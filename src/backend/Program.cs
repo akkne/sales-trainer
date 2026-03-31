@@ -57,6 +57,10 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>
 builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.SkillTree.SkillTreeService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Reference.ReferenceService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Profile.ProfileService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.League.LeagueService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
@@ -87,6 +91,11 @@ application.UseAuthentication();
 application.UseAuthorization();
 application.UseHangfireDashboard("/hangfire");
 application.MapControllers();
+
+RecurringJob.AddOrUpdate<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>(
+    "weekly-league-closure",
+    weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
+    "0 0 * * 1");
 
 using (var serviceScope = application.Services.CreateScope())
 {
