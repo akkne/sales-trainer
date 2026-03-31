@@ -56,6 +56,17 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.SkillTree.SkillTreeService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
+    SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
+    SalesTrainer.Api.Features.Exercises.FillBlankEvaluationStrategy>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
+    SalesTrainer.Api.Features.Exercises.FreeTextEvaluationStrategy>();
+builder.Services.AddHttpClient("OpenAI")
+    .ConfigureHttpClient(client =>
+        client.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

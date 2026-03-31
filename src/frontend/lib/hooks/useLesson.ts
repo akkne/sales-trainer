@@ -1,0 +1,57 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/apiClient";
+
+export interface LessonSummary {
+    lessonId: string;
+    title: string;
+    sortOrder: number;
+    difficultyLevel: number;
+    xpReward: number;
+    status: "locked" | "available" | "in_progress" | "completed";
+    bestScore: number;
+}
+
+export interface ExerciseData {
+    exerciseId: string;
+    type: "multiple_choice" | "fill_blank" | "free_text";
+    sortOrder: number;
+    content: unknown;
+}
+
+export interface ExerciseSubmissionResult {
+    isCorrect: boolean;
+    score: number;
+    explanation: string | null;
+    aiFeedback: string | null;
+    xpEarned: number;
+}
+
+export function useLessonsForSkill(skillSlug: string) {
+    return useQuery({
+        queryKey: ["lessons", skillSlug],
+        queryFn: () => apiClient.get<LessonSummary[]>(`/skills/${skillSlug}/lessons`),
+    });
+}
+
+export function useExercisesForLesson(lessonId: string) {
+    return useQuery({
+        queryKey: ["exercises", lessonId],
+        queryFn: () => apiClient.get<ExerciseData[]>(`/lessons/${lessonId}/exercises`),
+    });
+}
+
+export function useSubmitExercise() {
+    return useMutation({
+        mutationFn: ({
+            exerciseId,
+            answer,
+        }: {
+            exerciseId: string;
+            answer: unknown;
+        }) =>
+            apiClient.post<ExerciseSubmissionResult>(
+                `/exercises/${exerciseId}/submit`,
+                { answer }
+            ),
+    });
+}
