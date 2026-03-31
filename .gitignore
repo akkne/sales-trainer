@@ -1,0 +1,37 @@
+# Dependency directories
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+src/frontend/.next/
+src/frontend/out/
+src/frontend/.env*.local
+
+# .NET build outputs
+src/backend/bin/
+src/backend/obj/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker volumes (if mounted locally)
+.postgres_data/
+.mongo_data/
+.redis_data/
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
