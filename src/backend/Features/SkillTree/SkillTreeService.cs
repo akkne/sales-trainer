@@ -1,0 +1,52 @@
+using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Infrastructure.Data;
+
+namespace SalesTrainer.Api.Features.SkillTree;
+
+public class SkillTreeService(AppDbContext databaseContext)
+{
+    public async Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(Guid userId)
+    {
+        var skillProgressRecords = await databaseContext.UserSkillProgressRecords
+            .Where(progress => progress.UserId == userId)
+            .Join(
+                databaseContext.Skills,
+                progress => progress.SkillId,
+                skill => skill.Id,
+                (progress, skill) => new SkillTreeNodeDto(
+                    skill.Id,
+                    skill.Slug,
+                    skill.Title,
+                    skill.IconName,
+                    skill.SortOrder,
+                    progress.Status,
+                    progress.CompletedLessonCount,
+                    progress.TotalLessonCount,
+                    progress.Status == "locked"))
+            .OrderBy(node => node.SortOrder)
+            .ToListAsync();
+
+        var currentStreakDayCount = await databaseContext.UserStreaks
+            .Where(streak => streak.UserId == userId)
+            .Select(streak => streak.CurrentStreakDayCount)
+            .FirstOrDefaultAsync();
+
+        var totalXpAmount = await databaseContext.UserXpRecords
+            .Where(xp => xp.UserId == userId)
+            .SumAsync(xp => (int?)xp.Amount) ?? 0;
+
+        var weekStart = DateOnly.FromDateTime(
+            DateTime.UtcNow.AddDays(-(int)DateTime.UtcNow.DayOfWeek));
+
+        var weeklyXpAmount = await databaseContext.UserXpRecords
+            .Where(xp => xp.UserId == userId &&
+                         DateOnly.FromDateTime(xp.EarnedAt) >= weekStart)
+            .SumAsync(xp => (int?)xp.Amount) ?? 0;
+
+        return new SkillTreeResponseDto(
+            skillProgressRecords,
+            currentStreakDayCount,
+            totalXpAmount,
+            weeklyXpAmount);
+    }
+}

@@ -55,6 +55,7 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
 
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.SkillTree.SkillTreeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
