@@ -54,6 +54,7 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowCredentials()));
 
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
