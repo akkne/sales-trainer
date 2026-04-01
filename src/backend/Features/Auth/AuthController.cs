@@ -4,13 +4,15 @@ namespace SalesTrainer.Api.Features.Auth;
 
 [ApiController]
 [Route("auth")]
-public class AuthController(AuthenticationService authenticationService) : ControllerBase
+public class AuthController(
+    AuthenticationService authenticationService,
+    IWebHostEnvironment env) : ControllerBase
 {
     private const string RefreshTokenCookieName = "refreshToken";
-    private static readonly CookieOptions SecureHttpOnlyCookieOptions = new()
+    private CookieOptions SecureHttpOnlyCookieOptions => new()
     {
         HttpOnly = true,
-        Secure = true,
+        Secure = !env.IsDevelopment(),
         SameSite = SameSiteMode.Strict,
         MaxAge = TimeSpan.FromDays(30)
     };

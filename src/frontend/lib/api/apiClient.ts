@@ -41,7 +41,17 @@ async function fetchWithAuthToken<TResponseBody>(
     return response.json() as Promise<TResponseBody>;
 }
 
+let pendingRefresh: Promise<boolean> | null = null;
+
 async function attemptTokenRefresh(): Promise<boolean> {
+    if (pendingRefresh) return pendingRefresh;
+    pendingRefresh = doRefresh().finally(() => {
+        pendingRefresh = null;
+    });
+    return pendingRefresh;
+}
+
+async function doRefresh(): Promise<boolean> {
     try {
         const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
             method: "POST",
