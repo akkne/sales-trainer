@@ -17,6 +17,13 @@ src/backend/obj/
 .env.local
 .env.*.local
 
+# ASP.NET environment-specific settings
+appsettings.*.json
+
+# Claude & design config (local only, not committed)
+.claude/
+.design/
+
 # Docker volumes (if mounted locally)
 .postgres_data/
 .mongo_data/
