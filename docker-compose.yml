@@ -71,7 +71,7 @@ services:
     ports:
       - "3100:3100"
     volumes:
-      - ./infra/loki:/etc/loki
+      - ./infrastructure/loki:/etc/loki
       - loki_data:/loki
     command: -config.file=/etc/loki/loki.yml
 
@@ -80,7 +80,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./infra/prometheus:/etc/prometheus
+      - ./infrastructure/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -94,8 +94,8 @@ services:
     ports:
       - "3001:3000"
     volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning
-      - ./infra/grafana/dashboards:/etc/grafana/dashboards
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
