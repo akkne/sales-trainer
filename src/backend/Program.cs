@@ -109,8 +109,10 @@ using (var serviceScope = application.Services.CreateScope())
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
     databaseContext.Database.Migrate();
 
-    var superAdminEmail = application.Configuration["SuperAdmin:Email"] ?? "admin@salestrainer.local";
-    var superAdminPassword = application.Configuration["SuperAdmin:Password"] ?? "Admin123!";
+    var superAdminEmail = application.Configuration["SuperAdmin:Email"]
+        ?? throw new InvalidOperationException("SuperAdmin:Email is not configured.");
+    var superAdminPassword = application.Configuration["SuperAdmin:Password"]
+        ?? throw new InvalidOperationException("SuperAdmin:Password is not configured.");
 
     var existingSuperAdmin = databaseContext.Users
         .FirstOrDefault(u => u.Role == SalesTrainer.Api.Features.Auth.UserRole.SuperAdmin);
