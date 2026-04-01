@@ -11,6 +11,7 @@ async function fetchWithAuthToken<TResponseBody>(
 
     const response = await fetch(`${API_BASE_URL}${path}`, {
         ...requestOptions,
+        credentials: "include",
         headers: {
             "Content-Type": "application/json",
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
