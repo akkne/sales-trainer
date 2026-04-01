@@ -113,6 +113,7 @@ public class AuthController(AuthenticationService authenticationService) : Contr
             AccessToken: issuedTokenPair.AccessToken,
             UserId: issuedTokenPair.UserId,
             DisplayName: issuedTokenPair.DisplayName,
-            IsOnboardingCompleted: issuedTokenPair.IsOnboardingCompleted));
+            IsOnboardingCompleted: issuedTokenPair.IsOnboardingCompleted,
+            Role: issuedTokenPair.Role.ToString()));
     }
 }

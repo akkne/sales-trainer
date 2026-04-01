@@ -4,5 +4,6 @@ public record AuthTokenResponseDto(
     string AccessToken,
     string UserId,
     string DisplayName,
-    bool IsOnboardingCompleted
+    bool IsOnboardingCompleted,
+    string Role
 );

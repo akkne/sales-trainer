@@ -39,7 +39,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(authOptions =>
+{
+    authOptions.AddPolicy("RequireAdmin", policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.IsInRole("Admin") || ctx.User.IsInRole("SuperAdmin")));
+    authOptions.AddPolicy("RequireSuperAdmin", policy =>
+        policy.RequireRole("SuperAdmin"));
+});
 
 builder.Services.AddHangfire(hangfireConfiguration =>
     hangfireConfiguration.UsePostgreSqlStorage(storageOptions =>
@@ -101,6 +108,26 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
     databaseContext.Database.Migrate();
+
+    var superAdminEmail = application.Configuration["SuperAdmin:Email"] ?? "admin@salestrainer.local";
+    var superAdminPassword = application.Configuration["SuperAdmin:Password"] ?? "Admin123!";
+
+    var existingSuperAdmin = databaseContext.Users
+        .FirstOrDefault(u => u.Role == SalesTrainer.Api.Features.Auth.UserRole.SuperAdmin);
+
+    if (existingSuperAdmin is null)
+    {
+        databaseContext.Users.Add(new SalesTrainer.Api.Features.Auth.User
+        {
+            Id = Guid.NewGuid(),
+            Email = superAdminEmail.ToLowerInvariant(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(superAdminPassword),
+            DisplayName = "Super Admin",
+            CreatedAt = DateTime.UtcNow,
+            Role = SalesTrainer.Api.Features.Auth.UserRole.SuperAdmin
+        });
+        databaseContext.SaveChanges();
+    }
 }
 
 application.Run();

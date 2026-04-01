@@ -1,11 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useProfile } from "@/lib/hooks/useProfile";
 import { useLogout } from "@/lib/hooks/useAuth";
+import { useAuthStore } from "@/lib/store/authStore";
 
 export default function ProfilePage() {
     const { data: profileStats, isLoading } = useProfile();
     const logoutMutation = useLogout();
+    const { authenticatedUser } = useAuthStore();
+    const isAdmin =
+        authenticatedUser?.role === "Admin" || authenticatedUser?.role === "SuperAdmin";
 
     if (isLoading) {
         return (
@@ -94,6 +99,15 @@ export default function ProfilePage() {
                     />
                 </div>
             </div>
+
+            {isAdmin && (
+                <Link
+                    href="/admin/skills"
+                    className="block w-full py-3 rounded-2xl text-center text-gray-500 hover:text-gray-800 font-semibold transition-colors mb-2"
+                >
+                    Admin Panel
+                </Link>
+            )}
 
             <button
                 onClick={() => logoutMutation.mutate()}

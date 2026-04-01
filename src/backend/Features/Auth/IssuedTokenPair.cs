@@ -5,5 +5,6 @@ public record IssuedTokenPair(
     string RefreshToken,
     string UserId,
     string DisplayName,
-    bool IsOnboardingCompleted
+    bool IsOnboardingCompleted,
+    UserRole Role
 );

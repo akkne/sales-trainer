@@ -1,10 +1,13 @@
 import { create } from "zustand";
 
+export type UserRole = "User" | "Admin" | "SuperAdmin";
+
 interface AuthenticatedUser {
     id: string;
     email: string;
     displayName: string;
     isOnboardingCompleted: boolean;
+    role: UserRole;
 }
 
 interface AuthStoreState {

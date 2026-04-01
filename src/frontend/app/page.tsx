@@ -51,6 +51,7 @@ export default function LandingPage() {
             email: "demo@salestrainer.app",
             displayName: "Demo User",
             isOnboardingCompleted: false,
+            role: "User",
         });
 
         router.push("/onboarding");

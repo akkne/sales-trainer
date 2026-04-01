@@ -1,13 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api/apiClient";
-import { useAuthStore } from "@/lib/store/authStore";
+import { useAuthStore, type UserRole } from "@/lib/store/authStore";
 
 interface AuthTokenResponse {
     accessToken: string;
     userId: string;
     displayName: string;
     isOnboardingCompleted: boolean;
+    role: UserRole;
 }
 
 function useHandleSuccessfulAuth() {
@@ -21,6 +22,7 @@ function useHandleSuccessfulAuth() {
             email: "",
             displayName: authResponse.displayName,
             isOnboardingCompleted: authResponse.isOnboardingCompleted,
+            role: authResponse.role ?? "User",
         });
 
         if (authResponse.isOnboardingCompleted) {

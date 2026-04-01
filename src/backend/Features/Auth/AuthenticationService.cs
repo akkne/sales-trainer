@@ -151,7 +151,8 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
             RefreshToken: rawRefreshToken,
             UserId: user.Id.ToString(),
             DisplayName: user.DisplayName,
-            IsOnboardingCompleted: isOnboardingCompleted
+            IsOnboardingCompleted: isOnboardingCompleted,
+            Role: user.Role
         );
     }
 
@@ -166,7 +167,8 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
             [
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("displayName", user.DisplayName)
+                new Claim("displayName", user.DisplayName),
+                new Claim(ClaimTypes.Role, user.Role.ToString())
             ]),
             Expires = DateTime.UtcNow.AddMinutes(AccessTokenLifetimeMinutes),
             Issuer = configuration["Jwt:Issuer"],
