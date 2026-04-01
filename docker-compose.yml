@@ -6,8 +6,11 @@ services:
         - NEXT_PUBLIC_API_URL=http://localhost:5001
     ports:
       - "3000:3000"
+    environment:
+      - LOKI_URL=http://loki:3100
     depends_on:
       - backend
+      - loki
 
   backend:
     build: ./src/backend
@@ -22,12 +25,15 @@ services:
       - Jwt__Issuer=salestrainer
       - Jwt__Audience=salestrainer
       - Frontend__Url=http://localhost:3000
+      - Logging__Loki__Url=http://loki:3100
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_started
       redis:
+        condition: service_started
+      loki:
         condition: service_started
 
   postgres:
@@ -60,7 +66,50 @@ services:
     ports:
       - "6379:6379"
 
+  loki:
+    image: grafana/loki:3.4.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/loki:/etc/loki
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yml
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+      - ./infra/grafana/dashboards:/etc/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    depends_on:
+      - loki
+      - prometheus
+
 volumes:
   postgres_data:
   mongo_data:
   redis_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:
