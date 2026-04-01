@@ -33,6 +33,10 @@ async function fetchWithAuthToken<TResponseBody>(
         throw new Error(errorBody.message ?? `HTTP ${response.status}`);
     }
 
+    if (response.status === 204) {
+        return undefined as TResponseBody;
+    }
+
     return response.json() as Promise<TResponseBody>;
 }
 
