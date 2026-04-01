@@ -5,14 +5,34 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
+using Prometheus;
 using Serilog;
+using Serilog.Sinks.Grafana.Loki;
 using SalesTrainer.Api.Infrastructure.Data;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((hostingContext, loggerConfiguration) =>
-    loggerConfiguration.ReadFrom.Configuration(hostingContext.Configuration).WriteTo.Console());
+builder.Host.UseSerilog((ctx, loggerConfig) =>
+{
+    var lokiUrl = ctx.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+
+    loggerConfig
+        .ReadFrom.Configuration(ctx.Configuration)
+        .WriteTo.Console(outputTemplate:
+            "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+        .WriteTo.GrafanaLoki(
+            lokiUrl,
+            labels:
+            [
+                new LokiLabel { Key = "service", Value = "salestrainer-backend" },
+                new LokiLabel { Key = "env",     Value = ctx.HostingEnvironment.EnvironmentName }
+            ],
+            propertiesAsLabels: ["RequestId", "UserId"]
+        )
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "SalesTrainer.Api");
+});
 
 builder.Services.AddDbContext<AppDbContext>(databaseOptions =>
     databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
@@ -88,6 +108,8 @@ var application = builder.Build();
 
 application.UseSerilogRequestLogging();
 application.UseCors();
+application.UseHttpMetrics();
+application.MapMetrics();
 
 if (application.Environment.IsDevelopment())
 {
