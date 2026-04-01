@@ -61,6 +61,7 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowCredentials()));
 
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.SkillTree.SkillTreeService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseService>();
@@ -109,27 +110,8 @@ using (var serviceScope = application.Services.CreateScope())
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
     databaseContext.Database.Migrate();
 
-    var superAdminEmail = application.Configuration["SuperAdmin:Email"]
-        ?? throw new InvalidOperationException("SuperAdmin:Email is not configured.");
-    var superAdminPassword = application.Configuration["SuperAdmin:Password"]
-        ?? throw new InvalidOperationException("SuperAdmin:Password is not configured.");
-
-    var existingSuperAdmin = databaseContext.Users
-        .FirstOrDefault(u => u.Role == SalesTrainer.Api.Features.Auth.UserRole.SuperAdmin);
-
-    if (existingSuperAdmin is null)
-    {
-        databaseContext.Users.Add(new SalesTrainer.Api.Features.Auth.User
-        {
-            Id = Guid.NewGuid(),
-            Email = superAdminEmail.ToLowerInvariant(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(superAdminPassword),
-            DisplayName = "Super Admin",
-            CreatedAt = DateTime.UtcNow,
-            Role = SalesTrainer.Api.Features.Auth.UserRole.SuperAdmin
-        });
-        databaseContext.SaveChanges();
-    }
+    var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
+    await superAdminSeeder.SeedAsync();
 }
 
 application.Run();
