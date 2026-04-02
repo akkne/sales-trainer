@@ -137,3 +137,5 @@ using (var serviceScope = application.Services.CreateScope())
 }
 
 application.Run();
+
+public partial class Program { }

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SalesTrainer.Api", "SalesTrainer.Api.csproj", "{45A00E51-07DB-426E-93BA-9D66C9370E59}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SalesTrainer.Tests", "..\SalesTrainer.Tests\SalesTrainer.Tests.csproj", "{9FEF8D5C-E01C-49BC-87F0-E3C8AA6263EC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{45A00E51-07DB-426E-93BA-9D66C9370E59}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{45A00E51-07DB-426E-93BA-9D66C9370E59}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{45A00E51-07DB-426E-93BA-9D66C9370E59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9FEF8D5C-E01C-49BC-87F0-E3C8AA6263EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9FEF8D5C-E01C-49BC-87F0-E3C8AA6263EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9FEF8D5C-E01C-49BC-87F0-E3C8AA6263EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9FEF8D5C-E01C-49BC-87F0-E3C8AA6263EC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
