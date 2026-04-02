@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ public record CreateReferenceMaterialRequestDto(
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminReferenceController(AppDbContext db) : ControllerBase
+public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceController> logger) : ControllerBase
 {
     [HttpGet("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetBySkill(Guid skillId)
@@ -56,6 +57,9 @@ public class AdminReferenceController(AppDbContext db) : ControllerBase
         db.ReferenceMaterials.Add(material);
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Reference material created MaterialId={MaterialId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
+            material.Id, skillId, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminReferenceMaterialDto(
             material.Id, material.SkillId, material.Title,
             material.MarkdownContent, material.SortOrder));
@@ -74,6 +78,9 @@ public class AdminReferenceController(AppDbContext db) : ControllerBase
 
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Reference material updated MaterialId={MaterialId} Title={Title} by ActorId={ActorId}",
+            id, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminReferenceMaterialDto(
             material.Id, material.SkillId, material.Title,
             material.MarkdownContent, material.SortOrder));
@@ -87,6 +94,9 @@ public class AdminReferenceController(AppDbContext db) : ControllerBase
 
         db.ReferenceMaterials.Remove(material);
         await db.SaveChangesAsync();
+
+        logger.LogWarning("Reference material deleted MaterialId={MaterialId} SkillId={SkillId} by ActorId={ActorId}",
+            id, material.SkillId, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }

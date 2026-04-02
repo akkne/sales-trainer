@@ -3,10 +3,15 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
-public class SuperAdminSeeder(AppDbContext databaseContext, IConfiguration configuration)
+public class SuperAdminSeeder(
+    AppDbContext databaseContext,
+    IConfiguration configuration,
+    ILogger<SuperAdminSeeder> logger)
 {
     public async Task SeedAsync()
     {
+        logger.LogInformation("SuperAdmin seeding started");
+
         var email = configuration["SuperAdmin:Email"]
             ?? throw new InvalidOperationException("SuperAdmin:Email is not configured.");
         var password = configuration["SuperAdmin:Password"]
@@ -21,10 +26,21 @@ public class SuperAdminSeeder(AppDbContext databaseContext, IConfiguration confi
 
         if (existingUser is not null)
         {
+            if (existingUser.Role == UserRole.SuperAdmin)
+            {
+                logger.LogInformation("SuperAdmin already exists and has correct role {Email}", normalizedEmail);
+                return;
+            }
+
+            logger.LogInformation("Promoting existing user to SuperAdmin {Email} (was {OldRole})",
+                normalizedEmail, existingUser.Role);
             existingUser.Role = UserRole.SuperAdmin;
             await databaseContext.SaveChangesAsync();
             return;
         }
+
+        logger.LogInformation("Creating new SuperAdmin user {Email} DisplayName={DisplayName}",
+            normalizedEmail, displayName);
 
         databaseContext.Users.Add(new User
         {
@@ -37,5 +53,6 @@ public class SuperAdminSeeder(AppDbContext databaseContext, IConfiguration confi
         });
 
         await databaseContext.SaveChangesAsync();
+        logger.LogInformation("SuperAdmin user created successfully {Email}", normalizedEmail);
     }
 }

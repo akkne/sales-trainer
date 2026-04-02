@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/lib/store/authStore";
+import { clientLogger } from "@/lib/clientLogger";
 
 export default function AdminLayout({
     children,
@@ -16,6 +17,7 @@ export default function AdminLayout({
 
     useEffect(() => {
         if (!accessToken) {
+            clientLogger.warn("Admin panel access denied — not authenticated", { path: pathname });
             router.replace("/login");
             return;
         }
@@ -24,9 +26,29 @@ export default function AdminLayout({
             authenticatedUser.role !== "Admin" &&
             authenticatedUser.role !== "SuperAdmin"
         ) {
+            clientLogger.warn("Admin panel access denied — insufficient role", {
+                userId: authenticatedUser.id,
+                role: authenticatedUser.role,
+                path: pathname,
+            });
             router.replace("/tree");
         }
-    }, [accessToken, authenticatedUser, router]);
+    }, [accessToken, authenticatedUser, router, pathname]);
+
+    useEffect(() => {
+        if (
+            accessToken &&
+            authenticatedUser &&
+            (authenticatedUser.role === "Admin" || authenticatedUser.role === "SuperAdmin")
+        ) {
+            clientLogger.info("Admin panel opened", {
+                userId: authenticatedUser.id,
+                role: authenticatedUser.role,
+                path: pathname,
+            });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
 
     if (
         !accessToken ||

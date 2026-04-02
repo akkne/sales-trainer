@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public record CreateSkillRequestDto(
 [ApiController]
 [Route("admin/skills")]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminSkillsController(AppDbContext db) : ControllerBase
+public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<AdminSkillDto>>> GetAll()
@@ -60,6 +61,9 @@ public class AdminSkillsController(AppDbContext db) : ControllerBase
         db.Skills.Add(skill);
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Skill created SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
+            skill.Id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminSkillDto(
             skill.Id, skill.Title, skill.Slug, skill.IconName,
             skill.SortOrder, skill.PrerequisiteSkillId, skill.ApplicableSalesTypes));
@@ -81,6 +85,9 @@ public class AdminSkillsController(AppDbContext db) : ControllerBase
 
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Skill updated SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
+            skill.Id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminSkillDto(
             skill.Id, skill.Title, skill.Slug, skill.IconName,
             skill.SortOrder, skill.PrerequisiteSkillId, skill.ApplicableSalesTypes));
@@ -94,6 +101,9 @@ public class AdminSkillsController(AppDbContext db) : ControllerBase
 
         db.Skills.Remove(skill);
         await db.SaveChangesAsync();
+
+        logger.LogWarning("Skill deleted SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
+            id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }

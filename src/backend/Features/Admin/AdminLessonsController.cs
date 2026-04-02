@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +25,7 @@ public record CreateLessonRequestDto(
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminLessonsController(AppDbContext db) : ControllerBase
+public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsController> logger) : ControllerBase
 {
     [HttpGet("admin/skills/{skillId:guid}/lessons")]
     public async Task<ActionResult<List<AdminLessonDto>>> GetBySkill(Guid skillId)
@@ -59,6 +60,9 @@ public class AdminLessonsController(AppDbContext db) : ControllerBase
         db.Lessons.Add(lesson);
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Lesson created LessonId={LessonId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
+            lesson.Id, skillId, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminLessonDto(
             lesson.Id, lesson.SkillId, lesson.Title,
             lesson.SortOrder, lesson.DifficultyLevel, lesson.XpReward));
@@ -78,6 +82,9 @@ public class AdminLessonsController(AppDbContext db) : ControllerBase
 
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Lesson updated LessonId={LessonId} Title={Title} by ActorId={ActorId}",
+            id, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminLessonDto(
             lesson.Id, lesson.SkillId, lesson.Title,
             lesson.SortOrder, lesson.DifficultyLevel, lesson.XpReward));
@@ -91,6 +98,9 @@ public class AdminLessonsController(AppDbContext db) : ControllerBase
 
         db.Lessons.Remove(lesson);
         await db.SaveChangesAsync();
+
+        logger.LogWarning("Lesson deleted LessonId={LessonId} SkillId={SkillId} by ActorId={ActorId}",
+            id, lesson.SkillId, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }

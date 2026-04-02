@@ -9,7 +9,10 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
-public class AuthenticationService(AppDbContext databaseContext, IConfiguration configuration)
+public class AuthenticationService(
+    AppDbContext databaseContext,
+    IConfiguration configuration,
+    ILogger<AuthenticationService> logger)
 {
     private const int AccessTokenLifetimeMinutes = 15;
     private const int RefreshTokenLifetimeDays = 30;
@@ -19,16 +22,22 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
         string password,
         string displayName)
     {
+        var normalizedEmail = email.ToLowerInvariant();
+        logger.LogInformation("Registration attempt {Email}", normalizedEmail);
+
         var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.Email == email.ToLowerInvariant());
+            .FirstOrDefaultAsync(user => user.Email == normalizedEmail);
 
         if (existingUser is not null)
+        {
+            logger.LogWarning("Registration failed — email already registered {Email}", normalizedEmail);
             throw new InvalidOperationException("Email already registered.");
+        }
 
         var newUser = new User
         {
             Id = Guid.NewGuid(),
-            Email = email.ToLowerInvariant(),
+            Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow
@@ -37,21 +46,29 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
         databaseContext.Users.Add(newUser);
         await databaseContext.SaveChangesAsync();
 
+        logger.LogInformation("User registered successfully {Email} UserId={UserId}", normalizedEmail, newUser.Id);
         return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false);
     }
 
     public async Task<IssuedTokenPair> LoginWithEmailAsync(string email, string password)
     {
+        var normalizedEmail = email.ToLowerInvariant();
+        logger.LogInformation("Login attempt {Email}", normalizedEmail);
+
         var user = await databaseContext.Users
-            .FirstOrDefaultAsync(u => u.Email == email.ToLowerInvariant());
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
         if (user is null || user.PasswordHash is null ||
             !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        {
+            logger.LogWarning("Login failed — invalid credentials {Email}", normalizedEmail);
             throw new UnauthorizedAccessException("Invalid email or password.");
+        }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted);
 
+        logger.LogInformation("Login successful {Email} UserId={UserId} Role={Role}", normalizedEmail, user.Id, user.Role);
         return await IssueTokensForUserAsync(user, isOnboardingCompleted);
     }
 
@@ -67,6 +84,8 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
 
         var googlePayload = await GoogleJsonWebSignature.ValidateAsync(
             googleIdToken, validationSettings);
+
+        logger.LogInformation("Google login attempt {Email}", googlePayload.Email);
 
         var existingUser = await databaseContext.Users
             .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject)
@@ -85,11 +104,17 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
             };
             databaseContext.Users.Add(existingUser);
             await databaseContext.SaveChangesAsync();
+            logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
         else if (existingUser.GoogleId is null)
         {
             existingUser.GoogleId = googlePayload.Subject;
             await databaseContext.SaveChangesAsync();
+            logger.LogInformation("Linked Google account to existing user {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
+        }
+        else
+        {
+            logger.LogInformation("Google login successful {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
@@ -105,7 +130,10 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
             .FirstOrDefaultAsync(token => token.Token == rawRefreshToken);
 
         if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTime.UtcNow)
+        {
+            logger.LogWarning("Token refresh failed — invalid or expired refresh token");
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+        }
 
         storedToken.IsRevoked = true;
         await databaseContext.SaveChangesAsync();
@@ -113,6 +141,7 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == storedToken.UserId && profile.IsOnboardingCompleted);
 
+        logger.LogInformation("Access token refreshed for UserId={UserId}", storedToken.UserId);
         return await IssueTokensForUserAsync(storedToken.User, isOnboardingCompleted);
     }
 
@@ -125,6 +154,7 @@ public class AuthenticationService(AppDbContext databaseContext, IConfiguration 
 
         storedToken.IsRevoked = true;
         await databaseContext.SaveChangesAsync();
+        logger.LogInformation("Refresh token revoked for UserId={UserId}", storedToken.UserId);
     }
 
     private async Task<IssuedTokenPair> IssueTokensForUserAsync(

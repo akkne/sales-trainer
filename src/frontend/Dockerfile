@@ -17,5 +17,13 @@ ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+COPY --from=deps /app/node_modules/pino-loki ./node_modules/pino-loki
+COPY --from=deps /app/node_modules/pino-abstract-transport ./node_modules/pino-abstract-transport
+COPY --from=deps /app/node_modules/pump ./node_modules/pump
+COPY --from=deps /app/node_modules/split2 ./node_modules/split2
+COPY --from=deps /app/node_modules/end-of-stream ./node_modules/end-of-stream
+COPY --from=deps /app/node_modules/once ./node_modules/once
+COPY --from=deps /app/node_modules/wrappy ./node_modules/wrappy
 EXPOSE 3000
 CMD ["node", "server.js"]

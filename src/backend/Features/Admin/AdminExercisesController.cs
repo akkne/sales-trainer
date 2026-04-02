@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +24,7 @@ public record CreateExerciseRequestDto(
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminExercisesController(AppDbContext db) : ControllerBase
+public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons/{lessonId:guid}/exercises")]
     public async Task<ActionResult<List<AdminExerciseDto>>> GetByLesson(Guid lessonId)
@@ -63,6 +64,9 @@ public class AdminExercisesController(AppDbContext db) : ControllerBase
         db.Exercises.Add(exercise);
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Exercise created ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
+            exercise.Id, lessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminExerciseDto(
             exercise.Id, exercise.LessonId, exercise.Type,
             exercise.SortOrder, dto.Content));
@@ -81,6 +85,9 @@ public class AdminExercisesController(AppDbContext db) : ControllerBase
 
         await db.SaveChangesAsync();
 
+        logger.LogInformation("Exercise updated ExerciseId={ExerciseId} Type={Type} by ActorId={ActorId}",
+            id, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
         return Ok(new AdminExerciseDto(
             exercise.Id, exercise.LessonId, exercise.Type,
             exercise.SortOrder, dto.Content));
@@ -94,6 +101,9 @@ public class AdminExercisesController(AppDbContext db) : ControllerBase
 
         db.Exercises.Remove(exercise);
         await db.SaveChangesAsync();
+
+        logger.LogWarning("Exercise deleted ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
+            id, exercise.LessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }
