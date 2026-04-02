@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api/apiClient";
 import { useAuthStore, type UserRole } from "@/lib/store/authStore";
@@ -32,6 +33,27 @@ function useHandleSuccessfulAuth() {
             router.push("/onboarding");
         }
     };
+}
+
+export function useInitAuth() {
+    const { accessToken, authenticatedUser, setAuthenticatedUser, clearAuthSession } =
+        useAuthStore();
+
+    useEffect(() => {
+        if (!accessToken || authenticatedUser) return;
+
+        apiClient
+            .get<{
+                id: string;
+                email: string;
+                displayName: string;
+                role: UserRole;
+                isOnboardingCompleted: boolean;
+            }>("/auth/me")
+            .then((user) => setAuthenticatedUser(user))
+            .catch(() => clearAuthSession());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [accessToken]);
 }
 
 export function useRegister() {

@@ -1,4 +1,8 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
@@ -6,6 +10,7 @@ namespace SalesTrainer.Api.Features.Auth;
 [Route("auth")]
 public class AuthController(
     AuthenticationService authenticationService,
+    AppDbContext databaseContext,
     IWebHostEnvironment env) : ControllerBase
 {
     private const string RefreshTokenCookieName = "refreshToken";
@@ -16,6 +21,28 @@ public class AuthController(
         SameSite = SameSiteMode.Strict,
         MaxAge = TimeSpan.FromDays(30)
     };
+
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> GetCurrentUser()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        var displayName = User.FindFirstValue("displayName");
+        var role = User.FindFirstValue(ClaimTypes.Role);
+
+        var isOnboardingCompleted = userId is not null && await databaseContext.UserProfiles
+            .AnyAsync(p => p.UserId == Guid.Parse(userId) && p.IsOnboardingCompleted);
+
+        return Ok(new
+        {
+            id = userId,
+            email,
+            displayName,
+            role,
+            isOnboardingCompleted
+        });
+    }
 
     [HttpPost("register")]
     public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(

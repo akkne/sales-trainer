@@ -50,6 +50,14 @@ export default function AdminLayout({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
 
+    if (accessToken && !authenticatedUser) {
+        return (
+            <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
+                Loading...
+            </div>
+        );
+    }
+
     if (
         !accessToken ||
         !authenticatedUser ||

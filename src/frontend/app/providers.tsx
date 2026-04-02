@@ -2,6 +2,12 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { useInitAuth } from "@/lib/hooks/useAuth";
+
+function AuthInitializer() {
+    useInitAuth();
+    return null;
+}
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(
@@ -14,6 +20,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     );
 
     return (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+            <AuthInitializer />
+            {children}
+        </QueryClientProvider>
     );
 }
