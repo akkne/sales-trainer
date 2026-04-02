@@ -118,4 +118,66 @@ public class AuthTests
         var response = await _client.GetAsync("/auth/me");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+
+    [Test]
+    public async Task Refresh_ValidCookie_Returns200WithNewAccessToken()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"rf_{Guid.NewGuid()}@test.com");
+
+        var rawToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
+        _db.Set<SalesTrainer.Api.Features.Auth.RefreshToken>().Add(new SalesTrainer.Api.Features.Auth.RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Token = rawToken,
+            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            IsRevoked = false
+        });
+        await _db.SaveChangesAsync();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        request.Headers.Add("Cookie", $"refreshToken={Uri.EscapeDataString(rawToken)}");
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task Refresh_NoCookie_Returns401()
+    {
+        var response = await _client.PostAsync("/auth/refresh", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task Logout_RevokesToken_DeletesCookie()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"lo_{Guid.NewGuid()}@test.com");
+
+        var rawToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
+        _db.Set<SalesTrainer.Api.Features.Auth.RefreshToken>().Add(new SalesTrainer.Api.Features.Auth.RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Token = rawToken,
+            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            IsRevoked = false
+        });
+        await _db.SaveChangesAsync();
+
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/logout");
+        logoutRequest.Headers.Add("Cookie", $"refreshToken={Uri.EscapeDataString(rawToken)}");
+        var logoutResponse = await _client.SendAsync(logoutRequest);
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        refreshRequest.Headers.Add("Cookie", $"refreshToken={Uri.EscapeDataString(rawToken)}");
+        var refreshAfterLogout = await _client.SendAsync(refreshRequest);
+        refreshAfterLogout.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 }

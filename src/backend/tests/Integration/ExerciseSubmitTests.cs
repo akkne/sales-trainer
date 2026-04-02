@@ -103,6 +103,62 @@ public class ExerciseSubmitTests
     }
 
     [Test]
+    public async Task GetLessons_ValidToken_Returns200WithList()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"gl_{Guid.NewGuid()}@test.com");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-gl-{Guid.NewGuid()}");
+        await TestDbSeeder.SeedLessonAsync(_db, skill.Id);
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var lessons = await response.Content.ReadFromJsonAsync<JsonElement>();
+        lessons.GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Test]
+    public async Task GetLessons_UnknownSkillSlug_Returns404()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"gl_nf_{Guid.NewGuid()}@test.com");
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        var response = await client.GetAsync("/skills/nonexistent-slug-xyz/lessons");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task GetLessons_NoToken_Returns401()
+    {
+        var client = IntegrationTestSetup.Factory.CreateClient();
+        var response = await client.GetAsync("/skills/any-slug/lessons");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task GetExercises_ValidLessonId_Returns200WithList()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"ge_{Guid.NewGuid()}@test.com");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-ge-{Guid.NewGuid()}");
+        var lesson = await TestDbSeeder.SeedLessonAsync(_db, skill.Id);
+        await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson.Id);
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        var response = await client.GetAsync($"/lessons/{lesson.Id}/exercises");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var exercises = await response.Content.ReadFromJsonAsync<JsonElement>();
+        exercises.GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Test]
     public async Task Submit_CorrectAnswer_LessonProgressMarkedCompleted()
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
