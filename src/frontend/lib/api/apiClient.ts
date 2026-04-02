@@ -9,11 +9,13 @@ async function fetchWithAuthToken<TResponseBody>(
             ? localStorage.getItem("accessToken")
             : null;
 
+    const isFormData = requestOptions?.body instanceof FormData;
+
     const response = await fetch(`${API_BASE_URL}${path}`, {
         ...requestOptions,
         credentials: "include",
         headers: {
-            "Content-Type": "application/json",
+            ...(isFormData ? {} : { "Content-Type": "application/json" }),
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
             ...requestOptions?.headers,
         },
@@ -76,6 +78,14 @@ export const apiClient = {
         fetchWithAuthToken<TResponseBody>(path, {
             method: "POST",
             body: JSON.stringify(requestBody),
+        }),
+
+    postFile: <TResponseBody>(path: string, formData: FormData) =>
+        fetchWithAuthToken<TResponseBody>(path, {
+            method: "POST",
+            // Content-Type is NOT set — browser sets it with the correct boundary
+            headers: {},
+            body: formData,
         }),
 
     put: <TResponseBody>(path: string, requestBody: unknown) =>

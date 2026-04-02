@@ -277,6 +277,39 @@ export function useDeleteReference(skillId: string) {
     });
 }
 
+// --- Seeder ---
+
+export interface SeederImportResult {
+    skillsCreated: number;
+    skillsUpdated: number;
+    lessonsCreated: number;
+    lessonsUpdated: number;
+    exercisesCreated: number;
+    exercisesUpdated: number;
+    errors: string[];
+}
+
+export function useImportCsv() {
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.postFile<SeederImportResult>("/admin/seeder/csv", formData);
+        },
+        onSuccess: (data) => {
+            clientLogger.info("CSV seeder import complete", {
+                skillsCreated: data.skillsCreated,
+                lessonsCreated: data.lessonsCreated,
+                exercisesCreated: data.exercisesCreated,
+                errors: data.errors.length,
+            });
+        },
+        onError: (error) => {
+            clientLogger.error("CSV seeder import failed", { error: (error as Error).message });
+        },
+    });
+}
+
 // --- Users ---
 
 export function useAdminUsers() {
