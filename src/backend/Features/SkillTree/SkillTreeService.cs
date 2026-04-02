@@ -13,17 +13,18 @@ public class SkillTreeService(AppDbContext databaseContext)
                 databaseContext.Skills,
                 progress => progress.SkillId,
                 skill => skill.Id,
-                (progress, skill) => new SkillTreeNodeDto(
-                    skill.Id,
-                    skill.Slug,
-                    skill.Title,
-                    skill.IconName,
-                    skill.SortOrder,
-                    progress.Status,
-                    progress.CompletedLessonCount,
-                    progress.TotalLessonCount,
-                    progress.Status == "locked"))
-            .OrderBy(node => node.SortOrder)
+                (progress, skill) => new { progress, skill })
+            .OrderBy(x => x.skill.SortOrder)
+            .Select(x => new SkillTreeNodeDto(
+                x.skill.Id,
+                x.skill.Slug,
+                x.skill.Title,
+                x.skill.IconName,
+                x.skill.SortOrder,
+                x.progress.Status,
+                x.progress.CompletedLessonCount,
+                x.progress.TotalLessonCount,
+                x.progress.Status == "locked"))
             .ToListAsync();
 
         var currentStreakDayCount = await databaseContext.UserStreaks
