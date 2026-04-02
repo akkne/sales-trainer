@@ -11,6 +11,10 @@ src/frontend/.env*.local
 # .NET build outputs
 src/backend/bin/
 src/backend/obj/
+src/backend/api/bin/
+src/backend/api/obj/
+src/backend/tests/bin/
+src/backend/tests/obj/
 src/SalesTrainer.Tests/bin/
 src/SalesTrainer.Tests/obj/
 
