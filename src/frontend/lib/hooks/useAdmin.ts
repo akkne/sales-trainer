@@ -279,9 +279,13 @@ export function useDeleteReference(skillId: string) {
 
 // --- Seeder ---
 
-export interface SeederImportResult {
+export interface SkillsImportResult {
     skillsCreated: number;
     skillsUpdated: number;
+    errors: string[];
+}
+
+export interface LessonsImportResult {
     lessonsCreated: number;
     lessonsUpdated: number;
     exercisesCreated: number;
@@ -289,23 +293,45 @@ export interface SeederImportResult {
     errors: string[];
 }
 
-export function useImportCsv() {
+export function useImportSkills() {
     return useMutation({
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
-            return apiClient.postFile<SeederImportResult>("/admin/seeder/csv", formData);
+            return apiClient.postFile<SkillsImportResult>("/admin/seeder/skills", formData);
         },
         onSuccess: (data) => {
-            clientLogger.info("CSV seeder import complete", {
+            clientLogger.info("Skills seeder import complete", {
                 skillsCreated: data.skillsCreated,
+                skillsUpdated: data.skillsUpdated,
+                errors: data.errors.length,
+            });
+        },
+        onError: (error) => {
+            clientLogger.error("Skills seeder import failed", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useImportLessons(skillId: string) {
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.postFile<LessonsImportResult>(
+                `/admin/seeder/lessons?skillId=${skillId}`,
+                formData
+            );
+        },
+        onSuccess: (data) => {
+            clientLogger.info("Lessons seeder import complete", {
                 lessonsCreated: data.lessonsCreated,
                 exercisesCreated: data.exercisesCreated,
                 errors: data.errors.length,
             });
         },
         onError: (error) => {
-            clientLogger.error("CSV seeder import failed", { error: (error as Error).message });
+            clientLogger.error("Lessons seeder import failed", { error: (error as Error).message });
         },
     });
 }

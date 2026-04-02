@@ -77,7 +77,8 @@ export default function AdminLayout({
 
     const navItems = [
         { href: "/admin/skills", label: "Skills" },
-        { href: "/admin/seeder", label: "Seeder" },
+        { href: "/admin/seeder", label: "Skills Seeder" },
+        { href: "/admin/content", label: "Content Import" },
         ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
     ];
 

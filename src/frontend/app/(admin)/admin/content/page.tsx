@@ -1,29 +1,48 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useImportSkills, type SkillsImportResult } from "@/lib/hooks/useAdmin";
+import {
+    useAdminSkills,
+    useImportLessons,
+    type LessonsImportResult,
+} from "@/lib/hooks/useAdmin";
 
 const CSV_TEMPLATE = [
-    "slug,title,icon_name,sort_order,sales_types",
-    "cold-calling,Cold Calling,phone,1,b2b_saas|b2c",
-    "objection-handling,Objection Handling,shield,2,b2b_saas|retail|b2c",
+    "lesson_title,lesson_sort_order,lesson_difficulty,lesson_xp,exercise_type,exercise_sort_order,exercise_content_json",
+    'Opening the Call,1,1,50,multiple_choice,1,"{""situation"":""You just dialed a prospect."",""question"":""Best opener?"",""options"":[""Hi boss"",""Hi I\'m Alex from Acme"",""Buy something?""],""correctOptionIndex"":1}"',
+    'Opening the Call,1,1,50,fill_blank,2,"{""characterName"":""Prospect"",""characterLine"":""Who is this?"",""options"":[""Nobody."",""I\'m Alex from Acme."",""Please don\'t hang up!""],""correctOptionIndex"":1}"',
 ].join("\n");
 
 const JSON_TEMPLATE = JSON.stringify(
     [
         {
-            slug: "cold-calling",
-            title: "Cold Calling",
-            iconName: "phone",
+            title: "Opening the Call",
             sortOrder: 1,
-            salesTypes: ["b2b_saas", "b2c"],
-        },
-        {
-            slug: "objection-handling",
-            title: "Objection Handling",
-            iconName: "shield",
-            sortOrder: 2,
-            salesTypes: ["b2b_saas", "retail", "b2c"],
+            difficultyLevel: 1,
+            xpReward: 50,
+            exercises: [
+                {
+                    type: "multiple_choice",
+                    sortOrder: 1,
+                    content: {
+                        situation: "You just dialed a prospect.",
+                        question: "Best opener?",
+                        options: ["Hi boss", "Hi I'm Alex from Acme", "Buy something?"],
+                        correctOptionIndex: 1,
+                        explanation: "A clear, friendly opener sets the tone.",
+                    },
+                },
+                {
+                    type: "fill_blank",
+                    sortOrder: 2,
+                    content: {
+                        characterName: "Prospect",
+                        characterLine: "Who is this?",
+                        options: ["Nobody.", "I'm Alex from Acme.", "Please don't hang up!"],
+                        correctOptionIndex: 1,
+                    },
+                },
+            ],
         },
     ],
     null,
@@ -37,7 +56,7 @@ function downloadTemplate(format: "csv" | "json") {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `skills_template.${format}`;
+    a.download = `lessons_template.${format}`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -61,11 +80,14 @@ function StatBox({ label, value, accent }: { label: string; value: number; accen
     );
 }
 
-export default function SeederPage() {
+export default function ContentPage() {
+    const { data: skills = [], isLoading: skillsLoading } = useAdminSkills();
+    const [selectedSkillId, setSelectedSkillId] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [result, setResult] = useState<SkillsImportResult | null>(null);
-    const importSkills = useImportSkills();
+    const [result, setResult] = useState<LessonsImportResult | null>(null);
+
+    const importLessons = useImportLessons(selectedSkillId);
 
     function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const f = e.target.files?.[0] ?? null;
@@ -74,8 +96,8 @@ export default function SeederPage() {
     }
 
     async function handleImport() {
-        if (!selectedFile) return;
-        const data = await importSkills.mutateAsync(selectedFile);
+        if (!selectedFile || !selectedSkillId) return;
+        const data = await importLessons.mutateAsync(selectedFile);
         setResult(data);
         setSelectedFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -83,19 +105,53 @@ export default function SeederPage() {
 
     return (
         <div className="max-w-2xl">
-            <h1 className="text-xl font-semibold text-gray-900 mb-1">Skills Seeder</h1>
+            <h1 className="text-xl font-semibold text-gray-900 mb-1">Content Import</h1>
             <p className="text-sm text-gray-500 mb-6">
-                Bulk-import skills from a CSV or JSON file. Existing skills are updated by slug;
-                new ones are created.
+                Bulk-import lessons and exercises for a specific skill from a CSV or JSON file.
+                Existing lessons are matched by title; exercises by sort order within the lesson.
             </p>
+
+            {/* Skill selector */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                <h2 className="text-sm font-medium text-gray-700 mb-3">Select skill</h2>
+                {skillsLoading ? (
+                    <p className="text-sm text-gray-400">Loading skills…</p>
+                ) : skills.length === 0 ? (
+                    <p className="text-sm text-gray-400">
+                        No skills found. Add skills first via the Skills Seeder.
+                    </p>
+                ) : (
+                    <select
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                        value={selectedSkillId}
+                        onChange={(e) => {
+                            setSelectedSkillId(e.target.value);
+                            setResult(null);
+                        }}
+                    >
+                        <option value="">— choose a skill —</option>
+                        {[...skills]
+                            .sort((a, b) => a.sortOrder - b.sortOrder)
+                            .map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.iconName} · {s.title}
+                                </option>
+                            ))}
+                    </select>
+                )}
+            </div>
 
             {/* Upload card */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
                 <h2 className="text-sm font-medium text-gray-700 mb-4">Upload file</h2>
 
                 <div
-                    className="border-2 border-dashed border-gray-300 rounded-md px-6 py-8 text-center cursor-pointer hover:border-gray-400 transition-colors"
-                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-md px-6 py-8 text-center transition-colors ${
+                        selectedSkillId
+                            ? "border-gray-300 cursor-pointer hover:border-gray-400"
+                            : "border-gray-200 cursor-not-allowed opacity-50"
+                    }`}
+                    onClick={() => selectedSkillId && fileInputRef.current?.click()}
                 >
                     <p className="text-sm text-gray-500">
                         {selectedFile ? (
@@ -125,10 +181,10 @@ export default function SeederPage() {
                 <div className="mt-4 flex items-center gap-3 flex-wrap">
                     <button
                         onClick={handleImport}
-                        disabled={!selectedFile || importSkills.isPending}
+                        disabled={!selectedFile || !selectedSkillId || importLessons.isPending}
                         className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-40 transition-colors"
                     >
-                        {importSkills.isPending ? "Importing…" : "Import"}
+                        {importLessons.isPending ? "Importing…" : "Import"}
                     </button>
                     <button
                         onClick={() => downloadTemplate("csv")}
@@ -144,9 +200,9 @@ export default function SeederPage() {
                     </button>
                 </div>
 
-                {importSkills.isError && (
+                {importLessons.isError && (
                     <p className="mt-3 text-xs text-red-500">
-                        {(importSkills.error as Error).message}
+                        {(importLessons.error as Error).message}
                     </p>
                 )}
             </div>
@@ -156,8 +212,10 @@ export default function SeederPage() {
                 <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
                     <h2 className="text-sm font-medium text-gray-700 mb-4">Import result</h2>
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                        <StatBox label="Skills created" value={result.skillsCreated} accent />
-                        <StatBox label="Skills updated" value={result.skillsUpdated} />
+                        <StatBox label="Lessons created" value={result.lessonsCreated} accent />
+                        <StatBox label="Lessons updated" value={result.lessonsUpdated} />
+                        <StatBox label="Exercises created" value={result.exercisesCreated} accent />
+                        <StatBox label="Exercises updated" value={result.exercisesUpdated} />
                     </div>
                     {result.errors.length > 0 ? (
                         <div className="mt-2">
@@ -186,18 +244,26 @@ export default function SeederPage() {
                 <table className="w-full text-xs border-collapse mb-5">
                     <thead>
                         <tr className="border-b border-gray-200">
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Column</th>
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Type</th>
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Notes</th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
+                                Column
+                            </th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
+                                Type
+                            </th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
+                                Notes
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="text-gray-700">
                         {[
-                            ["slug", "string", "Unique identifier — upsert key"],
-                            ["title", "string", "Display title"],
-                            ["icon_name", "string", "Icon name (e.g. phone, handshake)"],
-                            ["sort_order", "integer", "Display order in skill tree"],
-                            ["sales_types", "string", "Pipe-separated: b2b_saas|retail|b2c"],
+                            ["lesson_title", "string", "Upsert key within the skill"],
+                            ["lesson_sort_order", "integer", "Order within the skill"],
+                            ["lesson_difficulty", "integer", "1 = easy, 3 = hard"],
+                            ["lesson_xp", "integer", "XP awarded on completion"],
+                            ["exercise_type", "string", "multiple_choice | fill_blank | free_text"],
+                            ["exercise_sort_order", "integer", "Order within the lesson (upsert key)"],
+                            ["exercise_content_json", "JSON", "Must be valid JSON"],
                         ].map(([col, type, notes]) => (
                             <tr key={col} className="border-b border-gray-100">
                                 <td className="py-1.5 px-2 font-mono text-gray-800">{col}</td>
@@ -212,11 +278,17 @@ export default function SeederPage() {
                 <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto text-gray-700">
 {`[
   {
-    "slug": "cold-calling",
-    "title": "Cold Calling",
-    "iconName": "phone",
+    "title": "Lesson title",
     "sortOrder": 1,
-    "salesTypes": ["b2b_saas", "b2c"]
+    "difficultyLevel": 1,
+    "xpReward": 50,
+    "exercises": [
+      {
+        "type": "multiple_choice",
+        "sortOrder": 1,
+        "content": { ... }
+      }
+    ]
   }
 ]`}
                 </pre>
