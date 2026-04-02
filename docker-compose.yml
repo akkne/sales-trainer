@@ -13,7 +13,7 @@ services:
       - loki
 
   backend:
-    build: ./src/backend
+    build: ./src/backend/api
     ports:
       - "5001:8080"
     environment:

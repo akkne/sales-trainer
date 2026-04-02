@@ -1,0 +1,29 @@
+using System.Text.Json;
+
+namespace SalesTrainer.Api.Features.Exercises;
+
+public class MultipleChoiceEvaluationStrategy : IExerciseEvaluationStrategy
+{
+    public string SupportedExerciseType => "multiple_choice";
+
+    public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
+        JsonElement exerciseContent,
+        JsonElement userAnswer)
+    {
+        var correctOptionIndex = exerciseContent.GetProperty("correctOptionIndex").GetInt32();
+        var selectedOptionIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
+        var isCorrect = selectedOptionIndex == correctOptionIndex;
+
+        string? explanation = null;
+        if (exerciseContent.TryGetProperty("explanation", out var explanationElement))
+            explanation = explanationElement.GetString();
+
+        var evaluationResult = new ExerciseEvaluationResult(
+            IsCorrect: isCorrect,
+            Score: isCorrect ? 100 : 0,
+            Explanation: explanation,
+            AiFeedback: null);
+
+        return Task.FromResult(evaluationResult);
+    }
+}

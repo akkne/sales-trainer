@@ -1,0 +1,121 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using NUnit.Framework;
+using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Tests;
+using SalesTrainer.Tests.Helpers;
+
+namespace SalesTrainer.Tests.Integration;
+
+[TestFixture]
+public class AuthTests
+{
+    private HttpClient _client = null!;
+    private AppDbContext _db = null!;
+    private IServiceScope _scope = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _client = IntegrationTestSetup.Factory.CreateClient();
+        _scope = IntegrationTestSetup.Factory.Services.CreateScope();
+        _db = _scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _scope.Dispose();
+    }
+
+    [Test]
+    public async Task Register_ValidCredentials_Returns200WithAccessToken()
+    {
+        var email = $"reg_{Guid.NewGuid()}@test.com";
+
+        var response = await _client.PostAsJsonAsync("/auth/register", new
+        {
+            email,
+            password = "Password123!",
+            displayName = "New User"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();
+        body.GetProperty("role").GetString().Should().Be("User");
+    }
+
+    [Test]
+    public async Task Register_DuplicateEmail_Returns409()
+    {
+        var email = $"dup_{Guid.NewGuid()}@test.com";
+        await TestDbSeeder.SeedUserAsync(_db, email: email);
+
+        var response = await _client.PostAsJsonAsync("/auth/register", new
+        {
+            email,
+            password = "Password123!",
+            displayName = "Dup User"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Test]
+    public async Task Login_ValidCredentials_Returns200WithAccessToken()
+    {
+        var email = $"login_{Guid.NewGuid()}@test.com";
+        await TestDbSeeder.SeedUserAsync(_db, email: email);
+
+        var response = await _client.PostAsJsonAsync("/auth/login", new
+        {
+            email,
+            password = "Password123!"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task Login_WrongPassword_Returns401()
+    {
+        var email = $"wrong_{Guid.NewGuid()}@test.com";
+        await TestDbSeeder.SeedUserAsync(_db, email: email);
+
+        var response = await _client.PostAsJsonAsync("/auth/login", new
+        {
+            email,
+            password = "WrongPassword!"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task GetMe_WithValidToken_Returns200WithUserInfo()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"me_{Guid.NewGuid()}@test.com");
+        var authedClient = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        var response = await authedClient.GetAsync("/auth/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("email").GetString().Should().Be(user.Email);
+        body.GetProperty("role").GetString().Should().Be("User");
+    }
+
+    [Test]
+    public async Task GetMe_WithoutToken_Returns401()
+    {
+        var response = await _client.GetAsync("/auth/me");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+}
