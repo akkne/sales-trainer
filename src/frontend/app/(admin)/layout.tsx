@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store/authStore";
 import { clientLogger } from "@/lib/clientLogger";
 
@@ -14,6 +14,11 @@ export default function AdminLayout({
     const router = useRouter();
     const pathname = usePathname();
     const { authenticatedUser, accessToken } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (!accessToken) {
@@ -49,6 +54,8 @@ export default function AdminLayout({
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
+
+    if (!mounted) return null;
 
     if (accessToken && !authenticatedUser) {
         return (
