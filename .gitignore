@@ -11,18 +11,23 @@ src/frontend/.env*.local
 # .NET build outputs
 src/backend/bin/
 src/backend/obj/
+src/SalesTrainer.Tests/bin/
+src/SalesTrainer.Tests/obj/
 
 # Environment files
 .env
 .env.local
 .env.*.local
 
-# ASP.NET environment-specific settings
+# ASP.NET environment-specific settings (may contain secrets)
 appsettings.*.json
+# Testing config has no secrets — commit it
+!appsettings.Testing.json
 
 # Claude & design config (local only, not committed)
 .claude/
 .design/
+docs/
 
 # Docker volumes (if mounted locally)
 .postgres_data/
