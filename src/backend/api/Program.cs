@@ -90,6 +90,8 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Profile.ProfileService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.League.LeagueService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Transcription.ITranscriptionService,
+    SalesTrainer.Api.Features.Transcription.WhisperTranscriptionService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
