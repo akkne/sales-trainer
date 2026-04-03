@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRegister } from "@/lib/hooks/useAuth";
+import { GoogleLoginButton } from "@/components/ui/GoogleLoginButton";
 
 export default function RegisterPage() {
     const [displayName, setDisplayName] = useState("");
@@ -62,6 +63,16 @@ export default function RegisterPage() {
                     {registerMutation.isPending ? "Создаём..." : "Создать аккаунт"}
                 </button>
             </form>
+
+            <div className="mt-4 flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400">или</span>
+                <div className="flex-1 h-px bg-gray-200" />
+            </div>
+
+            <div className="mt-4">
+                <GoogleLoginButton />
+            </div>
 
             <p className="mt-6 text-center text-sm text-gray-500">
                 Уже есть аккаунт?{" "}

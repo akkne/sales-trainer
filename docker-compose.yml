@@ -4,6 +4,7 @@ services:
       context: ./src/frontend
       args:
         - NEXT_PUBLIC_API_URL=http://localhost:5001
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     ports:
       - "3000:3000"
     environment:
@@ -25,6 +26,7 @@ services:
       - Jwt__Issuer=salestrainer
       - Jwt__Audience=salestrainer
       - Frontend__Url=http://localhost:3000
+      - Google__ClientId=${GOOGLE_CLIENT_ID}
       - Logging__Loki__Url=http://loki:3100
     depends_on:
       postgres:
