@@ -42,11 +42,11 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
     public async Task<ActionResult<List<AdminLessonWithSkillDto>>> GetAll()
     {
         var lessons = await db.Lessons
-            .Join(db.Skills, l => l.SkillId, s => s.Id,
-                (l, s) => new AdminLessonWithSkillDto(
-                    l.Id, l.SkillId, s.Title, s.IconName,
-                    l.Title, l.SortOrder, l.DifficultyLevel, l.XpReward))
-            .OrderBy(l => l.SkillTitle).ThenBy(l => l.SortOrder)
+            .Join(db.Skills, l => l.SkillId, s => s.Id, (l, s) => new { l, s })
+            .OrderBy(x => x.s.Title).ThenBy(x => x.l.SortOrder)
+            .Select(x => new AdminLessonWithSkillDto(
+                x.l.Id, x.l.SkillId, x.s.Title, x.s.IconName,
+                x.l.Title, x.l.SortOrder, x.l.DifficultyLevel, x.l.XpReward))
             .ToListAsync();
 
         return Ok(lessons);
