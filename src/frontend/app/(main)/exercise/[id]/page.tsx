@@ -78,7 +78,7 @@ export default function ExercisePage({ params }: ExercisePageProps) {
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 pb-40">
+        <div className="max-w-2xl mx-auto px-4 pb-[calc(10rem+env(safe-area-inset-bottom))]">
             {/* Header: X + progress bar + hearts */}
             <div className="flex items-center gap-3 py-5 sticky top-0 bg-white z-10">
                 <button

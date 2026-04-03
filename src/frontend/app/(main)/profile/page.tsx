@@ -43,7 +43,7 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="grid grid-cols-2 xs:grid-cols-2 gap-3 mb-6">
                 <div className="bg-[#F7F7F7] rounded-2xl p-5 flex flex-col items-center">
                     <span className="text-3xl mb-1">🔥</span>
                     <span className="font-[var(--font-space-grotesk)] font-bold text-2xl text-gray-900">
