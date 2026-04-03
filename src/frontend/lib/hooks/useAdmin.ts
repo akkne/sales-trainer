@@ -313,6 +313,29 @@ export function useImportSkills() {
     });
 }
 
+export function useImportLessonsBulk() {
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.postFile<LessonsImportResult>(
+                "/admin/seeder/lessons/bulk",
+                formData
+            );
+        },
+        onSuccess: (data) => {
+            clientLogger.info("Bulk lessons import complete", {
+                lessonsCreated: data.lessonsCreated,
+                exercisesCreated: data.exercisesCreated,
+                errors: data.errors.length,
+            });
+        },
+        onError: (error) => {
+            clientLogger.error("Bulk lessons import failed", { error: (error as Error).message });
+        },
+    });
+}
+
 export function useImportLessons(skillId: string) {
     return useMutation({
         mutationFn: (file: File) => {

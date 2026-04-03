@@ -79,6 +79,7 @@ export default function AdminLayout({
         { href: "/admin/skills", label: "Skills" },
         { href: "/admin/seeder", label: "Skills Seeder" },
         { href: "/admin/content", label: "Content Import" },
+        { href: "/admin/bulk-lessons", label: "Bulk Lessons" },
         ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
     ];
 
