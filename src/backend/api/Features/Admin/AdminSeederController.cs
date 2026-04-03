@@ -156,100 +156,16 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         }
     }
 
-    // ---- Bulk lessons import (cross-skill, JSON only) ----
-    // Accepts: [{ "skillIcon": "...", "title": "...", "sortOrder": 1, "xpReward": 50, "difficultyLevel": 1 }, ...]
-    // difficultyLevel is optional (defaults to 1).
-
-    [HttpPost("admin/seeder/lessons/bulk")]
-    [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<LessonsImportResultDto>> ImportLessonsBulk(IFormFile file)
-    {
-        if (file is null || file.Length == 0)
-            return BadRequest(new { message = "File is required." });
-
-        if (!Path.GetExtension(file.FileName).Equals(".json", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Only .json files are accepted for bulk import." });
-
-        var skillsBySlug = await db.Skills.ToDictionaryAsync(s => s.IconName);
-        var allLessons = await db.Lessons.ToListAsync();
-        var allExercises = await db.Exercises.ToListAsync();
-
-        var state = new LessonsImportState();
-
-        try
-        {
-            using var doc = await JsonDocument.ParseAsync(file.OpenReadStream());
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
-                return BadRequest(new { message = "JSON must be an array of lesson objects." });
-
-            foreach (var (el, idx) in doc.RootElement.EnumerateArray().Select((e, i) => (e, i + 1)))
-            {
-                try
-                {
-                    var skillIcon = el.GetProperty("skillIcon").GetString()?.Trim() ?? "";
-                    if (!skillsBySlug.TryGetValue(skillIcon, out var skill))
-                    {
-                        state.Errors.Add($"Item {idx}: skill with icon '{skillIcon}' not found.");
-                        continue;
-                    }
-
-                    var title = el.GetProperty("title").GetString()?.Trim() ?? "";
-                    var sortOrder = el.GetProperty("sortOrder").GetInt32();
-                    var xp = el.GetProperty("xpReward").GetInt32();
-                    var difficulty = el.TryGetProperty("difficultyLevel", out var diffProp) ? diffProp.GetInt32() : 1;
-
-                    var lesson = UpsertLesson(skill.Id, title, sortOrder, difficulty, xp, allLessons, state);
-
-                    if (el.TryGetProperty("exercises", out var exercisesEl)
-                        && exercisesEl.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var (exEl, exIdx) in exercisesEl.EnumerateArray().Select((e, i) => (e, i + 1)))
-                        {
-                            try
-                            {
-                                var exType = exEl.GetProperty("type").GetString()?.Trim() ?? "";
-                                var exSortOrder = exEl.GetProperty("sortOrder").GetInt32();
-                                var contentJson = exEl.GetProperty("content").GetRawText();
-                                UpsertExercise(lesson, exType, exSortOrder, contentJson, allExercises, state);
-                            }
-                            catch (Exception ex)
-                            {
-                                state.Errors.Add($"Item {idx}, exercise {exIdx}: {ex.Message}");
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex) { state.Errors.Add($"Item {idx}: {ex.Message}"); }
-            }
-        }
-        catch (JsonException ex) { return BadRequest(new { message = $"JSON parse error: {ex.Message}" }); }
-
-        await db.SaveChangesAsync();
-
-        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        logger.LogInformation(
-            "Bulk lessons import: LessonsCreated={LC} LessonsUpdated={LU} ExercisesCreated={EC} ExercisesUpdated={EU} Errors={ErrCount} by ActorId={ActorId}",
-            state.LessonsCreated, state.LessonsUpdated, state.ExercisesCreated, state.ExercisesUpdated,
-            state.Errors.Count, actorId);
-
-        return Ok(new LessonsImportResultDto(
-            state.LessonsCreated, state.LessonsUpdated,
-            state.ExercisesCreated, state.ExercisesUpdated,
-            state.Errors));
-    }
-
-    // ---- Lessons + Exercises import (CSV or JSON) ----
+    // ---- Lessons + Exercises import (CSV or JSON, skillIcons list embedded in each row/item) ----
+    // CSV columns: skill_icons (pipe-separated), lesson_title, lesson_sort_order, lesson_difficulty,
+    //              lesson_xp, exercise_type, exercise_sort_order, exercise_content_json
+    // JSON: [{ "skillIcons": ["cold-calls","objection"], "title": "...", "sortOrder": 1,
+    //          "xpReward": 50, "difficultyLevel": 1, "exercises": [...] }]
 
     [HttpPost("admin/seeder/lessons")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons([FromQuery] Guid skillId, IFormFile file)
+    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons(IFormFile file)
     {
-        if (skillId == Guid.Empty)
-            return BadRequest(new { message = "skillId query parameter is required." });
-
-        var skill = await db.Skills.FindAsync(skillId);
-        if (skill is null) return NotFound(new { message = "Skill not found." });
-
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
@@ -257,11 +173,9 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         if (ext != ".csv" && ext != ".json")
             return BadRequest(new { message = "Only .csv and .json files are accepted." });
 
-        var existingLessons = await db.Lessons.Where(l => l.SkillId == skillId).ToListAsync();
-        var lessonIds = existingLessons.Select(l => l.Id).ToList();
-        var existingExercises = lessonIds.Count > 0
-            ? await db.Exercises.Where(e => lessonIds.Contains(e.LessonId)).ToListAsync()
-            : [];
+        var skillsByIcon = await db.Skills.ToDictionaryAsync(s => s.IconName);
+        var allLessons = await db.Lessons.ToListAsync();
+        var allExercises = await db.Exercises.ToListAsync();
 
         var state = new LessonsImportState();
 
@@ -273,7 +187,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
 
             if (rows.Count == 0) return BadRequest(new { message = "CSV has no data rows." });
 
-            var required = new[] { "lesson_title", "lesson_sort_order", "lesson_difficulty", "lesson_xp",
+            var required = new[] { "skill_icons", "lesson_title", "lesson_sort_order", "lesson_difficulty", "lesson_xp",
                 "exercise_type", "exercise_sort_order", "exercise_content_json" };
             var missing = required.Where(c => !rows[0].ContainsKey(c)).ToList();
             if (missing.Count > 0)
@@ -281,7 +195,25 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
 
             foreach (var (row, index) in rows.Select((r, i) => (r, i + 2)))
             {
-                try { ProcessLessonRow(row, skillId, existingLessons, existingExercises, state); }
+                try
+                {
+                    var icons = row["skill_icons"].Split('|',
+                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (icons.Length == 0)
+                    {
+                        state.Errors.Add($"Row {index}: skill_icons is empty.");
+                        continue;
+                    }
+                    foreach (var icon in icons)
+                    {
+                        if (!skillsByIcon.TryGetValue(icon, out var skill))
+                        {
+                            state.Errors.Add($"Row {index}: skill with icon '{icon}' not found.");
+                            continue;
+                        }
+                        ProcessLessonRow(row, skill.Id, allLessons, allExercises, state);
+                    }
+                }
                 catch (Exception ex) { state.Errors.Add($"Row {index}: {ex.Message}"); }
             }
         }
@@ -297,33 +229,61 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
                 {
                     try
                     {
+                        if (!lessonEl.TryGetProperty("skillIcons", out var iconsEl)
+                            || iconsEl.ValueKind != JsonValueKind.Array)
+                        {
+                            state.Errors.Add($"Item {lessonIdx}: 'skillIcons' array is required.");
+                            continue;
+                        }
+
+                        var icons = iconsEl.EnumerateArray()
+                            .Select(e => e.GetString()?.Trim() ?? "")
+                            .Where(s => s.Length > 0)
+                            .ToList();
+
+                        if (icons.Count == 0)
+                        {
+                            state.Errors.Add($"Item {lessonIdx}: 'skillIcons' is empty.");
+                            continue;
+                        }
+
                         var lessonTitle = lessonEl.GetProperty("title").GetString()?.Trim() ?? "";
                         var lessonSortOrder = lessonEl.GetProperty("sortOrder").GetInt32();
-                        var difficulty = lessonEl.GetProperty("difficultyLevel").GetInt32();
+                        var difficulty = lessonEl.TryGetProperty("difficultyLevel", out var diffProp) ? diffProp.GetInt32() : 1;
                         var xp = lessonEl.GetProperty("xpReward").GetInt32();
 
-                        var lesson = UpsertLesson(skillId, lessonTitle, lessonSortOrder, difficulty, xp, existingLessons, state);
+                        lessonEl.TryGetProperty("exercises", out var exercisesEl);
 
-                        if (lessonEl.TryGetProperty("exercises", out var exercisesEl)
-                            && exercisesEl.ValueKind == JsonValueKind.Array)
+                        foreach (var icon in icons)
                         {
-                            foreach (var (exEl, exIdx) in exercisesEl.EnumerateArray().Select((e, i) => (e, i + 1)))
+                            if (!skillsByIcon.TryGetValue(icon, out var skill))
                             {
-                                try
+                                state.Errors.Add($"Item {lessonIdx}: skill with icon '{icon}' not found.");
+                                continue;
+                            }
+
+                            var lesson = UpsertLesson(skill.Id, lessonTitle, lessonSortOrder, difficulty, xp, allLessons, state);
+
+                            if (exercisesEl.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var (exEl, exIdx) in exercisesEl.EnumerateArray().Select((e, i) => (e, i + 1)))
                                 {
-                                    var exType = exEl.GetProperty("type").GetString()?.Trim() ?? "";
-                                    var exSortOrder = exEl.GetProperty("sortOrder").GetInt32();
-                                    var contentJson = exEl.GetProperty("content").GetRawText();
-                                    UpsertExercise(lesson, exType, exSortOrder, contentJson, existingExercises, state);
-                                }
-                                catch (Exception ex)
-                                {
-                                    state.Errors.Add($"Lesson {lessonIdx}, exercise {exIdx}: {ex.Message}");
+                                    try
+                                    {
+                                        var exType = exEl.GetProperty("type").GetString()?.Trim() ?? "";
+                                        var exSortOrder = exEl.GetProperty("sortOrder").GetInt32();
+                                        var contentJson = exEl.GetProperty("content").GetRawText();
+                                        UpsertExercise(lesson, exType, exSortOrder, contentJson, allExercises, state);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        state.Errors.Add($"Item {lessonIdx} ({icon}), exercise {exIdx}: {ex.Message}");
+                                    }
                                 }
                             }
                         }
                     }
-                    catch (Exception ex) { state.Errors.Add($"Lesson {lessonIdx}: {ex.Message}"); }
+                    catch (Exception ex) { state.Errors.Add($"Item {lessonIdx}: {ex.Message}"); }
                 }
             }
             catch (JsonException ex) { return BadRequest(new { message = $"JSON parse error: {ex.Message}" }); }
@@ -333,9 +293,9 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
 
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         logger.LogInformation(
-            "Lessons seeder import: LessonsCreated={LC} LessonsUpdated={LU} ExercisesCreated={EC} ExercisesUpdated={EU} Errors={ErrCount} SkillId={SkillId} by ActorId={ActorId}",
+            "Lessons seeder import: LessonsCreated={LC} LessonsUpdated={LU} ExercisesCreated={EC} ExercisesUpdated={EU} Errors={ErrCount} by ActorId={ActorId}",
             state.LessonsCreated, state.LessonsUpdated, state.ExercisesCreated, state.ExercisesUpdated,
-            state.Errors.Count, skillId, actorId);
+            state.Errors.Count, actorId);
 
         return Ok(new LessonsImportResultDto(
             state.LessonsCreated, state.LessonsUpdated,

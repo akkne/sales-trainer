@@ -16,6 +16,17 @@ public record AdminLessonDto(
     int XpReward
 );
 
+public record AdminLessonWithSkillDto(
+    Guid Id,
+    Guid SkillId,
+    string SkillTitle,
+    string SkillIcon,
+    string Title,
+    int SortOrder,
+    int DifficultyLevel,
+    int XpReward
+);
+
 public record CreateLessonRequestDto(
     string Title,
     int SortOrder,
@@ -27,6 +38,20 @@ public record CreateLessonRequestDto(
 [Authorize(Policy = "RequireAdmin")]
 public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsController> logger) : ControllerBase
 {
+    [HttpGet("admin/lessons")]
+    public async Task<ActionResult<List<AdminLessonWithSkillDto>>> GetAll()
+    {
+        var lessons = await db.Lessons
+            .Join(db.Skills, l => l.SkillId, s => s.Id,
+                (l, s) => new AdminLessonWithSkillDto(
+                    l.Id, l.SkillId, s.Title, s.IconName,
+                    l.Title, l.SortOrder, l.DifficultyLevel, l.XpReward))
+            .OrderBy(l => l.SkillTitle).ThenBy(l => l.SortOrder)
+            .ToListAsync();
+
+        return Ok(lessons);
+    }
+
     [HttpGet("admin/skills/{skillId:guid}/lessons")]
     public async Task<ActionResult<List<AdminLessonDto>>> GetBySkill(Guid skillId)
     {

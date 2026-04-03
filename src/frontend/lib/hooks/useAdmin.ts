@@ -25,6 +25,11 @@ export interface AdminLesson {
     xpReward: number;
 }
 
+export interface AdminLessonWithSkill extends AdminLesson {
+    skillTitle: string;
+    skillIcon: string;
+}
+
 export interface AdminExercise {
     id: string;
     lessonId: string;
@@ -104,6 +109,13 @@ export function useDeleteSkill() {
 
 // --- Lessons ---
 
+export function useAdminAllLessons() {
+    return useQuery({
+        queryKey: ["admin", "lessons"],
+        queryFn: () => apiClient.get<AdminLessonWithSkill[]>("/admin/lessons"),
+    });
+}
+
 export function useAdminLessons(skillId: string) {
     return useQuery({
         queryKey: ["admin", "lessons", skillId],
@@ -119,7 +131,7 @@ export function useCreateLesson(skillId: string) {
             apiClient.post<AdminLesson>(`/admin/skills/${skillId}/lessons`, body),
         onSuccess: (data) => {
             clientLogger.info("Lesson created", { lessonId: data.id, skillId, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create lesson", { skillId, title: variables.title, error: (error as Error).message });
@@ -134,7 +146,7 @@ export function useUpdateLesson(skillId: string, lessonId: string) {
             apiClient.put<AdminLesson>(`/admin/lessons/${lessonId}`, body),
         onSuccess: (data) => {
             clientLogger.info("Lesson updated", { lessonId: data.id, skillId, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update lesson", { lessonId, skillId, error: (error as Error).message });
@@ -149,7 +161,7 @@ export function useDeleteLesson(skillId: string) {
             apiClient.delete<void>(`/admin/lessons/${lessonId}`),
         onSuccess: (_, lessonId) => {
             clientLogger.warn("Lesson deleted", { lessonId, skillId });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error, lessonId) => {
             clientLogger.error("Failed to delete lesson", { lessonId, skillId, error: (error as Error).message });
@@ -313,38 +325,12 @@ export function useImportSkills() {
     });
 }
 
-export function useImportLessonsBulk() {
+export function useImportLessons() {
     return useMutation({
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
-            return apiClient.postFile<LessonsImportResult>(
-                "/admin/seeder/lessons/bulk",
-                formData
-            );
-        },
-        onSuccess: (data) => {
-            clientLogger.info("Bulk lessons import complete", {
-                lessonsCreated: data.lessonsCreated,
-                exercisesCreated: data.exercisesCreated,
-                errors: data.errors.length,
-            });
-        },
-        onError: (error) => {
-            clientLogger.error("Bulk lessons import failed", { error: (error as Error).message });
-        },
-    });
-}
-
-export function useImportLessons(skillId: string) {
-    return useMutation({
-        mutationFn: (file: File) => {
-            const formData = new FormData();
-            formData.append("file", file);
-            return apiClient.postFile<LessonsImportResult>(
-                `/admin/seeder/lessons?skillId=${skillId}`,
-                formData
-            );
+            return apiClient.postFile<LessonsImportResult>("/admin/seeder/lessons", formData);
         },
         onSuccess: (data) => {
             clientLogger.info("Lessons seeder import complete", {

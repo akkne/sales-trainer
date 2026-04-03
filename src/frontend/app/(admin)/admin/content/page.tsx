@@ -1,21 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-    useAdminSkills,
-    useImportLessons,
-    type LessonsImportResult,
-} from "@/lib/hooks/useAdmin";
+import { useImportLessons, type LessonsImportResult } from "@/lib/hooks/useAdmin";
 
 const CSV_TEMPLATE = [
-    "lesson_title,lesson_sort_order,lesson_difficulty,lesson_xp,exercise_type,exercise_sort_order,exercise_content_json",
-    'Opening the Call,1,1,50,multiple_choice,1,"{""situation"":""You just dialed a prospect."",""question"":""Best opener?"",""options"":[""Hi boss"",""Hi I\'m Alex from Acme"",""Buy something?""],""correctOptionIndex"":1}"',
-    'Opening the Call,1,1,50,fill_blank,2,"{""characterName"":""Prospect"",""characterLine"":""Who is this?"",""options"":[""Nobody."",""I\'m Alex from Acme."",""Please don\'t hang up!""],""correctOptionIndex"":1}"',
+    "skill_icons,lesson_title,lesson_sort_order,lesson_difficulty,lesson_xp,exercise_type,exercise_sort_order,exercise_content_json",
+    'cold-calls|objection-handling,Opening the Call,1,1,50,multiple_choice,1,"{""situation"":""You just dialed a prospect."",""question"":""Best opener?"",""options"":[""Hi boss"",""Hi I\'m Alex from Acme"",""Buy something?""],""correctOptionIndex"":1}"',
+    'cold-calls|objection-handling,Opening the Call,1,1,50,fill_blank,2,"{""characterName"":""Prospect"",""characterLine"":""Who is this?"",""options"":[""Nobody."",""I\'m Alex from Acme."",""Please don\'t hang up!""],""correctOptionIndex"":1}"',
 ].join("\n");
 
 const JSON_TEMPLATE = JSON.stringify(
     [
         {
+            skillIcons: ["cold-calls", "objection-handling"],
             title: "Opening the Call",
             sortOrder: 1,
             difficultyLevel: 1,
@@ -81,13 +78,11 @@ function StatBox({ label, value, accent }: { label: string; value: number; accen
 }
 
 export default function ContentPage() {
-    const { data: skills = [], isLoading: skillsLoading } = useAdminSkills();
-    const [selectedSkillId, setSelectedSkillId] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [result, setResult] = useState<LessonsImportResult | null>(null);
 
-    const importLessons = useImportLessons(selectedSkillId);
+    const importLessons = useImportLessons();
 
     function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const f = e.target.files?.[0] ?? null;
@@ -96,7 +91,7 @@ export default function ContentPage() {
     }
 
     async function handleImport() {
-        if (!selectedFile || !selectedSkillId) return;
+        if (!selectedFile) return;
         const data = await importLessons.mutateAsync(selectedFile);
         setResult(data);
         setSelectedFile(null);
@@ -107,51 +102,19 @@ export default function ContentPage() {
         <div className="max-w-2xl">
             <h1 className="text-xl font-semibold text-gray-900 mb-1">Content Import</h1>
             <p className="text-sm text-gray-500 mb-6">
-                Bulk-import lessons and exercises for a specific skill from a CSV or JSON file.
-                Existing lessons are matched by title; exercises by sort order within the lesson.
+                Import lessons and exercises across multiple skills from one CSV or JSON file.
+                Each row / item must include a <code className="bg-gray-100 px-1 rounded">skillIcons</code> list
+                (pipe-separated in CSV, array in JSON) matching existing skill icon names. Lessons are upserted by title within each skill;
+                exercises by sort order within the lesson.
             </p>
-
-            {/* Skill selector */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-                <h2 className="text-sm font-medium text-gray-700 mb-3">Select skill</h2>
-                {skillsLoading ? (
-                    <p className="text-sm text-gray-400">Loading skills…</p>
-                ) : skills.length === 0 ? (
-                    <p className="text-sm text-gray-400">
-                        No skills found. Add skills first via the Skills Seeder.
-                    </p>
-                ) : (
-                    <select
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                        value={selectedSkillId}
-                        onChange={(e) => {
-                            setSelectedSkillId(e.target.value);
-                            setResult(null);
-                        }}
-                    >
-                        <option value="">— choose a skill —</option>
-                        {[...skills]
-                            .sort((a, b) => a.sortOrder - b.sortOrder)
-                            .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                    {s.iconName} · {s.title}
-                                </option>
-                            ))}
-                    </select>
-                )}
-            </div>
 
             {/* Upload card */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
                 <h2 className="text-sm font-medium text-gray-700 mb-4">Upload file</h2>
 
                 <div
-                    className={`border-2 border-dashed rounded-md px-6 py-8 text-center transition-colors ${
-                        selectedSkillId
-                            ? "border-gray-300 cursor-pointer hover:border-gray-400"
-                            : "border-gray-200 cursor-not-allowed opacity-50"
-                    }`}
-                    onClick={() => selectedSkillId && fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 rounded-md px-6 py-8 text-center cursor-pointer hover:border-gray-400 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
                 >
                     <p className="text-sm text-gray-500">
                         {selectedFile ? (
@@ -181,7 +144,7 @@ export default function ContentPage() {
                 <div className="mt-4 flex items-center gap-3 flex-wrap">
                     <button
                         onClick={handleImport}
-                        disabled={!selectedFile || !selectedSkillId || importLessons.isPending}
+                        disabled={!selectedFile || importLessons.isPending}
                         className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-40 transition-colors"
                     >
                         {importLessons.isPending ? "Importing…" : "Import"}
@@ -244,19 +207,14 @@ export default function ContentPage() {
                 <table className="w-full text-xs border-collapse mb-5">
                     <thead>
                         <tr className="border-b border-gray-200">
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
-                                Column
-                            </th>
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
-                                Type
-                            </th>
-                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">
-                                Notes
-                            </th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Column</th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Type</th>
+                            <th className="text-left py-1.5 px-2 text-gray-500 font-medium">Notes</th>
                         </tr>
                     </thead>
                     <tbody className="text-gray-700">
                         {[
+                            ["skill_icons", "string", "Pipe-separated icon names — e.g. cold-calls|objection-handling"],
                             ["lesson_title", "string", "Upsert key within the skill"],
                             ["lesson_sort_order", "integer", "Order within the skill"],
                             ["lesson_difficulty", "integer", "1 = easy, 3 = hard"],
@@ -278,6 +236,7 @@ export default function ContentPage() {
                 <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto text-gray-700">
 {`[
   {
+    "skillIcons": ["cold-calls", "objection-handling"],
     "title": "Lesson title",
     "sortOrder": 1,
     "difficultyLevel": 1,
