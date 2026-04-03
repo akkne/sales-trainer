@@ -211,6 +211,7 @@ public class ExerciseService(
                 LongestStreakDayCount = 1,
                 LastActivityDate = today
             });
+            AwardStreakBonusXpIfMilestone(userId, 1);
             return;
         }
 
@@ -225,5 +226,28 @@ public class ExerciseService(
             streakRecord.LongestStreakDayCount = streakRecord.CurrentStreakDayCount;
 
         streakRecord.LastActivityDate = today;
+
+        AwardStreakBonusXpIfMilestone(userId, streakRecord.CurrentStreakDayCount);
+    }
+
+    private void AwardStreakBonusXpIfMilestone(Guid userId, int currentStreak)
+    {
+        int bonusXp = currentStreak switch
+        {
+            7  => 50,
+            30 => 200,
+            _  => 0
+        };
+
+        if (bonusXp == 0) return;
+
+        databaseContext.UserXpRecords.Add(new UserXp
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Amount = bonusXp,
+            Source = "streak_bonus",
+            EarnedAt = DateTime.UtcNow
+        });
     }
 }
