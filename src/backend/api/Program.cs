@@ -102,6 +102,7 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluati
 // builder.Services.AddHttpClient("OpenAI")
 //     .ConfigureHttpClient(client =>
 //         client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient(); // Required by FreeTextEvaluationStrategy and WhisperTranscriptionService
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

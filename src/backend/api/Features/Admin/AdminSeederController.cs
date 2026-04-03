@@ -157,7 +157,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
     }
 
     // ---- Bulk lessons import (cross-skill, JSON only) ----
-    // Accepts: [{ "skillSlug": "...", "title": "...", "sortOrder": 1, "xpReward": 50, "difficultyLevel": 1 }, ...]
+    // Accepts: [{ "skillIcon": "...", "title": "...", "sortOrder": 1, "xpReward": 50, "difficultyLevel": 1 }, ...]
     // difficultyLevel is optional (defaults to 1).
 
     [HttpPost("admin/seeder/lessons/bulk")]
@@ -170,7 +170,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         if (!Path.GetExtension(file.FileName).Equals(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted for bulk import." });
 
-        var skillsBySlug = await db.Skills.ToDictionaryAsync(s => s.Slug);
+        var skillsBySlug = await db.Skills.ToDictionaryAsync(s => s.IconName);
         var allLessons = await db.Lessons.ToListAsync();
         var allExercises = await db.Exercises.ToListAsync();
 
@@ -186,10 +186,10 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             {
                 try
                 {
-                    var skillSlug = el.GetProperty("skillSlug").GetString()?.Trim() ?? "";
-                    if (!skillsBySlug.TryGetValue(skillSlug, out var skill))
+                    var skillIcon = el.GetProperty("skillIcon").GetString()?.Trim() ?? "";
+                    if (!skillsBySlug.TryGetValue(skillIcon, out var skill))
                     {
-                        state.Errors.Add($"Item {idx}: skill with slug '{skillSlug}' not found.");
+                        state.Errors.Add($"Item {idx}: skill with icon '{skillIcon}' not found.");
                         continue;
                     }
 

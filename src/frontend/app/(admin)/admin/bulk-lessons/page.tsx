@@ -6,19 +6,19 @@ import { useImportLessonsBulk, type LessonsImportResult } from "@/lib/hooks/useA
 const JSON_TEMPLATE = JSON.stringify(
     [
         {
-            skillSlug: "cold-calls",
+            skillIcon: "cold-calls",
             title: "Подготовка к звонку",
             sortOrder: 1,
             xpReward: 60,
         },
         {
-            skillSlug: "cold-calls",
+            skillIcon: "cold-calls",
             title: "Первые секунды разговора",
             sortOrder: 2,
             xpReward: 60,
         },
         {
-            skillSlug: "objection-handling",
+            skillIcon: "objection-handling",
             title: "Почему клиенты возражают",
             sortOrder: 1,
             xpReward: 70,
@@ -82,7 +82,7 @@ export default function BulkLessonsPage() {
             <h1 className="text-xl font-semibold text-gray-900 mb-1">Bulk Lessons Import</h1>
             <p className="text-sm text-gray-500 mb-6">
                 Import lessons for multiple skills at once. Skills are matched by{" "}
-                <span className="font-mono">skillSlug</span>. Lessons are upserted by title within each skill.{" "}
+                <span className="font-mono">skillIcon</span>. Lessons are upserted by title within each skill.{" "}
                 <span className="font-medium">difficultyLevel</span> defaults to 1 if omitted.
             </p>
 
@@ -172,7 +172,7 @@ export default function BulkLessonsPage() {
                 <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto text-gray-700">
 {`[
   {
-    "skillSlug": "cold-calls",     // must match an existing skill slug
+    "skillIcon": "cold-calls",      // must match an existing skill icon name
     "title": "Lesson title",       // upsert key within the skill
     "sortOrder": 1,
     "xpReward": 60,
