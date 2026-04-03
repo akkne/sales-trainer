@@ -130,13 +130,13 @@
 
 ## Phase 6 — League Promotion
 
-### [ ] League promotion/demotion logic
-- [ ] `WeeklyLeagueClosureJob` — already scheduled, implement full logic:
+### [x] League promotion/demotion logic
+- [x] `WeeklyLeagueClosureJob` — full logic implemented:
   - Top-10 in each league promoted to next tier
   - Bottom-5 demoted
   - New week: reset `weekly_xp`, create new `LeagueMembership` rows
-- [ ] Frontend league page shows promotion/demotion zone highlights
-- [ ] Push notification / banner on week close (in-app only)
+- [x] Frontend league page shows promotion/demotion zone highlights
+- [x] Push notification / banner on week close (in-app only)
 
 ---
 
@@ -145,51 +145,42 @@
 > Full visual redesign of the main app flow based on Stitch design `projects/5546133593140033209`.
 > Spec: [docs/LESSON_EXECUTION_REDESIGN.md](LESSON_EXECUTION_REDESIGN.md)
 
-### [ ] Design tokens & fonts
-- [ ] Add Manrope font via `next/font/google` in `app/layout.tsx`
-- [ ] Update `globals.css`: body font → Manrope, define CSS color variables for green scheme
-- [ ] Add CSS utility classes: `node-center`, `node-left`, `node-right`, `btn-3d`, `slide-up`
+### [x] Design tokens & fonts
+- [x] Add Manrope font via `next/font/google` in `app/layout.tsx`
+- [x] Update `globals.css`: body font → Manrope, define CSS color variables for green scheme
+- [x] Add CSS utility classes: `node-center`, `node-left`, `node-right`, `btn-3d`, `slide-up`
 
-### [ ] SkillNode component redesign
-- [ ] `variant: 'completed' | 'active' | 'locked'` prop
-- [ ] Completed: yellow circle `#FFC800`, gold medal badge top-right
-- [ ] Active: green circle `#59c705`, `animate-ping` outer ring, default-open popover card above node
-- [ ] Locked: gray `#F7F7F7` circle, lock icon, `cursor-not-allowed`
-- [ ] Zigzag offset via `node-left` / `node-right` / `node-center` CSS classes
-- [ ] Popover card: lesson title, mini progress bar (X/total), "Старт" green button
+### [x] SkillNode component redesign
+- [x] `positionClass` prop (node-center / node-left / node-right)
+- [x] Completed: yellow circle `#FFC800`, gold medal badge top-right
+- [x] Active: green circle `#58CC02`, `animate-ping` outer ring, popover card above node
+- [x] Locked: gray `#F7F7F7` circle, lock icon SVG, `cursor-not-allowed`
+- [x] Zigzag offset via `node-left` / `node-right` / `node-center` CSS classes
+- [x] Popover card: skill title, mini progress bar, X/total lessons, "Старт" green button
 
-### [ ] StatsWidget redesign
-- [ ] 3 separate border cards: 🔥 Streak (yellow), ⚡ XP (blue), 🏆 League (red/shield)
-- [ ] Each card: `border-2 border-border-color rounded-2xl`, hover accent border
-- [ ] Mascot card below with motivational tip text
+### [x] StatsWidget redesign
+- [x] 3 separate border cards: 🔥 Streak (yellow), ⚡ XP (blue), 🏆 XP Total (red)
+- [x] Each card: `border-2 border-border-color rounded-2xl`, hover accent border
+- [x] Mascot card below with motivational tip text
 
-### [ ] Skill Tree page (`/tree`) redesign
-- [ ] Section header banner: `bg-primary text-white rounded-[24px] shadow-[0_4px_0_0_#58A700]`
-- [ ] Section header shows: name, description, `X/total` progress fraction badge
-- [ ] Locked section: `bg-surface border-2` with lock icon
-- [ ] Vertical path line: absolute div `left-1/2 -translate-x-1/2 w-4 bg-border-color`
-- [ ] Active segment of path line: `bg-primary` overlay at proportional height
-- [ ] Boss/chest node at end of each section (rotated square icon)
-- [ ] Right sidebar: new StatsWidget + mascot
+### [x] Skill Tree page (`/tree`) redesign
+- [x] Section header banner: green bg, shadow `0 4px 0 0 #58A700`, X/total badge
+- [x] Vertical path line with active green segment overlay
+- [x] Zigzag node offsets (center/right/right/center/left/left pattern)
+- [x] Right sidebar: new StatsWidget
 
-### [ ] Skill Path page (`/skill/[id]`) redesign
-- [ ] Replace lesson list with vertical node path
-- [ ] SVG overlay with curved `C` bezier connectors between nodes (dashed animated on active)
-- [ ] Lesson nodes: same completed/active/locked variants as SkillNode
-- [ ] Alternating left/right horizontal offsets
-- [ ] Active node popover: lesson name, "Урок X из N", green "Старт" button
-- [ ] Right sidebar: stats mini bar + skill description + progress bar + guidebook link
+### [x] Skill Path page (`/skill/[id]`) redesign
+- [x] Replace lesson list with vertical node path
+- [x] Lesson nodes: completed/active/locked variants with zigzag offsets
+- [x] Active node popover: lesson name, "Урок X из N", green "Старт" button
+- [x] Progress bar header with completed/total count
 
-### [ ] Exercise page (`/exercise/[id]`) redesign
-- [ ] New header: X button + green progress bar + ❤️ hearts counter (visual, starts at 4)
-- [ ] Character speech bubble for situation field (portrait + bubble with arrow)
-- [ ] Multiple choice: numbered badge (1/2/3) + `border-b-4` 3D shadow buttons
-- [ ] Selected state: `border-accent-blue bg-[#e8f7fe] text-accent-blue`
-- [ ] Replace `ExerciseResultBanner` with slide-up green/red panels:
-  - Correct: `bg-[#d7ffb8]`, checkmark icon, explanation, "ПРОДОЛЖИТЬ" green button
-  - Incorrect: `bg-[#ffdfe0]`, cancel icon, correct answer shown, "ПОНЯТНО" red button
-- [ ] Apply same speech bubble + numbered options to FillBlankExercise
-- [ ] Keep FreeTextExercise layout, apply 3D button style to submit/mic buttons
+### [x] Exercise page (`/exercise/[id]`) redesign
+- [x] New header: X button + green progress bar + ❤️ hearts counter (starts at 4)
+- [x] Character speech bubble for situation field
+- [x] Multiple choice + fill blank: numbered badge + `border-b-4` 3D buttons, blue selected state
+- [x] FreeTextExercise: 3D button style applied
+- [x] ExerciseResultBanner: CSS slide-up animation, correct (green) / incorrect (red) panels
 
 ### [ ] Smoke test
 - [ ] Full lesson flow: tree → skill path → exercise → result banner → next exercise
@@ -200,11 +191,18 @@
 
 ## Phase 7 — Polish & Mobile
 
-### [ ] Mobile UX pass
-- [ ] Responsive skill tree (touch-friendly nodes)
-- [ ] Exercise screen bottom-safe-area padding
-- [ ] Profile page on small screens
+### [x] Mobile UX pass
+- [x] Responsive skill tree (touch-friendly nodes via CSS zigzag offsets)
+- [x] Exercise screen bottom-safe-area padding (`env(safe-area-inset-bottom)`)
+- [x] BottomNav iOS safe-area padding
+- [x] Profile page on small screens (grid stays 2-col, font scales)
+- [x] `viewport` meta with `viewportFit: cover` for edge-to-edge iOS support
   
+### [x] Skill focus — lesson path on home tab
+- [x] Profile tab: skill picker (shows unlocked skills, persists choice in localStorage)
+- [x] `/tree` tab: if skill selected → shows lesson path (ordered by sortOrder); otherwise → full skill tree
+- [x] "Сменить навык →" link from tree to profile; "Показать все навыки" to clear selection
+- [x] Shared `LessonPath` component reused by both `/tree` and `/skill/[id]`
+
 ### [ ] Performance
-- [ ] Redis caching for skill tree (`GET /skill-tree`) — 60s TTL, invalidate on admin skill change
 - [ ] Redis leaderboard sorted set for league rankings

@@ -1,22 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { SkillNode } from "@/components/ui/SkillNode";
 import { LessonPath } from "@/components/ui/LessonPath";
 import { StatsWidget } from "@/components/layout/StatsWidget";
 import { useSkillTree } from "@/lib/hooks/useSkillTree";
-import { useLessonsForSkill } from "@/lib/hooks/useLesson";
+import { useAllLessons, useLessonsForSkill } from "@/lib/hooks/useLesson";
 import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
 
-// Zigzag pattern for the full skill tree view
-const ZIGZAG: Array<"node-center" | "node-left" | "node-right"> = [
-    "node-center",
-    "node-right",
-    "node-right",
-    "node-center",
-    "node-left",
-    "node-left",
-];
+function AllLessonsView() {
+    const { data: lessons, isLoading } = useAllLessons();
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+            </div>
+        );
+    }
+
+    const sorted = (lessons ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    const completedCount = sorted.filter((l) => l.status === "completed").length;
+
+    return (
+        <>
+            {/* Header banner */}
+            <div
+                className="rounded-3xl px-6 py-5 mb-8 text-white"
+                style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #58A700" }}
+            >
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-semibold opacity-80 uppercase tracking-wider mb-1">
+                            Путь мастерства
+                        </p>
+                        <h1 className="text-2xl font-extrabold">Все уроки</h1>
+                    </div>
+                    <div className="bg-white/20 rounded-2xl px-4 py-2 text-center">
+                        <span className="text-2xl font-extrabold">
+                            {completedCount}/{sorted.length}
+                        </span>
+                    </div>
+                </div>
+                <div className="mt-4 h-2 bg-white/30 rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-white rounded-full transition-all duration-500"
+                        style={{
+                            width: `${sorted.length > 0 ? (completedCount / sorted.length) * 100 : 0}%`,
+                        }}
+                    />
+                </div>
+                <p className="mt-3 text-white/70 text-xs font-semibold">
+                    Выбери навык в профиле, чтобы сфокусироваться →
+                </p>
+            </div>
+
+            {sorted.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+                    <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+                        style={{ background: "#F7F7F7" }}
+                    >
+                        📚
+                    </div>
+                    <p className="text-xl font-extrabold text-gray-800">Уроки ещё не добавлены</p>
+                    <p className="text-sm text-[#AFAFAF] max-w-xs">
+                        Попроси администратора добавить уроки, чтобы начать обучение
+                    </p>
+                </div>
+            ) : (
+                <LessonPath lessons={sorted} />
+            )}
+        </>
+    );
+}
 
 function SkillLessonView({ skillSlug, skillTitle, skillIcon }: {
     skillSlug: string;
@@ -112,71 +168,7 @@ export default function SkillTreePage() {
                         skillIcon={selectedSkill.iconName}
                     />
                 ) : (
-                    <>
-                        {/* Full skill tree */}
-                        <div
-                            className="rounded-3xl px-6 py-5 mb-8 text-white"
-                            style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #58A700" }}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-semibold opacity-80 uppercase tracking-wider mb-1">
-                                        Путь мастерства
-                                    </p>
-                                    <h1 className="text-2xl font-extrabold">Навыки продаж</h1>
-                                </div>
-                                <div className="bg-white/20 rounded-2xl px-4 py-2 text-center">
-                                    <span className="text-2xl font-extrabold">
-                                        {skillTreeData.skillNodes.filter(n => n.status === "completed").length}/
-                                        {skillTreeData.skillNodes.length}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="mt-4 h-2 bg-white/30 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-white rounded-full transition-all duration-500"
-                                    style={{
-                                        width: `${skillTreeData.skillNodes.length > 0
-                                            ? (skillTreeData.skillNodes.filter(n => n.status === "completed").length / skillTreeData.skillNodes.length) * 100
-                                            : 0}%`,
-                                    }}
-                                />
-                            </div>
-                            <p className="mt-3 text-white/70 text-xs font-semibold">
-                                Выбери навык в профиле, чтобы сфокусироваться →
-                            </p>
-                        </div>
-
-                        <div className="relative flex flex-col items-center gap-0">
-                            <div
-                                className="absolute left-1/2 -translate-x-1/2 top-9 bottom-9 w-1 rounded-full bg-[#E5E5E5]"
-                                aria-hidden
-                            />
-                            {skillTreeData.skillNodes.map((skillNode, nodeIndex) => {
-                                const positionClass = ZIGZAG[nodeIndex % ZIGZAG.length];
-                                const isPassedOrActive =
-                                    skillNode.status === "completed" ||
-                                    skillNode.status === "in_progress" ||
-                                    skillNode.status === "available";
-
-                                return (
-                                    <div
-                                        key={skillNode.skillId}
-                                        className="relative w-full flex flex-col items-center pb-12"
-                                    >
-                                        {nodeIndex < skillTreeData.skillNodes.length - 1 && isPassedOrActive && (
-                                            <div
-                                                className="absolute left-1/2 -translate-x-1/2 top-9 w-1 rounded-full bg-[#58CC02]"
-                                                style={{ height: "calc(100% - 36px)" }}
-                                                aria-hidden
-                                            />
-                                        )}
-                                        <SkillNode skillNode={skillNode} positionClass={positionClass} />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
+                    <AllLessonsView />
                 )}
             </div>
 

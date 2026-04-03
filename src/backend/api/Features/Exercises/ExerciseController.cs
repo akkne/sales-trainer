@@ -8,6 +8,16 @@ namespace SalesTrainer.Api.Features.Exercises;
 [Authorize]
 public class ExerciseController(ExerciseService exerciseService) : ControllerBase
 {
+    [HttpGet("lessons")]
+    public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetAllLessons()
+    {
+        var userId = ResolveCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var lessons = await exerciseService.GetAllLessonsAsync(userId.Value);
+        return Ok(lessons);
+    }
+
     [HttpGet("skills/{skillSlug}/lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(
         string skillSlug)

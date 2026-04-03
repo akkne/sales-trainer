@@ -10,6 +10,31 @@ public class ExerciseService(
     AppDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory)
 {
+    public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(Guid userId)
+    {
+        var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
+            .Where(progress => progress.UserId == userId)
+            .ToDictionaryAsync(progress => progress.LessonId);
+
+        var allLessons = await databaseContext.Lessons
+            .OrderBy(lesson => lesson.SortOrder)
+            .ThenBy(lesson => lesson.Id)
+            .ToListAsync();
+
+        return allLessons.Select(lesson =>
+        {
+            lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
+            return new LessonSummaryDto(
+                lesson.Id,
+                lesson.Title,
+                lesson.SortOrder,
+                lesson.DifficultyLevel,
+                lesson.XpReward,
+                progressRecord?.Status ?? "locked",
+                progressRecord?.BestScore ?? 0);
+        }).ToList();
+    }
+
     public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
         Guid userId,
         string skillSlug)

@@ -26,6 +26,13 @@ export interface ExerciseSubmissionResult {
     xpEarned: number;
 }
 
+export function useAllLessons() {
+    return useQuery({
+        queryKey: ["lessons", "all"],
+        queryFn: () => apiClient.get<LessonSummary[]>(`/lessons`),
+    });
+}
+
 export function useLessonsForSkill(skillSlug: string) {
     return useQuery({
         queryKey: ["lessons", skillSlug],
