@@ -66,6 +66,8 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
                 if (doc.RootElement.ValueKind != JsonValueKind.Array)
                     return BadRequest(new { message = "JSON must be an array of skill objects." });
 
+                var prerequisiteMap = new List<(string slug, string iconName)>();
+
                 foreach (var (el, index) in doc.RootElement.EnumerateArray().Select((e, i) => (e, i + 1)))
                 {
                     try
@@ -74,12 +76,40 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
                         var title = el.GetProperty("title").GetString()?.Trim() ?? "";
                         var iconName = el.GetProperty("iconName").GetString()?.Trim() ?? "";
                         var sortOrder = el.GetProperty("sortOrder").GetInt32();
-                        var salesTypes = el.GetProperty("salesTypes").EnumerateArray()
+                        var salesTypes = el.GetProperty("applicableSalesTypes").EnumerateArray()
                             .Select(e => e.GetString()?.Trim() ?? "")
                             .Where(s => s != "").ToArray();
                         UpsertSkill(slug, title, iconName, sortOrder, salesTypes, existingSkills, state);
+
+                        if (el.TryGetProperty("prerequisiteSkillIcon", out var prereqProp)
+                            && prereqProp.ValueKind != JsonValueKind.Null)
+                        {
+                            var prereqIcon = prereqProp.GetString()?.Trim();
+                            if (!string.IsNullOrEmpty(prereqIcon))
+                                prerequisiteMap.Add((slug, prereqIcon));
+                        }
+                        else if (existingSkills.TryGetValue(slug, out var existingSkill))
+                        {
+                            existingSkill.PrerequisiteSkillId = null;
+                        }
                     }
                     catch (Exception ex) { state.Errors.Add($"Item {index}: {ex.Message}"); }
+                }
+
+                if (prerequisiteMap.Count > 0)
+                {
+                    var iconToSkill = existingSkills.Values
+                        .GroupBy(s => s.IconName)
+                        .ToDictionary(g => g.Key, g => g.First());
+
+                    foreach (var (slug, prereqIcon) in prerequisiteMap)
+                    {
+                        if (existingSkills.TryGetValue(slug, out var skill)
+                            && iconToSkill.TryGetValue(prereqIcon, out var prereqSkill))
+                            skill.PrerequisiteSkillId = prereqSkill.Id;
+                        else
+                            state.Errors.Add($"Cannot resolve prerequisiteSkillIcon '{prereqIcon}' for skill '{slug}'.");
+                    }
                 }
             }
             catch (JsonException ex) { return BadRequest(new { message = $"JSON parse error: {ex.Message}" }); }
@@ -106,6 +136,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             found.IconName = iconName;
             found.SortOrder = sortOrder;
             found.ApplicableSalesTypes = salesTypes;
+            found.PrerequisiteSkillId = null; // will be resolved in second pass if applicable
             if (state.UpdatedSlugs.Add(slug)) state.SkillsUpdated++;
         }
         else
