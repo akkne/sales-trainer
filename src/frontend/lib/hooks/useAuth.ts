@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api/apiClient";
@@ -15,9 +15,11 @@ interface AuthTokenResponse {
 
 function useHandleSuccessfulAuth() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { setAccessToken, setAuthenticatedUser } = useAuthStore();
 
     return (authResponse: AuthTokenResponse) => {
+        queryClient.clear();
         setAccessToken(authResponse.accessToken);
         setAuthenticatedUser({
             id: authResponse.userId,
