@@ -2,7 +2,6 @@
 
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
 import {
     useExercisesForLesson,
     useSubmitExercise,
@@ -12,6 +11,8 @@ import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExer
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { ExerciseResultBanner } from "@/components/exercise/ExerciseResultBanner";
+
+const MAX_HEARTS = 4;
 
 interface ExercisePageProps {
     params: Promise<{ id: string }>;
@@ -27,6 +28,7 @@ export default function ExercisePage({ params }: ExercisePageProps) {
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
     const [lastSubmissionResult, setLastSubmissionResult] =
         useState<ExerciseSubmissionResult | null>(null);
+    const [hearts, setHearts] = useState(MAX_HEARTS);
 
     const currentExercise = exercises?.[currentExerciseIndex];
     const totalExerciseCount = exercises?.length ?? 0;
@@ -39,14 +41,21 @@ export default function ExercisePage({ params }: ExercisePageProps) {
         if (!currentExercise) return;
         submitExerciseMutation.mutate(
             { exerciseId: currentExercise.exerciseId, answer },
-            { onSuccess: (submissionResult) => setLastSubmissionResult(submissionResult) }
+            {
+                onSuccess: (result) => {
+                    setLastSubmissionResult(result);
+                    if (!result.isCorrect && hearts > 0) {
+                        setHearts((h) => Math.max(0, h - 1));
+                    }
+                },
+            }
         );
     }
 
     function handleContinueAfterResult() {
         setLastSubmissionResult(null);
         if (currentExerciseIndex + 1 < totalExerciseCount) {
-            setCurrentExerciseIndex((previousIndex) => previousIndex + 1);
+            setCurrentExerciseIndex((prev) => prev + 1);
         } else {
             router.back();
         }
@@ -69,19 +78,36 @@ export default function ExercisePage({ params }: ExercisePageProps) {
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6 pb-40">
-            <div className="flex items-center gap-3 mb-8">
+        <div className="max-w-2xl mx-auto px-4 pb-40">
+            {/* Header: X + progress bar + hearts */}
+            <div className="flex items-center gap-3 py-5 sticky top-0 bg-white z-10">
                 <button
                     onClick={() => router.back()}
-                    className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                    className="text-[#AFAFAF] hover:text-gray-500 text-xl leading-none transition-colors"
+                    aria-label="Выйти"
                 >
                     ✕
                 </button>
-                <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+
+                <div className="flex-1 h-4 bg-[#E5E5E5] rounded-full overflow-hidden">
                     <div
                         className="h-full bg-[#58CC02] rounded-full transition-all duration-300"
                         style={{ width: `${progressPercent}%` }}
                     />
+                </div>
+
+                {/* Hearts counter */}
+                <div className="flex items-center gap-0.5 shrink-0">
+                    {Array.from({ length: MAX_HEARTS }).map((_, i) => (
+                        <span
+                            key={i}
+                            className={`text-xl transition-all duration-200 ${
+                                i < hearts ? "opacity-100" : "opacity-20 grayscale"
+                            }`}
+                        >
+                            ❤️
+                        </span>
+                    ))}
                 </div>
             </div>
 
@@ -109,18 +135,16 @@ export default function ExercisePage({ params }: ExercisePageProps) {
                 />
             )}
 
-            <AnimatePresence>
-                {lastSubmissionResult && (
-                    <ExerciseResultBanner
-                        isCorrect={lastSubmissionResult.isCorrect}
-                        score={lastSubmissionResult.score}
-                        explanation={lastSubmissionResult.explanation}
-                        aiFeedback={lastSubmissionResult.aiFeedback}
-                        xpEarned={lastSubmissionResult.xpEarned}
-                        onContinue={handleContinueAfterResult}
-                    />
-                )}
-            </AnimatePresence>
+            {lastSubmissionResult && (
+                <ExerciseResultBanner
+                    isCorrect={lastSubmissionResult.isCorrect}
+                    score={lastSubmissionResult.score}
+                    explanation={lastSubmissionResult.explanation}
+                    aiFeedback={lastSubmissionResult.aiFeedback}
+                    xpEarned={lastSubmissionResult.xpEarned}
+                    onContinue={handleContinueAfterResult}
+                />
+            )}
         </div>
     );
 }

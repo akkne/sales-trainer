@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Lexend } from "next/font/google";
+import { Space_Grotesk, Lexend, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
@@ -11,6 +11,12 @@ const spaceGrotesk = Space_Grotesk({
 const lexend = Lexend({
     variable: "--font-lexend",
     subsets: ["latin"],
+});
+
+const manrope = Manrope({
+    variable: "--font-manrope",
+    subsets: ["latin", "cyrillic"],
+    weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -26,9 +32,9 @@ export default function RootLayout({
     return (
         <html
             lang="ru"
-            className={`${spaceGrotesk.variable} ${lexend.variable} h-full antialiased`}
+            className={`${spaceGrotesk.variable} ${lexend.variable} ${manrope.variable} h-full antialiased`}
         >
-            <body className="min-h-full flex flex-col bg-white font-[var(--font-lexend)]">
+            <body className="min-h-full flex flex-col bg-white font-[var(--font-manrope)]">
                 <AppProviders>{children}</AppProviders>
             </body>
         </html>

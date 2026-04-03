@@ -78,14 +78,19 @@ export function FreeTextExercise({
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="bg-[#F7F7F7] rounded-2xl p-4">
-                <p className="text-sm text-gray-500 mb-1">Ситуация</p>
-                <p className="text-gray-900 font-medium">{content.situation}</p>
-            </div>
+            {/* Character speech bubble */}
+            {content.situation && (
+                <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#58CC02] flex items-center justify-center text-white font-bold text-lg shrink-0 mt-1">
+                        🤝
+                    </div>
+                    <div className="relative bg-[#F7F7F7] rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                        <p className="text-sm text-gray-700">{content.situation}</p>
+                    </div>
+                </div>
+            )}
 
-            <p className="font-[var(--font-space-grotesk)] text-xl font-bold text-gray-900">
-                {content.prompt}
-            </p>
+            <p className="font-extrabold text-xl text-gray-900">{content.prompt}</p>
 
             <div className="relative">
                 <textarea
@@ -140,7 +145,7 @@ export function FreeTextExercise({
                     if (responseText.trim()) onSubmit({ text: responseText.trim() });
                 }}
                 disabled={!responseText.trim() || isBusy}
-                className="py-4 rounded-2xl bg-[#58CC02] text-white font-bold shadow-[0_4px_0_#4CAD00] active:shadow-none active:translate-y-1 transition-transform disabled:opacity-40"
+                className="py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
             >
                 {isSubmitting ? "AI оценивает..." : "Отправить"}
             </button>
