@@ -89,6 +89,7 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Reference.ReferenceService>
 builder.Services.AddScoped<SalesTrainer.Api.Features.Profile.ProfileService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.League.LeagueService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Gamification.StreakResetJob>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Transcription.ITranscriptionService,
     SalesTrainer.Api.Features.Transcription.WhisperTranscriptionService>();
@@ -98,11 +99,10 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluati
     SalesTrainer.Api.Features.Exercises.FillBlankEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.FreeTextEvaluationStrategy>();
-// TODO: OpenAI временно отключён
-// builder.Services.AddHttpClient("OpenAI")
-//     .ConfigureHttpClient(client =>
-//         client.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddHttpClient(); // Required by FreeTextEvaluationStrategy and WhisperTranscriptionService
+builder.Services.AddHttpClient("OpenAI")
+    .ConfigureHttpClient(client =>
+        client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient(); // fallback default client
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -130,6 +130,11 @@ RecurringJob.AddOrUpdate<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob
     "weekly-league-closure",
     weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
     "0 0 * * 1");
+
+RecurringJob.AddOrUpdate<SalesTrainer.Api.Features.Gamification.StreakResetJob>(
+    "daily-streak-reset",
+    streakResetJob => streakResetJob.ExecuteAsync(),
+    "5 0 * * *"); // 00:05 UTC every day
 
 using (var serviceScope = application.Services.CreateScope())
 {

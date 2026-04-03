@@ -55,3 +55,16 @@ export function useSubmitExercise() {
             ),
     });
 }
+
+export function useTranscribeAudio() {
+    return useMutation({
+        mutationFn: (blob: Blob) => {
+            const formData = new FormData();
+            formData.append("file", blob, "recording.webm");
+            return apiClient.postFile<{ text: string; language: string | null }>(
+                "/transcription/transcribe",
+                formData
+            );
+        },
+    });
+}
