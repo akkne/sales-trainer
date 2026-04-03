@@ -103,7 +103,7 @@ interface LessonPathProps {
 
 export function LessonPath({ lessons }: LessonPathProps) {
     return (
-        <div className="relative flex flex-col items-center gap-0">
+        <div className="relative flex flex-col items-center gap-0 pb-8">
             {/* Background path line */}
             <div
                 className="absolute left-1/2 -translate-x-1/2 top-7 bottom-7 w-1 rounded-full bg-[#E5E5E5]"
