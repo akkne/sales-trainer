@@ -6,5 +6,6 @@ public record CurrentLeagueResponseDto(
     DateOnly WeekStartDate,
     DateOnly WeekEndDate,
     IReadOnlyList<LeagueParticipantDto> ParticipantsByRank,
-    int CurrentUserRank
+    int CurrentUserRank,
+    string? PreviousWeekOutcome
 );

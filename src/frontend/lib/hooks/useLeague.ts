@@ -16,6 +16,7 @@ export interface CurrentLeagueData {
     weekEndDate: string;
     participantsByRank: LeagueParticipant[];
     currentUserRank: number;
+    previousWeekOutcome: "promoted" | "demoted" | null;
 }
 
 export function useCurrentLeague() {
