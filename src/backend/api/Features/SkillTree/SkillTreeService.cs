@@ -5,6 +5,46 @@ namespace SalesTrainer.Api.Features.SkillTree;
 
 public class SkillTreeService(AppDbContext databaseContext)
 {
+    /// <summary>
+    /// Returns ALL skills in the system with the user's progress status.
+    /// Skills without a UserSkillProgress row are returned as "locked".
+    /// Used by the profile skill picker.
+    /// </summary>
+    public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsForUserAsync(Guid userId)
+    {
+        var skillProgressBySkillId = await databaseContext.UserSkillProgressRecords
+            .Where(p => p.UserId == userId)
+            .ToDictionaryAsync(p => p.SkillId);
+
+        var allSkills = await databaseContext.Skills
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Id)
+            .ToListAsync();
+
+        // Lesson counts per skill
+        var lessonCountsBySkillId = await databaseContext.Lessons
+            .GroupBy(l => l.SkillId)
+            .Select(g => new { SkillId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.SkillId, x => x.Count);
+
+        return allSkills.Select(skill =>
+        {
+            skillProgressBySkillId.TryGetValue(skill.Id, out var progress);
+            lessonCountsBySkillId.TryGetValue(skill.Id, out var lessonCount);
+            var status = progress?.Status ?? "locked";
+            return new SkillTreeNodeDto(
+                skill.Id,
+                skill.Slug,
+                skill.Title,
+                skill.IconName,
+                skill.SortOrder,
+                status,
+                progress?.CompletedLessonCount ?? 0,
+                progress?.TotalLessonCount ?? lessonCount,
+                status == "locked");
+        }).ToList();
+    }
+
     public async Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(Guid userId)
     {
         var skillProgressRecords = await databaseContext.UserSkillProgressRecords

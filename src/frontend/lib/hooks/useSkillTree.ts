@@ -26,3 +26,11 @@ export function useSkillTree() {
         queryFn: () => apiClient.get<SkillTreeData>("/skill-tree"),
     });
 }
+
+/** Returns ALL skills with current user's progress. Used for the profile skill picker. */
+export function useSkills() {
+    return useQuery({
+        queryKey: ["skills"],
+        queryFn: () => apiClient.get<SkillTreeNode[]>("/skills"),
+    });
+}

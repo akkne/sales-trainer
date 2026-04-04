@@ -4,19 +4,19 @@ import Link from "next/link";
 import { useProfile } from "@/lib/hooks/useProfile";
 import { useLogout } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/store/authStore";
-import { useSkillTree } from "@/lib/hooks/useSkillTree";
+import { useSkills } from "@/lib/hooks/useSkillTree";
 import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
 
 export default function ProfilePage() {
-    const { data: profileStats, isLoading } = useProfile();
-    const { data: skillTreeData } = useSkillTree();
+    const { data: profileStats, isLoading: profileLoading } = useProfile();
+    const { data: allSkills, isLoading: skillsLoading } = useSkills();
     const logoutMutation = useLogout();
     const { authenticatedUser } = useAuthStore();
     const { selectedSkill, setSelectedSkill, clearSelectedSkill } = useSelectedSkillStore();
     const isAdmin =
         authenticatedUser?.role === "Admin" || authenticatedUser?.role === "SuperAdmin";
 
-    if (isLoading) {
+    if (profileLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
@@ -32,10 +32,6 @@ export default function ProfilePage() {
                   (profileStats.completedSkillCount / profileStats.totalSkillCount) * 100
               )
             : 0;
-
-    const availableSkills = (skillTreeData?.skillNodes ?? []).filter(
-        (n) => n.status !== "locked"
-    );
 
     return (
         <div className="max-w-2xl mx-auto px-4 py-8">
@@ -103,63 +99,119 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {/* Skill picker */}
-            {availableSkills.length > 0 && (
-                <div className="mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="font-bold text-gray-900">Навык на главной</h2>
-                        {selectedSkill && (
-                            <button
-                                onClick={clearSelectedSkill}
-                                className="text-xs text-[#AFAFAF] hover:text-gray-500 transition-colors"
-                            >
-                                Показать все навыки
-                            </button>
-                        )}
-                    </div>
+            {/* ── Skill picker ─────────────────────────────────────────────── */}
+            <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-bold text-gray-900">Выберите навык для изучения</h2>
+                    {selectedSkill && (
+                        <button
+                            onClick={clearSelectedSkill}
+                            className="text-xs text-[#AFAFAF] hover:text-gray-500 transition-colors"
+                        >
+                            Сбросить
+                        </button>
+                    )}
+                </div>
+
+                {skillsLoading ? (
+                    /* Loading skeleton */
                     <div className="flex flex-col gap-2">
-                        {availableSkills.map((skill) => {
+                        {[1, 2, 3].map((i) => (
+                            <div
+                                key={i}
+                                className="h-16 rounded-2xl bg-[#F7F7F7] animate-pulse"
+                            />
+                        ))}
+                    </div>
+                ) : !allSkills || allSkills.length === 0 ? (
+                    /* Empty state — no skills in the system yet */
+                    <div className="bg-[#F7F7F7] rounded-2xl px-5 py-8 text-center">
+                        <p className="text-3xl mb-2">📚</p>
+                        <p className="text-sm font-semibold text-gray-500">
+                            Навыки ещё не добавлены
+                        </p>
+                        <p className="text-xs text-[#AFAFAF] mt-1">
+                            Попросите администратора добавить навыки
+                        </p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        {allSkills.map((skill) => {
                             const isSelected = selectedSkill?.slug === skill.slug;
+                            const isLocked = skill.status === "locked";
+
                             return (
                                 <button
                                     key={skill.skillId}
-                                    onClick={() =>
+                                    onClick={() => {
+                                        if (isLocked) return;
                                         setSelectedSkill({
                                             slug: skill.slug,
                                             title: skill.title,
                                             iconName: skill.iconName,
-                                        })
-                                    }
-                                    className={`flex items-center gap-4 px-4 py-3 rounded-2xl text-left transition-colors border-2 ${
+                                        });
+                                    }}
+                                    disabled={isLocked}
+                                    className={`flex items-center gap-4 px-4 py-3 rounded-2xl text-left transition-all border-2 ${
                                         isSelected
                                             ? "border-[#58CC02] bg-[#E8F9D6]"
-                                            : "border-transparent bg-[#F7F7F7] hover:bg-[#E8F9D6]"
+                                            : isLocked
+                                              ? "border-transparent bg-[#F7F7F7] opacity-50 cursor-not-allowed"
+                                              : "border-transparent bg-[#F7F7F7] hover:bg-[#E8F9D6] hover:border-[#58CC02] cursor-pointer"
                                     }`}
                                 >
-                                    <span className="text-2xl">{skill.iconName || "📚"}</span>
+                                    <span className="text-2xl shrink-0">
+                                        {skill.iconName || "📚"}
+                                    </span>
                                     <div className="flex-1 min-w-0">
                                         <p
                                             className={`font-semibold truncate ${
-                                                isSelected ? "text-[#3C8400]" : "text-gray-800"
+                                                isSelected
+                                                    ? "text-[#3C8400]"
+                                                    : isLocked
+                                                      ? "text-[#AFAFAF]"
+                                                      : "text-gray-800"
                                             }`}
                                         >
                                             {skill.title}
                                         </p>
                                         <p className="text-xs text-[#AFAFAF]">
-                                            {skill.completedLessonCount}/{skill.totalLessonCount} уроков
+                                            {isLocked
+                                                ? "🔒 Заблокировано"
+                                                : `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`}
                                         </p>
                                     </div>
                                     {isSelected && (
-                                        <span className="text-[#58CC02] font-bold text-sm shrink-0">
+                                        <span className="text-[#58CC02] font-bold text-lg shrink-0">
                                             ✓
                                         </span>
+                                    )}
+                                    {isLocked && (
+                                        <svg
+                                            className="w-4 h-4 text-[#AFAFAF] shrink-0"
+                                            fill="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                                        </svg>
                                     )}
                                 </button>
                             );
                         })}
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Hint when a skill is selected */}
+                {selectedSkill && (
+                    <p className="text-xs text-[#AFAFAF] mt-3 text-center">
+                        Выбранный навык отображается на вкладке{" "}
+                        <Link href="/tree" className="text-[#58CC02] font-semibold">
+                            Путь
+                        </Link>
+                    </p>
+                )}
+            </div>
+            {/* ── end skill picker ─────────────────────────────────────────── */}
 
             {isAdmin && (
                 <Link

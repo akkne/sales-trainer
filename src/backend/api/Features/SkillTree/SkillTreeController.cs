@@ -22,3 +22,26 @@ public class SkillTreeController(SkillTreeService skillTreeService) : Controller
         return Ok(skillTreeResponse);
     }
 }
+
+[ApiController]
+[Route("skills")]
+[Authorize]
+public class SkillsController(SkillTreeService skillTreeService) : ControllerBase
+{
+    /// <summary>
+    /// Returns every skill in the system with the current user's progress.
+    /// Skills the user has not unlocked yet are returned with status "locked".
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
+    {
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(rawUserId, out var userId))
+            return Unauthorized();
+
+        var skills = await skillTreeService.GetAllSkillsForUserAsync(userId);
+        return Ok(skills);
+    }
+}
