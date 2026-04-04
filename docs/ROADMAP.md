@@ -220,9 +220,13 @@
 
 > Spec: [docs/LESSON_EXECUTION_FLOW.md](LESSON_EXECUTION_FLOW.md)
 
-### [ ] Sequential lesson unlock
-- [ ] `UpdateLessonProgressAsync` — auto-unlock next lesson in same skill on completion
-- [ ] Seed `UserLessonProgressRecords` on skill unlock (all locked except first → available)
+### [x] Sequential lesson unlock
+- [x] `UpdateLessonProgressAsync` — auto-unlock next lesson in same skill on completion
+- [x] `EnsureSkillLessonsSeededAsync` — lazy-init on first lessons fetch (first → available, rest → locked)
+- [x] `UnlockNextLessonInSkillAsync` — unlock next lesson by sortOrder after correct answer
+- [x] Unit tests: 7 cases covering seeding, locked skill, already-seeded, unlock, edge cases
+- [x] Integration tests: seed on first access, unlock after submit, full 3-lesson sequential flow
+- [x] Docs: [LESSON_UNLOCK.md](LESSON_UNLOCK.md), API_CONTRACTS.md updated
 
 ### [x] Tap-to-open popover on lesson nodes
 - [x] Replace always-on active-node popover with tap-to-toggle popover

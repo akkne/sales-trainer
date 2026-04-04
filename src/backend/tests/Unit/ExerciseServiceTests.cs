@@ -242,4 +242,185 @@ public class ExerciseServiceTests
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Lesson progress seeding tests
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private async Task<(Guid userId, string skillSlug, Guid lessonId1, Guid lessonId2, Guid lessonId3)>
+        SeedSkillWithThreeLessonsAsync()
+    {
+        var userId = Guid.NewGuid();
+        var skillId = Guid.NewGuid();
+        var slug = $"skill-{skillId}";
+        var lesson1Id = Guid.NewGuid();
+        var lesson2Id = Guid.NewGuid();
+        var lesson3Id = Guid.NewGuid();
+
+        _db.Users.Add(new SalesTrainer.Api.Features.Auth.User
+        {
+            Id = userId, Email = $"u{userId}@test.com", DisplayName = "T", CreatedAt = DateTime.UtcNow
+        });
+        _db.Skills.Add(new SalesTrainer.Api.Features.SkillTree.Skill
+        {
+            Id = skillId, Slug = slug, Title = "S", IconName = "i", SortOrder = 1,
+            ApplicableSalesTypes = ["all"]
+        });
+        _db.Lessons.Add(new Lesson { Id = lesson1Id, SkillId = skillId, Title = "L1", SortOrder = 1, DifficultyLevel = 1, XpReward = 10 });
+        _db.Lessons.Add(new Lesson { Id = lesson2Id, SkillId = skillId, Title = "L2", SortOrder = 2, DifficultyLevel = 1, XpReward = 10 });
+        _db.Lessons.Add(new Lesson { Id = lesson3Id, SkillId = skillId, Title = "L3", SortOrder = 3, DifficultyLevel = 1, XpReward = 10 });
+        _db.UserSkillProgressRecords.Add(new UserSkillProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, SkillId = skillId,
+            Status = "available", CompletedLessonCount = 0, TotalLessonCount = 3
+        });
+        await _db.SaveChangesAsync();
+
+        return (userId, slug, lesson1Id, lesson2Id, lesson3Id);
+    }
+
+    [Test]
+    public async Task GetLessonsForSkill_FirstAccess_SeedsFirstLessonAsAvailable()
+    {
+        var (userId, slug, lesson1Id, _, _) = await SeedSkillWithThreeLessonsAsync();
+
+        var lessons = await _service.GetLessonsForSkillAsync(userId, slug);
+
+        lessons.First(l => l.LessonId == lesson1Id).Status.Should().Be("available");
+    }
+
+    [Test]
+    public async Task GetLessonsForSkill_FirstAccess_SeedsRemainingLessonsAsLocked()
+    {
+        var (userId, slug, _, lesson2Id, lesson3Id) = await SeedSkillWithThreeLessonsAsync();
+
+        var lessons = await _service.GetLessonsForSkillAsync(userId, slug);
+
+        lessons.First(l => l.LessonId == lesson2Id).Status.Should().Be("locked");
+        lessons.First(l => l.LessonId == lesson3Id).Status.Should().Be("locked");
+    }
+
+    [Test]
+    public async Task GetLessonsForSkill_LockedSkill_DoesNotSeedLessonProgress()
+    {
+        var userId = Guid.NewGuid();
+        var skillId = Guid.NewGuid();
+        var slug = $"locked-{skillId}";
+
+        _db.Users.Add(new SalesTrainer.Api.Features.Auth.User
+        {
+            Id = userId, Email = $"u{userId}@test.com", DisplayName = "T", CreatedAt = DateTime.UtcNow
+        });
+        _db.Skills.Add(new SalesTrainer.Api.Features.SkillTree.Skill
+        {
+            Id = skillId, Slug = slug, Title = "S", IconName = "i", SortOrder = 2,
+            ApplicableSalesTypes = ["all"]
+        });
+        _db.Lessons.Add(new Lesson { Id = Guid.NewGuid(), SkillId = skillId, Title = "L", SortOrder = 1, DifficultyLevel = 1, XpReward = 10 });
+        _db.UserSkillProgressRecords.Add(new UserSkillProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, SkillId = skillId,
+            Status = "locked", CompletedLessonCount = 0, TotalLessonCount = 1
+        });
+        await _db.SaveChangesAsync();
+
+        var lessons = await _service.GetLessonsForSkillAsync(userId, slug);
+
+        lessons.Should().HaveCount(1);
+        lessons[0].Status.Should().Be("locked");
+        var progressCount = await _db.UserLessonProgressRecords
+            .CountAsync(p => p.UserId == userId);
+        progressCount.Should().Be(0);
+    }
+
+    [Test]
+    public async Task GetLessonsForSkill_AlreadyHasProgress_DoesNotReseed()
+    {
+        var (userId, slug, lesson1Id, lesson2Id, _) = await SeedSkillWithThreeLessonsAsync();
+
+        // Pre-existing progress: lesson 1 completed, lesson 2 available
+        _db.UserLessonProgressRecords.Add(new UserLessonProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, LessonId = lesson1Id, Status = "completed", BestScore = 100
+        });
+        _db.UserLessonProgressRecords.Add(new UserLessonProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, LessonId = lesson2Id, Status = "available", BestScore = 0
+        });
+        await _db.SaveChangesAsync();
+
+        var lessons = await _service.GetLessonsForSkillAsync(userId, slug);
+
+        lessons.First(l => l.LessonId == lesson1Id).Status.Should().Be("completed");
+        lessons.First(l => l.LessonId == lesson2Id).Status.Should().Be("available");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Next-lesson unlock tests
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Submit_CorrectAnswer_UnlocksNextLessonInSkill()
+    {
+        var (userId, skillId, lesson1Id, exerciseId) = await SeedCoreDataAsync(
+            correctOptionIndex: 0, totalLessons: 2);
+
+        var lesson2Id = Guid.NewGuid();
+        _db.Lessons.Add(new Lesson
+        {
+            Id = lesson2Id, SkillId = skillId, Title = "Lesson 2",
+            SortOrder = 2, DifficultyLevel = 1, XpReward = 10
+        });
+        _db.UserLessonProgressRecords.Add(new UserLessonProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, LessonId = lesson1Id,
+            Status = "available", BestScore = 0
+        });
+        _db.UserLessonProgressRecords.Add(new UserLessonProgress
+        {
+            Id = Guid.NewGuid(), UserId = userId, LessonId = lesson2Id,
+            Status = "locked", BestScore = 0
+        });
+        await _db.SaveChangesAsync();
+
+        await _service.SubmitExerciseAnswerAsync(userId, exerciseId, AnswerJson(0));
+
+        var next = await _db.UserLessonProgressRecords
+            .FirstAsync(p => p.UserId == userId && p.LessonId == lesson2Id);
+        next.Status.Should().Be("available");
+    }
+
+    [Test]
+    public async Task Submit_CorrectAnswer_LastLesson_DoesNotThrow()
+    {
+        var (userId, _, _, exerciseId) = await SeedCoreDataAsync(
+            correctOptionIndex: 0, totalLessons: 1);
+
+        var act = async () => await _service.SubmitExerciseAnswerAsync(userId, exerciseId, AnswerJson(0));
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task Submit_CorrectAnswer_UnlocksNextLesson_WhenNoProgressRecordExists()
+    {
+        // Next lesson has no progress record yet (wasn't seeded) — still gets unlocked
+        var (userId, skillId, _, exerciseId) = await SeedCoreDataAsync(
+            correctOptionIndex: 0, totalLessons: 2);
+
+        var lesson2Id = Guid.NewGuid();
+        _db.Lessons.Add(new Lesson
+        {
+            Id = lesson2Id, SkillId = skillId, Title = "Lesson 2",
+            SortOrder = 2, DifficultyLevel = 1, XpReward = 10
+        });
+        await _db.SaveChangesAsync();
+
+        await _service.SubmitExerciseAnswerAsync(userId, exerciseId, AnswerJson(0));
+
+        var next = await _db.UserLessonProgressRecords
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.LessonId == lesson2Id);
+        next.Should().NotBeNull();
+        next!.Status.Should().Be("available");
+    }
 }

@@ -184,4 +184,119 @@ public class ExerciseSubmitTests
         var first = lessons.EnumerateArray().First();
         first.GetProperty("status").GetString().Should().Be("completed");
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Sequential lesson unlock integration tests
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task GetLessons_FirstAccess_FirstLessonAvailable_RestLocked()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"seed_{Guid.NewGuid()}@test.com");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"seed-skill-{Guid.NewGuid()}");
+        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
+        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
+        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L3", sortOrder: 3);
+        await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
+            status: "available", totalLessonCount: 3);
+
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var lessons = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray()
+            .OrderBy(l => l.GetProperty("sortOrder").GetInt32())
+            .ToList();
+
+        lessons.Should().HaveCount(3);
+        lessons[0].GetProperty("status").GetString().Should().Be("available");
+        lessons[1].GetProperty("status").GetString().Should().Be("locked");
+        lessons[2].GetProperty("status").GetString().Should().Be("locked");
+    }
+
+    [Test]
+    public async Task SubmitLesson1_UnlocksLesson2()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"unlock_{Guid.NewGuid()}@test.com");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"unlock-skill-{Guid.NewGuid()}");
+        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
+        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
+        await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
+            status: "available", totalLessonCount: 2);
+        var exercise = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db,
+            lesson1.Id, correctOptionIndex: 0);
+
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        // Trigger seed by first GET
+        await client.GetAsync($"/skills/{skill.Slug}/lessons");
+
+        // Complete lesson 1
+        await client.PostAsJsonAsync(
+            $"/exercises/{exercise.Id}/submit",
+            new { answer = new { selectedOptionIndex = 0 } });
+
+        // Check lesson 2 is now available
+        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var lessons = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray()
+            .OrderBy(l => l.GetProperty("sortOrder").GetInt32())
+            .ToList();
+
+        lessons[0].GetProperty("status").GetString().Should().Be("completed");
+        lessons[1].GetProperty("status").GetString().Should().Be("available");
+    }
+
+    [Test]
+    public async Task FullLessonUnlockFlow_ThreeLessons_UnlocksSequentially()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"flow_{Guid.NewGuid()}@test.com");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"flow-skill-{Guid.NewGuid()}");
+        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
+        var lesson2 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
+        var lesson3 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L3", sortOrder: 3);
+        await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
+            status: "available", totalLessonCount: 3);
+        var ex1 = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson1.Id, correctOptionIndex: 0);
+        var ex2 = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson2.Id, correctOptionIndex: 0);
+        var ex3 = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson3.Id, correctOptionIndex: 0);
+
+        var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
+            user.Id, user.Email, user.DisplayName);
+
+        // Access to trigger seeding
+        await client.GetAsync($"/skills/{skill.Slug}/lessons");
+
+        // Complete lesson 1 → lesson 2 unlocks
+        await client.PostAsJsonAsync($"/exercises/{ex1.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
+
+        var r2 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var l2 = (await r2.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+        l2[0].GetProperty("status").GetString().Should().Be("completed");
+        l2[1].GetProperty("status").GetString().Should().Be("available");
+        l2[2].GetProperty("status").GetString().Should().Be("locked");
+
+        // Complete lesson 2 → lesson 3 unlocks
+        await client.PostAsJsonAsync($"/exercises/{ex2.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
+
+        var r3 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var l3 = (await r3.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+        l3[0].GetProperty("status").GetString().Should().Be("completed");
+        l3[1].GetProperty("status").GetString().Should().Be("completed");
+        l3[2].GetProperty("status").GetString().Should().Be("available");
+
+        // Complete lesson 3 → skill completed
+        await client.PostAsJsonAsync($"/exercises/{ex3.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
+
+        var r4 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var l4 = (await r4.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+        l4.Should().AllSatisfy(l => l.GetProperty("status").GetString().Should().Be("completed"));
+    }
 }

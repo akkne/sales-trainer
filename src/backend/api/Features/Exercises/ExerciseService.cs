@@ -12,6 +12,15 @@ public class ExerciseService(
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(Guid userId)
     {
+        // Lazy-init lesson progress for all accessible skills
+        var accessibleSkillIds = await databaseContext.UserSkillProgressRecords
+            .Where(p => p.UserId == userId && p.Status != "locked")
+            .Select(p => p.SkillId)
+            .ToListAsync();
+
+        foreach (var skillId in accessibleSkillIds)
+            await EnsureSkillLessonsSeededAsync(userId, skillId);
+
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progress => progress.UserId == userId)
             .ToDictionaryAsync(progress => progress.LessonId);
@@ -42,6 +51,9 @@ public class ExerciseService(
         var skill = await databaseContext.Skills
             .FirstOrDefaultAsync(skill => skill.Slug == skillSlug)
             ?? throw new KeyNotFoundException($"Skill '{skillSlug}' not found.");
+
+        // Lazy-init lesson progress for this skill on first access
+        await EnsureSkillLessonsSeededAsync(userId, skill.Id);
 
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progress => progress.UserId == userId)
@@ -174,6 +186,9 @@ public class ExerciseService(
 
         if (lesson is null) return;
 
+        // Unlock the next lesson in the same skill
+        await UnlockNextLessonInSkillAsync(userId, lesson);
+
         var skillProgressRecord = await databaseContext.UserSkillProgressRecords
             .FirstOrDefaultAsync(p => p.UserId == userId && p.SkillId == lesson.SkillId);
 
@@ -198,6 +213,81 @@ public class ExerciseService(
         else
         {
             skillProgressRecord.Status = "in_progress";
+        }
+    }
+
+    /// <summary>
+    /// Seeds UserLessonProgress rows for a skill the first time it is accessed.
+    /// First lesson → "available"; remaining → "locked".
+    /// No-op if any progress rows already exist for this user+skill.
+    /// </summary>
+    private async Task EnsureSkillLessonsSeededAsync(Guid userId, Guid skillId)
+    {
+        var skillProgress = await databaseContext.UserSkillProgressRecords
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.SkillId == skillId);
+
+        if (skillProgress is null || skillProgress.Status == "locked") return;
+
+        var lessons = await databaseContext.Lessons
+            .Where(l => l.SkillId == skillId)
+            .OrderBy(l => l.SortOrder)
+            .ThenBy(l => l.Id)
+            .ToListAsync();
+
+        if (lessons.Count == 0) return;
+
+        var lessonIds = lessons.Select(l => l.Id).ToList();
+        var existingCount = await databaseContext.UserLessonProgressRecords
+            .CountAsync(p => p.UserId == userId && lessonIds.Contains(p.LessonId));
+
+        if (existingCount > 0) return;
+
+        for (var i = 0; i < lessons.Count; i++)
+        {
+            databaseContext.UserLessonProgressRecords.Add(new UserLessonProgress
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                LessonId = lessons[i].Id,
+                Status = i == 0 ? "available" : "locked",
+                BestScore = 0
+            });
+        }
+
+        await databaseContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// After a lesson is completed, unlocks the next lesson in the same skill by sortOrder.
+    /// </summary>
+    private async Task UnlockNextLessonInSkillAsync(Guid userId, Lesson completedLesson)
+    {
+        var nextLesson = await databaseContext.Lessons
+            .Where(l => l.SkillId == completedLesson.SkillId
+                        && l.SortOrder > completedLesson.SortOrder)
+            .OrderBy(l => l.SortOrder)
+            .ThenBy(l => l.Id)
+            .FirstOrDefaultAsync();
+
+        if (nextLesson is null) return;
+
+        var nextProgress = await databaseContext.UserLessonProgressRecords
+            .FirstOrDefaultAsync(p => p.UserId == userId && p.LessonId == nextLesson.Id);
+
+        if (nextProgress is null)
+        {
+            databaseContext.UserLessonProgressRecords.Add(new UserLessonProgress
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                LessonId = nextLesson.Id,
+                Status = "available"
+            });
+        }
+        else if (nextProgress.Status == "locked")
+        {
+            nextProgress.Status = "available";
         }
     }
 
