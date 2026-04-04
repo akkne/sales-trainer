@@ -12,6 +12,7 @@ interface FreeTextContent {
 interface FreeTextExerciseProps {
     content: FreeTextContent;
     onSubmit: (answer: { text: string }) => void;
+    onSkip?: () => void;
     isSubmitting: boolean;
 }
 
@@ -20,6 +21,7 @@ type RecordingState = "idle" | "recording" | "transcribing";
 export function FreeTextExercise({
     content,
     onSubmit,
+    onSkip,
     isSubmitting,
 }: FreeTextExerciseProps) {
     const [responseText, setResponseText] = useState("");
@@ -140,15 +142,26 @@ export function FreeTextExercise({
                 </p>
             )}
 
-            <button
-                onClick={() => {
-                    if (responseText.trim()) onSubmit({ text: responseText.trim() });
-                }}
-                disabled={!responseText.trim() || isBusy}
-                className="py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-                {isSubmitting ? "AI оценивает..." : "Отправить"}
-            </button>
+            <div className="flex gap-3">
+                {onSkip && (
+                    <button
+                        onClick={onSkip}
+                        disabled={isBusy}
+                        className="flex-1 py-4 rounded-2xl border-2 border-[#E5E5E5] text-[#AFAFAF] font-extrabold hover:border-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40"
+                    >
+                        Пропустить
+                    </button>
+                )}
+                <button
+                    onClick={() => {
+                        if (responseText.trim()) onSubmit({ text: responseText.trim() });
+                    }}
+                    disabled={!responseText.trim() || isBusy}
+                    className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {isSubmitting ? "AI оценивает..." : "Отправить"}
+                </button>
+            </div>
         </div>
     );
 }

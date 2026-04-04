@@ -73,3 +73,12 @@ body {
 .slide-up {
     animation: slide-up 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* Animated dashed path line */
+@keyframes dash-scroll {
+    to { stroke-dashoffset: -40; }
+}
+.path-dash-animated {
+    animation: dash-scroll 1.2s linear infinite;
+}
+

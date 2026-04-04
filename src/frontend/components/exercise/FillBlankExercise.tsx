@@ -13,12 +13,14 @@ interface FillBlankContent {
 interface FillBlankExerciseProps {
     content: FillBlankContent;
     onSubmit: (answer: { selectedOptionIndex: number }) => void;
+    onSkip?: () => void;
     isSubmitting: boolean;
 }
 
 export function FillBlankExercise({
     content,
     onSubmit,
+    onSkip,
     isSubmitting,
 }: FillBlankExerciseProps) {
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
@@ -70,15 +72,26 @@ export function FillBlankExercise({
                 })}
             </div>
 
-            <button
-                onClick={() => {
-                    if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
-                }}
-                disabled={selectedOptionIndex === null || isSubmitting}
-                className="py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-                {isSubmitting ? "Проверяем..." : "Проверить"}
-            </button>
+            <div className="flex gap-3">
+                {onSkip && (
+                    <button
+                        onClick={onSkip}
+                        disabled={isSubmitting}
+                        className="flex-1 py-4 rounded-2xl border-2 border-[#E5E5E5] text-[#AFAFAF] font-extrabold hover:border-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40"
+                    >
+                        Пропустить
+                    </button>
+                )}
+                <button
+                    onClick={() => {
+                        if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
+                    }}
+                    disabled={selectedOptionIndex === null || isSubmitting}
+                    className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {isSubmitting ? "Проверяем..." : "Проверить"}
+                </button>
+            </div>
         </div>
     );
 }

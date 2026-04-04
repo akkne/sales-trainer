@@ -1,7 +1,36 @@
 "use client";
 
 import { useCurrentLeague } from "@/lib/hooks/useLeague";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+function useCountdown(weekEndDate: string) {
+    const [timeLeft, setTimeLeft] = useState("");
+
+    useEffect(() => {
+        function compute() {
+            const endMs = new Date(weekEndDate).getTime();
+            const diffMs = endMs - Date.now();
+            if (diffMs <= 0) {
+                setTimeLeft("Неделя завершена");
+                return;
+            }
+            const totalHours = Math.floor(diffMs / 3_600_000);
+            const days = Math.floor(totalHours / 24);
+            const hours = totalHours % 24;
+            if (days > 0) {
+                setTimeLeft(`${days}д ${hours}ч`);
+            } else {
+                const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+                setTimeLeft(`${hours}ч ${minutes}м`);
+            }
+        }
+        compute();
+        const id = setInterval(compute, 60_000);
+        return () => clearInterval(id);
+    }, [weekEndDate]);
+
+    return timeLeft;
+}
 
 const TIER_LABELS: Record<string, { label: string; emoji: string }> = {
     bronze: { label: "Бронза", emoji: "🥉" },
@@ -33,6 +62,7 @@ const DEMOTION_ZONE_SIZE = 5;
 export default function LeaguePage() {
     const { data: leagueData, isLoading } = useCurrentLeague();
     const [bannerDismissed, setBannerDismissed] = useState(false);
+    const countdown = useCountdown(leagueData?.weekEndDate ?? "");
 
     if (isLoading) {
         return (
@@ -78,13 +108,20 @@ export default function LeaguePage() {
                 <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-gray-900">
                     Лига {tierInfo.label}
                 </h1>
-                <p className="text-sm text-gray-400 mt-1">
-                    Неделя до {leagueData.weekEndDate}
-                </p>
                 {leagueData.currentUserRank > 0 && (
-                    <p className="text-sm font-semibold text-[#58CC02] mt-2">
+                    <p className="text-sm font-semibold text-[#58CC02] mt-1">
                         Твоё место: #{leagueData.currentUserRank}
                     </p>
+                )}
+
+                {/* Countdown timer */}
+                {countdown && (
+                    <div className="inline-flex items-center gap-2 mt-3 bg-[#FFF8E7] border border-[#FFC800] rounded-2xl px-4 py-2">
+                        <span className="text-base">⏳</span>
+                        <span className="text-sm font-bold text-[#E0A800]">
+                            До конца недели {countdown}
+                        </span>
+                    </div>
                 )}
             </div>
 

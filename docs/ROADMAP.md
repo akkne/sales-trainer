@@ -182,10 +182,10 @@
 - [x] FreeTextExercise: 3D button style applied
 - [x] ExerciseResultBanner: CSS slide-up animation, correct (green) / incorrect (red) panels
 
-### [ ] Smoke test
-- [ ] Full lesson flow: tree → skill path → exercise → result banner → next exercise
-- [ ] Verify all node states render correctly
-- [ ] Verify correct/incorrect banner slides up and continues properly
+### [x] Smoke test
+- [x] Full lesson flow: tree → skill path → exercise → result banner → next exercise
+- [x] Verify all node states render correctly
+- [x] Verify correct/incorrect banner slides up and continues properly
 
 ---
 
@@ -204,5 +204,51 @@
 - [x] "Сменить навык →" link from tree to profile; "Показать все навыки" to clear selection
 - [x] Shared `LessonPath` component reused by both `/tree` and `/skill/[id]`
 
+### [x] All-lessons path in /tree
+- [x] `GET /lessons` endpoint — all lessons across all skills, sorted by sortOrder
+- [x] `useAllLessons()` hook on frontend
+- [x] `/tree` (no skill selected) shows full lesson path instead of skill nodes
+- [x] Empty state shown when no lessons exist
+- [x] Fix bottom nav overlap — bumped layout padding-bottom to `6rem + safe-area`
+
 ### [ ] Performance
 - [ ] Redis leaderboard sorted set for league rankings
+
+---
+
+## Phase 9 — Lesson Execution Session
+
+> Spec: [docs/LESSON_EXECUTION_FLOW.md](LESSON_EXECUTION_FLOW.md)
+
+### [ ] Sequential lesson unlock
+- [ ] `UpdateLessonProgressAsync` — auto-unlock next lesson in same skill on completion
+- [ ] Seed `UserLessonProgressRecords` on skill unlock (all locked except first → available)
+
+### [x] Tap-to-open popover on lesson nodes
+- [x] Replace always-on active-node popover with tap-to-toggle popover
+- [x] Popover: lesson title, "Урок N из Total", "Приступить к прохождению" button
+- [x] Click-outside closes popover; only one open at a time
+
+### [x] Full-screen session tab `/session/[lessonId]`
+- [x] New route outside `(main)` layout (no BottomNav)
+- [x] Header: close (✕), progress bar (per-exercise), hearts (4, lose on wrong answer)
+- [x] Character speech bubble + numbered 3D choice buttons
+- [x] Session completion screen: XP earned, "Вернуться к пути" button
+- [x] Hearts = 0 → failure screen with "Попробовать снова"
+- [x] Restart session resets state without navigation
+
+### [x] Wire popover → session tab
+- [x] "Приступить к прохождению" navigates to `/session/[lessonId]`
+
+### [x] Skip button in exercises
+- [x] ПРОПУСТИТЬ button shown alongside ПРОВЕРИТЬ in all exercise types
+- [x] Skip advances to next exercise without penalty or submission
+- [x] Button only visible when `onSkip` prop provided (session context)
+
+### [x] League countdown timer
+- [x] "До конца недели Xд Xч" computed from `weekEndDate` and displayed above leaderboard
+- [x] Updates every minute; shows minutes when < 1 hour remaining
+
+### [x] Animated dashed path line
+- [x] Active lesson segment uses SVG animated dashed green stroke (1.2s loop)
+- [x] Completed segments stay solid green; inactive stays gray
