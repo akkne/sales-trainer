@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 
 export interface SkillTreeNode {
@@ -27,10 +27,28 @@ export function useSkillTree() {
     });
 }
 
-/** Returns ALL skills with current user's progress. Used for the profile skill picker. */
+/** Returns ALL skills with current user's progress. Used for profile & tree. */
 export function useSkills() {
     return useQuery({
         queryKey: ["skills"],
         queryFn: () => apiClient.get<SkillTreeNode[]>("/skills"),
+    });
+}
+
+/**
+ * Mutation: replace the user's enrolled skill set.
+ * Pass the full list of slugs the user wants to keep enrolled.
+ * sales-basics is always kept by the backend regardless.
+ */
+export function useUpdateEnrolledSkills() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (skillSlugs: string[]) =>
+            apiClient.put<void>("/skills/enrolled", { skillSlugs }),
+        onSuccess: () => {
+            // Re-fetch skills so statuses update immediately
+            queryClient.invalidateQueries({ queryKey: ["skills"] });
+            queryClient.invalidateQueries({ queryKey: ["skill-tree"] });
+        },
     });
 }

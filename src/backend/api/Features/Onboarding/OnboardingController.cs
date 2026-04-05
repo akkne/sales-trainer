@@ -23,7 +23,7 @@ public class OnboardingController(OnboardingService onboardingService) : Control
             userId,
             onboardingRequest.SalesType,
             onboardingRequest.ExperienceLevel,
-            onboardingRequest.Goal);
+            onboardingRequest.SelectedSkillSlugs);
 
         return NoContent();
     }

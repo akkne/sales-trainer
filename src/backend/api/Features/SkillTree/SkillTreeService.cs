@@ -1,10 +1,52 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Onboarding;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.SkillTree;
 
-public class SkillTreeService(AppDbContext databaseContext)
+public class SkillTreeService(AppDbContext databaseContext, OnboardingService onboardingService)
 {
+    private const string AlwaysEnrolledSlug = "sales-basics";
+
+    /// <summary>
+    /// Replaces the user's enrolled skills set.
+    /// <list type="bullet">
+    ///   <item>Slugs in <paramref name="skillSlugs"/> that are not yet enrolled → enrolled (status available).</item>
+    ///   <item>Currently enrolled skills absent from the list → locked (progress preserved).</item>
+    ///   <item><c>sales-basics</c> is always kept enrolled, even if omitted.</item>
+    /// </list>
+    /// </summary>
+    public async Task UpdateEnrolledSkillsAsync(Guid userId, List<string> skillSlugs)
+    {
+        var desired = skillSlugs
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        desired.Add(AlwaysEnrolledSlug);
+
+        // Enroll / re-enroll skills in the desired set
+        await onboardingService.EnrollSkillsAsync(userId, desired);
+
+        // Lock skills that are no longer desired (but were previously enrolled)
+        var allSkills = await databaseContext.Skills.ToListAsync();
+        var existingProgress = await databaseContext.UserSkillProgressRecords
+            .Where(p => p.UserId == userId)
+            .ToListAsync();
+
+        foreach (var progress in existingProgress)
+        {
+            if (progress.Status == "locked") continue;
+
+            var skill = allSkills.FirstOrDefault(s => s.Id == progress.SkillId);
+            if (skill is null) continue;
+            if (skill.Slug.Equals(AlwaysEnrolledSlug, StringComparison.OrdinalIgnoreCase)) continue;
+            if (desired.Contains(skill.Slug)) continue;
+
+            progress.Status = "locked";
+        }
+
+        await databaseContext.SaveChangesAsync();
+    }
     /// <summary>
     /// Returns ALL skills in the system with the user's progress status.
     /// Skills without a UserSkillProgress row are returned as "locked".

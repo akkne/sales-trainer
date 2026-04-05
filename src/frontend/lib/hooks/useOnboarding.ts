@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api/apiClient";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -6,7 +6,7 @@ import { useAuthStore } from "@/lib/store/authStore";
 interface OnboardingPayload {
     salesType: string;
     experienceLevel: string;
-    goal: string;
+    selectedSkillSlugs: string[];
 }
 
 export function useCompleteOnboarding() {
@@ -25,5 +25,16 @@ export function useCompleteOnboarding() {
             }
             router.push("/tree");
         },
+    });
+}
+
+/** Returns all skills from the backend (used during onboarding to show selection). */
+export function useSkillsForOnboarding() {
+    return useQuery({
+        queryKey: ["skills-onboarding"],
+        queryFn: () =>
+            apiClient.get<{ skillId: string; slug: string; title: string; iconName: string }[]>(
+                "/skills"
+            ),
     });
 }

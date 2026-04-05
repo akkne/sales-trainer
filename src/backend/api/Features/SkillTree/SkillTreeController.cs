@@ -30,7 +30,7 @@ public class SkillsController(SkillTreeService skillTreeService) : ControllerBas
 {
     /// <summary>
     /// Returns every skill in the system with the current user's progress.
-    /// Skills the user has not unlocked yet are returned with status "locked".
+    /// Skills the user has not enrolled in are returned with status "locked".
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
@@ -43,5 +43,24 @@ public class SkillsController(SkillTreeService skillTreeService) : ControllerBas
 
         var skills = await skillTreeService.GetAllSkillsForUserAsync(userId);
         return Ok(skills);
+    }
+
+    /// <summary>
+    /// Replaces the user's enrolled skill set.
+    /// Body: { "skillSlugs": ["sales-basics", "cold-calls"] }
+    /// sales-basics is always kept enrolled regardless of the payload.
+    /// </summary>
+    [HttpPut("enrolled")]
+    public async Task<IActionResult> UpdateEnrolledSkills(
+        [FromBody] UpdateEnrolledSkillsRequestDto request)
+    {
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(rawUserId, out var userId))
+            return Unauthorized();
+
+        await skillTreeService.UpdateEnrolledSkillsAsync(userId, request.SkillSlugs);
+        return NoContent();
     }
 }
