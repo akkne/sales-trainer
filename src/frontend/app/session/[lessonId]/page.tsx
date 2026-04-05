@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
@@ -24,17 +24,27 @@ interface SessionFlowProps {
     onRestart: () => void;
 }
 
+function formatSessionDuration(totalSeconds: number): string {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes === 0) return `${seconds} сек`;
+    return `${minutes} мин ${seconds} сек`;
+}
+
 function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     const router = useRouter();
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
     const submitExerciseMutation = useSubmitExercise();
 
+    const sessionStartTimeRef = useRef<number>(Date.now());
+    const sessionEndTimeRef = useRef<number>(0);
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
     const [lastSubmissionResult, setLastSubmissionResult] =
         useState<ExerciseSubmissionResult | null>(null);
     const [hearts, setHearts] = useState(MAX_HEARTS);
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
+    const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
 
     const currentExercise = exercises?.[currentExerciseIndex];
     const totalExerciseCount = exercises?.length ?? 0;
@@ -54,14 +64,20 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         setHearts((h) => Math.max(0, h - 1));
                     } else {
                         setTotalXpEarned((prev) => prev + result.xpEarned);
+                        setCorrectAnswerCount((prev) => prev + 1);
                     }
                 },
             }
         );
     }
 
+    function recordSessionEnd() {
+        sessionEndTimeRef.current = Date.now();
+    }
+
     function handleSkip() {
         if (currentExerciseIndex + 1 >= totalExerciseCount) {
+            recordSessionEnd();
             setSessionState("complete");
         } else {
             setCurrentExerciseIndex((prev) => prev + 1);
@@ -72,10 +88,12 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
         setLastSubmissionResult(null);
         const currentHearts = hearts;
         if (currentHearts === 0) {
+            recordSessionEnd();
             setSessionState("failed");
             return;
         }
         if (currentExerciseIndex + 1 >= totalExerciseCount) {
+            recordSessionEnd();
             setSessionState("complete");
         } else {
             setCurrentExerciseIndex((prev) => prev + 1);
@@ -92,6 +110,14 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
     // Completion screen
     if (sessionState === "complete") {
+        const sessionDurationSeconds = Math.round(
+            (sessionEndTimeRef.current - sessionStartTimeRef.current) / 1000
+        );
+        const accuracyPercent =
+            totalExerciseCount > 0
+                ? Math.round((correctAnswerCount / totalExerciseCount) * 100)
+                : 100;
+
         return (
             <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-white">
                 <div className="text-8xl mb-6 animate-bounce">🎉</div>
@@ -100,8 +126,8 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                     Отличная работа. Продолжай в том же духе!
                 </p>
 
-                <div className="flex gap-4 mb-10">
-                    <div className="bg-[#F7F7F7] rounded-2xl px-6 py-4 text-center min-w-[110px]">
+                <div className="grid grid-cols-2 gap-3 mb-4 w-full max-w-sm">
+                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
                         <div className="text-2xl font-extrabold text-[#FFC800]">
                             +{totalXpEarned}
                         </div>
@@ -109,15 +135,23 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                             XP заработано
                         </div>
                     </div>
-                    <div className="bg-[#F7F7F7] rounded-2xl px-6 py-4 text-center min-w-[110px]">
+                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
                         <div className="text-2xl font-extrabold text-[#58CC02]">
-                            {totalExerciseCount}
+                            {accuracyPercent}%
                         </div>
                         <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
-                            Упражнений
+                            Точность
                         </div>
                     </div>
-                    <div className="bg-[#F7F7F7] rounded-2xl px-6 py-4 text-center min-w-[110px]">
+                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
+                        <div className="text-2xl font-extrabold text-[#1CB0F6]">
+                            {formatSessionDuration(sessionDurationSeconds)}
+                        </div>
+                        <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
+                            Время
+                        </div>
+                    </div>
+                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
                         <div className="text-2xl font-extrabold text-[#FF4B4B]">
                             {Array.from({ length: hearts }, () => "❤️").join("")}
                         </div>
@@ -127,7 +161,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                     </div>
                 </div>
 
-                <div className="w-full max-w-xs flex flex-col gap-3">
+                <div className="w-full max-w-sm flex flex-col gap-3 mt-6">
                     <button
                         onClick={() => router.back()}
                         className="w-full py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"

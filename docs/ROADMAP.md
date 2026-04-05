@@ -256,3 +256,98 @@
 ### [x] Animated dashed path line
 - [x] Active lesson segment uses SVG animated dashed green stroke (1.2s loop)
 - [x] Completed segments stay solid green; inactive stays gray
+
+
+
+## Phase 10 — Post-Session Statistics
+
+> Реализовать статистику после прохождения урока.
+
+### [x] Session result screen enhancements
+- [x] Track session duration (start time → end time) via `useRef`
+- [x] Track per-exercise correctness (correct / total) via `correctAnswerCount` state
+- [x] Show on completion screen: time spent, accuracy %, XP earned, hearts remaining (2×2 grid)
+- [x] `formatSessionDuration(seconds)` pure utility: "X сек" or "X мин Y сек"
+
+---
+
+## Phase 11 — Achievements & Badges
+
+> Design source: project `16384358117617625529` — "Profile & Statistics (Vivid)" screen shows badges section.
+> Also noted as missing in [docs/STITCH_ANALYSIS.md](STITCH_ANALYSIS.md).
+
+### [ ] Backend — Achievement system
+- [ ] `Achievement` entity: id, key, title, description, iconUrl, condition (type + threshold)
+- [ ] `UserAchievement` entity: userId, achievementId, unlockedAt
+- [ ] Achievement evaluation on exercise submit: check milestones (first lesson, 7-day streak, 100 XP, etc.)
+- [ ] `GET /profile/achievements` — returns list of all achievements with `unlocked: bool, unlockedAt`
+- [ ] Seed default achievement set (5–10 entries)
+- [ ] Update API_CONTRACTS.md
+
+### [ ] Frontend — Badges on Profile
+- [ ] `useAchievements()` hook — fetches `/profile/achievements`
+- [ ] Badges grid section on `/profile` page: locked (grayscale) vs unlocked (color) badges
+- [ ] Badge card: icon, title, unlocked date or "locked" label
+- [ ] Toast notification when new achievement unlocked during session
+
+---
+
+## Phase 12 — Persona-based Onboarding
+
+> Design source: project `16384358117617625529` screens "Onboarding Step 1: Profile Selection" and
+> "Onboarding: Select Profile (Vivid)". Shows avatar cards for sales roles (SDR, AE, Account Manager, etc.).
+
+### [ ] Backend — User persona
+- [ ] Add `Persona` enum (SDR / AccountExecutive / AccountManager / Founder / Other) to `User` entity
+- [ ] EF migration: add `Persona` column (nullable)
+- [ ] Expose `persona` in profile API response
+- [ ] `PUT /profile/persona` endpoint
+
+### [ ] Frontend — Persona selection step in onboarding
+- [ ] New onboarding step 1: persona picker with avatar cards and role descriptions
+- [ ] Each card: role icon/avatar, title (e.g. "SDR"), short description
+- [ ] Selected card highlighted with green border; "Продолжить" button activates on selection
+- [ ] On submit → `PUT /profile/persona` → advance to existing skill selection step
+- [ ] Skip link ("Пропустить") for users who don't identify with a role
+- [ ] Persona shown on profile page as a badge/tag
+
+---
+
+## Phase 13 — Lesson Course Map
+
+> Design source: project `16384358117617625529` screen "Lesson Map: Objections" (id `4d961c964dd540f9bfe83133b73d6028`).
+> A detailed overview screen per skill showing all lessons as a structured course map.
+
+### [ ] Frontend — Skill course map page `/skill/[id]/map`
+- [ ] Header: skill title, icon, total lessons, completion %
+- [ ] List of lesson cards: lesson number, title, description excerpt, status (locked/active/completed), XP reward
+- [ ] Completed lessons: green check, duration shown
+- [ ] Active lesson: highlighted card with "Начать" CTA
+- [ ] Locked lessons: dimmed, lock icon, shows what unlocks them
+- [ ] "Start" button on active lesson → `/session/[lessonId]`
+- [ ] Link from skill node popover: "Посмотреть карту курса"
+
+### [ ] Backend — Lesson descriptions
+- [ ] Ensure `Lesson` entity has `description` field (add if missing)
+- [ ] Expose `description` and `estimatedMinutes` in lessons API response
+- [ ] Migration + seed update
+
+---
+
+## Phase 14 — Sales Handbook: Key Techniques
+
+> Design source: project `16384358117617625529` screens "Sales Handbook (Vivid)" and
+> "Sales Handbook: Key Techniques" — structured reference with categories, search, technique cards.
+
+### [ ] Backend — Reference material enhancements
+- [ ] Add `category` field to `ReferenceItem` entity (e.g. "objections", "cold-calls", "closing")
+- [ ] Add `tags` array field
+- [ ] `GET /reference?category=&search=` — filter + search endpoint
+- [ ] Migration + seed update for existing reference items
+
+### [ ] Frontend — Handbook page redesign (`/guidebook`)
+- [ ] Category tabs / filter chips at top (All, Objections, Cold Calls, Closing, etc.)
+- [ ] Search input with debounce — filters cards in real-time
+- [ ] Technique cards: title, category badge, short excerpt, expand on tap
+- [ ] Expanded card: full markdown content, "Related skill" link
+- [ ] Empty state when search yields no results
