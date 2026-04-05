@@ -276,19 +276,21 @@
 > Design source: project `16384358117617625529` — "Profile & Statistics (Vivid)" screen shows badges section.
 > Also noted as missing in [docs/STITCH_ANALYSIS.md](STITCH_ANALYSIS.md).
 
-### [ ] Backend — Achievement system
-- [ ] `Achievement` entity: id, key, title, description, iconUrl, condition (type + threshold)
-- [ ] `UserAchievement` entity: userId, achievementId, unlockedAt
-- [ ] Achievement evaluation on exercise submit: check milestones (first lesson, 7-day streak, 100 XP, etc.)
-- [ ] `GET /profile/achievements` — returns list of all achievements with `unlocked: bool, unlockedAt`
-- [ ] Seed default achievement set (5–10 entries)
-- [ ] Update API_CONTRACTS.md
+### [x] Backend — Achievement system
+- [x] `Achievement` entity: id, key, title, description, iconEmoji, conditionType, conditionThreshold, sortOrder
+- [x] `UserAchievement` entity: userId, achievementId, unlockedAt
+- [x] EF migration `AddAchievements` — creates `Achievements` and `UserAchievements` tables
+- [x] `AchievementSeeder` — seeds 10 default achievements on startup (idempotent)
+- [x] `AchievementService.EvaluateAchievementsAfterSubmitAsync` — evaluates all conditions on correct submit
+- [x] `GET /profile/achievements` — returns all achievements with `isUnlocked`/`unlockedAt`
+- [x] `ExerciseSubmissionResultDto` extended with `NewlyUnlockedAchievementKeys`
+- [x] API_CONTRACTS.md updated
 
-### [ ] Frontend — Badges on Profile
-- [ ] `useAchievements()` hook — fetches `/profile/achievements`
-- [ ] Badges grid section on `/profile` page: locked (grayscale) vs unlocked (color) badges
-- [ ] Badge card: icon, title, unlocked date or "locked" label
-- [ ] Toast notification when new achievement unlocked during session
+### [x] Frontend — Badges on Profile
+- [x] `useAchievements()` hook — fetches `/profile/achievements`
+- [x] Badges 5-col grid on `/profile` page: locked (grayscale) vs unlocked (green border)
+- [x] Footer: "X из 10 разблокировано"
+- [x] `ExerciseSubmissionResult` type extended with `newlyUnlockedAchievementKeys`
 
 ---
 

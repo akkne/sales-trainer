@@ -24,6 +24,7 @@ export interface ExerciseSubmissionResult {
     explanation: string | null;
     aiFeedback: string | null;
     xpEarned: number;
+    newlyUnlockedAchievementKeys: string[];
 }
 
 export function useAllLessons() {

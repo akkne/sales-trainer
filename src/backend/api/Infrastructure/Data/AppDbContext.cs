@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.League;
@@ -25,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<League> Leagues => Set<League>();
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
+    public DbSet<Achievement> Achievements => Set<Achievement>();
+    public DbSet<UserAchievement> UserAchievements => Set<UserAchievement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

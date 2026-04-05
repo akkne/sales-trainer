@@ -80,6 +80,8 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowAnyMethod()
         .AllowCredentials()));
 
+builder.Services.AddScoped<SalesTrainer.Api.Features.Achievements.AchievementService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Achievements.AchievementSeeder>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
@@ -143,6 +145,9 @@ using (var serviceScope = application.Services.CreateScope())
 
     var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
     await superAdminSeeder.SeedAsync();
+
+    var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Achievements.AchievementSeeder>();
+    await achievementSeeder.SeedAsync();
 }
 
 application.Run();

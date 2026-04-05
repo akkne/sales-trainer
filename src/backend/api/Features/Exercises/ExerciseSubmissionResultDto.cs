@@ -5,5 +5,6 @@ public record ExerciseSubmissionResultDto(
     int Score,
     string? Explanation,
     string? AiFeedback,
-    int XpEarned
+    int XpEarned,
+    IReadOnlyList<string> NewlyUnlockedAchievementKeys
 );

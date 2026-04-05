@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useProfile } from "@/lib/hooks/useProfile";
+import { useAchievements } from "@/lib/hooks/useAchievements";
 import { useLogout } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkills, useUpdateEnrolledSkills } from "@/lib/hooks/useSkillTree";
@@ -10,6 +11,7 @@ const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
 export default function ProfilePage() {
     const { data: profileStats, isLoading: profileLoading } = useProfile();
+    const { data: achievements } = useAchievements();
     const { data: allSkills, isLoading: skillsLoading } = useSkills();
     const logoutMutation = useLogout();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
@@ -114,6 +116,35 @@ export default function ProfilePage() {
                     />
                 </div>
             </div>
+
+            {/* ── Achievements ─────────────────────────────────────────────── */}
+            {achievements && achievements.length > 0 && (
+                <div className="mb-6">
+                    <h2 className="font-bold text-gray-900 text-lg mb-4">Достижения</h2>
+                    <div className="grid grid-cols-5 gap-2">
+                        {achievements.map((achievement) => (
+                            <div
+                                key={achievement.achievementId}
+                                title={`${achievement.title}: ${achievement.description}`}
+                                className={`flex flex-col items-center gap-1 p-3 rounded-2xl text-center transition-all ${
+                                    achievement.isUnlocked
+                                        ? "bg-[#E8F9D6] border-2 border-[#58CC02]"
+                                        : "bg-[#F7F7F7] border-2 border-transparent opacity-40 grayscale"
+                                }`}
+                            >
+                                <span className="text-2xl">{achievement.iconEmoji}</span>
+                                <span className="text-[10px] font-semibold text-gray-700 leading-tight">
+                                    {achievement.title}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-xs text-[#AFAFAF] mt-2 text-center">
+                        {achievements.filter((a) => a.isUnlocked).length} из {achievements.length} разблокировано
+                    </p>
+                </div>
+            )}
+            {/* ── end Achievements ─────────────────────────────────────────── */}
 
             {/* ── My Skills (enrollment manager) ──────────────────────────── */}
             <div className="mb-6">

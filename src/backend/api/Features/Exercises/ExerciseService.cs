@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.Lessons;
 using SalesTrainer.Api.Infrastructure.Data;
@@ -8,7 +9,8 @@ namespace SalesTrainer.Api.Features.Exercises;
 
 public class ExerciseService(
     AppDbContext databaseContext,
-    ExerciseEvaluationFactory evaluationFactory)
+    ExerciseEvaluationFactory evaluationFactory,
+    AchievementService achievementService)
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(Guid userId)
     {
@@ -146,6 +148,10 @@ public class ExerciseService(
             await UpdateStreakForUserAsync(userId);
         }
 
+        IReadOnlyList<string> newlyUnlockedAchievementKeys = Array.Empty<string>();
+        if (evaluationResult.IsCorrect)
+            newlyUnlockedAchievementKeys = await achievementService.EvaluateAchievementsAfterSubmitAsync(userId);
+
         await databaseContext.SaveChangesAsync();
 
         return new ExerciseSubmissionResultDto(
@@ -153,7 +159,8 @@ public class ExerciseService(
             evaluationResult.Score,
             evaluationResult.Explanation,
             evaluationResult.AiFeedback,
-            xpEarned);
+            xpEarned,
+            newlyUnlockedAchievementKeys);
     }
 
     private async Task UpdateLessonProgressAsync(Guid userId, Guid lessonId)
