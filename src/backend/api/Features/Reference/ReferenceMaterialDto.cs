@@ -4,5 +4,8 @@ public record ReferenceMaterialDto(
     Guid MaterialId,
     string Title,
     string MarkdownContent,
-    int SortOrder
+    int SortOrder,
+    string? Category,
+    string[] Tags,
+    string SkillSlug
 );

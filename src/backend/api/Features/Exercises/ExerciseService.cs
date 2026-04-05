@@ -38,9 +38,11 @@ public class ExerciseService(
             return new LessonSummaryDto(
                 lesson.Id,
                 lesson.Title,
+                lesson.Description,
                 lesson.SortOrder,
                 lesson.DifficultyLevel,
                 lesson.XpReward,
+                lesson.EstimatedMinutes,
                 progressRecord?.Status ?? "locked",
                 progressRecord?.BestScore ?? 0);
         }).ToList();
@@ -72,9 +74,11 @@ public class ExerciseService(
             return new LessonSummaryDto(
                 lesson.Id,
                 lesson.Title,
+                lesson.Description,
                 lesson.SortOrder,
                 lesson.DifficultyLevel,
                 lesson.XpReward,
+                lesson.EstimatedMinutes,
                 progressRecord?.Status ?? "locked",
                 progressRecord?.BestScore ?? 0);
         }).ToList();
