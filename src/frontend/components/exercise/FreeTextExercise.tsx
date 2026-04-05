@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useTranscribeAudio } from "@/lib/hooks/useLesson";
+import { useTranscribeAudio, type ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 
 interface FreeTextContent {
     situation: string;
@@ -13,7 +13,9 @@ interface FreeTextExerciseProps {
     content: FreeTextContent;
     onSubmit: (answer: { text: string }) => void;
     onSkip?: () => void;
+    onContinue?: () => void;
     isSubmitting: boolean;
+    submittedResult?: ExerciseSubmissionResult | null;
 }
 
 type RecordingState = "idle" | "recording" | "transcribing";
@@ -22,8 +24,11 @@ export function FreeTextExercise({
     content,
     onSubmit,
     onSkip,
+    onContinue,
     isSubmitting,
+    submittedResult,
 }: FreeTextExerciseProps) {
+    const isAnswered = submittedResult !== null && submittedResult !== undefined;
     const [responseText, setResponseText] = useState("");
     const [recordingState, setRecordingState] = useState<RecordingState>("idle");
     const [recordingError, setRecordingError] = useState<string | null>(null);
@@ -76,7 +81,7 @@ export function FreeTextExercise({
         mediaRecorderRef.current = null;
     }, []);
 
-    const isBusy = isSubmitting || recordingState !== "idle";
+    const isBusy = isSubmitting || recordingState !== "idle" || isAnswered;
 
     return (
         <div className="flex flex-col gap-6">
@@ -142,8 +147,17 @@ export function FreeTextExercise({
                 </p>
             )}
 
+            {/* Inline AI feedback */}
+            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
+                <p className={`text-sm leading-relaxed px-1 ${
+                    submittedResult.isCorrect ? "text-[#3C8400]" : "text-[#CC3333]"
+                }`}>
+                    {submittedResult.aiFeedback ?? submittedResult.explanation}
+                </p>
+            )}
+
             <div className="flex gap-3">
-                {onSkip && (
+                {!isAnswered && onSkip && (
                     <button
                         onClick={onSkip}
                         disabled={isBusy}
@@ -152,15 +166,25 @@ export function FreeTextExercise({
                         Пропустить
                     </button>
                 )}
-                <button
-                    onClick={() => {
-                        if (responseText.trim()) onSubmit({ text: responseText.trim() });
-                    }}
-                    disabled={!responseText.trim() || isBusy}
-                    className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    {isSubmitting ? "AI оценивает..." : "Отправить"}
-                </button>
+
+                {isAnswered ? (
+                    <button
+                        onClick={onContinue}
+                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                    >
+                        Продолжить
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => {
+                            if (responseText.trim()) onSubmit({ text: responseText.trim() });
+                        }}
+                        disabled={!responseText.trim() || isBusy}
+                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting ? "AI оценивает..." : "Отправить"}
+                    </button>
+                )}
             </div>
         </div>
     );

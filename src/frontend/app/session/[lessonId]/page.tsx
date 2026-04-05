@@ -10,7 +10,6 @@ import {
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
-import { ExerciseResultBanner } from "@/components/exercise/ExerciseResultBanner";
 
 const MAX_HEARTS = 4;
 
@@ -223,7 +222,9 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         }
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
                         isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
                     />
                 )}
                 {currentExercise.type === "fill_blank" && (
@@ -236,7 +237,9 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         }
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
                         isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
                     />
                 )}
                 {currentExercise.type === "free_text" && (
@@ -249,21 +252,13 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         }
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
                         isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
                     />
                 )}
             </div>
 
-            {lastSubmissionResult && (
-                <ExerciseResultBanner
-                    isCorrect={lastSubmissionResult.isCorrect}
-                    score={lastSubmissionResult.score}
-                    explanation={lastSubmissionResult.explanation}
-                    aiFeedback={lastSubmissionResult.aiFeedback}
-                    xpEarned={lastSubmissionResult.xpEarned}
-                    onContinue={handleContinueAfterResult}
-                />
-            )}
         </div>
     );
 }
