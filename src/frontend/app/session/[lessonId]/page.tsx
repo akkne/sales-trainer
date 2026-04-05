@@ -211,10 +211,11 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 </div>
             </div>
 
-            {/* Exercise content */}
-            <div className="flex-1 overflow-y-auto px-4 pb-10 pt-6 max-w-2xl w-full mx-auto">
+            {/* Exercise content — keyed by exerciseId to fully reset state on each new question */}
+            <div key={currentExercise.exerciseId} className="flex-1 overflow-y-auto px-4 pb-10 pt-6 max-w-2xl w-full mx-auto">
                 {currentExercise.type === "multiple_choice" && (
                     <MultipleChoiceExercise
+                        key={currentExercise.exerciseId}
                         content={
                             currentExercise.content as Parameters<
                                 typeof MultipleChoiceExercise
@@ -227,6 +228,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === "fill_blank" && (
                     <FillBlankExercise
+                        key={currentExercise.exerciseId}
                         content={
                             currentExercise.content as Parameters<
                                 typeof FillBlankExercise
@@ -239,6 +241,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === "free_text" && (
                     <FreeTextExercise
+                        key={currentExercise.exerciseId}
                         content={
                             currentExercise.content as Parameters<
                                 typeof FreeTextExercise

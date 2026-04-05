@@ -13,11 +13,9 @@ import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
 function SkillLessonView({
     skillSlug,
     skillTitle,
-    skillIcon,
 }: {
     skillSlug: string;
     skillTitle: string;
-    skillIcon: string;
 }) {
     const { data: lessons, isLoading } = useLessonsForSkill(skillSlug);
 
@@ -40,14 +38,11 @@ function SkillLessonView({
                 style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #58A700" }}
             >
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="text-3xl">{skillIcon || "📚"}</span>
-                        <div>
-                            <p className="text-sm font-semibold opacity-80 uppercase tracking-wider mb-0.5">
-                                Текущий навык
-                            </p>
-                            <h1 className="text-xl font-extrabold">{skillTitle}</h1>
-                        </div>
+                    <div>
+                        <p className="text-sm font-semibold opacity-80 uppercase tracking-wider mb-0.5">
+                            Текущий навык
+                        </p>
+                        <h1 className="text-xl font-extrabold">{skillTitle}</h1>
                     </div>
                     <div className="bg-white/20 rounded-2xl px-3 py-2 text-center shrink-0">
                         <span className="text-xl font-extrabold">
@@ -172,18 +167,15 @@ function SkillSidebar() {
                         }`}
                     >
                         <div className="flex items-center gap-2">
-                            <span className="text-lg leading-none shrink-0">
-                                {skill.iconName || "📚"}
-                            </span>
                             <span
-                                className={`text-sm font-semibold truncate leading-tight ${
+                                className={`text-sm font-semibold truncate leading-tight flex-1 ${
                                     isActive ? "text-[#3C8400]" : "text-gray-700"
                                 }`}
                             >
                                 {skill.title}
                             </span>
                             {isActive && (
-                                <span className="ml-auto shrink-0 w-2 h-2 rounded-full bg-[#58CC02]" />
+                                <span className="shrink-0 w-2 h-2 rounded-full bg-[#58CC02]" />
                             )}
                         </div>
                         {/* Mini progress bar */}
@@ -240,7 +232,6 @@ export default function SkillTreePage() {
                     <SkillLessonView
                         skillSlug={selectedSkill.slug}
                         skillTitle={selectedSkill.title}
-                        skillIcon={selectedSkill.iconName}
                     />
                 ) : (
                     <NoSkillSelected />

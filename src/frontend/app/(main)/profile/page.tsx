@@ -153,25 +153,22 @@ export default function ProfilePage() {
                                     onClick={() => toggleEnrollment(skill.slug)}
                                     disabled={isAlwaysOn || isSaving}
                                     className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-left transition-all border-2 ${
-                                        isEnrolled
-                                            ? "border-[#58CC02] bg-[#E8F9D6]"
-                                            : "border-transparent bg-[#F7F7F7]"
-                                    } ${
-                                        isAlwaysOn || isSaving
-                                            ? "cursor-default opacity-80"
-                                            : "cursor-pointer hover:border-[#58CC02]/40"
+                                        isAlwaysOn
+                                            ? "border-gray-200 bg-gray-50 cursor-default"
+                                            : isEnrolled
+                                            ? "border-[#58CC02] bg-[#E8F9D6] cursor-pointer hover:border-[#58CC02]/70"
+                                            : "border-transparent bg-[#F7F7F7] cursor-pointer hover:border-[#58CC02]/40"
                                     }`}
                                 >
-                                    {/* Icon */}
-                                    <span className="text-2xl shrink-0">
-                                        {skill.iconName || "📚"}
-                                    </span>
-
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
                                         <p
                                             className={`font-semibold truncate ${
-                                                isEnrolled ? "text-[#3C8400]" : "text-gray-700"
+                                                isAlwaysOn
+                                                    ? "text-gray-400"
+                                                    : isEnrolled
+                                                    ? "text-[#3C8400]"
+                                                    : "text-gray-700"
                                             }`}
                                         >
                                             {skill.title}
@@ -188,12 +185,18 @@ export default function ProfilePage() {
                                     {/* Toggle switch */}
                                     <div
                                         className={`w-12 h-6 rounded-full transition-colors shrink-0 flex items-center px-1 ${
-                                            isEnrolled ? "bg-[#58CC02]" : "bg-gray-200"
+                                            isAlwaysOn
+                                                ? "bg-gray-300"
+                                                : isEnrolled
+                                                ? "bg-[#58CC02]"
+                                                : "bg-gray-200"
                                         }`}
                                     >
                                         <div
                                             className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                                                isEnrolled ? "translate-x-6" : "translate-x-0"
+                                                isAlwaysOn || isEnrolled
+                                                    ? "translate-x-6"
+                                                    : "translate-x-0"
                                             }`}
                                         />
                                     </div>

@@ -174,37 +174,46 @@ export default function OnboardingPage() {
                                             onClick={() => toggleSkill(skill.slug)}
                                             disabled={isDefault}
                                             className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-left transition-all border-2 ${
-                                                isSelected
-                                                    ? "border-[#58CC02] bg-[#E8F9D6]"
-                                                    : "border-transparent bg-[#F7F7F7] hover:bg-gray-100"
-                                            } ${isDefault ? "cursor-default" : "cursor-pointer"}`}
+                                                isDefault
+                                                    ? "border-gray-200 bg-gray-50 cursor-default"
+                                                    : isSelected
+                                                    ? "border-[#58CC02] bg-[#E8F9D6] cursor-pointer"
+                                                    : "border-transparent bg-[#F7F7F7] hover:bg-gray-100 cursor-pointer"
+                                            }`}
                                         >
-                                            <span className="text-2xl shrink-0">
-                                                {skill.iconName || "📚"}
-                                            </span>
                                             <div className="flex-1 min-w-0">
                                                 <p
                                                     className={`font-semibold truncate ${
-                                                        isSelected ? "text-[#3C8400]" : "text-gray-800"
+                                                        isDefault
+                                                            ? "text-gray-400"
+                                                            : isSelected
+                                                            ? "text-[#3C8400]"
+                                                            : "text-gray-800"
                                                     }`}
                                                 >
                                                     {skill.title}
                                                 </p>
                                                 {isDefault && (
-                                                    <p className="text-xs text-[#58CC02] font-medium mt-0.5">
+                                                    <p className="text-xs text-gray-400 font-medium mt-0.5">
                                                         Базовый — всегда включён
                                                     </p>
                                                 )}
                                             </div>
-                                            {/* Toggle indicator */}
+                                            {/* Toggle switch */}
                                             <div
-                                                className={`w-12 h-6 rounded-full transition-colors shrink-0 flex items-center px-1 ${
-                                                    isSelected ? "bg-[#58CC02]" : "bg-gray-200"
+                                                className={`w-12 h-6 rounded-full shrink-0 flex items-center px-1 ${
+                                                    isDefault
+                                                        ? "bg-gray-300"
+                                                        : isSelected
+                                                        ? "bg-[#58CC02]"
+                                                        : "bg-gray-200"
                                                 }`}
                                             >
                                                 <div
                                                     className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                                                        isSelected ? "translate-x-6" : "translate-x-0"
+                                                        isDefault || isSelected
+                                                            ? "translate-x-6"
+                                                            : "translate-x-0"
                                                     }`}
                                                 />
                                             </div>
