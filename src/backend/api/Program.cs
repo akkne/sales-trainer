@@ -95,6 +95,11 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Gamification.StreakResetJob
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Transcription.ITranscriptionService,
     SalesTrainer.Api.Features.Transcription.WhisperTranscriptionService>();
+builder.Services.AddSingleton<SalesTrainer.Api.Infrastructure.Mongo.MongoDbContext>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.IOpenAiChatService,
+    SalesTrainer.Api.Features.Dialog.OpenAiChatService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
@@ -148,6 +153,9 @@ using (var serviceScope = application.Services.CreateScope())
 
     var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Achievements.AchievementSeeder>();
     await achievementSeeder.SeedAsync();
+
+    var dialogSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
+    await dialogSeeder.SeedAsync();
 }
 
 application.Run();

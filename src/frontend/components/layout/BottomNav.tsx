@@ -7,6 +7,7 @@ const NAV_ITEMS = [
     { href: "/tree", icon: "🗺️", label: "Путь" },
     { href: "/league", icon: "🏆", label: "Лига" },
     { href: "/guidebook", icon: "📖", label: "Справочник" },
+    { href: "/dialog", icon: "💬", label: "Диалог" },
     { href: "/profile", icon: "👤", label: "Профиль" },
 ];
 

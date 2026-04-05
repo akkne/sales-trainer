@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
+using SalesTrainer.Api.Features.Dialog;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.League;
 using SalesTrainer.Api.Features.Lessons;
@@ -28,6 +29,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<Achievement> Achievements => Set<Achievement>();
     public DbSet<UserAchievement> UserAchievements => Set<UserAchievement>();
+    public DbSet<DialogBundle> DialogBundles => Set<DialogBundle>();
+    public DbSet<DialogMode> DialogModes => Set<DialogMode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

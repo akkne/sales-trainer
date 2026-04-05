@@ -455,3 +455,229 @@
 ### [x] Docs & tests
 - [x] `docs/TESTING/ACHIEVEMENT_NOTIFICATION.md` — manual checklist
 - [x] Verify: toast shows after unlock, doesn't show on wrong answer, queue drains correctly
+
+---
+
+## ~~Phase 19 — Profile Stats & Weekly Target~~ [SKIP]
+
+> Design source: project `16384358117617625529` screen "Profile & Statistics (Vivid)" (`f1f97c280d784009a583743912f9fb6c`).
+> Profile currently shows streak/XP/achievements but lacks mastery %, league badge, and weekly XP target progress.
+
+### [ ] Weekly XP target panel
+- [ ] Backend: `GET /profile` returns `weeklyXpGoal` (configurable, default 600) and `weeklyXpCurrent`
+- [ ] Frontend: progress bar "X / Y XP" with motivational subtitle on profile page
+- [ ] Show "Top 5% learner" style motivational copy when near/over goal
+
+### [ ] Mastery % stat
+- [ ] Backend: compute mastery as % of completed exercises across all enrolled skills
+- [ ] Expose `masteryPercent` in `GET /profile` response
+- [ ] Show as 4th stat card on profile page (alongside streak, XP, league)
+
+### [ ] League badge on profile
+- [ ] Show current league tier name ("Ruby", "Elite", etc.) as a stat card on profile page
+- [ ] Link from profile league card → `/league` page
+
+---
+
+## ~~Phase 20 — Leaderboard Podium (Top-3 highlight)~~ [SKIP]
+
+> Design source: project `16384358117617625529` screen "League Leaderboard (Vivid)" (`866d49cb3eb64879beff714b05b53fd5`).
+> Current league page has a flat list. Design shows top-3 as large podium cards with avatars and crown/medal icons.
+
+### [ ] Top-3 podium section
+- [ ] Replace first 3 rows in league list with large featured cards: avatar, crown/medal rank icon, name, XP
+- [ ] 🥇 1st gets crown icon, 🥈 🥉 get medal icons
+- [ ] Remaining ranks (4–N) keep standard row layout
+
+### [ ] Current user highlight row
+- [ ] User's own row always visible (even if rank > 10), highlighted with "Current Promotion Zone" badge if in top-10
+- [ ] Show rank number prominently
+
+### [ ] Motivational banner
+- [ ] "KEEP PUSHING!" or similar banner between podium and the rest of the list
+
+---
+
+## ~~Phase 21 — Daily Goal & Streak Widget on Dashboard~~ [SKIP]
+
+> Design source: project `16384358117617625529` screens "Skill Tree Dashboard (Duo-Style)" (`7acba62367db4bdd8e576d3a07353ba3`) and "Дашборд: Дерево навыков" (`1404814a34ac48c49fc0411a00df3d31`).
+> Both show a "Daily Progress" panel and a daily XP goal bar on the main skill tree page.
+
+### [ ] Daily XP goal bar on /tree
+- [ ] Backend: `GET /profile` adds `dailyXpGoal` (default 50 XP) and `dailyXpToday`
+- [ ] Frontend: progress bar "X / Y XP today" shown in StatsWidget or dedicated card on `/tree`
+- [ ] Visual: near-complete state (green fill) vs incomplete (gray)
+
+### [ ] Daily streak widget upgrade
+- [ ] Current streak card on `/tree` shows only number — add "X days!" label with flame + progress prompt ("One more lesson to keep your streak!")
+- [ ] Show days-of-week mini calendar (M T W T F S S) with completed days highlighted
+
+---
+
+## Phase 22 — NPC Mentor / Skeptic Sergey Card [SKIP]
+
+> Design source: project `16384358117617625529` screens showing "Skeptic Sergey" mentor card on skill tree and guidebook.
+> Currently no mentor character card exists on the main screens. Design shows an interactive coach card with a "CHALLENGE SERGEY" or "SEE FULL STRATEGY" button.
+
+### [ ] Mentor card component
+- [ ] `MentorCard` component: avatar image/emoji, name, role title, motivational quote
+- [ ] "Challenge" CTA button — navigates to the next available exercise session
+- [ ] Shown on `/tree` dashboard as a card below the skill nodes
+
+### [ ] Mentor quote rotation
+- [ ] Backend: `GET /mentor/tip` returns a random motivational tip/quote (seeded list, 10+ entries)
+- [ ] Frontend: tip displayed in mentor card, refreshed on each visit
+
+---
+
+## ~~Phase 23 — Technique Mastery Progress in Guidebook~~ [SKIP]
+
+> Design source: project `16384358117617625529` screen "Sales Handbook (Vivid)" (`dd7025dbdd42452daa297f5c91be013f`).
+> Current guidebook has categories and search but no mastery tracking per technique/reference material.
+
+### [ ] Technique mastery tracking
+- [ ] Backend: track which reference materials a user has "practiced" (e.g., viewed + completed a related exercise)
+- [ ] `GET /reference` response includes `masteryLevel` per item (0–max)
+- [ ] Frontend: progress indicator on each technique card in guidebook ("Level 3", "3/8 Completed")
+
+### [ ] Mentor panel in guidebook
+- [ ] Inline "Coach Marcus" or mentor persona panel within expanded technique card
+- [ ] Shows persona-based insight (e.g., "Skeptic Sergey" case study) + 2–3 micro-prompts (practice, tips)
+
+---
+
+## ~~Phase 24 — Quests / Daily Challenges~~ [SKIP]
+
+> Design source: project `16384358117617625529` screen "Дашборд: Дерево навыков" (`1404814a34ac48c49fc0411a00df3d31`) — nav shows "КВЕСТЫ" tab; "Skill Tree Dashboard (Duo-Style)" shows "Quests" nav item.
+> A dedicated quests/challenges system is referenced in the design but not implemented.
+
+### [ ] Backend — Daily quests system
+- [ ] `Quest` entity: id, type (daily/weekly), title, description, conditionType, conditionThreshold, xpReward, expiresAt
+- [ ] `UserQuest` entity: userId, questId, progress, completedAt
+- [ ] `QuestSeeder` — seeds 3 daily quests refreshed each day (e.g., "Complete 3 exercises", "Earn 100 XP", "Log in 3 days in a row")
+- [ ] `GET /quests` — returns active quests with user progress
+- [ ] `QuestProgressJob` — evaluates quest progress after exercise submit
+
+### [ ] Frontend — /quests page
+- [ ] Quest cards: title, description, progress bar (X/Y), XP reward badge
+- [ ] Completed quests: green check, "Completed" label
+- [ ] Expired/missed quests: grayed out
+- [ ] "КВЕСТЫ" tab added to bottom navigation
+
+---
+
+## ~~Phase 25 — Sample Dialogs in Reference Materials~~ [SKIP]
+
+> Design source: project `16384358117617625529` screen "Sales Handbook: Key Techniques" (`8b30f1041d804b6f8cdfd029bb188c20`).
+> Technique cards in the design show expandable "Sample Dialog" sections with prospect/rep scripted exchanges and coach insights.
+
+### [ ] Sample dialog field in reference materials
+- [ ] Add `sampleDialog` (nullable JSON/text) field to `ReferenceMaterial` entity + migration
+- [ ] `ReferenceMaterialDto` exposes `sampleDialog` as structured text
+- [ ] Admin reference editor: textarea for sample dialog
+- [ ] Frontend: expanded technique card shows "Sample Dialog" section with alternating prospect/rep chat bubbles
+
+### [ ] Case study snippets
+- [ ] Add `caseStudy` (nullable text) field to `ReferenceMaterial` entity
+- [ ] Shown as a highlighted sub-card within expanded technique in guidebook
+
+---
+
+## ~~Phase 26 — Performance: Redis Leaderboard~~ [SKIP]
+
+> Deferred from Phase 7.
+
+### [ ] Redis leaderboard sorted set
+- [ ] Replace DB query for league rankings with Redis sorted set (`ZADD`, `ZRANK`, `ZRANGE`)
+- [ ] Update `WeeklyLeagueClosureJob` to sync Redis on week close
+- [ ] Update `GET /league` to read from Redis with DB fallback
+
+---
+
+## Phase 27 — AI Dialog Practice
+
+> New tab "Диалог" for AI-powered sales conversation practice.
+> Spec: [docs/AI_DIALOG.md](AI_DIALOG.md)
+
+### [x] Backend — PostgreSQL + MongoDB setup
+- [x] `DialogBundle` EF entity linked to `Skill` (PostgreSQL)
+- [x] `DialogMode` EF entity with `ChatSystemPrompt` and `FeedbackSystemPrompt` (PostgreSQL)
+- [x] `DialogSession` MongoDB entity with messages, feedback, xpEarned
+- [x] EF configurations and migration
+- [x] `MongoDbContext` for sessions
+
+### [x] Backend — Dialog entities & DTOs
+- [x] `DialogBundle` entity (skillId, title, description, iconEmoji, sortOrder, isActive)
+- [x] `DialogMode` entity (bundleId, key, title, description, chatSystemPrompt, feedbackSystemPrompt, sortOrder, isActive)
+- [x] `DialogSession` entity (userId, bundleId, modeId, status, messages[], feedback, xpEarned, timestamps)
+- [x] `DialogBundleDto`, `DialogModeDto`, `DialogSessionDto`, `DialogSessionSummaryDto`, `DialogMessageDto`
+- [x] Request DTOs with `chatSystemPrompt` and `feedbackSystemPrompt` fields
+
+### [x] Backend — OpenAI chat service
+- [x] `IOpenAiChatService` interface with `ChatMessageResult` and `FeedbackResult`
+- [x] `OpenAiChatService` — calls GPT-4.1-mini for chat, GPT-4.1 for feedback
+- [x] Auto-append `[DIALOG_END]` instruction to chat prompt
+- [x] Auto-append `[XP:number]` instruction to feedback prompt
+- [x] Parse tags and return structured results
+- [x] Graceful degradation: check `IsOpenAiConfigured()` before API calls
+
+### [x] Backend — Dialog public endpoints
+- [x] `DialogController` — `GET /dialog/bundles`, `GET /dialog/bundles/{bundleId}/modes`
+- [x] `GET /dialog/sessions` — user's session history
+- [x] `POST /dialog/sessions` — create session, AI sends first message
+- [x] `GET /dialog/sessions/{sessionId}` — get session with messages
+- [x] `POST /dialog/sessions/{sessionId}/messages` — send user message, get AI response
+- [x] `POST /dialog/sessions/{sessionId}/complete` — end session, generate feedback, award XP
+- [x] Return 503 if OpenAI not configured
+
+### [x] Backend — Admin dialog endpoints
+- [x] `AdminDialogController` with RequireAdmin policy
+- [x] `GET/POST/PUT/DELETE /admin/dialog/bundles` (with skillId)
+- [x] `GET/POST /admin/dialog/bundles/{bundleId}/modes` (with prompts)
+- [x] `PUT/DELETE /admin/dialog/modes/{id}` (edit prompts)
+
+### [x] Backend — Seed test data
+- [x] `DialogSeeder` — seed "Холодные звонки" bundle (linked to skill) + "Обход секретаря" mode
+- [x] Run seeder on startup (idempotent)
+
+### [x] Frontend — Dialog tab in BottomNav
+- [x] Add "💬 Диалог" item to `NAV_ITEMS` (before Profile)
+- [x] Route: `/dialog`
+
+### [x] Frontend — Dialog page (bundles grid)
+- [x] `useDialogBundles()` hook — fetches `/dialog/bundles`
+- [x] `/dialog/page.tsx` — grid of bundle cards (icon, title, description)
+- [x] Empty state if no bundles or OpenAI not configured
+- [x] Click bundle → navigate to `/dialog/[bundleId]`
+
+### [x] Frontend — Mode selection page
+- [x] `useDialogModes(bundleId)` hook — fetches `/dialog/bundles/{bundleId}/modes`
+- [x] `/dialog/[bundleId]/page.tsx` — header + mode cards grid
+- [x] Click mode → navigate to `/dialog/[bundleId]/[modeId]`
+
+### [x] Frontend — Chat page with history sidebar
+- [x] `useDialogSessions()` hook — fetches user's session history
+- [x] `SessionHistorySidebar` — sessions grouped by date, XP badges
+- [x] `/dialog/[bundleId]/[modeId]/page.tsx` — full-screen chat with sidebar
+- [x] Toggle sidebar, load previous sessions
+- [x] "Новый диалог" button starts fresh session
+
+### [x] Frontend — Session completion & feedback
+- [x] Detect `isStopSignal` from AI response
+- [x] Show "Завершить диалог" button when stop detected
+- [x] On complete → call `/sessions/{id}/complete` → show `FeedbackModal`
+- [x] FeedbackModal: XP badge, feedback text, "Новый диалог" button
+
+### [x] Frontend — Admin dialog management
+- [x] `/admin/dialog/page.tsx` — bundles table with skill selector
+- [x] `/admin/dialog/[bundleId]/page.tsx` — modes table with prompt editors
+- [x] Separate `ChatSystemPrompt` and `FeedbackSystemPrompt` textareas
+- [x] Add "Dialog" link to admin sidebar
+
+### [x] Docs & tests
+- [x] Update `docs/FEATURES.md` with AI Dialog link
+- [x] Update `docs/API_CONTRACTS.md` with dialog endpoints
+- [x] Update `docs/AI_DIALOG.md` with final architecture
+- [x] Create `docs/TESTING/AI_DIALOG.md` — manual checklist
+- [ ] Unit tests for `OpenAiChatService` (mocked HTTP)
+- [ ] Integration tests for dialog endpoints
