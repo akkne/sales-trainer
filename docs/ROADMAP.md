@@ -438,20 +438,20 @@
 
 > После получения достижения показывать всплывающее уведомление (toast / modal) с анимацией.
 
-### [ ] Achievement toast component
-- [ ] `AchievementToast` component: badge emoji, title, description, green border, slide-in animation
-- [ ] Auto-dismiss after 4s; tap/click to dismiss early
-- [ ] Positioned top-center on mobile, top-right on desktop
+### [x] Achievement toast component
+- [x] `AchievementToast` component: badge emoji, title, description, green border, slide-in animation
+- [x] Auto-dismiss after 4s; tap/click to dismiss early
+- [x] Positioned top-center on mobile, top-right on desktop
 
-### [ ] Wire to session completion
-- [ ] `submitExercise` result includes `newlyUnlockedAchievementKeys`
-- [ ] After each correct submit: if keys non-empty → fetch achievement details → show toast queue
-- [ ] Queue: show toasts one at a time with 500ms gap between each
+### [x] Wire to session completion
+- [x] `submitExercise` result includes `newlyUnlockedAchievementKeys`
+- [x] After each correct submit: if keys non-empty → fetch achievement details → show toast queue
+- [x] Queue: show toasts one at a time with 500ms gap between each
 
-### [ ] Achievement details lookup
-- [ ] `useAchievements()` data cached in session; map key → `{iconEmoji, title, description}`
-- [ ] No extra API call — use already-loaded achievements list
+### [x] Achievement details lookup
+- [x] `useAchievements()` data cached in session; map key → `{iconEmoji, title, description}`
+- [x] No extra API call — use already-loaded achievements list
 
-### [ ] Docs & tests
-- [ ] `docs/TESTING/ACHIEVEMENT_NOTIFICATION.md` — manual checklist
-- [ ] Verify: toast shows after unlock, doesn't show on wrong answer, queue drains correctly
+### [x] Docs & tests
+- [x] `docs/TESTING/ACHIEVEMENT_NOTIFICATION.md` — manual checklist
+- [x] Verify: toast shows after unlock, doesn't show on wrong answer, queue drains correctly
