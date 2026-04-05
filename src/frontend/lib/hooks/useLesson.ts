@@ -66,6 +66,21 @@ export function useSubmitExercise() {
     });
 }
 
+export interface NextLesson {
+    lessonId: string;
+    title: string;
+    xpReward: number;
+}
+
+export function useNextLesson(lessonId: string, enabled: boolean) {
+    return useQuery({
+        queryKey: ["lesson", "next", lessonId],
+        queryFn: () => apiClient.get<NextLesson | undefined>(`/lessons/${lessonId}/next`),
+        enabled: enabled && !!lessonId,
+        retry: false,
+    });
+}
+
 export function useTranscribeAudio() {
     return useMutation({
         mutationFn: (blob: Blob) => {

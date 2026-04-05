@@ -342,19 +342,75 @@
 > Design source: project `16384358117617625529` screens "Sales Handbook (Vivid)" and
 > "Sales Handbook: Key Techniques" — structured reference with categories, search, technique cards.
 
-### [ ] Backend — Reference material enhancements
-- [ ] Add `category` field to `ReferenceItem` entity (e.g. "objections", "cold-calls", "closing")
-- [ ] Add `tags` array field
-- [ ] `GET /reference?category=&search=` — filter + search endpoint
-- [ ] Migration + seed update for existing reference items
+### [x] Backend — Reference material enhancements
+- [x] Add `category` field to `ReferenceMaterial` entity (nullable text)
+- [x] Add `tags` field (comma-separated text, exposed as string[] in DTO)
+- [x] `GET /reference?category=&search=` — filter + search endpoint
+- [x] `GET /reference/categories` — distinct categories list
+- [x] Migration `AddCategoryTagsToReference` (also includes Lesson.Description + EstimatedMinutes)
+- [x] `ReferenceMaterialDto` updated with `category`, `tags`, `skillSlug`
 
-### [ ] Frontend — Handbook page redesign (`/guidebook`)
-- [ ] Category tabs / filter chips at top (All, Objections, Cold Calls, Closing, etc.)
-- [ ] Search input with debounce — filters cards in real-time
-- [ ] Technique cards: title, category badge, short excerpt, expand on tap
-- [ ] Expanded card: full markdown content, "Related skill" link
-- [ ] Empty state when search yields no results
+### [x] Frontend — Handbook page redesign (`/guidebook`)
+- [x] Category chips at top (dynamic from API), "Все" default
+- [x] Search input with debounce (useDeferredValue) — filters cards in real-time
+- [x] Technique cards: category badge, tags pills, title, excerpt, expand on tap
+- [x] Expanded card: full markdown content, "Связанный навык →" link
+- [x] Empty state when search yields no results
+- [x] "📖 Справочник" added to BottomNav
 
 
+## Phase 15 — Admin Reference Material CRUD (Global)
 
-## Phase {next} - добавить после прохождения уровня кнопку, которая будет открывать следующий уровень
+> Полное управление справочными материалами из единой страницы в админ панели.
+> Все администраторы (Admin + SuperAdmin) могут просматривать, создавать, редактировать и удалять материалы.
+
+### [x] Backend — extend admin reference endpoints
+- [x] Add `category`, `tags`, `skillTitle`, `skillSlug` to `AdminReferenceMaterialDto`
+- [x] Extend `CreateReferenceMaterialRequestDto` with `category?` and `tags?`
+- [x] Add `GET /admin/reference` — list all materials with optional `?skillId=&search=&category=` filters
+- [x] Add `GET /admin/reference/categories` — distinct categories
+- [x] Update `PUT /admin/reference/:id` and `POST /admin/skills/:id/reference` to accept category/tags
+- [x] Update API_CONTRACTS.md
+
+### [x] Frontend — /admin/reference page
+- [x] `useAdminReferenceAll()` hook — fetches `/admin/reference` with filters
+- [x] `useAdminReferenceCategories()` hook — fetches categories
+- [x] Create `/admin/reference/page.tsx` — table: skill, title, category, tags, sort; with search + skill + category filters
+- [x] Inline edit row: title, category, tags, sortOrder, markdownContent (expandable textarea)
+- [x] "New material" form: select skill (from `/admin/skills`), fill fields
+- [x] Delete with confirm modal
+- [x] Update existing `/admin/skills/[id]/reference` page to also show/edit category + tags fields
+- [x] Add "Reference" link to admin sidebar nav
+
+### [x] Docs & tests
+- [x] Update API_CONTRACTS.md with reference section
+- [x] Add manual test checklist to `docs/TESTING/ADMIN_REFERENCE.md`
+
+---
+
+## Phase 16 — Next Lesson Button after Session
+
+> После прохождения урока показывать кнопку "Следующий урок", которая сразу открывает следующий разблокированный урок в том же навыке.
+
+### [x] Backend — next lesson endpoint
+- [x] Add `GET /lessons/:lessonId/next` — returns `{lessonId, title, xpReward}` or 204 if none
+- [x] Query: find the lesson's skill, then find next lesson (by sortOrder) with status `available`
+- [x] Update API_CONTRACTS.md
+
+### [x] Frontend — next lesson on session completion screen
+- [x] `useNextLesson(lessonId, enabled)` hook — queries `/lessons/:lessonId/next`, enabled only on session complete
+- [x] On completion screen: if next lesson available → show green "Следующий урок →" button above "Вернуться к пути"
+- [x] "Следующий урок" navigates to `/session/[nextLessonId]` (replaces history)
+- [x] If no next lesson → show "Все уроки пройдены! 🎉" message; "Вернуться к пути" is green button
+
+### [x] Docs & tests
+- [x] Update API_CONTRACTS.md with `NextLessonDto`
+- [x] Add test checklist to `docs/TESTING/NEXT_LESSON.md`
+
+---
+
+## Phase {next} - проработать логику лиг. Сейчас все не работает, написано "До конца недели Неделя завершена"
+
+## Phase {next} - сделать так, чтобы при выполнения упражнений работала клавиатура (пользователь нажал на 1 и у него выбрался номер 1, также если он ждет Enter/Space у него применятся Проверить или Продолжить)
+
+## Phase {next} - добавить уведомление, когда пользователь получает Достижение

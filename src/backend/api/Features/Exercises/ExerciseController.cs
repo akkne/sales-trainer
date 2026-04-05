@@ -44,6 +44,18 @@ public class ExerciseController(ExerciseService exerciseService) : ControllerBas
         return Ok(exerciseDtos);
     }
 
+    [HttpGet("lessons/{lessonId:guid}/next")]
+    public async Task<ActionResult<NextLessonDto>> GetNextLesson(Guid lessonId)
+    {
+        var userId = ResolveCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var nextLesson = await exerciseService.GetNextAvailableLessonAsync(userId.Value, lessonId);
+        if (nextLesson is null) return NoContent();
+
+        return Ok(nextLesson);
+    }
+
     [HttpPost("exercises/{exerciseId:guid}/submit")]
     public async Task<ActionResult<ExerciseSubmissionResultDto>> SubmitExerciseAnswer(
         Guid exerciseId,

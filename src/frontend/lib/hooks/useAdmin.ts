@@ -41,9 +41,21 @@ export interface AdminExercise {
 export interface AdminReferenceMaterial {
     id: string;
     skillId: string;
+    skillTitle: string;
+    skillSlug: string;
     title: string;
     markdownContent: string;
     sortOrder: number;
+    category: string | null;
+    tags: string[];
+}
+
+export interface CreateReferenceMaterialBody {
+    title: string;
+    markdownContent: string;
+    sortOrder: number;
+    category?: string | null;
+    tags?: string | null;
 }
 
 export interface AdminUser {
@@ -227,6 +239,28 @@ export function useDeleteExercise(lessonId: string) {
 
 // --- Reference ---
 
+export function useAdminReferenceAll(filters?: { skillId?: string; category?: string; search?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.skillId) params.set("skillId", filters.skillId);
+    if (filters?.category) params.set("category", filters.category);
+    if (filters?.search) params.set("search", filters.search);
+    const queryString = params.toString();
+    return useQuery({
+        queryKey: ["admin", "reference", "all", filters],
+        queryFn: () =>
+            apiClient.get<AdminReferenceMaterial[]>(
+                `/admin/reference${queryString ? `?${queryString}` : ""}`
+            ),
+    });
+}
+
+export function useAdminReferenceCategories() {
+    return useQuery({
+        queryKey: ["admin", "reference", "categories"],
+        queryFn: () => apiClient.get<string[]>("/admin/reference/categories"),
+    });
+}
+
 export function useAdminReference(skillId: string) {
     return useQuery({
         queryKey: ["admin", "reference", skillId],
@@ -241,14 +275,32 @@ export function useAdminReference(skillId: string) {
 export function useCreateReference(skillId: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (body: Omit<AdminReferenceMaterial, "id" | "skillId">) =>
+        mutationFn: (body: CreateReferenceMaterialBody) =>
             apiClient.post<AdminReferenceMaterial>(
                 `/admin/skills/${skillId}/reference`,
                 body
             ),
         onSuccess: (data) => {
             clientLogger.info("Reference material created", { materialId: data.id, skillId, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "reference", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to create reference material", { skillId, title: variables.title, error: (error as Error).message });
+        },
+    });
+}
+
+export function useCreateReferenceForSkill(skillId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: CreateReferenceMaterialBody) =>
+            apiClient.post<AdminReferenceMaterial>(
+                `/admin/skills/${skillId}/reference`,
+                body
+            ),
+        onSuccess: (data) => {
+            clientLogger.info("Reference material created", { materialId: data.id, skillId, title: data.title });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create reference material", { skillId, title: variables.title, error: (error as Error).message });
@@ -259,14 +311,14 @@ export function useCreateReference(skillId: string) {
 export function useUpdateReference(skillId: string, materialId: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (body: Omit<AdminReferenceMaterial, "id" | "skillId">) =>
+        mutationFn: (body: CreateReferenceMaterialBody) =>
             apiClient.put<AdminReferenceMaterial>(
                 `/admin/reference/${materialId}`,
                 body
             ),
         onSuccess: (data) => {
             clientLogger.info("Reference material updated", { materialId: data.id, skillId, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "reference", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update reference material", { materialId, skillId, error: (error as Error).message });
@@ -281,10 +333,43 @@ export function useDeleteReference(skillId: string) {
             apiClient.delete<void>(`/admin/reference/${materialId}`),
         onSuccess: (_, materialId) => {
             clientLogger.warn("Reference material deleted", { materialId, skillId });
-            qc.invalidateQueries({ queryKey: ["admin", "reference", skillId] });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error, materialId) => {
             clientLogger.error("Failed to delete reference material", { materialId, skillId, error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteReferenceMaterial() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (materialId: string) =>
+            apiClient.delete<void>(`/admin/reference/${materialId}`),
+        onSuccess: (_, materialId) => {
+            clientLogger.warn("Reference material deleted", { materialId });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+        },
+        onError: (error, materialId) => {
+            clientLogger.error("Failed to delete reference material", { materialId, error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateReferenceMaterial(materialId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: CreateReferenceMaterialBody) =>
+            apiClient.put<AdminReferenceMaterial>(
+                `/admin/reference/${materialId}`,
+                body
+            ),
+        onSuccess: (data) => {
+            clientLogger.info("Reference material updated", { materialId: data.id, title: data.title });
+            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update reference material", { materialId, error: (error as Error).message });
         },
     });
 }

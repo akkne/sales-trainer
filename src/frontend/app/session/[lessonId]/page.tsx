@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
     useSubmitExercise,
+    useNextLesson,
     type ExerciseSubmissionResult,
 } from "@/lib/hooks/useLesson";
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
@@ -45,6 +46,9 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
+
+    const isSessionComplete = sessionState === "complete";
+    const { data: nextLesson, isSuccess: isNextLessonLoaded } = useNextLesson(lessonId, isSessionComplete);
 
     const currentExercise = exercises?.[currentExerciseIndex];
     const totalExerciseCount = exercises?.length ?? 0;
@@ -162,9 +166,26 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 </div>
 
                 <div className="w-full max-w-sm flex flex-col gap-3 mt-6">
+                    {isNextLessonLoaded && nextLesson ? (
+                        <>
+                            <button
+                                onClick={() => router.replace(`/session/${nextLesson.lessonId}`)}
+                                className="w-full py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                            >
+                                Следующий урок →
+                            </button>
+                            <p className="text-xs text-[#AFAFAF] text-center">{nextLesson.title}</p>
+                        </>
+                    ) : isNextLessonLoaded ? (
+                        <p className="text-sm text-[#AFAFAF] text-center mb-1">Все уроки пройдены! 🎉</p>
+                    ) : null}
                     <button
                         onClick={() => router.back()}
-                        className="w-full py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                        className={`w-full py-4 rounded-2xl font-extrabold ${
+                            isNextLessonLoaded && nextLesson
+                                ? "text-[#AFAFAF] hover:text-gray-600 transition-colors"
+                                : "bg-[#58CC02] text-white btn-3d"
+                        }`}
                     >
                         Вернуться к пути
                     </button>

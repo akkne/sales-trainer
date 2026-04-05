@@ -9,6 +9,7 @@ import {
     useUpdateReference,
     useDeleteReference,
     type AdminReferenceMaterial,
+    type CreateReferenceMaterialBody,
 } from "@/lib/hooks/useAdmin";
 
 export default function AdminReferencePageWrapper({
@@ -25,18 +26,19 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
     const createMaterial = useCreateReference(skillId);
     const deleteMaterial = useDeleteReference(skillId);
 
+    const emptyForm: CreateReferenceMaterialBody = { title: "", markdownContent: "", sortOrder: 0, category: null, tags: null };
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({ title: "", markdownContent: "", sortOrder: 0 });
+    const [form, setForm] = useState<CreateReferenceMaterialBody>(emptyForm);
 
     const [editId, setEditId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({ title: "", markdownContent: "", sortOrder: 0 });
+    const [editForm, setEditForm] = useState<CreateReferenceMaterialBody>(emptyForm);
     const updateMaterial = useUpdateReference(skillId, editId ?? "");
 
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     async function handleCreate() {
         await createMaterial.mutateAsync(form);
-        setForm({ title: "", markdownContent: "", sortOrder: 0 });
+        setForm(emptyForm);
         setShowForm(false);
     }
 
@@ -46,6 +48,8 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
             title: m.title,
             markdownContent: m.markdownContent,
             sortOrder: m.sortOrder,
+            category: m.category,
+            tags: m.tags.join(", "),
         });
     }
 
@@ -86,17 +90,37 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                             />
                         </label>
-                        <label className="block">
-                            <span className="text-xs text-gray-500">Sort order</span>
-                            <input
-                                type="number"
-                                className="mt-1 w-32 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                                value={form.sortOrder}
-                                onChange={(e) =>
-                                    setForm({ ...form, sortOrder: Number(e.target.value) })
-                                }
-                            />
-                        </label>
+                        <div className="flex gap-3">
+                            <label className="block flex-1">
+                                <span className="text-xs text-gray-500">Category</span>
+                                <input
+                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    placeholder="e.g. objections"
+                                    value={form.category ?? ""}
+                                    onChange={(e) => setForm({ ...form, category: e.target.value || null })}
+                                />
+                            </label>
+                            <label className="block flex-1">
+                                <span className="text-xs text-gray-500">Tags (comma-separated)</span>
+                                <input
+                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    placeholder="e.g. rapport,discovery"
+                                    value={form.tags ?? ""}
+                                    onChange={(e) => setForm({ ...form, tags: e.target.value || null })}
+                                />
+                            </label>
+                            <label className="block w-28">
+                                <span className="text-xs text-gray-500">Sort order</span>
+                                <input
+                                    type="number"
+                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    value={form.sortOrder}
+                                    onChange={(e) =>
+                                        setForm({ ...form, sortOrder: Number(e.target.value) })
+                                    }
+                                />
+                            </label>
+                        </div>
                         <label className="block">
                             <span className="text-xs text-gray-500">Content (Markdown)</span>
                             <textarea
@@ -142,20 +166,38 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                             }
                                         />
                                     </label>
-                                    <label className="block">
-                                        <span className="text-xs text-gray-500">Sort order</span>
-                                        <input
-                                            type="number"
-                                            className="mt-1 w-32 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
-                                            value={editForm.sortOrder}
-                                            onChange={(e) =>
-                                                setEditForm({
-                                                    ...editForm,
-                                                    sortOrder: Number(e.target.value),
-                                                })
-                                            }
-                                        />
-                                    </label>
+                                    <div className="flex gap-3">
+                                        <label className="block flex-1">
+                                            <span className="text-xs text-gray-500">Category</span>
+                                            <input
+                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                value={editForm.category ?? ""}
+                                                onChange={(e) => setEditForm({ ...editForm, category: e.target.value || null })}
+                                            />
+                                        </label>
+                                        <label className="block flex-1">
+                                            <span className="text-xs text-gray-500">Tags (comma-separated)</span>
+                                            <input
+                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                value={editForm.tags ?? ""}
+                                                onChange={(e) => setEditForm({ ...editForm, tags: e.target.value || null })}
+                                            />
+                                        </label>
+                                        <label className="block w-28">
+                                            <span className="text-xs text-gray-500">Sort order</span>
+                                            <input
+                                                type="number"
+                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                value={editForm.sortOrder}
+                                                onChange={(e) =>
+                                                    setEditForm({
+                                                        ...editForm,
+                                                        sortOrder: Number(e.target.value),
+                                                    })
+                                                }
+                                            />
+                                        </label>
+                                    </div>
                                     <label className="block">
                                         <span className="text-xs text-gray-500">
                                             Content (Markdown)

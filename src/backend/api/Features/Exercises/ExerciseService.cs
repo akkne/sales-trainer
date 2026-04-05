@@ -167,6 +167,31 @@ public class ExerciseService(
             newlyUnlockedAchievementKeys);
     }
 
+    public async Task<NextLessonDto?> GetNextAvailableLessonAsync(Guid userId, Guid lessonId)
+    {
+        var currentLesson = await databaseContext.Lessons
+            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId);
+
+        if (currentLesson is null) return null;
+
+        var nextLesson = await databaseContext.Lessons
+            .Where(lesson => lesson.SkillId == currentLesson.SkillId
+                             && lesson.SortOrder > currentLesson.SortOrder)
+            .OrderBy(lesson => lesson.SortOrder)
+            .FirstOrDefaultAsync();
+
+        if (nextLesson is null) return null;
+
+        var nextLessonProgress = await databaseContext.UserLessonProgressRecords
+            .FirstOrDefaultAsync(progress => progress.UserId == userId
+                                             && progress.LessonId == nextLesson.Id);
+
+        if (nextLessonProgress is null || nextLessonProgress.Status == "locked")
+            return null;
+
+        return new NextLessonDto(nextLesson.Id, nextLesson.Title, nextLesson.XpReward);
+    }
+
     private async Task UpdateLessonProgressAsync(Guid userId, Guid lessonId)
     {
         var progressRecord = await databaseContext.UserLessonProgressRecords

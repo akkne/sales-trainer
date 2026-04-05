@@ -10,40 +10,93 @@ namespace SalesTrainer.Api.Features.Admin;
 public record AdminReferenceMaterialDto(
     Guid Id,
     Guid SkillId,
+    string SkillTitle,
+    string SkillSlug,
     string Title,
     string MarkdownContent,
-    int SortOrder
+    int SortOrder,
+    string? Category,
+    string[] Tags
 );
 
 public record CreateReferenceMaterialRequestDto(
     string Title,
     string MarkdownContent,
-    int SortOrder
+    int SortOrder,
+    string? Category = null,
+    string? Tags = null
 );
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
 public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceController> logger) : ControllerBase
 {
+    [HttpGet("admin/reference")]
+    public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetAll(
+        [FromQuery] Guid? skillId,
+        [FromQuery] string? category,
+        [FromQuery] string? search)
+    {
+        var query = from material in db.ReferenceMaterials
+                    join skill in db.Skills on material.SkillId equals skill.Id
+                    select new { material, skill };
+
+        if (skillId.HasValue)
+            query = query.Where(pair => pair.material.SkillId == skillId.Value);
+
+        if (!string.IsNullOrWhiteSpace(category))
+            query = query.Where(pair => pair.material.Category == category);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(pair =>
+                pair.material.Title.ToLower().Contains(searchLower) ||
+                pair.material.MarkdownContent.ToLower().Contains(searchLower));
+        }
+
+        var results = await query
+            .OrderBy(pair => pair.skill.SortOrder)
+            .ThenBy(pair => pair.material.SortOrder)
+            .ThenBy(pair => pair.material.Title)
+            .ToListAsync();
+
+        return Ok(results.Select(pair => MapToDto(pair.material, pair.skill.Title, pair.skill.Slug)).ToList());
+    }
+
+    [HttpGet("admin/reference/categories")]
+    public async Task<ActionResult<List<string>>> GetCategories()
+    {
+        var categories = await db.ReferenceMaterials
+            .Where(m => m.Category != null)
+            .Select(m => m.Category!)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToListAsync();
+
+        return Ok(categories);
+    }
+
     [HttpGet("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetBySkill(Guid skillId)
     {
+        var skill = await db.Skills.FindAsync(skillId);
+        if (skill is null) return NotFound();
+
         var materials = await db.ReferenceMaterials
             .Where(r => r.SkillId == skillId)
             .OrderBy(r => r.SortOrder)
-            .Select(r => new AdminReferenceMaterialDto(
-                r.Id, r.SkillId, r.Title, r.MarkdownContent, r.SortOrder))
             .ToListAsync();
 
-        return Ok(materials);
+        return Ok(materials.Select(m => MapToDto(m, skill.Title, skill.Slug)).ToList());
     }
 
     [HttpPost("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<AdminReferenceMaterialDto>> Create(
         Guid skillId, [FromBody] CreateReferenceMaterialRequestDto dto)
     {
-        var skillExists = await db.Skills.AnyAsync(s => s.Id == skillId);
-        if (!skillExists) return NotFound();
+        var skill = await db.Skills.FindAsync(skillId);
+        if (skill is null) return NotFound();
 
         var material = new ReferenceMaterial
         {
@@ -51,7 +104,9 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
             SkillId = skillId,
             Title = dto.Title,
             MarkdownContent = dto.MarkdownContent,
-            SortOrder = dto.SortOrder
+            SortOrder = dto.SortOrder,
+            Category = dto.Category,
+            Tags = dto.Tags
         };
 
         db.ReferenceMaterials.Add(material);
@@ -60,9 +115,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         logger.LogInformation("Reference material created MaterialId={MaterialId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
             material.Id, skillId, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminReferenceMaterialDto(
-            material.Id, material.SkillId, material.Title,
-            material.MarkdownContent, material.SortOrder));
+        return Ok(MapToDto(material, skill.Title, skill.Slug));
     }
 
     [HttpPut("admin/reference/{id:guid}")]
@@ -72,18 +125,21 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         var material = await db.ReferenceMaterials.FindAsync(id);
         if (material is null) return NotFound();
 
+        var skill = await db.Skills.FindAsync(material.SkillId);
+        if (skill is null) return NotFound();
+
         material.Title = dto.Title;
         material.MarkdownContent = dto.MarkdownContent;
         material.SortOrder = dto.SortOrder;
+        material.Category = dto.Category;
+        material.Tags = dto.Tags;
 
         await db.SaveChangesAsync();
 
         logger.LogInformation("Reference material updated MaterialId={MaterialId} Title={Title} by ActorId={ActorId}",
             id, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminReferenceMaterialDto(
-            material.Id, material.SkillId, material.Title,
-            material.MarkdownContent, material.SortOrder));
+        return Ok(MapToDto(material, skill.Title, skill.Slug));
     }
 
     [HttpDelete("admin/reference/{id:guid}")]
@@ -100,4 +156,19 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
 
         return NoContent();
     }
+
+    private static AdminReferenceMaterialDto MapToDto(ReferenceMaterial material, string skillTitle, string skillSlug) =>
+        new(
+            material.Id,
+            material.SkillId,
+            skillTitle,
+            skillSlug,
+            material.Title,
+            material.MarkdownContent,
+            material.SortOrder,
+            material.Category,
+            material.Tags != null
+                ? material.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                : Array.Empty<string>()
+        );
 }
