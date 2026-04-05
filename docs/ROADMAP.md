@@ -321,19 +321,19 @@
 > Design source: project `16384358117617625529` screen "Lesson Map: Objections" (id `4d961c964dd540f9bfe83133b73d6028`).
 > A detailed overview screen per skill showing all lessons as a structured course map.
 
-### [ ] Frontend — Skill course map page `/skill/[id]/map`
-- [ ] Header: skill title, icon, total lessons, completion %
-- [ ] List of lesson cards: lesson number, title, description excerpt, status (locked/active/completed), XP reward
-- [ ] Completed lessons: green check, duration shown
-- [ ] Active lesson: highlighted card with "Начать" CTA
-- [ ] Locked lessons: dimmed, lock icon, shows what unlocks them
-- [ ] "Start" button on active lesson → `/session/[lessonId]`
-- [ ] Link from skill node popover: "Посмотреть карту курса"
+### [x] Frontend — Skill course map page `/skill/[id]/map`
+- [x] Header: skill title, icon, total lessons, completion %
+- [x] List of lesson cards: lesson number, title, description excerpt, status (locked/active/completed), XP reward
+- [x] Completed lessons: green check, duration shown
+- [x] Active lesson: highlighted card with "Начать" CTA
+- [x] Locked lessons: dimmed, lock icon, shows what unlocks them
+- [x] "Start" button on active lesson → `/session/[lessonId]`
+- [x] Link from skill node popover: "Посмотреть карту курса"
 
-### [ ] Backend — Lesson descriptions
-- [ ] Ensure `Lesson` entity has `description` field (add if missing)
-- [ ] Expose `description` and `estimatedMinutes` in lessons API response
-- [ ] Migration + seed update
+### [x] Backend — Lesson descriptions
+- [x] `Lesson` entity has `description` (nullable) and `estimatedMinutes` fields
+- [x] `LessonSummaryDto` exposes `description` and `estimatedMinutes`
+- [x] Frontend `LessonSummary` interface updated accordingly
 
 ---
 
@@ -354,3 +354,7 @@
 - [ ] Technique cards: title, category badge, short excerpt, expand on tap
 - [ ] Expanded card: full markdown content, "Related skill" link
 - [ ] Empty state when search yields no results
+
+
+
+## Phase {next} - добавить после прохождения уровня кнопку, которая будет открывать следующий уровень

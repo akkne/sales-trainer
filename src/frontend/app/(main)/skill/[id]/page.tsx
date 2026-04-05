@@ -36,9 +36,17 @@ export default function SkillPage({ params }: SkillPageProps) {
             <div className="bg-[#F7F7F7] rounded-2xl px-5 py-4 mb-8">
                 <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-gray-700 text-sm">Уроки</span>
-                    <span className="text-sm font-bold text-[#58CC02]">
-                        {completedCount}/{lessons.length}
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href={`/skill/${skillSlug}/map`}
+                            className="text-xs text-[#58CC02] font-semibold hover:underline"
+                        >
+                            Карта курса →
+                        </Link>
+                        <span className="text-sm font-bold text-[#58CC02]">
+                            {completedCount}/{lessons.length}
+                        </span>
+                    </div>
                 </div>
                 <div className="h-2 bg-[#E5E5E5] rounded-full overflow-hidden">
                     <div

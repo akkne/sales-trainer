@@ -90,7 +90,7 @@ export function SkillNode({ skillNode, positionClass = "node-center" }: SkillNod
 
             {/* Popover above active node */}
             {isActive && (
-                <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 w-48 bg-white rounded-2xl shadow-lg border border-[#E5E5E5] px-4 py-3 z-10">
+                <div className="absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 w-52 bg-white rounded-2xl shadow-lg border border-[#E5E5E5] px-4 py-3 z-10">
                     <p className="font-bold text-sm text-gray-900 mb-1 truncate">{skillNode.title}</p>
                     <div className="h-1.5 bg-[#E5E5E5] rounded-full overflow-hidden mb-2">
                         <div
@@ -101,6 +101,12 @@ export function SkillNode({ skillNode, positionClass = "node-center" }: SkillNod
                     <p className="text-xs text-[#AFAFAF] mb-2">
                         {skillNode.completedLessonCount}/{skillNode.totalLessonCount} уроков
                     </p>
+                    <Link
+                        href={`/skill/${skillNode.slug}/map`}
+                        className="block w-full text-center text-xs text-[#58CC02] font-semibold hover:underline"
+                    >
+                        Посмотреть карту курса →
+                    </Link>
                     {/* Triangle arrow pointing down */}
                     <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-2 overflow-hidden">
                         <div className="w-3 h-3 bg-white border border-[#E5E5E5] rotate-45 translate-y-[-6px] mx-auto" />
