@@ -4,6 +4,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { useCompleteOnboarding, useSkillsForOnboarding } from "@/lib/hooks/useOnboarding";
 
+const PERSONA_OPTIONS = [
+    { value: "sdr", label: "SDR", description: "Разведчик продаж — ищу и квалифицирую лиды", emoji: "📞" },
+    { value: "account_executive", label: "Account Executive", description: "Провожу сделки от демо до закрытия", emoji: "🤝" },
+    { value: "account_manager", label: "Account Manager", description: "Развиваю текущих клиентов", emoji: "💼" },
+    { value: "founder", label: "Основатель", description: "Продаю лично как CEO или co-founder", emoji: "🚀" },
+    { value: "other", label: "Другое", description: "Моя роль не вписывается в список", emoji: "✨" },
+];
+
 const SALES_TYPE_OPTIONS = [
     { value: "b2b_saas", label: "B2B SaaS", emoji: "💻" },
     { value: "retail", label: "Розница", emoji: "🛒" },
@@ -28,6 +36,7 @@ const SLIDE_VARIANTS = {
 
 export default function OnboardingPage() {
     const [currentStep, setCurrentStep] = useState(0);
+    const [selectedPersona, setSelectedPersona] = useState("");
     const [selectedSalesType, setSelectedSalesType] = useState("");
     const [selectedExperienceLevel, setSelectedExperienceLevel] = useState("");
     const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(
@@ -36,16 +45,25 @@ export default function OnboardingPage() {
     const completeOnboardingMutation = useCompleteOnboarding();
     const { data: allSkills, isLoading: skillsLoading } = useSkillsForOnboarding();
 
-    const totalStepCount = 3;
+    const totalStepCount = 4;
+
+    function handlePersonaSelection(persona: string) {
+        setSelectedPersona(persona);
+        setCurrentStep(1);
+    }
+
+    function handlePersonaSkip() {
+        setCurrentStep(1);
+    }
 
     function handleSalesTypeSelection(salesType: string) {
         setSelectedSalesType(salesType);
-        setCurrentStep(1);
+        setCurrentStep(2);
     }
 
     function handleExperienceLevelSelection(experienceLevel: string) {
         setSelectedExperienceLevel(experienceLevel);
-        setCurrentStep(2);
+        setCurrentStep(3);
     }
 
     function toggleSkill(slug: string) {
@@ -63,6 +81,7 @@ export default function OnboardingPage() {
             salesType: selectedSalesType,
             experienceLevel: selectedExperienceLevel,
             selectedSkillSlugs: Array.from(selectedSlugs),
+            persona: selectedPersona || undefined,
         });
     }
 
@@ -81,8 +100,46 @@ export default function OnboardingPage() {
             </div>
 
             <AnimatePresence mode="wait">
-                {/* ── Step 0: Sales type ───────────────────────────────────── */}
+                {/* ── Step 0: Persona selection ────────────────────────────── */}
                 {currentStep === 0 && (
+                    <motion.div
+                        key="step-persona"
+                        variants={SLIDE_VARIANTS}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.25 }}
+                    >
+                        <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-gray-900 mb-2">
+                            Кто ты в продажах?
+                        </h1>
+                        <p className="text-gray-500 mb-6">Выбери свою роль — подберём упражнения</p>
+                        <div className="flex flex-col gap-3">
+                            {PERSONA_OPTIONS.map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => handlePersonaSelection(opt.value)}
+                                    className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-[#F7F7F7] text-left hover:bg-[#E8F9D6] transition-colors"
+                                >
+                                    <span className="text-2xl shrink-0">{opt.emoji}</span>
+                                    <div>
+                                        <p className="font-semibold text-gray-900">{opt.label}</p>
+                                        <p className="text-sm text-gray-500 mt-0.5">{opt.description}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={handlePersonaSkip}
+                            className="mt-4 w-full py-3 text-sm text-[#AFAFAF] hover:text-gray-600 transition-colors"
+                        >
+                            Пропустить
+                        </button>
+                    </motion.div>
+                )}
+
+                {/* ── Step 1: Sales type ───────────────────────────────────── */}
+                {currentStep === 1 && (
                     <motion.div
                         key="step-sales-type"
                         variants={SLIDE_VARIANTS}
@@ -110,8 +167,8 @@ export default function OnboardingPage() {
                     </motion.div>
                 )}
 
-                {/* ── Step 1: Experience level ─────────────────────────────── */}
-                {currentStep === 1 && (
+                {/* ── Step 2: Experience level ─────────────────────────────── */}
+                {currentStep === 2 && (
                     <motion.div
                         key="step-experience"
                         variants={SLIDE_VARIANTS}
@@ -139,8 +196,8 @@ export default function OnboardingPage() {
                     </motion.div>
                 )}
 
-                {/* ── Step 2: Skill selection ──────────────────────────────── */}
-                {currentStep === 2 && (
+                {/* ── Step 3: Skill selection ──────────────────────────────── */}
+                {currentStep === 3 && (
                     <motion.div
                         key="step-skills"
                         variants={SLIDE_VARIANTS}

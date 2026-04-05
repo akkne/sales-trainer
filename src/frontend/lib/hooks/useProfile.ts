@@ -10,6 +10,7 @@ export interface UserProfileStats {
     completedSkillCount: number;
     totalSkillCount: number;
     averageExerciseScore: number;
+    persona: string | null;
 }
 
 export function useProfile() {

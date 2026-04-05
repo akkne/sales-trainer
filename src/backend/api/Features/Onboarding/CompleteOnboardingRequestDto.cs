@@ -3,5 +3,6 @@ namespace SalesTrainer.Api.Features.Onboarding;
 public record CompleteOnboardingRequestDto(
     string SalesType,
     string ExperienceLevel,
-    List<string> SelectedSkillSlugs
+    List<string> SelectedSkillSlugs,
+    string? Persona = null
 );

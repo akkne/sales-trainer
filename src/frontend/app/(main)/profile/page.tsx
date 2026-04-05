@@ -29,6 +29,14 @@ export default function ProfilePage() {
 
     if (!profileStats) return null;
 
+    const PERSONA_LABELS: Record<string, string> = {
+        sdr: "SDR",
+        account_executive: "Account Executive",
+        account_manager: "Account Manager",
+        founder: "Основатель",
+        other: "Другое",
+    };
+
     const completionPercent =
         profileStats.totalSkillCount > 0
             ? Math.round(
@@ -60,6 +68,11 @@ export default function ProfilePage() {
                         {profileStats.displayName}
                     </h1>
                     <p className="text-sm text-[#AFAFAF]">{profileStats.email}</p>
+                    {profileStats.persona && (
+                        <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-[#E8F9D6] text-[#3C8400] text-xs font-semibold">
+                            {PERSONA_LABELS[profileStats.persona] ?? profileStats.persona}
+                        </span>
+                    )}
                 </div>
                 <div className="w-14 h-14 rounded-full bg-[#58CC02] flex items-center justify-center text-white font-bold text-xl">
                     {profileStats.displayName[0]?.toUpperCase()}

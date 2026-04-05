@@ -12,7 +12,8 @@ public class OnboardingService(AppDbContext databaseContext)
         Guid userId,
         string salesType,
         string experienceLevel,
-        List<string> selectedSkillSlugs)
+        List<string> selectedSkillSlugs,
+        string? persona = null)
     {
         var existingProfile = await databaseContext.UserProfiles
             .FirstOrDefaultAsync(profile => profile.UserId == userId);
@@ -29,6 +30,8 @@ public class OnboardingService(AppDbContext databaseContext)
         existingProfile.SalesType = salesType;
         existingProfile.ExperienceLevel = experienceLevel;
         existingProfile.IsOnboardingCompleted = true;
+        if (persona is not null)
+            existingProfile.Persona = persona;
 
         // Ensure sales-basics is always enrolled
         var slugs = selectedSkillSlugs

@@ -7,6 +7,7 @@ interface OnboardingPayload {
     salesType: string;
     experienceLevel: string;
     selectedSkillSlugs: string[];
+    persona?: string;
 }
 
 export function useCompleteOnboarding() {

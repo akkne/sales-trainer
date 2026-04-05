@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Onboarding;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Profile;
@@ -10,6 +11,9 @@ public class ProfileService(AppDbContext databaseContext)
         var user = await databaseContext.Users
             .FirstOrDefaultAsync(user => user.Id == userId)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
+
+        var userProfile = await databaseContext.UserProfiles
+            .FirstOrDefaultAsync(profile => profile.UserId == userId);
 
         var streakRecord = await databaseContext.UserStreaks
             .FirstOrDefaultAsync(streak => streak.UserId == userId);
@@ -36,6 +40,33 @@ public class ProfileService(AppDbContext databaseContext)
             totalXpAmount,
             completedSkillCount,
             totalSkillCount,
-            Math.Round(averageExerciseScore, 1));
+            Math.Round(averageExerciseScore, 1),
+            userProfile?.Persona);
+    }
+
+    public async Task UpdatePersonaForUserAsync(Guid userId, string persona)
+    {
+        var userProfile = await databaseContext.UserProfiles
+            .FirstOrDefaultAsync(profile => profile.UserId == userId);
+
+        if (userProfile is null)
+        {
+            databaseContext.UserProfiles.Add(new UserProfile
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Persona = persona,
+                SalesType = "",
+                ExperienceLevel = "",
+                Goal = "",
+                IsOnboardingCompleted = false
+            });
+        }
+        else
+        {
+            userProfile.Persona = persona;
+        }
+
+        await databaseContext.SaveChangesAsync();
     }
 }

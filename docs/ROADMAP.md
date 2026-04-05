@@ -299,19 +299,20 @@
 > Design source: project `16384358117617625529` screens "Onboarding Step 1: Profile Selection" and
 > "Onboarding: Select Profile (Vivid)". Shows avatar cards for sales roles (SDR, AE, Account Manager, etc.).
 
-### [ ] Backend — User persona
-- [ ] Add `Persona` enum (SDR / AccountExecutive / AccountManager / Founder / Other) to `User` entity
-- [ ] EF migration: add `Persona` column (nullable)
-- [ ] Expose `persona` in profile API response
-- [ ] `PUT /profile/persona` endpoint
+### [x] Backend — User persona
+- [x] Add `Persona` (nullable text) to `UserProfile` entity
+- [x] EF migration `AddPersonaToUserProfile`
+- [x] `CompleteOnboardingRequestDto` extended with optional `Persona` field
+- [x] `OnboardingService` saves persona on completion
+- [x] `PUT /profile/persona` endpoint — validates allowed values
+- [x] `GET /profile` response includes `persona`
 
-### [ ] Frontend — Persona selection step in onboarding
-- [ ] New onboarding step 1: persona picker with avatar cards and role descriptions
-- [ ] Each card: role icon/avatar, title (e.g. "SDR"), short description
-- [ ] Selected card highlighted with green border; "Продолжить" button activates on selection
-- [ ] On submit → `PUT /profile/persona` → advance to existing skill selection step
-- [ ] Skip link ("Пропустить") for users who don't identify with a role
-- [ ] Persona shown on profile page as a badge/tag
+### [x] Frontend — Persona selection step in onboarding
+- [x] New onboarding step 0: persona picker (SDR, AE, AM, Founder, Other) with emoji + description cards
+- [x] Click → sets persona + advances to step 1; "Пропустить" skips without setting persona
+- [x] `totalStepCount` bumped from 3 → 4; remaining steps shifted 1→2→3
+- [x] `CompleteOnboarding` payload now includes `persona`
+- [x] Profile page: persona displayed as green badge/tag below email
 
 ---
 

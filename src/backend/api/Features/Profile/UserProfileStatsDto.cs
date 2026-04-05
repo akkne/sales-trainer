@@ -8,5 +8,6 @@ public record UserProfileStatsDto(
     int TotalXpAmount,
     int CompletedSkillCount,
     int TotalSkillCount,
-    double AverageExerciseScore
+    double AverageExerciseScore,
+    string? Persona
 );
