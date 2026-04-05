@@ -409,8 +409,49 @@
 
 ---
 
-## Phase {next} - проработать логику лиг. Сейчас все не работает, написано "До конца недели Неделя завершена"
+## Phase 17 — Keyboard Controls in Exercise Session
 
-## Phase {next} - сделать так, чтобы при выполнения упражнений работала клавиатура (пользователь нажал на 1 и у него выбрался номер 1, также если он ждет Enter/Space у него применятся Проверить или Продолжить)
+> При выполнении упражнений пользователь может управлять с клавиатуры: цифры 1-4 выбирают варианты,
+> Enter/Space применяют «Проверить» или «Продолжить».
 
-## Phase {next} - добавить уведомление, когда пользователь получает Достижение
+### [x] Multiple choice — digit keys
+- [x] `useKeyboardControls(options, onSubmit, onContinue)` hook in `session/` dir
+- [x] Keys 1–4: select the corresponding answer option (only when result banner is not shown)
+- [x] Enter / Space: trigger "Проверить" if answer selected, or "Продолжить" if result showing
+- [x] Hook attached in `SessionPage` and respects `disabled` state (no re-selection after submit)
+
+### [x] Fill-in-the-blank — focus & submit
+- [x] Enter submits when fill-blank input is focused and non-empty
+- [x] Space not intercepted when typing in text input (only in non-input context)
+
+### [x] Keyboard hint UI
+- [x] Small gray hint below action button: "или нажмите Enter" / "или нажмите 1–4"
+- [x] Hidden on touch devices (`@media (pointer: coarse)`)
+
+### [x] Docs & tests
+- [x] `docs/TESTING/KEYBOARD_CONTROLS.md` — manual checklist
+- [x] Unit tests for `useKeyboardControls` hook
+
+---
+
+## Phase 18 — Achievement Unlock Notification
+
+> После получения достижения показывать всплывающее уведомление (toast / modal) с анимацией.
+
+### [ ] Achievement toast component
+- [ ] `AchievementToast` component: badge emoji, title, description, green border, slide-in animation
+- [ ] Auto-dismiss after 4s; tap/click to dismiss early
+- [ ] Positioned top-center on mobile, top-right on desktop
+
+### [ ] Wire to session completion
+- [ ] `submitExercise` result includes `newlyUnlockedAchievementKeys`
+- [ ] After each correct submit: if keys non-empty → fetch achievement details → show toast queue
+- [ ] Queue: show toasts one at a time with 500ms gap between each
+
+### [ ] Achievement details lookup
+- [ ] `useAchievements()` data cached in session; map key → `{iconEmoji, title, description}`
+- [ ] No extra API call — use already-loaded achievements list
+
+### [ ] Docs & tests
+- [ ] `docs/TESTING/ACHIEVEMENT_NOTIFICATION.md` — manual checklist
+- [ ] Verify: toast shows after unlock, doesn't show on wrong answer, queue drains correctly

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useTranscribeAudio, type ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
+import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
 
 interface FreeTextContent {
     situation: string;
@@ -82,6 +83,20 @@ export function FreeTextExercise({
     }, []);
 
     const isBusy = isSubmitting || recordingState !== "idle" || isAnswered;
+
+    useKeyboardControls({
+        optionCount: 0,
+        onSelectOption: () => {},
+        onSubmit: () => {
+            if (responseText.trim() && !isBusy) {
+                onSubmit({ text: responseText.trim() });
+            }
+        },
+        onContinue: () => onContinue?.(),
+        isAnswered,
+        disabled: isBusy,
+        inputFocused: true, // Free text always has input, let Enter be handled inside textarea naturally
+    });
 
     return (
         <div className="flex flex-col gap-6">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
+import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
 
 /**
  * fill_blank content can be stored in two shapes depending on who seeded it:
@@ -44,6 +45,21 @@ export function FillBlankExercise({
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
     const isCharacterBased = !!(content.characterName || content.characterLine);
+
+    useKeyboardControls({
+        optionCount: content.options?.length ?? 0,
+        onSelectOption: (index) => {
+            if (!isAnswered) setSelectedOptionIndex(index);
+        },
+        onSubmit: () => {
+            if (selectedOptionIndex !== null && !isSubmitting) {
+                onSubmit({ selectedOptionIndex });
+            }
+        },
+        onContinue: () => onContinue?.(),
+        isAnswered,
+        disabled: isSubmitting,
+    });
 
     function optionStyle(optionIndex: number): string {
         const base = "flex items-center gap-4 px-4 py-4 rounded-2xl text-left font-semibold transition-colors border-b-4";
@@ -178,6 +194,11 @@ export function FillBlankExercise({
                     </button>
                 )}
             </div>
+
+            {/* Keyboard hint — hidden on touch devices */}
+            <p className="hidden pointer-fine:block text-center text-xs text-[#AFAFAF]">
+                {isAnswered ? "Enter — продолжить" : "1–4 выбрать · Enter — проверить"}
+            </p>
         </div>
     );
 }
