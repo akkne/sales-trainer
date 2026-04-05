@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useRef, useState } from "react";
+import { use, useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
@@ -8,9 +8,11 @@ import {
     useNextLesson,
     type ExerciseSubmissionResult,
 } from "@/lib/hooks/useLesson";
+import { useAchievements } from "@/lib/hooks/useAchievements";
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
+import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
 
 const MAX_HEARTS = 4;
 
@@ -36,6 +38,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     const router = useRouter();
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
     const submitExerciseMutation = useSubmitExercise();
+    const { data: allAchievements } = useAchievements();
 
     const sessionStartTimeRef = useRef<number>(Date.now());
     const sessionEndTimeRef = useRef<number>(0);
@@ -46,6 +49,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
+    const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
 
     const isSessionComplete = sessionState === "complete";
     const { data: nextLesson, isSuccess: isNextLessonLoaded } = useNextLesson(lessonId, isSessionComplete);
@@ -69,11 +73,30 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                     } else {
                         setTotalXpEarned((prev) => prev + result.xpEarned);
                         setCorrectAnswerCount((prev) => prev + 1);
+                        // Queue achievement toasts for newly unlocked achievements
+                        if (result.newlyUnlockedAchievementKeys?.length && allAchievements) {
+                            const newToasts = result.newlyUnlockedAchievementKeys
+                                .map((key) => allAchievements.find((a) => a.key === key))
+                                .filter(Boolean)
+                                .map((a) => ({
+                                    key: a!.key,
+                                    iconEmoji: a!.iconEmoji,
+                                    title: a!.title,
+                                    description: a!.description,
+                                }));
+                            if (newToasts.length > 0) {
+                                setToastQueue((prev) => [...prev, ...newToasts]);
+                            }
+                        }
                     }
                 },
             }
         );
     }
+
+    const dismissToast = useCallback((key: string) => {
+        setToastQueue((prev) => prev.filter((t) => t.key !== key));
+    }, []);
 
     function recordSessionEnd() {
         sessionEndTimeRef.current = Date.now();
@@ -234,6 +257,9 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
     return (
         <div className="min-h-screen bg-white flex flex-col">
+            {/* Achievement toast queue */}
+            <AchievementToastQueue queue={toastQueue} onDismiss={dismissToast} />
+
             {/* Header: ✕ + progress bar + hearts */}
             <div className="flex items-center gap-3 px-4 py-5 border-b border-[#E5E5E5] sticky top-0 bg-white z-10">
                 <button
