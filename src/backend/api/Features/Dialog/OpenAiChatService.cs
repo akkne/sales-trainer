@@ -180,14 +180,48 @@ public class OpenAiChatService : IOpenAiChatService
             throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
         }
 
-        var responseJson = JsonDocument.Parse(responseContent);
-        var assistantMessage = responseJson.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+        _logger.LogDebug("OpenAI API response: {Response}", responseContent);
 
-        return assistantMessage ?? string.Empty;
+        var responseJson = JsonDocument.Parse(responseContent);
+        var root = responseJson.RootElement;
+
+        // Try standard OpenAI format: { choices: [{ message: { content: "..." } }] }
+        if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+        {
+            var firstChoice = choices[0];
+            if (firstChoice.TryGetProperty("message", out var message) &&
+                message.TryGetProperty("content", out var content))
+            {
+                return content.GetString() ?? string.Empty;
+            }
+        }
+
+        // Try alternative format: { content: "..." } or { text: "..." }
+        if (root.TryGetProperty("content", out var directContent))
+        {
+            return directContent.GetString() ?? string.Empty;
+        }
+
+        if (root.TryGetProperty("text", out var textContent))
+        {
+            return textContent.GetString() ?? string.Empty;
+        }
+
+        // Try f5ai specific format: { result: { content: "..." } }
+        if (root.TryGetProperty("result", out var result))
+        {
+            if (result.TryGetProperty("content", out var resultContent))
+            {
+                return resultContent.GetString() ?? string.Empty;
+            }
+            if (result.TryGetProperty("text", out var resultText))
+            {
+                return resultText.GetString() ?? string.Empty;
+            }
+        }
+
+        _logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
+        throw new InvalidOperationException($"Unexpected API response format: {responseContent}");
     }
 
     private static string FormatConversationForFeedback(List<DialogMessage> messages)
