@@ -41,7 +41,7 @@ export default function ChatPage() {
     const [isCompleting, setIsCompleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
-    const [showCompletionButton, setShowCompletionButton] = useState(false);
+    const [isEnded, setIsEnded] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
     const [isInitialized, setIsInitialized] = useState(false);
 
@@ -64,14 +64,14 @@ export default function ChatPage() {
             setIsLoading(true);
             setError(null);
             setFeedback(null);
-            setShowCompletionButton(false);
+            setIsEnded(false);
             const session = await startDialogSession(bundleId, modeId);
             setSessionId(session.id);
             setMessages(session.messages);
             refetchSessions();
 
             if (session.messages.some((message) => message.isStopSignal)) {
-                setShowCompletionButton(true);
+                autoCompleteSession(session.id);
             }
         } catch (sessionError) {
             setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
@@ -135,7 +135,8 @@ export default function ChatPage() {
             setMessages((previousMessages) => [...previousMessages, aiMessage]);
 
             if (aiMessage.isStopSignal) {
-                setShowCompletionButton(true);
+                setIsEnded(true);
+                autoCompleteSession(currentSessionId);
             }
         } catch (sendError) {
             setError(sendError instanceof Error ? sendError.message : "Ошибка отправки");
@@ -144,14 +145,12 @@ export default function ChatPage() {
         }
     };
 
-    const handleCompleteSession = async () => {
-        if (!sessionId || isCompleting) return;
-
+    const autoCompleteSession = async (sid: string) => {
+        if (isCompleting) return;
         setIsCompleting(true);
         setError(null);
-
         try {
-            const sessionFeedback = await completeDialogSession(sessionId);
+            const sessionFeedback = await completeDialogSession(sid);
             setFeedback(sessionFeedback);
             refetchSessions();
             queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -166,7 +165,7 @@ export default function ChatPage() {
         setFeedback(null);
         setSessionId(null);
         setMessages([]);
-        setShowCompletionButton(false);
+        setIsEnded(false);
     };
 
     const handleClose = () => {
@@ -178,7 +177,7 @@ export default function ChatPage() {
         setIsLoading(true);
         setError(null);
         setFeedback(null);
-        setShowCompletionButton(false);
+        setIsEnded(false);
 
         try {
             const session = await apiClient.get<{
@@ -192,7 +191,7 @@ export default function ChatPage() {
             if (session.status === "completed") {
                 setFeedback(session.feedback);
             } else if (session.messages.some((message) => message.isStopSignal)) {
-                setShowCompletionButton(true);
+                setIsEnded(true);
             }
         } catch (loadError) {
             setError(loadError instanceof Error ? loadError.message : "Ошибка загрузки сессии");
@@ -214,7 +213,7 @@ export default function ChatPage() {
                 setSessionId(null);
                 setMessages([]);
                 setFeedback(null);
-                setShowCompletionButton(false);
+                setIsEnded(false);
             }
         } catch (deleteError) {
             setError(deleteError instanceof Error ? deleteError.message : "Ошибка удаления");
@@ -350,20 +349,16 @@ export default function ChatPage() {
                 </div>
 
                 <div className="flex-shrink-0 p-4 border-t border-gray-100 pb-[env(safe-area-inset-bottom)]">
-                    {showCompletionButton && !feedback && (
-                        <button
-                            onClick={handleCompleteSession}
-                            disabled={isCompleting}
-                            className="w-full mb-3 py-3 bg-blue-500 text-white font-bold rounded-2xl hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {isCompleting ? "Формируем обратную связь..." : "Завершить диалог"}
-                        </button>
+                    {isCompleting && (
+                        <div className="text-center text-sm text-gray-500 mb-3">
+                            Формируем обратную связь...
+                        </div>
                     )}
 
                     <ChatInput
                         onSend={handleSendMessage}
-                        disabled={isSending || isCompleting || !!feedback}
-                        placeholder={feedback ? "Диалог завершён" : "Ваш опеннер..."}
+                        disabled={isSending || isCompleting || isEnded || !!feedback}
+                        placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
                     />
                 </div>
             </div>
@@ -373,6 +368,4 @@ export default function ChatPage() {
             )}
         </div>
     );
-}
- );
 }
