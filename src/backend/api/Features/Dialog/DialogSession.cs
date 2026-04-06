@@ -64,6 +64,9 @@ public class DialogMessage
 
 public class DialogFeedback
 {
+    [BsonElement("summary")]
+    public string Summary { get; set; } = null!;
+
     [BsonElement("content")]
     public string Content { get; set; } = null!;
 

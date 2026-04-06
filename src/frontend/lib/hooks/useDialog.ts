@@ -31,6 +31,7 @@ export interface DialogMessage {
 }
 
 export interface DialogFeedback {
+    summary: string;
     content: string;
     generatedAt: string;
     xpEarned: number;

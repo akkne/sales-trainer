@@ -177,6 +177,7 @@ public class DialogService
 
         var feedback = new DialogFeedback
         {
+            Summary = feedbackResult.Summary,
             Content = feedbackResult.Content,
             GeneratedAt = DateTime.UtcNow
         };

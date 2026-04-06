@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { DialogFeedback } from "@/lib/hooks/useDialog";
 
 interface FeedbackModalProps {
@@ -9,6 +9,8 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
@@ -46,9 +48,60 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
 
                 <div className="p-6 overflow-y-auto flex-1">
                     <div
-                        className="prose prose-sm max-w-none text-gray-700 [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-gray-800 [&>h3]:mt-4 [&>h3]:mb-2 [&>h3:first-child]:mt-0 [&>ul]:my-2 [&>ul]:pl-5 [&>p]:my-2"
-                        dangerouslySetInnerHTML={{ __html: feedback.content }}
+                        className="prose prose-sm max-w-none text-gray-700 [&>strong]:font-bold [&>strong]:text-gray-800"
+                        dangerouslySetInnerHTML={{ __html: feedback.summary }}
                     />
+
+                    {!isExpanded && feedback.content !== feedback.summary && (
+                        <button
+                            onClick={() => setIsExpanded(true)}
+                            className="mt-4 flex items-center gap-2 text-[#58CC02] hover:text-[#4CAD02] font-medium transition-colors"
+                        >
+                            <span>Подробнее</span>
+                            <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 9l-7 7-7-7"
+                                />
+                            </svg>
+                        </button>
+                    )}
+
+                    {isExpanded && (
+                        <>
+                            <div className="my-4 border-t border-gray-100" />
+                            <div
+                                className="prose prose-sm max-w-none text-gray-700 [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-gray-800 [&>h3]:mt-4 [&>h3]:mb-2 [&>h3:first-child]:mt-0 [&>ul]:my-2 [&>ul]:pl-5 [&>p]:my-2 [&_strong]:font-bold [&_strong]:text-gray-800 [&_em]:italic [&_em]:text-gray-600"
+                                dangerouslySetInnerHTML={{ __html: feedback.content }}
+                            />
+                            <button
+                                onClick={() => setIsExpanded(false)}
+                                className="mt-4 flex items-center gap-2 text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                            >
+                                <span>Свернуть</span>
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M5 15l7-7 7 7"
+                                    />
+                                </svg>
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 <div className="p-6 border-t border-gray-100">

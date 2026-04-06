@@ -34,6 +34,36 @@ public class OpenAiChatService : IOpenAiChatService
 
     private const string XpInstructionSuffix = @"
 
+ФОРМАТ ОТВЕТА:
+Твой ответ должен состоять из ДВУХ БЛОКОВ, разделённых тегом [DETAILED]:
+
+ПЕРВЫЙ БЛОК (до [DETAILED]) — КРАТКОЕ РЕЗЮМЕ (2-3 предложения):
+Самое важное: что было хорошо ИЛИ что было критически плохо. Используй <strong> для выделения ключевых слов.
+
+[DETAILED]
+
+ВТОРОЙ БЛОК (после [DETAILED]) — ПОДРОБНЫЙ РАЗБОР:
+Используй теги <h3>, <p>, <ul>, <li>, <strong> (жирный для ключевых моментов), <em> (курсив для примеров из диалога). НЕ используй Markdown.
+
+Структура подробного разбора:
+<h3>Общая оценка</h3>
+<p>Краткое резюме: удалось ли достичь цели, что было ключевым моментом.</p>
+
+<h3>Что сделано хорошо</h3>
+<ul>
+<li><strong>Критерий:</strong> <em>конкретный пример из диалога</em></li>
+</ul>
+
+<h3>Что нужно улучшить</h3>
+<ul>
+<li><strong>Проблема:</strong> что было не так и почему это критично</li>
+</ul>
+
+<h3>Рекомендации</h3>
+<ul>
+<li>Конкретная фраза или техника, которую стоит использовать</li>
+</ul>
+
 В КОНЦЕ своего ответа на отдельной строке укажи количество XP, которое заслужил пользователь за этот диалог в формате:
 [XP:число]
 
@@ -102,11 +132,29 @@ public class OpenAiChatService : IOpenAiChatService
         var xpReward = ExtractXpReward(response);
         var cleanedContent = Regex.Replace(response, @"\[XP:\d+\]", "").Trim();
 
+        var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
+
         return new FeedbackResult
         {
-            Content = cleanedContent,
+            Summary = summary,
+            Content = detailedContent,
             XpReward = xpReward
         };
+    }
+
+    private static (string Summary, string Content) ExtractSummaryAndContent(string response)
+    {
+        const string delimiter = "[DETAILED]";
+        var delimiterIndex = response.IndexOf(delimiter, StringComparison.OrdinalIgnoreCase);
+
+        if (delimiterIndex >= 0)
+        {
+            var summary = response[..delimiterIndex].Trim();
+            var content = response[(delimiterIndex + delimiter.Length)..].Trim();
+            return (summary, content);
+        }
+
+        return (response, response);
     }
 
     private static int ExtractXpReward(string response)
