@@ -196,6 +196,13 @@ public class OpenAiChatService : IOpenAiChatService
             }
         }
 
+        // Try f5ai format: { message: { content: "..." } } (no choices array)
+        if (root.TryGetProperty("message", out var directMessage) &&
+            directMessage.TryGetProperty("content", out var messageContent))
+        {
+            return messageContent.GetString() ?? string.Empty;
+        }
+
         // Try alternative format: { content: "..." } or { text: "..." }
         if (root.TryGetProperty("content", out var directContent))
         {
