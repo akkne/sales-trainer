@@ -163,14 +163,19 @@ export default function ChatPage() {
 
     const handleCloseFeedback = () => {
         setFeedback(null);
-        setSessionId(null);
-        setMessages([]);
-        setIsEnded(false);
+        if (!isSessionCompleted) {
+            setSessionId(null);
+            setMessages([]);
+            setIsEnded(false);
+        }
     };
 
     const handleClose = () => {
         router.push("/dialog");
     };
+
+    const [isSessionCompleted, setIsSessionCompleted] = useState(false);
+    const [sessionFeedbackData, setSessionFeedbackData] = useState<DialogFeedback | null>(null);
 
     const handleSessionClick = async (clickedSessionId: string) => {
         setSessionId(clickedSessionId);
@@ -178,18 +183,23 @@ export default function ChatPage() {
         setError(null);
         setFeedback(null);
         setIsEnded(false);
+        setIsSessionCompleted(false);
+        setSessionFeedbackData(null);
 
         try {
             const session = await apiClient.get<{
                 messages: DialogMessage[];
                 status: string;
                 feedback: DialogFeedback | null;
+                xpEarned: number;
             }>(`/dialog/sessions/${clickedSessionId}`);
 
             setMessages(session.messages);
 
             if (session.status === "completed") {
-                setFeedback(session.feedback);
+                setIsSessionCompleted(true);
+                setSessionFeedbackData(session.feedback ? { ...session.feedback, xpEarned: session.xpEarned } : null);
+                setIsEnded(true);
             } else if (session.messages.some((message) => message.isStopSignal)) {
                 setIsEnded(true);
             }
@@ -200,7 +210,15 @@ export default function ChatPage() {
         }
     };
 
+    const handleShowFeedback = () => {
+        if (sessionFeedbackData) {
+            setFeedback(sessionFeedbackData);
+        }
+    };
+
     const handleNewChat = () => {
+        setIsSessionCompleted(false);
+        setSessionFeedbackData(null);
         initializeNewSession();
     };
 
@@ -214,6 +232,8 @@ export default function ChatPage() {
                 setMessages([]);
                 setFeedback(null);
                 setIsEnded(false);
+                setIsSessionCompleted(false);
+                setSessionFeedbackData(null);
             }
         } catch (deleteError) {
             setError(deleteError instanceof Error ? deleteError.message : "Ошибка удаления");
@@ -353,6 +373,15 @@ export default function ChatPage() {
                         <div className="text-center text-sm text-gray-500 mb-3">
                             Формируем обратную связь...
                         </div>
+                    )}
+
+                    {isSessionCompleted && sessionFeedbackData && !feedback && (
+                        <button
+                            onClick={handleShowFeedback}
+                            className="w-full py-3 mb-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] transition-colors"
+                        >
+                            Показать обратную связь
+                        </button>
                     )}
 
                     <ChatInput
