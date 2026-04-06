@@ -8,11 +8,8 @@ interface ModeCardProps {
 
 export function ModeCard({ bundleId, mode }: ModeCardProps) {
     return (
-        <Link
-            href={`/dialog/${bundleId}/${mode.id}`}
-            className="block p-4 border-2 border-gray-200 rounded-2xl hover:border-[#58CC02] transition-colors bg-white"
-        >
-            <div className="flex items-start justify-between">
+        <div className="p-4 border-2 border-gray-200 rounded-2xl bg-white">
+            <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                     <h3 className="font-bold text-lg text-gray-800">
                         {mode.title}
@@ -21,12 +18,25 @@ export function ModeCard({ bundleId, mode }: ModeCardProps) {
                         {mode.description}
                     </p>
                 </div>
+            </div>
+            <div className="flex gap-2">
+                <Link
+                    href={`/dialog/${bundleId}/${mode.id}?mode=text`}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#58CC02] text-white font-bold rounded-xl hover:bg-[#4CAD02] transition-colors text-sm"
+                >
+                    <span>💬</span>
+                    <span>Текст</span>
+                </Link>
                 {mode.voiceEnabled && (
-                    <span className="ml-3 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full flex items-center gap-1">
-                        🎤 Голос
-                    </span>
+                    <Link
+                        href={`/dialog/${bundleId}/${mode.id}?mode=voice`}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors text-sm"
+                    >
+                        <span>🎤</span>
+                        <span>Голос</span>
+                    </Link>
                 )}
             </div>
-        </Link>
+        </div>
     );
 }

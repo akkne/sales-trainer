@@ -13,20 +13,20 @@ namespace SalesTrainer.Api.Features.Voice;
 public class VoiceDialogController : ControllerBase
 {
     private readonly IVoiceDialogService _voiceDialogService;
-    private readonly IElevenLabsService _elevenLabsService;
+    private readonly IVoicerTtsService _voicerTtsService;
     private readonly IConfiguration _configuration;
     private readonly MongoDbContext _mongoContext;
     private readonly ILogger<VoiceDialogController> _logger;
 
     public VoiceDialogController(
         IVoiceDialogService voiceDialogService,
-        IElevenLabsService elevenLabsService,
+        IVoicerTtsService voicerTtsService,
         IConfiguration configuration,
         MongoDbContext mongoContext,
         ILogger<VoiceDialogController> logger)
     {
         _voiceDialogService = voiceDialogService;
-        _elevenLabsService = elevenLabsService;
+        _voicerTtsService = voicerTtsService;
         _configuration = configuration;
         _mongoContext = mongoContext;
         _logger = logger;
@@ -38,7 +38,7 @@ public class VoiceDialogController : ControllerBase
         [FromBody] VoiceMessageRequestDto request,
         CancellationToken ct)
     {
-        if (!_elevenLabsService.IsConfigured)
+        if (!_voicerTtsService.IsConfigured)
         {
             return StatusCode(503, new { error = "Voice service is not configured" });
         }
@@ -71,7 +71,7 @@ public class VoiceDialogController : ControllerBase
     [HttpGet("{sessionId}/voice/response")]
     public async Task<IActionResult> GetLastVoiceResponse(string sessionId, CancellationToken ct)
     {
-        if (!_elevenLabsService.IsConfigured)
+        if (!_voicerTtsService.IsConfigured)
         {
             return StatusCode(503, new { error = "Voice service is not configured" });
         }

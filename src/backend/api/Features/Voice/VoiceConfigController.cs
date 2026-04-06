@@ -9,16 +9,16 @@ namespace SalesTrainer.Api.Features.Voice;
 public class VoiceConfigController : ControllerBase
 {
     private readonly IConfiguration _configuration;
-    private readonly IElevenLabsService _elevenLabsService;
+    private readonly IVoicerTtsService _voicerTtsService;
 
     private const string PlaceholderDeepgramKey = "REPLACE_WITH_DEEPGRAM_API_KEY";
 
     public VoiceConfigController(
         IConfiguration configuration,
-        IElevenLabsService elevenLabsService)
+        IVoicerTtsService voicerTtsService)
     {
         _configuration = configuration;
-        _elevenLabsService = elevenLabsService;
+        _voicerTtsService = voicerTtsService;
     }
 
     [HttpGet("config")]
@@ -35,7 +35,7 @@ public class VoiceConfigController : ControllerBase
                                   deepgramApiKey != PlaceholderDeepgramKey &&
                                   !deepgramApiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
 
-        var isEnabled = voiceEnabled && deepgramConfigured && _elevenLabsService.IsConfigured;
+        var isEnabled = voiceEnabled && deepgramConfigured && _voicerTtsService.IsConfigured;
 
         return Ok(new VoiceConfigDto
         {

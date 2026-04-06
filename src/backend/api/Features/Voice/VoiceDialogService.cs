@@ -11,20 +11,20 @@ public class VoiceDialogService : IVoiceDialogService
     private readonly AppDbContext _dbContext;
     private readonly MongoDbContext _mongoContext;
     private readonly IOpenAiChatService _openAiService;
-    private readonly IElevenLabsService _elevenLabsService;
+    private readonly IVoicerTtsService _voicerTtsService;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
         AppDbContext dbContext,
         MongoDbContext mongoContext,
         IOpenAiChatService openAiService,
-        IElevenLabsService elevenLabsService,
+        IVoicerTtsService voicerTtsService,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
         _mongoContext = mongoContext;
         _openAiService = openAiService;
-        _elevenLabsService = elevenLabsService;
+        _voicerTtsService = voicerTtsService;
         _logger = logger;
     }
 
@@ -98,7 +98,7 @@ public class VoiceDialogService : IVoiceDialogService
 
         // Generate TTS audio
         var voiceId = mode.VoiceId; // null will use default voice
-        var audioStream = await _elevenLabsService.SynthesizeSpeechAsync(chatResult.Content, voiceId, ct);
+        var audioStream = await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceId, ct);
 
         return audioStream;
     }

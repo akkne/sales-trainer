@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,9 +25,11 @@ import { VoiceMicButton } from "@/components/dialog/VoiceMicButton";
 export default function ChatPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const bundleId = params.bundleId as string;
     const modeId = params.modeId as string;
+    const chatMode = searchParams.get("mode") || "text"; // "text" or "voice"
 
     const { data: bundles } = useDialogBundles();
     const { data: modes } = useDialogModes(bundleId);
@@ -282,7 +284,7 @@ export default function ChatPage() {
         stopVoice,
     } = useVoice({
         sessionId,
-        modeVoiceEnabled: currentMode?.voiceEnabled ?? false,
+        modeVoiceEnabled: chatMode === "voice" && (currentMode?.voiceEnabled ?? false),
         onTranscript: handleVoiceTranscript,
         onAiResponse: handleVoiceAiResponse,
         onError: handleVoiceError,
@@ -445,8 +447,8 @@ export default function ChatPage() {
                     )}
 
                     <div className="flex items-center gap-4">
-                        {/* Voice-only mode: show only mic button */}
-                        {currentMode?.voiceEnabled && isVoiceAvailable ? (
+                        {/* Voice mode: show only mic button */}
+                        {chatMode === "voice" && currentMode?.voiceEnabled && isVoiceAvailable ? (
                             <div className="flex-1 flex justify-center">
                                 <VoiceMicButton
                                     state={voiceState}
