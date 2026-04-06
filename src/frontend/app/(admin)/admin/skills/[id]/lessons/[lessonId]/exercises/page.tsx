@@ -444,6 +444,7 @@ export default function AdminLessonExercisesPage({
                                             className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
                                         >
                                             {isLoadingMut ? "Saving..." : (row.id ? "Save changes" : "Create")}
+                                        </button>
                                         {row.id ? (
                                             <button
                                                 onClick={() => {

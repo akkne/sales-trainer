@@ -61,6 +61,31 @@ public class VoiceDialogController : ControllerBase
 
             return File(audioStream, "audio/mpeg");
         }
+        catch (VoicerTtsAuthException ex)
+        {
+            _logger.LogWarning(ex, "Voice TTS authentication failed for session {SessionId}", sessionId);
+            return StatusCode(503, new { error = "Voice service authentication failed" });
+        }
+        catch (VoicerTtsRateLimitException ex)
+        {
+            _logger.LogWarning(ex, "Voice TTS rate limited for session {SessionId}", sessionId);
+            return StatusCode(429, new { error = "Too many voice requests, please wait a moment" });
+        }
+        catch (VoicerTtsInsufficientFundsException ex)
+        {
+            _logger.LogWarning(ex, "Voice TTS insufficient funds for session {SessionId}", sessionId);
+            return StatusCode(503, new { error = "Voice service unavailable - check account balance" });
+        }
+        catch (VoicerTtsTimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Voice TTS timeout for session {SessionId}", sessionId);
+            return StatusCode(504, new { error = "Voice service timed out" });
+        }
+        catch (VoicerTtsException ex)
+        {
+            _logger.LogWarning(ex, "Voice TTS error for session {SessionId}", sessionId);
+            return StatusCode(503, new { error = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "Voice message processing failed for session {SessionId}", sessionId);

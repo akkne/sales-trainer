@@ -89,7 +89,7 @@ export class DeepgramClient {
 
     sendAudio(audio: Int16Array): void {
         if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(audio.buffer);
+            this.ws.send(audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength));
         }
     }
 

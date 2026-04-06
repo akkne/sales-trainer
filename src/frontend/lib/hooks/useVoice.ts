@@ -118,6 +118,14 @@ export function useVoice(options: UseVoiceOptions) {
 
         try {
             // Initialize Deepgram
+            let deepgramDonePromise: Promise<void>;
+            let deepgramResolve: (() => void) | null = null;
+            let deepgramReject: ((error: Error) => void) | null = null;
+            deepgramDonePromise = new Promise((resolve, reject) => {
+                deepgramResolve = resolve;
+                deepgramReject = reject;
+            });
+
             deepgramRef.current = new DeepgramClient(
                 {
                     apiKey: deepgramKey.apiKey,
@@ -131,6 +139,7 @@ export function useVoice(options: UseVoiceOptions) {
                         if (isFinal) {
                             transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
                             setCurrentTranscript(transcriptBufferRef.current);
+                            deepgramResolve?.();
                         } else {
                             setCurrentTranscript(transcriptBufferRef.current + (transcriptBufferRef.current ? " " : "") + transcript);
                         }
@@ -138,12 +147,14 @@ export function useVoice(options: UseVoiceOptions) {
                     onError: (error: Error) => {
                         onError?.(error);
                         setState("error");
+                        deepgramReject?.(error);
                     },
                     onStateChange: (deepgramState: DeepgramState) => {
                         if (deepgramState === "error") {
                             setState("error");
+                            deepgramReject?.(new Error("Deepgram connection error"));
                         }
-                    },
+                    }
                 }
             );
 
@@ -161,8 +172,11 @@ export function useVoice(options: UseVoiceOptions) {
                     const pcmAudio = floatTo16BitPCM(audio);
                     deepgramRef.current?.sendAudio(pcmAudio);
 
-                    // Wait a bit for final transcript
-                    await new Promise((resolve) => setTimeout(resolve, 200));
+                    // Wait for Deepgram to finish (with timeout)
+                    const timeout = new Promise<void>((_, reject) =>
+                        setTimeout(() => reject(new Error("Transcription timeout")), 15000)
+                    );
+                    await Promise.race([deepgramDonePromise, timeout]);
 
                     const finalTranscript = transcriptBufferRef.current.trim();
                     if (finalTranscript) {
@@ -188,7 +202,7 @@ export function useVoice(options: UseVoiceOptions) {
                                 throw new Error(`Voice request failed: ${response.status}`);
                             }
 
-                            // Get AI response content from header or separate request
+                            // Get AI response content from separate request
                             const voiceResponseRes = await apiClient.get<{
                                 content: string;
                                 isStopSignal: boolean;

@@ -36,13 +36,18 @@ public class DialogSeeder
 
         if (existingBundle != null)
         {
-            // Update existing mode prompts if they exist
+            // Update existing mode prompts and voice settings
             var existingMode = await _dbContext.DialogModes
                 .FirstOrDefaultAsync(m => m.BundleId == existingBundle.Id && m.Key == secretaryBypassKey);
             if (existingMode != null)
             {
                 existingMode.ChatSystemPrompt = BuildSecretaryBypassChatPrompt();
                 existingMode.FeedbackSystemPrompt = BuildSecretaryBypassFeedbackPrompt();
+                existingMode.VoiceEnabled = true;
+                if (string.IsNullOrEmpty(existingMode.VoiceId))
+                {
+                    existingMode.VoiceId = "21m00Tcm4TlvDq8ikWAM";
+                }
                 existingMode.UpdatedAt = DateTime.UtcNow;
                 await _dbContext.SaveChangesAsync();
                 _logger.LogInformation("Updated prompts for dialog mode {Key}", secretaryBypassKey);
@@ -74,7 +79,9 @@ public class DialogSeeder
             ChatSystemPrompt = BuildSecretaryBypassChatPrompt(),
             FeedbackSystemPrompt = BuildSecretaryBypassFeedbackPrompt(),
             SortOrder = 1,
-            IsActive = true
+            IsActive = true,
+            VoiceEnabled = true,
+            VoiceId = "21m00Tcm4TlvDq8ikWAM"
         };
 
         _dbContext.DialogModes.Add(secretaryBypassMode);
