@@ -161,6 +161,22 @@ public class OpenAiChatService : IOpenAiChatService
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, responseContent);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
+            {
+                throw new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                throw new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw new OpenAiAuthException("AI service authentication failed. Please check API configuration.");
+            }
+
             throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
         }
 
@@ -185,3 +201,7 @@ public class OpenAiChatService : IOpenAiChatService
         return stringBuilder.ToString();
     }
 }
+
+public class OpenAiPaymentRequiredException(string message) : Exception(message);
+public class OpenAiRateLimitException(string message) : Exception(message);
+public class OpenAiAuthException(string message) : Exception(message);

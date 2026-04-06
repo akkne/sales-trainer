@@ -107,6 +107,18 @@ public class DialogController : ControllerBase
             var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId);
             return Ok(DialogSessionDto.FromEntity(session));
         }
+        catch (OpenAiPaymentRequiredException)
+        {
+            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
+        }
+        catch (OpenAiRateLimitException)
+        {
+            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
+        }
+        catch (OpenAiAuthException)
+        {
+            return StatusCode(503, new { message = "AI service authentication failed." });
+        }
         catch (InvalidOperationException invalidOperationException)
         {
             return BadRequest(new { message = invalidOperationException.Message });
@@ -149,6 +161,18 @@ public class DialogController : ControllerBase
         {
             var aiMessage = await _dialogService.SendMessageAsync(sessionId, userId.Value, request.Content);
             return Ok(DialogMessageDto.FromEntity(aiMessage));
+        }
+        catch (OpenAiPaymentRequiredException)
+        {
+            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
+        }
+        catch (OpenAiRateLimitException)
+        {
+            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
+        }
+        catch (OpenAiAuthException)
+        {
+            return StatusCode(503, new { message = "AI service authentication failed." });
         }
         catch (InvalidOperationException invalidOperationException)
         {
@@ -196,6 +220,18 @@ public class DialogController : ControllerBase
                 generatedAt = result.Feedback.GeneratedAt,
                 xpEarned = result.XpEarned
             });
+        }
+        catch (OpenAiPaymentRequiredException)
+        {
+            return StatusCode(402, new { message = "AI service requires payment. Please check your API balance." });
+        }
+        catch (OpenAiRateLimitException)
+        {
+            return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
+        }
+        catch (OpenAiAuthException)
+        {
+            return StatusCode(503, new { message = "AI service authentication failed." });
         }
         catch (InvalidOperationException invalidOperationException)
         {

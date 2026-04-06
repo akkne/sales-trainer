@@ -10,12 +10,15 @@ public class DialogSession
     public string Id { get; set; } = null!;
 
     [BsonElement("userId")]
+    [BsonRepresentation(BsonType.String)]
     public Guid UserId { get; set; }
 
     [BsonElement("bundleId")]
+    [BsonRepresentation(BsonType.String)]
     public Guid BundleId { get; set; }
 
     [BsonElement("modeId")]
+    [BsonRepresentation(BsonType.String)]
     public Guid ModeId { get; set; }
 
     [BsonElement("status")]
