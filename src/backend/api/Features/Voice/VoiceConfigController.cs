@@ -27,6 +27,8 @@ public class VoiceConfigController : ControllerBase
         var voiceEnabled = _configuration.GetValue("Voice:Enabled", false);
         var vadSilenceMs = _configuration.GetValue("Voice:VadSilenceMs", 600);
         var maxRecordingSeconds = _configuration.GetValue("Voice:MaxRecordingSeconds", 60);
+        var dailyLimitMinutes = _configuration.GetValue("Voice:DailyLimitMinutes", 30);
+        var monthlyLimitMinutes = _configuration.GetValue("Voice:MonthlyLimitMinutes", 300);
 
         var deepgramApiKey = _configuration["Deepgram:ApiKey"];
         var deepgramConfigured = !string.IsNullOrWhiteSpace(deepgramApiKey) &&
@@ -40,6 +42,8 @@ public class VoiceConfigController : ControllerBase
             Enabled = isEnabled,
             VadSilenceMs = vadSilenceMs,
             MaxRecordingSeconds = maxRecordingSeconds,
+            DailyLimitMinutes = dailyLimitMinutes,
+            MonthlyLimitMinutes = monthlyLimitMinutes,
             Deepgram = new DeepgramConfigDto
             {
                 Configured = deepgramConfigured,

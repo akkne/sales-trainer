@@ -445,21 +445,25 @@ export default function ChatPage() {
                     )}
 
                     <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                            <ChatInput
-                                onSend={handleSendMessage}
-                                disabled={isSending || isCompleting || isEnded || !!feedback || voiceState !== "idle"}
-                                placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
-                            />
-                        </div>
-
-                        {isVoiceAvailable && !isEnded && !feedback && (
-                            <VoiceMicButton
-                                state={voiceState}
-                                isAvailable={isVoiceAvailable}
-                                onStart={startVoice}
-                                onStop={stopVoice}
-                            />
+                        {/* Voice-only mode: show only mic button */}
+                        {currentMode?.voiceEnabled && isVoiceAvailable ? (
+                            <div className="flex-1 flex justify-center">
+                                <VoiceMicButton
+                                    state={voiceState}
+                                    isAvailable={isVoiceAvailable}
+                                    onStart={startVoice}
+                                    onStop={stopVoice}
+                                />
+                            </div>
+                        ) : (
+                            /* Text-only mode: show only text input */
+                            <div className="flex-1">
+                                <ChatInput
+                                    onSend={handleSendMessage}
+                                    disabled={isSending || isCompleting || isEnded || !!feedback}
+                                    placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
+                                />
+                            </div>
                         )}
                     </div>
                 </div>
