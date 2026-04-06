@@ -10,6 +10,7 @@ import {
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
+import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
 import { ExerciseResultBanner } from "@/components/exercise/ExerciseResultBanner";
 
 const MAX_HEARTS = 4;
@@ -130,6 +131,14 @@ export default function ExercisePage({ params }: ExercisePageProps) {
             {currentExercise.type === "free_text" && (
                 <FreeTextExercise
                     content={currentExercise.content as Parameters<typeof FreeTextExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    isSubmitting={submitExerciseMutation.isPending}
+                />
+            )}
+
+            {currentExercise.type === "open_question" && (
+                <OpenQuestionExercise
+                    content={currentExercise.content as Parameters<typeof OpenQuestionExercise>[0]["content"]}
                     onSubmit={handleExerciseSubmit}
                     isSubmitting={submitExerciseMutation.isPending}
                 />

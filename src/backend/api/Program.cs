@@ -110,6 +110,8 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluati
     SalesTrainer.Api.Features.Exercises.FillBlankEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.FreeTextEvaluationStrategy>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
+    SalesTrainer.Api.Features.Exercises.OpenQuestionEvaluationStrategy>();
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
