@@ -216,6 +216,7 @@ public class DialogController : ControllerBase
 
             return Ok(new
             {
+                summary = result.Feedback.Summary,
                 content = result.Feedback.Content,
                 generatedAt = result.Feedback.GeneratedAt,
                 xpEarned = result.XpEarned

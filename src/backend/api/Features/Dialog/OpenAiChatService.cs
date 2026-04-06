@@ -129,10 +129,14 @@ public class OpenAiChatService : IOpenAiChatService
 
         var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maxTokens);
 
+        _logger.LogDebug("Feedback response from AI: {Response}", response);
+
         var xpReward = ExtractXpReward(response);
         var cleanedContent = Regex.Replace(response, @"\[XP:\d+\]", "").Trim();
 
         var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
+
+        _logger.LogInformation("Extracted feedback summary length: {SummaryLen}, content length: {ContentLen}", summary.Length, detailedContent.Length);
 
         return new FeedbackResult
         {
@@ -154,7 +158,21 @@ public class OpenAiChatService : IOpenAiChatService
             return (summary, content);
         }
 
-        return (response, response);
+        // Fallback: extract first 2-3 sentences as summary
+        var summary2 = ExtractFirstSentences(response, 3);
+        return (summary2, response);
+    }
+
+    private static string ExtractFirstSentences(string text, int count)
+    {
+        // Remove HTML tags for sentence detection
+        var plainText = Regex.Replace(text, @"<[^>]+>", " ");
+        plainText = Regex.Replace(plainText, @"\s+", " ").Trim();
+
+        var sentences = Regex.Split(plainText, @"(?<=[.!?])\s+");
+        var result = string.Join(" ", sentences.Take(count));
+
+        return string.IsNullOrWhiteSpace(result) ? text : result;
     }
 
     private static int ExtractXpReward(string response)
