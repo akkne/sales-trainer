@@ -37,6 +37,8 @@ export default function AdminBundleModesPage() {
         feedbackSystemPrompt: "",
         sortOrder: 0,
         isActive: true,
+        voiceEnabled: false,
+        voiceId: null,
     });
 
     const resetForm = () => {
@@ -48,6 +50,8 @@ export default function AdminBundleModesPage() {
             feedbackSystemPrompt: "",
             sortOrder: modes?.length ?? 0,
             isActive: true,
+            voiceEnabled: false,
+            voiceId: null,
         });
         setIsCreating(false);
         setEditingModeId(null);
@@ -78,6 +82,8 @@ export default function AdminBundleModesPage() {
             feedbackSystemPrompt: mode.feedbackSystemPrompt,
             sortOrder: mode.sortOrder,
             isActive: mode.isActive,
+            voiceEnabled: mode.voiceEnabled,
+            voiceId: mode.voiceId,
         });
         setEditingModeId(mode.id);
         setIsCreating(false);
@@ -92,6 +98,8 @@ export default function AdminBundleModesPage() {
             feedbackSystemPrompt: "",
             sortOrder: modes?.length ?? 0,
             isActive: true,
+            voiceEnabled: false,
+            voiceId: null,
         });
         setIsCreating(true);
         setEditingModeId(null);
@@ -195,6 +203,29 @@ export default function AdminBundleModesPage() {
                                 <span className="text-sm text-gray-700">Active</span>
                             </label>
                         </div>
+                        <div className="flex items-end">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.voiceEnabled}
+                                    onChange={(changeEvent) => setFormData({ ...formData, voiceEnabled: changeEvent.target.checked })}
+                                />
+                                <span className="text-sm text-gray-700">Voice Enabled</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Voice ID (ElevenLabs)
+                            </label>
+                            <input
+                                type="text"
+                                value={formData.voiceId || ""}
+                                onChange={(changeEvent) => setFormData({ ...formData, voiceId: changeEvent.target.value || null })}
+                                className="w-full px-3 py-2 border rounded-lg"
+                                placeholder="Leave empty for default"
+                                disabled={!formData.voiceEnabled}
+                            />
+                        </div>
                         <div className="col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Description
@@ -264,6 +295,7 @@ export default function AdminBundleModesPage() {
                             <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Key</th>
                             <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Order</th>
                             <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Voice</th>
                             <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
                         </tr>
                     </thead>
@@ -285,6 +317,15 @@ export default function AdminBundleModesPage() {
                                     </span>
                                 </td>
                                 <td className="px-4 py-3">
+                                    {mode.voiceEnabled ? (
+                                        <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                                            🎤 Voice
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400 text-xs">—</span>
+                                    )}
+                                </td>
+                                <td className="px-4 py-3">
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => startEditing(mode)}
@@ -304,7 +345,7 @@ export default function AdminBundleModesPage() {
                         ))}
                         {(!modes || modes.length === 0) && (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                                     No modes yet. Create one to get started.
                                 </td>
                             </tr>

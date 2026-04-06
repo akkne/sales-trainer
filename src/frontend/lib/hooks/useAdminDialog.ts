@@ -23,6 +23,8 @@ export interface AdminDialogMode {
     feedbackSystemPrompt: string;
     sortOrder: number;
     isActive: boolean;
+    voiceEnabled: boolean;
+    voiceId: string | null;
 }
 
 export interface CreateBundleRequest {
@@ -51,6 +53,8 @@ export interface CreateModeRequest {
     feedbackSystemPrompt: string;
     sortOrder: number;
     isActive: boolean;
+    voiceEnabled?: boolean;
+    voiceId?: string | null;
 }
 
 export interface UpdateModeRequest {
@@ -61,6 +65,8 @@ export interface UpdateModeRequest {
     feedbackSystemPrompt?: string;
     sortOrder?: number;
     isActive?: boolean;
+    voiceEnabled?: boolean;
+    voiceId?: string | null;
 }
 
 export interface AdminSkill {

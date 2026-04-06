@@ -21,6 +21,7 @@ export interface DialogMode {
     description: string;
     sortOrder: number;
     isActive: boolean;
+    voiceEnabled: boolean;
 }
 
 export interface DialogMessage {

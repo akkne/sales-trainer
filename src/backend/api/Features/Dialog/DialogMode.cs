@@ -11,6 +11,8 @@ public class DialogMode
     public string FeedbackSystemPrompt { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool VoiceEnabled { get; set; }
+    public string? VoiceId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

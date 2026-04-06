@@ -9,6 +9,7 @@ public class DialogModeDto
     public string Description { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }
+    public bool VoiceEnabled { get; set; }
 
     public static DialogModeDto FromEntity(DialogMode mode) => new()
     {
@@ -18,7 +19,8 @@ public class DialogModeDto
         Title = mode.Title,
         Description = mode.Description,
         SortOrder = mode.SortOrder,
-        IsActive = mode.IsActive
+        IsActive = mode.IsActive,
+        VoiceEnabled = mode.VoiceEnabled
     };
 }
 
@@ -26,6 +28,7 @@ public class AdminDialogModeDto : DialogModeDto
 {
     public string ChatSystemPrompt { get; set; } = null!;
     public string FeedbackSystemPrompt { get; set; } = null!;
+    public string? VoiceId { get; set; }
 
     public static new AdminDialogModeDto FromEntity(DialogMode mode) => new()
     {
@@ -37,6 +40,8 @@ public class AdminDialogModeDto : DialogModeDto
         ChatSystemPrompt = mode.ChatSystemPrompt,
         FeedbackSystemPrompt = mode.FeedbackSystemPrompt,
         SortOrder = mode.SortOrder,
-        IsActive = mode.IsActive
+        IsActive = mode.IsActive,
+        VoiceEnabled = mode.VoiceEnabled,
+        VoiceId = mode.VoiceId
     };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     useDialogBundles,
@@ -14,11 +14,13 @@ import {
     completeDialogSession,
     deleteDialogSession,
 } from "@/lib/hooks/useDialog";
+import { useVoice } from "@/lib/hooks/useVoice";
 import { apiClient } from "@/lib/api/apiClient";
 import { ChatMessage } from "@/components/dialog/ChatMessage";
 import { ChatInput } from "@/components/dialog/ChatInput";
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
 import { SessionHistorySidebar } from "@/components/dialog/SessionHistorySidebar";
+import { VoiceMicButton } from "@/components/dialog/VoiceMicButton";
 
 export default function ChatPage() {
     const params = useParams();
@@ -44,6 +46,7 @@ export default function ChatPage() {
     const [isEnded, setIsEnded] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [voiceError, setVoiceError] = useState<string | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -240,6 +243,51 @@ export default function ChatPage() {
         }
     };
 
+    // Voice handling
+    const handleVoiceTranscript = useCallback((transcript: string) => {
+        const userMessage: DialogMessage = {
+            role: "user",
+            content: transcript,
+            timestamp: new Date().toISOString(),
+            isStopSignal: false,
+        };
+        setMessages((prev) => [...prev, userMessage]);
+    }, []);
+
+    const handleVoiceAiResponse = useCallback((content: string, isStopSignal: boolean) => {
+        const aiMessage: DialogMessage = {
+            role: "assistant",
+            content,
+            timestamp: new Date().toISOString(),
+            isStopSignal,
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+
+        if (isStopSignal && sessionId) {
+            setIsEnded(true);
+            autoCompleteSession(sessionId);
+        }
+    }, [sessionId]);
+
+    const handleVoiceError = useCallback((error: Error) => {
+        setVoiceError(error.message);
+        setTimeout(() => setVoiceError(null), 5000);
+    }, []);
+
+    const {
+        state: voiceState,
+        currentTranscript,
+        isVoiceAvailable,
+        startVoice,
+        stopVoice,
+    } = useVoice({
+        sessionId,
+        modeVoiceEnabled: currentMode?.voiceEnabled ?? false,
+        onTranscript: handleVoiceTranscript,
+        onAiResponse: handleVoiceAiResponse,
+        onError: handleVoiceError,
+    });
+
     if (isLoading && !sessionId && !isInitialized) {
         return (
             <div className="flex h-screen bg-white">
@@ -375,6 +423,18 @@ export default function ChatPage() {
                         </div>
                     )}
 
+                    {voiceError && (
+                        <div className="text-center text-red-500 text-sm mb-3">
+                            {voiceError}
+                        </div>
+                    )}
+
+                    {currentTranscript && (
+                        <div className="text-center text-gray-500 text-sm mb-3 italic">
+                            {currentTranscript}
+                        </div>
+                    )}
+
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
                         <button
                             onClick={handleShowFeedback}
@@ -384,11 +444,24 @@ export default function ChatPage() {
                         </button>
                     )}
 
-                    <ChatInput
-                        onSend={handleSendMessage}
-                        disabled={isSending || isCompleting || isEnded || !!feedback}
-                        placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
-                    />
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                            <ChatInput
+                                onSend={handleSendMessage}
+                                disabled={isSending || isCompleting || isEnded || !!feedback || voiceState !== "idle"}
+                                placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
+                            />
+                        </div>
+
+                        {isVoiceAvailable && !isEnded && !feedback && (
+                            <VoiceMicButton
+                                state={voiceState}
+                                isAvailable={isVoiceAvailable}
+                                onStart={startVoice}
+                                onStop={stopVoice}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
 

@@ -162,7 +162,9 @@ public class AdminDialogController : ControllerBase
             ChatSystemPrompt = request.ChatSystemPrompt,
             FeedbackSystemPrompt = request.FeedbackSystemPrompt,
             SortOrder = request.SortOrder,
-            IsActive = request.IsActive
+            IsActive = request.IsActive,
+            VoiceEnabled = request.VoiceEnabled,
+            VoiceId = request.VoiceId
         };
 
         _dbContext.DialogModes.Add(mode);
@@ -203,6 +205,8 @@ public class AdminDialogController : ControllerBase
         if (request.FeedbackSystemPrompt != null) mode.FeedbackSystemPrompt = request.FeedbackSystemPrompt;
         if (request.SortOrder.HasValue) mode.SortOrder = request.SortOrder.Value;
         if (request.IsActive.HasValue) mode.IsActive = request.IsActive.Value;
+        if (request.VoiceEnabled.HasValue) mode.VoiceEnabled = request.VoiceEnabled.Value;
+        if (request.VoiceId != null) mode.VoiceId = request.VoiceId;
 
         mode.UpdatedAt = DateTime.UtcNow;
 

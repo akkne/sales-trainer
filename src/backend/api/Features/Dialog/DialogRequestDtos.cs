@@ -40,6 +40,8 @@ public class CreateModeRequestDto
     public string FeedbackSystemPrompt { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool VoiceEnabled { get; set; }
+    public string? VoiceId { get; set; }
 }
 
 public class UpdateModeRequestDto
@@ -51,4 +53,6 @@ public class UpdateModeRequestDto
     public string? FeedbackSystemPrompt { get; set; }
     public int? SortOrder { get; set; }
     public bool? IsActive { get; set; }
+    public bool? VoiceEnabled { get; set; }
+    public string? VoiceId { get; set; }
 }

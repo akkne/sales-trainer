@@ -225,6 +225,12 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("VoiceEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("VoiceId")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BundleId");

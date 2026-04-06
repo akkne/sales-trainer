@@ -681,3 +681,68 @@
 - [x] Create `docs/TESTING/AI_DIALOG.md` — manual checklist
 - [ ] Unit tests for `OpenAiChatService` (mocked HTTP)
 - [ ] Integration tests for dialog endpoints
+
+---
+
+## Phase 28 — Voice Roleplay
+
+> Voice-based sales conversation practice. Stack: VAD (browser) → Deepgram Nova-3 (STT) → GPT-4.1 (logic) → ElevenLabs Flash v2.5 (TTS).
+> Spec: [docs/VOICE_ROLEPLAY.md](VOICE_ROLEPLAY.md)
+> Target latency: end of speech → start of audio ≤ 700ms
+
+### [x] Phase 28.1 — Backend infrastructure
+- [x] Add Deepgram config section to `appsettings.json`
+- [x] Add ElevenLabs config section to `appsettings.json`
+- [x] Add Voice config section to `appsettings.json`
+- [x] `IDeepgramService` interface (config check only, STT runs in browser)
+- [x] `IElevenLabsService` interface + `ElevenLabsService` implementation
+- [x] `ElevenLabsService` — streaming TTS via HTTP
+- [x] Graceful degradation: return empty/503 if keys not configured
+- [ ] Unit tests for `ElevenLabsService` (mocked HTTP)
+
+### [x] Phase 28.2 — Database & admin
+- [x] Migration: add `VoiceEnabled` (bool) and `VoiceId` (string?) to `DialogModes`
+- [x] Update `DialogMode` entity with new fields
+- [x] Update `AdminDialogModeDto` with `voiceEnabled`, `voiceId`
+- [x] Update admin mode edit form with voice toggle + voice ID input
+- [x] `GET /dialog/voice/config` endpoint — returns `{enabled, vadSilenceMs}`
+
+### [x] Phase 28.3 — Voice dialog endpoint
+- [x] `IVoiceDialogService` interface
+- [x] `VoiceDialogService` — orchestrates GPT + ElevenLabs
+- [x] `POST /dialog/sessions/{sessionId}/voice` — accepts transcript, returns audio stream
+- [x] Save user message + AI response to MongoDB session
+- [ ] Integration test for voice endpoint
+
+### [x] Phase 28.4 — Frontend VAD + Deepgram
+- [x] Install `@ricky0123/vad-web` package
+- [x] `lib/voice/vadManager.ts` — VAD wrapper with callbacks
+- [x] `lib/voice/deepgramClient.ts` — WebSocket client for Nova-3
+- [x] `useVoiceConfig()` hook — fetches `/dialog/voice/config`
+- [x] Deepgram connection management (open on session start, close on end)
+
+### [x] Phase 28.5 — Frontend audio playback
+- [x] `lib/voice/audioPlayer.ts` — Web Audio API streaming playback
+- [x] Handle audio stream from backend
+- [x] Playback state management (playing, ended, error)
+
+### [x] Phase 28.6 — Frontend UI components
+- [x] `VoiceMicButton.tsx` — Duolingo-style mic with green ring animation
+- [x] States: idle, listening, processing, playing, disabled
+- [x] `useVoice.ts` hook — orchestrates VAD → Deepgram → backend → playback
+- [x] Integrate voice mode into chat page (`/dialog/[bundleId]/[modeId]`)
+- [x] Show/hide voice button based on mode's `voiceEnabled` flag
+
+### [x] Phase 28.7 — Polish & error handling
+- [x] Microphone permission request flow
+- [x] Reconnect logic for Deepgram WebSocket
+- [x] Error toasts for voice failures
+- [x] Fallback to text mode on persistent errors
+- [x] Mobile responsive mic button
+
+### [x] Phase 28.8 — Docs & tests
+- [x] Update `docs/FEATURES.md` with Voice Roleplay link
+- [x] Update `docs/API_CONTRACTS.md` with voice endpoints
+- [x] Update `docs/VOICE_ROLEPLAY.md` with final architecture
+- [x] Create `docs/TESTING/VOICE_ROLEPLAY.md` — manual checklist
+- [ ] Frontend component tests for VoiceMicButton

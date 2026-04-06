@@ -100,6 +100,10 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.IOpenAiChatService,
     SalesTrainer.Api.Features.Dialog.OpenAiChatService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IElevenLabsService,
+    SalesTrainer.Api.Features.Voice.ElevenLabsService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IVoiceDialogService,
+    SalesTrainer.Api.Features.Voice.VoiceDialogService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
@@ -109,6 +113,9 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluati
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient("ElevenLabs")
+    .ConfigureHttpClient(client =>
+        client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddHttpClient(); // fallback default client
 
 builder.Services.AddControllers();
