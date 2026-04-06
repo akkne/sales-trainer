@@ -21,7 +21,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex gap-3">
+        <form onSubmit={handleSubmit} className="flex gap-4">
             <input
                 type="text"
                 value={inputValue}
@@ -33,7 +33,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
             <button
                 type="submit"
                 disabled={disabled || !inputValue.trim()}
-                className="px-6 py-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                className="px-8 py-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
                 →
             </button>

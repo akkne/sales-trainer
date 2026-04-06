@@ -12,6 +12,7 @@ import {
     startDialogSession,
     sendDialogMessage,
     completeDialogSession,
+    deleteDialogSession,
 } from "@/lib/hooks/useDialog";
 import { apiClient } from "@/lib/api/apiClient";
 import { ChatMessage } from "@/components/dialog/ChatMessage";
@@ -42,6 +43,7 @@ export default function ChatPage() {
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
     const [showCompletionButton, setShowCompletionButton] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +54,10 @@ export default function ChatPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    const filteredSessions = allSessions?.filter(
+        (session) => session.bundleId === bundleId && session.modeId === modeId
+    ) ?? [];
 
     const initializeNewSession = async () => {
         try {
@@ -75,12 +81,28 @@ export default function ChatPage() {
     };
 
     useEffect(() => {
-        initializeNewSession();
+        if (isInitialized || allSessions === undefined) return;
+
+        const existingSessions = allSessions.filter(
+            (session) => session.bundleId === bundleId && session.modeId === modeId
+        );
+
+        if (existingSessions.length === 0) {
+            initializeNewSession();
+        } else {
+            setIsLoading(false);
+        }
+        setIsInitialized(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [bundleId, modeId]);
+    }, [bundleId, modeId, allSessions, isInitialized]);
 
     const handleSendMessage = async (content: string) => {
-        if (!sessionId || isSending) return;
+        if (isSending) return;
+
+        if (!sessionId) {
+            await initializeNewSession();
+            return;
+        }
 
         const userMessage: DialogMessage = {
             role: "user",
@@ -127,7 +149,9 @@ export default function ChatPage() {
 
     const handleCloseFeedback = () => {
         setFeedback(null);
-        initializeNewSession();
+        setSessionId(null);
+        setMessages([]);
+        setShowCompletionButton(false);
     };
 
     const handleClose = () => {
@@ -166,11 +190,23 @@ export default function ChatPage() {
         initializeNewSession();
     };
 
-    const filteredSessions = allSessions?.filter(
-        (session) => session.bundleId === bundleId && session.modeId === modeId
-    ) ?? [];
+    const handleDeleteSession = async (deleteSessionId: string) => {
+        try {
+            await deleteDialogSession(deleteSessionId);
+            refetchSessions();
 
-    if (isLoading && !sessionId) {
+            if (sessionId === deleteSessionId) {
+                setSessionId(null);
+                setMessages([]);
+                setFeedback(null);
+                setShowCompletionButton(false);
+            }
+        } catch (deleteError) {
+            setError(deleteError instanceof Error ? deleteError.message : "Ошибка удаления");
+        }
+    };
+
+    if (isLoading && !sessionId && !isInitialized) {
         return (
             <div className="flex h-screen bg-white">
                 {showSidebar && (
@@ -179,6 +215,8 @@ export default function ChatPage() {
                         currentSessionId={null}
                         onSessionClick={handleSessionClick}
                         onNewChat={handleNewChat}
+                        onDeleteSession={handleDeleteSession}
+                        onClose={handleClose}
                     />
                 )}
                 <div className="flex-1 flex flex-col">
@@ -188,12 +226,6 @@ export default function ChatPage() {
                             className="text-gray-400 hover:text-gray-600 md:hidden"
                         >
                             ☰
-                        </button>
-                        <button
-                            onClick={handleClose}
-                            className="text-2xl text-gray-400 hover:text-gray-600"
-                        >
-                            ✕
                         </button>
                         <h1 className="font-bold text-gray-800">Загрузка...</h1>
                     </header>
@@ -214,16 +246,12 @@ export default function ChatPage() {
                         currentSessionId={null}
                         onSessionClick={handleSessionClick}
                         onNewChat={handleNewChat}
+                        onDeleteSession={handleDeleteSession}
+                        onClose={handleClose}
                     />
                 )}
                 <div className="flex-1 flex flex-col">
                     <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-100">
-                        <button
-                            onClick={handleClose}
-                            className="text-2xl text-gray-400 hover:text-gray-600"
-                        >
-                            ✕
-                        </button>
                         <h1 className="font-bold text-gray-800">Ошибка</h1>
                     </header>
                     <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -248,6 +276,8 @@ export default function ChatPage() {
                     currentSessionId={sessionId}
                     onSessionClick={handleSessionClick}
                     onNewChat={handleNewChat}
+                    onDeleteSession={handleDeleteSession}
+                    onClose={handleClose}
                 />
             )}
 
@@ -258,12 +288,6 @@ export default function ChatPage() {
                         className="text-gray-400 hover:text-gray-600"
                     >
                         ☰
-                    </button>
-                    <button
-                        onClick={handleClose}
-                        className="text-2xl text-gray-400 hover:text-gray-600"
-                    >
-                        ✕
                     </button>
                     <div className="flex-1 min-w-0">
                         <h1 className="font-bold text-gray-800 truncate">
@@ -276,6 +300,15 @@ export default function ChatPage() {
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {!sessionId && messages.length === 0 && (
+                        <div className="flex-1 flex items-center justify-center h-full">
+                            <div className="text-center text-gray-400">
+                                <p className="mb-2">Начните новый диалог</p>
+                                <p className="text-sm">Напишите сообщение или нажмите «Новый диалог»</p>
+                            </div>
+                        </div>
+                    )}
+
                     {messages.map((message, messageIndex) => (
                         <ChatMessage key={messageIndex} message={message} />
                     ))}

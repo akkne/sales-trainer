@@ -211,6 +211,25 @@ public class DialogService
             XpEarned = feedbackResult.XpReward
         };
     }
+
+    public async Task<bool> DeleteSessionAsync(string sessionId, Guid userId)
+    {
+        var session = await GetSessionForUserAsync(sessionId, userId);
+        if (session == null)
+        {
+            return false;
+        }
+
+        var filter = Builders<DialogSession>.Filter.And(
+            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
+            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
+        );
+
+        var result = await _mongoContext.DialogSessions.DeleteOneAsync(filter);
+        _logger.LogInformation("Deleted session {SessionId} for user {UserId}", sessionId, userId);
+
+        return result.DeletedCount > 0;
+    }
 }
 
 public class DialogFeedbackResult

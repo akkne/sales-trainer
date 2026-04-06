@@ -239,6 +239,24 @@ public class DialogController : ControllerBase
         }
     }
 
+    [HttpDelete("sessions/{sessionId}")]
+    public async Task<IActionResult> DeleteSession(string sessionId)
+    {
+        var userId = GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var deleted = await _dialogService.DeleteSessionAsync(sessionId, userId.Value);
+        if (!deleted)
+        {
+            return NotFound(new { message = "Session not found" });
+        }
+
+        return NoContent();
+    }
+
     private Guid? GetUserIdFromClaims()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

@@ -102,3 +102,7 @@ export async function sendDialogMessage(sessionId: string, content: string): Pro
 export async function completeDialogSession(sessionId: string): Promise<DialogFeedback> {
     return apiClient.post<DialogFeedback>(`/dialog/sessions/${sessionId}/complete`, {});
 }
+
+export async function deleteDialogSession(sessionId: string): Promise<void> {
+    return apiClient.delete(`/dialog/sessions/${sessionId}`);
+}
