@@ -260,12 +260,20 @@ export default function AdminLessonDetailPage({
             {/* Exercises */}
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-gray-800">Exercises</h2>
-                <button
-                    onClick={() => setShowExForm((v) => !v)}
-                    className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
-                >
-                    {showExForm ? "Cancel" : "+ New exercise"}
-                </button>
+                <div className="flex gap-2">
+                    <Link
+                        href={`/admin/skills/${skillId}/lessons/${lessonId}/exercises`}
+                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-500 transition-colors"
+                    >
+                        Edit Exercises
+                    </Link>
+                    <button
+                        onClick={() => setShowExForm((v) => !v)}
+                        className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
+                    >
+                        {showExForm ? "Cancel" : "+ New exercise"}
+                    </button>
+                </div>
             </div>
 
             {showExForm && (

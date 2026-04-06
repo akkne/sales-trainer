@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 
@@ -27,7 +27,12 @@ export default function AdminOpenQuestionPage() {
     });
 
     const [text, setText] = useState("");
-    const [hasChanges, setHasChanges] = useState(false);
+
+    useEffect(() => {
+        if (data) {
+            setText(data.contextText ?? "");
+        }
+    }, [data]);
 
     if (isLoading) {
         return (
@@ -47,8 +52,6 @@ export default function AdminOpenQuestionPage() {
         );
     }
 
-    const initialText = data?.contextText ?? "";
-
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-2">Open Question — Global AI Context</h1>
@@ -63,13 +66,11 @@ export default function AdminOpenQuestionPage() {
                         Global AI Context (applies to every open question)
                     </span>
                     <textarea
-                        value={hasChanges ? text : initialText}
-                        onChange={(e) => {
-                            setText(e.target.value);
-                            setHasChanges(true);
-                        }}
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
                         rows={12}
-                        className="mt-2 w-full border border-gray-300 rounded-md px-4 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        wrap="soft"
+                        className="mt-2 w-full border border-gray-300 rounded-md px-4 py-2 text-sm font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                         placeholder="You are a strict sales expert evaluator..."
                     />
                 </label>
@@ -77,8 +78,7 @@ export default function AdminOpenQuestionPage() {
                 <div className="flex gap-3 mt-4">
                     <button
                         onClick={async () => {
-                            await updateMutation.mutateAsync(hasChanges ? text : initialText);
-                            setHasChanges(false);
+                            await updateMutation.mutateAsync(text);
                         }}
                         disabled={updateMutation.isPending}
                         className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
