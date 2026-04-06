@@ -27,6 +27,10 @@ public class FreeTextEvaluationStrategy(IHttpClientFactory httpClientFactory, IC
         }
 
         var httpClient = httpClientFactory.CreateClient("OpenAI");
+        var openAiBaseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+        var completionsPath = configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var apiUrl = openAiBaseUrl.TrimEnd('/') + completionsPath;
+        var model = configuration["OpenAI:FreeTextModel"] ?? "gpt-4o-mini";
         var systemPrompt =
             "Ты — тренер по продажам. Оцени ответ менеджера по продажам. " +
             "Отвечай ТОЛЬКО в JSON формате: {\"score\": 0-100, \"feedback\": \"краткий фидбек на русском\", \"isCorrect\": true/false}. " +
@@ -35,15 +39,17 @@ public class FreeTextEvaluationStrategy(IHttpClientFactory httpClientFactory, IC
         var userPrompt =
             $"Ситуация: {situation}\n\nКритерии оценки: {evaluationCriteria}\n\nОтвет менеджера: {userResponseText}";
 
+        var maxTokens = int.TryParse(configuration["OpenAI:MaxTokensFreeText"], out var t) ? t : 300;
+
         var requestPayload = new
         {
-            model = "gpt-4o-mini",
+            model,
             messages = new[]
             {
                 new { role = "system", content = systemPrompt },
                 new { role = "user", content = userPrompt }
             },
-            max_tokens = 300,
+            max_tokens = maxTokens,
             response_format = new { type = "json_object" }
         };
 
@@ -52,11 +58,16 @@ public class FreeTextEvaluationStrategy(IHttpClientFactory httpClientFactory, IC
             Encoding.UTF8,
             "application/json");
 
-        httpClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiApiKey);
+        httpClient.DefaultRequestHeaders.Remove("Authorization");
+        httpClient.DefaultRequestHeaders.Remove("X-Auth-Token");
 
-        using var response = await httpClient.PostAsync(
-            "https://api.openai.com/v1/chat/completions", requestContent);
+        if (openAiBaseUrl.Contains("f5ai"))
+            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", openAiApiKey);
+        else
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiApiKey);
+
+        using var response = await httpClient.PostAsync(apiUrl, requestContent);
 
         if (!response.IsSuccessStatusCode)
         {

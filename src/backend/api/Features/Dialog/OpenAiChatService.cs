@@ -11,7 +11,6 @@ public class OpenAiChatService : IOpenAiChatService
     private readonly IConfiguration _configuration;
     private readonly ILogger<OpenAiChatService> _logger;
 
-    private const string OpenAiApiBaseUrl = "https://api.openai.com/v1/chat/completions";
     private const string PlaceholderApiKey = "REPLACE_WITH_OPENAI_API_KEY";
 
     private const string StopSignalInstruction = @"
@@ -120,8 +119,18 @@ public class OpenAiChatService : IOpenAiChatService
         }
 
         var apiKey = _configuration["OpenAI:ApiKey"]!;
+        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
+
         var httpClient = _httpClientFactory.CreateClient("OpenAI");
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        httpClient.DefaultRequestHeaders.Remove("Authorization");
+        httpClient.DefaultRequestHeaders.Remove("X-Auth-Token");
+
+        if (baseUrl.Contains("f5ai"))
+            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", apiKey);
+        else
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         var messages = new List<object>
         {
@@ -146,7 +155,7 @@ public class OpenAiChatService : IOpenAiChatService
 
         _logger.LogInformation("Calling OpenAI API with model {Model}", model);
 
-        var response = await httpClient.PostAsync(OpenAiApiBaseUrl, httpContent);
+        var response = await httpClient.PostAsync(apiUrl, httpContent);
         var responseContent = await response.Content.ReadAsStringAsync();
 
         if (!response.IsSuccessStatusCode)

@@ -7,7 +7,7 @@ public class WhisperTranscriptionService(
     IConfiguration configuration,
     ILogger<WhisperTranscriptionService> logger) : ITranscriptionService
 {
-    private const string WhisperApiUrl = "https://api.openai.com/v1/audio/transcriptions";
+    private const string DefaultWhisperApiUrl = "https://api.openai.com/v1/audio/transcriptions";
 
     public async Task<TranscriptionResult> TranscribeAsync(
         Stream audioStream,
@@ -23,8 +23,10 @@ public class WhisperTranscriptionService(
 
         var model = configuration["Whisper:Model"] ?? "whisper-1";
         var language = configuration["Whisper:Language"];
+        var whisperApiUrl = configuration["Whisper:ApiUrl"] ?? DefaultWhisperApiUrl;
 
         var httpClient = httpClientFactory.CreateClient("OpenAI");
+        httpClient.DefaultRequestHeaders.Remove("Authorization");
         httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
@@ -42,7 +44,7 @@ public class WhisperTranscriptionService(
 
         logger.LogInformation("Sending audio file {FileName} to Whisper API (model={Model})", fileName, model);
 
-        using var response = await httpClient.PostAsync(WhisperApiUrl, form, cancellationToken);
+        using var response = await httpClient.PostAsync(whisperApiUrl, form, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
