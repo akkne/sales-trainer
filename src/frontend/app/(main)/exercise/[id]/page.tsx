@@ -30,6 +30,7 @@ export default function ExercisePage({ params }: ExercisePageProps) {
     const [lastSubmissionResult, setLastSubmissionResult] =
         useState<ExerciseSubmissionResult | null>(null);
     const [hearts, setHearts] = useState(MAX_HEARTS);
+    const [showFeedback, setShowFeedback] = useState(false);
 
     const currentExercise = exercises?.[currentExerciseIndex];
     const totalExerciseCount = exercises?.length ?? 0;
@@ -45,6 +46,7 @@ export default function ExercisePage({ params }: ExercisePageProps) {
             {
                 onSuccess: (result) => {
                     setLastSubmissionResult(result);
+                    setShowFeedback(false);
                     if (!result.isCorrect && hearts > 0) {
                         setHearts((h) => Math.max(0, h - 1));
                     }
@@ -55,6 +57,7 @@ export default function ExercisePage({ params }: ExercisePageProps) {
 
     function handleContinueAfterResult() {
         setLastSubmissionResult(null);
+        setShowFeedback(false);
         if (currentExerciseIndex + 1 < totalExerciseCount) {
             setCurrentExerciseIndex((prev) => prev + 1);
         } else {
@@ -140,7 +143,10 @@ export default function ExercisePage({ params }: ExercisePageProps) {
                 <OpenQuestionExercise
                     content={currentExercise.content as Parameters<typeof OpenQuestionExercise>[0]["content"]}
                     onSubmit={handleExerciseSubmit}
+                    onSkip={handleContinueAfterResult}
+                    onContinue={handleContinueAfterResult}
                     isSubmitting={submitExerciseMutation.isPending}
+                    submittedResult={lastSubmissionResult}
                 />
             )}
 
