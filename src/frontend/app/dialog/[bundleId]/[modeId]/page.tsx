@@ -99,9 +99,24 @@ export default function ChatPage() {
     const handleSendMessage = async (content: string) => {
         if (isSending) return;
 
-        if (!sessionId) {
-            await initializeNewSession();
-            return;
+        let currentSessionId = sessionId;
+
+        if (!currentSessionId) {
+            try {
+                setIsLoading(true);
+                setError(null);
+                const session = await startDialogSession(bundleId, modeId);
+                currentSessionId = session.id;
+                setSessionId(session.id);
+                setMessages([]);
+                refetchSessions();
+            } catch (sessionError) {
+                setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
+                setIsLoading(false);
+                return;
+            } finally {
+                setIsLoading(false);
+            }
         }
 
         const userMessage: DialogMessage = {
@@ -116,7 +131,7 @@ export default function ChatPage() {
         setError(null);
 
         try {
-            const aiMessage = await sendDialogMessage(sessionId, content);
+            const aiMessage = await sendDialogMessage(currentSessionId, content);
             setMessages((previousMessages) => [...previousMessages, aiMessage]);
 
             if (aiMessage.isStopSignal) {
@@ -303,8 +318,8 @@ export default function ChatPage() {
                     {!sessionId && messages.length === 0 && (
                         <div className="flex-1 flex items-center justify-center h-full">
                             <div className="text-center text-gray-400">
-                                <p className="mb-2">Начните новый диалог</p>
-                                <p className="text-sm">Напишите сообщение или нажмите «Новый диалог»</p>
+                                <p className="mb-2">Представьтесь и скажите свой опеннер</p>
+                                <p className="text-sm">Вы звоните клиенту — начните разговор первым</p>
                             </div>
                         </div>
                     )}
@@ -348,7 +363,7 @@ export default function ChatPage() {
                     <ChatInput
                         onSend={handleSendMessage}
                         disabled={isSending || isCompleting || !!feedback}
-                        placeholder={feedback ? "Диалог завершён" : "Напишите ответ..."}
+                        placeholder={feedback ? "Диалог завершён" : "Ваш опеннер..."}
                     />
                 </div>
             </div>
@@ -358,4 +373,6 @@ export default function ChatPage() {
             )}
         </div>
     );
+}
+ );
 }

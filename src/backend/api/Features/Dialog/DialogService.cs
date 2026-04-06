@@ -65,24 +65,13 @@ public class DialogService
             throw new InvalidOperationException($"Mode {modeId} not found");
         }
 
-        var chatResult = await _openAiService.SendChatMessageAsync(mode.ChatSystemPrompt, []);
-
         var session = new DialogSession
         {
             UserId = userId,
             BundleId = bundleId,
             ModeId = modeId,
             Status = DialogSessionStatus.Active,
-            Messages =
-            [
-                new DialogMessage
-                {
-                    Role = "assistant",
-                    Content = chatResult.Content,
-                    Timestamp = DateTime.UtcNow,
-                    IsStopSignal = chatResult.IsStopSignal
-                }
-            ]
+            Messages = []
         };
 
         await _mongoContext.DialogSessions.InsertOneAsync(session);
