@@ -1,9 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises;
 
-public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory, IConfiguration configuration, AppDbContext db)
     : IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => "open_question";
@@ -13,10 +15,14 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
         JsonElement userAnswer)
     {
         var question = exerciseContent.GetProperty("question").GetString() ?? "";
-        var evaluationCriteria = exerciseContent.TryGetProperty("evaluationCriteria", out var criteriaElement)
-            ? criteriaElement.GetString() ?? ""
+        var perQuestionPrompt = exerciseContent.TryGetProperty("aiPrompt", out var promptElement)
+            ? promptElement.GetString() ?? ""
             : "";
         var userResponseText = userAnswer.GetProperty("text").GetString() ?? "";
+
+        var globalContext = await db.OpenQuestionGlobalContexts
+            .Select(c => c.ContextText)
+            .FirstOrDefaultAsync() ?? "";
 
         var openAiApiKey = configuration["OpenAI:ApiKey"];
         if (string.IsNullOrEmpty(openAiApiKey) || openAiApiKey.StartsWith("REPLACE_"))
@@ -34,15 +40,23 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
         var apiUrl = openAiBaseUrl.TrimEnd('/') + completionsPath;
         var model = configuration["OpenAI:OpenQuestionModel"] ?? "gpt-4.1";
 
-        var systemPrompt =
-            "Ты — строгий эксперт по продажам. Оцени ответ по шкале от 0 до 10. " +
-            "НЕ хвали и НЕ пиши про сильные стороны — только что улучшить. " +
-            "Отвечай ТОЛЬКО в JSON: {\"rating\": 0-10, \"improvements\": \"2-3 коротких совета что добавить/улучшить\"}. " +
-            "Формат improvements: \"Можно добавить X. Стоит уточнить Y. Попробуй Z.\"";
+        var systemPromptBuilder = new StringBuilder();
 
-        var userPrompt = string.IsNullOrEmpty(evaluationCriteria)
-            ? $"Вопрос: {question}\n\nОтвет пользователя: {userResponseText}"
-            : $"Вопрос: {question}\n\nКритерии оценки: {evaluationCriteria}\n\nОтвет пользователя: {userResponseText}";
+        if (!string.IsNullOrEmpty(globalContext))
+        {
+            systemPromptBuilder.AppendLine(globalContext);
+            systemPromptBuilder.AppendLine();
+        }
+
+        systemPromptBuilder.AppendLine(
+            "Отвечай ТОЛЬКО в JSON формате: {\"rating\": 0-10, \"improvements\": \"2-3 коротких совета что улучшить в формате 'Можно добавить X. Стоит уточнить Y.'\"}. " +
+            "НЕ пиши про сильные стороны — только что улучшить.");
+
+        var userPrompt = $"Вопрос: {question}\n\nОтвет пользователя: {userResponseText}";
+        if (!string.IsNullOrEmpty(perQuestionPrompt))
+        {
+            userPrompt += $"\n\nКритерии оценки: {perQuestionPrompt}";
+        }
 
         var maxTokens = int.TryParse(configuration["OpenAI:MaxTokensOpenQuestion"], out var t) ? t : 200;
 
@@ -51,7 +65,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
             model,
             messages = new[]
             {
-                new { role = "system", content = systemPrompt },
+                new { role = "system", content = systemPromptBuilder.ToString() },
                 new { role = "user", content = userPrompt }
             },
             max_tokens = maxTokens,
@@ -97,9 +111,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
         var improvements = aiResult.TryGetProperty("improvements", out var improvementsElement)
             ? improvementsElement.GetString() : null;
 
-        // Rating 0-10, correct if >= 8
         var isCorrect = rating >= 8;
-        // Convert 0-10 rating to 0-100 score for consistency
         var score = rating * 10;
 
         return new ExerciseEvaluationResult(

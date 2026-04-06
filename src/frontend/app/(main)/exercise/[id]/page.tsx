@@ -9,7 +9,6 @@ import {
 } from "@/lib/hooks/useLesson";
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
-import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
 import { ExerciseResultBanner } from "@/components/exercise/ExerciseResultBanner";
 
@@ -126,14 +125,6 @@ export default function ExercisePage({ params }: ExercisePageProps) {
             {currentExercise.type === "fill_blank" && (
                 <FillBlankExercise
                     content={currentExercise.content as Parameters<typeof FillBlankExercise>[0]["content"]}
-                    onSubmit={handleExerciseSubmit}
-                    isSubmitting={submitExerciseMutation.isPending}
-                />
-            )}
-
-            {currentExercise.type === "free_text" && (
-                <FreeTextExercise
-                    content={currentExercise.content as Parameters<typeof FreeTextExercise>[0]["content"]}
                     onSubmit={handleExerciseSubmit}
                     isSubmitting={submitExerciseMutation.isPending}
                 />

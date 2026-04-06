@@ -80,6 +80,7 @@ export default function AdminLayout({
         { href: "/admin/lessons", label: "Lessons" },
         { href: "/admin/reference", label: "Reference" },
         { href: "/admin/dialog", label: "Dialog" },
+        { href: "/admin/open-question", label: "Open Question AI" },
         { href: "/admin/seeder", label: "Skills Seeder" },
         { href: "/admin/content", label: "Content Import" },
         ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),

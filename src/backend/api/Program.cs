@@ -109,8 +109,6 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluati
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.FillBlankEvaluationStrategy>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
-    SalesTrainer.Api.Features.Exercises.FreeTextEvaluationStrategy>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
     SalesTrainer.Api.Features.Exercises.OpenQuestionEvaluationStrategy>();
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>

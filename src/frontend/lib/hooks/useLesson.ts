@@ -15,7 +15,7 @@ export interface LessonSummary {
 
 export interface ExerciseData {
     exerciseId: string;
-    type: "multiple_choice" | "fill_blank" | "free_text" | "open_question";
+    type: "multiple_choice" | "fill_blank" | "open_question";
     sortOrder: number;
     content: unknown;
 }

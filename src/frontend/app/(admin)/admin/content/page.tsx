@@ -219,7 +219,7 @@ export default function ContentPage() {
                             ["lesson_sort_order", "integer", "Order within the skill"],
                             ["lesson_difficulty", "integer", "1 = easy, 3 = hard"],
                             ["lesson_xp", "integer", "XP awarded on completion"],
-                            ["exercise_type", "string", "multiple_choice | fill_blank | free_text"],
+                            ["exercise_type", "string", "multiple_choice | fill_blank | open_question"],
                             ["exercise_sort_order", "integer", "Order within the lesson (upsert key)"],
                             ["exercise_content_json", "JSON", "Must be valid JSON"],
                         ].map(([col, type, notes]) => (

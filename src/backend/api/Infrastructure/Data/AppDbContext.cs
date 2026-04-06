@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserAchievement> UserAchievements => Set<UserAchievement>();
     public DbSet<DialogBundle> DialogBundles => Set<DialogBundle>();
     public DbSet<DialogMode> DialogModes => Set<DialogMode>();
+    public DbSet<OpenQuestionGlobalContext> OpenQuestionGlobalContexts => Set<OpenQuestionGlobalContext>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

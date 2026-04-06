@@ -12,7 +12,7 @@ import {
     useDeleteExercise,
 } from "@/lib/hooks/useAdmin";
 
-const EXERCISE_TYPES = ["multiple_choice", "fill_blank", "free_text"];
+const EXERCISE_TYPES = ["multiple_choice", "fill_blank", "open_question"];
 
 const CONTENT_TEMPLATES: Record<string, object> = {
     multiple_choice: {
@@ -29,10 +29,9 @@ const CONTENT_TEMPLATES: Record<string, object> = {
         correctOptionIndex: 0,
         explanation: "",
     },
-    free_text: {
-        situation: "",
-        prompt: "",
-        evaluationCriteria: "",
+    open_question: {
+        question: "",
+        aiPrompt: "",
     },
 };
 

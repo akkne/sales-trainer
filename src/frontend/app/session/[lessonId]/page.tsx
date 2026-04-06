@@ -11,7 +11,6 @@ import {
 import { useAchievements } from "@/lib/hooks/useAchievements";
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
-import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
 
@@ -315,21 +314,6 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         content={
                             currentExercise.content as Parameters<
                                 typeof FillBlankExercise
-                            >[0]["content"]
-                        }
-                        onSubmit={handleExerciseSubmit}
-                        onSkip={handleSkip}
-                        onContinue={handleContinueAfterResult}
-                        isSubmitting={submitExerciseMutation.isPending}
-                        submittedResult={lastSubmissionResult}
-                    />
-                )}
-                {currentExercise.type === "free_text" && (
-                    <FreeTextExercise
-                        key={currentExercise.exerciseId}
-                        content={
-                            currentExercise.content as Parameters<
-                                typeof FreeTextExercise
                             >[0]["content"]
                         }
                         onSubmit={handleExerciseSubmit}
