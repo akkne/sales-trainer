@@ -21,7 +21,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-3">
             <input
                 type="text"
                 value={inputValue}
