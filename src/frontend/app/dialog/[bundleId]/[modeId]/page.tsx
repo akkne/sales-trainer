@@ -7,13 +7,13 @@ import {
     useDialogBundles,
     useDialogModes,
     useDialogSessions,
-    useDialogSession,
     DialogMessage,
     DialogFeedback,
     startDialogSession,
     sendDialogMessage,
     completeDialogSession,
 } from "@/lib/hooks/useDialog";
+import { apiClient } from "@/lib/api/apiClient";
 import { ChatMessage } from "@/components/dialog/ChatMessage";
 import { ChatInput } from "@/components/dialog/ChatInput";
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
@@ -76,6 +76,7 @@ export default function ChatPage() {
 
     useEffect(() => {
         initializeNewSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bundleId, modeId]);
 
     const handleSendMessage = async (content: string) => {
@@ -141,20 +142,17 @@ export default function ChatPage() {
         setShowCompletionButton(false);
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"}/dialog/sessions/${clickedSessionId}`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-                },
-            });
+            const session = await apiClient.get<{
+                messages: DialogMessage[];
+                status: string;
+                feedback: DialogFeedback | null;
+            }>(`/dialog/sessions/${clickedSessionId}`);
 
-            if (!response.ok) throw new Error("Failed to load session");
-
-            const session = await response.json();
             setMessages(session.messages);
 
             if (session.status === "completed") {
                 setFeedback(session.feedback);
-            } else if (session.messages.some((message: DialogMessage) => message.isStopSignal)) {
+            } else if (session.messages.some((message) => message.isStopSignal)) {
                 setShowCompletionButton(true);
             }
         } catch (loadError) {
