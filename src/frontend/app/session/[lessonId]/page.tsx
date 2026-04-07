@@ -13,6 +13,7 @@ import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExer
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
+import { Icon } from "@/components/ui/Icon";
 
 const MAX_HEARTS = 4;
 
@@ -129,8 +130,8 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+            <div className="flex items-center justify-center min-h-screen bg-surface">
+                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
             </div>
         );
     }
@@ -146,43 +147,47 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 : 100;
 
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-white">
-                <div className="text-8xl mb-6 animate-bounce">🎉</div>
-                <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Урок пройден!</h1>
-                <p className="text-[#AFAFAF] mb-10">
+            <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-surface">
+                <div className="w-24 h-24 rounded-full bg-primary-container flex items-center justify-center mb-6">
+                    <Icon name="celebration" size="2xl" className="text-primary" />
+                </div>
+                <h1 className="font-headline text-3xl font-bold text-on-surface mb-2">Урок пройден!</h1>
+                <p className="text-on-surface-variant mb-10">
                     Отличная работа. Продолжай в том же духе!
                 </p>
 
                 <div className="grid grid-cols-2 gap-3 mb-4 w-full max-w-sm">
-                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
-                        <div className="text-2xl font-extrabold text-[#FFC800]">
+                    <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
+                        <div className="font-headline text-2xl font-bold text-secondary">
                             +{totalXpEarned}
                         </div>
-                        <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
+                        <div className="text-xs text-on-surface-variant uppercase tracking-wider mt-1">
                             XP заработано
                         </div>
                     </div>
-                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
-                        <div className="text-2xl font-extrabold text-[#58CC02]">
+                    <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
+                        <div className="font-headline text-2xl font-bold text-primary">
                             {accuracyPercent}%
                         </div>
-                        <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
+                        <div className="text-xs text-on-surface-variant uppercase tracking-wider mt-1">
                             Точность
                         </div>
                     </div>
-                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
-                        <div className="text-2xl font-extrabold text-[#1CB0F6]">
+                    <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
+                        <div className="font-headline text-2xl font-bold text-tertiary">
                             {formatSessionDuration(sessionDurationSeconds)}
                         </div>
-                        <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
+                        <div className="text-xs text-on-surface-variant uppercase tracking-wider mt-1">
                             Время
                         </div>
                     </div>
-                    <div className="bg-[#F7F7F7] rounded-2xl px-4 py-4 text-center">
-                        <div className="text-2xl font-extrabold text-[#FF4B4B]">
-                            {Array.from({ length: hearts }, () => "❤️").join("")}
+                    <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
+                            {Array.from({ length: hearts }, (_, i) => (
+                                <Icon key={i} name="favorite" size="md" variant="filled" className="text-error" />
+                            ))}
                         </div>
-                        <div className="text-xs text-[#AFAFAF] uppercase tracking-wider mt-1">
+                        <div className="text-xs text-on-surface-variant uppercase tracking-wider mt-1">
                             Жизни
                         </div>
                     </div>
@@ -193,21 +198,22 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         <>
                             <button
                                 onClick={() => router.replace(`/session/${nextLesson.lessonId}`)}
-                                className="w-full py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                                className="w-full py-4 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center gap-2 shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
                             >
-                                Следующий урок →
+                                Следующий урок
+                                <Icon name="arrow_forward" size="sm" />
                             </button>
-                            <p className="text-xs text-[#AFAFAF] text-center">{nextLesson.title}</p>
+                            <p className="text-xs text-on-surface-variant text-center">{nextLesson.title}</p>
                         </>
                     ) : isNextLessonLoaded ? (
-                        <p className="text-sm text-[#AFAFAF] text-center mb-1">Все уроки пройдены! 🎉</p>
+                        <p className="text-sm text-on-surface-variant text-center mb-1">Все уроки пройдены! 🎉</p>
                     ) : null}
                     <button
                         onClick={() => router.back()}
-                        className={`w-full py-4 rounded-2xl font-extrabold ${
+                        className={`w-full py-4 rounded-full font-bold tonal-transition ${
                             isNextLessonLoaded && nextLesson
-                                ? "text-[#AFAFAF] hover:text-gray-600 transition-colors"
-                                : "bg-[#58CC02] text-white btn-3d"
+                                ? "text-on-surface-variant hover:text-on-surface"
+                                : "bg-primary text-on-primary shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1"
                         }`}
                     >
                         Вернуться к пути
@@ -220,25 +226,27 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     // Failure screen
     if (sessionState === "failed") {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-white">
-                <div className="text-8xl mb-6">💔</div>
-                <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
+            <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-surface">
+                <div className="w-24 h-24 rounded-full bg-error-container flex items-center justify-center mb-6">
+                    <Icon name="heart_broken" size="2xl" className="text-error" />
+                </div>
+                <h1 className="font-headline text-3xl font-bold text-on-surface mb-2">
                     Жизни закончились
                 </h1>
-                <p className="text-[#AFAFAF] mb-10">
+                <p className="text-on-surface-variant mb-10">
                     Не сдавайся — попробуй ещё раз!
                 </p>
 
                 <div className="w-full max-w-xs flex flex-col gap-3">
                     <button
                         onClick={onRestart}
-                        className="w-full py-4 rounded-2xl bg-[#FF4B4B] text-white font-extrabold btn-3d-red"
+                        className="w-full py-4 rounded-full bg-error text-on-error font-bold shadow-[0_4px_0_var(--color-red-shadow)] active:shadow-none active:translate-y-1 tonal-transition"
                     >
                         Попробовать снова
                     </button>
                     <button
                         onClick={() => router.back()}
-                        className="w-full py-4 rounded-2xl text-[#AFAFAF] font-semibold hover:text-gray-600 transition-colors"
+                        className="w-full py-4 rounded-full text-on-surface-variant font-semibold hover:text-on-surface tonal-transition"
                     >
                         Вернуться к пути
                     </button>
@@ -249,44 +257,45 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
     if (!currentExercise) {
         return (
-            <div className="flex items-center justify-center min-h-screen text-gray-500">
+            <div className="flex items-center justify-center min-h-screen text-on-surface-variant bg-surface">
                 Упражнения не найдены
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-white flex flex-col">
+        <div className="min-h-screen bg-surface flex flex-col">
             {/* Achievement toast queue */}
             <AchievementToastQueue queue={toastQueue} onDismiss={dismissToast} />
 
             {/* Header: ✕ + progress bar + hearts */}
-            <div className="flex items-center gap-3 px-4 py-5 border-b border-[#E5E5E5] sticky top-0 bg-white z-10">
+            <div className="flex items-center gap-3 px-4 py-5 border-b border-outline-variant sticky top-0 bg-surface z-10">
                 <button
                     onClick={() => router.back()}
-                    className="text-[#AFAFAF] hover:text-gray-500 text-xl leading-none transition-colors shrink-0"
+                    className="text-on-surface-variant hover:text-on-surface tonal-transition shrink-0"
                     aria-label="Выйти"
                 >
-                    ✕
+                    <Icon name="close" size="md" />
                 </button>
 
-                <div className="flex-1 h-4 bg-[#E5E5E5] rounded-full overflow-hidden">
+                <div className="flex-1 h-3 bg-surface-container-highest rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-[#58CC02] rounded-full transition-all duration-500"
+                        className="h-full bg-primary rounded-full transition-all duration-500"
                         style={{ width: `${progressPercent}%` }}
                     />
                 </div>
 
                 <div className="flex items-center gap-0.5 shrink-0">
                     {Array.from({ length: MAX_HEARTS }).map((_, i) => (
-                        <span
+                        <Icon
                             key={i}
-                            className={`text-xl transition-all duration-200 ${
-                                i < hearts ? "opacity-100" : "opacity-20 grayscale"
+                            name="favorite"
+                            size="md"
+                            variant="filled"
+                            className={`transition-all duration-200 ${
+                                i < hearts ? "text-error" : "text-surface-container-highest"
                             }`}
-                        >
-                            ❤️
-                        </span>
+                        />
                     ))}
                 </div>
             </div>

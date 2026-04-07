@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 export interface AchievementToastData {
     key: string;
@@ -40,21 +41,24 @@ export function AchievementToast({ achievement, onDismiss }: AchievementToastPro
                 setVisible(false);
                 setTimeout(onDismiss, 350);
             }}
-            className={`flex items-center gap-4 bg-white border-2 border-[#58CC02] rounded-2xl px-4 py-3 shadow-lg cursor-pointer select-none
+            className={`flex items-center gap-4 bg-surface-container-lowest border-2 border-primary rounded-2xl px-4 py-3 shadow-lg cursor-pointer select-none
                 transition-all duration-300 ease-out
                 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}
             role="alert"
             aria-live="polite"
         >
-            <span className="text-3xl">{achievement.iconEmoji}</span>
+            <div className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center shrink-0">
+                <span className="text-2xl">{achievement.iconEmoji}</span>
+            </div>
             <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wider text-[#58CC02] mb-0.5">
+                <div className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-primary mb-0.5">
+                    <Icon name="emoji_events" size="sm" />
                     Достижение разблокировано!
-                </p>
-                <p className="font-extrabold text-gray-900 text-sm leading-tight truncate">
+                </div>
+                <p className="font-bold text-on-surface text-sm leading-tight truncate">
                     {achievement.title}
                 </p>
-                <p className="text-xs text-[#AFAFAF] truncate">{achievement.description}</p>
+                <p className="text-xs text-on-surface-variant truncate">{achievement.description}</p>
             </div>
         </div>
     );

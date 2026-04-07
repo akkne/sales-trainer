@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
+import { Icon } from "@/components/ui/Icon";
 
 /**
  * fill_blank content can be stored in two shapes depending on who seeded it:
@@ -67,18 +68,18 @@ export function FillBlankExercise({
         if (!isAnswered) {
             return `${base} ${
                 selectedOptionIndex === optionIndex
-                    ? "border-[#1CB0F6] bg-[#E8F7FE] text-[#1CB0F6]"
-                    : "border-[#E5E5E5] bg-[#F7F7F7] text-gray-700 hover:bg-[#EEFAFF]"
+                    ? "border-tertiary bg-tertiary-container text-tertiary"
+                    : "border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high"
             }`;
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
         const isCorrectOption = optionIndex === content.correctOptionIndex;
 
-        if (isSelected && submittedResult.isCorrect)       return `${base} border-[#58CC02] bg-[#E8F9D6] text-[#3C8400]`;
-        if (isSelected && !submittedResult.isCorrect)      return `${base} border-[#FF4B4B] bg-[#FFF2F2] text-[#CC3333]`;
-        if (!submittedResult.isCorrect && isCorrectOption) return `${base} border-[#58CC02] bg-[#E8F9D6] text-[#3C8400]`;
-        return `${base} border-[#E5E5E5] bg-[#F7F7F7] text-gray-400`;
+        if (isSelected && submittedResult.isCorrect)       return `${base} border-primary bg-primary-container text-primary`;
+        if (isSelected && !submittedResult.isCorrect)      return `${base} border-error bg-error-container text-error`;
+        if (!submittedResult.isCorrect && isCorrectOption) return `${base} border-primary bg-primary-container text-primary`;
+        return `${base} border-outline-variant bg-surface-container text-on-surface-variant`;
     }
 
     function badgeStyle(optionIndex: number): string {
@@ -87,18 +88,18 @@ export function FillBlankExercise({
         if (!isAnswered) {
             return `${base} ${
                 selectedOptionIndex === optionIndex
-                    ? "bg-[#1CB0F6] text-white"
-                    : "bg-[#E5E5E5] text-gray-500"
+                    ? "bg-tertiary text-on-tertiary"
+                    : "bg-surface-container-highest text-on-surface-variant"
             }`;
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
         const isCorrectOption = optionIndex === content.correctOptionIndex;
 
-        if (isSelected && submittedResult.isCorrect)       return `${base} bg-[#58CC02] text-white`;
-        if (isSelected && !submittedResult.isCorrect)      return `${base} bg-[#FF4B4B] text-white`;
-        if (!submittedResult.isCorrect && isCorrectOption) return `${base} bg-[#58CC02] text-white`;
-        return `${base} bg-[#E5E5E5] text-gray-400`;
+        if (isSelected && submittedResult.isCorrect)       return `${base} bg-primary text-on-primary`;
+        if (isSelected && !submittedResult.isCorrect)      return `${base} bg-error text-on-error`;
+        if (!submittedResult.isCorrect && isCorrectOption) return `${base} bg-primary text-on-primary`;
+        return `${base} bg-surface-container-highest text-on-surface-variant`;
     }
 
     return (
@@ -106,15 +107,15 @@ export function FillBlankExercise({
             {/* Character speech bubble — only for character-based exercises */}
             {isCharacterBased && (
                 <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold text-lg shrink-0 mt-1">
+                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-secondary font-bold text-lg shrink-0 mt-1">
                         {content.characterName?.[0]?.toUpperCase() ?? "?"}
                     </div>
                     <div className="flex-1">
                         {content.characterName && (
-                            <p className="text-xs font-semibold text-[#AFAFAF] mb-1">{content.characterName}</p>
+                            <p className="text-xs font-semibold text-on-surface-variant mb-1">{content.characterName}</p>
                         )}
-                        <div className="relative bg-[#F7F7F7] rounded-2xl rounded-tl-sm px-4 py-3">
-                            <p className="text-gray-900 font-medium italic">
+                        <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3">
+                            <p className="text-on-surface font-medium italic">
                                 &ldquo;{content.characterLine}&rdquo;
                             </p>
                         </div>
@@ -125,17 +126,17 @@ export function FillBlankExercise({
             {/* Situation bubble — for question-based exercises with a scenario */}
             {!isCharacterBased && content.situation && (
                 <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#58CC02] flex items-center justify-center text-white font-bold text-lg shrink-0 mt-1">
-                        🤝
+                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
+                        <Icon name="handshake" size="sm" className="text-primary" />
                     </div>
-                    <div className="relative bg-[#F7F7F7] rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-gray-700">{content.situation}</p>
+                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
                     </div>
                 </div>
             )}
 
             {/* Main question heading */}
-            <p className="font-extrabold text-xl text-gray-900">
+            <p className="font-headline font-bold text-xl text-on-surface">
                 {content.question ?? "Выбери лучший ответ:"}
             </p>
 
@@ -158,7 +159,7 @@ export function FillBlankExercise({
             {/* Inline explanation */}
             {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
                 <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-[#3C8400]" : "text-[#CC3333]"
+                    submittedResult.isCorrect ? "text-primary" : "text-error"
                 }`}>
                     {submittedResult.explanation ?? submittedResult.aiFeedback}
                 </p>
@@ -169,7 +170,7 @@ export function FillBlankExercise({
                     <button
                         onClick={onSkip}
                         disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-2xl border-2 border-[#E5E5E5] text-[#AFAFAF] font-extrabold hover:border-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40"
+                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
                     >
                         Пропустить
                     </button>
@@ -178,7 +179,7 @@ export function FillBlankExercise({
                 {isAnswered ? (
                     <button
                         onClick={onContinue}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
                     >
                         Продолжить
                     </button>
@@ -188,7 +189,7 @@ export function FillBlankExercise({
                             if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
                         }}
                         disabled={selectedOptionIndex === null || isSubmitting}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? "Проверяем..." : "Проверить"}
                     </button>
@@ -196,7 +197,7 @@ export function FillBlankExercise({
             </div>
 
             {/* Keyboard hint — hidden on touch devices */}
-            <p className="hidden pointer-fine:block text-center text-xs text-[#AFAFAF]">
+            <p className="hidden pointer-fine:block text-center text-xs text-on-surface-variant">
                 {isAnswered ? "Enter — продолжить" : "1–4 выбрать · Enter — проверить"}
             </p>
         </div>

@@ -53,7 +53,7 @@ export function OpenQuestionExercise({
     return (
         <div className="flex flex-col gap-6">
             {/* Question */}
-            <p className="font-extrabold text-xl text-gray-900">{content.question}</p>
+            <p className="font-headline font-bold text-xl text-on-surface">{content.question}</p>
 
             <textarea
                 value={responseText}
@@ -61,7 +61,7 @@ export function OpenQuestionExercise({
                 placeholder="Напиши свой ответ..."
                 rows={5}
                 disabled={isAnswered}
-                className="w-full px-4 py-3 rounded-2xl bg-[#F7F7F7] text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-[#58CC02] resize-none disabled:opacity-60"
+                className="w-full px-4 py-3 rounded-2xl bg-surface-container text-on-surface placeholder-on-surface-variant outline-none focus:ring-2 focus:ring-primary resize-none disabled:opacity-60"
             />
 
             {/* Rating and improvements display */}
@@ -72,17 +72,17 @@ export function OpenQuestionExercise({
                         <div
                             className={`text-3xl font-extrabold px-4 py-2 rounded-xl ${
                                 rating >= 8
-                                    ? "bg-[#D7FFB8] text-[#58CC02]"
+                                    ? "bg-primary-container text-primary"
                                     : rating >= 5
-                                    ? "bg-[#FFF4CC] text-[#FFC800]"
-                                    : "bg-[#FFDEDE] text-[#FF4B4B]"
+                                    ? "bg-tertiary-container text-tertiary"
+                                    : "bg-error-container text-error"
                             }`}
                         >
                             {rating}/10
                         </div>
                         <span
                             className={`text-sm font-semibold ${
-                                rating >= 8 ? "text-[#58CC02]" : "text-[#AFAFAF]"
+                                rating >= 8 ? "text-primary" : "text-on-surface-variant"
                             }`}
                         >
                             {rating >= 8 ? "Отлично!" : rating >= 5 ? "Неплохо" : "Нужно доработать"}
@@ -91,11 +91,11 @@ export function OpenQuestionExercise({
 
                     {/* Improvements feedback */}
                     {submittedResult.aiFeedback && (
-                        <div className="bg-[#F7F7F7] rounded-2xl px-4 py-3">
-                            <p className="text-xs text-[#AFAFAF] uppercase tracking-wider mb-1">
+                        <div className="bg-surface-container rounded-2xl px-4 py-3">
+                            <p className="text-xs text-on-surface-variant uppercase tracking-wider mb-1">
                                 Что улучшить
                             </p>
-                            <p className="text-sm text-gray-700 leading-relaxed">
+                            <p className="text-sm text-on-surface leading-relaxed">
                                 {submittedResult.aiFeedback}
                             </p>
                         </div>
@@ -108,7 +108,7 @@ export function OpenQuestionExercise({
                     <button
                         onClick={onSkip}
                         disabled={isBusy}
-                        className="flex-1 py-4 rounded-2xl border-2 border-[#E5E5E5] text-[#AFAFAF] font-extrabold hover:border-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40"
+                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
                     >
                         Пропустить
                     </button>
@@ -117,7 +117,7 @@ export function OpenQuestionExercise({
                 {isAnswered ? (
                     <button
                         onClick={onContinue}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
                     >
                         Продолжить
                     </button>
@@ -127,7 +127,7 @@ export function OpenQuestionExercise({
                             if (responseText.trim()) onSubmit({ text: responseText.trim() });
                         }}
                         disabled={!responseText.trim() || isBusy}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? "AI оценивает..." : "Отправить"}
                     </button>

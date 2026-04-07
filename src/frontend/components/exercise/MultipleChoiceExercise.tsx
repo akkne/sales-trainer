@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
+import { Icon } from "@/components/ui/Icon";
 
 interface MultipleChoiceContent {
     situation: string;
@@ -54,29 +55,24 @@ export function MultipleChoiceExercise({
         if (!isAnswered) {
             return `${base} ${
                 selectedOptionIndex === optionIndex
-                    ? "border-[#1CB0F6] bg-[#E8F7FE] text-[#1CB0F6]"
-                    : "border-[#E5E5E5] bg-[#F7F7F7] text-gray-700 hover:bg-[#EEFAFF]"
+                    ? "border-tertiary bg-tertiary-container text-tertiary"
+                    : "border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high"
             }`;
         }
 
-        // After submission: colour by correctness
         const isSelected = selectedOptionIndex === optionIndex;
         const isCorrectOption = optionIndex === content.correctOptionIndex;
 
         if (isSelected && submittedResult.isCorrect) {
-            // Correct answer selected → green
-            return `${base} border-[#58CC02] bg-[#E8F9D6] text-[#3C8400]`;
+            return `${base} border-primary bg-primary-container text-primary`;
         }
         if (isSelected && !submittedResult.isCorrect) {
-            // Wrong answer selected → red
-            return `${base} border-[#FF4B4B] bg-[#FFF2F2] text-[#CC3333]`;
+            return `${base} border-error bg-error-container text-error`;
         }
         if (!submittedResult.isCorrect && isCorrectOption) {
-            // Show the correct answer in green when user was wrong
-            return `${base} border-[#58CC02] bg-[#E8F9D6] text-[#3C8400]`;
+            return `${base} border-primary bg-primary-container text-primary`;
         }
-        // All other options: faded
-        return `${base} border-[#E5E5E5] bg-[#F7F7F7] text-gray-400`;
+        return `${base} border-outline-variant bg-surface-container text-on-surface-variant`;
     }
 
     function badgeStyle(optionIndex: number): string {
@@ -85,18 +81,18 @@ export function MultipleChoiceExercise({
         if (!isAnswered) {
             return `${base} ${
                 selectedOptionIndex === optionIndex
-                    ? "bg-[#1CB0F6] text-white"
-                    : "bg-[#E5E5E5] text-gray-500"
+                    ? "bg-tertiary text-on-tertiary"
+                    : "bg-surface-container-highest text-on-surface-variant"
             }`;
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
         const isCorrectOption = optionIndex === content.correctOptionIndex;
 
-        if (isSelected && submittedResult.isCorrect) return `${base} bg-[#58CC02] text-white`;
-        if (isSelected && !submittedResult.isCorrect) return `${base} bg-[#FF4B4B] text-white`;
-        if (!submittedResult.isCorrect && isCorrectOption) return `${base} bg-[#58CC02] text-white`;
-        return `${base} bg-[#E5E5E5] text-gray-400`;
+        if (isSelected && submittedResult.isCorrect) return `${base} bg-primary text-on-primary`;
+        if (isSelected && !submittedResult.isCorrect) return `${base} bg-error text-on-error`;
+        if (!submittedResult.isCorrect && isCorrectOption) return `${base} bg-primary text-on-primary`;
+        return `${base} bg-surface-container-highest text-on-surface-variant`;
     }
 
     return (
@@ -104,16 +100,16 @@ export function MultipleChoiceExercise({
             {/* Character speech bubble */}
             {content.situation && (
                 <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#58CC02] flex items-center justify-center text-white font-bold text-lg shrink-0 mt-1">
-                        🤝
+                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
+                        <Icon name="handshake" size="sm" className="text-primary" />
                     </div>
-                    <div className="relative bg-[#F7F7F7] rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-gray-700">{content.situation}</p>
+                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
                     </div>
                 </div>
             )}
 
-            <p className="font-extrabold text-xl text-gray-900">{content.question}</p>
+            <p className="font-headline font-bold text-xl text-on-surface">{content.question}</p>
 
             <div className="flex flex-col gap-3">
                 {content.options.map((optionText, optionIndex) => (
@@ -134,7 +130,7 @@ export function MultipleChoiceExercise({
             {/* Inline explanation */}
             {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
                 <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-[#3C8400]" : "text-[#CC3333]"
+                    submittedResult.isCorrect ? "text-primary" : "text-error"
                 }`}>
                     {submittedResult.explanation ?? submittedResult.aiFeedback}
                 </p>
@@ -145,7 +141,7 @@ export function MultipleChoiceExercise({
                     <button
                         onClick={onSkip}
                         disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-2xl border-2 border-[#E5E5E5] text-[#AFAFAF] font-extrabold hover:border-gray-300 hover:text-gray-500 transition-colors disabled:opacity-40"
+                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
                     >
                         Пропустить
                     </button>
@@ -154,7 +150,7 @@ export function MultipleChoiceExercise({
                 {isAnswered ? (
                     <button
                         onClick={onContinue}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
                     >
                         Продолжить
                     </button>
@@ -164,7 +160,7 @@ export function MultipleChoiceExercise({
                             if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
                         }}
                         disabled={selectedOptionIndex === null || isSubmitting}
-                        className="flex-1 py-4 rounded-2xl bg-[#58CC02] text-white font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? "Проверяем..." : "Проверить"}
                     </button>
@@ -172,7 +168,7 @@ export function MultipleChoiceExercise({
             </div>
 
             {/* Keyboard hint — hidden on touch devices */}
-            <p className="hidden pointer-fine:block text-center text-xs text-[#AFAFAF]">
+            <p className="hidden pointer-fine:block text-center text-xs text-on-surface-variant">
                 {isAnswered ? "Enter — продолжить" : "1–4 выбрать · Enter — проверить"}
             </p>
         </div>
