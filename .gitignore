@@ -31,7 +31,6 @@ appsettings.*.json
 # Claude & design config (local only, not committed)
 .claude/
 .design/
-docs/
 
 # Docker volumes (if mounted locally)
 .postgres_data/
