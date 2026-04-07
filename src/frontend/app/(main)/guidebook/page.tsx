@@ -4,6 +4,7 @@ import { useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useHandbook, useHandbookCategories } from "@/lib/hooks/useReference";
+import { Icon } from "@/components/ui/Icon";
 
 const CATEGORY_LABELS: Record<string, string> = {
     "objections": "Возражения",
@@ -14,22 +15,35 @@ const CATEGORY_LABELS: Record<string, string> = {
     "negotiation": "Переговоры",
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+    "objections": "verified_user",
+    "cold-calls": "call",
+    "closing": "handshake",
+    "discovery": "psychology",
+    "rapport": "diversity_3",
+    "negotiation": "balance",
+};
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+    "objections": { bg: "bg-error-container", text: "text-error" },
+    "cold-calls": { bg: "bg-tertiary-container", text: "text-tertiary" },
+    "closing": { bg: "bg-primary-container", text: "text-primary" },
+    "discovery": { bg: "bg-secondary-container", text: "text-secondary" },
+    "rapport": { bg: "bg-[#E8DEF8]", text: "text-[#6750A4]" },
+    "negotiation": { bg: "bg-[#FFE0B2]", text: "text-[#E65100]" },
+};
+
 function categoryLabel(cat: string): string {
     return CATEGORY_LABELS[cat] ?? cat;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-    "objections": "bg-red-100 text-red-700",
-    "cold-calls": "bg-blue-100 text-blue-700",
-    "closing": "bg-green-100 text-green-700",
-    "discovery": "bg-yellow-100 text-yellow-700",
-    "rapport": "bg-purple-100 text-purple-700",
-    "negotiation": "bg-orange-100 text-orange-700",
-};
+function categoryIcon(cat: string | null): string {
+    return cat ? (CATEGORY_ICONS[cat] ?? "article") : "article";
+}
 
-function categoryColor(cat: string | null): string {
-    if (!cat) return "bg-gray-100 text-gray-600";
-    return CATEGORY_COLORS[cat] ?? "bg-gray-100 text-gray-600";
+function categoryColors(cat: string | null): { bg: string; text: string } {
+    if (!cat) return { bg: "bg-surface-container", text: "text-on-surface-variant" };
+    return CATEGORY_COLORS[cat] ?? { bg: "bg-surface-container", text: "text-on-surface-variant" };
 }
 
 export default function GuidebookPage() {
@@ -50,29 +64,32 @@ export default function GuidebookPage() {
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-3xl mx-auto px-4 py-8">
             {/* Header */}
             <div className="mb-6">
-                <h1 className="font-extrabold text-2xl text-gray-900 mb-1">📖 Справочник</h1>
-                <p className="text-sm text-[#AFAFAF]">Ключевые техники продаж</p>
+                <div className="flex items-center gap-2 mb-2">
+                    <Icon name="menu_book" size="lg" className="text-primary" />
+                    <h1 className="font-headline font-bold text-2xl text-on-surface">Справочник</h1>
+                </div>
+                <p className="text-sm text-on-surface-variant">Ключевые техники продаж</p>
             </div>
 
             {/* Search */}
             <div className="relative mb-4">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#AFAFAF] text-sm">🔍</span>
+                <Icon name="search" size="md" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
                 <input
                     type="text"
                     placeholder="Поиск техник..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    className="w-full pl-9 pr-4 py-3 rounded-xl border-2 border-[#E5E5E5] focus:border-[#58CC02] outline-none text-sm font-medium transition-colors"
+                    className="w-full pl-10 pr-10 py-3 rounded-full bg-surface-container-low text-on-surface placeholder-on-surface-variant outline-none focus:ring-2 focus:ring-primary border-2 border-transparent focus:border-primary tonal-transition"
                 />
                 {searchInput && (
                     <button
                         onClick={() => setSearchInput("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#AFAFAF] hover:text-gray-600 text-lg leading-none"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface tonal-transition"
                     >
-                        ×
+                        <Icon name="close" size="sm" />
                     </button>
                 )}
             </div>
@@ -82,103 +99,135 @@ export default function GuidebookPage() {
                 <div className="flex gap-2 flex-wrap mb-6">
                     <button
                         onClick={() => setSelectedCategory(null)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-colors ${
+                        className={`px-4 py-2 rounded-full text-sm font-semibold tonal-transition ${
                             selectedCategory === null
-                                ? "bg-[#58CC02] text-white border-[#58CC02]"
-                                : "bg-white text-gray-600 border-[#E5E5E5] hover:border-[#58CC02]"
+                                ? "bg-primary text-on-primary"
+                                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
                         }`}
                     >
                         Все
                     </button>
-                    {categories.map((cat) => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-colors ${
-                                selectedCategory === cat
-                                    ? "bg-[#58CC02] text-white border-[#58CC02]"
-                                    : "bg-white text-gray-600 border-[#E5E5E5] hover:border-[#58CC02]"
-                            }`}
-                        >
-                            {categoryLabel(cat)}
-                        </button>
-                    ))}
+                    {categories.map((cat) => {
+                        const colors = categoryColors(cat);
+                        const isSelected = selectedCategory === cat;
+                        return (
+                            <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
+                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold tonal-transition ${
+                                    isSelected
+                                        ? "bg-primary text-on-primary"
+                                        : `${colors.bg} ${colors.text} hover:opacity-80`
+                                }`}
+                            >
+                                <Icon name={categoryIcon(cat)} size="sm" />
+                                {categoryLabel(cat)}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
             {/* Results */}
             {isLoading ? (
                 <div className="flex justify-center py-12">
-                    <div className="w-8 h-8 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+                    <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
                 </div>
             ) : materials.length === 0 ? (
                 <div className="text-center py-16">
-                    <p className="text-4xl mb-3">🔎</p>
-                    <p className="font-semibold text-gray-700 mb-1">Ничего не найдено</p>
-                    <p className="text-sm text-[#AFAFAF]">Попробуй другой запрос или категорию</p>
+                    <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4">
+                        <Icon name="search_off" size="xl" className="text-on-surface-variant" />
+                    </div>
+                    <p className="font-semibold text-on-surface mb-1">Ничего не найдено</p>
+                    <p className="text-sm text-on-surface-variant">Попробуй другой запрос или категорию</p>
                 </div>
             ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-4">
                     {materials.map((material) => {
                         const isExpanded = expandedId === material.materialId;
-                        // First ~120 chars of content as excerpt
-                        const excerpt = material.markdownContent.replace(/[#*_`]/g, "").slice(0, 120);
+                        const colors = categoryColors(material.category);
+                        // First ~150 chars of content as excerpt
+                        const excerpt = material.markdownContent.replace(/[#*_`]/g, "").slice(0, 150);
 
                         return (
                             <div
                                 key={material.materialId}
-                                className={`rounded-2xl border-2 overflow-hidden transition-all ${
+                                className={`rounded-2xl overflow-hidden tonal-transition ${
                                     isExpanded
-                                        ? "border-[#58CC02]"
-                                        : "border-[#E5E5E5] hover:border-[#C3E89A]"
+                                        ? "bg-surface-container-lowest ring-2 ring-primary"
+                                        : "bg-surface-container-lowest hover:bg-surface-container"
                                 }`}
                             >
                                 {/* Card header — always visible */}
                                 <button
                                     onClick={() => toggleExpand(material.materialId)}
-                                    className="w-full text-left px-4 py-4"
+                                    className="w-full text-left px-5 py-4"
                                 >
-                                    <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                            {/* Category and tags */}
+                                            <div className="flex items-center gap-2 flex-wrap mb-2">
                                                 {material.category && (
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${categoryColor(material.category)}`}>
+                                                    <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
+                                                        <Icon name={categoryIcon(material.category)} size="sm" />
                                                         {categoryLabel(material.category)}
                                                     </span>
                                                 )}
-                                                {material.tags.map((tag) => (
-                                                    <span key={tag} className="text-[10px] text-[#AFAFAF] bg-[#F7F7F7] px-1.5 py-0.5 rounded-full">
-                                                        {tag}
+                                                {material.tags.slice(0, 2).map((tag) => (
+                                                    <span key={tag} className="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                                                        #{tag}
                                                     </span>
                                                 ))}
                                             </div>
-                                            <p className="font-bold text-gray-900 text-sm leading-snug">
+
+                                            <p className="font-bold text-on-surface text-base leading-snug mb-1">
                                                 {material.title}
                                             </p>
+
                                             {!isExpanded && (
-                                                <p className="text-xs text-[#7A7A7A] mt-1 line-clamp-2">
-                                                    {excerpt}{excerpt.length >= 120 ? "…" : ""}
+                                                <p className="text-sm text-on-surface-variant line-clamp-2">
+                                                    {excerpt}{excerpt.length >= 150 ? "…" : ""}
                                                 </p>
                                             )}
                                         </div>
-                                        <span className={`text-[#AFAFAF] flex-shrink-0 mt-1 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}>
-                                            ▼
-                                        </span>
+
+                                        <Icon
+                                            name={isExpanded ? "expand_less" : "expand_more"}
+                                            size="md"
+                                            className="text-on-surface-variant shrink-0 mt-1"
+                                        />
                                     </div>
                                 </button>
 
                                 {/* Expanded content */}
                                 {isExpanded && (
-                                    <div className="px-4 pb-4">
-                                        <div className="prose prose-sm max-w-none text-gray-700 mb-3">
+                                    <div className="px-5 pb-5">
+                                        <div className="prose prose-sm max-w-none text-on-surface-variant mb-4 [&_strong]:text-on-surface [&_h1]:font-headline [&_h2]:font-headline [&_h3]:font-headline">
                                             <ReactMarkdown>{material.markdownContent}</ReactMarkdown>
                                         </div>
-                                        <Link
-                                            href={`/skill/${material.skillSlug}`}
-                                            className="inline-flex items-center gap-1 text-xs text-[#58CC02] font-semibold hover:underline"
-                                        >
-                                            📚 Связанный навык →
-                                        </Link>
+
+                                        <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-outline-variant">
+                                            {/* Tags */}
+                                            <div className="flex gap-2 flex-wrap">
+                                                {material.tags.map((tag) => (
+                                                    <span key={tag} className="text-xs text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                                                        #{tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+
+                                            {/* Related skill link */}
+                                            {material.skillSlug && (
+                                                <Link
+                                                    href={`/skill/${material.skillSlug}`}
+                                                    className="flex items-center gap-1 text-xs text-primary font-semibold hover:underline"
+                                                >
+                                                    <Icon name="school" size="sm" />
+                                                    Связанный навык
+                                                    <Icon name="arrow_forward" size="sm" />
+                                                </Link>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
