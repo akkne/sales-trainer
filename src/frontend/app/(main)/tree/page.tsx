@@ -7,6 +7,7 @@ import { StatsWidget } from "@/components/layout/StatsWidget";
 import { useSkillTree, useSkills } from "@/lib/hooks/useSkillTree";
 import { useLessonsForSkill } from "@/lib/hooks/useLesson";
 import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
+import { Icon } from "@/components/ui/Icon";
 
 // ── Skill lesson view ─────────────────────────────────────────────────────────
 
@@ -22,49 +23,73 @@ function SkillLessonView({
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-20">
-                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
             </div>
         );
     }
 
     const sorted = (lessons ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
     const completedCount = sorted.filter((l) => l.status === "completed").length;
+    const totalCount = sorted.length;
+    const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
     return (
         <>
-            {/* Skill header banner */}
-            <div
-                className="rounded-3xl px-6 py-5 mb-8 text-white"
-                style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #58A700" }}
-            >
-                <div className="flex items-center justify-between">
+            {/* Skill header banner - Hero Card */}
+            <div className="rounded-2xl p-6 mb-8 bg-primary text-on-primary">
+                <div className="flex items-start justify-between mb-4">
                     <div>
-                        <p className="text-sm font-semibold opacity-80 uppercase tracking-wider mb-0.5">
-                            Текущий навык
+                        <p className="text-sm font-medium opacity-80 uppercase tracking-wider mb-1">
+                            Текущий модуль
                         </p>
-                        <h1 className="text-xl font-extrabold">{skillTitle}</h1>
+                        <h1 className="text-2xl font-headline font-bold leading-tight">
+                            {skillTitle}
+                        </h1>
                     </div>
-                    <div className="bg-white/20 rounded-2xl px-3 py-2 text-center shrink-0">
-                        <span className="text-xl font-extrabold">
-                            {completedCount}/{sorted.length}
+                    <Icon name="psychology" size="2xl" className="opacity-50" />
+                </div>
+
+                {/* Progress stats */}
+                <div className="mb-4">
+                    <div className="flex justify-between text-sm mb-2">
+                        <span className="font-medium">
+                            Уровень мастерства {Math.min(5, Math.floor(progressPercent / 20) + 1)}/5
                         </span>
+                        <span className="font-medium">{progressPercent}%</span>
+                    </div>
+                    <div className="h-2 bg-on-primary/30 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-primary-container rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercent}%` }}
+                        />
                     </div>
                 </div>
-                <div className="mt-4 h-2 bg-white/30 rounded-full overflow-hidden">
-                    <div
-                        className="h-full bg-white rounded-full transition-all duration-500"
-                        style={{
-                            width: `${sorted.length > 0 ? (completedCount / sorted.length) * 100 : 0}%`,
-                        }}
-                    />
+
+                {/* Quick stats row */}
+                <div className="flex items-center gap-4">
+                    <div className="bg-on-primary/20 rounded-2xl px-3 py-2 text-center">
+                        <span className="text-lg font-bold">
+                            {completedCount}/{totalCount}
+                        </span>
+                        <p className="text-xs opacity-80">уроков</p>
+                    </div>
+                    <Link
+                        href={`/skill/${skillSlug}/map`}
+                        className="flex items-center gap-2 bg-primary-container text-on-primary-container font-semibold px-5 py-3 rounded-full hover:opacity-90 tonal-transition"
+                    >
+                        Продолжить урок
+                        <Icon name="arrow_forward" size="sm" />
+                    </Link>
                 </div>
             </div>
 
             {sorted.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                    <span className="text-5xl">📭</span>
-                    <p className="text-lg font-extrabold text-gray-800">Уроки ещё не добавлены</p>
-                    <p className="text-sm text-[#AFAFAF] max-w-xs">
+                    <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center">
+                        <Icon name="inbox" size="xl" className="text-on-surface-variant" />
+                    </div>
+                    <p className="text-lg font-bold text-on-surface">Уроки ещё не добавлены</p>
+                    <p className="text-sm text-on-surface-variant max-w-xs">
                         Попроси администратора добавить уроки
                     </p>
                 </div>
@@ -80,18 +105,19 @@ function SkillLessonView({
 function NoSkillSelected() {
     return (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl bg-[#F7F7F7]">
-                👈
+            <div className="w-20 h-20 rounded-full flex items-center justify-center bg-surface-container">
+                <Icon name="touch_app" size="xl" className="text-on-surface-variant" />
             </div>
-            <p className="text-xl font-extrabold text-gray-800">Выбери навык</p>
-            <p className="text-sm text-[#AFAFAF] max-w-xs">
+            <p className="text-xl font-bold text-on-surface">Выбери навык</p>
+            <p className="text-sm text-on-surface-variant max-w-xs">
                 Нажми на навык слева, чтобы увидеть уроки
             </p>
             <Link
                 href="/profile"
-                className="mt-2 text-sm text-[#58CC02] font-semibold hover:underline"
+                className="mt-2 text-sm text-primary font-semibold hover:underline flex items-center gap-1"
             >
-                Добавить навыки в профиле →
+                Добавить навыки в профиле
+                <Icon name="arrow_forward" size="sm" />
             </Link>
         </div>
     );
@@ -122,7 +148,7 @@ function SkillSidebar() {
         return (
             <div className="flex flex-col gap-2 pt-1">
                 {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 rounded-xl bg-[#F7F7F7] animate-pulse" />
+                    <div key={i} className="h-12 rounded-2xl bg-surface-container animate-pulse" />
                 ))}
             </div>
         );
@@ -131,9 +157,9 @@ function SkillSidebar() {
     if (enrolledSkills.length === 0) {
         return (
             <div className="text-center pt-4">
-                <p className="text-xs text-[#AFAFAF] leading-relaxed">
+                <p className="text-xs text-on-surface-variant leading-relaxed">
                     Нет активных навыков.{" "}
-                    <Link href="/profile" className="text-[#58CC02] font-semibold">
+                    <Link href="/profile" className="text-primary font-semibold">
                         Добавь в профиле
                     </Link>
                 </p>
@@ -160,28 +186,30 @@ function SkillSidebar() {
                                 iconName: skill.iconName,
                             })
                         }
-                        className={`w-full flex flex-col gap-0.5 px-3 py-2.5 rounded-xl text-left transition-all ${
+                        className={`w-full flex flex-col gap-1 px-3 py-3 rounded-2xl text-left tonal-transition ${
                             isActive
-                                ? "bg-[#E8F9D6] text-[#3C8400]"
-                                : "text-gray-600 hover:bg-[#F7F7F7]"
+                                ? "bg-primary-container"
+                                : "hover:bg-surface-container"
                         }`}
                     >
                         <div className="flex items-center gap-2">
                             <span
                                 className={`text-sm font-semibold truncate leading-tight flex-1 ${
-                                    isActive ? "text-[#3C8400]" : "text-gray-700"
+                                    isActive ? "text-primary" : "text-on-surface"
                                 }`}
                             >
                                 {skill.title}
                             </span>
                             {isActive && (
-                                <span className="shrink-0 w-2 h-2 rounded-full bg-[#58CC02]" />
+                                <span className="shrink-0 w-2 h-2 rounded-full bg-primary" />
                             )}
                         </div>
                         {/* Mini progress bar */}
-                        <div className="ml-7 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-1 bg-surface-container-highest rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-[#58CC02] rounded-full transition-all"
+                                className={`h-full rounded-full transition-all ${
+                                    isActive ? "bg-primary" : "bg-outline-variant"
+                                }`}
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
@@ -201,14 +229,14 @@ export default function SkillTreePage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
             </div>
         );
     }
 
     if (isError || !skillTreeData) {
         return (
-            <div className="flex items-center justify-center min-h-screen text-gray-500">
+            <div className="flex items-center justify-center min-h-screen text-on-surface-variant">
                 Не удалось загрузить дерево навыков
             </div>
         );
@@ -218,8 +246,8 @@ export default function SkillTreePage() {
         <div className="max-w-5xl mx-auto px-4 py-8 flex gap-6">
             {/* ── Left: skill selector ───────────────────────────────────── */}
             <div className="w-44 hidden md:block shrink-0">
-                <div className="sticky top-8">
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#AFAFAF] mb-3 px-1">
+                <div className="sticky top-20">
+                    <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3 px-1">
                         Навыки
                     </p>
                     <SkillSidebar />
