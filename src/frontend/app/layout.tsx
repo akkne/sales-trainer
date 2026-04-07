@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Lexend, Manrope } from "next/font/google";
+import { Plus_Jakarta_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
-const spaceGrotesk = Space_Grotesk({
-    variable: "--font-space-grotesk",
+const plusJakarta = Plus_Jakarta_Sans({
+    variable: "--font-plus-jakarta",
     subsets: ["latin"],
-});
-
-const lexend = Lexend({
-    variable: "--font-lexend",
-    subsets: ["latin"],
+    weight: ["400", "500", "600", "700"],
 });
 
 const manrope = Manrope({
@@ -20,7 +16,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-    title: "SalesTrainer",
+    title: "SalesMastery",
     description: "Тренажёр навыков продаж",
 };
 
@@ -38,9 +34,16 @@ export default function RootLayout({
     return (
         <html
             lang="ru"
-            className={`${spaceGrotesk.variable} ${lexend.variable} ${manrope.variable} h-full antialiased`}
+            className={`${plusJakarta.variable} ${manrope.variable} h-full antialiased`}
         >
-            <body className="min-h-full flex flex-col bg-white font-[var(--font-manrope)]">
+            <head>
+                {/* Material Symbols Outlined icons */}
+                <link
+                    rel="stylesheet"
+                    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+                />
+            </head>
+            <body className="min-h-full flex flex-col bg-surface font-[var(--font-manrope)]">
                 <AppProviders>{children}</AppProviders>
             </body>
         </html>
