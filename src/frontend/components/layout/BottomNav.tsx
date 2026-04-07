@@ -2,32 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 
 const NAV_ITEMS = [
-    { href: "/tree", icon: "🗺️", label: "Путь" },
-    { href: "/league", icon: "🏆", label: "Лига" },
-    { href: "/guidebook", icon: "📖", label: "Справочник" },
-    { href: "/dialog", icon: "💬", label: "Диалог" },
-    { href: "/profile", icon: "👤", label: "Профиль" },
-];
+    { href: "/tree", icon: "school", label: "Путь" },
+    { href: "/league", icon: "trophy", label: "Лига" },
+    { href: "/guidebook", icon: "menu_book", label: "Справочник" },
+    { href: "/dialog", icon: "forum", label: "Диалог" },
+    { href: "/profile", icon: "person", label: "Профиль" },
+] as const;
 
 export function BottomNav() {
     const currentPathname = usePathname();
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 flex pb-[env(safe-area-inset-bottom)]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-nav border-t border-outline-variant flex pb-[env(safe-area-inset-bottom)]">
             {NAV_ITEMS.map((navItem) => {
                 const isActive = currentPathname.startsWith(navItem.href);
                 return (
                     <Link
                         key={navItem.href}
                         href={navItem.href}
-                        className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${
-                            isActive ? "text-[#58CC02]" : "text-gray-400 hover:text-gray-600"
+                        className={`flex-1 flex flex-col items-center py-3 gap-0.5 tonal-transition ${
+                            isActive
+                                ? "text-primary"
+                                : "text-on-surface-variant hover:text-primary"
                         }`}
                     >
-                        <span className="text-xl">{navItem.icon}</span>
-                        <span className="text-xs font-semibold">{navItem.label}</span>
+                        <Icon
+                            name={navItem.icon}
+                            variant={isActive ? "filled" : "outlined"}
+                            size="md"
+                        />
+                        <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>
+                            {navItem.label}
+                        </span>
                     </Link>
                 );
             })}
