@@ -1,4 +1,4 @@
-е# Frontend Redesign Plan
+# Frontend Redesign Plan
 
 ## Overview
 
