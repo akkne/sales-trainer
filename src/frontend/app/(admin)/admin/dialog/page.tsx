@@ -90,8 +90,8 @@ export default function AdminDialogPage() {
     if (isLoading) {
         return (
             <div className="p-6">
-                <h1 className="text-2xl font-bold mb-6">Dialog Bundles</h1>
-                <p className="text-gray-500">Loading...</p>
+                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">Dialog Bundles</h1>
+                <p className="text-on-surface-variant">Loading...</p>
             </div>
         );
     }
@@ -99,8 +99,8 @@ export default function AdminDialogPage() {
     if (error) {
         return (
             <div className="p-6">
-                <h1 className="text-2xl font-bold mb-6">Dialog Bundles</h1>
-                <p className="text-red-500">Error: {error.message}</p>
+                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">Dialog Bundles</h1>
+                <p className="text-error">Error: {error.message}</p>
             </div>
         );
     }
@@ -108,29 +108,29 @@ export default function AdminDialogPage() {
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Dialog Bundles</h1>
+                <h1 className="font-headline text-xl font-bold text-on-surface">Dialog Bundles</h1>
                 <button
                     onClick={startCreating}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                    className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-primary-dim"
                 >
                     + New Bundle
                 </button>
             </div>
 
             {(isCreating || editingBundleId) && (
-                <div className="mb-6 p-4 border rounded-lg bg-white">
-                    <h2 className="text-lg font-semibold mb-4">
+                <div className="mb-6 p-4 bg-surface-container-lowest rounded-2xl">
+                    <h2 className="text-lg font-headline font-semibold mb-4">
                         {isCreating ? "Create Bundle" : "Edit Bundle"}
                     </h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface mb-1">
                                 Skill
                             </label>
                             <select
                                 value={formData.skillId}
                                 onChange={(changeEvent) => setFormData({ ...formData, skillId: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border rounded-lg"
+                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                             >
                                 <option value="">Select skill...</option>
                                 {skills?.map((skill) => (
@@ -141,48 +141,48 @@ export default function AdminDialogPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface mb-1">
                                 Title
                             </label>
                             <input
                                 type="text"
                                 value={formData.title}
                                 onChange={(changeEvent) => setFormData({ ...formData, title: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border rounded-lg"
+                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                                 placeholder="Холодные звонки"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface mb-1">
                                 Icon Emoji
                             </label>
                             <input
                                 type="text"
                                 value={formData.iconEmoji}
                                 onChange={(changeEvent) => setFormData({ ...formData, iconEmoji: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border rounded-lg"
+                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                                 placeholder="📞"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface mb-1">
                                 Sort Order
                             </label>
                             <input
                                 type="number"
                                 value={formData.sortOrder}
                                 onChange={(changeEvent) => setFormData({ ...formData, sortOrder: parseInt(changeEvent.target.value) || 0 })}
-                                className="w-full px-3 py-2 border rounded-lg"
+                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-on-surface mb-1">
                                 Description
                             </label>
                             <textarea
                                 value={formData.description}
                                 onChange={(changeEvent) => setFormData({ ...formData, description: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border rounded-lg"
+                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
                                 rows={2}
                                 placeholder="Описание бандла..."
                             />
@@ -194,7 +194,7 @@ export default function AdminDialogPage() {
                                     checked={formData.isActive}
                                     onChange={(changeEvent) => setFormData({ ...formData, isActive: changeEvent.target.checked })}
                                 />
-                                <span className="text-sm text-gray-700">Active</span>
+                                <span className="text-sm text-on-surface">Active</span>
                             </label>
                         </div>
                     </div>
@@ -202,13 +202,13 @@ export default function AdminDialogPage() {
                         <button
                             onClick={isCreating ? handleCreate : handleUpdate}
                             disabled={createBundleMutation.isPending || updateBundleMutation.isPending || !formData.skillId}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300"
+                            className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-primary-dim disabled:opacity-40"
                         >
                             {isCreating ? "Create" : "Save"}
                         </button>
                         <button
                             onClick={resetForm}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-surface-container text-on-surface-variant rounded-lg hover:bg-surface-container-high"
                         >
                             Cancel
                         </button>
@@ -216,41 +216,41 @@ export default function AdminDialogPage() {
                 </div>
             )}
 
-            <div className="bg-white rounded-lg border overflow-hidden">
+            <div className="bg-surface-container-lowest rounded-2xl overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-surface-container-low">
                         <tr>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Icon</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Title</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Skill</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Order</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Actions</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Icon</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Title</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Skill</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Order</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-outline-variant">
                         {bundles?.map((bundle) => (
-                            <tr key={bundle.id} className="hover:bg-gray-50">
+                            <tr key={bundle.id} className="hover:bg-surface-container-low">
                                 <td className="px-4 py-3 text-2xl">{bundle.iconEmoji}</td>
                                 <td className="px-4 py-3">
                                     <Link
                                         href={`/admin/dialog/${bundle.id}`}
-                                        className="text-blue-600 hover:underline font-medium"
+                                        className="text-primary hover:underline font-medium"
                                     >
                                         {bundle.title}
                                     </Link>
                                 </td>
-                                <td className="px-4 py-3 text-gray-500 text-sm">
+                                <td className="px-4 py-3 text-on-surface-variant text-sm">
                                     {bundle.skillTitle}
-                                    <span className="text-gray-400 ml-1">({bundle.skillSlug})</span>
+                                    <span className="text-on-surface-variant ml-1">({bundle.skillSlug})</span>
                                 </td>
-                                <td className="px-4 py-3 text-gray-500">{bundle.sortOrder}</td>
+                                <td className="px-4 py-3 text-on-surface-variant">{bundle.sortOrder}</td>
                                 <td className="px-4 py-3">
                                     <span
                                         className={`px-2 py-1 text-xs rounded-full ${
                                             bundle.isActive
-                                                ? "bg-green-100 text-green-800"
-                                                : "bg-gray-100 text-gray-800"
+                                                ? "bg-primary-container text-primary"
+                                                : "bg-surface-container text-on-surface-variant"
                                         }`}
                                     >
                                         {bundle.isActive ? "Active" : "Inactive"}
@@ -260,13 +260,13 @@ export default function AdminDialogPage() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => startEditing(bundle)}
-                                            className="text-blue-600 hover:underline text-sm"
+                                            className="text-primary hover:underline text-sm"
                                         >
                                             Edit
                                         </button>
                                         <button
                                             onClick={() => setDeletingBundleId(bundle.id)}
-                                            className="text-red-600 hover:underline text-sm"
+                                            className="text-error hover:underline text-sm"
                                         >
                                             Delete
                                         </button>
@@ -276,7 +276,7 @@ export default function AdminDialogPage() {
                         ))}
                         {(!bundles || bundles.length === 0) && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                                <td colSpan={6} className="px-4 py-8 text-center text-on-surface-variant">
                                     No bundles yet. Create one to get started.
                                 </td>
                             </tr>
@@ -287,22 +287,22 @@ export default function AdminDialogPage() {
 
             {deletingBundleId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-lg p-6 max-w-sm">
-                        <h3 className="text-lg font-semibold mb-2">Delete Bundle?</h3>
-                        <p className="text-gray-500 mb-4">
+                    <div className="bg-surface-container-lowest rounded-2xl p-6 max-w-sm">
+                        <h3 className="text-lg font-headline font-semibold mb-2">Delete Bundle?</h3>
+                        <p className="text-on-surface-variant mb-4">
                             This will also delete all modes in this bundle. This action cannot be undone.
                         </p>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => handleDelete(deletingBundleId)}
                                 disabled={deleteBundleMutation.isPending}
-                                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-300"
+                                className="px-4 py-2 bg-error text-on-error rounded-lg hover:bg-error disabled:opacity-40"
                             >
                                 Delete
                             </button>
                             <button
                                 onClick={() => setDeletingBundleId(null)}
-                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                className="px-4 py-2 bg-surface-container text-on-surface-variant rounded-lg hover:bg-surface-container-high"
                             >
                                 Cancel
                             </button>

@@ -138,7 +138,7 @@ export default function AdminLessonDetailPage({
     }
 
     if (!lesson) {
-        return <p className="text-sm text-gray-400">Loading lesson...</p>;
+        return <p className="text-sm text-on-surface-variant">Loading lesson...</p>;
     }
 
     return (
@@ -146,20 +146,20 @@ export default function AdminLessonDetailPage({
             <div className="mb-6">
                 <Link
                     href={`/admin/skills/${skillId}`}
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                     ← {lesson.title ? `Back to skill` : "Back"}
                 </Link>
             </div>
 
             {/* Lesson info */}
-            <div className="bg-white border border-gray-200 rounded-lg p-5 mb-8">
+            <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-8">
                 <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-lg font-semibold text-gray-900">{lesson.title}</h1>
+                    <h1 className="text-lg font-semibold text-on-surface">{lesson.title}</h1>
                     {!editLessonMode && (
                         <button
                             onClick={startEditLesson}
-                            className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+                            className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                         >
                             Edit
                         </button>
@@ -169,9 +169,9 @@ export default function AdminLessonDetailPage({
                     <div>
                         <div className="grid grid-cols-2 gap-4">
                             <label className="block col-span-2">
-                                <span className="text-xs text-gray-500">Title</span>
+                                <span className="text-xs text-on-surface-variant">Title</span>
                                 <input
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     value={lessonForm.title}
                                     onChange={(e) =>
                                         setLessonForm({ ...lessonForm, title: e.target.value })
@@ -179,10 +179,10 @@ export default function AdminLessonDetailPage({
                                 />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-gray-500">Sort order</span>
+                                <span className="text-xs text-on-surface-variant">Sort order</span>
                                 <input
                                     type="number"
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     value={lessonForm.sortOrder}
                                     onChange={(e) =>
                                         setLessonForm({
@@ -193,12 +193,12 @@ export default function AdminLessonDetailPage({
                                 />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-gray-500">Difficulty</span>
+                                <span className="text-xs text-on-surface-variant">Difficulty</span>
                                 <input
                                     type="number"
                                     min={1}
                                     max={3}
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     value={lessonForm.difficultyLevel}
                                     onChange={(e) =>
                                         setLessonForm({
@@ -209,10 +209,10 @@ export default function AdminLessonDetailPage({
                                 />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-gray-500">XP reward</span>
+                                <span className="text-xs text-on-surface-variant">XP reward</span>
                                 <input
                                     type="number"
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     value={lessonForm.xpReward}
                                     onChange={(e) =>
                                         setLessonForm({
@@ -227,13 +227,13 @@ export default function AdminLessonDetailPage({
                             <button
                                 onClick={handleSaveLesson}
                                 disabled={updateLesson.isPending}
-                                className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                             >
                                 {updateLesson.isPending ? "Saving..." : "Save"}
                             </button>
                             <button
                                 onClick={() => setEditLessonMode(false)}
-                                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                             >
                                 Cancel
                             </button>
@@ -242,16 +242,16 @@ export default function AdminLessonDetailPage({
                 ) : (
                     <dl className="grid grid-cols-3 gap-3 text-sm">
                         <div>
-                            <dt className="text-xs text-gray-400">Order</dt>
-                            <dd className="text-gray-700">{lesson.sortOrder}</dd>
+                            <dt className="text-xs text-on-surface-variant">Order</dt>
+                            <dd className="text-on-surface">{lesson.sortOrder}</dd>
                         </div>
                         <div>
-                            <dt className="text-xs text-gray-400">Difficulty</dt>
-                            <dd className="text-gray-700">{lesson.difficultyLevel}</dd>
+                            <dt className="text-xs text-on-surface-variant">Difficulty</dt>
+                            <dd className="text-on-surface">{lesson.difficultyLevel}</dd>
                         </div>
                         <div>
-                            <dt className="text-xs text-gray-400">XP reward</dt>
-                            <dd className="text-gray-700">{lesson.xpReward}</dd>
+                            <dt className="text-xs text-on-surface-variant">XP reward</dt>
+                            <dd className="text-on-surface">{lesson.xpReward}</dd>
                         </div>
                     </dl>
                 )}
@@ -259,17 +259,17 @@ export default function AdminLessonDetailPage({
 
             {/* Exercises */}
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-gray-800">Exercises</h2>
+                <h2 className="text-base font-semibold text-on-surface">Exercises</h2>
                 <div className="flex gap-2">
                     <Link
                         href={`/admin/skills/${skillId}/lessons/${lessonId}/exercises`}
-                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-500 transition-colors"
+                        className="px-3 py-1.5 text-sm bg-secondary text-on-secondary rounded-md hover:bg-secondary/90 transition-colors"
                     >
                         Edit Exercises
                     </Link>
                     <button
                         onClick={() => setShowExForm((v) => !v)}
-                        className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
+                        className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
                     >
                         {showExForm ? "Cancel" : "+ New exercise"}
                     </button>
@@ -277,12 +277,12 @@ export default function AdminLessonDetailPage({
             </div>
 
             {showExForm && (
-                <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
+                <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-4">
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <label className="block">
-                            <span className="text-xs text-gray-500">Type</span>
+                            <span className="text-xs text-on-surface-variant">Type</span>
                             <select
-                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={exType}
                                 onChange={(e) => {
                                     setExType(e.target.value);
@@ -303,21 +303,21 @@ export default function AdminLessonDetailPage({
                             </select>
                         </label>
                         <label className="block">
-                            <span className="text-xs text-gray-500">Sort order</span>
+                            <span className="text-xs text-on-surface-variant">Sort order</span>
                             <input
                                 type="number"
-                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={exSortOrder}
                                 onChange={(e) => setExSortOrder(Number(e.target.value))}
                             />
                         </label>
                     </div>
                     <label className="block">
-                        <span className="text-xs text-gray-500">Content (JSON)</span>
+                        <span className="text-xs text-on-surface-variant">Content (JSON)</span>
                         <textarea
                             rows={10}
-                            className={`mt-1 w-full border rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400 ${
-                                jsonError ? "border-red-400" : "border-gray-300"
+                            className={`mt-1 w-full border rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary ${
+                                jsonError ? "border-error" : "border-outline-variant"
                             }`}
                             value={exContentJson}
                             onChange={(e) => {
@@ -326,13 +326,13 @@ export default function AdminLessonDetailPage({
                             }}
                         />
                         {jsonError && (
-                            <p className="mt-1 text-xs text-red-500">{jsonError}</p>
+                            <p className="mt-1 text-xs text-error">{jsonError}</p>
                         )}
                     </label>
                     <button
                         onClick={handleCreateExercise}
                         disabled={createExercise.isPending}
-                        className="mt-4 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                        className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createExercise.isPending ? "Saving..." : "Create exercise"}
                     </button>
@@ -340,23 +340,23 @@ export default function AdminLessonDetailPage({
             )}
 
             {isLoading ? (
-                <p className="text-sm text-gray-400">Loading...</p>
+                <p className="text-sm text-on-surface-variant">Loading...</p>
             ) : exercises.length === 0 ? (
-                <p className="text-sm text-gray-400">No exercises yet.</p>
+                <p className="text-sm text-on-surface-variant">No exercises yet.</p>
             ) : (
                 <div className="space-y-3">
                     {exercises.map((ex) => (
                         <div
                             key={ex.id}
-                            className="bg-white border border-gray-200 rounded-lg p-4"
+                            className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-4"
                         >
                             {editExerciseId === ex.id ? (
                                 <div>
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <label className="block">
-                                            <span className="text-xs text-gray-500">Type</span>
+                                            <span className="text-xs text-on-surface-variant">Type</span>
                                             <select
-                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                                 value={editExType}
                                                 onChange={(e) => setEditExType(e.target.value)}
                                             >
@@ -368,12 +368,12 @@ export default function AdminLessonDetailPage({
                                             </select>
                                         </label>
                                         <label className="block">
-                                            <span className="text-xs text-gray-500">
+                                            <span className="text-xs text-on-surface-variant">
                                                 Sort order
                                             </span>
                                             <input
                                                 type="number"
-                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                                 value={editExSortOrder}
                                                 onChange={(e) =>
                                                     setEditExSortOrder(Number(e.target.value))
@@ -382,15 +382,15 @@ export default function AdminLessonDetailPage({
                                         </label>
                                     </div>
                                     <label className="block">
-                                        <span className="text-xs text-gray-500">
+                                        <span className="text-xs text-on-surface-variant">
                                             Content (JSON)
                                         </span>
                                         <textarea
                                             rows={10}
-                                            className={`mt-1 w-full border rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400 ${
+                                            className={`mt-1 w-full border rounded-md px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary ${
                                                 editJsonError
-                                                    ? "border-red-400"
-                                                    : "border-gray-300"
+                                                    ? "border-error"
+                                                    : "border-outline-variant"
                                             }`}
                                             value={editExJson}
                                             onChange={(e) => {
@@ -399,7 +399,7 @@ export default function AdminLessonDetailPage({
                                             }}
                                         />
                                         {editJsonError && (
-                                            <p className="mt-1 text-xs text-red-500">
+                                            <p className="mt-1 text-xs text-error">
                                                 {editJsonError}
                                             </p>
                                         )}
@@ -408,13 +408,13 @@ export default function AdminLessonDetailPage({
                                         <button
                                             onClick={handleSaveExercise}
                                             disabled={updateExercise.isPending}
-                                            className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                                            className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                                         >
                                             {updateExercise.isPending ? "Saving..." : "Save"}
                                         </button>
                                         <button
                                             onClick={() => setEditExerciseId(null)}
-                                            className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                            className="px-3 py-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -424,21 +424,21 @@ export default function AdminLessonDetailPage({
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
+                                            <span className="text-xs bg-surface-container text-on-surface-variant px-2 py-0.5 rounded font-mono">
                                                 {ex.type}
                                             </span>
-                                            <span className="text-xs text-gray-400">
+                                            <span className="text-xs text-on-surface-variant">
                                                 order: {ex.sortOrder}
                                             </span>
                                         </div>
-                                        <pre className="text-xs text-gray-500 font-mono overflow-x-auto whitespace-pre-wrap line-clamp-3">
+                                        <pre className="text-xs text-on-surface-variant font-mono overflow-x-auto whitespace-pre-wrap line-clamp-3">
                                             {JSON.stringify(ex.content, null, 2)}
                                         </pre>
                                     </div>
                                     <div className="flex gap-2 shrink-0">
                                         <button
                                             onClick={() => startEditExercise(ex)}
-                                            className="text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                                         >
                                             Edit
                                         </button>
@@ -449,13 +449,13 @@ export default function AdminLessonDetailPage({
                                                         deleteExercise.mutate(ex.id);
                                                         setConfirmDeleteExId(null);
                                                     }}
-                                                    className="text-xs text-red-600 hover:underline"
+                                                    className="text-xs text-error hover:underline"
                                                 >
                                                     Confirm
                                                 </button>
                                                 <button
                                                     onClick={() => setConfirmDeleteExId(null)}
-                                                    className="text-xs text-gray-400 hover:underline"
+                                                    className="text-xs text-on-surface-variant hover:underline"
                                                 >
                                                     Cancel
                                                 </button>
@@ -463,7 +463,7 @@ export default function AdminLessonDetailPage({
                                         ) : (
                                             <button
                                                 onClick={() => setConfirmDeleteExId(ex.id)}
-                                                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                                                className="text-xs text-on-surface-variant hover:text-error transition-colors"
                                             >
                                                 Delete
                                             </button>

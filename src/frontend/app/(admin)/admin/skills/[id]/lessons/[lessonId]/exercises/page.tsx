@@ -63,11 +63,11 @@ function typeLabel(type: string): string {
 
 function typeBadgeColor(type: string): string {
     const colors: Record<string, string> = {
-        multiple_choice: "bg-blue-100 text-blue-700",
-        fill_blank: "bg-green-100 text-green-700",
-        open_question: "bg-purple-100 text-purple-700",
+        multiple_choice: "bg-tertiary-container text-tertiary",
+        fill_blank: "bg-primary-container text-primary",
+        open_question: "bg-secondary-container text-secondary",
     };
-    return colors[type] ?? "bg-gray-100 text-gray-600";
+    return colors[type] ?? "bg-surface-container text-on-surface-variant";
 }
 
 // --- Sortable exercise list drag helpers ---
@@ -97,8 +97,8 @@ function MultipleChoiceEditor({ content, onChange }: {
     content: MultipleChoiceContent;
     onChange: (c: MultipleChoiceContent) => void;
 }) {
-    const inputCls = "mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";
-    const labelCls = "text-xs text-gray-500";
+    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+    const labelCls = "text-xs text-on-surface-variant";
 
     return (
         <div className="space-y-3">
@@ -132,7 +132,7 @@ function MultipleChoiceEditor({ content, onChange }: {
                         />
                     </div>
                 ))}
-                <span className="text-[10px] text-gray-400 mt-1 block">
+                <span className="text-[10px] text-on-surface-variant mt-1 block">
                     Radio button marks the correct answer
                 </span>
             </div>
@@ -149,8 +149,8 @@ function FillBlankEditor({ content, onChange }: {
     content: FillBlankContent;
     onChange: (c: FillBlankContent) => void;
 }) {
-    const inputCls = "mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";
-    const labelCls = "text-xs text-gray-500";
+    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+    const labelCls = "text-xs text-on-surface-variant";
 
     return (
         <div className="space-y-3">
@@ -184,7 +184,7 @@ function FillBlankEditor({ content, onChange }: {
                         />
                     </div>
                 ))}
-                <span className="text-[10px] text-gray-400 mt-1 block">
+                <span className="text-[10px] text-on-surface-variant mt-1 block">
                     Radio button marks the correct answer
                 </span>
             </div>
@@ -201,8 +201,8 @@ function OpenQuestionEditor({ content, onChange }: {
     content: OpenQuestionContent;
     onChange: (c: OpenQuestionContent) => void;
 }) {
-    const inputCls = "mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";
-    const labelCls = "text-xs text-gray-500";
+    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+    const labelCls = "text-xs text-on-surface-variant";
 
     return (
         <div className="space-y-3">
@@ -259,9 +259,9 @@ export default function AdminLessonExercisesPage({
 
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const inputCls = "mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400";
-    const labelCls = "text-xs text-gray-500";
-    const cardCls = "bg-white border border-gray-200 rounded-lg p-4";
+    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+    const labelCls = "text-xs text-on-surface-variant";
+    const cardCls = "bg-surface-container-lowest border border-outline-variant rounded-2xl p-4";
 
     async function saveExercise(row: ExerciseRow) {
         if (row.id) {
@@ -331,27 +331,27 @@ export default function AdminLessonExercisesPage({
             <div className="mb-6">
                 <Link
                     href={`/admin/skills/${skillId}/lessons/${lessonId}`}
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                     ← Back to lesson
                 </Link>
             </div>
 
             <div className="flex items-center justify-between mb-4">
-                <h1 className="text-lg font-semibold text-gray-900">Edit Exercises</h1>
+                <h1 className="text-lg font-semibold text-on-surface">Edit Exercises</h1>
                 <button
                     onClick={addExercise}
-                    className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
+                    className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
                 >
                     + Add exercise
                 </button>
             </div>
 
             {rows.length === 0 && !isLoading && (
-                <p className="text-sm text-gray-400">No exercises yet. Click "+ Add exercise" to create one.</p>
+                <p className="text-sm text-on-surface-variant">No exercises yet. Click "+ Add exercise" to create one.</p>
             )}
 
-            {isLoading && <p className="text-sm text-gray-400">Loading...</p>}
+            {isLoading && <p className="text-sm text-on-surface-variant">Loading...</p>}
 
             <div className="space-y-4">
                 {rows.map((row, index) => {
@@ -366,7 +366,7 @@ export default function AdminLessonExercisesPage({
                                         <button
                                             disabled={index === 0}
                                             onClick={() => setRows(moveExercise(rows, index, index - 1))}
-                                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs leading-none"
+                                            className="text-on-surface-variant hover:text-on-surface disabled:opacity-30 text-xs leading-none"
                                             title="Move up"
                                         >
                                             ▲
@@ -374,7 +374,7 @@ export default function AdminLessonExercisesPage({
                                         <button
                                             disabled={index === rows.length - 1}
                                             onClick={() => setRows(moveExercise(rows, index, index + 1))}
-                                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 text-xs leading-none"
+                                            className="text-on-surface-variant hover:text-on-surface disabled:opacity-30 text-xs leading-none"
                                             title="Move down"
                                         >
                                             ▼
@@ -383,20 +383,20 @@ export default function AdminLessonExercisesPage({
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor(row.type)}`}>
                                         {typeLabel(row.type)}
                                     </span>
-                                    <span className="text-xs text-gray-400">order: {row.sortOrder}</span>
+                                    <span className="text-xs text-on-surface-variant">order: {row.sortOrder}</span>
                                 </div>
                                 {!isEditing && (
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => setEditingId(row.id ?? "__new__")}
-                                            className="text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                                         >
                                             Edit
                                         </button>
                                         {row.id && (
                                             <button
                                                 onClick={() => deleteRow(row.id)}
-                                                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                                className="text-xs text-error hover:text-error transition-colors"
                                             >
                                                 Delete
                                             </button>
@@ -441,7 +441,7 @@ export default function AdminLessonExercisesPage({
                                         <button
                                             onClick={async () => await saveExercise(row)}
                                             disabled={isLoadingMut}
-                                            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                                            className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                                         >
                                             {isLoadingMut ? "Saving..." : (row.id ? "Save changes" : "Create")}
                                         </button>
@@ -458,14 +458,14 @@ export default function AdminLessonExercisesPage({
                                                     }
                                                     setEditingId(null);
                                                 }}
-                                                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                                             >
                                                 Cancel
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={() => setRows(rows.filter((r) => r.id !== null))}
-                                                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                                             >
                                                 Remove
                                             </button>
@@ -473,7 +473,7 @@ export default function AdminLessonExercisesPage({
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-xs text-gray-500 font-mono">
+                                <p className="text-xs text-on-surface-variant font-mono">
                                     {renderContentPreview(row)}
                                 </p>
                             )}

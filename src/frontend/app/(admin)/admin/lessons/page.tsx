@@ -16,9 +16,9 @@ type SortDir = "asc" | "desc";
 const DIFFICULTY_LABELS: Record<number, string> = { 1: "Easy", 2: "Medium", 3: "Hard" };
 
 function difficultyColor(d: number) {
-    if (d === 1) return "text-green-600 bg-green-50 border-green-200";
-    if (d === 2) return "text-yellow-700 bg-yellow-50 border-yellow-200";
-    return "text-red-600 bg-red-50 border-red-200";
+    if (d === 1) return "text-primary bg-primary-container border-primary-container";
+    if (d === 2) return "text-tertiary bg-tertiary-container border-tertiary-container";
+    return "text-error bg-error-container border-error-container";
 }
 
 interface AddFormState {
@@ -147,8 +147,8 @@ export default function LessonsPage() {
     }
 
     function SortIcon({ col }: { col: SortKey }) {
-        if (sortKey !== col) return <span className="ml-1 text-gray-300">↕</span>;
-        return <span className="ml-1 text-gray-600">{sortDir === "asc" ? "↑" : "↓"}</span>;
+        if (sortKey !== col) return <span className="ml-1 text-outline-variant">↕</span>;
+        return <span className="ml-1 text-on-surface-variant">{sortDir === "asc" ? "↑" : "↓"}</span>;
     }
 
     const sortedSkills = [...skills].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -157,12 +157,12 @@ export default function LessonsPage() {
         <div className="max-w-5xl">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Lessons</h1>
-                    <p className="text-sm text-gray-500 mt-0.5">{lessons.length} total</p>
+                    <h1 className="text-xl font-semibold text-on-surface">Lessons</h1>
+                    <p className="text-sm text-on-surface-variant mt-0.5">{lessons.length} total</p>
                 </div>
                 <button
                     onClick={() => { setShowAdd(v => !v); setAddError(""); }}
-                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
+                    className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
                 >
                     {showAdd ? "Cancel" : "+ Add lesson"}
                 </button>
@@ -170,13 +170,13 @@ export default function LessonsPage() {
 
             {/* Add form */}
             {showAdd && (
-                <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-                    <h2 className="text-sm font-medium text-gray-700 mb-4">New lesson</h2>
+                <div className="bg-surface-container-lowest rounded-2xl p-5 mb-5">
+                    <h2 className="text-sm font-medium text-on-surface mb-4">New lesson</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="col-span-2">
-                            <label className="block text-xs text-gray-500 mb-1">Skill</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">Skill</label>
                             <select
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="w-full border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={addForm.skillId}
                                 onChange={e => setAddForm(f => ({ ...f, skillId: e.target.value }))}
                             >
@@ -187,36 +187,36 @@ export default function LessonsPage() {
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs text-gray-500 mb-1">Title</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">Title</label>
                             <input
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="w-full border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={addForm.title}
                                 onChange={e => setAddForm(f => ({ ...f, title: e.target.value }))}
                                 placeholder="Lesson title"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Sort order</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">Sort order</label>
                             <input
                                 type="number" min={1}
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="w-full border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={addForm.sortOrder}
                                 onChange={e => setAddForm(f => ({ ...f, sortOrder: e.target.value }))}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">XP reward</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">XP reward</label>
                             <input
                                 type="number" min={0}
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="w-full border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={addForm.xpReward}
                                 onChange={e => setAddForm(f => ({ ...f, xpReward: e.target.value }))}
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 mb-1">Difficulty</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">Difficulty</label>
                             <select
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="w-full border-outline-variant rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={addForm.difficultyLevel}
                                 onChange={e => setAddForm(f => ({ ...f, difficultyLevel: e.target.value }))}
                             >
@@ -226,11 +226,11 @@ export default function LessonsPage() {
                             </select>
                         </div>
                     </div>
-                    {addError && <p className="text-xs text-red-500 mb-3">{addError}</p>}
+                    {addError && <p className="text-xs text-error mb-3">{addError}</p>}
                     <button
                         onClick={handleAdd}
                         disabled={createLesson.isPending}
-                        className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-40 transition-colors"
                     >
                         {createLesson.isPending ? "Saving…" : "Save"}
                     </button>
@@ -238,20 +238,20 @@ export default function LessonsPage() {
             )}
 
             {/* Filters */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-surface-container-lowest rounded-2xl p-4 mb-4 flex flex-wrap gap-3 items-end">
                 <div>
-                    <label className="block text-xs text-gray-500 mb-1">Search</label>
+                    <label className="block text-xs text-on-surface-variant mb-1">Search</label>
                     <input
-                        className="border border-gray-300 rounded px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                        className="border-outline-variant rounded px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-primary"
                         placeholder="Title or skill…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
                 </div>
                 <div>
-                    <label className="block text-xs text-gray-500 mb-1">Skill</label>
+                    <label className="block text-xs text-on-surface-variant mb-1">Skill</label>
                     <select
-                        className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                        className="border-outline-variant rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                         value={filterSkillId}
                         onChange={e => setFilterSkillId(e.target.value)}
                     >
@@ -262,7 +262,7 @@ export default function LessonsPage() {
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs text-gray-500 mb-1">Difficulty</label>
+                    <label className="block text-xs text-on-surface-variant mb-1">Difficulty</label>
                     <div className="flex gap-1">
                         {([0, 1, 2, 3] as const).map(d => (
                             <button
@@ -270,8 +270,8 @@ export default function LessonsPage() {
                                 onClick={() => setFilterDifficulty(d)}
                                 className={`px-3 py-1.5 text-xs rounded border transition-colors ${
                                     filterDifficulty === d
-                                        ? "bg-gray-900 text-white border-gray-900"
-                                        : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                                        ? "bg-primary text-on-primary border-primary"
+                                        : "border-outline-variant text-on-surface-variant hover:bg-surface-container-low"
                                 }`}
                             >
                                 {d === 0 ? "All" : DIFFICULTY_LABELS[d]}
@@ -282,24 +282,24 @@ export default function LessonsPage() {
                 {(filterSkillId || filterDifficulty || search) && (
                     <button
                         onClick={() => { setFilterSkillId(""); setFilterDifficulty(0); setSearch(""); }}
-                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors pb-1.5"
+                        className="text-xs text-on-surface-variant hover:text-on-surface transition-colors pb-1.5"
                     >
                         Clear filters
                     </button>
                 )}
-                <span className="text-xs text-gray-400 ml-auto pb-1.5">{filtered.length} shown</span>
+                <span className="text-xs text-on-surface-variant ml-auto pb-1.5">{filtered.length} shown</span>
             </div>
 
             {/* Table */}
             {isLoading ? (
-                <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
+                <p className="text-sm text-on-surface-variant py-8 text-center">Loading…</p>
             ) : filtered.length === 0 ? (
-                <p className="text-sm text-gray-400 py-8 text-center">No lessons found.</p>
+                <p className="text-sm text-on-surface-variant py-8 text-center">No lessons found.</p>
             ) : (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-surface-container-lowest rounded-2xl overflow-hidden">
                     <table className="w-full text-sm border-collapse">
                         <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
+                            <tr className="border-b border-outline-variant bg-surface-container-low">
                                 {([
                                     ["skillTitle", "Skill"],
                                     ["title", "Title"],
@@ -309,27 +309,27 @@ export default function LessonsPage() {
                                 ] as [SortKey, string][]).map(([key, label]) => (
                                     <th
                                         key={key}
-                                        className="text-left py-2.5 px-4 text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
+                                        className="text-left py-2.5 px-4 text-xs font-medium text-on-surface-variant cursor-pointer hover:text-on-surface select-none"
                                         onClick={() => toggleSort(key)}
                                     >
                                         {label}<SortIcon col={key} />
                                     </th>
                                 ))}
-                                <th className="py-2.5 px-4 text-xs font-medium text-gray-500 text-right">Actions</th>
+                                <th className="py-2.5 px-4 text-xs font-medium text-on-surface-variant text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filtered.map(lesson => (
-                                <tr key={lesson.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <tr key={lesson.id} className="border-b border-surface-container hover:bg-surface-container-low">
                                     {editState?.lessonId === lesson.id ? (
                                         <>
                                             <td className="py-2 px-4">
-                                                <span className="text-xs text-gray-500 font-mono">{lesson.skillIcon}</span>
-                                                <span className="text-xs text-gray-400 ml-1">· {lesson.skillTitle}</span>
+                                                <span className="text-xs text-on-surface-variant font-mono">{lesson.skillIcon}</span>
+                                                <span className="text-xs text-on-surface-variant ml-1">· {lesson.skillTitle}</span>
                                             </td>
                                             <td className="py-2 px-4">
                                                 <input
-                                                    className="border border-gray-300 rounded px-2 py-1 text-xs w-full focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                    className="border-outline-variant rounded px-2 py-1 text-xs w-full focus:outline-none focus:ring-1 focus:ring-primary"
                                                     value={editState.title}
                                                     onChange={e => setEditState(s => s && ({ ...s, title: e.target.value }))}
                                                 />
@@ -337,14 +337,14 @@ export default function LessonsPage() {
                                             <td className="py-2 px-4">
                                                 <input
                                                     type="number" min={1}
-                                                    className="border border-gray-300 rounded px-2 py-1 text-xs w-16 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                    className="border-outline-variant rounded px-2 py-1 text-xs w-16 focus:outline-none focus:ring-1 focus:ring-primary"
                                                     value={editState.sortOrder}
                                                     onChange={e => setEditState(s => s && ({ ...s, sortOrder: e.target.value }))}
                                                 />
                                             </td>
                                             <td className="py-2 px-4">
                                                 <select
-                                                    className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                    className="border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                                                     value={editState.difficultyLevel}
                                                     onChange={e => setEditState(s => s && ({ ...s, difficultyLevel: e.target.value }))}
                                                 >
@@ -356,24 +356,24 @@ export default function LessonsPage() {
                                             <td className="py-2 px-4">
                                                 <input
                                                     type="number" min={0}
-                                                    className="border border-gray-300 rounded px-2 py-1 text-xs w-16 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                    className="border-outline-variant rounded px-2 py-1 text-xs w-16 focus:outline-none focus:ring-1 focus:ring-primary"
                                                     value={editState.xpReward}
                                                     onChange={e => setEditState(s => s && ({ ...s, xpReward: e.target.value }))}
                                                 />
                                             </td>
                                             <td className="py-2 px-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    {editError && <span className="text-xs text-red-500">{editError}</span>}
+                                                    {editError && <span className="text-xs text-error">{editError}</span>}
                                                     <button
                                                         onClick={handleUpdate}
                                                         disabled={updateLesson.isPending}
-                                                        className="text-xs px-3 py-1 bg-gray-900 text-white rounded hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                                                        className="text-xs px-3 py-1 bg-primary text-on-primary rounded hover:bg-primary-dim disabled:opacity-40 transition-colors"
                                                     >
                                                         {updateLesson.isPending ? "Saving…" : "Save"}
                                                     </button>
                                                     <button
                                                         onClick={() => setEditState(null)}
-                                                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                                        className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                                                     >
                                                         Cancel
                                                     </button>
@@ -383,28 +383,28 @@ export default function LessonsPage() {
                                     ) : (
                                         <>
                                             <td className="py-2.5 px-4">
-                                                <span className="text-xs font-mono text-gray-500">{lesson.skillIcon}</span>
-                                                <span className="text-xs text-gray-400 ml-1">· {lesson.skillTitle}</span>
+                                                <span className="text-xs font-mono text-on-surface-variant">{lesson.skillIcon}</span>
+                                                <span className="text-xs text-on-surface-variant ml-1">· {lesson.skillTitle}</span>
                                             </td>
-                                            <td className="py-2.5 px-4 text-gray-800">{lesson.title}</td>
-                                            <td className="py-2.5 px-4 text-gray-500">{lesson.sortOrder}</td>
+                                            <td className="py-2.5 px-4 text-on-surface">{lesson.title}</td>
+                                            <td className="py-2.5 px-4 text-on-surface-variant">{lesson.sortOrder}</td>
                                             <td className="py-2.5 px-4">
                                                 <span className={`text-xs px-2 py-0.5 rounded border font-medium ${difficultyColor(lesson.difficultyLevel)}`}>
                                                     {DIFFICULTY_LABELS[lesson.difficultyLevel] ?? lesson.difficultyLevel}
                                                 </span>
                                             </td>
-                                            <td className="py-2.5 px-4 text-gray-500">{lesson.xpReward}</td>
+                                            <td className="py-2.5 px-4 text-on-surface-variant">{lesson.xpReward}</td>
                                             <td className="py-2.5 px-4 text-right">
                                                 <div className="flex items-center justify-end gap-3">
                                                     <button
                                                         onClick={() => startEdit(lesson)}
-                                                        className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                                                        className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                                                     >
                                                         Edit
                                                     </button>
                                                     <button
                                                         onClick={() => setDeleteConfirm(lesson)}
-                                                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                                        className="text-xs text-error hover:text-error transition-colors"
                                                     >
                                                         Delete
                                                     </button>
@@ -422,26 +422,26 @@ export default function LessonsPage() {
             {/* Delete confirm modal */}
             {deleteConfirm && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg border border-gray-200 p-6 w-96 shadow-lg">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-2">Delete lesson?</h3>
-                        <p className="text-sm text-gray-500 mb-1">
-                            <span className="font-medium text-gray-700">{deleteConfirm.title}</span>
+                    <div className="bg-surface-container-lowest rounded-2xl p-6 w-96 shadow-lg">
+                        <h3 className="text-sm font-semibold text-on-surface mb-2">Delete lesson?</h3>
+                        <p className="text-sm text-on-surface-variant mb-1">
+                            <span className="font-medium text-on-surface">{deleteConfirm.title}</span>
                         </p>
-                        <p className="text-xs text-gray-400 mb-5">
+                        <p className="text-xs text-on-surface-variant mb-5">
                             Skill: {deleteConfirm.skillIcon} · {deleteConfirm.skillTitle}.
                             All exercises in this lesson will also be deleted.
                         </p>
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 transition-colors"
+                                className="px-4 py-2 text-sm border border-outline-variant rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleDelete}
                                 disabled={deleteLesson.isPending}
-                                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-40 transition-colors"
+                                className="px-4 py-2 text-sm bg-error text-on-error rounded-md hover:bg-error/90 disabled:opacity-40 transition-colors"
                             >
                                 {deleteLesson.isPending ? "Deleting…" : "Delete"}
                             </button>

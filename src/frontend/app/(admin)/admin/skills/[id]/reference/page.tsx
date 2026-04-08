@@ -63,57 +63,57 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
             <div className="mb-6">
                 <Link
                     href={`/admin/skills/${skillId}`}
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                 >
                     ← Back to skill
                 </Link>
             </div>
 
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-xl font-semibold text-gray-900">Reference materials</h1>
+                <h1 className="text-xl font-semibold text-on-surface">Reference materials</h1>
                 <button
                     onClick={() => setShowForm((v) => !v)}
-                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 transition-colors"
+                    className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
                 >
                     {showForm ? "Cancel" : "+ New material"}
                 </button>
             </div>
 
             {showForm && (
-                <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 mb-6">
                     <div className="space-y-4">
                         <label className="block">
-                            <span className="text-xs text-gray-500">Title</span>
+                            <span className="text-xs text-on-surface-variant">Title</span>
                             <input
-                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={form.title}
                                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                             />
                         </label>
                         <div className="flex gap-3">
                             <label className="block flex-1">
-                                <span className="text-xs text-gray-500">Category</span>
+                                <span className="text-xs text-on-surface-variant">Category</span>
                                 <input
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     placeholder="e.g. objections"
                                     value={form.category ?? ""}
                                     onChange={(e) => setForm({ ...form, category: e.target.value || null })}
                                 />
                             </label>
                             <label className="block flex-1">
-                                <span className="text-xs text-gray-500">Tags (comma-separated)</span>
+                                <span className="text-xs text-on-surface-variant">Tags (comma-separated)</span>
                                 <input
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     placeholder="e.g. rapport,discovery"
                                     value={form.tags ?? ""}
                                     onChange={(e) => setForm({ ...form, tags: e.target.value || null })}
                                 />
                             </label>
                             <label className="block w-28">
-                                <span className="text-xs text-gray-500">Sort order</span>
+                                <span className="text-xs text-on-surface-variant">Sort order</span>
                                 <input
                                     type="number"
-                                    className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                     value={form.sortOrder}
                                     onChange={(e) =>
                                         setForm({ ...form, sortOrder: Number(e.target.value) })
@@ -122,10 +122,10 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                             </label>
                         </div>
                         <label className="block">
-                            <span className="text-xs text-gray-500">Content (Markdown)</span>
+                            <span className="text-xs text-on-surface-variant">Content (Markdown)</span>
                             <textarea
                                 rows={12}
-                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={form.markdownContent}
                                 onChange={(e) =>
                                     setForm({ ...form, markdownContent: e.target.value })
@@ -136,7 +136,7 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                     <button
                         onClick={handleCreate}
                         disabled={createMaterial.isPending || !form.title}
-                        className="mt-4 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                        className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createMaterial.isPending ? "Saving..." : "Create"}
                     </button>
@@ -144,22 +144,22 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
             )}
 
             {isLoading ? (
-                <p className="text-sm text-gray-400">Loading...</p>
+                <p className="text-sm text-on-surface-variant">Loading...</p>
             ) : materials.length === 0 ? (
-                <p className="text-sm text-gray-400">No reference materials yet.</p>
+                <p className="text-sm text-on-surface-variant">No reference materials yet.</p>
             ) : (
                 <div className="space-y-4">
                     {materials.map((m) => (
                         <div
                             key={m.id}
-                            className="bg-white border border-gray-200 rounded-lg p-5"
+                            className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5"
                         >
                             {editId === m.id ? (
                                 <div className="space-y-4">
                                     <label className="block">
-                                        <span className="text-xs text-gray-500">Title</span>
+                                        <span className="text-xs text-on-surface-variant">Title</span>
                                         <input
-                                            className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                            className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                             value={editForm.title}
                                             onChange={(e) =>
                                                 setEditForm({ ...editForm, title: e.target.value })
@@ -168,26 +168,26 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                     </label>
                                     <div className="flex gap-3">
                                         <label className="block flex-1">
-                                            <span className="text-xs text-gray-500">Category</span>
+                                            <span className="text-xs text-on-surface-variant">Category</span>
                                             <input
-                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                                 value={editForm.category ?? ""}
                                                 onChange={(e) => setEditForm({ ...editForm, category: e.target.value || null })}
                                             />
                                         </label>
                                         <label className="block flex-1">
-                                            <span className="text-xs text-gray-500">Tags (comma-separated)</span>
+                                            <span className="text-xs text-on-surface-variant">Tags (comma-separated)</span>
                                             <input
-                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                                 value={editForm.tags ?? ""}
                                                 onChange={(e) => setEditForm({ ...editForm, tags: e.target.value || null })}
                                             />
                                         </label>
                                         <label className="block w-28">
-                                            <span className="text-xs text-gray-500">Sort order</span>
+                                            <span className="text-xs text-on-surface-variant">Sort order</span>
                                             <input
                                                 type="number"
-                                                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                                 value={editForm.sortOrder}
                                                 onChange={(e) =>
                                                     setEditForm({
@@ -199,12 +199,12 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                         </label>
                                     </div>
                                     <label className="block">
-                                        <span className="text-xs text-gray-500">
+                                        <span className="text-xs text-on-surface-variant">
                                             Content (Markdown)
                                         </span>
                                         <textarea
                                             rows={12}
-                                            className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                            className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                                             value={editForm.markdownContent}
                                             onChange={(e) =>
                                                 setEditForm({
@@ -218,13 +218,13 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                         <button
                                             onClick={handleSave}
                                             disabled={updateMaterial.isPending}
-                                            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                                            className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                                         >
                                             {updateMaterial.isPending ? "Saving..." : "Save"}
                                         </button>
                                         <button
                                             onClick={() => setEditId(null)}
-                                            className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                            className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -234,17 +234,17 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                 <div>
                                     <div className="flex items-center justify-between mb-3">
                                         <div>
-                                            <h3 className="font-medium text-gray-800">
+                                            <h3 className="font-medium text-on-surface">
                                                 {m.title}
                                             </h3>
-                                            <span className="text-xs text-gray-400">
+                                            <span className="text-xs text-on-surface-variant">
                                                 order: {m.sortOrder}
                                             </span>
                                         </div>
                                         <div className="flex gap-3">
                                             <button
                                                 onClick={() => startEdit(m)}
-                                                className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+                                                className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
                                             >
                                                 Edit
                                             </button>
@@ -255,13 +255,13 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                                             deleteMaterial.mutate(m.id);
                                                             setConfirmDeleteId(null);
                                                         }}
-                                                        className="text-sm text-red-600 hover:underline"
+                                                        className="text-sm text-error hover:underline"
                                                     >
                                                         Confirm
                                                     </button>
                                                     <button
                                                         onClick={() => setConfirmDeleteId(null)}
-                                                        className="text-sm text-gray-400 hover:underline"
+                                                        className="text-sm text-on-surface-variant hover:underline"
                                                     >
                                                         Cancel
                                                     </button>
@@ -269,14 +269,14 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
                                             ) : (
                                                 <button
                                                     onClick={() => setConfirmDeleteId(m.id)}
-                                                    className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+                                                    className="text-sm text-on-surface-variant hover:text-error transition-colors"
                                                 >
                                                     Delete
                                                 </button>
                                             )}
                                         </div>
                                     </div>
-                                    <pre className="text-xs text-gray-500 font-mono whitespace-pre-wrap line-clamp-4 bg-gray-50 rounded p-3">
+                                    <pre className="text-xs text-on-surface-variant font-mono whitespace-pre-wrap line-clamp-4 bg-surface-container-low rounded p-3">
                                         {m.markdownContent}
                                     </pre>
                                 </div>

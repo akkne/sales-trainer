@@ -5,6 +5,18 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store/authStore";
 import { clientLogger } from "@/lib/clientLogger";
+import { Icon } from "@/components/ui/Icon";
+
+const NAV_ICONS: Record<string, string> = {
+    "/admin/skills": "psychology",
+    "/admin/lessons": "menu_book",
+    "/admin/reference": "library_books",
+    "/admin/dialog": "forum",
+    "/admin/open-question": "quiz",
+    "/admin/seeder": "upload_file",
+    "/admin/content": "download",
+    "/admin/users": "group",
+};
 
 export default function AdminLayout({
     children,
@@ -59,7 +71,7 @@ export default function AdminLayout({
 
     if (accessToken && !authenticatedUser) {
         return (
-            <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
+            <div className="min-h-screen flex items-center justify-center text-on-surface-variant text-sm bg-surface">
                 Loading...
             </div>
         );
@@ -87,38 +99,44 @@ export default function AdminLayout({
     ];
 
     return (
-        <div className="min-h-screen flex bg-gray-50">
-            <aside className="w-52 shrink-0 bg-white border-r border-gray-200 flex flex-col">
-                <div className="px-5 py-4 border-b border-gray-200">
-                    <span className="font-semibold text-gray-800 text-sm">Admin Panel</span>
-                    <span className="block text-xs text-gray-400 mt-0.5">
+        <div className="min-h-screen flex bg-surface">
+            <aside className="w-56 shrink-0 bg-surface-container-lowest flex flex-col">
+                <div className="px-5 py-4">
+                    <span className="font-headline font-bold text-on-surface text-sm">Admin Panel</span>
+                    <span className="block text-xs text-on-surface-variant mt-0.5">
                         {authenticatedUser.role}
                     </span>
                 </div>
-                <nav className="flex-1 py-3">
+                <nav className="flex-1 py-2 px-2 space-y-0.5">
                     {navItems.map((item) => {
                         const isActive = pathname.startsWith(item.href);
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`block px-5 py-2.5 text-sm transition-colors ${
+                                className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-colors ${
                                     isActive
-                                        ? "bg-gray-100 text-gray-900 font-medium"
-                                        : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                                        ? "bg-primary-container text-primary font-medium"
+                                        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                                 }`}
                             >
+                                <Icon
+                                    name={NAV_ICONS[item.href] ?? "circle"}
+                                    size="sm"
+                                    variant={isActive ? "filled" : "outlined"}
+                                />
                                 {item.label}
                             </Link>
                         );
                     })}
                 </nav>
-                <div className="px-5 py-4 border-t border-gray-200">
+                <div className="px-5 py-4">
                     <Link
                         href="/tree"
-                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                        className="flex items-center gap-2 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                     >
-                        ← Back to app
+                        <Icon name="arrow_back" size="sm" />
+                        Back to app
                     </Link>
                 </div>
             </aside>
