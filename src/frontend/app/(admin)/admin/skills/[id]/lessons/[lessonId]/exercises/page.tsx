@@ -252,7 +252,7 @@ export default function AdminLessonExercisesPage({
             id: ex.id,
             type: ex.type as ExerciseType,
             sortOrder: ex.sortOrder,
-            content: ex.content as ExerciseRow["content"],
+            content: ex.content as unknown as ExerciseRow["content"],
         }));
         setRows(mapped);
     }, [exercises]);
@@ -267,13 +267,13 @@ export default function AdminLessonExercisesPage({
         if (row.id) {
             await updateExerciseMut.mutateAsync({
                 exerciseId: row.id,
-                body: { type: row.type, sortOrder: row.sortOrder, content: row.content as Record<string, unknown> },
+                body: { type: row.type, sortOrder: row.sortOrder, content: row.content as unknown as Record<string, unknown> },
             });
         } else {
             await createMut.mutateAsync({
                 type: row.type,
                 sortOrder: row.sortOrder,
-                content: row.content as Record<string, unknown>,
+                content: row.content as unknown as Record<string, unknown>,
             });
         }
         setEditingId(null);
@@ -452,7 +452,7 @@ export default function AdminLessonExercisesPage({
                                                     const orig = exercises.find((ex) => ex.id === row.id);
                                                     if (orig) {
                                                         setRows(rows.map((r, ri) => ri === index
-                                                            ? { id: orig.id, type: orig.type as ExerciseType, sortOrder: orig.sortOrder, content: orig.content as ExerciseRow["content"] }
+                                                            ? { id: orig.id, type: orig.type as ExerciseType, sortOrder: orig.sortOrder, content: orig.content as unknown as ExerciseRow["content"] }
                                                             : r
                                                         ));
                                                     }

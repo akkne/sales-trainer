@@ -1,4 +1,4 @@
-# Frontend Redesign Plan
+е# Frontend Redesign Plan
 
 ## Overview
 
@@ -370,26 +370,51 @@ From design "Admin: Skills Management":
 ## Phase 12: Shared Components
 
 ### 12.1 Buttons
-Create standardized button variants:
-- [ ] Primary: `bg-primary text-on-primary rounded-full`
-- [ ] Secondary: Ghost style, no bg, `text-primary`
-- [ ] Tertiary: `bg-surface-container-high text-on-surface`
-- [ ] Disabled: `opacity-60 cursor-not-allowed`
+Created: `src/frontend/components/ui/Button.tsx`
+- [x] Primary: `bg-primary text-on-primary rounded-full`
+- [x] Secondary: `bg-secondary-container` for secondary actions
+- [x] Tertiary: `bg-surface-container-high text-on-surface`
+- [x] Ghost: Transparent with `text-primary`
+- [x] Error: `bg-error` for destructive actions
+- [x] Disabled: `opacity-60 cursor-not-allowed`
+- [x] IconButton variant for icon-only buttons
+- [x] Loading state with spinner
 
 ### 12.2 Form Inputs
-- [ ] Default: `bg-surface-container-low` no border
-- [ ] Focus: 2px `primary` bottom underline or outer glow
+Created: `src/frontend/components/ui/Input.tsx`
+- [x] TextInput: `bg-surface-container-low` with focus ring
+- [x] SearchInput: Rounded-full with search icon
+- [x] Textarea: Multi-line input
+- [x] Select: Dropdown with custom chevron
+- [x] Toggle: Switch component
+- [x] Checkbox: Checkbox with custom styling
+- [x] InputWrapper: Label, error, hint support
 
 ### 12.3 Progress Bars
-- [ ] Track: `bg-surface-variant` 
-- [ ] Fill: `bg-tertiary` (or primary for some contexts)
-- [ ] Height: 12px, `rounded-full`
+Created: `src/frontend/components/ui/Progress.tsx`
+- [x] ProgressBar: Linear progress with variants
+- [x] CircularProgress: SVG-based circular indicator
+- [x] StepProgress: Multi-step form progress
+- [x] ProgressSkeleton: Loading state
 
 ### 12.4 Cards
-- [ ] No borders — use surface color shifts
-- [ ] `rounded-DEFAULT` (1rem) or `rounded-lg` (2rem)
-- [ ] `p-6` internal padding (32px)
-- [ ] Hover: subtle shadow or bg shift
+Created: `src/frontend/components/ui/Card.tsx`
+- [x] Card: Base component with surface variants
+- [x] CardHeader: Title, subtitle, icon, action
+- [x] CardContent: Content area
+- [x] CardFooter: Actions area
+- [x] StatCard: Metrics display
+- [x] CardSkeleton: Loading state
+
+### 12.5 Common Components
+Created: `src/frontend/components/ui/Common.tsx`
+- [x] Badge: Status indicators and labels
+- [x] StatusBadge: Badge with icon
+- [x] NotificationDot: Indicator dot
+- [x] Avatar: Profile images with initials fallback
+- [x] AvatarGroup: Stacked avatars
+- [x] Divider: Visual separator
+- [x] Chip: Filter pills and tags
 
 ---
 
