@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { DialogFeedback } from "@/lib/hooks/useDialog";
+import { Icon } from "@/components/ui/Icon";
 
 interface FeedbackModalProps {
     feedback: DialogFeedback;
@@ -23,92 +24,76 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
     }, [onClose]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/50 p-4">
+            <div className="bg-surface-container-lowest rounded-2xl max-w-lg w-full max-h-[80vh] flex flex-col shadow-xl">
+                {/* Header */}
+                <div className="p-6 border-b border-outline-variant flex items-center justify-between">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800">
-                            Обратная связь
-                        </h2>
+                        <div className="flex items-center gap-2 mb-2">
+                            <Icon name="assignment" size="md" className="text-primary" />
+                            <h2 className="text-xl font-headline font-bold text-on-surface">
+                                Обратная связь
+                            </h2>
+                        </div>
                         {feedback.xpEarned > 0 && (
-                            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-[#58CC02]/10 rounded-full">
-                                <span className="text-[#58CC02] font-bold">+{feedback.xpEarned} XP</span>
-                                <span className="text-gray-500 text-sm">заработано</span>
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-container rounded-full">
+                                <Icon name="bolt" size="sm" className="text-primary" />
+                                <span className="text-primary font-bold">+{feedback.xpEarned} XP</span>
+                                <span className="text-on-primary-container text-sm">заработано</span>
                             </div>
                         )}
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-2xl text-gray-400 hover:text-gray-600 transition-colors"
+                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
                         aria-label="Закрыть"
                     >
-                        &times;
+                        <Icon name="close" size="md" className="text-on-surface-variant" />
                     </button>
                 </div>
 
+                {/* Content */}
                 <div className="p-6 overflow-y-auto flex-1">
                     <div
-                        className="prose prose-sm max-w-none text-gray-700 [&>strong]:font-bold [&>strong]:text-gray-800"
+                        className="prose prose-sm max-w-none text-on-surface-variant [&>strong]:font-bold [&>strong]:text-on-surface"
                         dangerouslySetInnerHTML={{ __html: feedback.summary }}
                     />
 
                     {!isExpanded && feedback.content !== feedback.summary && (
                         <button
                             onClick={() => setIsExpanded(true)}
-                            className="mt-4 flex items-center gap-2 text-[#58CC02] hover:text-[#4CAD02] font-medium transition-colors"
+                            className="mt-4 flex items-center gap-2 text-primary hover:text-primary-dim font-medium tonal-transition"
                         >
                             <span>Подробнее</span>
-                            <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 9l-7 7-7-7"
-                                />
-                            </svg>
+                            <Icon name="expand_more" size="sm" />
                         </button>
                     )}
 
                     {isExpanded && (
                         <>
-                            <div className="my-4 border-t border-gray-100" />
+                            <div className="my-4 border-t border-outline-variant" />
                             <div
-                                className="prose prose-sm max-w-none text-gray-700 [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-gray-800 [&>h3]:mt-4 [&>h3]:mb-2 [&>h3:first-child]:mt-0 [&>ul]:my-2 [&>ul]:pl-5 [&>p]:my-2 [&_strong]:font-bold [&_strong]:text-gray-800 [&_em]:italic [&_em]:text-gray-600"
+                                className="prose prose-sm max-w-none text-on-surface-variant [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-on-surface [&>h3]:mt-4 [&>h3]:mb-2 [&>h3:first-child]:mt-0 [&>ul]:my-2 [&>ul]:pl-5 [&>p]:my-2 [&_strong]:font-bold [&_strong]:text-on-surface [&_em]:italic [&_em]:text-on-surface-variant"
                                 dangerouslySetInnerHTML={{ __html: feedback.content }}
                             />
                             <button
                                 onClick={() => setIsExpanded(false)}
-                                className="mt-4 flex items-center gap-2 text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                                className="mt-4 flex items-center gap-2 text-on-surface-variant hover:text-on-surface font-medium tonal-transition"
                             >
                                 <span>Свернуть</span>
-                                <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M5 15l7-7 7 7"
-                                    />
-                                </svg>
+                                <Icon name="expand_less" size="sm" />
                             </button>
                         </>
                     )}
                 </div>
 
-                <div className="p-6 border-t border-gray-100">
+                {/* Footer */}
+                <div className="p-6 border-t border-outline-variant">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] transition-colors"
+                        className="w-full py-3 bg-primary text-on-primary font-bold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
                     >
+                        <Icon name="add" size="sm" />
                         Новый диалог
                     </button>
                 </div>

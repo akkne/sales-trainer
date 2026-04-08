@@ -274,15 +274,24 @@ New Design (from "Dialog Selection"):
 
 - [x] Redesign with icon badge, status pill, progress bar, CTA
 
-### 8.3 Voice Practice Page
+### 8.3 Voice Practice Page ✅
 **File:** `src/frontend/app/dialog/[bundleId]/[modeId]/page.tsx`
 
 New Design (from "Voice Practice: Balanced Controls"):
-- [ ] Timer display top-center
-- [ ] Persona card with avatar, name, title, difficulty badge
-- [ ] Status bar: "Listening to your response..."
-- [ ] Control buttons: mic, close, end session, hint, script
-- [ ] Objectives sidebar panel: Session objectives list with completion states
+- [x] Timer display top-center
+- [x] Persona card with avatar, name, title, difficulty badge
+- [x] Status bar: "Listening to your response..."
+- [x] Control buttons: mic, close, end session, hint, script
+- [x] Session history sidebar redesigned
+
+### 8.4 Dialog Components Redesigned ✅
+**Files:**
+- `src/frontend/components/dialog/ChatMessage.tsx` - Chat bubbles with avatars
+- `src/frontend/components/dialog/ChatInput.tsx` - Rounded input with send button
+- `src/frontend/components/dialog/VoiceMicButton.tsx` - Voice controls with design system
+- `src/frontend/components/dialog/SessionHistorySidebar.tsx` - History sidebar
+- `src/frontend/components/dialog/FeedbackModal.tsx` - Feedback modal
+- `src/frontend/components/dialog/DeleteConfirmModal.tsx` - Delete confirmation
 
 ---
 

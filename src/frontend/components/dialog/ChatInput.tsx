@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 interface ChatInputProps {
     onSend: (content: string) => void;
@@ -20,22 +21,28 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
         setInputValue("");
     };
 
+    const canSend = !disabled && inputValue.trim().length > 0;
+
     return (
-        <form onSubmit={handleSubmit} className="flex gap-4">
+        <form onSubmit={handleSubmit} className="flex gap-3">
             <input
                 type="text"
                 value={inputValue}
                 onChange={(changeEvent) => setInputValue(changeEvent.target.value)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-2xl focus:border-[#58CC02] focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                className="flex-1 px-4 py-3 bg-surface-container-low text-on-surface placeholder-on-surface-variant rounded-full border-2 border-transparent focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed tonal-transition"
             />
             <button
                 type="submit"
-                disabled={disabled || !inputValue.trim()}
-                className="px-8 py-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                disabled={!canSend}
+                className={`w-12 h-12 rounded-full flex items-center justify-center tonal-transition ${
+                    canSend
+                        ? "bg-primary text-on-primary shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1"
+                        : "bg-surface-container-high text-on-surface-variant cursor-not-allowed"
+                }`}
             >
-                →
+                <Icon name="send" size="md" />
             </button>
         </form>
     );

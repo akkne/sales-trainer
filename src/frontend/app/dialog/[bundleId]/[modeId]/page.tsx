@@ -21,6 +21,13 @@ import { ChatInput } from "@/components/dialog/ChatInput";
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
 import { SessionHistorySidebar } from "@/components/dialog/SessionHistorySidebar";
 import { VoiceMicButton } from "@/components/dialog/VoiceMicButton";
+import { Icon } from "@/components/ui/Icon";
+
+function formatTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
 
 export default function ChatPage() {
     const params = useParams();
@@ -49,8 +56,36 @@ export default function ChatPage() {
     const [showSidebar, setShowSidebar] = useState(true);
     const [isInitialized, setIsInitialized] = useState(false);
     const [voiceError, setVoiceError] = useState<string | null>(null);
+    const [sessionTimer, setSessionTimer] = useState(0);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Session timer
+    useEffect(() => {
+        if (sessionId && !isEnded && !feedback) {
+            timerRef.current = setInterval(() => {
+                setSessionTimer((prev) => prev + 1);
+            }, 1000);
+        } else {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        }
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+            }
+        };
+    }, [sessionId, isEnded, feedback]);
+
+    // Reset timer on new session
+    useEffect(() => {
+        if (sessionId) {
+            setSessionTimer(0);
+        }
+    }, [sessionId]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,6 +214,13 @@ export default function ChatPage() {
         router.push("/dialog");
     };
 
+    const handleEndSession = () => {
+        if (sessionId && !isEnded) {
+            setIsEnded(true);
+            autoCompleteSession(sessionId);
+        }
+    };
+
     const [isSessionCompleted, setIsSessionCompleted] = useState(false);
     const [sessionFeedbackData, setSessionFeedbackData] = useState<DialogFeedback | null>(null);
 
@@ -290,9 +332,12 @@ export default function ChatPage() {
         onError: handleVoiceError,
     });
 
+    const isVoiceMode = chatMode === "voice" && currentMode?.voiceEnabled && isVoiceAvailable;
+
+    // Loading state
     if (isLoading && !sessionId && !isInitialized) {
         return (
-            <div className="flex h-screen bg-white">
+            <div className="flex h-screen bg-surface">
                 {showSidebar && (
                     <SessionHistorySidebar
                         sessions={filteredSessions}
@@ -304,26 +349,27 @@ export default function ChatPage() {
                     />
                 )}
                 <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-100">
+                    <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
                         <button
                             onClick={() => setShowSidebar(!showSidebar)}
-                            className="text-gray-400 hover:text-gray-600 md:hidden"
+                            className="text-on-surface-variant hover:text-on-surface tonal-transition md:hidden"
                         >
-                            ☰
+                            <Icon name="menu" size="md" />
                         </button>
-                        <h1 className="font-bold text-gray-800">Загрузка...</h1>
+                        <h1 className="font-headline font-bold text-on-surface">Загрузка...</h1>
                     </header>
                     <div className="flex-1 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#58CC02]" />
+                        <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
                     </div>
                 </div>
             </div>
         );
     }
 
+    // Error state
     if (error && !sessionId) {
         return (
-            <div className="flex h-screen bg-white">
+            <div className="flex h-screen bg-surface">
                 {showSidebar && (
                     <SessionHistorySidebar
                         sessions={filteredSessions}
@@ -335,14 +381,17 @@ export default function ChatPage() {
                     />
                 )}
                 <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-100">
-                        <h1 className="font-bold text-gray-800">Ошибка</h1>
+                    <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
+                        <h1 className="font-headline font-bold text-on-surface">Ошибка</h1>
                     </header>
                     <div className="flex-1 flex flex-col items-center justify-center p-4">
-                        <p className="text-red-500 text-center mb-4">{error}</p>
+                        <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-4">
+                            <Icon name="error" size="xl" className="text-error" />
+                        </div>
+                        <p className="text-error text-center mb-6 font-medium">{error}</p>
                         <button
                             onClick={handleClose}
-                            className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-2xl hover:bg-gray-300"
+                            className="px-6 py-3 bg-surface-container text-on-surface font-semibold rounded-full hover:bg-surface-container-high tonal-transition"
                         >
                             Вернуться
                         </button>
@@ -353,7 +402,7 @@ export default function ChatPage() {
     }
 
     return (
-        <div className="flex h-screen bg-white">
+        <div className="flex h-screen bg-surface">
             {showSidebar && (
                 <SessionHistorySidebar
                     sessions={filteredSessions}
@@ -366,29 +415,96 @@ export default function ChatPage() {
             )}
 
             <div className="flex-1 flex flex-col">
-                <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                {/* Header */}
+                <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
                     <button
                         onClick={() => setShowSidebar(!showSidebar)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-on-surface-variant hover:text-on-surface tonal-transition"
                     >
-                        ☰
+                        <Icon name="menu" size="md" />
                     </button>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="font-bold text-gray-800 truncate">
-                            {currentMode?.title || "Диалог"}
-                        </h1>
-                        {currentBundle && (
-                            <p className="text-xs text-gray-500">{currentBundle.title}</p>
-                        )}
+
+                    {/* Persona card */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
+                            <Icon name="psychology" size="md" className="text-secondary" />
+                        </div>
+                        <div className="min-w-0">
+                            <h1 className="font-semibold text-on-surface truncate text-sm">
+                                {currentMode?.title || "AI Собеседник"}
+                            </h1>
+                            <p className="text-xs text-on-surface-variant truncate">
+                                {currentBundle?.title || "Тренировка диалога"}
+                            </p>
+                        </div>
                     </div>
+
+                    {/* Timer */}
+                    {sessionId && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant">
+                            <Icon name="timer" size="sm" />
+                            <span className="text-sm font-mono font-medium tabular-nums">
+                                {formatTime(sessionTimer)}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* End session button */}
+                    {sessionId && !isEnded && !feedback && (
+                        <button
+                            onClick={handleEndSession}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error-container text-error text-sm font-medium hover:opacity-90 tonal-transition"
+                        >
+                            <Icon name="stop_circle" size="sm" />
+                            Завершить
+                        </button>
+                    )}
+
+                    {/* Close button */}
+                    <button
+                        onClick={handleClose}
+                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
+                    >
+                        <Icon name="close" size="md" className="text-on-surface-variant" />
+                    </button>
                 </header>
 
+                {/* Status bar */}
+                {(isSending || isCompleting || voiceState !== "idle") && (
+                    <div className="px-4 py-2 bg-surface-container-low border-b border-outline-variant">
+                        <p className="text-sm text-on-surface-variant text-center flex items-center justify-center gap-2">
+                            {isCompleting && (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    Формируем обратную связь...
+                                </>
+                            )}
+                            {isSending && !isCompleting && (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    AI думает...
+                                </>
+                            )}
+                            {voiceState === "listening" && "🎙️ Слушаю..."}
+                            {voiceState === "speaking" && "🗣️ Говорите..."}
+                            {voiceState === "processing" && "⏳ Обработка речи..."}
+                            {voiceState === "playing" && "🔊 AI отвечает..."}
+                        </p>
+                    </div>
+                )}
+
+                {/* Messages area */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {!sessionId && messages.length === 0 && (
                         <div className="flex-1 flex items-center justify-center h-full">
-                            <div className="text-center text-gray-400">
-                                <p className="mb-2">Представьтесь и скажите свой опеннер</p>
-                                <p className="text-sm">Вы звоните клиенту — начните разговор первым</p>
+                            <div className="text-center max-w-sm">
+                                <div className="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center mx-auto mb-4">
+                                    <Icon name="call" size="xl" className="text-primary" />
+                                </div>
+                                <p className="font-semibold text-on-surface mb-2">Начните разговор</p>
+                                <p className="text-sm text-on-surface-variant">
+                                    Представьтесь и скажите свой опеннер — вы звоните клиенту первым
+                                </p>
                             </div>
                         </div>
                     )}
@@ -399,75 +515,74 @@ export default function ChatPage() {
 
                     {isSending && (
                         <div className="flex justify-start">
-                            <div className="bg-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm">
+                            <div className="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center mr-2">
+                                <Icon name="psychology" size="sm" className="text-secondary" />
+                            </div>
+                            <div className="bg-surface-container px-4 py-3 rounded-2xl rounded-tl-sm">
                                 <div className="flex gap-1">
-                                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.1s]" />
-                                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce" />
+                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce [animation-delay:0.1s]" />
+                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce [animation-delay:0.2s]" />
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {error && sessionId && (
-                        <div className="text-center text-red-500 text-sm py-2">
-                            {error}
+                        <div className="flex justify-center">
+                            <div className="bg-error-container text-error text-sm px-4 py-2 rounded-full flex items-center gap-2">
+                                <Icon name="error" size="sm" />
+                                {error}
+                            </div>
                         </div>
                     )}
 
                     <div ref={messagesEndRef} />
                 </div>
 
-                <div className="flex-shrink-0 p-4 border-t border-gray-100 pb-[env(safe-area-inset-bottom)]">
-                    {isCompleting && (
-                        <div className="text-center text-sm text-gray-500 mb-3">
-                            Формируем обратную связь...
-                        </div>
-                    )}
-
+                {/* Input area */}
+                <div className="flex-shrink-0 p-4 border-t border-outline-variant bg-surface-container-lowest pb-[env(safe-area-inset-bottom)]">
                     {voiceError && (
-                        <div className="text-center text-red-500 text-sm mb-3">
+                        <div className="text-center text-error text-sm mb-3 flex items-center justify-center gap-2">
+                            <Icon name="error" size="sm" />
                             {voiceError}
                         </div>
                     )}
 
                     {currentTranscript && (
-                        <div className="text-center text-gray-500 text-sm mb-3 italic">
-                            {currentTranscript}
+                        <div className="text-center text-on-surface-variant text-sm mb-3 italic bg-surface-container rounded-full px-4 py-2">
+                            "{currentTranscript}"
                         </div>
                     )}
 
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
                         <button
                             onClick={handleShowFeedback}
-                            className="w-full py-3 mb-3 bg-[#58CC02] text-white font-bold rounded-2xl hover:bg-[#4CAD02] transition-colors"
+                            className="w-full py-3 mb-3 bg-primary text-on-primary font-bold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
                         >
+                            <Icon name="assignment" size="sm" />
                             Показать обратную связь
                         </button>
                     )}
 
-                    <div className="flex items-center gap-4">
-                        {/* Voice mode: show only mic button */}
-                        {chatMode === "voice" && currentMode?.voiceEnabled && isVoiceAvailable ? (
-                            <div className="flex-1 flex justify-center">
-                                <VoiceMicButton
-                                    state={voiceState}
-                                    isAvailable={isVoiceAvailable}
-                                    onStart={startVoice}
-                                    onStop={stopVoice}
-                                />
-                            </div>
-                        ) : (
-                            /* Text-only mode: show only text input */
-                            <div className="flex-1">
-                                <ChatInput
-                                    onSend={handleSendMessage}
-                                    disabled={isSending || isCompleting || isEnded || !!feedback}
-                                    placeholder={isEnded || feedback ? "Диалог завершён" : "Ваш опеннер..."}
-                                />
-                            </div>
-                        )}
-                    </div>
+                    {/* Voice mode controls */}
+                    {isVoiceMode ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <VoiceMicButton
+                                state={voiceState}
+                                isAvailable={isVoiceAvailable}
+                                onStart={startVoice}
+                                onStop={stopVoice}
+                            />
+                        </div>
+                    ) : (
+                        /* Text mode input */
+                        <ChatInput
+                            onSend={handleSendMessage}
+                            disabled={isSending || isCompleting || isEnded || !!feedback}
+                            placeholder={isEnded || feedback ? "Диалог завершён" : "Введите сообщение..."}
+                        />
+                    )}
                 </div>
             </div>
 

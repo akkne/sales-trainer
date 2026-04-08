@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 interface DeleteConfirmModalProps {
     onConfirm: () => void;
@@ -20,37 +21,44 @@ export function DeleteConfirmModal({ onConfirm, onCancel }: DeleteConfirmModalPr
     }, [onCancel]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-2xl max-w-sm w-full">
-                <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-gray-800">Удалить чат?</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/50 p-4">
+            <div className="bg-surface-container-lowest rounded-2xl max-w-sm w-full shadow-xl">
+                {/* Header */}
+                <div className="p-5 border-b border-outline-variant flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Icon name="delete" size="md" className="text-error" />
+                        <h3 className="text-lg font-headline font-bold text-on-surface">Удалить чат?</h3>
+                    </div>
                     <button
                         onClick={onCancel}
-                        className="text-2xl text-gray-400 hover:text-gray-600 transition-colors"
+                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
                         aria-label="Закрыть"
                     >
-                        &times;
+                        <Icon name="close" size="md" className="text-on-surface-variant" />
                     </button>
                 </div>
 
-                <div className="p-4">
-                    <p className="text-gray-600 text-sm">
+                {/* Content */}
+                <div className="p-5">
+                    <p className="text-on-surface-variant text-sm">
                         Вы точно хотите удалить этот чат? Это действие нельзя отменить.
                     </p>
                 </div>
 
-                <div className="p-4 border-t border-gray-100 flex gap-3">
+                {/* Footer */}
+                <div className="p-5 border-t border-outline-variant flex gap-3">
                     <button
                         onClick={onCancel}
-                        className="flex-1 py-2 px-4 border-2 border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+                        className="flex-1 py-2.5 px-4 bg-surface-container-high text-on-surface font-semibold rounded-full hover:bg-surface-container-highest tonal-transition"
                     >
-                        Отклонить
+                        Отмена
                     </button>
                     <button
                         onClick={onConfirm}
-                        className="flex-1 py-2 px-4 bg-red-500 text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
+                        className="flex-1 py-2.5 px-4 bg-error text-on-error font-semibold rounded-full shadow-[0_4px_0_var(--color-red-shadow)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
                     >
-                        Подтвердить
+                        <Icon name="delete" size="sm" />
+                        Удалить
                     </button>
                 </div>
             </div>
