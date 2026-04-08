@@ -1,5 +1,10 @@
 # Frontend Redesign Plan
 
+## Status: COMPLETE
+
+> **Design source:** Sales Training Platform (Stitch Project ID: 7882200878184662893)
+> **Last reviewed:** 2026-04-08
+
 ## Overview
 
 Full frontend redesign based on the **Sales Training Platform** design from Stitch (Project ID: 7882200878184662893).
