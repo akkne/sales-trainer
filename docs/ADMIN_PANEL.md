@@ -26,7 +26,7 @@ Policies are registered in `Program.cs`. Controllers use `[Authorize(Policy = "R
 ## Seeding the first SuperAdmin
 
 On application startup (`Program.cs`), a default superadmin is upserted if no superadmin exists:
-- Email: from env var `SUPERADMIN_EMAIL` (default `admin@salestrainer.local`)
+- Email: from env var `SUPERADMIN_EMAIL` (default `admin@sallevate.local`)
 - Password: from env var `SUPERADMIN_PASSWORD` (default `Admin123!`)
 
 Change these in production via environment variables.

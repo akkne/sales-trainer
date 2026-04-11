@@ -11,8 +11,6 @@ public class VoiceConfigController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IVoicerTtsService _voicerTtsService;
 
-    private const string PlaceholderDeepgramKey = "REPLACE_WITH_DEEPGRAM_API_KEY";
-
     public VoiceConfigController(
         IConfiguration configuration,
         IVoicerTtsService voicerTtsService)
@@ -30,12 +28,8 @@ public class VoiceConfigController : ControllerBase
         var dailyLimitMinutes = _configuration.GetValue("Voice:DailyLimitMinutes", 30);
         var monthlyLimitMinutes = _configuration.GetValue("Voice:MonthlyLimitMinutes", 300);
 
-        var deepgramApiKey = _configuration["Deepgram:ApiKey"];
-        var deepgramConfigured = !string.IsNullOrWhiteSpace(deepgramApiKey) &&
-                                  deepgramApiKey != PlaceholderDeepgramKey &&
-                                  !deepgramApiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
-
-        var isEnabled = voiceEnabled && deepgramConfigured && _voicerTtsService.IsConfigured;
+        // Voice is enabled if TTS is configured (STT uses browser's Web Speech API)
+        var isEnabled = voiceEnabled && _voicerTtsService.IsConfigured;
 
         return Ok(new VoiceConfigDto
         {
@@ -44,31 +38,6 @@ public class VoiceConfigController : ControllerBase
             MaxRecordingSeconds = maxRecordingSeconds,
             DailyLimitMinutes = dailyLimitMinutes,
             MonthlyLimitMinutes = monthlyLimitMinutes,
-            Deepgram = new DeepgramConfigDto
-            {
-                Configured = deepgramConfigured,
-                Model = _configuration["Deepgram:Model"] ?? "nova-3",
-                Language = _configuration["Deepgram:Language"] ?? "ru",
-                SmartFormat = _configuration.GetValue("Deepgram:SmartFormat", true),
-                Punctuate = _configuration.GetValue("Deepgram:Punctuate", true)
-            }
         });
-    }
-
-    [HttpGet("deepgram-key")]
-    public ActionResult<object> GetDeepgramKey()
-    {
-        var deepgramApiKey = _configuration["Deepgram:ApiKey"];
-        var deepgramConfigured = !string.IsNullOrWhiteSpace(deepgramApiKey) &&
-                                  deepgramApiKey != PlaceholderDeepgramKey &&
-                                  !deepgramApiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
-
-        if (!deepgramConfigured)
-        {
-            return StatusCode(503, new { error = "Deepgram is not configured" });
-        }
-
-        // Return key for frontend WebSocket connection
-        return Ok(new { apiKey = deepgramApiKey });
     }
 }

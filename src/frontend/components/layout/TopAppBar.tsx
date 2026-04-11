@@ -30,7 +30,7 @@ export function TopAppBar() {
                 className="flex items-center gap-2 font-headline font-bold text-lg text-primary"
             >
                 <Icon name="psychology" size="md" className="text-primary" />
-                SalesMastery
+                Sallevate
             </Link>
 
             {/* Navigation links */}

@@ -36,14 +36,14 @@ In `lib/logger.ts`, the pino transport is built once at module load. With `outpu
 ### Backend (Serilog → Loki)
 | Label | Value |
 |-------|-------|
-| `service` | `salestrainer-backend` |
+| `service` | `sallevate-backend` |
 | `env` | `Development` / `Production` |
 | `RequestId` | per-request correlation ID (from Serilog context) |
 
 ### Frontend server (pino-loki)
 | Label | Value |
 |-------|-------|
-| `service` | `salestrainer-frontend` |
+| `service` | `sallevate-frontend` |
 | `env` | `development` / `production` |
 
 ### Frontend browser (via /api/logs)
@@ -53,32 +53,32 @@ Same as frontend server labels + `source: "browser"` in log fields.
 
 ```logql
 # All errors from any service
-{service=~"salestrainer-.+"} |= "Error" or level = "error"
+{service=~"sallevate-.+"} |= "Error" or level = "error"
 
 # Backend errors only
-{service="salestrainer-backend"} | json | level = "Error"
+{service="sallevate-backend"} | json | level = "Error"
 
 # Frontend browser errors
-{service="salestrainer-frontend"} | json | source = "browser" | level >= 50
+{service="sallevate-frontend"} | json | source = "browser" | level >= 50
 
 # Logs for a specific request
-{service="salestrainer-backend"} | json | RequestId = "<id>"
+{service="sallevate-backend"} | json | RequestId = "<id>"
 
 # Rate of log lines per minute by service
-rate({service=~"salestrainer-.+"}[1m])
+rate({service=~"sallevate-.+"}[1m])
 ```
 
 ## PromQL Quick Reference
 
 ```promql
 # HTTP request rate (all)
-rate(http_requests_received_total{job="salestrainer-backend"}[1m])
+rate(http_requests_received_total{job="sallevate-backend"}[1m])
 
 # p95 latency
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="salestrainer-backend"}[5m]))
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="sallevate-backend"}[5m]))
 
 # Error rate (5xx)
-rate(http_requests_received_total{job="salestrainer-backend", code=~"5.."}[1m])
+rate(http_requests_received_total{job="sallevate-backend", code=~"5.."}[1m])
 ```
 
 ## Access URLs (local docker-compose)

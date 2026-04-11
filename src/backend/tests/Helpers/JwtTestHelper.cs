@@ -9,8 +9,8 @@ namespace SalesTrainer.Tests.Helpers;
 public static class JwtTestHelper
 {
     public const string JwtKey = "integration-test-signing-key-32-chars!!";
-    public const string JwtIssuer = "salestrainer";
-    public const string JwtAudience = "salestrainer";
+    public const string JwtIssuer = "sallevate";
+    public const string JwtAudience = "sallevate";
 
     public static string BuildToken(Guid userId, string email, string displayName, UserRole role = UserRole.User)
     {

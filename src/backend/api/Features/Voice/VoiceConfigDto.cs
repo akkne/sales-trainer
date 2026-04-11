@@ -7,14 +7,4 @@ public class VoiceConfigDto
     public int MaxRecordingSeconds { get; set; }
     public int DailyLimitMinutes { get; set; }
     public int MonthlyLimitMinutes { get; set; }
-    public DeepgramConfigDto Deepgram { get; set; } = new();
-}
-
-public class DeepgramConfigDto
-{
-    public bool Configured { get; set; }
-    public string Model { get; set; } = "nova-3";
-    public string Language { get; set; } = "ru";
-    public bool SmartFormat { get; set; } = true;
-    public bool Punctuate { get; set; } = true;
 }

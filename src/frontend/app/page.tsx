@@ -48,7 +48,7 @@ export default function LandingPage() {
         setAccessToken(response.accessToken);
         setAuthenticatedUser({
             id: "demo",
-            email: "demo@salestrainer.app",
+            email: "demo@sallevate.app",
             displayName: "Demo User",
             isOnboardingCompleted: false,
             role: "User",
@@ -61,7 +61,7 @@ export default function LandingPage() {
         <div className="min-h-screen bg-white">
             <header className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
                 <span className="font-[var(--font-space-grotesk)] font-bold text-xl text-gray-900">
-                    SalesTrainer
+                    Sallevate
                 </span>
                 <Link
                     href="/login"

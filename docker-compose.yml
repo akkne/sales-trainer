@@ -5,7 +5,7 @@ services:
       args:
         - NEXT_PUBLIC_API_URL=http://localhost:5001
         - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-    pull_policy: build
+    pull_policy: build  
     ports:
       - "3000:3000"
     environment:
@@ -21,12 +21,12 @@ services:
       - "5001:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=salestrainer;Username=st;Password=st_secret
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=sallevate;Username=st;Password=st_secret
       - ConnectionStrings__Mongo=mongodb://mongo:27017
       - ConnectionStrings__Redis=redis:6379
       - Jwt__Key=CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR_AT_LEAST_32_CHARS
-      - Jwt__Issuer=salestrainer
-      - Jwt__Audience=salestrainer
+      - Jwt__Issuer=sallevate
+      - Jwt__Audience=sallevate
       - Frontend__Url=http://localhost:3000
       - Google__ClientId=${GOOGLE_CLIENT_ID}
       - Logging__Loki__Url=http://loki:3100
@@ -43,7 +43,7 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: salestrainer
+      POSTGRES_DB: sallevate
       POSTGRES_USER: st
       POSTGRES_PASSWORD: st_secret
     volumes:
@@ -51,7 +51,7 @@ services:
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U st -d salestrainer"]
+      test: ["CMD-SHELL", "pg_isready -U st -d sallevate"]
       interval: 5s
       timeout: 5s
       retries: 10

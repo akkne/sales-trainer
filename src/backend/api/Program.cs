@@ -25,13 +25,13 @@ builder.Host.UseSerilog((ctx, loggerConfig) =>
             lokiUrl,
             labels:
             [
-                new LokiLabel { Key = "service", Value = "salestrainer-backend" },
+                new LokiLabel { Key = "service", Value = "sallevate-backend" },
                 new LokiLabel { Key = "env",     Value = ctx.HostingEnvironment.EnvironmentName }
             ],
             propertiesAsLabels: ["RequestId", "UserId"]
         )
         .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", "SalesTrainer.Api");
+        .Enrich.WithProperty("Application", "Sallevate.Api");
 });
 
 builder.Services.AddDbContext<AppDbContext>(databaseOptions =>

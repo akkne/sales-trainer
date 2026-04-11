@@ -98,7 +98,7 @@ export function Sidebar() {
 
             {/* App branding footer */}
             <div className="text-center text-xs text-outline font-semibold tracking-widest uppercase">
-                SalesMastery
+                Sallevate
             </div>
         </aside>
     );

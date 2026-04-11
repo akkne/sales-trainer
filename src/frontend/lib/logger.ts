@@ -15,7 +15,7 @@ function buildLogger() {
       options: {
         host: lokiUrl,
         labels: {
-          service: "salestrainer-frontend",
+          service: "sallevate-frontend",
           env: process.env.NODE_ENV ?? "development",
         },
         batching: true,
@@ -35,7 +35,7 @@ function buildLogger() {
   return pino(
     {
       level: isDev ? "debug" : "info",
-      base: { service: "salestrainer-frontend" },
+      base: { service: "sallevate-frontend" },
     },
     pino.transport({ targets })
   );

@@ -9,7 +9,7 @@ public class MongoDbContext
 
     public MongoDbContext(IMongoClient mongoClient, IConfiguration configuration)
     {
-        var databaseName = configuration["Mongo:DatabaseName"] ?? "salestrainer";
+        var databaseName = configuration["Mongo:DatabaseName"] ?? "sallevate";
         _database = mongoClient.GetDatabase(databaseName);
     }
 

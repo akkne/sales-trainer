@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/apiClient";
-import { VadManager, VadState, floatTo16BitPCM } from "@/lib/voice/vadManager";
-import { DeepgramClient, DeepgramState } from "@/lib/voice/deepgramClient";
+import { WebSpeechClient, WebSpeechState, isWebSpeechSupported } from "@/lib/voice/webSpeechClient";
 import { AudioPlayer, AudioPlayerState } from "@/lib/voice/audioPlayer";
 
 export interface VoiceConfig {
@@ -11,17 +10,6 @@ export interface VoiceConfig {
     maxRecordingSeconds: number;
     dailyLimitMinutes: number;
     monthlyLimitMinutes: number;
-    deepgram: {
-        configured: boolean;
-        model: string;
-        language: string;
-        smartFormat: boolean;
-        punctuate: boolean;
-    };
-}
-
-export interface DeepgramKeyResponse {
-    apiKey: string;
 }
 
 export function useVoiceConfig() {
@@ -29,15 +17,6 @@ export function useVoiceConfig() {
         queryKey: ["voice", "config"],
         queryFn: () => apiClient.get<VoiceConfig>("/dialog/voice/config"),
         staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-export function useDeepgramKey(enabled: boolean) {
-    return useQuery({
-        queryKey: ["voice", "deepgram-key"],
-        queryFn: () => apiClient.get<DeepgramKeyResponse>("/dialog/voice/deepgram-key"),
-        enabled,
-        staleTime: 5 * 60 * 1000,
     });
 }
 
@@ -65,25 +44,22 @@ export function useVoice(options: UseVoiceOptions) {
     const [currentTranscript, setCurrentTranscript] = useState("");
     const [isVoiceAvailable, setIsVoiceAvailable] = useState(false);
 
-    const vadRef = useRef<VadManager | null>(null);
-    const deepgramRef = useRef<DeepgramClient | null>(null);
+    const speechClientRef = useRef<WebSpeechClient | null>(null);
     const audioPlayerRef = useRef<AudioPlayer | null>(null);
     const transcriptBufferRef = useRef<string>("");
+    const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const { data: voiceConfig } = useVoiceConfig();
-    const { data: deepgramKey } = useDeepgramKey(
-        !!voiceConfig?.enabled && modeVoiceEnabled
-    );
 
     // Check if voice is available
     useEffect(() => {
         const available = !!(
             voiceConfig?.enabled &&
             modeVoiceEnabled &&
-            deepgramKey?.apiKey
+            isWebSpeechSupported()
         );
         setIsVoiceAvailable(available);
-    }, [voiceConfig, modeVoiceEnabled, deepgramKey]);
+    }, [voiceConfig, modeVoiceEnabled]);
 
     // Initialize audio player
     useEffect(() => {
@@ -93,8 +69,8 @@ export function useVoice(options: UseVoiceOptions) {
                     setState("playing");
                 } else if (playerState === "ended") {
                     setState("listening");
-                    // Resume VAD after playback
-                    vadRef.current?.resume();
+                    // Resume speech recognition after playback
+                    speechClientRef.current?.resume();
                 } else if (playerState === "error") {
                     setState("error");
                 }
@@ -109,140 +85,131 @@ export function useVoice(options: UseVoiceOptions) {
         };
     }, [onError]);
 
+    // Process speech after silence
+    const processSpeech = useCallback(async (transcript: string) => {
+        if (!transcript.trim() || !sessionId) {
+            setState("listening");
+            return;
+        }
+
+        setState("processing");
+        onTranscript?.(transcript);
+
+        try {
+            // Pause speech recognition during processing
+            speechClientRef.current?.pause();
+
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/dialog/sessions/${sessionId}/voice`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+                    },
+                    body: JSON.stringify({ transcript }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Voice request failed: ${response.status}`);
+            }
+
+            // Get AI response content from separate request
+            const voiceResponseRes = await apiClient.get<{
+                content: string;
+                isStopSignal: boolean;
+            }>(`/dialog/sessions/${sessionId}/voice/response`);
+
+            onAiResponse?.(voiceResponseRes.content, voiceResponseRes.isStopSignal);
+
+            // Play audio
+            const audioBlob = await response.blob();
+            await audioPlayerRef.current?.playBlob(audioBlob);
+        } catch (error) {
+            onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
+            setState("error");
+            speechClientRef.current?.resume();
+        }
+
+        // Clear transcript buffer
+        transcriptBufferRef.current = "";
+        setCurrentTranscript("");
+    }, [sessionId, onTranscript, onAiResponse, onError]);
+
     const startVoice = useCallback(async () => {
-        if (!isVoiceAvailable || !deepgramKey?.apiKey || !sessionId) {
+        if (!isVoiceAvailable || !sessionId) {
             return;
         }
 
         setState("initializing");
 
         try {
-            // Initialize Deepgram
-            let deepgramDonePromise: Promise<void>;
-            let deepgramResolve: (() => void) | null = null;
-            let deepgramReject: ((error: Error) => void) | null = null;
-            deepgramDonePromise = new Promise((resolve, reject) => {
-                deepgramResolve = resolve;
-                deepgramReject = reject;
-            });
-
-            deepgramRef.current = new DeepgramClient(
-                {
-                    apiKey: deepgramKey.apiKey,
-                    model: voiceConfig?.deepgram.model,
-                    language: voiceConfig?.deepgram.language,
-                    smartFormat: voiceConfig?.deepgram.smartFormat,
-                    punctuate: voiceConfig?.deepgram.punctuate,
-                },
-                {
-                    onTranscript: (transcript: string, isFinal: boolean) => {
-                        if (isFinal) {
-                            transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
-                            setCurrentTranscript(transcriptBufferRef.current);
-                            deepgramResolve?.();
-                        } else {
-                            setCurrentTranscript(transcriptBufferRef.current + (transcriptBufferRef.current ? " " : "") + transcript);
-                        }
-                    },
-                    onError: (error: Error) => {
-                        onError?.(error);
-                        setState("error");
-                        deepgramReject?.(error);
-                    },
-                    onStateChange: (deepgramState: DeepgramState) => {
-                        if (deepgramState === "error") {
-                            setState("error");
-                            deepgramReject?.(new Error("Deepgram connection error"));
-                        }
+            speechClientRef.current = new WebSpeechClient({
+                language: "ru-RU",
+                continuous: true,
+                interimResults: true,
+                onResult: (transcript: string, isFinal: boolean) => {
+                    // Clear silence timeout on new speech
+                    if (silenceTimeoutRef.current) {
+                        clearTimeout(silenceTimeoutRef.current);
+                        silenceTimeoutRef.current = null;
                     }
-                }
-            );
 
-            await deepgramRef.current.connect();
+                    if (isFinal) {
+                        transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
+                        setCurrentTranscript(transcriptBufferRef.current);
 
-            // Initialize VAD
-            vadRef.current = new VadManager({
+                        // Set silence timeout to process after pause
+                        const vadSilenceMs = voiceConfig?.vadSilenceMs ?? 600;
+                        silenceTimeoutRef.current = setTimeout(() => {
+                            const finalTranscript = transcriptBufferRef.current.trim();
+                            if (finalTranscript) {
+                                processSpeech(finalTranscript);
+                            }
+                        }, vadSilenceMs);
+                    } else {
+                        setCurrentTranscript(transcriptBufferRef.current + (transcriptBufferRef.current ? " " : "") + transcript);
+                    }
+                },
+                onError: (error: Error) => {
+                    onError?.(error);
+                    setState("error");
+                },
+                onStateChange: (speechState: WebSpeechState) => {
+                    if (speechState === "listening") {
+                        setState("listening");
+                    } else if (speechState === "error") {
+                        setState("error");
+                    }
+                },
                 onSpeechStart: () => {
                     setState("speaking");
                 },
-                onSpeechEnd: async (audio: Float32Array) => {
-                    setState("processing");
-
-                    // Send final audio to Deepgram
-                    const pcmAudio = floatTo16BitPCM(audio);
-                    deepgramRef.current?.sendAudio(pcmAudio);
-
-                    // Wait for Deepgram to finish (with timeout)
-                    const timeout = new Promise<void>((_, reject) =>
-                        setTimeout(() => reject(new Error("Transcription timeout")), 15000)
-                    );
-                    await Promise.race([deepgramDonePromise, timeout]);
-
-                    const finalTranscript = transcriptBufferRef.current.trim();
-                    if (finalTranscript) {
-                        onTranscript?.(finalTranscript);
-
-                        // Send to backend and get audio response
-                        try {
-                            vadRef.current?.pause();
-
-                            const response = await fetch(
-                                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/dialog/sessions/${sessionId}/voice`,
-                                {
-                                    method: "POST",
-                                    headers: {
-                                        "Content-Type": "application/json",
-                                        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-                                    },
-                                    body: JSON.stringify({ transcript: finalTranscript }),
-                                }
-                            );
-
-                            if (!response.ok) {
-                                throw new Error(`Voice request failed: ${response.status}`);
-                            }
-
-                            // Get AI response content from separate request
-                            const voiceResponseRes = await apiClient.get<{
-                                content: string;
-                                isStopSignal: boolean;
-                            }>(`/dialog/sessions/${sessionId}/voice/response`);
-
-                            onAiResponse?.(voiceResponseRes.content, voiceResponseRes.isStopSignal);
-
-                            // Play audio
-                            const audioBlob = await response.blob();
-                            await audioPlayerRef.current?.playBlob(audioBlob);
-                        } catch (error) {
-                            onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
-                            setState("error");
-                            vadRef.current?.resume();
-                        }
-                    } else {
+                onSpeechEnd: () => {
+                    if (state !== "processing" && state !== "playing") {
                         setState("listening");
                     }
-
-                    // Clear transcript buffer
-                    transcriptBufferRef.current = "";
-                    setCurrentTranscript("");
                 },
             });
 
-            await vadRef.current.start();
-            setState("listening");
+            await speechClientRef.current.start();
         } catch (error) {
             onError?.(error instanceof Error ? error : new Error("Voice initialization failed"));
             setState("error");
         }
-    }, [isVoiceAvailable, deepgramKey, sessionId, voiceConfig, onTranscript, onAiResponse, onError]);
+    }, [isVoiceAvailable, sessionId, voiceConfig, onError, processSpeech, state]);
 
-    const stopVoice = useCallback(async () => {
-        vadRef.current?.stop();
-        deepgramRef.current?.disconnect();
+    const stopVoice = useCallback(() => {
+        if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+        }
+
+        speechClientRef.current?.stop();
         audioPlayerRef.current?.stop();
 
-        vadRef.current = null;
-        deepgramRef.current = null;
+        speechClientRef.current = null;
 
         setState("idle");
         setCurrentTranscript("");
@@ -252,8 +219,10 @@ export function useVoice(options: UseVoiceOptions) {
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            vadRef.current?.stop();
-            deepgramRef.current?.disconnect();
+            if (silenceTimeoutRef.current) {
+                clearTimeout(silenceTimeoutRef.current);
+            }
+            speechClientRef.current?.stop();
             audioPlayerRef.current?.destroy();
         };
     }, []);

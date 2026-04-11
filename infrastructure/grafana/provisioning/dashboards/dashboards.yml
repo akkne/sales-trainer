@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: salestrainer
+  - name: sallevate
     orgId: 1
-    folder: SalesTrainer
+    folder: Sallevate
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

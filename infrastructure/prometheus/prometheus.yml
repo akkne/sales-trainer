@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: salestrainer-backend
+  - job_name: sallevate-backend
     static_configs:
       - targets: ['backend:8080']
     metrics_path: /metrics

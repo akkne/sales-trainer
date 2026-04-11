@@ -1,6 +1,6 @@
 {
-  "title": "SalesTrainer Overview",
-  "uid": "salestrainer-overview",
+  "title": "Sallevate Overview",
+  "uid": "sallevate-overview",
   "schemaVersion": 38,
   "version": 1,
   "refresh": "30s",
@@ -14,7 +14,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "rate(http_requests_received_total{job=\"salestrainer-backend\"}[1m])",
+          "expr": "rate(http_requests_received_total{job=\"sallevate-backend\"}[1m])",
           "legendFormat": "{{method}} {{route}} {{code}}"
         }
       ]
@@ -27,7 +27,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"salestrainer-backend\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"sallevate-backend\"}[5m]))",
           "legendFormat": "p95 {{route}}"
         }
       ]
@@ -40,7 +40,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "rate(http_requests_received_total{job=\"salestrainer-backend\", code=~\"5..\"}[1m])",
+          "expr": "rate(http_requests_received_total{job=\"sallevate-backend\", code=~\"5..\"}[1m])",
           "legendFormat": "{{method}} {{route}}"
         }
       ]
@@ -53,7 +53,7 @@
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "{service=~\"salestrainer-.+\"}",
+          "expr": "{service=~\"sallevate-.+\"}",
           "legendFormat": ""
         }
       ],
@@ -72,7 +72,7 @@
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "{service=~\"salestrainer-.+\"} |= `\"level\":\"error\"` or {service=~\"salestrainer-.+\"} |= `Error` or {service=~\"salestrainer-.+\"} |= `\"level\":50`",
+          "expr": "{service=~\"sallevate-.+\"} |= `\"level\":\"error\"` or {service=~\"sallevate-.+\"} |= `Error` or {service=~\"sallevate-.+\"} |= `\"level\":50`",
           "legendFormat": ""
         }
       ],
