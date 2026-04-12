@@ -173,7 +173,7 @@ export function useVoice(options: UseVoiceOptions) {
         let activeSessionId = currentSessionIdRef.current;
         if (!activeSessionId && bundleId && modeId) {
             try {
-                const session = await apiClient.post<{ id: string }>("/dialog/sessions/start", {
+                const session = await apiClient.post<{ id: string }>("/dialog/sessions", {
                     bundleId,
                     modeId,
                 });
