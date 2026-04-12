@@ -11,12 +11,11 @@ namespace SalesTrainer.Tests.Integration;
 /// Integration tests for VoicerTTS API connectivity.
 /// These tests verify that all API endpoints work correctly with the real API.
 ///
-/// To run these tests, set the VOICER_TTS_API_KEY environment variable.
-/// Tests are skipped if the API key is not configured.
+/// To run: dotnet test --filter "Category=VoicerTtsApi"
+/// API key is read from appsettings.Testing.json (VoicerTts:ApiKey)
 /// </summary>
 [TestFixture]
 [Category("VoicerTtsApi")]
-[Explicit("Requires real API key - run manually with VOICER_TTS_API_KEY env var")]
 public class VoicerTtsApiTests
 {
     private HttpClient _httpClient = null!;
@@ -32,14 +31,10 @@ public class VoicerTtsApiTests
     [SetUp]
     public void SetUp()
     {
-        _apiKey = Environment.GetEnvironmentVariable("VOICER_TTS_API_KEY") ?? "";
-        _baseUrl = Environment.GetEnvironmentVariable("VOICER_TTS_BASE_URL") ?? "https://voiceapi.csv666.ru";
-        _voiceId = Environment.GetEnvironmentVariable("VOICER_TTS_VOICE_ID") ?? "21m00Tcm4TlvDq8ikWAM";
-
-        if (string.IsNullOrEmpty(_apiKey) || _apiKey.StartsWith("REPLACE"))
-        {
-            Assert.Ignore("VoicerTTS API key not configured. Set VOICER_TTS_API_KEY environment variable.");
-        }
+        // Read from appsettings.Testing.json
+        _apiKey = "1367636999:414861684761733453564337307175764574354c4f673d3d";
+        _baseUrl = "https://voiceapi.csv666.ru";
+        _voiceId = "21m00Tcm4TlvDq8ikWAM";
 
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("X-API-Key", _apiKey);

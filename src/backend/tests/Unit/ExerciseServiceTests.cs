@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using NUnit.Framework;
+using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Exercises;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.Lessons;
@@ -25,7 +26,8 @@ public class ExerciseServiceTests
             new MultipleChoiceEvaluationStrategy(),
             new FillBlankEvaluationStrategy()
         ]);
-        _service = new ExerciseService(_db, factory);
+        var achievementService = new AchievementService(_db);
+        _service = new ExerciseService(_db, factory, achievementService);
     }
 
     [TearDown]
