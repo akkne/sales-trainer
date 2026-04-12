@@ -34,6 +34,8 @@ public class VoicerTtsService : IVoicerTtsService
         }
     }
 
+    private const int MinTextLength = 500;
+
     public async Task<Stream> SynthesizeSpeechAsync(string text, string? voiceId = null, CancellationToken ct = default)
     {
         if (!IsConfigured)
@@ -54,13 +56,17 @@ public class VoicerTtsService : IVoicerTtsService
 
         var effectiveVoiceId = voiceId ?? defaultVoiceId;
 
+        // Pad short text with SSML silence to meet 500 char minimum
+        var paddedText = PadTextToMinLength(text);
+
         var httpClient = _httpClientFactory.CreateClient("VoicerTts");
         httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
 
         // Step 1: Create TTS task
-        var taskId = await CreateTaskAsync(httpClient, baseUrl, text, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, ct);
-        _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters", taskId, text.Length);
+        var taskId = await CreateTaskAsync(httpClient, baseUrl, paddedText, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, ct);
+        _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters (padded from {OriginalLength})",
+            taskId, paddedText.Length, text.Length);
 
         // Step 2: Poll for completion
         var status = await PollForCompletionAsync(httpClient, baseUrl, taskId, pollIntervalMs, maxPollAttempts, ct);
@@ -74,6 +80,23 @@ public class VoicerTtsService : IVoicerTtsService
         _logger.LogInformation("VoicerTts audio downloaded for task {TaskId}", taskId);
 
         return audioStream;
+    }
+
+    /// <summary>
+    /// Pads text to meet the VoicerTts minimum 500 character requirement.
+    /// Uses whitespace padding that doesn't affect speech output.
+    /// </summary>
+    private static string PadTextToMinLength(string text)
+    {
+        if (text.Length >= MinTextLength)
+        {
+            return text;
+        }
+
+        // Pad with spaces - TTS engines ignore trailing whitespace
+        var paddingNeeded = MinTextLength - text.Length;
+        var padding = new string(' ', paddingNeeded);
+        return text + padding;
     }
 
     private async Task<int> CreateTaskAsync(

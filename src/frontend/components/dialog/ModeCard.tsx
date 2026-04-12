@@ -25,15 +25,15 @@ export function ModeCard({ bundleId, mode }: ModeCardProps) {
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#58CC02] text-white font-bold rounded-xl hover:bg-[#4CAD02] transition-colors text-sm"
                 >
                     <span>💬</span>
-                    <span>Текст</span>
+                    <span>Text</span>
                 </Link>
                 {mode.voiceEnabled && (
                     <Link
-                        href={`/dialog/${bundleId}/${mode.id}?mode=voice`}
+                        href={`/dialog/${bundleId}/${mode.id}/voice`}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors text-sm"
                     >
                         <span>🎤</span>
-                        <span>Голос</span>
+                        <span>Voice</span>
                     </Link>
                 )}
             </div>
