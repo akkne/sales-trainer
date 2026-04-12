@@ -318,6 +318,12 @@ export default function ChatPage() {
         setTimeout(() => setVoiceError(null), 5000);
     }, []);
 
+    const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
+        setSessionId(newSessionId);
+        setMessages([]);
+        refetchSessions();
+    }, [refetchSessions]);
+
     const {
         state: voiceState,
         currentTranscript,
@@ -327,6 +333,9 @@ export default function ChatPage() {
     } = useVoice({
         sessionId,
         modeVoiceEnabled: chatMode === "voice" && (currentMode?.voiceEnabled ?? false),
+        bundleId,
+        modeId,
+        onSessionCreated: handleVoiceSessionCreated,
         onTranscript: handleVoiceTranscript,
         onAiResponse: handleVoiceAiResponse,
         onError: handleVoiceError,
@@ -566,7 +575,7 @@ export default function ChatPage() {
                     )}
 
                     {/* Voice mode controls */}
-                    {isVoiceMode ? (
+                    {isVoiceMode && !isEnded && !feedback ? (
                         <div className="flex flex-col items-center gap-4">
                             <VoiceMicButton
                                 state={voiceState}

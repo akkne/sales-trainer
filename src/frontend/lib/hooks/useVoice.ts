@@ -32,13 +32,16 @@ export type VoicePipelineState =
 export interface UseVoiceOptions {
     sessionId: string | null;
     modeVoiceEnabled: boolean;
+    bundleId?: string;
+    modeId?: string;
+    onSessionCreated?: (sessionId: string) => void;
     onTranscript?: (transcript: string) => void;
     onAiResponse?: (content: string, isStopSignal: boolean) => void;
     onError?: (error: Error) => void;
 }
 
 export function useVoice(options: UseVoiceOptions) {
-    const { sessionId, modeVoiceEnabled, onTranscript, onAiResponse, onError } = options;
+    const { sessionId, modeVoiceEnabled, bundleId, modeId, onSessionCreated, onTranscript, onAiResponse, onError } = options;
 
     const [state, setState] = useState<VoicePipelineState>("idle");
     const [currentTranscript, setCurrentTranscript] = useState("");
@@ -48,6 +51,19 @@ export function useVoice(options: UseVoiceOptions) {
     const audioPlayerRef = useRef<AudioPlayer | null>(null);
     const transcriptBufferRef = useRef<string>("");
     const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const currentSessionIdRef = useRef<string | null>(sessionId);
+    const isProcessingRef = useRef(false);
+    const stateRef = useRef<VoicePipelineState>("idle");
+
+    // Keep sessionId ref in sync
+    useEffect(() => {
+        currentSessionIdRef.current = sessionId;
+    }, [sessionId]);
+
+    // Keep state ref in sync
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
 
     const { data: voiceConfig } = useVoiceConfig();
 
@@ -87,11 +103,18 @@ export function useVoice(options: UseVoiceOptions) {
 
     // Process speech after silence
     const processSpeech = useCallback(async (transcript: string) => {
-        if (!transcript.trim() || !sessionId) {
+        // Prevent concurrent processing
+        if (isProcessingRef.current) {
+            return;
+        }
+
+        const activeSessionId = currentSessionIdRef.current;
+        if (!transcript.trim() || !activeSessionId) {
             setState("listening");
             return;
         }
 
+        isProcessingRef.current = true;
         setState("processing");
         onTranscript?.(transcript);
 
@@ -100,7 +123,7 @@ export function useVoice(options: UseVoiceOptions) {
             speechClientRef.current?.pause();
 
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/dialog/sessions/${sessionId}/voice`,
+                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/dialog/sessions/${activeSessionId}/voice`,
                 {
                     method: "POST",
                     headers: {
@@ -119,7 +142,7 @@ export function useVoice(options: UseVoiceOptions) {
             const voiceResponseRes = await apiClient.get<{
                 content: string;
                 isStopSignal: boolean;
-            }>(`/dialog/sessions/${sessionId}/voice/response`);
+            }>(`/dialog/sessions/${activeSessionId}/voice/response`);
 
             onAiResponse?.(voiceResponseRes.content, voiceResponseRes.isStopSignal);
 
@@ -130,19 +153,45 @@ export function useVoice(options: UseVoiceOptions) {
             onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
             setState("error");
             speechClientRef.current?.resume();
+        } finally {
+            isProcessingRef.current = false;
         }
 
         // Clear transcript buffer
         transcriptBufferRef.current = "";
         setCurrentTranscript("");
-    }, [sessionId, onTranscript, onAiResponse, onError]);
+    }, [onTranscript, onAiResponse, onError]);
 
     const startVoice = useCallback(async () => {
-        if (!isVoiceAvailable || !sessionId) {
+        if (!isVoiceAvailable) {
             return;
         }
 
         setState("initializing");
+
+        // Create session if needed
+        let activeSessionId = currentSessionIdRef.current;
+        if (!activeSessionId && bundleId && modeId) {
+            try {
+                const session = await apiClient.post<{ id: string }>("/dialog/sessions/start", {
+                    bundleId,
+                    modeId,
+                });
+                activeSessionId = session.id;
+                currentSessionIdRef.current = activeSessionId;
+                onSessionCreated?.(activeSessionId);
+            } catch (error) {
+                onError?.(error instanceof Error ? error : new Error("Failed to create session"));
+                setState("error");
+                return;
+            }
+        }
+
+        if (!activeSessionId) {
+            onError?.(new Error("No session available"));
+            setState("error");
+            return;
+        }
 
         try {
             speechClientRef.current = new WebSpeechClient({
@@ -187,7 +236,7 @@ export function useVoice(options: UseVoiceOptions) {
                     setState("speaking");
                 },
                 onSpeechEnd: () => {
-                    if (state !== "processing" && state !== "playing") {
+                    if (stateRef.current !== "processing" && stateRef.current !== "playing") {
                         setState("listening");
                     }
                 },
@@ -198,7 +247,7 @@ export function useVoice(options: UseVoiceOptions) {
             onError?.(error instanceof Error ? error : new Error("Voice initialization failed"));
             setState("error");
         }
-    }, [isVoiceAvailable, sessionId, voiceConfig, onError, processSpeech, state]);
+    }, [isVoiceAvailable, bundleId, modeId, voiceConfig, onSessionCreated, onError, processSpeech]);
 
     const stopVoice = useCallback(() => {
         if (silenceTimeoutRef.current) {

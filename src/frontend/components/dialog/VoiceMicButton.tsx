@@ -77,7 +77,7 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
                     />
                 ) : (
                     <Icon
-                        name={isActive ? "mic" : "mic"}
+                        name={isActive ? "mic" : "mic_off"}
                         size="xl"
                         variant={isActive ? "filled" : "outlined"}
                         className={isActive ? "text-on-primary" : "text-on-surface-variant"}

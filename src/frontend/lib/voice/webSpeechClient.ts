@@ -185,20 +185,101 @@ export class WebSpeechClient {
     pause(): void {
         this.shouldRestart = false;
         if (this.recognition) {
-            this.recognition.stop();
+            try {
+                this.recognition.stop();
+            } catch {
+                // Ignore if not started
+            }
         }
         this.setState("idle");
     }
 
     resume(): void {
-        if (this.recognition && this.state === "idle") {
-            this.shouldRestart = true;
-            try {
-                this.recognition.start();
-            } catch {
-                // Ignore if already started
-            }
+        if (this.state !== "idle") {
+            return;
         }
+
+        this.shouldRestart = true;
+
+        // If recognition exists but may have stopped, recreate it
+        if (!this.recognition) {
+            const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognitionClass) {
+                return;
+            }
+            this.recognition = new SpeechRecognitionClass();
+            this.setupRecognition();
+        }
+
+        try {
+            this.recognition.start();
+        } catch {
+            // If start fails (already running), let onend handler restart
+        }
+    }
+
+    private setupRecognition(): void {
+        if (!this.recognition) return;
+
+        this.recognition.continuous = this.options.continuous ?? true;
+        this.recognition.interimResults = this.options.interimResults ?? true;
+        this.recognition.lang = this.options.language ?? "ru-RU";
+        this.recognition.maxAlternatives = 1;
+
+        this.recognition.onstart = () => {
+            this.setState("listening");
+        };
+
+        this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+            let interimTranscript = "";
+            let finalTranscript = "";
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                const transcript = result[0].transcript;
+
+                if (result.isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+
+            if (finalTranscript) {
+                this.options.onResult(finalTranscript.trim(), true);
+            } else if (interimTranscript) {
+                this.options.onResult(interimTranscript.trim(), false);
+            }
+        };
+
+        this.recognition.onspeechstart = () => {
+            this.options.onSpeechStart?.();
+        };
+
+        this.recognition.onspeechend = () => {
+            this.options.onSpeechEnd?.();
+        };
+
+        this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            if (event.error === "no-speech" || event.error === "aborted") {
+                return;
+            }
+
+            this.setState("error");
+            this.options.onError?.(new Error(`Ошибка распознавания: ${event.error}`));
+        };
+
+        this.recognition.onend = () => {
+            if (this.shouldRestart && this.state === "listening") {
+                try {
+                    this.recognition?.start();
+                } catch {
+                    // Ignore if already started
+                }
+            } else {
+                this.setState("idle");
+            }
+        };
     }
 
     getState(): WebSpeechState {
