@@ -102,6 +102,8 @@ builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IVoicerTtsService,
     SalesTrainer.Api.Features.Voice.VoicerTtsService>();
+builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IGoogleTtsService,
+    SalesTrainer.Api.Features.Voice.GoogleTtsService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IVoiceDialogService,
     SalesTrainer.Api.Features.Voice.VoiceDialogService>();
 builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
@@ -116,6 +118,9 @@ builder.Services.AddHttpClient("OpenAI")
 builder.Services.AddHttpClient("VoicerTts")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(120));
+builder.Services.AddHttpClient("GoogleTts")
+    .ConfigureHttpClient(client =>
+        client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient(); // fallback default client
 
 builder.Services.AddControllers();

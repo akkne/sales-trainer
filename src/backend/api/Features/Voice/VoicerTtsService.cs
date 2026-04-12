@@ -84,7 +84,7 @@ public class VoicerTtsService : IVoicerTtsService
 
     /// <summary>
     /// Pads text to meet the VoicerTts minimum 500 character requirement.
-    /// Uses whitespace padding that doesn't affect speech output.
+    /// Repeats the original text with natural pauses to reach minimum length.
     /// </summary>
     private static string PadTextToMinLength(string text)
     {
@@ -93,10 +93,14 @@ public class VoicerTtsService : IVoicerTtsService
             return text;
         }
 
-        // Pad with spaces - TTS engines ignore trailing whitespace
-        var paddingNeeded = MinTextLength - text.Length;
-        var padding = new string(' ', paddingNeeded);
-        return text + padding;
+        // Repeat text with pause markers until we reach minimum length
+        var sb = new StringBuilder(text);
+        while (sb.Length < MinTextLength)
+        {
+            sb.Append("... ");
+            sb.Append(text);
+        }
+        return sb.ToString();
     }
 
     private async Task<int> CreateTaskAsync(

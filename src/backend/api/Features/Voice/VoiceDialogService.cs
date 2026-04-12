@@ -12,6 +12,7 @@ public class VoiceDialogService : IVoiceDialogService
     private readonly MongoDbContext _mongoContext;
     private readonly IOpenAiChatService _openAiService;
     private readonly IVoicerTtsService _voicerTtsService;
+    private readonly IGoogleTtsService _googleTtsService;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
@@ -19,12 +20,14 @@ public class VoiceDialogService : IVoiceDialogService
         MongoDbContext mongoContext,
         IOpenAiChatService openAiService,
         IVoicerTtsService voicerTtsService,
+        IGoogleTtsService googleTtsService,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
         _mongoContext = mongoContext;
         _openAiService = openAiService;
         _voicerTtsService = voicerTtsService;
+        _googleTtsService = googleTtsService;
         _logger = logger;
     }
 
@@ -96,9 +99,22 @@ public class VoiceDialogService : IVoiceDialogService
             "Voice message processed for session {SessionId}, user message: {UserLen} chars, AI response: {AiLen} chars",
             sessionId, transcript.Length, chatResult.Content.Length);
 
-        // Generate TTS audio
-        var voiceId = mode.VoiceId; // null will use default voice
-        var audioStream = await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceId, ct);
+        // Generate TTS audio - prefer Google TTS, fallback to VoicerTTS
+        Stream audioStream;
+        if (_googleTtsService.IsConfigured)
+        {
+            var voiceName = mode.VoiceId; // Can be used for Google voice name
+            audioStream = await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceName, ct);
+        }
+        else if (_voicerTtsService.IsConfigured)
+        {
+            var voiceId = mode.VoiceId;
+            audioStream = await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceId, ct);
+        }
+        else
+        {
+            throw new InvalidOperationException("No TTS service is configured");
+        }
 
         return audioStream;
     }
