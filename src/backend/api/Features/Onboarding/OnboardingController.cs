@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Onboarding.Models;
+using SalesTrainer.Api.Features.Onboarding.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Onboarding;
 

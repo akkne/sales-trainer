@@ -1,0 +1,8 @@
+namespace SalesTrainer.Api.Features.SkillTree.Models;
+
+public record SkillTreeResponseDto(
+    IReadOnlyList<SkillTreeNodeDto> SkillNodes,
+    int CurrentStreakDayCount,
+    int TotalXpAmount,
+    int WeeklyXpAmount
+);

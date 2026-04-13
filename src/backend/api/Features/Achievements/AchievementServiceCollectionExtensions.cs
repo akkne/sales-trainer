@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.Achievements.Services.Abstract;
+using SalesTrainer.Api.Features.Achievements.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.Achievements;
 
 public static class AchievementServiceCollectionExtensions

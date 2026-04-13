@@ -1,3 +1,5 @@
+using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Dialog.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Dialog;

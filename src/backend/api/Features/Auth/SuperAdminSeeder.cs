@@ -1,14 +1,15 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
-public class SuperAdminSeeder(
+public sealed class SuperAdminSeeder(
     AppDbContext databaseContext,
     IConfiguration configuration,
     ILogger<SuperAdminSeeder> logger)
 {
-    public async Task SeedAsync()
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("SuperAdmin seeding started");
 
@@ -22,7 +23,7 @@ public class SuperAdminSeeder(
         var normalizedEmail = email.ToLowerInvariant();
 
         var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+            .FirstOrDefaultAsync(user => user.Email == normalizedEmail, cancellationToken);
 
         if (existingUser is not null)
         {
@@ -35,7 +36,7 @@ public class SuperAdminSeeder(
             logger.LogInformation("Promoting existing user to SuperAdmin {Email} (was {OldRole})",
                 normalizedEmail, existingUser.Role);
             existingUser.Role = UserRole.SuperAdmin;
-            await databaseContext.SaveChangesAsync();
+            await databaseContext.SaveChangesAsync(cancellationToken);
             return;
         }
 
@@ -52,7 +53,7 @@ public class SuperAdminSeeder(
             Role = UserRole.SuperAdmin
         });
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
         logger.LogInformation("SuperAdmin user created successfully {Email}", normalizedEmail);
     }
 }

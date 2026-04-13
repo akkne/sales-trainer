@@ -2,13 +2,15 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Auth.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
 [ApiController]
 [Route("auth")]
-public class AuthController(
+public sealed class AuthController(
     IAuthenticationService authenticationService,
     AppDbContext databaseContext,
     IWebHostEnvironment environment) : ControllerBase
@@ -24,7 +26,7 @@ public class AuthController(
 
     [HttpGet("me")]
     [Authorize]
-    public async Task<IActionResult> GetCurrentUser()
+    public async Task<IActionResult> GetCurrentUser(CancellationToken cancellationToken = default)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var email = User.FindFirstValue(ClaimTypes.Email);
@@ -32,7 +34,7 @@ public class AuthController(
         var role = User.FindFirstValue(ClaimTypes.Role);
 
         var isOnboardingCompleted = userId is not null && await databaseContext.UserProfiles
-            .AnyAsync(p => p.UserId == Guid.Parse(userId) && p.IsOnboardingCompleted);
+            .AnyAsync(profile => profile.UserId == Guid.Parse(userId) && profile.IsOnboardingCompleted, cancellationToken);
 
         return Ok(new
         {
@@ -46,14 +48,16 @@ public class AuthController(
 
     [HttpPost("register")]
     public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(
-        [FromBody] RegisterRequestDto registerRequest)
+        [FromBody] RegisterRequestDto registerRequest,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var issuedTokenPair = await authenticationService.RegisterWithEmailAsync(
                 registerRequest.Email,
                 registerRequest.Password,
-                registerRequest.DisplayName);
+                registerRequest.DisplayName,
+                cancellationToken);
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
@@ -65,13 +69,15 @@ public class AuthController(
 
     [HttpPost("login")]
     public async Task<ActionResult<AuthTokenResponseDto>> LoginWithEmail(
-        [FromBody] LoginRequestDto loginRequest)
+        [FromBody] LoginRequestDto loginRequest,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var issuedTokenPair = await authenticationService.LoginWithEmailAsync(
                 loginRequest.Email,
-                loginRequest.Password);
+                loginRequest.Password,
+                cancellationToken);
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
@@ -83,12 +89,14 @@ public class AuthController(
 
     [HttpPost("google")]
     public async Task<ActionResult<AuthTokenResponseDto>> LoginWithGoogle(
-        [FromBody] GoogleLoginRequestDto googleLoginRequest)
+        [FromBody] GoogleLoginRequestDto googleLoginRequest,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var issuedTokenPair = await authenticationService.LoginWithGoogleAsync(
-                googleLoginRequest.IdToken);
+                googleLoginRequest.IdToken,
+                cancellationToken);
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
@@ -101,7 +109,8 @@ public class AuthController(
     }
 
     [HttpPost("refresh")]
-    public async Task<ActionResult<AuthTokenResponseDto>> RefreshAccessToken()
+    public async Task<ActionResult<AuthTokenResponseDto>> RefreshAccessToken(
+        CancellationToken cancellationToken = default)
     {
         var rawRefreshToken = Request.Cookies[RefreshTokenCookieName];
 
@@ -110,7 +119,9 @@ public class AuthController(
 
         try
         {
-            var issuedTokenPair = await authenticationService.RefreshAccessTokenAsync(rawRefreshToken);
+            var issuedTokenPair = await authenticationService.RefreshAccessTokenAsync(
+                rawRefreshToken,
+                cancellationToken);
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
         catch (UnauthorizedAccessException exception)
@@ -120,12 +131,12 @@ public class AuthController(
     }
 
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken = default)
     {
         var rawRefreshToken = Request.Cookies[RefreshTokenCookieName];
 
         if (!string.IsNullOrEmpty(rawRefreshToken))
-            await authenticationService.RevokeRefreshTokenAsync(rawRefreshToken);
+            await authenticationService.RevokeRefreshTokenAsync(rawRefreshToken, cancellationToken);
 
         Response.Cookies.Delete(RefreshTokenCookieName);
         return NoContent();

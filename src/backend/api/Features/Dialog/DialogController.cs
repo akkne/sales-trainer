@@ -2,7 +2,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SalesTrainer.Api.Features.Gamification;
+using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Dialog;
@@ -10,7 +12,7 @@ namespace SalesTrainer.Api.Features.Dialog;
 [ApiController]
 [Route("dialog")]
 [Authorize]
-public class DialogController : ControllerBase
+public sealed class DialogController : ControllerBase
 {
     private readonly IDialogService _dialogService;
     private readonly AppDbContext _databaseContext;
@@ -24,39 +26,39 @@ public class DialogController : ControllerBase
     }
 
     [HttpGet("bundles")]
-    public async Task<IActionResult> GetBundles()
+    public async Task<IActionResult> GetBundles(CancellationToken cancellationToken = default)
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
             return Ok(Array.Empty<DialogBundleDto>());
         }
 
-        var bundles = await _dialogService.GetActiveBundlesAsync();
+        var bundles = await _dialogService.GetActiveBundlesAsync(cancellationToken);
         var bundleDtos = bundles.Select(DialogBundleDto.FromEntity).ToList();
         return Ok(bundleDtos);
     }
 
     [HttpGet("bundles/{bundleId:guid}/modes")]
-    public async Task<IActionResult> GetModesForBundle(Guid bundleId)
+    public async Task<IActionResult> GetModesForBundle(Guid bundleId, CancellationToken cancellationToken = default)
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
             return Ok(Array.Empty<DialogModeDto>());
         }
 
-        var bundle = await _dialogService.GetBundleByIdAsync(bundleId);
+        var bundle = await _dialogService.GetBundleByIdAsync(bundleId, cancellationToken);
         if (bundle == null)
         {
             return NotFound(new { message = "Bundle not found" });
         }
 
-        var modes = await _dialogService.GetActiveModesForBundleAsync(bundleId);
+        var modes = await _dialogService.GetActiveModesForBundleAsync(bundleId, cancellationToken);
         var modeDtos = modes.Select(DialogModeDto.FromEntity).ToList();
         return Ok(modeDtos);
     }
 
     [HttpGet("sessions")]
-    public async Task<IActionResult> GetUserSessions()
+    public async Task<IActionResult> GetUserSessions(CancellationToken cancellationToken = default)
     {
         var userId = GetUserIdFromClaims();
         if (userId == null)
@@ -64,18 +66,18 @@ public class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        var sessions = await _dialogService.GetUserSessionsAsync(userId.Value);
+        var sessions = await _dialogService.GetUserSessionsAsync(userId.Value, cancellationToken);
 
-        var bundleIds = sessions.Select(s => s.BundleId).Distinct().ToList();
-        var modeIds = sessions.Select(s => s.ModeId).Distinct().ToList();
+        var bundleIds = sessions.Select(session => session.BundleId).Distinct().ToList();
+        var modeIds = sessions.Select(session => session.ModeId).Distinct().ToList();
 
         var bundles = await _databaseContext.DialogBundles
             .Where(bundle => bundleIds.Contains(bundle.Id))
-            .ToDictionaryAsync(bundle => bundle.Id, bundle => bundle.Title);
+            .ToDictionaryAsync(bundle => bundle.Id, bundle => bundle.Title, cancellationToken);
 
         var modes = await _databaseContext.DialogModes
             .Where(mode => modeIds.Contains(mode.Id))
-            .ToDictionaryAsync(mode => mode.Id, mode => mode.Title);
+            .ToDictionaryAsync(mode => mode.Id, mode => mode.Title, cancellationToken);
 
         var sessionDtos = sessions.Select(session =>
             DialogSessionSummaryDto.FromEntity(
@@ -89,7 +91,9 @@ public class DialogController : ControllerBase
     }
 
     [HttpPost("sessions")]
-    public async Task<IActionResult> StartSession([FromBody] StartSessionRequestDto request)
+    public async Task<IActionResult> StartSession(
+        [FromBody] StartSessionRequestDto request,
+        CancellationToken cancellationToken = default)
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
@@ -104,7 +108,7 @@ public class DialogController : ControllerBase
 
         try
         {
-            var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId);
+            var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId, cancellationToken);
             return Ok(DialogSessionDto.FromEntity(session));
         }
         catch (OpenAiPaymentRequiredException)
@@ -126,7 +130,7 @@ public class DialogController : ControllerBase
     }
 
     [HttpGet("sessions/{sessionId}")]
-    public async Task<IActionResult> GetSession(string sessionId)
+    public async Task<IActionResult> GetSession(string sessionId, CancellationToken cancellationToken = default)
     {
         var userId = GetUserIdFromClaims();
         if (userId == null)
@@ -134,7 +138,7 @@ public class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        var session = await _dialogService.GetSessionForUserAsync(sessionId, userId.Value);
+        var session = await _dialogService.GetSessionForUserAsync(sessionId, userId.Value, cancellationToken);
         if (session == null)
         {
             return NotFound(new { message = "Session not found" });
@@ -144,7 +148,10 @@ public class DialogController : ControllerBase
     }
 
     [HttpPost("sessions/{sessionId}/messages")]
-    public async Task<IActionResult> SendMessage(string sessionId, [FromBody] SendMessageRequestDto request)
+    public async Task<IActionResult> SendMessage(
+        string sessionId,
+        [FromBody] SendMessageRequestDto request,
+        CancellationToken cancellationToken = default)
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
@@ -159,7 +166,7 @@ public class DialogController : ControllerBase
 
         try
         {
-            var aiMessage = await _dialogService.SendMessageAsync(sessionId, userId.Value, request.Content);
+            var aiMessage = await _dialogService.SendMessageAsync(sessionId, userId.Value, request.Content, cancellationToken);
             return Ok(DialogMessageDto.FromEntity(aiMessage));
         }
         catch (OpenAiPaymentRequiredException)
@@ -181,7 +188,7 @@ public class DialogController : ControllerBase
     }
 
     [HttpPost("sessions/{sessionId}/complete")]
-    public async Task<IActionResult> CompleteSession(string sessionId)
+    public async Task<IActionResult> CompleteSession(string sessionId, CancellationToken cancellationToken = default)
     {
         if (!_dialogService.IsOpenAiConfigured)
         {
@@ -196,7 +203,7 @@ public class DialogController : ControllerBase
 
         try
         {
-            var result = await _dialogService.CompleteSessionAsync(sessionId, userId.Value);
+            var result = await _dialogService.CompleteSessionAsync(sessionId, userId.Value, cancellationToken);
 
             if (result.XpEarned > 0)
             {
@@ -208,7 +215,7 @@ public class DialogController : ControllerBase
                     EarnedAt = DateTime.UtcNow
                 };
                 _databaseContext.UserXpRecords.Add(userXp);
-                await _databaseContext.SaveChangesAsync();
+                await _databaseContext.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Awarded {Xp} XP to user {UserId} for dialog session {SessionId}",
                     result.XpEarned, userId.Value, sessionId);
@@ -241,7 +248,7 @@ public class DialogController : ControllerBase
     }
 
     [HttpDelete("sessions/{sessionId}")]
-    public async Task<IActionResult> DeleteSession(string sessionId)
+    public async Task<IActionResult> DeleteSession(string sessionId, CancellationToken cancellationToken = default)
     {
         var userId = GetUserIdFromClaims();
         if (userId == null)
@@ -249,7 +256,7 @@ public class DialogController : ControllerBase
             return Unauthorized();
         }
 
-        var deleted = await _dialogService.DeleteSessionAsync(sessionId, userId.Value);
+        var deleted = await _dialogService.DeleteSessionAsync(sessionId, userId.Value, cancellationToken);
         if (!deleted)
         {
             return NotFound(new { message = "Session not found" });

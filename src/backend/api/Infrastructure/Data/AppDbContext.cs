@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
-using SalesTrainer.Api.Features.Achievements;
-using SalesTrainer.Api.Features.Auth;
-using SalesTrainer.Api.Features.Dialog;
-using SalesTrainer.Api.Features.Gamification;
-using SalesTrainer.Api.Features.League;
-using SalesTrainer.Api.Features.Lessons;
-using SalesTrainer.Api.Features.Onboarding;
-using SalesTrainer.Api.Features.Reference;
-using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.Achievements.Models;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Gamification.Models;
+using SalesTrainer.Api.Features.League.Models;
+using SalesTrainer.Api.Features.Lessons.Models;
+using SalesTrainer.Api.Features.Onboarding.Models;
+using SalesTrainer.Api.Features.Reference.Models;
+using SalesTrainer.Api.Features.SkillTree.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Data;
 

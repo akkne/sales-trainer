@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.Onboarding.Services.Abstract;
+using SalesTrainer.Api.Features.Onboarding.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.Onboarding;
 
 public static class OnboardingServiceCollectionExtensions

@@ -2,7 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SalesTrainer.Api.Features.Reference;
+using SalesTrainer.Api.Features.Reference.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;

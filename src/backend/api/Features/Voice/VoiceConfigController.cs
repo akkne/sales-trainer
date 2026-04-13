@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Voice.Models;
+using SalesTrainer.Api.Features.Voice.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Voice;
 

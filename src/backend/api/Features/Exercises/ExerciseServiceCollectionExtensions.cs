@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.Exercises.Services.Abstract;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.Exercises;
 
 public static class ExerciseServiceCollectionExtensions

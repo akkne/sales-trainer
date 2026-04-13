@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using SalesTrainer.Api.Features.Lessons;
+using SalesTrainer.Api.Features.Lessons.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Data;
 

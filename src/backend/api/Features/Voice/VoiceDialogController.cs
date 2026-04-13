@@ -2,7 +2,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
-using SalesTrainer.Api.Features.Dialog;
+using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Voice.Models;
+using SalesTrainer.Api.Features.Voice.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Voice;

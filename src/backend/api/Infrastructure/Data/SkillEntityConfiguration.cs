@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.SkillTree.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Data;
 

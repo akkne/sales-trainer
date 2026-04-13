@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SalesTrainer.Api.Features.Dialog.Models;
 
 namespace SalesTrainer.Api.Features.Dialog;
 

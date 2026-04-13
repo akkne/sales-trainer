@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Exercises.Models;
+using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Exercises;
 

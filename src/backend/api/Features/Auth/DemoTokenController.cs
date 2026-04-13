@@ -8,7 +8,7 @@ namespace SalesTrainer.Api.Features.Auth;
 
 [ApiController]
 [Route("demo")]
-public class DemoTokenController(IConfiguration configuration) : ControllerBase
+public sealed class DemoTokenController(IConfiguration configuration) : ControllerBase
 {
     [HttpPost("token")]
     public IActionResult IssueDemoToken()

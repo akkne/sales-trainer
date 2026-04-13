@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.League.Services.Abstract;
+using SalesTrainer.Api.Features.League.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.League;
 
 public static class LeagueServiceCollectionExtensions

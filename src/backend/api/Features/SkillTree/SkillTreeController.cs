@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.SkillTree.Models;
+using SalesTrainer.Api.Features.SkillTree.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.SkillTree;
 

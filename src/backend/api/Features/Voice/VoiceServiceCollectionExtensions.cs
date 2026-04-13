@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Features.Voice.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.Voice;
 
 public static class VoiceServiceCollectionExtensions

@@ -1,3 +1,6 @@
+using SalesTrainer.Api.Features.Auth.Services.Abstract;
+using SalesTrainer.Api.Features.Auth.Services.Implementation;
+
 namespace SalesTrainer.Api.Features.Auth;
 
 public static class AuthenticationServiceCollectionExtensions

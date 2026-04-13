@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Transcription.Models;
+using SalesTrainer.Api.Features.Transcription.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Transcription;
 

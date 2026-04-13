@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Achievements;
 
-public class AchievementSeeder(AppDbContext databaseContext, ILogger<AchievementSeeder> logger)
+public sealed class AchievementSeeder(AppDbContext databaseContext, ILogger<AchievementSeeder> logger)
 {
     private static readonly IReadOnlyList<Achievement> DefaultAchievements =
     [
@@ -19,11 +20,11 @@ public class AchievementSeeder(AppDbContext databaseContext, ILogger<Achievement
         new Achievement { Key = "skill_completed", Title = "Мастер навыка",   Description = "Полностью пройди один навык",           IconEmoji = "🎓", ConditionType = "skill_completed", ConditionThreshold = 0,    SortOrder = 10 }
     ];
 
-    public async Task SeedAsync()
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         var existingKeys = await databaseContext.Achievements
             .Select(achievement => achievement.Key)
-            .ToHashSetAsync();
+            .ToHashSetAsync(cancellationToken);
 
         var newAchievements = DefaultAchievements
             .Where(achievement => !existingKeys.Contains(achievement.Key))
@@ -47,7 +48,7 @@ public class AchievementSeeder(AppDbContext databaseContext, ILogger<Achievement
         }
 
         databaseContext.Achievements.AddRange(newAchievements);
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Achievement seed: inserted {Count} new achievements", newAchievements.Count);
     }
 }

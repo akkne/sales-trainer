@@ -1,5 +1,5 @@
 using MongoDB.Driver;
-using SalesTrainer.Api.Features.Dialog;
+using SalesTrainer.Api.Features.Dialog.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Mongo;
 
