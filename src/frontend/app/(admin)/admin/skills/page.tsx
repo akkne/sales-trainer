@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import {
     useAdminSkills,
     useCreateSkill,
     useDeleteSkill,
+    useImportSkills,
     type AdminSkill,
+    type SkillsImportResult,
 } from "@/lib/hooks/useAdmin";
 
 const SALES_TYPES = [
@@ -26,14 +28,41 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
     applicableSalesTypes: [],
 });
 
+const SKILLS_TEMPLATE = JSON.stringify([
+    {
+        slug: "example-skill",
+        title: "Example Skill",
+        iconName: "star",
+        sortOrder: 1,
+        applicableSalesTypes: ["b2b_saas", "retail"],
+        prerequisiteSkillIcon: null
+    }
+], null, 2);
+
+function downloadSkillsTemplate() {
+    const blob = new Blob([SKILLS_TEMPLATE], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "skills_template.json";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 export default function AdminSkillsPage() {
     const { data: skills = [], isLoading } = useAdminSkills();
     const createSkill = useCreateSkill();
     const deleteSkill = useDeleteSkill();
+    const importSkills = useImportSkills();
 
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+    // Import state
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [showImport, setShowImport] = useState(false);
+    const [importResult, setImportResult] = useState<SkillsImportResult | null>(null);
 
     function handleSalesTypeToggle(type: string) {
         setForm((prev) => ({
@@ -55,17 +84,80 @@ export default function AdminSkillsPage() {
         setConfirmDeleteId(null);
     }
 
+    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const result = await importSkills.mutateAsync(file);
+            setImportResult(result);
+        } catch {
+            // Error handled by hook
+        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-on-surface">Skills</h1>
-                <button
-                    onClick={() => setShowForm((v) => !v)}
-                    className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
-                >
-                    {showForm ? "Cancel" : "+ New skill"}
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => { setShowImport((v) => !v); setImportResult(null); }}
+                        className="px-4 py-2 text-sm border border-outline-variant text-on-surface-variant rounded-md hover:bg-surface-container transition-colors"
+                    >
+                        {showImport ? "Close Import" : "Import JSON"}
+                    </button>
+                    <button
+                        onClick={() => setShowForm((v) => !v)}
+                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
+                    >
+                        {showForm ? "Cancel" : "+ New skill"}
+                    </button>
+                </div>
             </div>
+
+            {/* Import Section */}
+            {showImport && (
+                <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-medium text-on-surface">Import Skills from JSON</h2>
+                        <button
+                            onClick={downloadSkillsTemplate}
+                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors underline"
+                        >
+                            Download template
+                        </button>
+                    </div>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleImport}
+                        className="block w-full text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-outline-variant file:text-sm file:bg-surface-container file:text-on-surface hover:file:bg-surface-container-high cursor-pointer"
+                    />
+                    {importSkills.isPending && (
+                        <p className="mt-3 text-xs text-on-surface-variant">Importing...</p>
+                    )}
+                    {importSkills.isError && (
+                        <p className="mt-3 text-xs text-error">{(importSkills.error as Error).message}</p>
+                    )}
+                    {importResult && (
+                        <div className="mt-3 p-3 bg-surface-container rounded-md">
+                            <p className="text-xs text-on-surface">
+                                Created: <span className="font-medium">{importResult.skillsCreated}</span> | Updated: <span className="font-medium">{importResult.skillsUpdated}</span>
+                            </p>
+                            {importResult.errors.length > 0 && (
+                                <div className="mt-2">
+                                    <p className="text-xs text-error font-medium">{importResult.errors.length} error(s):</p>
+                                    <ul className="mt-1 text-xs text-error font-mono">
+                                        {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {showForm && (
                 <div className="bg-surface-container-lowest rounded-2xl p-5 mb-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { use } from "react";
 import Link from "next/link";
 import {
@@ -12,65 +12,53 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 
-const EXERCISE_TYPES = ["multiple_choice", "fill_blank", "open_question"] as const;
-type ExerciseType = (typeof EXERCISE_TYPES)[number];
+import {
+    EXERCISE_TYPES,
+    TYPE_LABELS,
+    ExerciseType,
+    ExerciseContent,
+    MultipleChoiceContent,
+    FillBlankContent,
+    OpenQuestionContent,
+    OrderingContent,
+    MatchingContent,
+    CategorizingContent,
+    FindErrorContent,
+    RewriteBetterContent,
+    AiDialogContent,
+    RateCallContent,
+    WrittenAnswerContent,
+    emptyMultipleChoice,
+    emptyFillBlank,
+    emptyOpenQuestion,
+    emptyOrdering,
+    emptyMatching,
+    emptyCategorizing,
+    emptyFindError,
+    emptyRewriteBetter,
+    emptyAiDialog,
+    emptyRateCall,
+    emptyWrittenAnswer,
+    inputCls,
+    labelCls,
+} from "@/components/admin/exercise-editors";
 
-// --- Type-specific content interfaces ---
+import { MultipleChoiceEditor } from "@/components/admin/exercise-editors/MultipleChoiceEditor";
+import { FillBlankEditor } from "@/components/admin/exercise-editors/FillBlankEditor";
+import { OpenQuestionEditor } from "@/components/admin/exercise-editors/OpenQuestionEditor";
+import { OrderingEditor } from "@/components/admin/exercise-editors/OrderingEditor";
+import { MatchingEditor } from "@/components/admin/exercise-editors/MatchingEditor";
+import { CategorizingEditor } from "@/components/admin/exercise-editors/CategorizingEditor";
+import { FindErrorEditor } from "@/components/admin/exercise-editors/FindErrorEditor";
+import { RewriteBetterEditor } from "@/components/admin/exercise-editors/RewriteBetterEditor";
+import { AiDialogEditor } from "@/components/admin/exercise-editors/AiDialogEditor";
+import { RateCallEditor } from "@/components/admin/exercise-editors/RateCallEditor";
+import { WrittenAnswerEditor } from "@/components/admin/exercise-editors/WrittenAnswerEditor";
 
-interface MultipleChoiceContent {
-    situation: string;
-    question: string;
-    options: string[];
-    correctOptionIndex: number;
-    explanation: string;
+// Monochrome badge styling
+function typeBadgeColor(): string {
+    return "bg-surface-container text-on-surface-variant border border-outline-variant";
 }
-
-interface FillBlankContent {
-    characterName: string;
-    characterLine: string;
-    options: string[];
-    correctOptionIndex: number;
-    explanation: string;
-}
-
-interface OpenQuestionContent {
-    question: string;
-    aiPrompt: string;
-}
-
-function emptyMultipleChoice(): MultipleChoiceContent {
-    return { situation: "", question: "", options: ["", "", "", ""], correctOptionIndex: 0, explanation: "" };
-}
-
-function emptyFillBlank(): FillBlankContent {
-    return { characterName: "", characterLine: "___", options: ["", "", "", ""], correctOptionIndex: 0, explanation: "" };
-}
-
-function emptyOpenQuestion(): OpenQuestionContent {
-    return { question: "", aiPrompt: "" };
-}
-
-// --- Type badge helpers ---
-
-function typeLabel(type: string): string {
-    const labels: Record<string, string> = {
-        multiple_choice: "Multiple Choice",
-        fill_blank: "Fill Blank",
-        open_question: "Open Question",
-    };
-    return labels[type] ?? type;
-}
-
-function typeBadgeColor(type: string): string {
-    const colors: Record<string, string> = {
-        multiple_choice: "bg-tertiary-container text-tertiary",
-        fill_blank: "bg-primary-container text-primary",
-        open_question: "bg-secondary-container text-secondary",
-    };
-    return colors[type] ?? "bg-surface-container text-on-surface-variant";
-}
-
-// --- Sortable exercise list drag helpers ---
 
 function moveExercise(exercises: ExerciseRow[], from: number, to: number): ExerciseRow[] {
     const result = [...exercises];
@@ -81,147 +69,88 @@ function moveExercise(exercises: ExerciseRow[], from: number, to: number): Exerc
 }
 
 interface ExerciseRow {
-    id: string | null; // null = new, not yet saved
+    id: string | null;
     type: ExerciseType;
     sortOrder: number;
-    content: MultipleChoiceContent | FillBlankContent | OpenQuestionContent;
+    content: ExerciseContent;
 }
 
-function cloneExercise(ex: ExerciseRow): ExerciseRow {
-    return { ...ex, content: JSON.parse(JSON.stringify(ex.content)) };
+function getEmptyContent(type: ExerciseType): ExerciseContent {
+    switch (type) {
+        case "multiple_choice": return emptyMultipleChoice();
+        case "fill_blank": return emptyFillBlank();
+        case "open_question": return emptyOpenQuestion();
+        case "ordering": return emptyOrdering();
+        case "matching": return emptyMatching();
+        case "categorizing": return emptyCategorizing();
+        case "find_error": return emptyFindError();
+        case "rewrite_better": return emptyRewriteBetter();
+        case "ai_dialog": return emptyAiDialog();
+        case "rate_call": return emptyRateCall();
+        case "written_answer": return emptyWrittenAnswer();
+    }
 }
 
-// --- Content editors per type ---
-
-function MultipleChoiceEditor({ content, onChange }: {
-    content: MultipleChoiceContent;
-    onChange: (c: MultipleChoiceContent) => void;
-}) {
-    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelCls = "text-xs text-on-surface-variant";
-
-    return (
-        <div className="space-y-3">
-            <label className="block">
-                <span className={labelCls}>Situation (context)</span>
-                <input className={inputCls} value={content.situation}
-                    onChange={(e) => onChange({ ...content, situation: e.target.value })} />
-            </label>
-            <label className="block">
-                <span className={labelCls}>Question</span>
-                <input className={inputCls} value={content.question}
-                    onChange={(e) => onChange({ ...content, question: e.target.value })} />
-            </label>
-            <div>
-                <span className={labelCls}>Options</span>
-                {content.options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2 mt-1">
-                        <input
-                            type="radio"
-                            checked={content.correctOptionIndex === i}
-                            onChange={() => onChange({ ...content, correctOptionIndex: i })}
-                            className="shrink-0"
-                        />
-                        <input className={inputCls} value={opt}
-                            onChange={(e) => {
-                                const opts = [...content.options];
-                                opts[i] = e.target.value;
-                                onChange({ ...content, options: opts });
-                            }}
-                            placeholder={`Option ${i + 1}`}
-                        />
-                    </div>
-                ))}
-                <span className="text-[10px] text-on-surface-variant mt-1 block">
-                    Radio button marks the correct answer
-                </span>
-            </div>
-            <label className="block">
-                <span className={labelCls}>Explanation (shown after answer)</span>
-                <input className={inputCls} value={content.explanation}
-                    onChange={(e) => onChange({ ...content, explanation: e.target.value })} />
-            </label>
-        </div>
-    );
+function contentEditor(
+    type: ExerciseType,
+    content: ExerciseContent,
+    onChange: (c: ExerciseContent) => void
+) {
+    switch (type) {
+        case "multiple_choice":
+            return <MultipleChoiceEditor content={content as MultipleChoiceContent} onChange={onChange} />;
+        case "fill_blank":
+            return <FillBlankEditor content={content as FillBlankContent} onChange={onChange} />;
+        case "open_question":
+            return <OpenQuestionEditor content={content as OpenQuestionContent} onChange={onChange} />;
+        case "ordering":
+            return <OrderingEditor content={content as OrderingContent} onChange={onChange} />;
+        case "matching":
+            return <MatchingEditor content={content as MatchingContent} onChange={onChange} />;
+        case "categorizing":
+            return <CategorizingEditor content={content as CategorizingContent} onChange={onChange} />;
+        case "find_error":
+            return <FindErrorEditor content={content as FindErrorContent} onChange={onChange} />;
+        case "rewrite_better":
+            return <RewriteBetterEditor content={content as RewriteBetterContent} onChange={onChange} />;
+        case "ai_dialog":
+            return <AiDialogEditor content={content as AiDialogContent} onChange={onChange} />;
+        case "rate_call":
+            return <RateCallEditor content={content as RateCallContent} onChange={onChange} />;
+        case "written_answer":
+            return <WrittenAnswerEditor content={content as WrittenAnswerContent} onChange={onChange} />;
+    }
 }
 
-function FillBlankEditor({ content, onChange }: {
-    content: FillBlankContent;
-    onChange: (c: FillBlankContent) => void;
-}) {
-    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelCls = "text-xs text-on-surface-variant";
-
-    return (
-        <div className="space-y-3">
-            <label className="block">
-                <span className={labelCls}>Character Name</span>
-                <input className={inputCls} value={content.characterName}
-                    onChange={(e) => onChange({ ...content, characterName: e.target.value })} />
-            </label>
-            <label className="block">
-                <span className={labelCls}>Line with blank (use ___ for the gap)</span>
-                <textarea rows={2} className={inputCls} value={content.characterLine}
-                    onChange={(e) => onChange({ ...content, characterLine: e.target.value })} />
-            </label>
-            <div>
-                <span className={labelCls}>Options</span>
-                {content.options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2 mt-1">
-                        <input
-                            type="radio"
-                            checked={content.correctOptionIndex === i}
-                            onChange={() => onChange({ ...content, correctOptionIndex: i })}
-                            className="shrink-0"
-                        />
-                        <input className={inputCls} value={opt}
-                            onChange={(e) => {
-                                const opts = [...content.options];
-                                opts[i] = e.target.value;
-                                onChange({ ...content, options: opts });
-                            }}
-                            placeholder={`Option ${i + 1}`}
-                        />
-                    </div>
-                ))}
-                <span className="text-[10px] text-on-surface-variant mt-1 block">
-                    Radio button marks the correct answer
-                </span>
-            </div>
-            <label className="block">
-                <span className={labelCls}>Explanation</span>
-                <input className={inputCls} value={content.explanation}
-                    onChange={(e) => onChange({ ...content, explanation: e.target.value })} />
-            </label>
-        </div>
-    );
+function renderContentPreview(row: ExerciseRow): string {
+    const c = row.content;
+    switch (row.type) {
+        case "multiple_choice":
+            return (c as MultipleChoiceContent).question || "(no question)";
+        case "fill_blank":
+            return `${(c as FillBlankContent).characterName}: ${(c as FillBlankContent).characterLine}`;
+        case "open_question":
+            return (c as OpenQuestionContent).question || "(no question)";
+        case "ordering":
+            return (c as OrderingContent).instruction || "(no instruction)";
+        case "matching":
+            return (c as MatchingContent).instruction || "(no instruction)";
+        case "categorizing":
+            return (c as CategorizingContent).instruction || "(no instruction)";
+        case "find_error":
+            return (c as FindErrorContent).instruction || "(no instruction)";
+        case "rewrite_better":
+            return (c as RewriteBetterContent).originalText?.slice(0, 50) || "(no text)";
+        case "ai_dialog":
+            return (c as AiDialogContent).scenario?.slice(0, 50) || "(no scenario)";
+        case "rate_call":
+            return `${(c as RateCallContent).transcript?.length || 0} lines, ${(c as RateCallContent).criteria?.length || 0} criteria`;
+        case "written_answer":
+            return (c as WrittenAnswerContent).prompt?.slice(0, 50) || "(no prompt)";
+        default:
+            return "(preview)";
+    }
 }
-
-function OpenQuestionEditor({ content, onChange }: {
-    content: OpenQuestionContent;
-    onChange: (c: OpenQuestionContent) => void;
-}) {
-    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelCls = "text-xs text-on-surface-variant";
-
-    return (
-        <div className="space-y-3">
-            <label className="block">
-                <span className={labelCls}>Question text</span>
-                <input className={inputCls} value={content.question}
-                    onChange={(e) => onChange({ ...content, question: e.target.value })} />
-            </label>
-            <label className="block">
-                <span className={labelCls}>AI evaluation prompt (criteria)</span>
-                <textarea rows={6} className={inputCls} value={content.aiPrompt}
-                    onChange={(e) => onChange({ ...content, aiPrompt: e.target.value })}
-                    placeholder="Rate the answer based on whether the user mentions..." />
-            </label>
-        </div>
-    );
-}
-
-// --- Main page ---
 
 export default function AdminLessonExercisesPage({
     params,
@@ -242,25 +171,27 @@ export default function AdminLessonExercisesPage({
         },
     });
 
-    const [rows, setRows] = useState<ExerciseRow[]>([]);
-    // Initialize rows once when query resolves
-    const initRef = useRef(false);
-    useEffect(() => {
-        if (initRef.current) return;
-        initRef.current = true;
-        const mapped: ExerciseRow[] = exercises.map((ex) => ({
-            id: ex.id,
-            type: ex.type as ExerciseType,
-            sortOrder: ex.sortOrder,
-            content: ex.content as unknown as ExerciseRow["content"],
-        }));
-        setRows(mapped);
-    }, [exercises]);
+    // Local state for editing - initialized lazily from server data
+    const [localRows, setLocalRows] = useState<ExerciseRow[] | null>(null);
+
+    // Use local state if available, otherwise derive from server data
+    const rows: ExerciseRow[] = localRows ?? exercises.map((ex) => ({
+        id: ex.id,
+        type: ex.type as ExerciseType,
+        sortOrder: ex.sortOrder,
+        content: ex.content as unknown as ExerciseContent,
+    }));
+
+    // Wrapper to set local state
+    function setRows(newRows: ExerciseRow[] | ((prev: ExerciseRow[]) => ExerciseRow[])) {
+        if (typeof newRows === "function") {
+            setLocalRows((prev) => newRows(prev ?? rows));
+        } else {
+            setLocalRows(newRows);
+        }
+    }
 
     const [editingId, setEditingId] = useState<string | null>(null);
-
-    const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-    const labelCls = "text-xs text-on-surface-variant";
     const cardCls = "bg-surface-container-lowest border border-outline-variant rounded-2xl p-4";
 
     async function saveExercise(row: ExerciseRow) {
@@ -299,31 +230,6 @@ export default function AdminLessonExercisesPage({
         if (editingId === id) setEditingId(null);
     }
 
-    function contentEditor(type: ExerciseType, content: ExerciseRow["content"], onChange: (c: ExerciseRow["content"]) => void) {
-        if (type === "multiple_choice") {
-            return (
-                <MultipleChoiceEditor
-                    content={content as MultipleChoiceContent}
-                    onChange={(c) => onChange(c as ExerciseRow["content"])}
-                />
-            );
-        }
-        if (type === "fill_blank") {
-            return (
-                <FillBlankEditor
-                    content={content as FillBlankContent}
-                    onChange={(c) => onChange(c as ExerciseRow["content"])}
-                />
-            );
-        }
-        return (
-            <OpenQuestionEditor
-                content={content as OpenQuestionContent}
-                onChange={(c) => onChange(c as ExerciseRow["content"])}
-            />
-        );
-    }
-
     const isLoadingMut = createMut.isPending || updateExerciseMut.isPending;
 
     return (
@@ -348,7 +254,7 @@ export default function AdminLessonExercisesPage({
             </div>
 
             {rows.length === 0 && !isLoading && (
-                <p className="text-sm text-on-surface-variant">No exercises yet. Click "+ Add exercise" to create one.</p>
+                <p className="text-sm text-on-surface-variant">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>
             )}
 
             {isLoading && <p className="text-sm text-on-surface-variant">Loading...</p>}
@@ -359,7 +265,6 @@ export default function AdminLessonExercisesPage({
 
                     return (
                         <div key={row.id ?? "__new__"} className={cardCls}>
-                            {/* Drag handles and header */}
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                     <div className="flex flex-col gap-0.5">
@@ -380,10 +285,10 @@ export default function AdminLessonExercisesPage({
                                             ▼
                                         </button>
                                     </div>
-                                    <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor(row.type)}`}>
-                                        {typeLabel(row.type)}
+                                    <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
+                                        {TYPE_LABELS[row.type]}
                                     </span>
-                                    <span className="text-xs text-on-surface-variant">order: {row.sortOrder}</span>
+                                    <span className="text-xs text-on-surface-variant">#{row.sortOrder}</span>
                                 </div>
                                 {!isEditing && (
                                     <div className="flex gap-3">
@@ -417,18 +322,12 @@ export default function AdminLessonExercisesPage({
                                                 setRows(rows.map((r, ri) => {
                                                     if (ri !== index) return r;
                                                     if (newType === r.type) return r;
-                                                    if (newType === "multiple_choice") {
-                                                        return { ...r, type: newType as "multiple_choice", content: emptyMultipleChoice() };
-                                                    }
-                                                    if (newType === "fill_blank") {
-                                                        return { ...r, type: newType as "fill_blank", content: emptyFillBlank() };
-                                                    }
-                                                    return { ...r, type: newType as "open_question", content: emptyOpenQuestion() };
+                                                    return { ...r, type: newType, content: getEmptyContent(newType) };
                                                 }));
                                             }}
                                         >
                                             {EXERCISE_TYPES.map((t) => (
-                                                <option key={t} value={t}>{typeLabel(t)}</option>
+                                                <option key={t} value={t}>{TYPE_LABELS[t]}</option>
                                             ))}
                                         </select>
                                     </label>
@@ -448,11 +347,10 @@ export default function AdminLessonExercisesPage({
                                         {row.id ? (
                                             <button
                                                 onClick={() => {
-                                                    // Reset to original
                                                     const orig = exercises.find((ex) => ex.id === row.id);
                                                     if (orig) {
                                                         setRows(rows.map((r, ri) => ri === index
-                                                            ? { id: orig.id, type: orig.type as ExerciseType, sortOrder: orig.sortOrder, content: orig.content as unknown as ExerciseRow["content"] }
+                                                            ? { id: orig.id, type: orig.type as ExerciseType, sortOrder: orig.sortOrder, content: orig.content as unknown as ExerciseContent }
                                                             : r
                                                         ));
                                                     }
@@ -483,17 +381,4 @@ export default function AdminLessonExercisesPage({
             </div>
         </div>
     );
-}
-
-function renderContentPreview(row: ExerciseRow) {
-    if (row.type === "multiple_choice") {
-        const c = row.content as MultipleChoiceContent;
-        return c.question || "(no question)";
-    }
-    if (row.type === "fill_blank") {
-        const c = row.content as FillBlankContent;
-        return `${c.characterName}: ${c.characterLine}`;
-    }
-    const c = row.content as OpenQuestionContent;
-    return c.question || "(no question)";
 }

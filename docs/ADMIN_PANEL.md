@@ -75,6 +75,12 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 | GET | /admin/users | — | `AdminUserDto[]` |
 | PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` |
 
+### JSON Import (Seeder)
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /admin/seeder/skills | `multipart/form-data` with JSON file | `SkillsImportResultDto` |
+| POST | /admin/seeder/lessons | `multipart/form-data` with JSON file | `LessonsImportResultDto` |
+
 ---
 
 ## Frontend routes
@@ -87,14 +93,18 @@ app/(admin)/
   admin/
     page.tsx           ← redirect to /admin/skills
     skills/
-      page.tsx         ← skill list
+      page.tsx         ← skill list + JSON import
       [id]/
         page.tsx       ← edit skill + lessons list
         lessons/
           [lessonId]/
-            page.tsx   ← exercises list + editor
+            page.tsx       ← lesson edit + exercises list
+            exercises/
+              page.tsx     ← visual exercise editor (all 11 types)
         reference/
           page.tsx     ← reference materials list + editor
+    lessons/
+      page.tsx         ← all lessons view + JSON import
     users/
       page.tsx         ← user list + role management (superadmin only)
 ```
@@ -103,8 +113,72 @@ app/(admin)/
 
 ## UI principles
 
-- Minimal, functional, no animations
+- Minimal, functional, monochrome color scheme
 - Standard HTML-like forms via Tailwind utility classes
-- Tables for list views, simple modals for create/edit
+- Tables for list views
 - Inline delete confirmation (no separate modal — just a button state change to "Confirm?")
-- Role badge on user list (color-coded: gray=User, blue=Admin, purple=SuperAdmin)
+- JSON import sections collapsible on each entity page
+
+---
+
+## JSON Import Formats
+
+### Skills Template
+```json
+[
+  {
+    "slug": "cold-calling",
+    "title": "Cold Calling",
+    "iconName": "phone",
+    "sortOrder": 1,
+    "applicableSalesTypes": ["b2b_saas", "b2c"],
+    "prerequisiteSkillIcon": null
+  }
+]
+```
+
+### Lessons Template (with all 11 exercise types)
+```json
+[
+  {
+    "skillIcons": ["cold-calls"],
+    "title": "Opening the Call",
+    "sortOrder": 1,
+    "difficultyLevel": 1,
+    "xpReward": 50,
+    "exercises": [
+      { "type": "multiple_choice", "sortOrder": 1, "content": {...} },
+      { "type": "fill_blank", "sortOrder": 2, "content": {...} },
+      { "type": "open_question", "sortOrder": 3, "content": {...} },
+      { "type": "ordering", "sortOrder": 4, "content": {...} },
+      { "type": "matching", "sortOrder": 5, "content": {...} },
+      { "type": "categorizing", "sortOrder": 6, "content": {...} },
+      { "type": "find_error", "sortOrder": 7, "content": {...} },
+      { "type": "rewrite_better", "sortOrder": 8, "content": {...} },
+      { "type": "ai_dialog", "sortOrder": 9, "content": {...} },
+      { "type": "rate_call", "sortOrder": 10, "content": {...} },
+      { "type": "written_answer", "sortOrder": 11, "content": {...} }
+    ]
+  }
+]
+```
+
+---
+
+## Exercise Types (11 total)
+
+| Type | Description | Key Content Fields |
+|------|-------------|-------------------|
+| `multiple_choice` | Quiz with 4 options | situation, question, options[], correctOptionIndex, explanation |
+| `fill_blank` | Dialog completion | characterName, characterLine (with ___), options[], correctOptionIndex |
+| `open_question` | Free-form AI-evaluated answer | question, aiPrompt |
+| `ordering` | Arrange items in sequence | instruction, items[], correctOrder[], explanation |
+| `matching` | Connect left/right columns | instruction, leftItems[], rightItems[], correctPairs[] |
+| `categorizing` | Sort items into buckets | instruction, categories[], items[], correctMapping{} |
+| `find_error` | Identify mistake in dialog | instruction, dialogLines[], errorLineId, suggestedFixes[] |
+| `rewrite_better` | Improve given text | originalText, context, minLength, maxLength, aiPrompt |
+| `ai_dialog` | Practice with AI persona | scenario, persona{}, systemPrompt, minTurnsForCompletion, aiPrompt |
+| `rate_call` | Evaluate transcript quality | transcript[], criteria[], aiPrompt |
+| `written_answer` | Write based on prompt | prompt, context, minLength, maxLength, aiPrompt |
+
+See `src/frontend/components/admin/exercise-editors/types.ts` for full TypeScript interfaces.

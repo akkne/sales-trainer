@@ -12,7 +12,12 @@ import {
     useDeleteExercise,
 } from "@/lib/hooks/useAdmin";
 
-const EXERCISE_TYPES = ["multiple_choice", "fill_blank", "open_question"];
+const EXERCISE_TYPES = [
+    "multiple_choice", "fill_blank", "open_question",
+    "ordering", "matching", "categorizing",
+    "find_error", "rewrite_better", "ai_dialog",
+    "rate_call", "written_answer"
+];
 
 const CONTENT_TEMPLATES: Record<string, object> = {
     multiple_choice: {
@@ -31,6 +36,61 @@ const CONTENT_TEMPLATES: Record<string, object> = {
     },
     open_question: {
         question: "",
+        aiPrompt: "",
+    },
+    ordering: {
+        instruction: "",
+        items: ["", "", ""],
+        correctOrder: [],
+        explanation: "",
+    },
+    matching: {
+        instruction: "",
+        leftItems: ["", ""],
+        rightItems: ["", ""],
+        correctPairs: [],
+        explanation: "",
+    },
+    categorizing: {
+        instruction: "",
+        categories: ["Category A", "Category B"],
+        items: [{ id: "1", text: "" }],
+        correctMapping: {},
+        explanation: "",
+    },
+    find_error: {
+        instruction: "",
+        dialogLines: [{ id: "1", speaker: "", text: "" }],
+        errorLineId: "",
+        requireExplanation: false,
+        suggestedFixes: [],
+        correctFixIds: [],
+        aiPrompt: "",
+    },
+    rewrite_better: {
+        originalText: "",
+        context: "",
+        minLength: 20,
+        maxLength: 500,
+        aiPrompt: "",
+    },
+    ai_dialog: {
+        scenario: "",
+        persona: { name: "", role: "", personality: "" },
+        systemPrompt: "",
+        minTurnsForCompletion: 4,
+        aiPrompt: "",
+    },
+    rate_call: {
+        transcript: [{ speaker: "", text: "" }],
+        criteria: [{ id: "1", name: "", description: "" }],
+        aiPrompt: "",
+    },
+    written_answer: {
+        prompt: "",
+        context: "",
+        minLength: 50,
+        maxLength: 1000,
         aiPrompt: "",
     },
 };
