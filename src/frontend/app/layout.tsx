@@ -16,7 +16,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-    title: "Sallevate",
+    title: "Sellevate",
     description: "Тренажёр навыков продаж",
 };
 

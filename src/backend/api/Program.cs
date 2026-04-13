@@ -37,13 +37,13 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
             lokiUrl,
             labels:
             [
-                new LokiLabel { Key = "service", Value = "sallevate-backend" },
+                new LokiLabel { Key = "service", Value = "sellevate-backend" },
                 new LokiLabel { Key = "env",     Value = context.HostingEnvironment.EnvironmentName }
             ],
             propertiesAsLabels: ["RequestId", "UserId"]
         )
         .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", "Sallevate.Api");
+        .Enrich.WithProperty("Application", "Sellevate.Api");
 });
 
 builder.Services.AddDbContext<AppDbContext>(databaseOptions =>
@@ -159,9 +159,6 @@ using (var serviceScope = application.Services.CreateScope())
 
     var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
     await achievementSeeder.SeedAsync();
-
-    var dialogSeeder = serviceScope.ServiceProvider.GetRequiredService<DialogSeeder>();
-    await dialogSeeder.SeedAsync();
 }
 
 application.Run();

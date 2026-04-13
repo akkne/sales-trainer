@@ -1,4 +1,4 @@
-# Sallevate — Улучшенная архитектура
+# Sellevate — Улучшенная архитектура
 
 > Документ написан на основе анализа текущего состояния проекта (апрель 2026).  
 > Цель — описать путь эволюции монолита к масштабируемой, отказоустойчивой архитектуре.
@@ -12,7 +12,7 @@
 Проект реализован как **монолит с feature-slice организацией** на ASP.NET Core 9.
 
 ```
-Sallevate.Api (один процесс)
+Sellevate.Api (один процесс)
 ├── Features/Auth          — аутентификация, JWT, Google OAuth
 ├── Features/Onboarding    — профиль пользователя
 ├── Features/SkillTree     — дерево навыков
@@ -202,7 +202,7 @@ week.closed
 - Добавить версионирование контента (content_versions) при изменении упражнений через Admin
 
 ### Этап 3 — Выделить AI Service (3–5 дней)
-- Поднять отдельный ASP.NET Core процесс `Sallevate.AiService`
+- Поднять отдельный ASP.NET Core процесс `Sellevate.AiService`
 - Перенести `FreeTextEvaluationStrategy` и `WhisperTranscriptionService`
 - Добавить очередь (сначала Redis Streams, потом Kafka)
 - Монолит вызывает AI Service через HTTP или публикует задачу в очередь

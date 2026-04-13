@@ -11,7 +11,6 @@ public static class DialogServiceCollectionExtensions
         services.AddSingleton<MongoDbContext>();
         services.AddScoped<IOpenAiChatService, OpenAiChatService>();
         services.AddScoped<IDialogService, DialogService>();
-        services.AddScoped<DialogSeeder>();
         return services;
     }
 }

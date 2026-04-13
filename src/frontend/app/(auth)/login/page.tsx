@@ -21,7 +21,7 @@ export default function LoginPage() {
             {/* Brand header */}
             <div className="flex items-center justify-center gap-2 mb-8">
                 <Icon name="psychology" size="xl" className="text-primary" />
-                <span className="font-headline font-bold text-2xl text-primary">Sallevate</span>
+                <span className="font-headline font-bold text-2xl text-primary">Sellevate</span>
             </div>
 
             <h1 className="font-headline text-3xl font-bold text-on-surface mb-2 text-center">

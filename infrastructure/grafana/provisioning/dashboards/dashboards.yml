@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: sallevate
+  - name: sellevate
     orgId: 1
-    folder: Sallevate
+    folder: Sellevate
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30
