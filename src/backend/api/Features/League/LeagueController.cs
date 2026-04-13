@@ -7,7 +7,7 @@ namespace SalesTrainer.Api.Features.League;
 [ApiController]
 [Route("league")]
 [Authorize]
-public class LeagueController(LeagueService leagueService) : ControllerBase
+public class LeagueController(ILeagueService leagueService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<CurrentLeagueResponseDto>> GetCurrentLeague()

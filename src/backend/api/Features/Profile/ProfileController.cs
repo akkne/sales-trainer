@@ -7,7 +7,7 @@ namespace SalesTrainer.Api.Features.Profile;
 [ApiController]
 [Route("profile")]
 [Authorize]
-public class ProfileController(ProfileService profileService) : ControllerBase
+public class ProfileController(IProfileService profileService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<UserProfileStatsDto>> GetProfileStats()

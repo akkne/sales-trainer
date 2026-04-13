@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.League;
 
-public class WeeklyLeagueClosureJob(LeagueService leagueService)
+public class WeeklyLeagueClosureJob(ILeagueService leagueService)
 {
     public async Task ExecuteAsync()
     {

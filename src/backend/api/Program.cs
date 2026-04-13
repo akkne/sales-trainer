@@ -9,16 +9,28 @@ using Prometheus;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Api.Features.Achievements;
+using SalesTrainer.Api.Features.Auth;
+using SalesTrainer.Api.Features.Dialog;
+using SalesTrainer.Api.Features.Exercises;
+using SalesTrainer.Api.Features.Gamification;
+using SalesTrainer.Api.Features.League;
+using SalesTrainer.Api.Features.Onboarding;
+using SalesTrainer.Api.Features.Profile;
+using SalesTrainer.Api.Features.Reference;
+using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.Transcription;
+using SalesTrainer.Api.Features.Voice;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((ctx, loggerConfig) =>
+builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = ctx.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
 
-    loggerConfig
-        .ReadFrom.Configuration(ctx.Configuration)
+    loggerConfiguration
+        .ReadFrom.Configuration(context.Configuration)
         .WriteTo.Console(outputTemplate:
             "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
         .WriteTo.GrafanaLoki(
@@ -26,7 +38,7 @@ builder.Host.UseSerilog((ctx, loggerConfig) =>
             labels:
             [
                 new LokiLabel { Key = "service", Value = "sallevate-backend" },
-                new LokiLabel { Key = "env",     Value = ctx.HostingEnvironment.EnvironmentName }
+                new LokiLabel { Key = "env",     Value = context.HostingEnvironment.EnvironmentName }
             ],
             propertiesAsLabels: ["RequestId", "UserId"]
         )
@@ -59,12 +71,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authOptions =>
+builder.Services.AddAuthorization(authorizationOptions =>
 {
-    authOptions.AddPolicy("RequireAdmin", policy =>
-        policy.RequireAssertion(ctx =>
-            ctx.User.IsInRole("Admin") || ctx.User.IsInRole("SuperAdmin")));
-    authOptions.AddPolicy("RequireSuperAdmin", policy =>
+    authorizationOptions.AddPolicy("RequireAdmin", policy =>
+        policy.RequireAssertion(context =>
+            context.User.IsInRole("Admin") || context.User.IsInRole("SuperAdmin")));
+    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
         policy.RequireRole("SuperAdmin"));
 });
 
@@ -80,38 +92,20 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowAnyMethod()
         .AllowCredentials()));
 
-builder.Services.AddScoped<SalesTrainer.Api.Features.Achievements.AchievementService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Achievements.AchievementSeeder>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.AuthenticationService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Onboarding.OnboardingService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.SkillTree.SkillTreeService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Reference.ReferenceService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Profile.ProfileService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.League.LeagueService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Gamification.StreakResetJob>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.ExerciseEvaluationFactory>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Transcription.ITranscriptionService,
-    SalesTrainer.Api.Features.Transcription.WhisperTranscriptionService>();
-builder.Services.AddSingleton<SalesTrainer.Api.Infrastructure.Mongo.MongoDbContext>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.IOpenAiChatService,
-    SalesTrainer.Api.Features.Dialog.OpenAiChatService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IVoicerTtsService,
-    SalesTrainer.Api.Features.Voice.VoicerTtsService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IGoogleTtsService,
-    SalesTrainer.Api.Features.Voice.GoogleTtsService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Voice.IVoiceDialogService,
-    SalesTrainer.Api.Features.Voice.VoiceDialogService>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
-    SalesTrainer.Api.Features.Exercises.MultipleChoiceEvaluationStrategy>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
-    SalesTrainer.Api.Features.Exercises.FillBlankEvaluationStrategy>();
-builder.Services.AddScoped<SalesTrainer.Api.Features.Exercises.IExerciseEvaluationStrategy,
-    SalesTrainer.Api.Features.Exercises.OpenQuestionEvaluationStrategy>();
+builder.Services
+    .AddAchievementFeatureServices()
+    .AddAuthenticationFeatureServices()
+    .AddDialogFeatureServices()
+    .AddExerciseFeatureServices()
+    .AddGamificationFeatureServices()
+    .AddLeagueFeatureServices()
+    .AddOnboardingFeatureServices()
+    .AddProfileFeatureServices()
+    .AddReferenceFeatureServices()
+    .AddSkillTreeFeatureServices()
+    .AddTranscriptionFeatureServices()
+    .AddVoiceFeatureServices();
+
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
@@ -121,7 +115,7 @@ builder.Services.AddHttpClient("VoicerTts")
 builder.Services.AddHttpClient("GoogleTts")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddHttpClient(); // fallback default client
+builder.Services.AddHttpClient();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -145,28 +139,28 @@ application.UseAuthorization();
 application.UseHangfireDashboard("/hangfire");
 application.MapControllers();
 
-RecurringJob.AddOrUpdate<SalesTrainer.Api.Features.League.WeeklyLeagueClosureJob>(
+RecurringJob.AddOrUpdate<WeeklyLeagueClosureJob>(
     "weekly-league-closure",
     weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
     "0 0 * * 1");
 
-RecurringJob.AddOrUpdate<SalesTrainer.Api.Features.Gamification.StreakResetJob>(
+RecurringJob.AddOrUpdate<StreakResetJob>(
     "daily-streak-reset",
     streakResetJob => streakResetJob.ExecuteAsync(),
-    "5 0 * * *"); // 00:05 UTC every day
+    "5 0 * * *");
 
 using (var serviceScope = application.Services.CreateScope())
 {
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
     databaseContext.Database.Migrate();
 
-    var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Auth.SuperAdminSeeder>();
+    var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SuperAdminSeeder>();
     await superAdminSeeder.SeedAsync();
 
-    var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Achievements.AchievementSeeder>();
+    var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
     await achievementSeeder.SeedAsync();
 
-    var dialogSeeder = serviceScope.ServiceProvider.GetRequiredService<SalesTrainer.Api.Features.Dialog.DialogSeeder>();
+    var dialogSeeder = serviceScope.ServiceProvider.GetRequiredService<DialogSeeder>();
     await dialogSeeder.SeedAsync();
 }
 

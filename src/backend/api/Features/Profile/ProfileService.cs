@@ -4,50 +4,55 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Profile;
 
-public class ProfileService(AppDbContext databaseContext)
+internal sealed class ProfileService(AppDbContext databaseContext) : IProfileService
 {
-    public async Task<UserProfileStatsDto> GetProfileStatsForUserAsync(Guid userId)
+    public async Task<UserProfileStatsDto> GetProfileStatsForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var user = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.Id == userId)
+            .FirstOrDefaultAsync(userRecord => userRecord.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
         var userProfile = await databaseContext.UserProfiles
-            .FirstOrDefaultAsync(profile => profile.UserId == userId);
+            .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
 
         var streakRecord = await databaseContext.UserStreaks
-            .FirstOrDefaultAsync(streak => streak.UserId == userId);
+            .FirstOrDefaultAsync(streak => streak.UserId == userId, cancellationToken);
 
-        var totalXpAmount = await databaseContext.UserXpRecords
-            .Where(xp => xp.UserId == userId)
-            .SumAsync(xp => (int?)xp.Amount) ?? 0;
+        var totalExperiencePointsAmount = await databaseContext.UserXpRecords
+            .Where(experiencePointRecord => experiencePointRecord.UserId == userId)
+            .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
 
         var completedSkillCount = await databaseContext.UserSkillProgressRecords
-            .CountAsync(progress => progress.UserId == userId && progress.Status == "completed");
+            .CountAsync(progressRecord => progressRecord.UserId == userId && progressRecord.Status == "completed", cancellationToken);
 
         var totalSkillCount = await databaseContext.UserSkillProgressRecords
-            .CountAsync(progress => progress.UserId == userId);
+            .CountAsync(progressRecord => progressRecord.UserId == userId, cancellationToken);
 
         var averageExerciseScore = await databaseContext.UserExerciseAttempts
             .Where(attempt => attempt.UserId == userId)
-            .AverageAsync(attempt => (double?)attempt.Score) ?? 0.0;
+            .AverageAsync(attempt => (double?)attempt.Score, cancellationToken) ?? 0.0;
 
         return new UserProfileStatsDto(
             user.DisplayName,
             user.Email,
             streakRecord?.CurrentStreakDayCount ?? 0,
             streakRecord?.LongestStreakDayCount ?? 0,
-            totalXpAmount,
+            totalExperiencePointsAmount,
             completedSkillCount,
             totalSkillCount,
             Math.Round(averageExerciseScore, 1),
             userProfile?.Persona);
     }
 
-    public async Task UpdatePersonaForUserAsync(Guid userId, string persona)
+    public async Task UpdatePersonaForUserAsync(
+        Guid userId,
+        string persona,
+        CancellationToken cancellationToken = default)
     {
         var userProfile = await databaseContext.UserProfiles
-            .FirstOrDefaultAsync(profile => profile.UserId == userId);
+            .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
 
         if (userProfile is null)
         {
@@ -67,6 +72,6 @@ public class ProfileService(AppDbContext databaseContext)
             userProfile.Persona = persona;
         }
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 }

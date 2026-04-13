@@ -3,13 +3,14 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Reference;
 
-public class ReferenceService(AppDbContext databaseContext)
+internal sealed class ReferenceService(AppDbContext databaseContext) : IReferenceService
 {
     public async Task<IReadOnlyList<ReferenceMaterialDto>> GetReferenceMaterialsForSkillAsync(
-        string skillSlug)
+        string skillSlug,
+        CancellationToken cancellationToken = default)
     {
         var skill = await databaseContext.Skills
-            .FirstOrDefaultAsync(skill => skill.Slug == skillSlug)
+            .FirstOrDefaultAsync(skillRecord => skillRecord.Slug == skillSlug, cancellationToken)
             ?? throw new KeyNotFoundException($"Skill '{skillSlug}' not found.");
 
         return await databaseContext.ReferenceMaterials
@@ -25,12 +26,13 @@ public class ReferenceService(AppDbContext databaseContext)
                     ? material.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
                     : Array.Empty<string>(),
                 skill.Slug))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<ReferenceMaterialDto>> GetAllReferenceMaterialsAsync(
         string? category,
-        string? search)
+        string? search,
+        CancellationToken cancellationToken = default)
     {
         var query = from material in databaseContext.ReferenceMaterials
                     join skill in databaseContext.Skills
@@ -51,7 +53,7 @@ public class ReferenceService(AppDbContext databaseContext)
         var results = await query
             .OrderBy(pair => pair.material.SortOrder)
             .ThenBy(pair => pair.material.Title)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return results.Select(pair => new ReferenceMaterialDto(
             pair.material.Id,
@@ -66,13 +68,13 @@ public class ReferenceService(AppDbContext databaseContext)
             .ToList();
     }
 
-    public async Task<IReadOnlyList<string>> GetAllCategoriesAsync()
+    public async Task<IReadOnlyList<string>> GetAllCategoriesAsync(CancellationToken cancellationToken = default)
     {
         return await databaseContext.ReferenceMaterials
-            .Where(m => m.Category != null)
-            .Select(m => m.Category!)
+            .Where(material => material.Category != null)
+            .Select(material => material.Category!)
             .Distinct()
-            .OrderBy(c => c)
-            .ToListAsync();
+            .OrderBy(category => category)
+            .ToListAsync(cancellationToken);
     }
 }

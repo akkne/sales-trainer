@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace SalesTrainer.Api.Features.Dialog;
 
-public class OpenAiChatService : IOpenAiChatService
+internal sealed class OpenAiChatService : IOpenAiChatService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
@@ -32,7 +32,7 @@ public class OpenAiChatService : IOpenAiChatService
 
 Тег [DIALOG_END] ставится на отдельной строке в конце сообщения.";
 
-    private const string XpInstructionSuffix = @"
+    private const string ExperiencePointsInstructionSuffix = @"
 
 ФОРМАТ ОТВЕТА:
 Твой ответ должен состоять из ДВУХ БЛОКОВ, разделённых тегом [DETAILED]:
@@ -95,14 +95,17 @@ public class OpenAiChatService : IOpenAiChatService
         }
     }
 
-    public async Task<ChatMessageResult> SendChatMessageAsync(string systemPrompt, List<DialogMessage> conversationHistory)
+    public async Task<ChatMessageResult> SendChatMessageAsync(
+        string systemPrompt,
+        List<DialogMessage> conversationHistory,
+        CancellationToken cancellationToken = default)
     {
         var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
-        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
+        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
 
         var enhancedSystemPrompt = systemPrompt + StopSignalInstruction;
 
-        var response = await CallOpenAiAsync(enhancedSystemPrompt, conversationHistory, chatModel, maxTokens);
+        var response = await CallOpenAiAsync(enhancedSystemPrompt, conversationHistory, chatModel, maximumTokenCount, cancellationToken);
 
         var isStopSignal = response.Contains("[DIALOG_END]");
         var cleanedContent = response.Replace("[DIALOG_END]", "").Trim();
@@ -114,35 +117,38 @@ public class OpenAiChatService : IOpenAiChatService
         };
     }
 
-    public async Task<FeedbackResult> GenerateFeedbackAsync(string feedbackPrompt, List<DialogMessage> conversationHistory)
+    public async Task<FeedbackResult> GenerateFeedbackAsync(
+        string feedbackPrompt,
+        List<DialogMessage> conversationHistory,
+        CancellationToken cancellationToken = default)
     {
         var feedbackModel = _configuration["OpenAI:FeedbackModel"] ?? "gpt-4.1";
-        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensFeedback"], out var feedbackTokens) ? feedbackTokens : 1500;
+        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensFeedback"], out var feedbackTokens) ? feedbackTokens : 1500;
 
         var conversationAsText = FormatConversationForFeedback(conversationHistory);
-        var fullPrompt = $"{feedbackPrompt}{XpInstructionSuffix}\n\n--- Диалог ---\n{conversationAsText}";
+        var fullPrompt = $"{feedbackPrompt}{ExperiencePointsInstructionSuffix}\n\n--- Диалог ---\n{conversationAsText}";
 
         var emptyHistory = new List<DialogMessage>
         {
             new() { Role = "user", Content = fullPrompt, Timestamp = DateTime.UtcNow }
         };
 
-        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maxTokens);
+        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maximumTokenCount, cancellationToken);
 
         _logger.LogDebug("Feedback response from AI: {Response}", response);
 
-        var xpReward = ExtractXpReward(response);
+        var experiencePointsReward = ExtractExperiencePointsReward(response);
         var cleanedContent = Regex.Replace(response, @"\[XP:\d+\]", "").Trim();
 
         var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
 
-        _logger.LogInformation("Extracted feedback summary length: {SummaryLen}, content length: {ContentLen}", summary.Length, detailedContent.Length);
+        _logger.LogInformation("Extracted feedback summary length: {SummaryLength}, content length: {ContentLength}", summary.Length, detailedContent.Length);
 
         return new FeedbackResult
         {
             Summary = summary,
             Content = detailedContent,
-            XpReward = xpReward
+            XpReward = experiencePointsReward
         };
     }
 
@@ -158,14 +164,12 @@ public class OpenAiChatService : IOpenAiChatService
             return (summary, content);
         }
 
-        // Fallback: extract first 2-3 sentences as summary
-        var summary2 = ExtractFirstSentences(response, 3);
-        return (summary2, response);
+        var summaryFallback = ExtractFirstSentences(response, 3);
+        return (summaryFallback, response);
     }
 
     private static string ExtractFirstSentences(string text, int count)
     {
-        // Remove HTML tags for sentence detection
         var plainText = Regex.Replace(text, @"<[^>]+>", " ");
         plainText = Regex.Replace(plainText, @"\s+", " ").Trim();
 
@@ -175,12 +179,12 @@ public class OpenAiChatService : IOpenAiChatService
         return string.IsNullOrWhiteSpace(result) ? text : result;
     }
 
-    private static int ExtractXpReward(string response)
+    private static int ExtractExperiencePointsReward(string response)
     {
         var match = Regex.Match(response, @"\[XP:(\d+)\]");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var xp))
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var experiencePoints))
         {
-            return Math.Clamp(xp, 0, 100);
+            return Math.Clamp(experiencePoints, 0, 100);
         }
         return 25;
     }
@@ -189,7 +193,8 @@ public class OpenAiChatService : IOpenAiChatService
         string systemPrompt,
         List<DialogMessage> conversationHistory,
         string model,
-        int maxTokens)
+        int maximumTokenCount,
+        CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
         {
@@ -224,7 +229,7 @@ public class OpenAiChatService : IOpenAiChatService
         {
             model,
             messages,
-            max_tokens = maxTokens,
+            max_tokens = maximumTokenCount,
             temperature = 0.7
         };
 
@@ -233,8 +238,8 @@ public class OpenAiChatService : IOpenAiChatService
 
         _logger.LogInformation("Calling OpenAI API with model {Model}", model);
 
-        var response = await httpClient.PostAsync(apiUrl, httpContent);
-        var responseContent = await response.Content.ReadAsStringAsync();
+        var response = await httpClient.PostAsync(apiUrl, httpContent, cancellationToken);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -252,7 +257,7 @@ public class OpenAiChatService : IOpenAiChatService
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                throw new OpenAiAuthException("AI service authentication failed. Please check API configuration.");
+                throw new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration.");
             }
 
             throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
@@ -263,7 +268,6 @@ public class OpenAiChatService : IOpenAiChatService
         var responseJson = JsonDocument.Parse(responseContent);
         var root = responseJson.RootElement;
 
-        // Try standard OpenAI format: { choices: [{ message: { content: "..." } }] }
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
             var firstChoice = choices[0];
@@ -274,14 +278,12 @@ public class OpenAiChatService : IOpenAiChatService
             }
         }
 
-        // Try f5ai format: { message: { content: "..." } } (no choices array)
         if (root.TryGetProperty("message", out var directMessage) &&
             directMessage.TryGetProperty("content", out var messageContent))
         {
             return messageContent.GetString() ?? string.Empty;
         }
 
-        // Try alternative format: { content: "..." } or { text: "..." }
         if (root.TryGetProperty("content", out var directContent))
         {
             return directContent.GetString() ?? string.Empty;
@@ -292,7 +294,6 @@ public class OpenAiChatService : IOpenAiChatService
             return textContent.GetString() ?? string.Empty;
         }
 
-        // Try f5ai specific format: { result: { content: "..." } }
         if (root.TryGetProperty("result", out var result))
         {
             if (result.TryGetProperty("content", out var resultContent))
@@ -320,7 +321,3 @@ public class OpenAiChatService : IOpenAiChatService
         return stringBuilder.ToString();
     }
 }
-
-public class OpenAiPaymentRequiredException(string message) : Exception(message);
-public class OpenAiRateLimitException(string message) : Exception(message);
-public class OpenAiAuthException(string message) : Exception(message);

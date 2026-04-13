@@ -5,61 +5,71 @@ using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Dialog;
 
-public class DialogService
+internal sealed class DialogService : IDialogService
 {
-    private readonly AppDbContext _dbContext;
+    private readonly AppDbContext _databaseContext;
     private readonly MongoDbContext _mongoContext;
-    private readonly IOpenAiChatService _openAiService;
+    private readonly IOpenAiChatService _openAiChatService;
     private readonly ILogger<DialogService> _logger;
 
     public DialogService(
-        AppDbContext dbContext,
+        AppDbContext databaseContext,
         MongoDbContext mongoContext,
-        IOpenAiChatService openAiService,
+        IOpenAiChatService openAiChatService,
         ILogger<DialogService> logger)
     {
-        _dbContext = dbContext;
+        _databaseContext = databaseContext;
         _mongoContext = mongoContext;
-        _openAiService = openAiService;
+        _openAiChatService = openAiChatService;
         _logger = logger;
     }
 
-    public bool IsOpenAiConfigured => _openAiService.IsConfigured;
+    public bool IsOpenAiConfigured => _openAiChatService.IsConfigured;
 
-    public async Task<List<DialogBundle>> GetActiveBundlesAsync()
+    public async Task<List<DialogBundle>> GetActiveBundlesAsync(CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DialogBundles
+        return await _databaseContext.DialogBundles
             .Include(bundle => bundle.Skill)
             .Where(bundle => bundle.IsActive)
             .OrderBy(bundle => bundle.SortOrder)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
-    public async Task<DialogBundle?> GetBundleByIdAsync(Guid bundleId)
+    public async Task<DialogBundle?> GetBundleByIdAsync(
+        Guid bundleId,
+        CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DialogBundles
+        return await _databaseContext.DialogBundles
             .Include(bundle => bundle.Skill)
-            .FirstOrDefaultAsync(bundle => bundle.Id == bundleId);
+            .FirstOrDefaultAsync(bundle => bundle.Id == bundleId, cancellationToken);
     }
 
-    public async Task<List<DialogMode>> GetActiveModesForBundleAsync(Guid bundleId)
+    public async Task<List<DialogMode>> GetActiveModesForBundleAsync(
+        Guid bundleId,
+        CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DialogModes
+        return await _databaseContext.DialogModes
             .Where(mode => mode.BundleId == bundleId && mode.IsActive)
             .OrderBy(mode => mode.SortOrder)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
-    public async Task<DialogMode?> GetModeByIdAsync(Guid modeId)
+    public async Task<DialogMode?> GetModeByIdAsync(
+        Guid modeId,
+        CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DialogModes
+        return await _databaseContext.DialogModes
             .Include(mode => mode.Bundle)
-            .FirstOrDefaultAsync(mode => mode.Id == modeId);
+            .FirstOrDefaultAsync(mode => mode.Id == modeId, cancellationToken);
     }
 
-    public async Task<DialogSession> StartSessionAsync(Guid userId, Guid bundleId, Guid modeId)
+    public async Task<DialogSession> StartSessionAsync(
+        Guid userId,
+        Guid bundleId,
+        Guid modeId,
+        CancellationToken cancellationToken = default)
     {
-        var mode = await GetModeByIdAsync(modeId);
+        var mode = await GetModeByIdAsync(modeId, cancellationToken);
         if (mode == null)
         {
             throw new InvalidOperationException($"Mode {modeId} not found");
@@ -74,37 +84,48 @@ public class DialogService
             Messages = []
         };
 
-        await _mongoContext.DialogSessions.InsertOneAsync(session);
+        await _mongoContext.DialogSessions.InsertOneAsync(session, cancellationToken: cancellationToken);
         _logger.LogInformation("Started dialog session {SessionId} for user {UserId}", session.Id, userId);
 
         return session;
     }
 
-    public async Task<DialogSession?> GetSessionByIdAsync(string sessionId)
+    public async Task<DialogSession?> GetSessionByIdAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId);
-        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync();
+        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<DialogSession?> GetSessionForUserAsync(string sessionId, Guid userId)
+    public async Task<DialogSession?> GetSessionForUserAsync(
+        string sessionId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<DialogSession>.Filter.And(
             Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
             Builders<DialogSession>.Filter.Eq(session => session.UserId, userId)
         );
-        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync();
+        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<List<DialogSession>> GetUserSessionsAsync(Guid userId)
+    public async Task<List<DialogSession>> GetUserSessionsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var filter = Builders<DialogSession>.Filter.Eq(session => session.UserId, userId);
         var sort = Builders<DialogSession>.Sort.Descending(session => session.CreatedAt);
-        return await _mongoContext.DialogSessions.Find(filter).Sort(sort).ToListAsync();
+        return await _mongoContext.DialogSessions.Find(filter).Sort(sort).ToListAsync(cancellationToken);
     }
 
-    public async Task<DialogMessage> SendMessageAsync(string sessionId, Guid userId, string userMessageContent)
+    public async Task<DialogMessage> SendMessageAsync(
+        string sessionId,
+        Guid userId,
+        string userMessageContent,
+        CancellationToken cancellationToken = default)
     {
-        var session = await GetSessionForUserAsync(sessionId, userId);
+        var session = await GetSessionForUserAsync(sessionId, userId, cancellationToken);
         if (session == null)
         {
             throw new InvalidOperationException($"Session {sessionId} not found for user {userId}");
@@ -115,7 +136,7 @@ public class DialogService
             throw new InvalidOperationException($"Session {sessionId} is not active");
         }
 
-        var mode = await GetModeByIdAsync(session.ModeId);
+        var mode = await GetModeByIdAsync(session.ModeId, cancellationToken);
         if (mode == null)
         {
             throw new InvalidOperationException($"Mode {session.ModeId} not found");
@@ -131,7 +152,7 @@ public class DialogService
 
         session.Messages.Add(userMessage);
 
-        var chatResult = await _openAiService.SendChatMessageAsync(mode.ChatSystemPrompt, session.Messages);
+        var chatResult = await _openAiChatService.SendChatMessageAsync(mode.ChatSystemPrompt, session.Messages, cancellationToken);
 
         var aiMessage = new DialogMessage
         {
@@ -143,10 +164,11 @@ public class DialogService
 
         session.Messages.Add(aiMessage);
 
-        var updateDefinition = Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages);
+        var updateDefinition = Builders<DialogSession>.Update.Set(sessionRecord => sessionRecord.Messages, session.Messages);
         await _mongoContext.DialogSessions.UpdateOneAsync(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            updateDefinition
+            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
+            updateDefinition,
+            cancellationToken: cancellationToken
         );
 
         _logger.LogInformation("Added message to session {SessionId}, total messages: {Count}", sessionId, session.Messages.Count);
@@ -154,9 +176,12 @@ public class DialogService
         return aiMessage;
     }
 
-    public async Task<DialogFeedbackResult> CompleteSessionAsync(string sessionId, Guid userId)
+    public async Task<DialogFeedbackResult> CompleteSessionAsync(
+        string sessionId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        var session = await GetSessionForUserAsync(sessionId, userId);
+        var session = await GetSessionForUserAsync(sessionId, userId, cancellationToken);
         if (session == null)
         {
             throw new InvalidOperationException($"Session {sessionId} not found for user {userId}");
@@ -167,13 +192,13 @@ public class DialogService
             throw new InvalidOperationException($"Session {sessionId} is not active");
         }
 
-        var mode = await GetModeByIdAsync(session.ModeId);
+        var mode = await GetModeByIdAsync(session.ModeId, cancellationToken);
         if (mode == null)
         {
             throw new InvalidOperationException($"Mode {session.ModeId} not found");
         }
 
-        var feedbackResult = await _openAiService.GenerateFeedbackAsync(mode.FeedbackSystemPrompt, session.Messages);
+        var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(mode.FeedbackSystemPrompt, session.Messages, cancellationToken);
 
         var feedback = new DialogFeedback
         {
@@ -183,17 +208,18 @@ public class DialogService
         };
 
         var updateDefinition = Builders<DialogSession>.Update
-            .Set(s => s.Status, DialogSessionStatus.Completed)
-            .Set(s => s.Feedback, feedback)
-            .Set(s => s.XpEarned, feedbackResult.XpReward)
-            .Set(s => s.CompletedAt, DateTime.UtcNow);
+            .Set(sessionRecord => sessionRecord.Status, DialogSessionStatus.Completed)
+            .Set(sessionRecord => sessionRecord.Feedback, feedback)
+            .Set(sessionRecord => sessionRecord.XpEarned, feedbackResult.XpReward)
+            .Set(sessionRecord => sessionRecord.CompletedAt, DateTime.UtcNow);
 
         await _mongoContext.DialogSessions.UpdateOneAsync(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            updateDefinition
+            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
+            updateDefinition,
+            cancellationToken: cancellationToken
         );
 
-        _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {Xp}", sessionId, userId, feedbackResult.XpReward);
+        _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {ExperiencePoints}", sessionId, userId, feedbackResult.XpReward);
 
         return new DialogFeedbackResult
         {
@@ -202,28 +228,25 @@ public class DialogService
         };
     }
 
-    public async Task<bool> DeleteSessionAsync(string sessionId, Guid userId)
+    public async Task<bool> DeleteSessionAsync(
+        string sessionId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        var session = await GetSessionForUserAsync(sessionId, userId);
+        var session = await GetSessionForUserAsync(sessionId, userId, cancellationToken);
         if (session == null)
         {
             return false;
         }
 
         var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
+            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
+            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.UserId, userId)
         );
 
-        var result = await _mongoContext.DialogSessions.DeleteOneAsync(filter);
+        var result = await _mongoContext.DialogSessions.DeleteOneAsync(filter, cancellationToken);
         _logger.LogInformation("Deleted session {SessionId} for user {UserId}", sessionId, userId);
 
         return result.DeletedCount > 0;
     }
-}
-
-public class DialogFeedbackResult
-{
-    public DialogFeedback Feedback { get; set; } = null!;
-    public int XpEarned { get; set; }
 }

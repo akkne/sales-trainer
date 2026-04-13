@@ -7,30 +7,31 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises;
 
-public class ExerciseService(
+internal sealed class ExerciseService(
     AppDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory,
-    AchievementService achievementService)
+    IAchievementService achievementService) : IExerciseService
 {
-    public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(Guid userId)
+    public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        // Lazy-init lesson progress for all accessible skills
         var accessibleSkillIds = await databaseContext.UserSkillProgressRecords
-            .Where(p => p.UserId == userId && p.Status != "locked")
-            .Select(p => p.SkillId)
-            .ToListAsync();
+            .Where(progressRecord => progressRecord.UserId == userId && progressRecord.Status != "locked")
+            .Select(progressRecord => progressRecord.SkillId)
+            .ToListAsync(cancellationToken);
 
         foreach (var skillId in accessibleSkillIds)
-            await EnsureSkillLessonsSeededAsync(userId, skillId);
+            await EnsureSkillLessonsSeededAsync(userId, skillId, cancellationToken);
 
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
-            .Where(progress => progress.UserId == userId)
-            .ToDictionaryAsync(progress => progress.LessonId);
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
         var allLessons = await databaseContext.Lessons
             .OrderBy(lesson => lesson.SortOrder)
             .ThenBy(lesson => lesson.Id)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return allLessons.Select(lesson =>
         {
@@ -50,23 +51,23 @@ public class ExerciseService(
 
     public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
         Guid userId,
-        string skillSlug)
+        string skillSlug,
+        CancellationToken cancellationToken = default)
     {
         var skill = await databaseContext.Skills
-            .FirstOrDefaultAsync(skill => skill.Slug == skillSlug)
+            .FirstOrDefaultAsync(skillRecord => skillRecord.Slug == skillSlug, cancellationToken)
             ?? throw new KeyNotFoundException($"Skill '{skillSlug}' not found.");
 
-        // Lazy-init lesson progress for this skill on first access
-        await EnsureSkillLessonsSeededAsync(userId, skill.Id);
+        await EnsureSkillLessonsSeededAsync(userId, skill.Id, cancellationToken);
 
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
-            .Where(progress => progress.UserId == userId)
-            .ToDictionaryAsync(progress => progress.LessonId);
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
         var allLessons = await databaseContext.Lessons
             .Where(lesson => lesson.SkillId == skill.Id)
             .OrderBy(lesson => lesson.SortOrder)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return allLessons.Select(lesson =>
         {
@@ -84,36 +85,39 @@ public class ExerciseService(
         }).ToList();
     }
 
-    public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(Guid lessonId)
+    public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
+        Guid lessonId,
+        CancellationToken cancellationToken = default)
     {
         var rawExercises = await databaseContext.Exercises
             .Where(exercise => exercise.LessonId == lessonId)
             .OrderBy(exercise => exercise.SortOrder)
             .Select(exercise => new { exercise.Id, exercise.Type, exercise.SortOrder, exercise.SerializedContent })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-        return rawExercises.Select(raw => new ExerciseDto(
-            raw.Id,
-            raw.Type,
-            raw.SortOrder,
-            JsonDocument.Parse(raw.SerializedContent).RootElement))
+        return rawExercises.Select(rawExercise => new ExerciseDto(
+            rawExercise.Id,
+            rawExercise.Type,
+            rawExercise.SortOrder,
+            JsonDocument.Parse(rawExercise.SerializedContent).RootElement))
             .ToList();
     }
 
     public async Task<ExerciseSubmissionResultDto> SubmitExerciseAnswerAsync(
         Guid userId,
         Guid exerciseId,
-        JsonElement userAnswer)
+        JsonElement userAnswer,
+        CancellationToken cancellationToken = default)
     {
         var exercise = await databaseContext.Exercises
-            .FirstOrDefaultAsync(e => e.Id == exerciseId)
+            .FirstOrDefaultAsync(exerciseRecord => exerciseRecord.Id == exerciseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
 
         var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
         var exerciseContent = JsonDocument.Parse(exercise.SerializedContent).RootElement;
 
         var evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
-            exerciseContent, userAnswer);
+            exerciseContent, userAnswer, cancellationToken);
 
         var newAttempt = new UserExerciseAttempt
         {
@@ -131,46 +135,49 @@ public class ExerciseService(
 
         databaseContext.UserExerciseAttempts.Add(newAttempt);
 
-        var xpEarned = 0;
+        var experiencePointsEarned = 0;
         if (evaluationResult.IsCorrect)
         {
             var parentLesson = await databaseContext.Lessons
-                .FirstOrDefaultAsync(lesson => lesson.Id == exercise.LessonId);
+                .FirstOrDefaultAsync(lesson => lesson.Id == exercise.LessonId, cancellationToken);
 
-            xpEarned = parentLesson?.XpReward ?? 10;
+            experiencePointsEarned = parentLesson?.XpReward ?? 10;
 
             databaseContext.UserXpRecords.Add(new UserXp
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                Amount = xpEarned,
+                Amount = experiencePointsEarned,
                 Source = "exercise",
                 EarnedAt = DateTime.UtcNow
             });
 
-            await UpdateLessonProgressAsync(userId, exercise.LessonId);
-            await UpdateStreakForUserAsync(userId);
+            await UpdateLessonProgressAsync(userId, exercise.LessonId, cancellationToken);
+            await UpdateStreakForUserAsync(userId, cancellationToken);
         }
 
         IReadOnlyList<string> newlyUnlockedAchievementKeys = Array.Empty<string>();
         if (evaluationResult.IsCorrect)
-            newlyUnlockedAchievementKeys = await achievementService.EvaluateAchievementsAfterSubmitAsync(userId);
+            newlyUnlockedAchievementKeys = await achievementService.EvaluateAchievementsAfterSubmitAsync(userId, cancellationToken);
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         return new ExerciseSubmissionResultDto(
             evaluationResult.IsCorrect,
             evaluationResult.Score,
             evaluationResult.Explanation,
             evaluationResult.AiFeedback,
-            xpEarned,
+            experiencePointsEarned,
             newlyUnlockedAchievementKeys);
     }
 
-    public async Task<NextLessonDto?> GetNextAvailableLessonAsync(Guid userId, Guid lessonId)
+    public async Task<NextLessonDto?> GetNextAvailableLessonAsync(
+        Guid userId,
+        Guid lessonId,
+        CancellationToken cancellationToken = default)
     {
         var currentLesson = await databaseContext.Lessons
-            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId);
+            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
 
         if (currentLesson is null) return null;
 
@@ -178,13 +185,13 @@ public class ExerciseService(
             .Where(lesson => lesson.SkillId == currentLesson.SkillId
                              && lesson.SortOrder > currentLesson.SortOrder)
             .OrderBy(lesson => lesson.SortOrder)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (nextLesson is null) return null;
 
         var nextLessonProgress = await databaseContext.UserLessonProgressRecords
-            .FirstOrDefaultAsync(progress => progress.UserId == userId
-                                             && progress.LessonId == nextLesson.Id);
+            .FirstOrDefaultAsync(progressRecord => progressRecord.UserId == userId
+                                             && progressRecord.LessonId == nextLesson.Id, cancellationToken);
 
         if (nextLessonProgress is null || nextLessonProgress.Status == "locked")
             return null;
@@ -192,10 +199,13 @@ public class ExerciseService(
         return new NextLessonDto(nextLesson.Id, nextLesson.Title, nextLesson.XpReward);
     }
 
-    private async Task UpdateLessonProgressAsync(Guid userId, Guid lessonId)
+    private async Task UpdateLessonProgressAsync(
+        Guid userId,
+        Guid lessonId,
+        CancellationToken cancellationToken = default)
     {
         var progressRecord = await databaseContext.UserLessonProgressRecords
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.LessonId == lessonId);
+            .FirstOrDefaultAsync(record => record.UserId == userId && record.LessonId == lessonId, cancellationToken);
 
         if (progressRecord is null)
         {
@@ -218,33 +228,32 @@ public class ExerciseService(
         }
 
         var lesson = await databaseContext.Lessons
-            .FirstOrDefaultAsync(l => l.Id == lessonId);
+            .FirstOrDefaultAsync(lessonRecord => lessonRecord.Id == lessonId, cancellationToken);
 
         if (lesson is null) return;
 
-        // Unlock the next lesson in the same skill
-        await UnlockNextLessonInSkillAsync(userId, lesson);
+        await UnlockNextLessonInSkillAsync(userId, lesson, cancellationToken);
 
         var skillProgressRecord = await databaseContext.UserSkillProgressRecords
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.SkillId == lesson.SkillId);
+            .FirstOrDefaultAsync(record => record.UserId == userId && record.SkillId == lesson.SkillId, cancellationToken);
 
         if (skillProgressRecord is null) return;
 
         var completedLessonCount = await databaseContext.UserLessonProgressRecords
-            .CountAsync(p => p.UserId == userId
-                             && p.LessonId != lessonId
-                             && p.Status == "completed"
+            .CountAsync(record => record.UserId == userId
+                             && record.LessonId != lessonId
+                             && record.Status == "completed"
                              && databaseContext.Lessons
-                                 .Where(l => l.Id == p.LessonId)
-                                 .Select(l => l.SkillId)
-                                 .Contains(lesson.SkillId));
+                                 .Where(lessonRecord => lessonRecord.Id == record.LessonId)
+                                 .Select(lessonRecord => lessonRecord.SkillId)
+                                 .Contains(lesson.SkillId), cancellationToken);
 
         skillProgressRecord.CompletedLessonCount = completedLessonCount + 1;
 
         if (skillProgressRecord.CompletedLessonCount >= skillProgressRecord.TotalLessonCount)
         {
             skillProgressRecord.Status = "completed";
-            await UnlockNextSkillAsync(userId, lesson.SkillId);
+            await UnlockNextSkillAsync(userId, lesson.SkillId, cancellationToken);
         }
         else
         {
@@ -252,64 +261,62 @@ public class ExerciseService(
         }
     }
 
-    /// <summary>
-    /// Seeds UserLessonProgress rows for a skill the first time it is accessed.
-    /// First lesson → "available"; remaining → "locked".
-    /// No-op if any progress rows already exist for this user+skill.
-    /// </summary>
-    private async Task EnsureSkillLessonsSeededAsync(Guid userId, Guid skillId)
+    private async Task EnsureSkillLessonsSeededAsync(
+        Guid userId,
+        Guid skillId,
+        CancellationToken cancellationToken = default)
     {
         var skillProgress = await databaseContext.UserSkillProgressRecords
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.SkillId == skillId);
+            .FirstOrDefaultAsync(record => record.UserId == userId && record.SkillId == skillId, cancellationToken);
 
         if (skillProgress is null || skillProgress.Status == "locked") return;
 
         var lessons = await databaseContext.Lessons
-            .Where(l => l.SkillId == skillId)
-            .OrderBy(l => l.SortOrder)
-            .ThenBy(l => l.Id)
-            .ToListAsync();
+            .Where(lesson => lesson.SkillId == skillId)
+            .OrderBy(lesson => lesson.SortOrder)
+            .ThenBy(lesson => lesson.Id)
+            .ToListAsync(cancellationToken);
 
         if (lessons.Count == 0) return;
 
-        var lessonIds = lessons.Select(l => l.Id).ToList();
+        var lessonIds = lessons.Select(lesson => lesson.Id).ToList();
         var existingCount = await databaseContext.UserLessonProgressRecords
-            .CountAsync(p => p.UserId == userId && lessonIds.Contains(p.LessonId));
+            .CountAsync(record => record.UserId == userId && lessonIds.Contains(record.LessonId), cancellationToken);
 
         if (existingCount > 0) return;
 
-        for (var i = 0; i < lessons.Count; i++)
+        for (var lessonIndex = 0; lessonIndex < lessons.Count; lessonIndex++)
         {
             databaseContext.UserLessonProgressRecords.Add(new UserLessonProgress
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                LessonId = lessons[i].Id,
-                Status = i == 0 ? "available" : "locked",
+                LessonId = lessons[lessonIndex].Id,
+                Status = lessonIndex == 0 ? "available" : "locked",
                 BestScore = 0
             });
         }
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// After a lesson is completed, unlocks the next lesson in the same skill by sortOrder.
-    /// </summary>
-    private async Task UnlockNextLessonInSkillAsync(Guid userId, Lesson completedLesson)
+    private async Task UnlockNextLessonInSkillAsync(
+        Guid userId,
+        Lesson completedLesson,
+        CancellationToken cancellationToken = default)
     {
         var nextLesson = await databaseContext.Lessons
-            .Where(l => l.SkillId == completedLesson.SkillId
-                        && l.SortOrder > completedLesson.SortOrder)
-            .OrderBy(l => l.SortOrder)
-            .ThenBy(l => l.Id)
-            .FirstOrDefaultAsync();
+            .Where(lesson => lesson.SkillId == completedLesson.SkillId
+                        && lesson.SortOrder > completedLesson.SortOrder)
+            .OrderBy(lesson => lesson.SortOrder)
+            .ThenBy(lesson => lesson.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (nextLesson is null) return;
 
         var nextProgress = await databaseContext.UserLessonProgressRecords
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.LessonId == nextLesson.Id);
+            .FirstOrDefaultAsync(record => record.UserId == userId && record.LessonId == nextLesson.Id, cancellationToken);
 
         if (nextProgress is null)
         {
@@ -327,30 +334,35 @@ public class ExerciseService(
         }
     }
 
-    private async Task UnlockNextSkillAsync(Guid userId, Guid completedSkillId)
+    private async Task UnlockNextSkillAsync(
+        Guid userId,
+        Guid completedSkillId,
+        CancellationToken cancellationToken = default)
     {
         var nextLockedSkillProgress = await databaseContext.UserSkillProgressRecords
             .Join(
                 databaseContext.Skills,
-                progress => progress.SkillId,
+                progressRecord => progressRecord.SkillId,
                 skill => skill.Id,
-                (progress, skill) => new { progress, skill })
-            .Where(pair => pair.progress.UserId == userId
-                           && pair.progress.Status == "locked"
+                (progressRecord, skill) => new { progressRecord, skill })
+            .Where(pair => pair.progressRecord.UserId == userId
+                           && pair.progressRecord.Status == "locked"
                            && pair.skill.PrerequisiteSkillId == completedSkillId)
-            .Select(pair => pair.progress)
-            .FirstOrDefaultAsync();
+            .Select(pair => pair.progressRecord)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (nextLockedSkillProgress is not null)
             nextLockedSkillProgress.Status = "available";
     }
 
-    private async Task UpdateStreakForUserAsync(Guid userId)
+    private async Task UpdateStreakForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var streakRecord = await databaseContext.UserStreaks
-            .FirstOrDefaultAsync(streak => streak.UserId == userId);
+            .FirstOrDefaultAsync(streak => streak.UserId == userId, cancellationToken);
 
         if (streakRecord is null)
         {
@@ -362,7 +374,7 @@ public class ExerciseService(
                 LongestStreakDayCount = 1,
                 LastActivityDate = today
             });
-            AwardStreakBonusXpIfMilestone(userId, 1);
+            AwardStreakBonusExperiencePointsIfMilestone(userId, 1);
             return;
         }
 
@@ -378,25 +390,25 @@ public class ExerciseService(
 
         streakRecord.LastActivityDate = today;
 
-        AwardStreakBonusXpIfMilestone(userId, streakRecord.CurrentStreakDayCount);
+        AwardStreakBonusExperiencePointsIfMilestone(userId, streakRecord.CurrentStreakDayCount);
     }
 
-    private void AwardStreakBonusXpIfMilestone(Guid userId, int currentStreak)
+    private void AwardStreakBonusExperiencePointsIfMilestone(Guid userId, int currentStreak)
     {
-        int bonusXp = currentStreak switch
+        int bonusExperiencePoints = currentStreak switch
         {
             7  => 50,
             30 => 200,
             _  => 0
         };
 
-        if (bonusXp == 0) return;
+        if (bonusExperiencePoints == 0) return;
 
         databaseContext.UserXpRecords.Add(new UserXp
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Amount = bonusXp,
+            Amount = bonusExperiencePoints,
             Source = "streak_bonus",
             EarnedAt = DateTime.UtcNow
         });

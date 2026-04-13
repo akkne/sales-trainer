@@ -3,19 +3,14 @@ namespace SalesTrainer.Api.Features.Dialog;
 public interface IOpenAiChatService
 {
     bool IsConfigured { get; }
-    Task<ChatMessageResult> SendChatMessageAsync(string systemPrompt, List<DialogMessage> conversationHistory);
-    Task<FeedbackResult> GenerateFeedbackAsync(string feedbackPrompt, List<DialogMessage> conversationHistory);
-}
 
-public class ChatMessageResult
-{
-    public string Content { get; set; } = null!;
-    public bool IsStopSignal { get; set; }
-}
+    Task<ChatMessageResult> SendChatMessageAsync(
+        string systemPrompt,
+        List<DialogMessage> conversationHistory,
+        CancellationToken cancellationToken = default);
 
-public class FeedbackResult
-{
-    public string Summary { get; set; } = null!;
-    public string Content { get; set; } = null!;
-    public int XpReward { get; set; }
+    Task<FeedbackResult> GenerateFeedbackAsync(
+        string feedbackPrompt,
+        List<DialogMessage> conversationHistory,
+        CancellationToken cancellationToken = default);
 }

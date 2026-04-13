@@ -4,76 +4,68 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.SkillTree;
 
-public class SkillTreeService(AppDbContext databaseContext, OnboardingService onboardingService)
+internal sealed class SkillTreeService(
+    AppDbContext databaseContext,
+    IOnboardingService onboardingService) : ISkillTreeService
 {
     private const string AlwaysEnrolledSlug = "sales-basics";
 
-    /// <summary>
-    /// Replaces the user's enrolled skills set.
-    /// <list type="bullet">
-    ///   <item>Slugs in <paramref name="skillSlugs"/> that are not yet enrolled → enrolled (status available).</item>
-    ///   <item>Currently enrolled skills absent from the list → locked (progress preserved).</item>
-    ///   <item><c>sales-basics</c> is always kept enrolled, even if omitted.</item>
-    /// </list>
-    /// </summary>
-    public async Task UpdateEnrolledSkillsAsync(Guid userId, List<string> skillSlugs)
+    public async Task UpdateEnrolledSkillsAsync(
+        Guid userId,
+        List<string> skillSlugs,
+        CancellationToken cancellationToken = default)
     {
-        var desired = skillSlugs
-            .Select(s => s.Trim())
-            .Where(s => s.Length > 0)
+        var desiredSkillSlugs = skillSlugs
+            .Select(slug => slug.Trim())
+            .Where(slug => slug.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        desired.Add(AlwaysEnrolledSlug);
+        desiredSkillSlugs.Add(AlwaysEnrolledSlug);
 
-        // Enroll / re-enroll skills in the desired set
-        await onboardingService.EnrollSkillsAsync(userId, desired);
+        await onboardingService.EnrollSkillsAsync(userId, desiredSkillSlugs, cancellationToken);
 
-        // Lock skills that are no longer desired (but were previously enrolled)
-        var allSkills = await databaseContext.Skills.ToListAsync();
+        var allSkills = await databaseContext.Skills.ToListAsync(cancellationToken);
         var existingProgress = await databaseContext.UserSkillProgressRecords
-            .Where(p => p.UserId == userId)
-            .ToListAsync();
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToListAsync(cancellationToken);
 
-        foreach (var progress in existingProgress)
+        foreach (var progressRecord in existingProgress)
         {
-            if (progress.Status == "locked") continue;
+            if (progressRecord.Status == "locked") continue;
 
-            var skill = allSkills.FirstOrDefault(s => s.Id == progress.SkillId);
+            var skill = allSkills.FirstOrDefault(skillRecord => skillRecord.Id == progressRecord.SkillId);
             if (skill is null) continue;
             if (skill.Slug.Equals(AlwaysEnrolledSlug, StringComparison.OrdinalIgnoreCase)) continue;
-            if (desired.Contains(skill.Slug)) continue;
+            if (desiredSkillSlugs.Contains(skill.Slug)) continue;
 
-            progress.Status = "locked";
+            progressRecord.Status = "locked";
         }
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
-    /// <summary>
-    /// Returns ALL skills in the system with the user's progress status.
-    /// Skills without a UserSkillProgress row are returned as "locked".
-    /// Used by the profile skill picker.
-    /// </summary>
-    public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsForUserAsync(Guid userId)
+
+    public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var skillProgressBySkillId = await databaseContext.UserSkillProgressRecords
-            .Where(p => p.UserId == userId)
-            .ToDictionaryAsync(p => p.SkillId);
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToDictionaryAsync(progressRecord => progressRecord.SkillId, cancellationToken);
 
         var allSkills = await databaseContext.Skills
-            .OrderBy(s => s.SortOrder)
-            .ThenBy(s => s.Id)
-            .ToListAsync();
+            .OrderBy(skill => skill.SortOrder)
+            .ThenBy(skill => skill.Id)
+            .ToListAsync(cancellationToken);
 
-        // Lesson counts per skill
         var lessonCountsBySkillId = await databaseContext.Lessons
-            .GroupBy(l => l.SkillId)
-            .Select(g => new { SkillId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.SkillId, x => x.Count);
+            .GroupBy(lesson => lesson.SkillId)
+            .Select(group => new { SkillId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(entry => entry.SkillId, entry => entry.Count, cancellationToken);
 
         return allSkills.Select(skill =>
         {
-            skillProgressBySkillId.TryGetValue(skill.Id, out var progress);
+            skillProgressBySkillId.TryGetValue(skill.Id, out var progressRecord);
             lessonCountsBySkillId.TryGetValue(skill.Id, out var lessonCount);
-            var status = progress?.Status ?? "locked";
+            var status = progressRecord?.Status ?? "locked";
             return new SkillTreeNodeDto(
                 skill.Id,
                 skill.Slug,
@@ -81,55 +73,57 @@ public class SkillTreeService(AppDbContext databaseContext, OnboardingService on
                 skill.IconName,
                 skill.SortOrder,
                 status,
-                progress?.CompletedLessonCount ?? 0,
-                progress?.TotalLessonCount ?? lessonCount,
+                progressRecord?.CompletedLessonCount ?? 0,
+                progressRecord?.TotalLessonCount ?? lessonCount,
                 status == "locked");
         }).ToList();
     }
 
-    public async Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(Guid userId)
+    public async Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var skillProgressRecords = await databaseContext.UserSkillProgressRecords
-            .Where(progress => progress.UserId == userId)
+            .Where(progressRecord => progressRecord.UserId == userId)
             .Join(
                 databaseContext.Skills,
-                progress => progress.SkillId,
+                progressRecord => progressRecord.SkillId,
                 skill => skill.Id,
-                (progress, skill) => new { progress, skill })
-            .OrderBy(x => x.skill.SortOrder)
-            .Select(x => new SkillTreeNodeDto(
-                x.skill.Id,
-                x.skill.Slug,
-                x.skill.Title,
-                x.skill.IconName,
-                x.skill.SortOrder,
-                x.progress.Status,
-                x.progress.CompletedLessonCount,
-                x.progress.TotalLessonCount,
-                x.progress.Status == "locked"))
-            .ToListAsync();
+                (progressRecord, skill) => new { progressRecord, skill })
+            .OrderBy(pair => pair.skill.SortOrder)
+            .Select(pair => new SkillTreeNodeDto(
+                pair.skill.Id,
+                pair.skill.Slug,
+                pair.skill.Title,
+                pair.skill.IconName,
+                pair.skill.SortOrder,
+                pair.progressRecord.Status,
+                pair.progressRecord.CompletedLessonCount,
+                pair.progressRecord.TotalLessonCount,
+                pair.progressRecord.Status == "locked"))
+            .ToListAsync(cancellationToken);
 
         var currentStreakDayCount = await databaseContext.UserStreaks
             .Where(streak => streak.UserId == userId)
             .Select(streak => streak.CurrentStreakDayCount)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var totalXpAmount = await databaseContext.UserXpRecords
-            .Where(xp => xp.UserId == userId)
-            .SumAsync(xp => (int?)xp.Amount) ?? 0;
+        var totalExperiencePointsAmount = await databaseContext.UserXpRecords
+            .Where(experiencePointRecord => experiencePointRecord.UserId == userId)
+            .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
 
         var weekStart = DateOnly.FromDateTime(
             DateTime.UtcNow.AddDays(-(int)DateTime.UtcNow.DayOfWeek));
 
-        var weeklyXpAmount = await databaseContext.UserXpRecords
-            .Where(xp => xp.UserId == userId &&
-                         DateOnly.FromDateTime(xp.EarnedAt) >= weekStart)
-            .SumAsync(xp => (int?)xp.Amount) ?? 0;
+        var weeklyExperiencePointsAmount = await databaseContext.UserXpRecords
+            .Where(experiencePointRecord => experiencePointRecord.UserId == userId &&
+                         DateOnly.FromDateTime(experiencePointRecord.EarnedAt) >= weekStart)
+            .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
 
         return new SkillTreeResponseDto(
             skillProgressRecords,
             currentStreakDayCount,
-            totalXpAmount,
-            weeklyXpAmount);
+            totalExperiencePointsAmount,
+            weeklyExperiencePointsAmount);
     }
 }

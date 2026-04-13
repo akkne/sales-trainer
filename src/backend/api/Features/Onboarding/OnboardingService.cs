@@ -4,7 +4,7 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Onboarding;
 
-public class OnboardingService(AppDbContext databaseContext)
+internal sealed class OnboardingService(AppDbContext databaseContext) : IOnboardingService
 {
     private const string DefaultSkillSlug = "sales-basics";
 
@@ -13,10 +13,11 @@ public class OnboardingService(AppDbContext databaseContext)
         string salesType,
         string experienceLevel,
         List<string> selectedSkillSlugs,
-        string? persona = null)
+        string? persona = null,
+        CancellationToken cancellationToken = default)
     {
         var existingProfile = await databaseContext.UserProfiles
-            .FirstOrDefaultAsync(profile => profile.UserId == userId);
+            .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
 
         if (existingProfile is not null && existingProfile.IsOnboardingCompleted)
             return;
@@ -33,46 +34,43 @@ public class OnboardingService(AppDbContext databaseContext)
         if (persona is not null)
             existingProfile.Persona = persona;
 
-        // Ensure sales-basics is always enrolled
-        var slugs = selectedSkillSlugs
-            .Select(s => s.Trim())
-            .Where(s => s.Length > 0)
+        var skillSlugsToEnroll = selectedSkillSlugs
+            .Select(slug => slug.Trim())
+            .Where(slug => slug.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        slugs.Add(DefaultSkillSlug);
+        skillSlugsToEnroll.Add(DefaultSkillSlug);
 
-        await EnrollSkillsAsync(userId, slugs);
+        await EnrollSkillsAsync(userId, skillSlugsToEnroll, cancellationToken);
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Creates UserSkillProgress rows for each slug in <paramref name="slugs"/>.
-    /// New skills → status "available"; previously locked → restore to "available".
-    /// </summary>
-    internal async Task EnrollSkillsAsync(Guid userId, IEnumerable<string> slugs)
+    public async Task EnrollSkillsAsync(
+        Guid userId,
+        IEnumerable<string> skillSlugs,
+        CancellationToken cancellationToken = default)
     {
-        var slugList = slugs.ToList();
+        var slugList = skillSlugs.ToList();
 
         var skills = await databaseContext.Skills
-            .Where(s => slugList.Contains(s.Slug))
-            .ToListAsync();
+            .Where(skill => slugList.Contains(skill.Slug))
+            .ToListAsync(cancellationToken);
 
         var existingProgress = await databaseContext.UserSkillProgressRecords
-            .Where(p => p.UserId == userId)
-            .ToDictionaryAsync(p => p.SkillId);
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToDictionaryAsync(progressRecord => progressRecord.SkillId, cancellationToken);
 
         foreach (var skill in skills)
         {
-            if (existingProgress.TryGetValue(skill.Id, out var progress))
+            if (existingProgress.TryGetValue(skill.Id, out var progressRecord))
             {
-                if (progress.Status == "locked")
-                    progress.Status = "available";
-                // If already in_progress / completed — keep as-is
+                if (progressRecord.Status == "locked")
+                    progressRecord.Status = "available";
             }
             else
             {
                 var lessonCount = await databaseContext.Lessons
-                    .CountAsync(l => l.SkillId == skill.Id);
+                    .CountAsync(lesson => lesson.SkillId == skill.Id, cancellationToken);
 
                 databaseContext.UserSkillProgressRecords.Add(new UserSkillProgress
                 {

@@ -12,14 +12,14 @@ namespace SalesTrainer.Api.Features.Dialog;
 [Authorize]
 public class DialogController : ControllerBase
 {
-    private readonly DialogService _dialogService;
-    private readonly AppDbContext _dbContext;
+    private readonly IDialogService _dialogService;
+    private readonly AppDbContext _databaseContext;
     private readonly ILogger<DialogController> _logger;
 
-    public DialogController(DialogService dialogService, AppDbContext dbContext, ILogger<DialogController> logger)
+    public DialogController(IDialogService dialogService, AppDbContext databaseContext, ILogger<DialogController> logger)
     {
         _dialogService = dialogService;
-        _dbContext = dbContext;
+        _databaseContext = databaseContext;
         _logger = logger;
     }
 
@@ -69,13 +69,13 @@ public class DialogController : ControllerBase
         var bundleIds = sessions.Select(s => s.BundleId).Distinct().ToList();
         var modeIds = sessions.Select(s => s.ModeId).Distinct().ToList();
 
-        var bundles = await _dbContext.DialogBundles
-            .Where(b => bundleIds.Contains(b.Id))
-            .ToDictionaryAsync(b => b.Id, b => b.Title);
+        var bundles = await _databaseContext.DialogBundles
+            .Where(bundle => bundleIds.Contains(bundle.Id))
+            .ToDictionaryAsync(bundle => bundle.Id, bundle => bundle.Title);
 
-        var modes = await _dbContext.DialogModes
-            .Where(m => modeIds.Contains(m.Id))
-            .ToDictionaryAsync(m => m.Id, m => m.Title);
+        var modes = await _databaseContext.DialogModes
+            .Where(mode => modeIds.Contains(mode.Id))
+            .ToDictionaryAsync(mode => mode.Id, mode => mode.Title);
 
         var sessionDtos = sessions.Select(session =>
             DialogSessionSummaryDto.FromEntity(
@@ -115,7 +115,7 @@ public class DialogController : ControllerBase
         {
             return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
         }
-        catch (OpenAiAuthException)
+        catch (OpenAiAuthenticationException)
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
         }
@@ -170,7 +170,7 @@ public class DialogController : ControllerBase
         {
             return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
         }
-        catch (OpenAiAuthException)
+        catch (OpenAiAuthenticationException)
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
         }
@@ -207,8 +207,8 @@ public class DialogController : ControllerBase
                     Source = "dialog",
                     EarnedAt = DateTime.UtcNow
                 };
-                _dbContext.UserXpRecords.Add(userXp);
-                await _dbContext.SaveChangesAsync();
+                _databaseContext.UserXpRecords.Add(userXp);
+                await _databaseContext.SaveChangesAsync();
 
                 _logger.LogInformation("Awarded {Xp} XP to user {UserId} for dialog session {SessionId}",
                     result.XpEarned, userId.Value, sessionId);
@@ -230,7 +230,7 @@ public class DialogController : ControllerBase
         {
             return StatusCode(429, new { message = "AI service rate limit exceeded. Please try again later." });
         }
-        catch (OpenAiAuthException)
+        catch (OpenAiAuthenticationException)
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
         }

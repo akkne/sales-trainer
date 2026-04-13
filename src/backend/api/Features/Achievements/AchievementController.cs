@@ -7,7 +7,7 @@ namespace SalesTrainer.Api.Features.Achievements;
 [ApiController]
 [Route("profile/achievements")]
 [Authorize]
-public class AchievementController(AchievementService achievementService) : ControllerBase
+public class AchievementController(IAchievementService achievementService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AchievementDto>>> GetAchievements()

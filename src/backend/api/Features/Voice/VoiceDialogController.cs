@@ -36,7 +36,7 @@ public class VoiceDialogController : ControllerBase
     public async Task<IActionResult> ProcessVoiceMessage(
         string sessionId,
         [FromBody] VoiceMessageRequestDto request,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         if (!_voicerTtsService.IsConfigured)
         {
@@ -57,44 +57,44 @@ public class VoiceDialogController : ControllerBase
         try
         {
             var audioStream = await _voiceDialogService.ProcessVoiceMessageAsync(
-                sessionId, userId, request.Transcript, ct);
+                sessionId, userId, request.Transcript, cancellationToken);
 
             return File(audioStream, "audio/mpeg");
         }
-        catch (VoicerTtsAuthException ex)
+        catch (VoicerTtsAuthenticationException exception)
         {
-            _logger.LogWarning(ex, "Voice TTS authentication failed for session {SessionId}", sessionId);
+            _logger.LogWarning(exception, "Voice TTS authentication failed for session {SessionId}", sessionId);
             return StatusCode(503, new { error = "Voice service authentication failed" });
         }
-        catch (VoicerTtsRateLimitException ex)
+        catch (VoicerTtsRateLimitException exception)
         {
-            _logger.LogWarning(ex, "Voice TTS rate limited for session {SessionId}", sessionId);
+            _logger.LogWarning(exception, "Voice TTS rate limited for session {SessionId}", sessionId);
             return StatusCode(429, new { error = "Too many voice requests, please wait a moment" });
         }
-        catch (VoicerTtsInsufficientFundsException ex)
+        catch (VoicerTtsInsufficientFundsException exception)
         {
-            _logger.LogWarning(ex, "Voice TTS insufficient funds for session {SessionId}", sessionId);
+            _logger.LogWarning(exception, "Voice TTS insufficient funds for session {SessionId}", sessionId);
             return StatusCode(503, new { error = "Voice service unavailable - check account balance" });
         }
-        catch (VoicerTtsTimeoutException ex)
+        catch (VoicerTtsTimeoutException exception)
         {
-            _logger.LogWarning(ex, "Voice TTS timeout for session {SessionId}", sessionId);
+            _logger.LogWarning(exception, "Voice TTS timeout for session {SessionId}", sessionId);
             return StatusCode(504, new { error = "Voice service timed out" });
         }
-        catch (VoicerTtsException ex)
+        catch (VoicerTtsException exception)
         {
-            _logger.LogWarning(ex, "Voice TTS error for session {SessionId}", sessionId);
-            return StatusCode(503, new { error = ex.Message });
+            _logger.LogWarning(exception, "Voice TTS error for session {SessionId}", sessionId);
+            return StatusCode(503, new { error = exception.Message });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
-            _logger.LogWarning(ex, "Voice message processing failed for session {SessionId}", sessionId);
-            return BadRequest(new { error = ex.Message });
+            _logger.LogWarning(exception, "Voice message processing failed for session {SessionId}", sessionId);
+            return BadRequest(new { error = exception.Message });
         }
     }
 
     [HttpGet("{sessionId}/voice/response")]
-    public async Task<IActionResult> GetLastVoiceResponse(string sessionId, CancellationToken ct)
+    public async Task<IActionResult> GetLastVoiceResponse(string sessionId, CancellationToken cancellationToken)
     {
         if (!_voicerTtsService.IsConfigured)
         {
@@ -107,19 +107,18 @@ public class VoiceDialogController : ControllerBase
             return Unauthorized();
         }
 
-        // Get session and last AI message
         var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
+            Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
+            Builders<DialogSession>.Filter.Eq(session => session.UserId, userId)
         );
-        var session = await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(ct);
+        var session = await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
 
         if (session == null)
         {
             return NotFound(new { error = "Session not found" });
         }
 
-        var lastAiMessage = session.Messages.LastOrDefault(m => m.Role == "assistant");
+        var lastAiMessage = session.Messages.LastOrDefault(message => message.Role == "assistant");
         if (lastAiMessage == null)
         {
             return NotFound(new { error = "No AI response found" });
@@ -132,16 +131,4 @@ public class VoiceDialogController : ControllerBase
             Timestamp = lastAiMessage.Timestamp
         });
     }
-}
-
-public class VoiceMessageRequestDto
-{
-    public string Transcript { get; set; } = null!;
-}
-
-public class VoiceResponseDto
-{
-    public string Content { get; set; } = null!;
-    public bool IsStopSignal { get; set; }
-    public DateTime Timestamp { get; set; }
 }

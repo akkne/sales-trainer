@@ -5,14 +5,17 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises;
 
-public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory, IConfiguration configuration, AppDbContext db)
-    : IExerciseEvaluationStrategy
+internal sealed class OpenQuestionEvaluationStrategy(
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration,
+    AppDbContext databaseContext) : IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => "open_question";
 
     public async Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
-        JsonElement userAnswer)
+        JsonElement userAnswer,
+        CancellationToken cancellationToken = default)
     {
         var question = exerciseContent.GetProperty("question").GetString() ?? "";
         var perQuestionPrompt = exerciseContent.TryGetProperty("aiPrompt", out var promptElement)
@@ -20,9 +23,9 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
             : "";
         var userResponseText = userAnswer.GetProperty("text").GetString() ?? "";
 
-        var globalContext = await db.OpenQuestionGlobalContexts
-            .Select(c => c.ContextText)
-            .FirstOrDefaultAsync() ?? "";
+        var globalContext = await databaseContext.OpenQuestionGlobalContexts
+            .Select(context => context.ContextText)
+            .FirstOrDefaultAsync(cancellationToken) ?? "";
 
         var openAiApiKey = configuration["OpenAI:ApiKey"];
         if (string.IsNullOrEmpty(openAiApiKey) || openAiApiKey.StartsWith("REPLACE_"))
@@ -58,7 +61,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
             userPrompt += $"\n\nКритерии оценки: {perQuestionPrompt}";
         }
 
-        var maxTokens = int.TryParse(configuration["OpenAI:MaxTokensOpenQuestion"], out var t) ? t : 200;
+        var maximumTokenCount = int.TryParse(configuration["OpenAI:MaxTokensOpenQuestion"], out var tokenCount) ? tokenCount : 200;
 
         var requestPayload = new
         {
@@ -68,7 +71,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
                 new { role = "system", content = systemPromptBuilder.ToString() },
                 new { role = "user", content = userPrompt }
             },
-            max_tokens = maxTokens,
+            max_tokens = maximumTokenCount,
             response_format = new { type = "json_object" }
         };
 
@@ -86,7 +89,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiApiKey);
 
-        using var response = await httpClient.PostAsync(apiUrl, requestContent);
+        using var response = await httpClient.PostAsync(apiUrl, requestContent, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -97,7 +100,7 @@ public class OpenQuestionEvaluationStrategy(IHttpClientFactory httpClientFactory
                 AiFeedback: "Не удалось получить AI-оценку. Попробуй ещё раз.");
         }
 
-        var responseBody = await response.Content.ReadAsStringAsync();
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         var responseJson = JsonDocument.Parse(responseBody);
         var aiResponseText = responseJson.RootElement
             .GetProperty("choices")[0]

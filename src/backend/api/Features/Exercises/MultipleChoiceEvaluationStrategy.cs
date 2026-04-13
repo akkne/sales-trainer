@@ -2,13 +2,14 @@ using System.Text.Json;
 
 namespace SalesTrainer.Api.Features.Exercises;
 
-public class MultipleChoiceEvaluationStrategy : IExerciseEvaluationStrategy
+internal sealed class MultipleChoiceEvaluationStrategy : IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => "multiple_choice";
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
-        JsonElement userAnswer)
+        JsonElement userAnswer,
+        CancellationToken cancellationToken = default)
     {
         var correctOptionIndex = exerciseContent.GetProperty("correctOptionIndex").GetInt32();
         var selectedOptionIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();

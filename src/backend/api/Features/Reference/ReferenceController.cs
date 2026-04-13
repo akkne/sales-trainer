@@ -5,7 +5,7 @@ namespace SalesTrainer.Api.Features.Reference;
 
 [ApiController]
 [Authorize]
-public class ReferenceController(ReferenceService referenceService) : ControllerBase
+public class ReferenceController(IReferenceService referenceService) : ControllerBase
 {
     [HttpGet("skills/{skillSlug}/reference")]
     public async Task<ActionResult<IReadOnlyList<ReferenceMaterialDto>>> GetReferenceMaterials(
@@ -23,10 +23,6 @@ public class ReferenceController(ReferenceService referenceService) : Controller
         }
     }
 
-    /// <summary>
-    /// Returns all reference materials across all skills.
-    /// Optional filters: category (exact match) and search (title/content contains).
-    /// </summary>
     [HttpGet("reference")]
     public async Task<ActionResult<IReadOnlyList<ReferenceMaterialDto>>> GetAllReferenceMaterials(
         [FromQuery] string? category,
@@ -36,9 +32,6 @@ public class ReferenceController(ReferenceService referenceService) : Controller
         return Ok(materials);
     }
 
-    /// <summary>
-    /// Returns the list of distinct categories that have at least one reference material.
-    /// </summary>
     [HttpGet("reference/categories")]
     public async Task<ActionResult<IReadOnlyList<string>>> GetCategories()
     {

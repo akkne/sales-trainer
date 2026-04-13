@@ -9,10 +9,10 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
-public class AuthenticationService(
+internal sealed class AuthenticationService(
     AppDbContext databaseContext,
     IConfiguration configuration,
-    ILogger<AuthenticationService> logger)
+    ILogger<AuthenticationService> logger) : IAuthenticationService
 {
     private const int AccessTokenLifetimeMinutes = 15;
     private const int RefreshTokenLifetimeDays = 30;
@@ -20,13 +20,14 @@ public class AuthenticationService(
     public async Task<IssuedTokenPair> RegisterWithEmailAsync(
         string email,
         string password,
-        string displayName)
+        string displayName,
+        CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.ToLowerInvariant();
         logger.LogInformation("Registration attempt {Email}", normalizedEmail);
 
         var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.Email == normalizedEmail);
+            .FirstOrDefaultAsync(user => user.Email == normalizedEmail, cancellationToken);
 
         if (existingUser is not null)
         {
@@ -44,19 +45,22 @@ public class AuthenticationService(
         };
 
         databaseContext.Users.Add(newUser);
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("User registered successfully {Email} UserId={UserId}", normalizedEmail, newUser.Id);
-        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false);
+        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false, cancellationToken);
     }
 
-    public async Task<IssuedTokenPair> LoginWithEmailAsync(string email, string password)
+    public async Task<IssuedTokenPair> LoginWithEmailAsync(
+        string email,
+        string password,
+        CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.ToLowerInvariant();
         logger.LogInformation("Login attempt {Email}", normalizedEmail);
 
         var user = await databaseContext.Users
-            .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+            .FirstOrDefaultAsync(userRecord => userRecord.Email == normalizedEmail, cancellationToken);
 
         if (user is null || user.PasswordHash is null ||
             !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
@@ -66,13 +70,15 @@ public class AuthenticationService(
         }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
-            .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted);
+            .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);
 
         logger.LogInformation("Login successful {Email} UserId={UserId} Role={Role}", normalizedEmail, user.Id, user.Role);
-        return await IssueTokensForUserAsync(user, isOnboardingCompleted);
+        return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
     }
 
-    public async Task<IssuedTokenPair> LoginWithGoogleAsync(string googleIdToken)
+    public async Task<IssuedTokenPair> LoginWithGoogleAsync(
+        string googleIdToken,
+        CancellationToken cancellationToken = default)
     {
         var googleClientId = configuration["Google:ClientId"]
             ?? throw new InvalidOperationException("Google:ClientId not configured.");
@@ -88,9 +94,9 @@ public class AuthenticationService(
         logger.LogInformation("Google login attempt {Email}", googlePayload.Email);
 
         var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject)
+            .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject, cancellationToken)
             ?? await databaseContext.Users
-                .FirstOrDefaultAsync(user => user.Email == googlePayload.Email);
+                .FirstOrDefaultAsync(user => user.Email == googlePayload.Email, cancellationToken);
 
         if (existingUser is null)
         {
@@ -103,13 +109,13 @@ public class AuthenticationService(
                 CreatedAt = DateTime.UtcNow
             };
             databaseContext.Users.Add(existingUser);
-            await databaseContext.SaveChangesAsync();
+            await databaseContext.SaveChangesAsync(cancellationToken);
             logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
         else if (existingUser.GoogleId is null)
         {
             existingUser.GoogleId = googlePayload.Subject;
-            await databaseContext.SaveChangesAsync();
+            await databaseContext.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Linked Google account to existing user {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
         else
@@ -118,16 +124,18 @@ public class AuthenticationService(
         }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
-            .AnyAsync(profile => profile.UserId == existingUser.Id && profile.IsOnboardingCompleted);
+            .AnyAsync(profile => profile.UserId == existingUser.Id && profile.IsOnboardingCompleted, cancellationToken);
 
-        return await IssueTokensForUserAsync(existingUser, isOnboardingCompleted);
+        return await IssueTokensForUserAsync(existingUser, isOnboardingCompleted, cancellationToken);
     }
 
-    public async Task<IssuedTokenPair> RefreshAccessTokenAsync(string rawRefreshToken)
+    public async Task<IssuedTokenPair> RefreshAccessTokenAsync(
+        string rawRefreshToken,
+        CancellationToken cancellationToken = default)
     {
         var storedToken = await databaseContext.RefreshTokens
             .Include(token => token.User)
-            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken);
+            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
 
         if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTime.UtcNow)
         {
@@ -136,30 +144,33 @@ public class AuthenticationService(
         }
 
         storedToken.IsRevoked = true;
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
-            .AnyAsync(profile => profile.UserId == storedToken.UserId && profile.IsOnboardingCompleted);
+            .AnyAsync(profile => profile.UserId == storedToken.UserId && profile.IsOnboardingCompleted, cancellationToken);
 
         logger.LogInformation("Access token refreshed for UserId={UserId}", storedToken.UserId);
-        return await IssueTokensForUserAsync(storedToken.User, isOnboardingCompleted);
+        return await IssueTokensForUserAsync(storedToken.User, isOnboardingCompleted, cancellationToken);
     }
 
-    public async Task RevokeRefreshTokenAsync(string rawRefreshToken)
+    public async Task RevokeRefreshTokenAsync(
+        string rawRefreshToken,
+        CancellationToken cancellationToken = default)
     {
         var storedToken = await databaseContext.RefreshTokens
-            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken);
+            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
 
         if (storedToken is null) return;
 
         storedToken.IsRevoked = true;
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Refresh token revoked for UserId={UserId}", storedToken.UserId);
     }
 
     private async Task<IssuedTokenPair> IssueTokensForUserAsync(
         User user,
-        bool isOnboardingCompleted)
+        bool isOnboardingCompleted,
+        CancellationToken cancellationToken = default)
     {
         var accessToken = BuildJwtAccessToken(user);
         var rawRefreshToken = GenerateSecureRandomToken();
@@ -174,7 +185,7 @@ public class AuthenticationService(
         };
 
         databaseContext.RefreshTokens.Add(newRefreshToken);
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         return new IssuedTokenPair(
             AccessToken: accessToken,

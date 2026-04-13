@@ -7,7 +7,7 @@ namespace SalesTrainer.Api.Features.Onboarding;
 [ApiController]
 [Route("onboarding")]
 [Authorize]
-public class OnboardingController(OnboardingService onboardingService) : ControllerBase
+public class OnboardingController(IOnboardingService onboardingService) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> CompleteOnboarding(

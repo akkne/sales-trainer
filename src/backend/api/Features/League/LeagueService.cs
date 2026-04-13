@@ -3,33 +3,33 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.League;
 
-public class LeagueService(AppDbContext databaseContext)
+internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueService
 {
-    private const int MaxLeagueParticipantCount = 30;
+    private const int MaximumLeagueParticipantCount = 30;
     private const int PromotionZoneSize = 10;
     private const int DemotionZoneSize = 5;
 
     private static readonly string[] TierOrder = ["bronze", "silver", "gold", "diamond"];
 
-    public async Task<CurrentLeagueResponseDto> GetCurrentLeagueForUserAsync(Guid userId)
+    public async Task<CurrentLeagueResponseDto> GetCurrentLeagueForUserAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
         var weekStart = GetCurrentWeekStart();
         var weekEnd = weekStart.AddDays(6);
         var previousWeekStart = weekStart.AddDays(-7);
 
-        // Find user's most recent past membership to determine tier and previous outcome
         var previousMembershipData = await databaseContext.LeagueMemberships
             .Join(
                 databaseContext.Leagues,
-                m => m.LeagueId,
-                l => l.Id,
-                (m, l) => new { m.PromotionOutcome, l.Tier, l.WeekStartDate })
-            .Where(x => x.WeekStartDate < weekStart)
-            .OrderByDescending(x => x.WeekStartDate)
-            .Select(x => new { x.PromotionOutcome, x.Tier, x.WeekStartDate })
-            .FirstOrDefaultAsync();
+                membership => membership.LeagueId,
+                league => league.Id,
+                (membership, league) => new { membership.PromotionOutcome, league.Tier, league.WeekStartDate })
+            .Where(membershipLeague => membershipLeague.WeekStartDate < weekStart)
+            .OrderByDescending(membershipLeague => membershipLeague.WeekStartDate)
+            .Select(membershipLeague => new { membershipLeague.PromotionOutcome, membershipLeague.Tier, membershipLeague.WeekStartDate })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        // Only expose outcome if from immediately last week (avoid stale banners)
         var previousWeekOutcome = previousMembershipData?.WeekStartDate == previousWeekStart
             ? previousMembershipData.PromotionOutcome
             : null;
@@ -38,15 +38,14 @@ public class LeagueService(AppDbContext databaseContext)
             ? "bronze"
             : GetNextTierForOutcome(previousMembershipData.Tier, previousMembershipData.PromotionOutcome);
 
-        // Check if user already has a membership for this week (pre-created by closure job)
         var existingThisWeek = await databaseContext.LeagueMemberships
             .Join(
                 databaseContext.Leagues,
-                m => m.LeagueId,
-                l => l.Id,
-                (m, l) => new { Membership = m, League = l })
-            .Where(x => x.Membership.UserId == userId && x.League.WeekStartDate == weekStart)
-            .FirstOrDefaultAsync();
+                membership => membership.LeagueId,
+                league => league.Id,
+                (membership, league) => new { Membership = membership, League = league })
+            .Where(membershipLeague => membershipLeague.Membership.UserId == userId && membershipLeague.League.WeekStartDate == weekStart)
+            .FirstOrDefaultAsync(cancellationToken);
 
         League currentLeague;
         if (existingThisWeek is not null)
@@ -56,24 +55,24 @@ public class LeagueService(AppDbContext databaseContext)
         else
         {
             currentLeague = await databaseContext.Leagues
-                .FirstOrDefaultAsync(l => l.WeekStartDate == weekStart && l.Tier == userTier)
-                ?? await CreateLeagueForWeekAsync(weekStart, weekEnd, userTier);
+                .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == userTier, cancellationToken)
+                ?? await CreateLeagueForWeekAsync(weekStart, weekEnd, userTier, cancellationToken);
 
-            await JoinLeagueAsync(userId, currentLeague.Id);
+            await JoinLeagueAsync(userId, currentLeague.Id, cancellationToken);
         }
 
-        await SyncWeeklyXpForLeagueAsync(currentLeague.Id, weekStart);
+        await SyncWeeklyExperiencePointsForLeagueAsync(currentLeague.Id, weekStart, cancellationToken);
 
         var allMemberships = await databaseContext.LeagueMemberships
-            .Where(m => m.LeagueId == currentLeague.Id)
+            .Where(membership => membership.LeagueId == currentLeague.Id)
             .Join(
                 databaseContext.Users,
-                m => m.UserId,
-                u => u.Id,
-                (m, u) => new { membership = m, user = u })
+                membership => membership.UserId,
+                user => user.Id,
+                (membership, user) => new { membership, user })
             .OrderByDescending(pair => pair.membership.WeeklyXpAmount)
-            .Take(MaxLeagueParticipantCount)
-            .ToListAsync();
+            .Take(MaximumLeagueParticipantCount)
+            .ToListAsync(cancellationToken);
 
         var participants = allMemberships
             .Select((pair, index) => new LeagueParticipantDto(
@@ -85,7 +84,7 @@ public class LeagueService(AppDbContext databaseContext)
             .ToList();
 
         var currentUserRank = participants
-            .FirstOrDefault(p => p.IsCurrentUser)?.Rank ?? 0;
+            .FirstOrDefault(participant => participant.IsCurrentUser)?.Rank ?? 0;
 
         return new CurrentLeagueResponseDto(
             currentLeague.Id,
@@ -97,41 +96,38 @@ public class LeagueService(AppDbContext databaseContext)
             previousWeekOutcome);
     }
 
-    public async Task CloseCurrentLeagueAndCreateNextAsync()
+    public async Task CloseCurrentLeagueAndCreateNextAsync(CancellationToken cancellationToken = default)
     {
         var weekStart = GetCurrentWeekStart();
         var nextWeekStart = weekStart.AddDays(7);
         var nextWeekEnd = nextWeekStart.AddDays(6);
 
         var leaguesToClose = await databaseContext.Leagues
-            .Where(l => l.WeekStartDate == weekStart)
-            .ToListAsync();
+            .Where(league => league.WeekStartDate == weekStart)
+            .ToListAsync(cancellationToken);
 
         if (leaguesToClose.Count == 0) return;
 
-        // Cache already-created leagues for next week to avoid duplicates
         var nextWeekLeaguesByTier = new Dictionary<string, League>();
 
         foreach (var league in leaguesToClose)
         {
             var memberships = await databaseContext.LeagueMemberships
-                .Where(m => m.LeagueId == league.Id)
-                .OrderByDescending(m => m.WeeklyXpAmount)
-                .ToListAsync();
+                .Where(membership => membership.LeagueId == league.Id)
+                .OrderByDescending(membership => membership.WeeklyXpAmount)
+                .ToListAsync(cancellationToken);
 
-            // Assign ranks and promotion outcomes
-            for (var i = 0; i < memberships.Count; i++)
+            for (var membershipIndex = 0; membershipIndex < memberships.Count; membershipIndex++)
             {
-                var membership = memberships[i];
-                membership.Rank = i + 1;
-                membership.PromotionOutcome = i < PromotionZoneSize
+                var membership = memberships[membershipIndex];
+                membership.Rank = membershipIndex + 1;
+                membership.PromotionOutcome = membershipIndex < PromotionZoneSize
                     ? "promoted"
-                    : i >= memberships.Count - DemotionZoneSize
+                    : membershipIndex >= memberships.Count - DemotionZoneSize
                         ? "demoted"
                         : null;
             }
 
-            // Pre-create memberships in next week's leagues
             foreach (var membership in memberships)
             {
                 var nextTier = GetNextTierForOutcome(league.Tier, membership.PromotionOutcome);
@@ -139,8 +135,8 @@ public class LeagueService(AppDbContext databaseContext)
                 if (!nextWeekLeaguesByTier.TryGetValue(nextTier, out var nextLeague))
                 {
                     nextLeague = await databaseContext.Leagues
-                        .FirstOrDefaultAsync(l => l.WeekStartDate == nextWeekStart && l.Tier == nextTier)
-                        ?? await CreateLeagueForWeekAsync(nextWeekStart, nextWeekEnd, nextTier);
+                        .FirstOrDefaultAsync(leagueRecord => leagueRecord.WeekStartDate == nextWeekStart && leagueRecord.Tier == nextTier, cancellationToken)
+                        ?? await CreateLeagueForWeekAsync(nextWeekStart, nextWeekEnd, nextTier, cancellationToken);
                     nextWeekLeaguesByTier[nextTier] = nextLeague;
                 }
 
@@ -155,10 +151,14 @@ public class LeagueService(AppDbContext databaseContext)
             }
         }
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<League> CreateLeagueForWeekAsync(DateOnly weekStart, DateOnly weekEnd, string tier = "bronze")
+    private async Task<League> CreateLeagueForWeekAsync(
+        DateOnly weekStart,
+        DateOnly weekEnd,
+        string tier = "bronze",
+        CancellationToken cancellationToken = default)
     {
         var newLeague = new League
         {
@@ -169,11 +169,14 @@ public class LeagueService(AppDbContext databaseContext)
         };
 
         databaseContext.Leagues.Add(newLeague);
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
         return newLeague;
     }
 
-    private async Task<LeagueMembership> JoinLeagueAsync(Guid userId, Guid leagueId)
+    private async Task<LeagueMembership> JoinLeagueAsync(
+        Guid userId,
+        Guid leagueId,
+        CancellationToken cancellationToken = default)
     {
         var newMembership = new LeagueMembership
         {
@@ -185,36 +188,39 @@ public class LeagueService(AppDbContext databaseContext)
         };
 
         databaseContext.LeagueMemberships.Add(newMembership);
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
         return newMembership;
     }
 
-    private async Task SyncWeeklyXpForLeagueAsync(Guid leagueId, DateOnly weekStart)
+    private async Task SyncWeeklyExperiencePointsForLeagueAsync(
+        Guid leagueId,
+        DateOnly weekStart,
+        CancellationToken cancellationToken = default)
     {
         var membershipUserIds = await databaseContext.LeagueMemberships
-            .Where(m => m.LeagueId == leagueId)
-            .Select(m => m.UserId)
-            .ToListAsync();
+            .Where(membership => membership.LeagueId == leagueId)
+            .Select(membership => membership.UserId)
+            .ToListAsync(cancellationToken);
 
-        var weeklyXpByUserId = await databaseContext.UserXpRecords
-            .Where(xp =>
-                membershipUserIds.Contains(xp.UserId) &&
-                DateOnly.FromDateTime(xp.EarnedAt) >= weekStart)
-            .GroupBy(xp => xp.UserId)
-            .Select(g => new { UserId = g.Key, Total = g.Sum(x => x.Amount) })
-            .ToDictionaryAsync(e => e.UserId, e => e.Total);
+        var weeklyExperiencePointsByUserId = await databaseContext.UserXpRecords
+            .Where(experiencePointRecord =>
+                membershipUserIds.Contains(experiencePointRecord.UserId) &&
+                DateOnly.FromDateTime(experiencePointRecord.EarnedAt) >= weekStart)
+            .GroupBy(experiencePointRecord => experiencePointRecord.UserId)
+            .Select(group => new { UserId = group.Key, Total = group.Sum(record => record.Amount) })
+            .ToDictionaryAsync(entry => entry.UserId, entry => entry.Total, cancellationToken);
 
         var membershipsToUpdate = await databaseContext.LeagueMemberships
-            .Where(m => m.LeagueId == leagueId)
-            .ToListAsync();
+            .Where(membership => membership.LeagueId == leagueId)
+            .ToListAsync(cancellationToken);
 
         foreach (var membership in membershipsToUpdate)
         {
-            if (weeklyXpByUserId.TryGetValue(membership.UserId, out var weeklyXp))
-                membership.WeeklyXpAmount = weeklyXp;
+            if (weeklyExperiencePointsByUserId.TryGetValue(membership.UserId, out var weeklyExperiencePoints))
+                membership.WeeklyXpAmount = weeklyExperiencePoints;
         }
 
-        await databaseContext.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
     private static string GetNextTierForOutcome(string currentTier, string? outcome)

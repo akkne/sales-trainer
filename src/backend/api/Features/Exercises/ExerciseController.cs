@@ -6,7 +6,7 @@ namespace SalesTrainer.Api.Features.Exercises;
 
 [ApiController]
 [Authorize]
-public class ExerciseController(ExerciseService exerciseService) : ControllerBase
+public class ExerciseController(IExerciseService exerciseService) : ControllerBase
 {
     [HttpGet("lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetAllLessons()

@@ -7,7 +7,7 @@ namespace SalesTrainer.Api.Features.SkillTree;
 [ApiController]
 [Route("skill-tree")]
 [Authorize]
-public class SkillTreeController(SkillTreeService skillTreeService) : ControllerBase
+public class SkillTreeController(ISkillTreeService skillTreeService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<SkillTreeResponseDto>> GetSkillTree()
@@ -26,12 +26,8 @@ public class SkillTreeController(SkillTreeService skillTreeService) : Controller
 [ApiController]
 [Route("skills")]
 [Authorize]
-public class SkillsController(SkillTreeService skillTreeService) : ControllerBase
+public class SkillsController(ISkillTreeService skillTreeService) : ControllerBase
 {
-    /// <summary>
-    /// Returns every skill in the system with the current user's progress.
-    /// Skills the user has not enrolled in are returned with status "locked".
-    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
     {
@@ -45,11 +41,6 @@ public class SkillsController(SkillTreeService skillTreeService) : ControllerBas
         return Ok(skills);
     }
 
-    /// <summary>
-    /// Replaces the user's enrolled skill set.
-    /// Body: { "skillSlugs": ["sales-basics", "cold-calls"] }
-    /// sales-basics is always kept enrolled regardless of the payload.
-    /// </summary>
     [HttpPut("enrolled")]
     public async Task<IActionResult> UpdateEnrolledSkills(
         [FromBody] UpdateEnrolledSkillsRequestDto request)

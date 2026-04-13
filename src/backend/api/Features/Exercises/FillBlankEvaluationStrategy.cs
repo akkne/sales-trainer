@@ -2,13 +2,14 @@ using System.Text.Json;
 
 namespace SalesTrainer.Api.Features.Exercises;
 
-public class FillBlankEvaluationStrategy : IExerciseEvaluationStrategy
+internal sealed class FillBlankEvaluationStrategy : IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => "fill_blank";
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
-        JsonElement userAnswer)
+        JsonElement userAnswer,
+        CancellationToken cancellationToken = default)
     {
         var correctOptionIndex = exerciseContent.GetProperty("correctOptionIndex").GetInt32();
         var selectedOptionIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
