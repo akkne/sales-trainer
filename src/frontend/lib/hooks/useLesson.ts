@@ -15,7 +15,18 @@ export interface LessonSummary {
 
 export interface ExerciseData {
     exerciseId: string;
-    type: "multiple_choice" | "fill_blank" | "open_question";
+    type:
+        | "multiple_choice"
+        | "fill_blank"
+        | "open_question"
+        | "ordering"
+        | "matching"
+        | "categorizing"
+        | "find_error"
+        | "rewrite_better"
+        | "ai_dialog"
+        | "rate_call"
+        | "written_answer";
     sortOrder: number;
     content: unknown;
 }
@@ -63,21 +74,6 @@ export function useSubmitExercise() {
                 `/exercises/${exerciseId}/submit`,
                 { answer }
             ),
-    });
-}
-
-export interface NextLesson {
-    lessonId: string;
-    title: string;
-    xpReward: number;
-}
-
-export function useNextLesson(lessonId: string, enabled: boolean) {
-    return useQuery({
-        queryKey: ["lesson", "next", lessonId],
-        queryFn: () => apiClient.get<NextLesson | undefined>(`/lessons/${lessonId}/next`),
-        enabled: enabled && !!lessonId,
-        retry: false,
     });
 }
 

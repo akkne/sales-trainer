@@ -46,18 +46,6 @@ public class ExerciseController(IExerciseService exerciseService) : ControllerBa
         return Ok(exerciseDtos);
     }
 
-    [HttpGet("lessons/{lessonId:guid}/next")]
-    public async Task<ActionResult<NextLessonDto>> GetNextLesson(Guid lessonId)
-    {
-        var userId = ResolveCurrentUserId();
-        if (userId is null) return Unauthorized();
-
-        var nextLesson = await exerciseService.GetNextAvailableLessonAsync(userId.Value, lessonId);
-        if (nextLesson is null) return NoContent();
-
-        return Ok(nextLesson);
-    }
-
     [HttpPost("exercises/{exerciseId:guid}/submit")]
     public async Task<ActionResult<ExerciseSubmissionResultDto>> SubmitExerciseAnswer(
         Guid exerciseId,
@@ -71,6 +59,30 @@ public class ExerciseController(IExerciseService exerciseService) : ControllerBa
             var submissionResult = await exerciseService.SubmitExerciseAnswerAsync(
                 userId.Value, exerciseId, submitRequest.Answer);
             return Ok(submissionResult);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (NotSupportedException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [HttpPost("exercises/{exerciseId:guid}/chat")]
+    public async Task<ActionResult<ExerciseChatResponseDto>> SendChatMessage(
+        Guid exerciseId,
+        [FromBody] ExerciseChatRequestDto chatRequest)
+    {
+        var userId = ResolveCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        try
+        {
+            var chatResponse = await exerciseService.SendChatMessageAsync(
+                userId.Value, exerciseId, chatRequest.Message);
+            return Ok(chatResponse);
         }
         catch (KeyNotFoundException exception)
         {

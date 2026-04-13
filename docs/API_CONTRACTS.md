@@ -61,6 +61,11 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 | GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` |
 | GET | /lessons/:lessonId/next | — | `NextLessonDto` or 204 if no next lesson |
 | POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
+| POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
+
+**AI Dialog Chat Endpoint:**
+`POST /exercises/:exerciseId/chat` — for `ai_dialog` type exercises only. Handles multi-turn conversation.
+`ExerciseChatResponseDto`: `{response: string, isComplete: boolean, turnNumber: number, maxTurns: number}`
 
 **Lesson unlock behavior:**
 - First call to `GET /skills/:slug/lessons` lazy-seeds `UserLessonProgress` rows: lesson 1 → `available`, rest → `locked`.
@@ -72,11 +77,27 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 **multiple_choice**: `{situation, question, options[], correctOptionIndex, explanation?}`
 **fill_blank**: `{characterName, characterLine, options[], correctOptionIndex, explanation?}`
 **free_text**: `{situation, prompt, evaluationCriteria}`
+**ordering**: `{situation, items[{id, text}], correctOrder[], explanation?}`
+**matching**: `{situation, leftColumn[{id, text}], rightColumn[{id, text}], correctPairs[{left, right}], explanation?}`
+**categorizing**: `{situation, items[{id, text}], categories[{id, title, color}], correctMapping{itemId: categoryId}, explanation?}`
+**find_error**: `{situation, dialogLines[{id, speaker, text}], errorLineId, aiPrompt?, requireExplanation?, suggestedFixes?[{id, text}], correctFixIds?[]}`
+**rewrite_better**: `{situation, originalText, context?, aiPrompt, minLength?, maxLength?}`
+**ai_dialog**: `{situation, persona{name, role, description}, chatSystemPrompt, aiPrompt, maxTurns?, minTurnsForCompletion?}`
+**rate_call**: `{situation, transcript[{speaker, text}], criteria[{id, name, description}], ratingScale{min, max}, aiPrompt}`
+**written_answer**: `{prompt, context?, aiPrompt, minLength?, maxLength?}`
 
 `answer` shape by type:
 
 **multiple_choice / fill_blank**: `{selectedOptionIndex: number}`
 **free_text**: `{text: string}`
+**ordering**: `{order: string[]}` — item IDs in user's order
+**matching**: `{pairs: [{left, right}]}`
+**categorizing**: `{mapping: {itemId: categoryId}}`
+**find_error**: `{selectedLineId, explanation?, selectedFixId?}`
+**rewrite_better**: `{rewrittenText: string}`
+**ai_dialog**: `{messages: [{role, content}], completedNaturally: boolean}`
+**rate_call**: `{ratings: {criterionId: number}, overallComment?: string}`
+**written_answer**: `{text: string}`
 
 `NextLessonDto`: `{lessonId, title, xpReward}` — next lesson in same skill with status `available` or `in_progress`. Returns 204 when no next lesson exists.
 

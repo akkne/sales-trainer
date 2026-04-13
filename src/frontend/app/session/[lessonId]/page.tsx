@@ -5,13 +5,20 @@ import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
     useSubmitExercise,
-    useNextLesson,
     type ExerciseSubmissionResult,
 } from "@/lib/hooks/useLesson";
 import { useAchievements } from "@/lib/hooks/useAchievements";
 import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
 import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
+import { OrderingExercise } from "@/components/exercise/OrderingExercise";
+import { MatchingExercise } from "@/components/exercise/MatchingExercise";
+import { CategorizingExercise } from "@/components/exercise/CategorizingExercise";
+import { FindErrorExercise } from "@/components/exercise/FindErrorExercise";
+import { RewriteBetterExercise } from "@/components/exercise/RewriteBetterExercise";
+import { AiDialogExercise } from "@/components/exercise/AiDialogExercise";
+import { RateCallExercise } from "@/components/exercise/RateCallExercise";
+import { WrittenAnswerExercise } from "@/components/exercise/WrittenAnswerExercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
 import { Icon } from "@/components/ui/Icon";
 
@@ -51,9 +58,6 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
     const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
-
-    const isSessionComplete = sessionState === "complete";
-    const { data: nextLesson, isSuccess: isNextLessonLoaded } = useNextLesson(lessonId, isSessionComplete);
 
     const currentExercise = exercises?.[currentExerciseIndex];
     const totalExerciseCount = exercises?.length ?? 0;
@@ -194,27 +198,9 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 </div>
 
                 <div className="w-full max-w-sm flex flex-col gap-3 mt-6">
-                    {isNextLessonLoaded && nextLesson ? (
-                        <>
-                            <button
-                                onClick={() => router.replace(`/session/${nextLesson.lessonId}`)}
-                                className="w-full py-4 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center gap-2 shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
-                            >
-                                Следующий урок
-                                <Icon name="arrow_forward" size="sm" />
-                            </button>
-                            <p className="text-xs text-on-surface-variant text-center">{nextLesson.title}</p>
-                        </>
-                    ) : isNextLessonLoaded ? (
-                        <p className="text-sm text-on-surface-variant text-center mb-1">Все уроки пройдены! 🎉</p>
-                    ) : null}
                     <button
                         onClick={() => router.back()}
-                        className={`w-full py-4 rounded-full font-bold tonal-transition ${
-                            isNextLessonLoaded && nextLesson
-                                ? "text-on-surface-variant hover:text-on-surface"
-                                : "bg-primary text-on-primary shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1"
-                        }`}
+                        className="w-full py-4 rounded-full bg-primary text-on-primary font-bold shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
                     >
                         Вернуться к пути
                     </button>
@@ -340,6 +326,95 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                                 typeof OpenQuestionExercise
                             >[0]["content"]
                         }
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "ordering" && (
+                    <OrderingExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof OrderingExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "matching" && (
+                    <MatchingExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof MatchingExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "categorizing" && (
+                    <CategorizingExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof CategorizingExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "find_error" && (
+                    <FindErrorExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof FindErrorExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "rewrite_better" && (
+                    <RewriteBetterExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof RewriteBetterExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "ai_dialog" && (
+                    <AiDialogExercise
+                        key={currentExercise.exerciseId}
+                        exerciseId={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof AiDialogExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "rate_call" && (
+                    <RateCallExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof RateCallExercise>[0]["content"]}
+                        onSubmit={handleExerciseSubmit}
+                        onSkip={handleSkip}
+                        onContinue={handleContinueAfterResult}
+                        isSubmitting={submitExerciseMutation.isPending}
+                        submittedResult={lastSubmissionResult}
+                    />
+                )}
+                {currentExercise.type === "written_answer" && (
+                    <WrittenAnswerExercise
+                        key={currentExercise.exerciseId}
+                        content={currentExercise.content as Parameters<typeof WrittenAnswerExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}

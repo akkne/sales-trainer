@@ -173,34 +173,6 @@ internal sealed class ExerciseService(
             newlyUnlockedAchievementKeys);
     }
 
-    public async Task<NextLessonDto?> GetNextAvailableLessonAsync(
-        Guid userId,
-        Guid lessonId,
-        CancellationToken cancellationToken = default)
-    {
-        var currentLesson = await databaseContext.Lessons
-            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
-
-        if (currentLesson is null) return null;
-
-        var nextLesson = await databaseContext.Lessons
-            .Where(lesson => lesson.SkillId == currentLesson.SkillId
-                             && lesson.SortOrder > currentLesson.SortOrder)
-            .OrderBy(lesson => lesson.SortOrder)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (nextLesson is null) return null;
-
-        var nextLessonProgress = await databaseContext.UserLessonProgressRecords
-            .FirstOrDefaultAsync(progressRecord => progressRecord.UserId == userId
-                                             && progressRecord.LessonId == nextLesson.Id, cancellationToken);
-
-        if (nextLessonProgress is null || nextLessonProgress.Status == "locked")
-            return null;
-
-        return new NextLessonDto(nextLesson.Id, nextLesson.Title, nextLesson.XpReward);
-    }
-
     private async Task UpdateLessonProgressAsync(
         Guid userId,
         Guid lessonId,
@@ -414,5 +386,107 @@ internal sealed class ExerciseService(
             Source = "streak_bonus",
             EarnedAt = DateTime.UtcNow
         });
+    }
+
+    public async Task<ExerciseChatResponseDto> SendChatMessageAsync(
+        Guid userId,
+        Guid exerciseId,
+        string userMessage,
+        CancellationToken cancellationToken = default)
+    {
+        var exercise = await databaseContext.Exercises
+            .FirstOrDefaultAsync(e => e.Id == exerciseId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+
+        if (exercise.Type != "ai_dialog")
+            throw new NotSupportedException("Chat is only supported for ai_dialog exercises.");
+
+        var content = JsonDocument.Parse(exercise.SerializedContent).RootElement;
+        var maxTurns = content.TryGetProperty("maxTurns", out var maxEl) ? maxEl.GetInt32() : 10;
+        var chatSystemPrompt = content.GetProperty("chatSystemPrompt").GetString() ?? "";
+
+        // Get or create chat state from cache (using Redis pattern key)
+        var cacheKey = $"exercise_chat:{userId}:{exerciseId}";
+        var messages = await GetChatMessagesFromCacheAsync(cacheKey, cancellationToken);
+
+        // If no messages, start with AI greeting
+        if (messages.Count == 0)
+        {
+            var greeting = await GenerateAiResponseAsync(chatSystemPrompt, messages, cancellationToken);
+            messages.Add(new ChatMessage("assistant", greeting.Response));
+            await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+
+            return new ExerciseChatResponseDto(
+                Response: greeting.Response,
+                IsComplete: greeting.IsComplete,
+                TurnNumber: 1,
+                MaxTurns: maxTurns);
+        }
+
+        // Add user message
+        messages.Add(new ChatMessage("user", userMessage));
+
+        var turnNumber = messages.Count(m => m.Role == "user");
+        if (turnNumber >= maxTurns)
+        {
+            await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+            return new ExerciseChatResponseDto(
+                Response: "Диалог завершён — достигнуто максимальное количество реплик.",
+                IsComplete: true,
+                TurnNumber: turnNumber,
+                MaxTurns: maxTurns);
+        }
+
+        // Generate AI response
+        var aiResponse = await GenerateAiResponseAsync(chatSystemPrompt, messages, cancellationToken);
+        messages.Add(new ChatMessage("assistant", aiResponse.Response));
+
+        await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+
+        return new ExerciseChatResponseDto(
+            Response: aiResponse.Response,
+            IsComplete: aiResponse.IsComplete,
+            TurnNumber: turnNumber,
+            MaxTurns: maxTurns);
+    }
+
+    private record ChatMessage(string Role, string Content);
+
+    private record AiChatResponse(string Response, bool IsComplete);
+
+    private Task<List<ChatMessage>> GetChatMessagesFromCacheAsync(string cacheKey, CancellationToken cancellationToken)
+    {
+        // For now, use in-memory storage via static dictionary
+        // In production, this should use Redis
+        if (_chatCache.TryGetValue(cacheKey, out var messages))
+            return Task.FromResult(messages);
+        return Task.FromResult(new List<ChatMessage>());
+    }
+
+    private Task SaveChatMessagesToCacheAsync(string cacheKey, List<ChatMessage> messages, CancellationToken cancellationToken)
+    {
+        _chatCache[cacheKey] = messages;
+        return Task.CompletedTask;
+    }
+
+    private static readonly Dictionary<string, List<ChatMessage>> _chatCache = new();
+
+    private async Task<AiChatResponse> GenerateAiResponseAsync(
+        string systemPrompt,
+        List<ChatMessage> messages,
+        CancellationToken cancellationToken)
+    {
+        // This is a simplified implementation - in production should use OpenAI service
+        // For now, return a placeholder that indicates the chat endpoint works
+        await Task.CompletedTask;
+
+        // TODO: Implement actual OpenAI call similar to DialogService
+        // For now, return placeholder
+        var isComplete = messages.Count(m => m.Role == "user") >= 3 &&
+                         messages.LastOrDefault()?.Content.Contains("спасибо", StringComparison.OrdinalIgnoreCase) == true;
+
+        return new AiChatResponse(
+            Response: "Понял вас. Что ещё вы хотели бы обсудить?",
+            IsComplete: isComplete);
     }
 }

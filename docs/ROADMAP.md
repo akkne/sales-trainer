@@ -1,4 +1,4 @@
-# Sallevate — ROADMAP
+# Sellevate — ROADMAP
 
 ## How the agent works with this file
 1. Read phases top to bottom
@@ -746,3 +746,60 @@
 - [x] Update `docs/VOICE_ROLEPLAY.md` with final architecture
 - [x] Create `docs/TESTING/VOICE_ROLEPLAY.md` — manual checklist
 - [ ] Frontend component tests for VoiceMicButton
+
+---
+
+## Phase 29 — New Exercise Types
+
+> Add 8 new exercise types: ordering, matching, categorizing, find-error, rewrite-better, ai-dialog, rate-call, written-answer.
+> Spec: [docs/NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md)
+
+### [x] Documentation
+- [x] Create `docs/NEW_EXERCISE_TYPES.md` — full architecture spec
+- [x] Update `docs/API_CONTRACTS.md` with new content/answer schemas
+- [x] Update `docs/DB_SCHEMA.md` with ExerciseTypePrompts table
+- [x] Update `docs/FEATURES.md` with link
+
+### [x] Backend — Database
+- [x] `ExerciseTypePrompt` entity for global AI prompts
+- [x] EF configuration for unique ExerciseType index
+- [x] Migration `AddExerciseTypePrompts` with seed data
+
+### [x] Backend — Non-AI evaluation strategies
+- [x] `OrderingEvaluationStrategy` — exact sequence match
+- [x] `MatchingEvaluationStrategy` — pair matching with partial credit
+- [x] `CategorizingEvaluationStrategy` — bucket sorting with partial credit
+
+### [x] Backend — AI evaluation strategies
+- [x] `AiEvaluationStrategyBase` — shared AI prompt construction and parsing
+- [x] `FindErrorEvaluationStrategy` — line selection + AI explanation eval
+- [x] `RewriteBetterEvaluationStrategy` — text improvement eval
+- [x] `AiDialogEvaluationStrategy` — multi-turn conversation eval
+- [x] `RateCallEvaluationStrategy` — transcript analysis comparison
+- [x] `WrittenAnswerEvaluationStrategy` — free-form text eval
+
+### [x] Backend — DI and endpoints
+- [x] Register all 8 strategies in `ExerciseServiceCollectionExtensions`
+- [x] `POST /exercises/{id}/chat` endpoint for ai_dialog type
+- [x] `SendChatMessageAsync` in ExerciseService
+
+### [x] Frontend — Exercise components
+- [x] `OrderingExercise.tsx` — drag-drop + up/down buttons
+- [x] `MatchingExercise.tsx` — two-column connection
+- [x] `CategorizingExercise.tsx` — bucket sorting with drag-drop
+- [x] `FindErrorExercise.tsx` — line selection + explanation + fixes
+- [x] `RewriteBetterExercise.tsx` — textarea with char counter
+- [x] `AiDialogExercise.tsx` — chat interface with persona
+- [x] `RateCallExercise.tsx` — transcript + criteria rating
+- [x] `WrittenAnswerExercise.tsx` — prompt + textarea
+
+### [x] Frontend — Integration
+- [x] Update `ExerciseData.type` union in `useLesson.ts`
+- [x] Add all component imports to session page
+- [x] Add type dispatchers for all 8 new types
+
+### [x] Testing
+- [x] Create `docs/TESTING/NEW_EXERCISE_TYPES.md` — manual checklist
+- [ ] Unit tests for non-AI evaluation strategies
+- [ ] Unit tests for AI strategies (mocked HTTP)
+- [ ] Integration tests for chat endpoint

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.League.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
@@ -32,6 +33,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DialogBundle> DialogBundles => Set<DialogBundle>();
     public DbSet<DialogMode> DialogModes => Set<DialogMode>();
     public DbSet<OpenQuestionGlobalContext> OpenQuestionGlobalContexts => Set<OpenQuestionGlobalContext>();
+    public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

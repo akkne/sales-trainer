@@ -29,3 +29,4 @@ Add a new link here whenever a new docs file is created — do NOT put feature l
 - [Achievement Notification — toast queue on achievement unlock during session](TESTING/ACHIEVEMENT_NOTIFICATION.md)
 - [AI Dialog — conversational sales practice with GPT feedback](AI_DIALOG.md)
 - [Voice Roleplay — voice-based sales practice with VAD, Deepgram STT, ElevenLabs TTS](VOICE_ROLEPLAY.md)
+- [New Exercise Types — ordering, matching, categorizing, find-error, rewrite, AI dialog, rate-call, written-answer](NEW_EXERCISE_TYPES.md)

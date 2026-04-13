@@ -24,8 +24,13 @@ public interface IExerciseService
         JsonElement userAnswer,
         CancellationToken cancellationToken = default);
 
-    Task<NextLessonDto?> GetNextAvailableLessonAsync(
+    /// <summary>
+    /// Handles a chat turn in an ai_dialog exercise.
+    /// Returns the AI response and conversation state.
+    /// </summary>
+    Task<ExerciseChatResponseDto> SendChatMessageAsync(
         Guid userId,
-        Guid lessonId,
+        Guid exerciseId,
+        string userMessage,
         CancellationToken cancellationToken = default);
 }

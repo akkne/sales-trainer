@@ -200,6 +200,20 @@ Indexes: `IX_RefreshTokens_UserId`
 
 ---
 
+### `ExerciseTypePrompts`
+
+| Column        | Type                       | Nullable | Notes                                          |
+|---------------|----------------------------|----------|------------------------------------------------|
+| `Id`          | `uuid`                     | NOT NULL | PK                                             |
+| `ExerciseType`| `text`                     | NOT NULL | UNIQUE — type key (`find_error`, `ai_dialog`, etc.) |
+| `SystemPrompt`| `text`                     | NOT NULL | Global system prompt for all exercises of type |
+| `UpdatedAt`   | `timestamp with time zone` | NOT NULL |                                                |
+
+Used for AI-powered exercise types: `find_error`, `rewrite_better`, `ai_dialog`, `rate_call`, `written_answer`.
+Prompt is combined with per-exercise `aiPrompt` from `SerializedContent`.
+
+---
+
 ## Exercise Content Schemas
 
 The `Exercises.SerializedContent` (jsonb) varies by `Type`:
@@ -231,6 +245,97 @@ The `Exercises.SerializedContent` (jsonb) varies by `Type`:
   "characterName": "string",
   "characterReplica": "string",
   "evaluationCriteria": "string"
+}
+```
+
+### `ordering`
+```json
+{
+  "situation": "string",
+  "items": [{"id": "string", "text": "string"}],
+  "correctOrder": ["string"],
+  "explanation": "string (optional)"
+}
+```
+
+### `matching`
+```json
+{
+  "situation": "string",
+  "leftColumn": [{"id": "string", "text": "string"}],
+  "rightColumn": [{"id": "string", "text": "string"}],
+  "correctPairs": [{"left": "string", "right": "string"}],
+  "explanation": "string (optional)"
+}
+```
+
+### `categorizing`
+```json
+{
+  "situation": "string",
+  "items": [{"id": "string", "text": "string"}],
+  "categories": [{"id": "string", "title": "string", "color": "string (hex)"}],
+  "correctMapping": {"itemId": "categoryId"},
+  "explanation": "string (optional)"
+}
+```
+
+### `find_error`
+```json
+{
+  "situation": "string",
+  "dialogLines": [{"id": "string", "speaker": "string", "text": "string"}],
+  "errorLineId": "string",
+  "aiPrompt": "string (optional, per-exercise evaluation criteria)",
+  "requireExplanation": "boolean (optional)",
+  "suggestedFixes": [{"id": "string", "text": "string"}],
+  "correctFixIds": ["string"]
+}
+```
+
+### `rewrite_better`
+```json
+{
+  "situation": "string",
+  "originalText": "string",
+  "context": "string (optional)",
+  "aiPrompt": "string",
+  "minLength": "number (optional)",
+  "maxLength": "number (optional)"
+}
+```
+
+### `ai_dialog`
+```json
+{
+  "situation": "string",
+  "persona": {"name": "string", "role": "string", "description": "string"},
+  "chatSystemPrompt": "string",
+  "aiPrompt": "string (final evaluation criteria)",
+  "maxTurns": "number (optional, default 10)",
+  "minTurnsForCompletion": "number (optional, default 4)"
+}
+```
+
+### `rate_call`
+```json
+{
+  "situation": "string",
+  "transcript": [{"speaker": "string", "text": "string"}],
+  "criteria": [{"id": "string", "name": "string", "description": "string"}],
+  "ratingScale": {"min": "number", "max": "number"},
+  "aiPrompt": "string"
+}
+```
+
+### `written_answer`
+```json
+{
+  "prompt": "string",
+  "context": "string (optional)",
+  "aiPrompt": "string",
+  "minLength": "number (optional)",
+  "maxLength": "number (optional)"
 }
 ```
 
