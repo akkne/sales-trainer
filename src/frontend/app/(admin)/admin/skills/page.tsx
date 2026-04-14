@@ -11,31 +11,17 @@ import {
     type SkillsImportResult,
 } from "@/lib/hooks/useAdmin";
 
-const SALES_TYPES = [
-    "b2b_saas",
-    "retail",
-    "real_estate",
-    "finance",
-    "b2c",
-];
-
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     title: "",
-    slug: "",
-    iconName: "star",
-    sortOrder: 0,
-    prerequisiteSkillId: null,
-    applicableSalesTypes: [],
+    description: null,
+    orderInTree: 0,
 });
 
 const SKILLS_TEMPLATE = JSON.stringify([
     {
-        slug: "example-skill",
         title: "Example Skill",
-        iconName: "star",
-        sortOrder: 1,
-        applicableSalesTypes: ["b2b_saas", "retail"],
-        prerequisiteSkillIcon: null
+        description: "Description of the skill",
+        orderInTree: 1
     }
 ], null, 2);
 
@@ -59,19 +45,9 @@ export default function AdminSkillsPage() {
     const [form, setForm] = useState(emptyForm());
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-    // Import state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showImport, setShowImport] = useState(false);
     const [importResult, setImportResult] = useState<SkillsImportResult | null>(null);
-
-    function handleSalesTypeToggle(type: string) {
-        setForm((prev) => ({
-            ...prev,
-            applicableSalesTypes: prev.applicableSalesTypes.includes(type)
-                ? prev.applicableSalesTypes.filter((t) => t !== type)
-                : [...prev.applicableSalesTypes, type],
-        }));
-    }
 
     async function handleCreate() {
         await createSkill.mutateAsync(form);
@@ -116,7 +92,6 @@ export default function AdminSkillsPage() {
                 </div>
             </div>
 
-            {/* Import Section */}
             {showImport && (
                 <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-6">
                     <div className="flex items-center justify-between mb-3">
@@ -172,57 +147,29 @@ export default function AdminSkillsPage() {
                             />
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Slug</span>
-                            <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                value={form.slug}
-                                onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                            />
-                        </label>
-                        <label className="block">
-                            <span className="text-xs text-on-surface-variant">Icon name</span>
-                            <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                value={form.iconName}
-                                onChange={(e) => setForm({ ...form, iconName: e.target.value })}
-                            />
-                        </label>
-                        <label className="block">
-                            <span className="text-xs text-on-surface-variant">Sort order</span>
+                            <span className="text-xs text-on-surface-variant">Order in tree</span>
                             <input
                                 type="number"
                                 className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                value={form.sortOrder}
+                                value={form.orderInTree}
                                 onChange={(e) =>
-                                    setForm({ ...form, sortOrder: Number(e.target.value) })
+                                    setForm({ ...form, orderInTree: Number(e.target.value) })
                                 }
                             />
                         </label>
-                    </div>
-                    <div className="mt-4">
-                        <span className="text-xs text-on-surface-variant block mb-2">
-                            Applicable sales types
-                        </span>
-                        <div className="flex flex-wrap gap-2">
-                            {SALES_TYPES.map((type) => (
-                                <button
-                                    key={type}
-                                    type="button"
-                                    onClick={() => handleSalesTypeToggle(type)}
-                                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                                        form.applicableSalesTypes.includes(type)
-                                            ? "bg-primary text-on-primary border-primary"
-                                            : "bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:border-on-surface-variant"
-                                    }`}
-                                >
-                                    {type}
-                                </button>
-                            ))}
-                        </div>
+                        <label className="block col-span-2">
+                            <span className="text-xs text-on-surface-variant">Description</span>
+                            <textarea
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                rows={2}
+                                value={form.description || ""}
+                                onChange={(e) => setForm({ ...form, description: e.target.value || null })}
+                            />
+                        </label>
                     </div>
                     <button
                         onClick={handleCreate}
-                        disabled={createSkill.isPending || !form.title || !form.slug}
+                        disabled={createSkill.isPending || !form.title}
                         className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createSkill.isPending ? "Saving..." : "Create"}
@@ -247,13 +194,10 @@ export default function AdminSkillsPage() {
                                 Title
                             </th>
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
-                                Slug
+                                Description
                             </th>
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
                                 Order
-                            </th>
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
-                                Sales types
                             </th>
                             <th className="py-2 px-3" />
                         </tr>
@@ -272,11 +216,10 @@ export default function AdminSkillsPage() {
                                         {skill.title}
                                     </Link>
                                 </td>
-                                <td className="py-2.5 px-3 text-on-surface-variant">{skill.slug}</td>
-                                <td className="py-2.5 px-3 text-on-surface-variant">{skill.sortOrder}</td>
                                 <td className="py-2.5 px-3 text-on-surface-variant">
-                                    {skill.applicableSalesTypes.join(", ") || "—"}
+                                    {skill.description || "—"}
                                 </td>
+                                <td className="py-2.5 px-3 text-on-surface-variant">{skill.orderInTree}</td>
                                 <td className="py-2.5 px-3 text-right">
                                     {confirmDeleteId === skill.id ? (
                                         <span className="inline-flex gap-2">

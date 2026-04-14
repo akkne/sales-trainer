@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/Icon";
 
 const NAV_ICONS: Record<string, string> = {
     "/admin/skills": "psychology",
+    "/admin/topics": "folder_open",
     "/admin/lessons": "menu_book",
     "/admin/reference": "library_books",
     "/admin/dialog": "forum",
@@ -87,10 +88,11 @@ export default function AdminLayout({
 
     const navItems = [
         { href: "/admin/skills", label: "Skills" },
+        { href: "/admin/topics", label: "Topics" },
         { href: "/admin/lessons", label: "Lessons" },
         { href: "/admin/reference", label: "Reference" },
         { href: "/admin/dialog", label: "Dialog" },
-        { href: "/admin/open-question", label: "Open Question AI" },
+        { href: "/admin/open-question", label: "AI Prompts" },
         ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
     ];
 

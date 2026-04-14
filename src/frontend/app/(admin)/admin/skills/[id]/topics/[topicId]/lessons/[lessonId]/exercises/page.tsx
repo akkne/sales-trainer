@@ -55,7 +55,6 @@ import { AiDialogEditor } from "@/components/admin/exercise-editors/AiDialogEdit
 import { RateCallEditor } from "@/components/admin/exercise-editors/RateCallEditor";
 import { WrittenAnswerEditor } from "@/components/admin/exercise-editors/WrittenAnswerEditor";
 
-// Monochrome badge styling
 function typeBadgeColor(): string {
     return "bg-surface-container text-on-surface-variant border border-outline-variant";
 }
@@ -153,12 +152,12 @@ function renderContentPreview(row: ExerciseRow): string {
     }
 }
 
-export default function AdminLessonExercisesPage({
+export default function AdminTopicLessonExercisesPage({
     params,
 }: {
-    params: Promise<{ id: string; lessonId: string }>;
+    params: Promise<{ id: string; topicId: string; lessonId: string }>;
 }) {
-    const { id: skillId, lessonId } = use(params);
+    const { id: skillId, topicId, lessonId } = use(params);
     const { data: exercises = [], isLoading } = useAdminExercises(lessonId);
 
     const createMut = useCreateExercise(lessonId);
@@ -172,10 +171,8 @@ export default function AdminLessonExercisesPage({
         },
     });
 
-    // Local state for editing - initialized lazily from server data
     const [localRows, setLocalRows] = useState<ExerciseRow[] | null>(null);
 
-    // Use local state if available, otherwise derive from server data
     const rows: ExerciseRow[] = localRows ?? exercises.map((ex) => ({
         id: ex.id,
         type: ex.type as ExerciseType,
@@ -184,7 +181,6 @@ export default function AdminLessonExercisesPage({
         customAiPrompt: ex.customAiPrompt ?? null,
     }));
 
-    // Wrapper to set local state
     function setRows(newRows: ExerciseRow[] | ((prev: ExerciseRow[]) => ExerciseRow[])) {
         if (typeof newRows === "function") {
             setLocalRows((prev) => newRows(prev ?? rows));
@@ -245,10 +241,10 @@ export default function AdminLessonExercisesPage({
         <div>
             <div className="mb-6">
                 <Link
-                    href={`/admin/skills/${skillId}/lessons/${lessonId}`}
+                    href={`/admin/skills/${skillId}/topics/${topicId}`}
                     className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                 >
-                    ← Back to lesson
+                    ← Back to topic
                 </Link>
             </div>
 
@@ -298,6 +294,11 @@ export default function AdminLessonExercisesPage({
                                         {TYPE_LABELS[row.type]}
                                     </span>
                                     <span className="text-xs text-on-surface-variant">#{row.sortOrder}</span>
+                                    {row.customAiPrompt && (
+                                        <span className="text-xs px-1.5 py-0.5 bg-primary-container text-primary rounded">
+                                            AI
+                                        </span>
+                                    )}
                                 </div>
                                 {!isEditing && (
                                     <div className="flex gap-3">
@@ -345,7 +346,7 @@ export default function AdminLessonExercisesPage({
                                         setRows(rows.map((r, ri) => ri === index ? { ...r, content: newContent } : r));
                                     })}
 
-                                    {/* Custom AI Prompt - shown for AI-powered types */}
+                                    {/* Custom AI Prompt */}
                                     {["open_question", "find_error", "rewrite_better", "ai_dialog", "rate_call", "written_answer"].includes(row.type) && (
                                         <label className="block mt-4">
                                             <span className={labelCls}>Custom AI Prompt (optional)</span>
