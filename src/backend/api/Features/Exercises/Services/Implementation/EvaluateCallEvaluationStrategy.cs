@@ -7,16 +7,17 @@ using SalesTrainer.Api.Infrastructure.Data;
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 /// <summary>
-/// Evaluates rate-call exercises where user analyzes a call transcript.
+/// Evaluates evaluate_call exercises where user analyzes a call transcript.
+/// Content schema: { transcript: [{ speaker, text }], evaluation_axes: [{ name, description }], ai_prompt }
 /// AI compares user's ratings with its own analysis.
 /// </summary>
-internal sealed class RateCallEvaluationStrategy(
+internal sealed class EvaluateCallEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     AppDbContext databaseContext)
     : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "rate_call";
+    public string SupportedExerciseType => ExerciseTypes.EvaluateCall;
 
     public async Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
@@ -32,14 +33,13 @@ internal sealed class RateCallEvaluationStrategy(
             transcriptBuilder.AppendLine($"{speaker}: {text}");
         }
 
-        // Format criteria
-        var criteriaBuilder = new StringBuilder();
-        foreach (var criterion in exerciseContent.GetProperty("criteria").EnumerateArray())
+        // Format evaluation axes
+        var axesBuilder = new StringBuilder();
+        foreach (var axis in exerciseContent.GetProperty("evaluation_axes").EnumerateArray())
         {
-            var id = criterion.GetProperty("id").GetString();
-            var name = criterion.GetProperty("name").GetString();
-            var description = criterion.GetProperty("description").GetString();
-            criteriaBuilder.AppendLine($"- {id}: {name} — {description}");
+            var name = axis.GetProperty("name").GetString();
+            var description = axis.GetProperty("description").GetString();
+            axesBuilder.AppendLine($"- {name}: {description}");
         }
 
         // Format user ratings
@@ -53,7 +53,7 @@ internal sealed class RateCallEvaluationStrategy(
             ? commentEl.GetString() ?? ""
             : "";
 
-        var aiPrompt = exerciseContent.TryGetProperty("aiPrompt", out var promptEl)
+        var aiPrompt = exerciseContent.TryGetProperty("ai_prompt", out var promptEl)
             ? promptEl.GetString() ?? ""
             : "";
 
@@ -62,7 +62,7 @@ internal sealed class RateCallEvaluationStrategy(
             {transcriptBuilder}
 
             Критерии оценки:
-            {criteriaBuilder}
+            {axesBuilder}
 
             Оценки пользователя:
             {ratingsBuilder}

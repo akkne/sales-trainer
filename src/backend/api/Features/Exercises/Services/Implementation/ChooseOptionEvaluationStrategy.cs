@@ -4,18 +4,27 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-internal sealed class MultipleChoiceEvaluationStrategy : IExerciseEvaluationStrategy
+/// <summary>
+/// Evaluates choose_option exercises where user selects the best answer from options.
+/// Content schema: { situation, options: [{ text, is_correct }], explanation }
+/// </summary>
+internal sealed class ChooseOptionEvaluationStrategy : IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "multiple_choice";
+    public string SupportedExerciseType => ExerciseTypes.ChooseOption;
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var correctOptionIndex = exerciseContent.GetProperty("correctOptionIndex").GetInt32();
-        var selectedOptionIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
-        var isCorrect = selectedOptionIndex == correctOptionIndex;
+        var selectedIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
+        var options = exerciseContent.GetProperty("options").EnumerateArray().ToList();
+
+        var isCorrect = false;
+        if (selectedIndex >= 0 && selectedIndex < options.Count)
+        {
+            isCorrect = options[selectedIndex].GetProperty("is_correct").GetBoolean();
+        }
 
         string? explanation = null;
         if (exerciseContent.TryGetProperty("explanation", out var explanationElement))

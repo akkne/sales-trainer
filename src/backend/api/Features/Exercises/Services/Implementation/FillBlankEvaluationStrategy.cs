@@ -4,18 +4,27 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
+/// <summary>
+/// Evaluates fill_blank exercises where user fills a gap in dialogue.
+/// Content schema: { before, after, options: [{ text, is_correct }] }
+/// </summary>
 internal sealed class FillBlankEvaluationStrategy : IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "fill_blank";
+    public string SupportedExerciseType => ExerciseTypes.FillBlank;
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var correctOptionIndex = exerciseContent.GetProperty("correctOptionIndex").GetInt32();
-        var selectedOptionIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
-        var isCorrect = selectedOptionIndex == correctOptionIndex;
+        var selectedIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
+        var options = exerciseContent.GetProperty("options").EnumerateArray().ToList();
+
+        var isCorrect = false;
+        if (selectedIndex >= 0 && selectedIndex < options.Count)
+        {
+            isCorrect = options[selectedIndex].GetProperty("is_correct").GetBoolean();
+        }
 
         string? explanation = null;
         if (exerciseContent.TryGetProperty("explanation", out var explanationElement))

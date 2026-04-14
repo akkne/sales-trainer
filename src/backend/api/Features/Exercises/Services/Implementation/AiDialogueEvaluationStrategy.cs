@@ -7,16 +7,17 @@ using SalesTrainer.Api.Infrastructure.Data;
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 /// <summary>
-/// Evaluates AI dialog exercises where user had multi-turn conversation with AI customer.
+/// Evaluates ai_dialogue exercises where user had multi-turn conversation with AI customer.
+/// Content schema: { persona, scenario, context, max_turns, success_criteria: [], ai_prompt }
 /// The full conversation history is submitted and AI evaluates the overall quality.
 /// </summary>
-internal sealed class AiDialogEvaluationStrategy(
+internal sealed class AiDialogueEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     AppDbContext databaseContext)
     : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "ai_dialog";
+    public string SupportedExerciseType => ExerciseTypes.AiDialogue;
 
     public async Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
@@ -25,10 +26,11 @@ internal sealed class AiDialogEvaluationStrategy(
     {
         var messages = userAnswer.GetProperty("messages").EnumerateArray().ToList();
 
-        // Check minimum turns
-        var minTurns = exerciseContent.TryGetProperty("minTurnsForCompletion", out var minEl)
-            ? minEl.GetInt32()
-            : 4;
+        // Check minimum turns (default 3)
+        var maxTurns = exerciseContent.TryGetProperty("max_turns", out var maxEl)
+            ? maxEl.GetInt32()
+            : 6;
+        var minTurns = maxTurns / 2; // At least half the max turns
 
         var userMessageCount = messages.Count(m => m.GetProperty("role").GetString() == "user");
         if (userMessageCount < minTurns)
@@ -43,7 +45,7 @@ internal sealed class AiDialogEvaluationStrategy(
         // Format conversation for evaluation
         var conversationBuilder = new StringBuilder();
         var persona = exerciseContent.TryGetProperty("persona", out var personaEl)
-            ? personaEl.GetProperty("name").GetString() ?? "Клиент"
+            ? personaEl.GetString() ?? "Клиент"
             : "Клиент";
 
         foreach (var msg in messages)
@@ -54,11 +56,29 @@ internal sealed class AiDialogEvaluationStrategy(
             conversationBuilder.AppendLine($"{speaker}: {content}");
         }
 
-        var aiPrompt = exerciseContent.TryGetProperty("aiPrompt", out var promptEl)
+        // Get success criteria
+        var criteria = new List<string>();
+        if (exerciseContent.TryGetProperty("success_criteria", out var criteriaEl))
+        {
+            foreach (var c in criteriaEl.EnumerateArray())
+            {
+                var criterion = c.GetString();
+                if (!string.IsNullOrEmpty(criterion))
+                    criteria.Add(criterion);
+            }
+        }
+
+        var scenario = exerciseContent.TryGetProperty("scenario", out var scenarioEl)
+            ? scenarioEl.GetString() ?? ""
+            : "";
+
+        var aiPrompt = exerciseContent.TryGetProperty("ai_prompt", out var promptEl)
             ? promptEl.GetString() ?? ""
             : "";
 
-        var userPrompt = $"Полный диалог:\n\n{conversationBuilder}";
+        var userPrompt = $"Сценарий: {scenario}\n\nПолный диалог:\n\n{conversationBuilder}";
+        if (criteria.Count > 0)
+            userPrompt += $"\n\nКритерии успеха:\n- {string.Join("\n- ", criteria)}";
 
         return await EvaluateWithAiAsync(
             SupportedExerciseType,

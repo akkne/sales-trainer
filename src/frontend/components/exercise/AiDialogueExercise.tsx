@@ -4,28 +4,22 @@ import { useState, useRef, useEffect } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
 
-interface Persona {
-    name: string;
-    role: string;
-    description: string;
-}
-
 interface ChatMessage {
     role: "user" | "assistant";
     content: string;
 }
 
-interface AiDialogContent {
-    situation: string;
-    persona: Persona;
-    chatSystemPrompt: string;
-    aiPrompt: string;
-    maxTurns?: number;
-    minTurnsForCompletion?: number;
+interface AiDialogueContent {
+    persona: string;
+    scenario: string;
+    context?: string;
+    max_turns?: number;
+    success_criteria?: string[];
+    ai_prompt?: string;
 }
 
-interface AiDialogExerciseProps {
-    content: AiDialogContent;
+interface AiDialogueExerciseProps {
+    content: AiDialogueContent;
     exerciseId: string;
     onSubmit: (answer: { messages: ChatMessage[]; completedNaturally: boolean }) => void;
     onSkip?: () => void;
@@ -34,7 +28,7 @@ interface AiDialogExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function AiDialogExercise({
+export function AiDialogueExercise({
     content,
     exerciseId,
     onSubmit,
@@ -42,7 +36,7 @@ export function AiDialogExercise({
     onContinue,
     isSubmitting,
     submittedResult,
-}: AiDialogExerciseProps) {
+}: AiDialogueExerciseProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState("");
     const [isSending, setIsSending] = useState(false);
@@ -50,8 +44,8 @@ export function AiDialogExercise({
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const maxTurns = content.maxTurns ?? 10;
-    const minTurns = content.minTurnsForCompletion ?? 4;
+    const maxTurns = content.max_turns ?? 6;
+    const minTurns = Math.floor(maxTurns / 2);
     const userTurnCount = messages.filter(m => m.role === "user").length;
     const canComplete = userTurnCount >= minTurns;
 
@@ -85,7 +79,7 @@ export function AiDialogExercise({
             // Fallback greeting
             setMessages([{
                 role: "assistant",
-                content: `${content.persona.name}: Да, слушаю. Что вы хотели?`
+                content: `${content.persona}: Да, слушаю. Что вы хотели?`
             }]);
         } finally {
             setIsSending(false);
@@ -114,7 +108,6 @@ export function AiDialogExercise({
             }
         } catch (error) {
             console.error("Failed to send message:", error);
-            // Fallback response
             setMessages(prev => [...prev, {
                 role: "assistant",
                 content: "Понял вас. Что ещё хотели обсудить?"
@@ -152,13 +145,13 @@ export function AiDialogExercise({
                     <Icon name="user" size="md" className="text-primary" />
                 </div>
                 <div>
-                    <p className="font-bold text-on-surface">{content.persona.name}</p>
-                    <p className="text-sm text-on-surface-variant">{content.persona.role}</p>
+                    <p className="font-bold text-on-surface">{content.persona}</p>
+                    <p className="text-sm text-on-surface-variant">{content.scenario}</p>
                 </div>
             </div>
 
-            {content.situation && (
-                <p className="text-sm text-on-surface-variant px-1">{content.situation}</p>
+            {content.context && (
+                <p className="text-sm text-on-surface-variant px-1">{content.context}</p>
             )}
 
             {/* Chat messages */}

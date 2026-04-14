@@ -6,22 +6,13 @@ import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
 import { Icon } from "@/components/ui/Icon";
 
 /**
- * fill_blank content can be stored in two shapes depending on who seeded it:
- *   1. character-based:  { characterName, characterLine, options, correctOptionIndex }
- *   2. question-based:   { situation?, question, options, correctOptionIndex }
- *      (same shape as multiple_choice)
- * Both shapes are handled here.
+ * fill_blank content: dialogue with a blank to fill
+ * Schema: { before, after, options: [{ text, is_correct }] }
  */
 interface FillBlankContent {
-    // character-based
-    characterName?: string;
-    characterLine?: string;
-    // question-based
-    situation?: string;
-    question?: string;
-    // common
-    options: string[];
-    correctOptionIndex: number;
+    before: string;
+    after: string;
+    options: Array<{ text: string; is_correct: boolean }>;
     explanation?: string;
 }
 
@@ -45,7 +36,7 @@ export function FillBlankExercise({
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const isCharacterBased = !!(content.characterName || content.characterLine);
+    const correctOptionIndex = content.options.findIndex(opt => opt.is_correct);
 
     useKeyboardControls({
         optionCount: content.options?.length ?? 0,
@@ -74,7 +65,7 @@ export function FillBlankExercise({
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === content.correctOptionIndex;
+        const isCorrectOption = optionIndex === correctOptionIndex;
 
         if (isSelected && submittedResult.isCorrect)       return `${base} border-primary bg-primary-container text-primary`;
         if (isSelected && !submittedResult.isCorrect)      return `${base} border-error bg-error-container text-error`;
@@ -94,7 +85,7 @@ export function FillBlankExercise({
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === content.correctOptionIndex;
+        const isCorrectOption = optionIndex === correctOptionIndex;
 
         if (isSelected && submittedResult.isCorrect)       return `${base} bg-primary text-on-primary`;
         if (isSelected && !submittedResult.isCorrect)      return `${base} bg-error text-on-error`;
@@ -104,44 +95,45 @@ export function FillBlankExercise({
 
     return (
         <div className="flex flex-col gap-6">
-            {/* Character speech bubble — only for character-based exercises */}
-            {isCharacterBased && (
+            {/* Dialogue context */}
+            <div className="flex flex-col gap-2">
+                {/* Before text */}
                 <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-secondary font-bold text-lg shrink-0 mt-1">
-                        {content.characterName?.[0]?.toUpperCase() ?? "?"}
-                    </div>
-                    <div className="flex-1">
-                        {content.characterName && (
-                            <p className="text-xs font-semibold text-on-surface-variant mb-1">{content.characterName}</p>
-                        )}
-                        <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3">
-                            <p className="text-on-surface font-medium italic">
-                                &ldquo;{content.characterLine}&rdquo;
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Situation bubble — for question-based exercises with a scenario */}
-            {!isCharacterBased && content.situation && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="handshake" size="sm" className="text-primary" />
+                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0 mt-1">
+                        <Icon name="person" size="sm" className="text-secondary" />
                     </div>
                     <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
+                        <p className="text-on-surface">{content.before}</p>
                     </div>
                 </div>
-            )}
 
-            {/* Main question heading */}
+                {/* Blank indicator */}
+                <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center shrink-0 mt-1">
+                        <Icon name="edit" size="sm" className="text-tertiary" />
+                    </div>
+                    <div className="relative bg-tertiary-container/50 border-2 border-dashed border-tertiary rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                        <p className="text-tertiary font-medium">???</p>
+                    </div>
+                </div>
+
+                {/* After text */}
+                <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0 mt-1">
+                        <Icon name="person" size="sm" className="text-secondary" />
+                    </div>
+                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                        <p className="text-on-surface">{content.after}</p>
+                    </div>
+                </div>
+            </div>
+
             <p className="font-headline font-bold text-xl text-on-surface">
-                {content.question ?? "Выбери лучший ответ:"}
+                Что сказал продавец?
             </p>
 
             <div className="flex flex-col gap-3">
-                {(content.options ?? []).map((optionText, optionIndex) => (
+                {(content.options ?? []).map((option, optionIndex) => (
                     <button
                         key={optionIndex}
                         onClick={() => {
@@ -151,7 +143,7 @@ export function FillBlankExercise({
                         className={optionStyle(optionIndex)}
                     >
                         <span className={badgeStyle(optionIndex)}>{optionIndex + 1}</span>
-                        {optionText}
+                        {option.text}
                     </button>
                 ))}
             </div>

@@ -5,33 +5,40 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 /// <summary>
-/// Evaluates categorizing exercises where user sorts items into buckets.
+/// Evaluates categorize exercises where user sorts items into buckets.
+/// Content schema: { instruction, categories: ["A", "B"], items: [{ text, category }] }
 /// Supports partial credit: score = (correctItems / totalItems) * 100.
 /// IsCorrect only when all items in correct categories.
 /// </summary>
-internal sealed class CategorizingEvaluationStrategy : IExerciseEvaluationStrategy
+internal sealed class CategorizeEvaluationStrategy : IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "categorizing";
+    public string SupportedExerciseType => ExerciseTypes.Categorize;
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var correctMapping = exerciseContent.GetProperty("correctMapping")
-            .EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.GetString() ?? "");
+        // Build correct mapping from items array
+        var correctMapping = new Dictionary<int, string>();
+        var itemIndex = 0;
+        foreach (var item in exerciseContent.GetProperty("items").EnumerateArray())
+        {
+            correctMapping[itemIndex] = item.GetProperty("category").GetString() ?? "";
+            itemIndex++;
+        }
 
+        // User provides mapping as { itemIndex: category }
         var userMapping = userAnswer.GetProperty("mapping")
             .EnumerateObject()
-            .ToDictionary(p => p.Name, p => p.Value.GetString() ?? "");
+            .ToDictionary(p => int.Parse(p.Name), p => p.Value.GetString() ?? "");
 
         var totalItems = correctMapping.Count;
         var correctCount = 0;
 
-        foreach (var (itemId, correctCategory) in correctMapping)
+        foreach (var (idx, correctCategory) in correctMapping)
         {
-            if (userMapping.TryGetValue(itemId, out var userCategory) &&
+            if (userMapping.TryGetValue(idx, out var userCategory) &&
                 userCategory == correctCategory)
             {
                 correctCount++;

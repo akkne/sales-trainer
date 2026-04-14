@@ -5,16 +5,14 @@ import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
 import { Icon } from "@/components/ui/Icon";
 
-interface MultipleChoiceContent {
+interface ChooseOptionContent {
     situation: string;
-    question: string;
-    options: string[];
-    correctOptionIndex: number;
+    options: Array<{ text: string; is_correct: boolean }>;
     explanation?: string;
 }
 
-interface MultipleChoiceExerciseProps {
-    content: MultipleChoiceContent;
+interface ChooseOptionExerciseProps {
+    content: ChooseOptionContent;
     onSubmit: (answer: { selectedOptionIndex: number }) => void;
     onSkip?: () => void;
     onContinue?: () => void;
@@ -22,17 +20,18 @@ interface MultipleChoiceExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function MultipleChoiceExercise({
+export function ChooseOptionExercise({
     content,
     onSubmit,
     onSkip,
     onContinue,
     isSubmitting,
     submittedResult,
-}: MultipleChoiceExerciseProps) {
+}: ChooseOptionExerciseProps) {
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
+    const correctOptionIndex = content.options.findIndex(opt => opt.is_correct);
 
     useKeyboardControls({
         optionCount: content.options.length,
@@ -61,7 +60,7 @@ export function MultipleChoiceExercise({
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === content.correctOptionIndex;
+        const isCorrectOption = optionIndex === correctOptionIndex;
 
         if (isSelected && submittedResult.isCorrect) {
             return `${base} border-primary bg-primary-container text-primary`;
@@ -87,7 +86,7 @@ export function MultipleChoiceExercise({
         }
 
         const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === content.correctOptionIndex;
+        const isCorrectOption = optionIndex === correctOptionIndex;
 
         if (isSelected && submittedResult.isCorrect) return `${base} bg-primary text-on-primary`;
         if (isSelected && !submittedResult.isCorrect) return `${base} bg-error text-on-error`;
@@ -109,10 +108,10 @@ export function MultipleChoiceExercise({
                 </div>
             )}
 
-            <p className="font-headline font-bold text-xl text-on-surface">{content.question}</p>
+            <p className="font-headline font-bold text-xl text-on-surface">Выберите лучший ответ:</p>
 
             <div className="flex flex-col gap-3">
-                {content.options.map((optionText, optionIndex) => (
+                {content.options.map((option, optionIndex) => (
                     <button
                         key={optionIndex}
                         onClick={() => {
@@ -122,7 +121,7 @@ export function MultipleChoiceExercise({
                         className={optionStyle(optionIndex)}
                     >
                         <span className={badgeStyle(optionIndex)}>{optionIndex + 1}</span>
-                        {optionText}
+                        {option.text}
                     </button>
                 ))}
             </div>

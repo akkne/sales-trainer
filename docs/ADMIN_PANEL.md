@@ -153,27 +153,24 @@ JSON import is available inline on Skills and Lessons pages:
 ]
 ```
 
-### Lessons Template (with all 11 exercise types)
+### Lessons Template (with all 10 exercise types)
 ```json
 [
   {
-    "skillIcons": ["cold-calls"],
+    "topicIconicName": "cold-calls",
     "title": "Opening the Call",
-    "sortOrder": 1,
-    "difficultyLevel": 1,
-    "xpReward": 50,
+    "orderInTopic": 1,
     "exercises": [
-      { "type": "multiple_choice", "sortOrder": 1, "content": {...} },
-      { "type": "fill_blank", "sortOrder": 2, "content": {...} },
-      { "type": "open_question", "sortOrder": 3, "content": {...} },
-      { "type": "ordering", "sortOrder": 4, "content": {...} },
-      { "type": "matching", "sortOrder": 5, "content": {...} },
-      { "type": "categorizing", "sortOrder": 6, "content": {...} },
-      { "type": "find_error", "sortOrder": 7, "content": {...} },
-      { "type": "rewrite_better", "sortOrder": 8, "content": {...} },
-      { "type": "ai_dialog", "sortOrder": 9, "content": {...} },
-      { "type": "rate_call", "sortOrder": 10, "content": {...} },
-      { "type": "written_answer", "sortOrder": 11, "content": {...} }
+      { "type": "choose_option", "orderInLesson": 1, "content": {...} },
+      { "type": "fill_blank", "orderInLesson": 2, "content": {...} },
+      { "type": "reorder", "orderInLesson": 3, "content": {...} },
+      { "type": "match_pairs", "orderInLesson": 4, "content": {...} },
+      { "type": "categorize", "orderInLesson": 5, "content": {...} },
+      { "type": "spot_mistake", "orderInLesson": 6, "content": {...} },
+      { "type": "rewrite", "orderInLesson": 7, "content": {...} },
+      { "type": "ai_dialogue", "orderInLesson": 8, "content": {...} },
+      { "type": "evaluate_call", "orderInLesson": 9, "content": {...} },
+      { "type": "free_text", "orderInLesson": 10, "content": {...} }
     ]
   }
 ]
@@ -181,50 +178,49 @@ JSON import is available inline on Skills and Lessons pages:
 
 ---
 
-## Exercise Types (11 total)
+## Exercise Types (10 total)
 
 | Type | Description | Key Content Fields |
 |------|-------------|-------------------|
-| `multiple_choice` | Quiz with 4 options | situation, question, options[], correctOptionIndex, explanation |
-| `fill_blank` | Dialog completion | characterName, characterLine (with ___), options[], correctOptionIndex, explanation |
-| `open_question` | Free-form AI-evaluated answer | question, aiPrompt |
-| `ordering` | Arrange items in sequence | instruction, items[], correctOrder[], explanation |
-| `matching` | Connect left/right columns | instruction, leftItems[], rightItems[], correctPairs[], explanation |
-| `categorizing` | Sort items into buckets | instruction, categories[], items[], correctMapping{}, explanation |
-| `find_error` | Identify mistake in dialog | instruction, dialogLines[], errorLineId, requireExplanation, suggestedFixes[], correctFixIds[], aiPrompt |
-| `rewrite_better` | Improve given text | originalText, context, minLength, maxLength, aiPrompt |
-| `ai_dialog` | Practice with AI persona | scenario, persona{name,role,personality}, systemPrompt, minTurnsForCompletion, aiPrompt |
-| `rate_call` | Evaluate transcript quality | transcript[], criteria[], aiPrompt |
-| `written_answer` | Write based on prompt | prompt, context, minLength, maxLength, aiPrompt |
+| `choose_option` | Select best answer from options | situation, options: [{text, is_correct}], explanation |
+| `fill_blank` | Fill gap in dialogue | before, after, options: [{text, is_correct}] |
+| `reorder` | Arrange items in sequence | instruction, items: [{text, correct_position}], explanation |
+| `match_pairs` | Connect left/right columns | instruction, pairs: [{left, right}], explanation |
+| `categorize` | Sort items into buckets | instruction, categories[], items: [{text, category}], explanation |
+| `spot_mistake` | Identify mistake in dialog | dialogue: [{speaker, text, is_mistake}], explanation, ai_prompt |
+| `rewrite` | Improve given text | instruction, original, evaluation_criteria[], ai_prompt |
+| `ai_dialogue` | Practice with AI persona | persona, scenario, context, max_turns, success_criteria[], ai_prompt |
+| `evaluate_call` | Evaluate transcript quality | transcript: [{speaker, text}], evaluation_axes: [{name, description}], ai_prompt |
+| `free_text` | Write based on prompt | situation, instruction, evaluation_criteria[], ai_prompt |
 
-See `src/frontend/components/admin/exercise-editors/types.ts` for full TypeScript interfaces.
+See `src/frontend/lib/exerciseTypes.ts` for TypeScript constants.
+See `src/backend/api/Features/Exercises/ExerciseTypes.cs` for C# constants.
 
 ---
 
 ## Visual Exercise Editor
 
-The admin panel provides a visual editor for all 11 exercise types at:
-`/admin/skills/[skillId]/lessons/[lessonId]/exercises`
+The admin panel provides a visual editor for all 10 exercise types at:
+`/admin/skills/[skillId]/topics/[topicId]/lessons/[lessonId]/exercises`
 
 Features:
 - Type-specific form fields for each exercise type
 - Drag reordering with up/down arrows
 - Inline preview of content
 - Add/edit/delete exercises without raw JSON editing
-- Auto-assigns sortOrder based on position
+- Auto-assigns orderInLesson based on position
 
 Each exercise type has a dedicated editor component in `src/frontend/components/admin/exercise-editors/`:
-- MultipleChoiceEditor.tsx
+- ChooseOptionEditor.tsx
 - FillBlankEditor.tsx
-- OpenQuestionEditor.tsx
-- OrderingEditor.tsx
-- MatchingEditor.tsx
-- CategorizingEditor.tsx
-- FindErrorEditor.tsx
-- RewriteBetterEditor.tsx
-- AiDialogEditor.tsx
-- RateCallEditor.tsx
-- WrittenAnswerEditor.tsx
+- ReorderEditor.tsx
+- MatchPairsEditor.tsx
+- CategorizeEditor.tsx
+- SpotMistakeEditor.tsx
+- RewriteEditor.tsx
+- AiDialogueEditor.tsx
+- EvaluateCallEditor.tsx
+- FreeTextEditor.tsx
 
 ---
 

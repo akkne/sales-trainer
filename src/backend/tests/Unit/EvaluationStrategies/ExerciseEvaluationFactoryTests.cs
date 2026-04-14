@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Exercises;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
 
@@ -13,7 +14,7 @@ public class ExerciseEvaluationFactoryTests
     public void SetUp()
     {
         _factory = new ExerciseEvaluationFactory([
-            new MultipleChoiceEvaluationStrategy(),
+            new ChooseOptionEvaluationStrategy(),
             new FillBlankEvaluationStrategy()
         ]);
     }
@@ -21,14 +22,14 @@ public class ExerciseEvaluationFactoryTests
     [Test]
     public void GetStrategyForExerciseType_KnownType_ReturnsCorrectStrategy()
     {
-        var strategy = _factory.GetStrategyForExerciseType("multiple_choice");
-        strategy.Should().BeOfType<MultipleChoiceEvaluationStrategy>();
+        var strategy = _factory.GetStrategyForExerciseType(ExerciseTypes.ChooseOption);
+        strategy.Should().BeOfType<ChooseOptionEvaluationStrategy>();
     }
 
     [Test]
     public void GetStrategyForExerciseType_FillBlank_ReturnsFillBlankStrategy()
     {
-        var strategy = _factory.GetStrategyForExerciseType("fill_blank");
+        var strategy = _factory.GetStrategyForExerciseType(ExerciseTypes.FillBlank);
         strategy.Should().BeOfType<FillBlankEvaluationStrategy>();
     }
 

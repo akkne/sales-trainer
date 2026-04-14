@@ -4,46 +4,57 @@ import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
 
-interface OrderingItem {
-    id: string;
+interface ReorderItem {
     text: string;
+    correct_position: number;
 }
 
-interface OrderingContent {
-    situation: string;
-    items: OrderingItem[];
-    correctOrder: string[];
+interface ReorderContent {
+    instruction: string;
+    items: ReorderItem[];
     explanation?: string;
 }
 
-interface OrderingExerciseProps {
-    content: OrderingContent;
-    onSubmit: (answer: { order: string[] }) => void;
+interface ReorderExerciseProps {
+    content: ReorderContent;
+    onSubmit: (answer: { order: number[] }) => void;
     onSkip?: () => void;
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function OrderingExercise({
+export function ReorderExercise({
     content,
     onSubmit,
     onSkip,
     onContinue,
     isSubmitting,
     submittedResult,
-}: OrderingExerciseProps) {
-    // Shuffle items deterministically on first render
-    const shuffledItems = useMemo(() => {
-        const items = [...content.items];
-        // Simple shuffle based on item IDs
-        return items.sort((a, b) => a.id.localeCompare(b.id));
+}: ReorderExerciseProps) {
+    // Shuffle items on first render
+    const shuffledIndices = useMemo(() => {
+        const indices = content.items.map((_, i) => i);
+        // Simple shuffle
+        for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        return indices;
     }, [content.items]);
 
-    const [orderedIds, setOrderedIds] = useState<string[]>(shuffledItems.map(i => i.id));
+    const [orderedIndices, setOrderedIndices] = useState<number[]>(shuffledIndices);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
+
+    // Build correct order from correct_position
+    const correctOrder = useMemo(() => {
+        return content.items
+            .map((item, idx) => ({ idx, pos: item.correct_position }))
+            .sort((a, b) => a.pos - b.pos)
+            .map(x => x.idx);
+    }, [content.items]);
 
     function handleDragStart(index: number) {
         if (isAnswered) return;
@@ -54,10 +65,10 @@ export function OrderingExercise({
         e.preventDefault();
         if (draggedIndex === null || draggedIndex === targetIndex || isAnswered) return;
 
-        const newOrder = [...orderedIds];
+        const newOrder = [...orderedIndices];
         const [dragged] = newOrder.splice(draggedIndex, 1);
         newOrder.splice(targetIndex, 0, dragged);
-        setOrderedIds(newOrder);
+        setOrderedIndices(newOrder);
         setDraggedIndex(targetIndex);
     }
 
@@ -68,22 +79,22 @@ export function OrderingExercise({
     function moveItem(fromIndex: number, direction: "up" | "down") {
         if (isAnswered) return;
         const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
-        if (toIndex < 0 || toIndex >= orderedIds.length) return;
+        if (toIndex < 0 || toIndex >= orderedIndices.length) return;
 
-        const newOrder = [...orderedIds];
+        const newOrder = [...orderedIndices];
         [newOrder[fromIndex], newOrder[toIndex]] = [newOrder[toIndex], newOrder[fromIndex]];
-        setOrderedIds(newOrder);
+        setOrderedIndices(newOrder);
     }
 
-    function itemStyle(itemId: string, index: number): string {
+    function itemStyle(itemIdx: number, position: number): string {
         const base = "flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-colors border-b-4 cursor-grab active:cursor-grabbing";
 
         if (!isAnswered) {
             return `${base} border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high`;
         }
 
-        const correctIndex = content.correctOrder.indexOf(itemId);
-        const isCorrectPosition = index === correctIndex;
+        const correctPosition = correctOrder.indexOf(itemIdx);
+        const isCorrectPosition = position === correctPosition;
 
         if (isCorrectPosition) {
             return `${base} border-primary bg-primary-container text-primary cursor-default`;
@@ -91,21 +102,15 @@ export function OrderingExercise({
         return `${base} border-error bg-error-container text-error cursor-default`;
     }
 
-    const itemsMap = useMemo(() => {
-        const map = new Map<string, OrderingItem>();
-        content.items.forEach(item => map.set(item.id, item));
-        return map;
-    }, [content.items]);
-
     return (
         <div className="flex flex-col gap-6">
-            {content.situation && (
+            {content.instruction && (
                 <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
                         <Icon name="list-ordered" size="sm" className="text-primary" />
                     </div>
                     <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
+                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
                     </div>
                 </div>
             )}
@@ -115,37 +120,37 @@ export function OrderingExercise({
             </p>
 
             <div className="flex flex-col gap-2">
-                {orderedIds.map((itemId, index) => {
-                    const item = itemsMap.get(itemId);
+                {orderedIndices.map((itemIdx, position) => {
+                    const item = content.items[itemIdx];
                     if (!item) return null;
 
                     return (
                         <div
-                            key={itemId}
+                            key={itemIdx}
                             draggable={!isAnswered}
-                            onDragStart={() => handleDragStart(index)}
-                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragStart={() => handleDragStart(position)}
+                            onDragOver={(e) => handleDragOver(e, position)}
                             onDragEnd={handleDragEnd}
-                            className={itemStyle(itemId, index)}
+                            className={itemStyle(itemIdx, position)}
                         >
                             <span className="w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center text-sm font-bold shrink-0">
-                                {index + 1}
+                                {position + 1}
                             </span>
                             <span className="flex-1">{item.text}</span>
                             {!isAnswered && (
                                 <div className="flex flex-col gap-1">
                                     <button
                                         type="button"
-                                        onClick={() => moveItem(index, "up")}
-                                        disabled={index === 0}
+                                        onClick={() => moveItem(position, "up")}
+                                        disabled={position === 0}
                                         className="p-1 rounded hover:bg-surface-container-highest disabled:opacity-30"
                                     >
                                         <Icon name="chevron-up" size="sm" />
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => moveItem(index, "down")}
-                                        disabled={index === orderedIds.length - 1}
+                                        onClick={() => moveItem(position, "down")}
+                                        disabled={position === orderedIndices.length - 1}
                                         className="p-1 rounded hover:bg-surface-container-highest disabled:opacity-30"
                                     >
                                         <Icon name="chevron-down" size="sm" />
@@ -185,7 +190,7 @@ export function OrderingExercise({
                     </button>
                 ) : (
                     <button
-                        onClick={() => onSubmit({ order: orderedIds })}
+                        onClick={() => onSubmit({ order: orderedIndices })}
                         disabled={isSubmitting}
                         className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
                     >

@@ -8,17 +8,17 @@ import {
     type ExerciseSubmissionResult,
 } from "@/lib/hooks/useLesson";
 import { useAchievements } from "@/lib/hooks/useAchievements";
-import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
+import { ExerciseTypes } from "@/lib/exerciseTypes";
+import { ChooseOptionExercise } from "@/components/exercise/ChooseOptionExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
-import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
-import { OrderingExercise } from "@/components/exercise/OrderingExercise";
-import { MatchingExercise } from "@/components/exercise/MatchingExercise";
-import { CategorizingExercise } from "@/components/exercise/CategorizingExercise";
-import { FindErrorExercise } from "@/components/exercise/FindErrorExercise";
-import { RewriteBetterExercise } from "@/components/exercise/RewriteBetterExercise";
-import { AiDialogExercise } from "@/components/exercise/AiDialogExercise";
-import { RateCallExercise } from "@/components/exercise/RateCallExercise";
-import { WrittenAnswerExercise } from "@/components/exercise/WrittenAnswerExercise";
+import { ReorderExercise } from "@/components/exercise/ReorderExercise";
+import { MatchPairsExercise } from "@/components/exercise/MatchPairsExercise";
+import { CategorizeExercise } from "@/components/exercise/CategorizeExercise";
+import { SpotMistakeExercise } from "@/components/exercise/SpotMistakeExercise";
+import { RewriteExercise } from "@/components/exercise/RewriteExercise";
+import { AiDialogueExercise } from "@/components/exercise/AiDialogueExercise";
+import { EvaluateCallExercise } from "@/components/exercise/EvaluateCallExercise";
+import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
 import { Icon } from "@/components/ui/Icon";
 
@@ -288,12 +288,12 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
             {/* Exercise content — keyed by exerciseId to fully reset state on each new question */}
             <div key={currentExercise.exerciseId} className="flex-1 overflow-y-auto px-4 pb-10 pt-6 max-w-2xl w-full mx-auto">
-                {currentExercise.type === "multiple_choice" && (
-                    <MultipleChoiceExercise
+                {currentExercise.type === ExerciseTypes.ChooseOption && (
+                    <ChooseOptionExercise
                         key={currentExercise.exerciseId}
                         content={
                             currentExercise.content as Parameters<
-                                typeof MultipleChoiceExercise
+                                typeof ChooseOptionExercise
                             >[0]["content"]
                         }
                         onSubmit={handleExerciseSubmit}
@@ -303,7 +303,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "fill_blank" && (
+                {currentExercise.type === ExerciseTypes.FillBlank && (
                     <FillBlankExercise
                         key={currentExercise.exerciseId}
                         content={
@@ -318,14 +318,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "open_question" && (
-                    <OpenQuestionExercise
+                {currentExercise.type === ExerciseTypes.Reorder && (
+                    <ReorderExercise
                         key={currentExercise.exerciseId}
-                        content={
-                            currentExercise.content as Parameters<
-                                typeof OpenQuestionExercise
-                            >[0]["content"]
-                        }
+                        content={currentExercise.content as Parameters<typeof ReorderExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -333,10 +329,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "ordering" && (
-                    <OrderingExercise
+                {currentExercise.type === ExerciseTypes.MatchPairs && (
+                    <MatchPairsExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof OrderingExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof MatchPairsExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -344,10 +340,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "matching" && (
-                    <MatchingExercise
+                {currentExercise.type === ExerciseTypes.Categorize && (
+                    <CategorizeExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof MatchingExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof CategorizeExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -355,10 +351,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "categorizing" && (
-                    <CategorizingExercise
+                {currentExercise.type === ExerciseTypes.SpotMistake && (
+                    <SpotMistakeExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof CategorizingExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof SpotMistakeExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -366,10 +362,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "find_error" && (
-                    <FindErrorExercise
+                {currentExercise.type === ExerciseTypes.Rewrite && (
+                    <RewriteExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof FindErrorExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof RewriteExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -377,22 +373,11 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "rewrite_better" && (
-                    <RewriteBetterExercise
-                        key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof RewriteBetterExercise>[0]["content"]}
-                        onSubmit={handleExerciseSubmit}
-                        onSkip={handleSkip}
-                        onContinue={handleContinueAfterResult}
-                        isSubmitting={submitExerciseMutation.isPending}
-                        submittedResult={lastSubmissionResult}
-                    />
-                )}
-                {currentExercise.type === "ai_dialog" && (
-                    <AiDialogExercise
+                {currentExercise.type === ExerciseTypes.AiDialogue && (
+                    <AiDialogueExercise
                         key={currentExercise.exerciseId}
                         exerciseId={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof AiDialogExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof AiDialogueExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -400,10 +385,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "rate_call" && (
-                    <RateCallExercise
+                {currentExercise.type === ExerciseTypes.EvaluateCall && (
+                    <EvaluateCallExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof RateCallExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof EvaluateCallExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}
@@ -411,10 +396,10 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         submittedResult={lastSubmissionResult}
                     />
                 )}
-                {currentExercise.type === "written_answer" && (
-                    <WrittenAnswerExercise
+                {currentExercise.type === ExerciseTypes.FreeText && (
+                    <FreeTextExercise
                         key={currentExercise.exerciseId}
-                        content={currentExercise.content as Parameters<typeof WrittenAnswerExercise>[0]["content"]}
+                        content={currentExercise.content as Parameters<typeof FreeTextExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
                         onContinue={handleContinueAfterResult}

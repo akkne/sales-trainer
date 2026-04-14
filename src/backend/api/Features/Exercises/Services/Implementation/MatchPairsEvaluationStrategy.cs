@@ -5,20 +5,21 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 /// <summary>
-/// Evaluates matching exercises where user connects items from two columns.
+/// Evaluates match_pairs exercises where user connects items from two columns.
+/// Content schema: { instruction, pairs: [{ left, right }] }
 /// Supports partial credit: score = (correctPairs / totalPairs) * 100.
 /// IsCorrect only when all pairs match.
 /// </summary>
-internal sealed class MatchingEvaluationStrategy : IExerciseEvaluationStrategy
+internal sealed class MatchPairsEvaluationStrategy : IExerciseEvaluationStrategy
 {
-    public string SupportedExerciseType => "matching";
+    public string SupportedExerciseType => ExerciseTypes.MatchPairs;
 
     public Task<ExerciseEvaluationResult> EvaluateAnswerAsync(
         JsonElement exerciseContent,
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var correctPairs = exerciseContent.GetProperty("correctPairs")
+        var correctPairs = exerciseContent.GetProperty("pairs")
             .EnumerateArray()
             .Select(p => (
                 Left: p.GetProperty("left").GetString() ?? "",

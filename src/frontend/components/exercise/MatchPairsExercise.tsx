@@ -4,108 +4,109 @@ import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
 
-interface MatchingItem {
-    id: string;
-    text: string;
-}
-
-interface MatchingPair {
+interface MatchPair {
     left: string;
     right: string;
 }
 
-interface MatchingContent {
-    situation: string;
-    leftColumn: MatchingItem[];
-    rightColumn: MatchingItem[];
-    correctPairs: MatchingPair[];
+interface MatchPairsContent {
+    instruction: string;
+    pairs: MatchPair[];
     explanation?: string;
 }
 
-interface MatchingExerciseProps {
-    content: MatchingContent;
-    onSubmit: (answer: { pairs: MatchingPair[] }) => void;
+interface MatchPairsExerciseProps {
+    content: MatchPairsContent;
+    onSubmit: (answer: { pairs: MatchPair[] }) => void;
     onSkip?: () => void;
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function MatchingExercise({
+export function MatchPairsExercise({
     content,
     onSubmit,
     onSkip,
     onContinue,
     isSubmitting,
     submittedResult,
-}: MatchingExerciseProps) {
+}: MatchPairsExerciseProps) {
+    // Extract unique left and right items from pairs
+    const leftItems = useMemo(() => content.pairs.map(p => p.left), [content.pairs]);
+    const rightItems = useMemo(() => {
+        // Shuffle right items
+        const items = content.pairs.map(p => p.right);
+        return items.sort(() => Math.random() - 0.5);
+    }, [content.pairs]);
+
     const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
-    const [pairs, setPairs] = useState<MatchingPair[]>([]);
+    const [userPairs, setUserPairs] = useState<MatchPair[]>([]);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
-    const connectedLeftIds = useMemo(() => new Set(pairs.map(p => p.left)), [pairs]);
-    const connectedRightIds = useMemo(() => new Set(pairs.map(p => p.right)), [pairs]);
+    const connectedLefts = useMemo(() => new Set(userPairs.map(p => p.left)), [userPairs]);
+    const connectedRights = useMemo(() => new Set(userPairs.map(p => p.right)), [userPairs]);
 
-    function handleLeftClick(id: string) {
-        if (isAnswered || connectedLeftIds.has(id)) return;
-        setSelectedLeft(id === selectedLeft ? null : id);
+    function handleLeftClick(item: string) {
+        if (isAnswered || connectedLefts.has(item)) return;
+        setSelectedLeft(item === selectedLeft ? null : item);
     }
 
-    function handleRightClick(id: string) {
-        if (isAnswered || connectedRightIds.has(id) || !selectedLeft) return;
-        setPairs([...pairs, { left: selectedLeft, right: id }]);
+    function handleRightClick(item: string) {
+        if (isAnswered || connectedRights.has(item) || !selectedLeft) return;
+        setUserPairs([...userPairs, { left: selectedLeft, right: item }]);
         setSelectedLeft(null);
     }
 
-    function removePair(leftId: string) {
+    function removePair(leftItem: string) {
         if (isAnswered) return;
-        setPairs(pairs.filter(p => p.left !== leftId));
+        setUserPairs(userPairs.filter(p => p.left !== leftItem));
     }
 
     function resetAll() {
-        setPairs([]);
+        setUserPairs([]);
         setSelectedLeft(null);
     }
 
     const correctPairsSet = useMemo(() => {
-        return new Set(content.correctPairs.map(p => `${p.left}:${p.right}`));
-    }, [content.correctPairs]);
+        return new Set(content.pairs.map(p => `${p.left}:${p.right}`));
+    }, [content.pairs]);
 
-    function leftItemStyle(id: string): string {
+    function leftItemStyle(item: string): string {
         const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
 
         if (!isAnswered) {
-            if (connectedLeftIds.has(id)) {
+            if (connectedLefts.has(item)) {
                 return `${base} border-tertiary bg-tertiary-container text-tertiary`;
             }
-            if (selectedLeft === id) {
+            if (selectedLeft === item) {
                 return `${base} border-primary bg-primary-container text-primary`;
             }
             return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-outline`;
         }
 
-        const pair = pairs.find(p => p.left === id);
+        const pair = userPairs.find(p => p.left === item);
         if (pair && correctPairsSet.has(`${pair.left}:${pair.right}`)) {
             return `${base} border-primary bg-primary-container text-primary`;
         }
         return `${base} border-error bg-error-container text-error`;
     }
 
-    function rightItemStyle(id: string): string {
+    function rightItemStyle(item: string): string {
         const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
 
         if (!isAnswered) {
-            if (connectedRightIds.has(id)) {
+            if (connectedRights.has(item)) {
                 return `${base} border-tertiary bg-tertiary-container text-tertiary`;
             }
-            if (selectedLeft && !connectedRightIds.has(id)) {
+            if (selectedLeft && !connectedRights.has(item)) {
                 return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-primary cursor-pointer`;
             }
             return `${base} border-outline-variant bg-surface-container text-on-surface`;
         }
 
-        const pair = pairs.find(p => p.right === id);
+        const pair = userPairs.find(p => p.right === item);
         if (pair && correctPairsSet.has(`${pair.left}:${pair.right}`)) {
             return `${base} border-primary bg-primary-container text-primary`;
         }
@@ -115,17 +116,17 @@ export function MatchingExercise({
         return `${base} border-outline-variant bg-surface-container text-on-surface-variant`;
     }
 
-    const canSubmit = pairs.length === content.leftColumn.length;
+    const canSubmit = userPairs.length === leftItems.length;
 
     return (
         <div className="flex flex-col gap-6">
-            {content.situation && (
+            {content.instruction && (
                 <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
                         <Icon name="link" size="sm" className="text-primary" />
                     </div>
                     <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
+                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
                     </div>
                 </div>
             )}
@@ -136,18 +137,18 @@ export function MatchingExercise({
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                    {content.leftColumn.map((item) => (
+                    {leftItems.map((item) => (
                         <button
-                            key={item.id}
-                            onClick={() => handleLeftClick(item.id)}
-                            disabled={isAnswered || connectedLeftIds.has(item.id)}
-                            className={leftItemStyle(item.id)}
+                            key={item}
+                            onClick={() => handleLeftClick(item)}
+                            disabled={isAnswered || connectedLefts.has(item)}
+                            className={leftItemStyle(item)}
                         >
-                            {item.text}
-                            {!isAnswered && connectedLeftIds.has(item.id) && (
+                            {item}
+                            {!isAnswered && connectedLefts.has(item) && (
                                 <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); removePair(item.id); }}
+                                    onClick={(e) => { e.stopPropagation(); removePair(item); }}
                                     className="ml-2 text-xs text-tertiary hover:text-error"
                                 >
                                     ✕
@@ -158,20 +159,20 @@ export function MatchingExercise({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                    {content.rightColumn.map((item) => (
+                    {rightItems.map((item) => (
                         <button
-                            key={item.id}
-                            onClick={() => handleRightClick(item.id)}
-                            disabled={isAnswered || connectedRightIds.has(item.id) || !selectedLeft}
-                            className={rightItemStyle(item.id)}
+                            key={item}
+                            onClick={() => handleRightClick(item)}
+                            disabled={isAnswered || connectedRights.has(item) || !selectedLeft}
+                            className={rightItemStyle(item)}
                         >
-                            {item.text}
+                            {item}
                         </button>
                     ))}
                 </div>
             </div>
 
-            {!isAnswered && pairs.length > 0 && (
+            {!isAnswered && userPairs.length > 0 && (
                 <button
                     type="button"
                     onClick={resetAll}
@@ -209,7 +210,7 @@ export function MatchingExercise({
                     </button>
                 ) : (
                     <button
-                        onClick={() => onSubmit({ pairs })}
+                        onClick={() => onSubmit({ pairs: userPairs })}
                         disabled={!canSubmit || isSubmitting}
                         className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
                     >

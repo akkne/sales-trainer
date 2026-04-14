@@ -23,14 +23,160 @@ const LESSONS_TEMPLATE = JSON.stringify([
         orderInTopic: 1,
         exercises: [
             {
-                type: "multiple_choice",
+                type: "choose_option",
                 orderInLesson: 1,
                 content: {
-                    situation: "Client is hesitant",
-                    question: "What is the best approach?",
-                    options: ["Option A", "Option B", "Option C", "Option D"],
-                    correctOptionIndex: 0,
-                    explanation: "Option A is best because..."
+                    situation: "Клиент говорит: 'Это слишком дорого'",
+                    options: [
+                        { text: "Да, понимаю. Могу предложить скидку.", is_correct: false },
+                        { text: "Скажите, дорого относительно чего?", is_correct: true },
+                        { text: "Это лучшая цена на рынке.", is_correct: false }
+                    ],
+                    explanation: "Лучше уточнить причину возражения, чем сразу снижать цену."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "fill_blank",
+                orderInLesson: 2,
+                content: {
+                    before: "Клиент: У нас уже есть поставщик.",
+                    after: "Клиент: Ну, в целом да, можно обсудить.",
+                    options: [
+                        { text: "Понял, но мы лучше!", is_correct: false },
+                        { text: "А что если я покажу, как можно сэкономить 20%?", is_correct: true },
+                        { text: "Жаль, до свидания.", is_correct: false },
+                        { text: "Давайте я отправлю презентацию.", is_correct: false }
+                    ]
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "reorder",
+                orderInLesson: 3,
+                content: {
+                    instruction: "Расставьте этапы холодного звонка в правильном порядке",
+                    items: [
+                        { text: "Приветствие и представление", correct_position: 1 },
+                        { text: "Выявление потребности", correct_position: 2 },
+                        { text: "Презентация решения", correct_position: 3 },
+                        { text: "Работа с возражениями", correct_position: 4 },
+                        { text: "Закрытие на следующий шаг", correct_position: 5 }
+                    ],
+                    explanation: "Важно сначала понять потребность, потом предлагать решение."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "match_pairs",
+                orderInLesson: 4,
+                content: {
+                    instruction: "Соедините возражение с лучшей техникой ответа",
+                    pairs: [
+                        { left: "Слишком дорого", right: "Техника сравнения ценности" },
+                        { left: "Нам ничего не нужно", right: "Техника бумеранга" },
+                        { left: "Отправьте на почту", right: "Техника моста" },
+                        { left: "Я подумаю", right: "Техника изоляции" }
+                    ],
+                    explanation: "Каждое возражение требует своего подхода."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "categorize",
+                orderInLesson: 5,
+                content: {
+                    instruction: "Распределите вопросы по категориям",
+                    categories: ["Хороший вопрос", "Плохой вопрос"],
+                    items: [
+                        { text: "Сколько у вас сотрудников?", category: "Хороший вопрос" },
+                        { text: "Вам нравится наш продукт?", category: "Плохой вопрос" },
+                        { text: "Какие цели на этот квартал?", category: "Хороший вопрос" },
+                        { text: "Хотите скидку?", category: "Плохой вопрос" }
+                    ],
+                    explanation: "Хорошие discovery-вопросы открытые и направлены на понимание."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "spot_mistake",
+                orderInLesson: 6,
+                content: {
+                    dialogue: [
+                        { speaker: "seller", text: "Добрый день! Меня зовут Алексей.", is_mistake: false },
+                        { speaker: "client", text: "Добрый день.", is_mistake: false },
+                        { speaker: "seller", text: "Мы лучшая CRM на рынке!", is_mistake: true },
+                        { speaker: "client", text: "Нам ничего не нужно.", is_mistake: false }
+                    ],
+                    explanation: "Продавец сразу начал питчить вместо вопроса о потребности.",
+                    ai_prompt: "Оцени, понял ли пользователь, что проблема в питче вместо discovery."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "rewrite",
+                orderInLesson: 7,
+                content: {
+                    instruction: "Перепишите тему холодного письма более цепляюще",
+                    original: "Предложение о сотрудничестве",
+                    evaluation_criteria: [
+                        "Персонализация",
+                        "Интрига без кликбейта",
+                        "Краткость (до 50 символов)"
+                    ],
+                    ai_prompt: "Оцени улучшенную тему письма по критериям."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "ai_dialogue",
+                orderInLesson: 8,
+                content: {
+                    persona: "Скептик Сергей",
+                    scenario: "Discovery-звонок с IT-директором",
+                    context: "Клиент скептически настроен, отвечает коротко, торопится",
+                    max_turns: 6,
+                    success_criteria: [
+                        "Качество вопросов",
+                        "Работа со скептицизмом",
+                        "Достижение следующего шага"
+                    ],
+                    ai_prompt: "Оцени диалог продавца по критериям."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "evaluate_call",
+                orderInLesson: 9,
+                content: {
+                    transcript: [
+                        { speaker: "seller", text: "Здравствуйте, это Алексей из компании Рост." },
+                        { speaker: "client", text: "Добрый день." },
+                        { speaker: "seller", text: "Скажите, вы рассматриваете новые решения для продаж?" },
+                        { speaker: "client", text: "В целом да, но не приоритет." },
+                        { speaker: "seller", text: "Понял. А что сейчас является приоритетом?" }
+                    ],
+                    evaluation_axes: [
+                        { name: "Квалификация", description: "Была ли проведена квалификация?" },
+                        { name: "Открытые вопросы", description: "Использовались ли открытые вопросы?" },
+                        { name: "Следующий шаг", description: "Был ли согласован следующий шаг?" }
+                    ],
+                    ai_prompt: "Сравни оценку пользователя с объективным анализом звонка."
+                },
+                customAiPrompt: null
+            },
+            {
+                type: "free_text",
+                orderInLesson: 10,
+                content: {
+                    situation: "Клиент говорит: 'Это слишком дорого для нас'",
+                    instruction: "Напишите ответ на это возражение",
+                    evaluation_criteria: [
+                        "Не снижает цену сразу",
+                        "Выясняет причину возражения",
+                        "Профессиональный тон"
+                    ],
+                    ai_prompt: "Оцени ответ на возражение 'дорого' по критериям."
                 },
                 customAiPrompt: null
             }

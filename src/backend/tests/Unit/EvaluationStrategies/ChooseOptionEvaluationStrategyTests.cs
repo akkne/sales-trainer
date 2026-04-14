@@ -1,20 +1,21 @@
 using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Exercises;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
 
 [TestFixture]
-public class MultipleChoiceEvaluationStrategyTests
+public class ChooseOptionEvaluationStrategyTests
 {
-    private readonly MultipleChoiceEvaluationStrategy _strategy = new();
+    private readonly ChooseOptionEvaluationStrategy _strategy = new();
 
-    private static JsonElement BuildContent(int correctOptionIndex, string? explanation = null)
+    private static JsonElement BuildContent(object[] options, string? explanation = null)
     {
         var obj = new Dictionary<string, object?>
         {
-            ["correctOptionIndex"] = correctOptionIndex,
+            ["situation"] = "Test situation",
+            ["options"] = options,
             ["explanation"] = explanation
         };
         return JsonDocument.Parse(JsonSerializer.Serialize(obj)).RootElement;
@@ -29,7 +30,14 @@ public class MultipleChoiceEvaluationStrategyTests
     [Test]
     public async Task EvaluateAnswerAsync_CorrectAnswer_ReturnsIsCorrectTrueScore100()
     {
-        var content = BuildContent(correctOptionIndex: 2, explanation: "Because it works.");
+        var options = new object[]
+        {
+            new { text = "Wrong", is_correct = false },
+            new { text = "Wrong", is_correct = false },
+            new { text = "Correct", is_correct = true },
+            new { text = "Wrong", is_correct = false }
+        };
+        var content = BuildContent(options, explanation: "Because it works.");
         var answer = BuildAnswer(selectedOptionIndex: 2);
 
         var result = await _strategy.EvaluateAnswerAsync(content, answer);
@@ -43,7 +51,13 @@ public class MultipleChoiceEvaluationStrategyTests
     [Test]
     public async Task EvaluateAnswerAsync_WrongAnswer_ReturnsIsCorrectFalseScore0()
     {
-        var content = BuildContent(correctOptionIndex: 1);
+        var options = new object[]
+        {
+            new { text = "Wrong", is_correct = false },
+            new { text = "Correct", is_correct = true },
+            new { text = "Wrong", is_correct = false }
+        };
+        var content = BuildContent(options);
         var answer = BuildAnswer(selectedOptionIndex: 0);
 
         var result = await _strategy.EvaluateAnswerAsync(content, answer);
@@ -55,8 +69,12 @@ public class MultipleChoiceEvaluationStrategyTests
     [Test]
     public async Task EvaluateAnswerAsync_NoExplanationInContent_ExplanationIsNull()
     {
-        var content = JsonDocument.Parse(
-            JsonSerializer.Serialize(new { correctOptionIndex = 0 })).RootElement;
+        var options = new object[]
+        {
+            new { text = "Correct", is_correct = true },
+            new { text = "Wrong", is_correct = false }
+        };
+        var content = BuildContent(options);
         var answer = BuildAnswer(selectedOptionIndex: 0);
 
         var result = await _strategy.EvaluateAnswerAsync(content, answer);

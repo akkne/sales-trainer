@@ -9,27 +9,19 @@ interface TranscriptLine {
     text: string;
 }
 
-interface Criterion {
-    id: string;
+interface EvaluationAxis {
     name: string;
     description: string;
 }
 
-interface RatingScale {
-    min: number;
-    max: number;
-}
-
-interface RateCallContent {
-    situation: string;
+interface EvaluateCallContent {
     transcript: TranscriptLine[];
-    criteria: Criterion[];
-    ratingScale: RatingScale;
-    aiPrompt: string;
+    evaluation_axes: EvaluationAxis[];
+    ai_prompt?: string;
 }
 
-interface RateCallExerciseProps {
-    content: RateCallContent;
+interface EvaluateCallExerciseProps {
+    content: EvaluateCallContent;
     onSubmit: (answer: { ratings: Record<string, number>; overallComment?: string }) => void;
     onSkip?: () => void;
     onContinue?: () => void;
@@ -37,23 +29,23 @@ interface RateCallExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function RateCallExercise({
+export function EvaluateCallExercise({
     content,
     onSubmit,
     onSkip,
     onContinue,
     isSubmitting,
     submittedResult,
-}: RateCallExerciseProps) {
+}: EvaluateCallExerciseProps) {
     const [ratings, setRatings] = useState<Record<string, number>>({});
     const [overallComment, setOverallComment] = useState("");
     const [showTranscript, setShowTranscript] = useState(true);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const allRated = content.criteria.every(c => ratings[c.id] !== undefined);
+    const allRated = content.evaluation_axes.every(axis => ratings[axis.name] !== undefined);
 
-    function setRating(criterionId: string, value: number) {
-        setRatings({ ...ratings, [criterionId]: value });
+    function setRating(axisName: string, value: number) {
+        setRatings({ ...ratings, [axisName]: value });
     }
 
     function getRatingColor(score: number): string {
@@ -62,21 +54,18 @@ export function RateCallExercise({
         return "bg-error text-on-error";
     }
 
-    const { min, max } = content.ratingScale;
-    const ratingOptions = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+    const ratingOptions = [1, 2, 3, 4, 5];
 
     return (
         <div className="flex flex-col gap-6">
-            {content.situation && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="phone" size="sm" className="text-primary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
-                    </div>
+            <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
+                    <Icon name="phone" size="sm" className="text-primary" />
                 </div>
-            )}
+                <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
+                    <p className="text-sm text-on-surface-variant">Оцените звонок по критериям</p>
+                </div>
+            </div>
 
             {/* Transcript toggle */}
             <div className="flex flex-col gap-2">
@@ -93,7 +82,7 @@ export function RateCallExercise({
                     <div className="flex flex-col gap-1 p-4 bg-surface-container rounded-xl max-h-[250px] overflow-y-auto">
                         {content.transcript.map((line, idx) => (
                             <div key={idx} className="flex gap-2">
-                                <span className="font-bold text-sm shrink-0 w-20 text-on-surface-variant">
+                                <span className="font-bold text-sm shrink-0 w-20 text-on-surface-variant capitalize">
                                     {line.speaker}:
                                 </span>
                                 <span className="text-sm text-on-surface">{line.text}</span>
@@ -103,28 +92,28 @@ export function RateCallExercise({
                 )}
             </div>
 
-            {/* Criteria ratings */}
+            {/* Evaluation axes ratings */}
             <div className="flex flex-col gap-4">
                 <p className="font-headline font-bold text-lg text-on-surface">
                     Оцените звонок по критериям:
                 </p>
 
-                {content.criteria.map((criterion) => (
-                    <div key={criterion.id} className="flex flex-col gap-2 p-4 bg-surface-container rounded-xl">
+                {content.evaluation_axes.map((axis) => (
+                    <div key={axis.name} className="flex flex-col gap-2 p-4 bg-surface-container rounded-xl">
                         <div className="flex justify-between items-start">
                             <div>
-                                <p className="font-medium text-on-surface">{criterion.name}</p>
-                                <p className="text-xs text-on-surface-variant">{criterion.description}</p>
+                                <p className="font-medium text-on-surface">{axis.name}</p>
+                                <p className="text-xs text-on-surface-variant">{axis.description}</p>
                             </div>
                         </div>
                         <div className="flex gap-2 mt-2">
                             {ratingOptions.map((value) => (
                                 <button
                                     key={value}
-                                    onClick={() => !isAnswered && setRating(criterion.id, value)}
+                                    onClick={() => !isAnswered && setRating(axis.name, value)}
                                     disabled={isAnswered}
                                     className={`w-10 h-10 rounded-lg font-bold transition-colors ${
-                                        ratings[criterion.id] === value
+                                        ratings[axis.name] === value
                                             ? "bg-primary text-on-primary"
                                             : "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
                                     } disabled:opacity-60`}

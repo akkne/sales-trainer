@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Exercises;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
 namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
 
@@ -10,11 +10,13 @@ public class FillBlankEvaluationStrategyTests
 {
     private readonly FillBlankEvaluationStrategy _strategy = new();
 
-    private static JsonElement BuildContent(int correctOptionIndex, string? explanation = null)
+    private static JsonElement BuildContent(object[] options, string? explanation = null)
     {
         var obj = new Dictionary<string, object?>
         {
-            ["correctOptionIndex"] = correctOptionIndex,
+            ["before"] = "Client says:",
+            ["after"] = "And then leaves.",
+            ["options"] = options,
             ["explanation"] = explanation
         };
         return JsonDocument.Parse(JsonSerializer.Serialize(obj)).RootElement;
@@ -29,7 +31,13 @@ public class FillBlankEvaluationStrategyTests
     [Test]
     public async Task EvaluateAnswerAsync_CorrectAnswer_ReturnsIsCorrectTrueScore100()
     {
-        var content = BuildContent(correctOptionIndex: 0, explanation: "First is right.");
+        var options = new object[]
+        {
+            new { text = "Correct", is_correct = true },
+            new { text = "Wrong", is_correct = false },
+            new { text = "Wrong", is_correct = false }
+        };
+        var content = BuildContent(options, explanation: "First is right.");
         var answer = BuildAnswer(selectedOptionIndex: 0);
 
         var result = await _strategy.EvaluateAnswerAsync(content, answer);
@@ -42,7 +50,13 @@ public class FillBlankEvaluationStrategyTests
     [Test]
     public async Task EvaluateAnswerAsync_WrongAnswer_ReturnsIsCorrectFalseScore0()
     {
-        var content = BuildContent(correctOptionIndex: 1);
+        var options = new object[]
+        {
+            new { text = "Wrong", is_correct = false },
+            new { text = "Correct", is_correct = true },
+            new { text = "Wrong", is_correct = false }
+        };
+        var content = BuildContent(options);
         var answer = BuildAnswer(selectedOptionIndex: 2);
 
         var result = await _strategy.EvaluateAnswerAsync(content, answer);

@@ -4,17 +4,15 @@ import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
 
-interface RewriteBetterContent {
-    situation: string;
-    originalText: string;
-    context?: string;
-    aiPrompt: string;
-    minLength?: number;
-    maxLength?: number;
+interface RewriteContent {
+    instruction: string;
+    original: string;
+    evaluation_criteria?: string[];
+    ai_prompt?: string;
 }
 
-interface RewriteBetterExerciseProps {
-    content: RewriteBetterContent;
+interface RewriteExerciseProps {
+    content: RewriteContent;
     onSubmit: (answer: { rewrittenText: string }) => void;
     onSkip?: () => void;
     onContinue?: () => void;
@@ -22,21 +20,20 @@ interface RewriteBetterExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-export function RewriteBetterExercise({
+export function RewriteExercise({
     content,
     onSubmit,
     onSkip,
     onContinue,
     isSubmitting,
     submittedResult,
-}: RewriteBetterExerciseProps) {
+}: RewriteExerciseProps) {
     const [rewrittenText, setRewrittenText] = useState("");
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const minLength = content.minLength ?? 10;
-    const maxLength = content.maxLength ?? 500;
+    const minLength = 10;
     const charCount = rewrittenText.length;
-    const isValidLength = charCount >= minLength && charCount <= maxLength;
+    const isValidLength = charCount >= minLength;
 
     function getRatingColor(score: number): string {
         if (score >= 80) return "bg-primary text-on-primary";
@@ -46,28 +43,31 @@ export function RewriteBetterExercise({
 
     return (
         <div className="flex flex-col gap-6">
-            {content.situation && (
+            {content.instruction && (
                 <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
                         <Icon name="edit-3" size="sm" className="text-primary" />
                     </div>
                     <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.situation}</p>
+                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
                     </div>
                 </div>
             )}
 
-            {content.context && (
+            {content.evaluation_criteria && content.evaluation_criteria.length > 0 && (
                 <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant">
-                    <p className="text-sm text-on-surface-variant">
-                        <span className="font-medium">Контекст:</span> {content.context}
-                    </p>
+                    <p className="text-xs font-medium text-on-surface-variant mb-2">Критерии оценки:</p>
+                    <ul className="text-sm text-on-surface-variant list-disc list-inside space-y-1">
+                        {content.evaluation_criteria.map((criterion, idx) => (
+                            <li key={idx}>{criterion}</li>
+                        ))}
+                    </ul>
                 </div>
             )}
 
             <div className="p-4 rounded-xl bg-surface-container border-2 border-outline-variant">
                 <p className="text-xs font-medium text-on-surface-variant mb-2">Оригинал:</p>
-                <p className="text-on-surface italic">{content.originalText}</p>
+                <p className="text-on-surface italic">{content.original}</p>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -85,8 +85,8 @@ export function RewriteBetterExercise({
                     <span className={charCount < minLength ? "text-error" : "text-on-surface-variant"}>
                         Минимум {minLength} символов
                     </span>
-                    <span className={charCount > maxLength ? "text-error" : "text-on-surface-variant"}>
-                        {charCount} / {maxLength}
+                    <span className="text-on-surface-variant">
+                        {charCount} символов
                     </span>
                 </div>
             </div>
