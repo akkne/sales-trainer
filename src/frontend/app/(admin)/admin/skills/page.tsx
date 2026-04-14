@@ -12,6 +12,7 @@ import {
 } from "@/lib/hooks/useAdmin";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
+    iconicName: "",
     title: "",
     description: null,
     orderInTree: 0,
@@ -19,6 +20,7 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
 
 const SKILLS_TEMPLATE = JSON.stringify([
     {
+        iconicName: "example-skill",
         title: "Example Skill",
         description: "Description of the skill",
         orderInTree: 1
@@ -139,7 +141,16 @@ export default function AdminSkillsPage() {
                     <h2 className="text-sm font-medium text-on-surface mb-4">New skill</h2>
                     <div className="grid grid-cols-2 gap-4">
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Title</span>
+                            <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                            <input
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                value={form.iconicName}
+                                onChange={(e) => setForm({ ...form, iconicName: e.target.value })}
+                                placeholder="e.g. cold-calling"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="text-xs text-on-surface-variant">Title (Display Name)</span>
                             <input
                                 className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={form.title}
@@ -157,6 +168,7 @@ export default function AdminSkillsPage() {
                                 }
                             />
                         </label>
+                        <div />
                         <label className="block col-span-2">
                             <span className="text-xs text-on-surface-variant">Description</span>
                             <textarea
@@ -169,7 +181,7 @@ export default function AdminSkillsPage() {
                     </div>
                     <button
                         onClick={handleCreate}
-                        disabled={createSkill.isPending || !form.title}
+                        disabled={createSkill.isPending || !form.iconicName || !form.title}
                         className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createSkill.isPending ? "Saving..." : "Create"}
@@ -191,6 +203,9 @@ export default function AdminSkillsPage() {
                     <thead>
                         <tr className="border-b border-outline-variant">
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                Iconic Name
+                            </th>
+                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
                                 Title
                             </th>
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
@@ -208,13 +223,16 @@ export default function AdminSkillsPage() {
                                 key={skill.id}
                                 className="border-b border-surface-container hover:bg-surface-container-low"
                             >
-                                <td className="py-2.5 px-3 font-medium text-on-surface">
+                                <td className="py-2.5 px-3 font-mono text-xs text-on-surface">
                                     <Link
                                         href={`/admin/skills/${skill.id}`}
                                         className="hover:underline"
                                     >
-                                        {skill.title}
+                                        {skill.iconicName}
                                     </Link>
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-on-surface">
+                                    {skill.title}
                                 </td>
                                 <td className="py-2.5 px-3 text-on-surface-variant">
                                     {skill.description || "—"}

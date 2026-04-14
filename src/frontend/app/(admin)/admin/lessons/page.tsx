@@ -18,7 +18,7 @@ type SortDir = "asc" | "desc";
 
 const LESSONS_TEMPLATE = JSON.stringify([
     {
-        topicTitle: "Introduction",
+        topicIconicName: "introduction",
         title: "First Steps",
         orderInTopic: 1,
         exercises: [
@@ -215,7 +215,7 @@ export default function LessonsPage() {
                         </button>
                     </div>
                     <p className="text-xs text-on-surface-variant mb-3">
-                        JSON format: <code className="bg-surface-container px-1 rounded">{"{ topicTitle, title, orderInTopic, exercises[] }"}</code>
+                        JSON format: <code className="bg-surface-container px-1 rounded">{"{ topicIconicName, title, orderInTopic, exercises[] }"}</code>
                     </p>
                     <input
                         ref={fileInputRef}

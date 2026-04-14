@@ -16,12 +16,14 @@ import {
 
 const TOPICS_TEMPLATE = JSON.stringify([
     {
-        skillTitle: "Sales Basics",
+        skillIconicName: "sales-basics",
+        iconicName: "introduction-to-sales",
         title: "Introduction to Sales",
         orderInSkill: 1
     },
     {
-        skillTitle: "Sales Basics",
+        skillIconicName: "sales-basics",
+        iconicName: "prospecting",
         title: "Prospecting",
         orderInSkill: 2
     }
@@ -48,7 +50,8 @@ export default function AdminTopicsPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-    const [formSkillId, setFormSkillId] = useState<string>("");
+    const [formSkillIconicName, setFormSkillIconicName] = useState<string>("");
+    const [formIconicName, setFormIconicName] = useState("");
     const [formTitle, setFormTitle] = useState("");
     const [formOrder, setFormOrder] = useState(1);
 
@@ -57,7 +60,7 @@ export default function AdminTopicsPage() {
     const [importResult, setImportResult] = useState<TopicsImportResult | null>(null);
 
     // For creating topics under any skill
-    const createTopicForSkill = useCreateTopic(formSkillId || skills[0]?.id || "");
+    const createTopicForSkill = useCreateTopic(formSkillIconicName || skills[0]?.iconicName || "");
 
     // For updating topics - we need the skill context but update by topicId
     const updateTopic = useUpdateTopic(editingId || "");
@@ -79,12 +82,12 @@ export default function AdminTopicsPage() {
 
     // Group topics by skill for display
     const groupedTopics = useMemo(() => {
-        const groups: Record<string, { skill: { id: string; title: string }; topics: AdminTopicWithSkill[] }> = {};
+        const groups: Record<string, { skill: { id: string; iconicName: string; title: string }; topics: AdminTopicWithSkill[] }> = {};
 
         for (const topic of filteredTopics) {
             if (!groups[topic.skillId]) {
                 groups[topic.skillId] = {
-                    skill: { id: topic.skillId, title: topic.skillTitle },
+                    skill: { id: topic.skillId, iconicName: topic.skillIconicName, title: topic.skillTitle },
                     topics: []
                 };
             }
@@ -100,14 +103,16 @@ export default function AdminTopicsPage() {
     }, [filteredTopics]);
 
     function resetForm() {
-        setFormSkillId(skills[0]?.id || "");
+        setFormSkillIconicName(skills[0]?.iconicName || "");
+        setFormIconicName("");
         setFormTitle("");
         setFormOrder(1);
     }
 
     async function handleCreate() {
-        if (!formSkillId) return;
+        if (!formSkillIconicName) return;
         await createTopicForSkill.mutateAsync({
+            iconicName: formIconicName,
             title: formTitle,
             orderInSkill: formOrder,
         });
@@ -117,6 +122,7 @@ export default function AdminTopicsPage() {
 
     function startEdit(topic: AdminTopicWithSkill) {
         setEditingId(topic.id);
+        setFormIconicName(topic.iconicName);
         setFormTitle(topic.title);
         setFormOrder(topic.orderInSkill);
     }
@@ -124,10 +130,12 @@ export default function AdminTopicsPage() {
     async function handleUpdate() {
         if (!editingId) return;
         await updateTopic.mutateAsync({
+            iconicName: formIconicName,
             title: formTitle,
             orderInSkill: formOrder,
         });
         setEditingId(null);
+        setFormIconicName("");
         setFormTitle("");
         setFormOrder(1);
     }
@@ -182,7 +190,7 @@ export default function AdminTopicsPage() {
                         </button>
                     </div>
                     <p className="text-xs text-on-surface-variant mb-3">
-                        JSON array with objects: <code className="bg-surface-container px-1 rounded">{"{ skillTitle, title, orderInSkill }"}</code>
+                        JSON array with objects: <code className="bg-surface-container px-1 rounded">{"{ skillIconicName, iconicName, title, orderInSkill }"}</code>
                     </p>
                     <input
                         ref={fileInputRef}
@@ -219,22 +227,31 @@ export default function AdminTopicsPage() {
             {showForm && (
                 <div className="bg-surface-container-lowest rounded-2xl p-5 mb-6">
                     <h2 className="text-sm font-medium text-on-surface mb-4">New topic</h2>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-4 gap-4">
                         <label className="block">
                             <span className="text-xs text-on-surface-variant">Skill</span>
                             <select
                                 className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                                value={formSkillId}
-                                onChange={(e) => setFormSkillId(e.target.value)}
+                                value={formSkillIconicName}
+                                onChange={(e) => setFormSkillIconicName(e.target.value)}
                             >
                                 <option value="">Select skill...</option>
                                 {skills.map(skill => (
-                                    <option key={skill.id} value={skill.id}>{skill.title}</option>
+                                    <option key={skill.id} value={skill.iconicName}>{skill.title} ({skill.iconicName})</option>
                                 ))}
                             </select>
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Title</span>
+                            <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                            <input
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                value={formIconicName}
+                                onChange={(e) => setFormIconicName(e.target.value)}
+                                placeholder="e.g. introduction-to-sales"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="text-xs text-on-surface-variant">Title (Display Name)</span>
                             <input
                                 className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={formTitle}
@@ -253,7 +270,7 @@ export default function AdminTopicsPage() {
                     </div>
                     <button
                         onClick={handleCreate}
-                        disabled={createTopicForSkill.isPending || !formTitle || !formSkillId}
+                        disabled={createTopicForSkill.isPending || !formIconicName || !formTitle || !formSkillIconicName}
                         className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createTopicForSkill.isPending ? "Saving..." : "Create"}
@@ -313,6 +330,9 @@ export default function AdminTopicsPage() {
                                 <thead>
                                     <tr className="border-b border-outline-variant">
                                         <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                            Iconic Name
+                                        </th>
+                                        <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
                                             Title
                                         </th>
                                         <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium w-24">
@@ -329,6 +349,13 @@ export default function AdminTopicsPage() {
                                         >
                                             {editingId === topic.id ? (
                                                 <>
+                                                    <td className="py-2.5 px-3">
+                                                        <input
+                                                            className="w-full border border-outline-variant rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                                            value={formIconicName}
+                                                            onChange={(e) => setFormIconicName(e.target.value)}
+                                                        />
+                                                    </td>
                                                     <td className="py-2.5 px-3">
                                                         <input
                                                             className="w-full border border-outline-variant rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
@@ -364,13 +391,16 @@ export default function AdminTopicsPage() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <td className="py-2.5 px-3 font-medium text-on-surface">
+                                                    <td className="py-2.5 px-3 font-mono text-xs text-on-surface">
                                                         <Link
                                                             href={`/admin/skills/${topic.skillId}/topics/${topic.id}`}
                                                             className="hover:underline"
                                                         >
-                                                            {topic.title}
+                                                            {topic.iconicName}
                                                         </Link>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 font-medium text-on-surface">
+                                                        {topic.title}
                                                     </td>
                                                     <td className="py-2.5 px-3 text-on-surface-variant">
                                                         {topic.orderInSkill}

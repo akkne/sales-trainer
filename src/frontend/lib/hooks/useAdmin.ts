@@ -8,6 +8,7 @@ import { clientLogger } from "@/lib/clientLogger";
 
 export interface AdminSkill {
     id: string;
+    iconicName: string;
     title: string;
     description: string | null;
     orderInTree: number;
@@ -16,11 +17,13 @@ export interface AdminSkill {
 export interface AdminTopic {
     id: string;
     skillId: string;
+    iconicName: string;
     title: string;
     orderInSkill: number;
 }
 
 export interface AdminTopicWithSkill extends AdminTopic {
+    skillIconicName: string;
     skillTitle: string;
 }
 
@@ -32,6 +35,7 @@ export interface AdminLesson {
 }
 
 export interface AdminLessonWithTopic extends AdminLesson {
+    topicIconicName: string;
     topicTitle: string;
 }
 
@@ -86,11 +90,11 @@ export function useCreateSkill() {
         mutationFn: (body: Omit<AdminSkill, "id">) =>
             apiClient.post<AdminSkill>("/admin/skills", body),
         onSuccess: (data) => {
-            clientLogger.info("Skill created", { skillId: data.id, title: data.title });
+            clientLogger.info("Skill created", { skillId: data.id, iconicName: data.iconicName });
             qc.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to create skill", { title: variables.title, error: (error as Error).message });
+            clientLogger.error("Failed to create skill", { iconicName: variables.iconicName, error: (error as Error).message });
         },
     });
 }
@@ -98,10 +102,10 @@ export function useCreateSkill() {
 export function useUpdateSkill(id: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (body: Omit<AdminSkill, "id">) =>
+        mutationFn: (body: Partial<Omit<AdminSkill, "id">>) =>
             apiClient.put<AdminSkill>(`/admin/skills/${id}`, body),
         onSuccess: (data) => {
-            clientLogger.info("Skill updated", { skillId: data.id, title: data.title });
+            clientLogger.info("Skill updated", { skillId: data.id, iconicName: data.iconicName });
             qc.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error) => {
@@ -133,25 +137,25 @@ export function useAdminAllTopics() {
     });
 }
 
-export function useAdminTopics(skillId: string) {
+export function useAdminTopics(skillIconicName: string) {
     return useQuery({
-        queryKey: ["admin", "topics", skillId],
-        queryFn: () => apiClient.get<AdminTopic[]>(`/admin/skills/${skillId}/topics`),
-        enabled: !!skillId,
+        queryKey: ["admin", "topics", skillIconicName],
+        queryFn: () => apiClient.get<AdminTopic[]>(`/admin/skills/${skillIconicName}/topics`),
+        enabled: !!skillIconicName,
     });
 }
 
-export function useCreateTopic(skillId: string) {
+export function useCreateTopic(skillIconicName: string) {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminTopic, "id" | "skillId">) =>
-            apiClient.post<AdminTopic>(`/admin/skills/${skillId}/topics`, body),
+            apiClient.post<AdminTopic>(`/admin/skills/${skillIconicName}/topics`, body),
         onSuccess: (data) => {
-            clientLogger.info("Topic created", { topicId: data.id, skillId, title: data.title });
+            clientLogger.info("Topic created", { topicId: data.id, skillIconicName, iconicName: data.iconicName });
             qc.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to create topic", { skillId, title: variables.title, error: (error as Error).message });
+            clientLogger.error("Failed to create topic", { skillIconicName, iconicName: variables.iconicName, error: (error as Error).message });
         },
     });
 }
@@ -159,10 +163,10 @@ export function useCreateTopic(skillId: string) {
 export function useUpdateTopic(topicId: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (body: Omit<AdminTopic, "id" | "skillId">) =>
+        mutationFn: (body: Partial<Omit<AdminTopic, "id" | "skillId">>) =>
             apiClient.put<AdminTopic>(`/admin/topics/${topicId}`, body),
         onSuccess: (data) => {
-            clientLogger.info("Topic updated", { topicId: data.id, title: data.title });
+            clientLogger.info("Topic updated", { topicId: data.id, iconicName: data.iconicName });
             qc.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error) => {
@@ -195,25 +199,25 @@ export function useAdminAllLessons() {
     });
 }
 
-export function useAdminLessons(topicId: string) {
+export function useAdminLessons(topicIconicName: string) {
     return useQuery({
-        queryKey: ["admin", "lessons", topicId],
-        queryFn: () => apiClient.get<AdminLesson[]>(`/admin/topics/${topicId}/lessons`),
-        enabled: !!topicId,
+        queryKey: ["admin", "lessons", topicIconicName],
+        queryFn: () => apiClient.get<AdminLesson[]>(`/admin/topics/${topicIconicName}/lessons`),
+        enabled: !!topicIconicName,
     });
 }
 
-export function useCreateLesson(topicId: string) {
+export function useCreateLesson(topicIconicName: string) {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminLesson, "id" | "topicId">) =>
-            apiClient.post<AdminLesson>(`/admin/topics/${topicId}/lessons`, body),
+            apiClient.post<AdminLesson>(`/admin/topics/${topicIconicName}/lessons`, body),
         onSuccess: (data) => {
-            clientLogger.info("Lesson created", { lessonId: data.id, topicId, title: data.title });
+            clientLogger.info("Lesson created", { lessonId: data.id, topicIconicName, title: data.title });
             qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to create lesson", { topicId, title: variables.title, error: (error as Error).message });
+            clientLogger.error("Failed to create lesson", { topicIconicName, title: variables.title, error: (error as Error).message });
         },
     });
 }
