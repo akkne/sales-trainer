@@ -5,9 +5,9 @@ import {
     useAdminReferenceAll,
     useAdminReferenceCategories,
     useAdminSkills,
-    useDeleteReferenceMaterial,
-    useUpdateReferenceMaterial,
-    useCreateReferenceForSkill,
+    useDeleteReference,
+    useUpdateReference,
+    useCreateReference,
     type AdminReferenceMaterial,
     type CreateReferenceMaterialBody,
 } from "@/lib/hooks/useAdmin";
@@ -43,9 +43,9 @@ export default function AdminReferenceAllPage() {
     const { data: categories = [] } = useAdminReferenceCategories();
     const { data: skills = [] } = useAdminSkills();
 
-    const deleteMaterial = useDeleteReferenceMaterial();
-    const updateMaterial = useUpdateReferenceMaterial(editingId ?? "");
-    const createMaterial = useCreateReferenceForSkill(createSkillId);
+    const deleteMaterial = useDeleteReference();
+    const updateMaterial = useUpdateReference(editingId ?? "");
+    const createMaterial = useCreateReference(createSkillId);
 
     function startEdit(material: AdminReferenceMaterial) {
         setEditingId(material.id);

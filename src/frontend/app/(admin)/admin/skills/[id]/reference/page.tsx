@@ -24,7 +24,7 @@ export default function AdminReferencePageWrapper({
 function AdminReferencePage({ skillId }: { skillId: string }) {
     const { data: materials = [], isLoading } = useAdminReference(skillId);
     const createMaterial = useCreateReference(skillId);
-    const deleteMaterial = useDeleteReference(skillId);
+    const deleteMaterial = useDeleteReference();
 
     const emptyForm: CreateReferenceMaterialBody = { title: "", markdownContent: "", sortOrder: 0, category: null, tags: null };
     const [showForm, setShowForm] = useState(false);
@@ -32,7 +32,7 @@ function AdminReferencePage({ skillId }: { skillId: string }) {
 
     const [editId, setEditId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<CreateReferenceMaterialBody>(emptyForm);
-    const updateMaterial = useUpdateReference(skillId, editId ?? "");
+    const updateMaterial = useUpdateReference(editId ?? "");
 
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
