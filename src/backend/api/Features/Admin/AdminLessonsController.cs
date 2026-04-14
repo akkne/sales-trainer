@@ -17,6 +17,7 @@ public record AdminLessonDto(
 public record AdminLessonWithTopicDto(
     Guid Id,
     Guid TopicId,
+    string TopicIconicName,
     string TopicTitle,
     string Title,
     int OrderInTopic
@@ -36,20 +37,23 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
     {
         var lessons = await db.Lessons
             .Join(db.Topics, l => l.TopicId, t => t.Id, (l, t) => new { l, t })
-            .OrderBy(x => x.t.Title).ThenBy(x => x.l.OrderInTopic)
+            .OrderBy(x => x.t.IconicName).ThenBy(x => x.l.OrderInTopic)
             .Select(x => new AdminLessonWithTopicDto(
-                x.l.Id, x.l.TopicId, x.t.Title,
+                x.l.Id, x.l.TopicId, x.t.IconicName, x.t.Title,
                 x.l.Title, x.l.OrderInTopic))
             .ToListAsync();
 
         return Ok(lessons);
     }
 
-    [HttpGet("admin/topics/{topicId:guid}/lessons")]
-    public async Task<ActionResult<List<AdminLessonDto>>> GetByTopic(Guid topicId)
+    [HttpGet("admin/topics/{topicIconicName}/lessons")]
+    public async Task<ActionResult<List<AdminLessonDto>>> GetByTopic(string topicIconicName)
     {
+        var topic = await db.Topics.FirstOrDefaultAsync(t => t.IconicName == topicIconicName);
+        if (topic is null) return NotFound(new { message = $"Topic '{topicIconicName}' not found." });
+
         var lessons = await db.Lessons
-            .Where(l => l.TopicId == topicId)
+            .Where(l => l.TopicId == topic.Id)
             .OrderBy(l => l.OrderInTopic)
             .Select(l => new AdminLessonDto(l.Id, l.TopicId, l.Title, l.OrderInTopic))
             .ToListAsync();
@@ -57,17 +61,17 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
         return Ok(lessons);
     }
 
-    [HttpPost("admin/topics/{topicId:guid}/lessons")]
+    [HttpPost("admin/topics/{topicIconicName}/lessons")]
     public async Task<ActionResult<AdminLessonDto>> Create(
-        Guid topicId, [FromBody] CreateLessonRequestDto dto)
+        string topicIconicName, [FromBody] CreateLessonRequestDto dto)
     {
-        var topicExists = await db.Topics.AnyAsync(t => t.Id == topicId);
-        if (!topicExists) return NotFound();
+        var topic = await db.Topics.FirstOrDefaultAsync(t => t.IconicName == topicIconicName);
+        if (topic is null) return NotFound(new { message = $"Topic '{topicIconicName}' not found." });
 
         var lesson = new Lesson
         {
             Id = Guid.NewGuid(),
-            TopicId = topicId,
+            TopicId = topic.Id,
             Title = dto.Title,
             OrderInTopic = dto.OrderInTopic
         };
@@ -75,8 +79,8 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
         db.Lessons.Add(lesson);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Lesson created LessonId={LessonId} TopicId={TopicId} Title={Title} by ActorId={ActorId}",
-            lesson.Id, topicId, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Lesson created LessonId={LessonId} TopicIconicName={TopicIconicName} Title={Title} by ActorId={ActorId}",
+            lesson.Id, topicIconicName, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return Ok(new AdminLessonDto(lesson.Id, lesson.TopicId, lesson.Title, lesson.OrderInTopic));
     }

@@ -16,9 +16,9 @@ public record LessonsImportResultDto(int LessonsCreated, int LessonsUpdated, int
 
 /// <summary>
 /// Import structure:
-/// Skills JSON: [{ "title": "...", "description": "...", "orderInTree": 1 }]
-/// Topics JSON: [{ "skillTitle": "...", "title": "...", "orderInSkill": 1 }]
-/// Lessons JSON: [{ "topicTitle": "...", "title": "...", "orderInTopic": 1,
+/// Skills JSON: [{ "iconicName": "...", "title": "...", "description": "...", "orderInTree": 1 }]
+/// Topics JSON: [{ "skillIconicName": "...", "iconicName": "...", "title": "...", "orderInSkill": 1 }]
+/// Lessons JSON: [{ "topicIconicName": "...", "title": "...", "orderInTopic": 1,
 ///                 "exercises": [{ "type": "...", "orderInLesson": 1, "content": {...}, "customAiPrompt": "..." }] }]
 /// </summary>
 [ApiController]
@@ -35,7 +35,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingSkills = await db.Skills.ToDictionaryAsync(s => s.Title);
+        var existingSkills = await db.Skills.ToDictionaryAsync(s => s.IconicName);
         var state = new SkillsImportState();
 
         try
@@ -48,12 +48,13 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             {
                 try
                 {
+                    var iconicName = el.GetProperty("iconicName").GetString()?.Trim() ?? "";
                     var title = el.GetProperty("title").GetString()?.Trim() ?? "";
                     var description = el.TryGetProperty("description", out var descProp) && descProp.ValueKind != JsonValueKind.Null
                         ? descProp.GetString()?.Trim()
                         : null;
                     var orderInTree = el.GetProperty("orderInTree").GetInt32();
-                    UpsertSkill(title, description, orderInTree, existingSkills, state);
+                    UpsertSkill(iconicName, title, description, orderInTree, existingSkills, state);
                 }
                 catch (Exception ex) { state.Errors.Add($"Item {index}: {ex.Message}"); }
             }
@@ -70,29 +71,32 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         return Ok(new SkillsImportResultDto(state.SkillsCreated, state.SkillsUpdated, state.Errors));
     }
 
-    private void UpsertSkill(string title, string? description, int orderInTree,
+    private void UpsertSkill(string iconicName, string title, string? description, int orderInTree,
         Dictionary<string, Skill> existingSkills, SkillsImportState state)
     {
+        if (string.IsNullOrWhiteSpace(iconicName)) throw new InvalidOperationException("iconicName is empty.");
         if (string.IsNullOrWhiteSpace(title)) throw new InvalidOperationException("title is empty.");
 
-        if (existingSkills.TryGetValue(title, out var found))
+        if (existingSkills.TryGetValue(iconicName, out var found))
         {
+            found.Title = title;
             found.Description = description;
             found.OrderInTree = orderInTree;
-            if (state.UpdatedTitles.Add(title)) state.SkillsUpdated++;
+            if (state.UpdatedIconicNames.Add(iconicName)) state.SkillsUpdated++;
         }
         else
         {
             var skill = new Skill
             {
                 Id = Guid.NewGuid(),
+                IconicName = iconicName,
                 Title = title,
                 Description = description,
                 OrderInTree = orderInTree
             };
             db.Skills.Add(skill);
-            existingSkills[title] = skill;
-            if (state.CreatedTitles.Add(title)) state.SkillsCreated++;
+            existingSkills[iconicName] = skill;
+            if (state.CreatedIconicNames.Add(iconicName)) state.SkillsCreated++;
         }
     }
 
@@ -106,7 +110,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var skillsByTitle = await db.Skills.ToDictionaryAsync(s => s.Title);
+        var skillsByIconicName = await db.Skills.ToDictionaryAsync(s => s.IconicName);
         var existingTopics = await db.Topics.ToListAsync();
         var state = new TopicsImportState();
 
@@ -120,16 +124,17 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             {
                 try
                 {
-                    var skillTitle = el.GetProperty("skillTitle").GetString()?.Trim() ?? "";
-                    if (!skillsByTitle.TryGetValue(skillTitle, out var skill))
+                    var skillIconicName = el.GetProperty("skillIconicName").GetString()?.Trim() ?? "";
+                    if (!skillsByIconicName.TryGetValue(skillIconicName, out var skill))
                     {
-                        state.Errors.Add($"Item {index}: skill '{skillTitle}' not found.");
+                        state.Errors.Add($"Item {index}: skill '{skillIconicName}' not found.");
                         continue;
                     }
 
+                    var iconicName = el.GetProperty("iconicName").GetString()?.Trim() ?? "";
                     var title = el.GetProperty("title").GetString()?.Trim() ?? "";
                     var orderInSkill = el.GetProperty("orderInSkill").GetInt32();
-                    UpsertTopic(skill.Id, title, orderInSkill, existingTopics, state);
+                    UpsertTopic(skill.Id, iconicName, title, orderInSkill, existingTopics, state);
                 }
                 catch (Exception ex) { state.Errors.Add($"Item {index}: {ex.Message}"); }
             }
@@ -146,14 +151,17 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         return Ok(new TopicsImportResultDto(state.TopicsCreated, state.TopicsUpdated, state.Errors));
     }
 
-    private void UpsertTopic(Guid skillId, string title, int orderInSkill,
+    private void UpsertTopic(Guid skillId, string iconicName, string title, int orderInSkill,
         List<Topic> existingTopics, TopicsImportState state)
     {
+        if (string.IsNullOrWhiteSpace(iconicName)) throw new InvalidOperationException("iconicName is empty.");
         if (string.IsNullOrWhiteSpace(title)) throw new InvalidOperationException("title is empty.");
 
-        var existing = existingTopics.FirstOrDefault(t => t.SkillId == skillId && t.Title == title);
+        var existing = existingTopics.FirstOrDefault(t => t.IconicName == iconicName);
         if (existing is not null)
         {
+            existing.SkillId = skillId;
+            existing.Title = title;
             existing.OrderInSkill = orderInSkill;
             state.TopicsUpdated++;
         }
@@ -163,6 +171,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             {
                 Id = Guid.NewGuid(),
                 SkillId = skillId,
+                IconicName = iconicName,
                 Title = title,
                 OrderInSkill = orderInSkill
             };
@@ -182,7 +191,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var topicsByTitle = await db.Topics.ToDictionaryAsync(t => t.Title);
+        var topicsByIconicName = await db.Topics.ToDictionaryAsync(t => t.IconicName);
         var allLessons = await db.Lessons.ToListAsync();
         var allExercises = await db.Exercises.ToListAsync();
         var state = new LessonsImportState();
@@ -197,10 +206,10 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             {
                 try
                 {
-                    var topicTitle = lessonEl.GetProperty("topicTitle").GetString()?.Trim() ?? "";
-                    if (!topicsByTitle.TryGetValue(topicTitle, out var topic))
+                    var topicIconicName = lessonEl.GetProperty("topicIconicName").GetString()?.Trim() ?? "";
+                    if (!topicsByIconicName.TryGetValue(topicIconicName, out var topic))
                     {
-                        state.Errors.Add($"Item {lessonIdx}: topic '{topicTitle}' not found.");
+                        state.Errors.Add($"Item {lessonIdx}: topic '{topicIconicName}' not found.");
                         continue;
                     }
 
@@ -311,8 +320,8 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         public int SkillsCreated { get; set; }
         public int SkillsUpdated { get; set; }
         public List<string> Errors { get; } = [];
-        public HashSet<string> CreatedTitles { get; } = [];
-        public HashSet<string> UpdatedTitles { get; } = [];
+        public HashSet<string> CreatedIconicNames { get; } = [];
+        public HashSet<string> UpdatedIconicNames { get; } = [];
     }
 
     private sealed class TopicsImportState

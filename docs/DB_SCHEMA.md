@@ -62,25 +62,27 @@ Indexes: `IX_RefreshTokens_UserId`
 
 ### `Skills`
 
-| Column        | Type      | Nullable | Notes                  |
-|---------------|-----------|----------|------------------------|
-| `Id`          | `uuid`    | NOT NULL | PK                     |
-| `OrderInTree` | `integer` | NOT NULL | Display order in tree  |
-| `Title`       | `text`    | NOT NULL |                        |
-| `Description` | `text`    | NULL     |                        |
+| Column        | Type      | Nullable | Notes                          |
+|---------------|-----------|----------|--------------------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                             |
+| `IconicName`  | `text`    | NOT NULL | UNIQUE — English identifier    |
+| `OrderInTree` | `integer` | NOT NULL | Display order in tree          |
+| `Title`       | `text`    | NOT NULL | Localized display name         |
+| `Description` | `text`    | NULL     |                                |
 
 ---
 
 ### `Topics`
 
-| Column        | Type      | Nullable | Notes                |
-|---------------|-----------|----------|----------------------|
-| `Id`          | `uuid`    | NOT NULL | PK                   |
-| `SkillId`     | `uuid`    | NOT NULL | FK → `Skills.Id`     |
-| `OrderInSkill`| `integer` | NOT NULL |                      |
-| `Title`       | `text`    | NOT NULL |                      |
+| Column        | Type      | Nullable | Notes                          |
+|---------------|-----------|----------|--------------------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                             |
+| `SkillId`     | `uuid`    | NOT NULL | FK → `Skills.Id`               |
+| `IconicName`  | `text`    | NOT NULL | UNIQUE — English identifier    |
+| `OrderInSkill`| `integer` | NOT NULL |                                |
+| `Title`       | `text`    | NOT NULL | Localized display name         |
 
-Indexes: `IX_Topics_SkillId_OrderInSkill`
+Indexes: `IX_Topics_IconicName`, `IX_Topics_SkillId_OrderInSkill`
 
 ---
 
@@ -309,4 +311,4 @@ Skills
 | `AddOpenQuestionGlobalContext`        | 2026-04-06 | `OpenQuestionGlobalContexts` table           |
 | `ResetSkillsAndAddNewOnes`            | 2026-04-13 | Reset skills data                            |
 | `AddExerciseTypePrompts`              | 2026-04-13 | `ExerciseTypePrompts` table                  |
-| `RefactorSkillsTopicsLessonsExercises`| 2026-04-14 | New hierarchy: Skills → Topics → Lessons → Exercises |
+| `AddIconicNameToSkillsAndTopics`      | 2026-04-14 | Add IconicName (unique) to Skills and Topics |

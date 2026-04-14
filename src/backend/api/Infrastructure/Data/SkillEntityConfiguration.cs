@@ -10,7 +10,10 @@ public class SkillEntityConfiguration : IEntityTypeConfiguration<Skill>
     {
         builder.ToTable("Skills");
         builder.HasKey(s => s.Id);
+        builder.Property(s => s.IconicName).IsRequired();
         builder.Property(s => s.Title).IsRequired();
+
+        builder.HasIndex(s => s.IconicName).IsUnique();
     }
 }
 
@@ -20,6 +23,7 @@ public class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
     {
         builder.ToTable("Topics");
         builder.HasKey(t => t.Id);
+        builder.Property(t => t.IconicName).IsRequired();
         builder.Property(t => t.Title).IsRequired();
 
         builder.HasOne(t => t.Skill)
@@ -27,6 +31,7 @@ public class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
             .HasForeignKey(t => t.SkillId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasIndex(t => t.IconicName).IsUnique();
         builder.HasIndex(t => new { t.SkillId, t.OrderInSkill });
     }
 }

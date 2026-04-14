@@ -10,6 +10,7 @@ namespace SalesTrainer.Api.Features.Admin;
 public record AdminTopicDto(
     Guid Id,
     Guid SkillId,
+    string IconicName,
     string Title,
     int OrderInSkill
 );
@@ -17,14 +18,23 @@ public record AdminTopicDto(
 public record AdminTopicWithSkillDto(
     Guid Id,
     Guid SkillId,
+    string SkillIconicName,
     string SkillTitle,
+    string IconicName,
     string Title,
     int OrderInSkill
 );
 
 public record CreateTopicRequestDto(
+    string IconicName,
     string Title,
     int OrderInSkill
+);
+
+public record UpdateTopicRequestDto(
+    string? IconicName,
+    string? Title,
+    int? OrderInSkill
 );
 
 [ApiController]
@@ -38,36 +48,44 @@ public class AdminTopicsController(AppDbContext db, ILogger<AdminTopicsControlle
             .Join(db.Skills, t => t.SkillId, s => s.Id, (t, s) => new { t, s })
             .OrderBy(x => x.s.OrderInTree).ThenBy(x => x.t.OrderInSkill)
             .Select(x => new AdminTopicWithSkillDto(
-                x.t.Id, x.t.SkillId, x.s.Title,
-                x.t.Title, x.t.OrderInSkill))
+                x.t.Id, x.t.SkillId, x.s.IconicName, x.s.Title,
+                x.t.IconicName, x.t.Title, x.t.OrderInSkill))
             .ToListAsync();
 
         return Ok(topics);
     }
 
-    [HttpGet("admin/skills/{skillId:guid}/topics")]
-    public async Task<ActionResult<List<AdminTopicDto>>> GetBySkill(Guid skillId)
+    [HttpGet("admin/skills/{skillIconicName}/topics")]
+    public async Task<ActionResult<List<AdminTopicDto>>> GetBySkill(string skillIconicName)
     {
+        var skill = await db.Skills.FirstOrDefaultAsync(s => s.IconicName == skillIconicName);
+        if (skill is null) return NotFound(new { message = $"Skill '{skillIconicName}' not found." });
+
         var topics = await db.Topics
-            .Where(t => t.SkillId == skillId)
+            .Where(t => t.SkillId == skill.Id)
             .OrderBy(t => t.OrderInSkill)
-            .Select(t => new AdminTopicDto(t.Id, t.SkillId, t.Title, t.OrderInSkill))
+            .Select(t => new AdminTopicDto(t.Id, t.SkillId, t.IconicName, t.Title, t.OrderInSkill))
             .ToListAsync();
 
         return Ok(topics);
     }
 
-    [HttpPost("admin/skills/{skillId:guid}/topics")]
+    [HttpPost("admin/skills/{skillIconicName}/topics")]
     public async Task<ActionResult<AdminTopicDto>> Create(
-        Guid skillId, [FromBody] CreateTopicRequestDto dto)
+        string skillIconicName, [FromBody] CreateTopicRequestDto dto)
     {
-        var skillExists = await db.Skills.AnyAsync(s => s.Id == skillId);
-        if (!skillExists) return NotFound();
+        var skill = await db.Skills.FirstOrDefaultAsync(s => s.IconicName == skillIconicName);
+        if (skill is null) return NotFound(new { message = $"Skill '{skillIconicName}' not found." });
+
+        var exists = await db.Topics.AnyAsync(t => t.IconicName == dto.IconicName);
+        if (exists)
+            return Conflict(new { message = $"Topic with iconicName '{dto.IconicName}' already exists." });
 
         var topic = new Topic
         {
             Id = Guid.NewGuid(),
-            SkillId = skillId,
+            SkillId = skill.Id,
+            IconicName = dto.IconicName,
             Title = dto.Title,
             OrderInSkill = dto.OrderInSkill
         };
@@ -75,28 +93,36 @@ public class AdminTopicsController(AppDbContext db, ILogger<AdminTopicsControlle
         db.Topics.Add(topic);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Topic created TopicId={TopicId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
-            topic.Id, skillId, topic.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Topic created TopicId={TopicId} SkillIconicName={SkillIconicName} IconicName={IconicName} by ActorId={ActorId}",
+            topic.Id, skillIconicName, topic.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.Title, topic.OrderInSkill));
+        return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.IconicName, topic.Title, topic.OrderInSkill));
     }
 
     [HttpPut("admin/topics/{id:guid}")]
     public async Task<ActionResult<AdminTopicDto>> Update(
-        Guid id, [FromBody] CreateTopicRequestDto dto)
+        Guid id, [FromBody] UpdateTopicRequestDto dto)
     {
         var topic = await db.Topics.FindAsync(id);
         if (topic is null) return NotFound();
 
-        topic.Title = dto.Title;
-        topic.OrderInSkill = dto.OrderInSkill;
+        if (dto.IconicName is not null && dto.IconicName != topic.IconicName)
+        {
+            var exists = await db.Topics.AnyAsync(t => t.IconicName == dto.IconicName && t.Id != id);
+            if (exists)
+                return Conflict(new { message = $"Topic with iconicName '{dto.IconicName}' already exists." });
+            topic.IconicName = dto.IconicName;
+        }
+
+        if (dto.Title is not null) topic.Title = dto.Title;
+        if (dto.OrderInSkill.HasValue) topic.OrderInSkill = dto.OrderInSkill.Value;
 
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Topic updated TopicId={TopicId} Title={Title} by ActorId={ActorId}",
-            id, topic.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Topic updated TopicId={TopicId} IconicName={IconicName} by ActorId={ActorId}",
+            id, topic.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.Title, topic.OrderInSkill));
+        return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.IconicName, topic.Title, topic.OrderInSkill));
     }
 
     [HttpDelete("admin/topics/{id:guid}")]

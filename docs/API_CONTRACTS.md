@@ -163,35 +163,35 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/skills | — | `AdminSkillDto[]` |
-| POST | /admin/skills | `{title, description?, orderInTree}` | `AdminSkillDto` |
-| PUT | /admin/skills/:id | same | `AdminSkillDto` |
+| POST | /admin/skills | `{iconicName, title, description?, orderInTree}` | `AdminSkillDto` |
+| PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
-`AdminSkillDto`: `{id, title, description, orderInTree}`
+`AdminSkillDto`: `{id, iconicName, title, description, orderInTree}`
 
 ### Topics
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/topics | — | `AdminTopicWithSkillDto[]` |
-| GET | /admin/skills/:skillId/topics | — | `AdminTopicDto[]` |
-| POST | /admin/skills/:skillId/topics | `{title, orderInSkill}` | `AdminTopicDto` |
-| PUT | /admin/topics/:id | `{title, orderInSkill}` | `AdminTopicDto` |
+| GET | /admin/skills/:skillIconicName/topics | — | `AdminTopicDto[]` |
+| POST | /admin/skills/:skillIconicName/topics | `{iconicName, title, orderInSkill}` | `AdminTopicDto` |
+| PUT | /admin/topics/:id | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
 | DELETE | /admin/topics/:id | — | 204 |
 
-`AdminTopicDto`: `{id, skillId, title, orderInSkill}`
-`AdminTopicWithSkillDto`: `{id, skillId, skillTitle, title, orderInSkill}`
+`AdminTopicDto`: `{id, skillId, iconicName, title, orderInSkill}`
+`AdminTopicWithSkillDto`: `{id, skillId, skillIconicName, skillTitle, iconicName, title, orderInSkill}`
 
 ### Lessons
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/lessons | — | `AdminLessonWithTopicDto[]` |
-| GET | /admin/topics/:topicId/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/topics/:topicId/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
+| GET | /admin/topics/:topicIconicName/lessons | — | `AdminLessonDto[]` |
+| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
 | PUT | /admin/lessons/:id | `{title, orderInTopic}` | `AdminLessonDto` |
 | DELETE | /admin/lessons/:id | — | 204 |
 
 `AdminLessonDto`: `{id, topicId, title, orderInTopic}`
-`AdminLessonWithTopicDto`: `{id, topicId, topicTitle, title, orderInTopic}`
+`AdminLessonWithTopicDto`: `{id, topicId, topicIconicName, topicTitle, title, orderInTopic}`
 
 ### Exercises
 | Method | Path | Body | Response |
@@ -237,9 +237,9 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
 | POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
 
-**Skills JSON:** `[{ title, description?, orderInTree }]`
-**Topics JSON:** `[{ skillTitle, title, orderInSkill }]`
-**Lessons JSON:** `[{ topicTitle, title, orderInTopic, exercises: [{ type, orderInLesson, content, customAiPrompt? }] }]`
+**Skills JSON:** `[{ iconicName, title, description?, orderInTree }]`
+**Topics JSON:** `[{ skillIconicName, iconicName, title, orderInSkill }]`
+**Lessons JSON:** `[{ topicIconicName, title, orderInTopic, exercises: [{ type, orderInLesson, content, customAiPrompt? }] }]`
 
 `SkillsImportResultDto`: `{skillsCreated, skillsUpdated, errors: string[]}`
 `TopicsImportResultDto`: `{topicsCreated, topicsUpdated, errors: string[]}`

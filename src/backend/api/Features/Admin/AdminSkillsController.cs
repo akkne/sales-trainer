@@ -9,15 +9,24 @@ namespace SalesTrainer.Api.Features.Admin;
 
 public record AdminSkillDto(
     Guid Id,
+    string IconicName,
     string Title,
     string? Description,
     int OrderInTree
 );
 
 public record CreateSkillRequestDto(
+    string IconicName,
     string Title,
     string? Description,
     int OrderInTree
+);
+
+public record UpdateSkillRequestDto(
+    string? IconicName,
+    string? Title,
+    string? Description,
+    int? OrderInTree
 );
 
 [ApiController]
@@ -30,7 +39,7 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
     {
         var skills = await db.Skills
             .OrderBy(s => s.OrderInTree)
-            .Select(s => new AdminSkillDto(s.Id, s.Title, s.Description, s.OrderInTree))
+            .Select(s => new AdminSkillDto(s.Id, s.IconicName, s.Title, s.Description, s.OrderInTree))
             .ToListAsync();
 
         return Ok(skills);
@@ -39,9 +48,14 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
     [HttpPost]
     public async Task<ActionResult<AdminSkillDto>> Create([FromBody] CreateSkillRequestDto dto)
     {
+        var exists = await db.Skills.AnyAsync(s => s.IconicName == dto.IconicName);
+        if (exists)
+            return Conflict(new { message = $"Skill with iconicName '{dto.IconicName}' already exists." });
+
         var skill = new Skill
         {
             Id = Guid.NewGuid(),
+            IconicName = dto.IconicName,
             Title = dto.Title,
             Description = dto.Description,
             OrderInTree = dto.OrderInTree
@@ -50,29 +64,37 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         db.Skills.Add(skill);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Skill created SkillId={SkillId} Title={Title} by ActorId={ActorId}",
-            skill.Id, skill.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Skill created SkillId={SkillId} IconicName={IconicName} by ActorId={ActorId}",
+            skill.Id, skill.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(skill.Id, skill.Title, skill.Description, skill.OrderInTree));
+        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree));
     }
 
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<AdminSkillDto>> Update(
-        Guid id, [FromBody] CreateSkillRequestDto dto)
+        Guid id, [FromBody] UpdateSkillRequestDto dto)
     {
         var skill = await db.Skills.FindAsync(id);
         if (skill is null) return NotFound();
 
-        skill.Title = dto.Title;
-        skill.Description = dto.Description;
-        skill.OrderInTree = dto.OrderInTree;
+        if (dto.IconicName is not null && dto.IconicName != skill.IconicName)
+        {
+            var exists = await db.Skills.AnyAsync(s => s.IconicName == dto.IconicName && s.Id != id);
+            if (exists)
+                return Conflict(new { message = $"Skill with iconicName '{dto.IconicName}' already exists." });
+            skill.IconicName = dto.IconicName;
+        }
+
+        if (dto.Title is not null) skill.Title = dto.Title;
+        if (dto.Description is not null) skill.Description = dto.Description;
+        if (dto.OrderInTree.HasValue) skill.OrderInTree = dto.OrderInTree.Value;
 
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Skill updated SkillId={SkillId} Title={Title} by ActorId={ActorId}",
-            skill.Id, skill.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Skill updated SkillId={SkillId} IconicName={IconicName} by ActorId={ActorId}",
+            skill.Id, skill.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(skill.Id, skill.Title, skill.Description, skill.OrderInTree));
+        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree));
     }
 
     [HttpDelete("{id:guid}")]
