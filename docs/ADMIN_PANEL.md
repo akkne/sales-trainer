@@ -161,16 +161,133 @@ JSON import is available inline on Skills and Lessons pages:
     "title": "Opening the Call",
     "orderInTopic": 1,
     "exercises": [
-      { "type": "choose_option", "orderInLesson": 1, "content": {...} },
-      { "type": "fill_blank", "orderInLesson": 2, "content": {...} },
-      { "type": "reorder", "orderInLesson": 3, "content": {...} },
-      { "type": "match_pairs", "orderInLesson": 4, "content": {...} },
-      { "type": "categorize", "orderInLesson": 5, "content": {...} },
-      { "type": "spot_mistake", "orderInLesson": 6, "content": {...} },
-      { "type": "rewrite", "orderInLesson": 7, "content": {...} },
-      { "type": "ai_dialogue", "orderInLesson": 8, "content": {...} },
-      { "type": "evaluate_call", "orderInLesson": 9, "content": {...} },
-      { "type": "free_text", "orderInLesson": 10, "content": {...} }
+      {
+        "type": "choose_option",
+        "orderInLesson": 1,
+        "content": {
+          "situation": "Клиент говорит: 'Это слишком дорого'",
+          "options": [
+            { "text": "Да, понимаю. Могу предложить скидку.", "is_correct": false },
+            { "text": "Скажите, дорого относительно чего?", "is_correct": true },
+            { "text": "Это лучшая цена на рынке.", "is_correct": false }
+          ],
+          "explanation": "Лучше уточнить причину возражения."
+        }
+      },
+      {
+        "type": "fill_blank",
+        "orderInLesson": 2,
+        "content": {
+          "before": "Клиент: У нас уже есть поставщик.",
+          "after": "Клиент: Ну, в целом да, можно обсудить.",
+          "options": [
+            { "text": "Понял, но мы лучше!", "is_correct": false },
+            { "text": "А что если я покажу, как сэкономить 20%?", "is_correct": true },
+            { "text": "Жаль, до свидания.", "is_correct": false }
+          ]
+        }
+      },
+      {
+        "type": "reorder",
+        "orderInLesson": 3,
+        "content": {
+          "instruction": "Расставьте этапы холодного звонка",
+          "items": [
+            { "text": "Приветствие", "correct_position": 1 },
+            { "text": "Выявление потребности", "correct_position": 2 },
+            { "text": "Презентация", "correct_position": 3 },
+            { "text": "Работа с возражениями", "correct_position": 4 }
+          ],
+          "explanation": "Сначала понять потребность, потом предлагать."
+        }
+      },
+      {
+        "type": "match_pairs",
+        "orderInLesson": 4,
+        "content": {
+          "instruction": "Соедините возражение с техникой",
+          "pairs": [
+            { "left": "Слишком дорого", "right": "Сравнение ценности" },
+            { "left": "Нам ничего не нужно", "right": "Техника бумеранга" },
+            { "left": "Отправьте на почту", "right": "Техника моста" }
+          ],
+          "explanation": "Каждое возражение требует своего подхода."
+        }
+      },
+      {
+        "type": "categorize",
+        "orderInLesson": 5,
+        "content": {
+          "instruction": "Распределите вопросы по категориям",
+          "categories": ["Хороший вопрос", "Плохой вопрос"],
+          "items": [
+            { "text": "Какие цели на квартал?", "category": "Хороший вопрос" },
+            { "text": "Вам нравится наш продукт?", "category": "Плохой вопрос" }
+          ],
+          "explanation": "Хорошие вопросы открытые и про понимание."
+        }
+      },
+      {
+        "type": "spot_mistake",
+        "orderInLesson": 6,
+        "content": {
+          "dialogue": [
+            { "speaker": "seller", "text": "Добрый день!", "is_mistake": false },
+            { "speaker": "seller", "text": "Мы лучшая CRM!", "is_mistake": true },
+            { "speaker": "client", "text": "Нам ничего не нужно.", "is_mistake": false }
+          ],
+          "explanation": "Питч вместо discovery — ошибка.",
+          "ai_prompt": "Оцени понимание проблемы питча."
+        }
+      },
+      {
+        "type": "rewrite",
+        "orderInLesson": 7,
+        "content": {
+          "instruction": "Перепишите тему письма цепляюще",
+          "original": "Предложение о сотрудничестве",
+          "evaluation_criteria": ["Персонализация", "Интрига", "Краткость"],
+          "ai_prompt": "Оцени улучшение темы письма."
+        }
+      },
+      {
+        "type": "ai_dialogue",
+        "orderInLesson": 8,
+        "content": {
+          "persona": "Скептик Сергей",
+          "scenario": "Discovery-звонок",
+          "context": "IT-директор, скептичен, торопится",
+          "max_turns": 6,
+          "success_criteria": ["Качество вопросов", "Работа со скептицизмом"],
+          "ai_prompt": "Оцени диалог продавца."
+        }
+      },
+      {
+        "type": "evaluate_call",
+        "orderInLesson": 9,
+        "content": {
+          "transcript": [
+            { "speaker": "seller", "text": "Здравствуйте, это Алексей." },
+            { "speaker": "client", "text": "Добрый день." },
+            { "speaker": "seller", "text": "Рассматриваете новые решения?" }
+          ],
+          "evaluation_axes": [
+            { "name": "Квалификация", "description": "Была ли квалификация?" },
+            { "name": "Открытые вопросы", "description": "Использовались ли?" }
+          ],
+          "ai_prompt": "Сравни оценку с анализом звонка."
+        }
+      },
+      {
+        "type": "free_text",
+        "orderInLesson": 10,
+        "content": {
+          "situation": "Клиент: 'Это слишком дорого'",
+          "instruction": "Напишите ответ на возражение",
+          "evaluation_criteria": ["Не снижает цену", "Выясняет причину"],
+          "ai_prompt": "Оцени ответ на возражение."
+        }
+      }
     ]
   }
 ]
