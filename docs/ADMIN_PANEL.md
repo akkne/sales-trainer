@@ -48,9 +48,10 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 ### Lessons
 | Method | Path | Body | Response |
 |---|---|---|---|
+| GET | /admin/lessons | — | `AdminLessonWithSkillDto[]` (all lessons) |
 | GET | /admin/skills/:skillId/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/skills/:skillId/lessons | `{title, sortOrder}` | `AdminLessonDto` |
-| PUT | /admin/lessons/:id | `{title, sortOrder}` | `AdminLessonDto` |
+| POST | /admin/skills/:skillId/lessons | `{title, sortOrder, difficultyLevel, xpReward}` | `AdminLessonDto` |
+| PUT | /admin/lessons/:id | same | `AdminLessonDto` |
 | DELETE | /admin/lessons/:id | — | 204 |
 
 ### Exercises
@@ -64,8 +65,10 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 ### Reference Materials
 | Method | Path | Body | Response |
 |---|---|---|---|
+| GET | /admin/reference | query: `?skillId=&category=&search=` | `AdminReferenceMaterialDto[]` |
+| GET | /admin/reference/categories | — | `string[]` |
 | GET | /admin/skills/:skillId/reference | — | `AdminReferenceMaterialDto[]` |
-| POST | /admin/skills/:skillId/reference | `{title, markdownContent, sortOrder}` | `AdminReferenceMaterialDto` |
+| POST | /admin/skills/:skillId/reference | `{title, markdownContent, sortOrder, category?, tags?}` | `AdminReferenceMaterialDto` |
 | PUT | /admin/reference/:id | same | `AdminReferenceMaterialDto` |
 | DELETE | /admin/reference/:id | — | 204 |
 
@@ -93,7 +96,7 @@ app/(admin)/
   admin/
     page.tsx           ← redirect to /admin/skills
     skills/
-      page.tsx         ← skill list + JSON import
+      page.tsx         ← skill list + inline JSON import
       [id]/
         page.tsx       ← edit skill + lessons list
         lessons/
@@ -104,7 +107,13 @@ app/(admin)/
         reference/
           page.tsx     ← reference materials list + editor
     lessons/
-      page.tsx         ← all lessons view + JSON import
+      page.tsx         ← all lessons view + inline JSON import
+    reference/
+      page.tsx         ← global reference materials view
+    dialog/
+      page.tsx         ← dialog bundles management
+    open-question/
+      page.tsx         ← AI prompts management
     users/
       page.tsx         ← user list + role management (superadmin only)
 ```
@@ -117,11 +126,18 @@ app/(admin)/
 - Standard HTML-like forms via Tailwind utility classes
 - Tables for list views
 - Inline delete confirmation (no separate modal — just a button state change to "Confirm?")
-- JSON import sections collapsible on each entity page
+- JSON import sections collapsible on each entity page (Skills, Lessons)
 
 ---
 
-## JSON Import Formats
+## JSON Import Workflow
+
+JSON import is available inline on Skills and Lessons pages:
+
+1. Click "Import JSON" button
+2. Download template for reference (shows all supported fields)
+3. Upload your JSON file
+4. View import results (created/updated counts, errors)
 
 ### Skills Template
 ```json
@@ -170,15 +186,51 @@ app/(admin)/
 | Type | Description | Key Content Fields |
 |------|-------------|-------------------|
 | `multiple_choice` | Quiz with 4 options | situation, question, options[], correctOptionIndex, explanation |
-| `fill_blank` | Dialog completion | characterName, characterLine (with ___), options[], correctOptionIndex |
+| `fill_blank` | Dialog completion | characterName, characterLine (with ___), options[], correctOptionIndex, explanation |
 | `open_question` | Free-form AI-evaluated answer | question, aiPrompt |
 | `ordering` | Arrange items in sequence | instruction, items[], correctOrder[], explanation |
-| `matching` | Connect left/right columns | instruction, leftItems[], rightItems[], correctPairs[] |
-| `categorizing` | Sort items into buckets | instruction, categories[], items[], correctMapping{} |
-| `find_error` | Identify mistake in dialog | instruction, dialogLines[], errorLineId, suggestedFixes[] |
+| `matching` | Connect left/right columns | instruction, leftItems[], rightItems[], correctPairs[], explanation |
+| `categorizing` | Sort items into buckets | instruction, categories[], items[], correctMapping{}, explanation |
+| `find_error` | Identify mistake in dialog | instruction, dialogLines[], errorLineId, requireExplanation, suggestedFixes[], correctFixIds[], aiPrompt |
 | `rewrite_better` | Improve given text | originalText, context, minLength, maxLength, aiPrompt |
-| `ai_dialog` | Practice with AI persona | scenario, persona{}, systemPrompt, minTurnsForCompletion, aiPrompt |
+| `ai_dialog` | Practice with AI persona | scenario, persona{name,role,personality}, systemPrompt, minTurnsForCompletion, aiPrompt |
 | `rate_call` | Evaluate transcript quality | transcript[], criteria[], aiPrompt |
 | `written_answer` | Write based on prompt | prompt, context, minLength, maxLength, aiPrompt |
 
 See `src/frontend/components/admin/exercise-editors/types.ts` for full TypeScript interfaces.
+
+---
+
+## Visual Exercise Editor
+
+The admin panel provides a visual editor for all 11 exercise types at:
+`/admin/skills/[skillId]/lessons/[lessonId]/exercises`
+
+Features:
+- Type-specific form fields for each exercise type
+- Drag reordering with up/down arrows
+- Inline preview of content
+- Add/edit/delete exercises without raw JSON editing
+- Auto-assigns sortOrder based on position
+
+Each exercise type has a dedicated editor component in `src/frontend/components/admin/exercise-editors/`:
+- MultipleChoiceEditor.tsx
+- FillBlankEditor.tsx
+- OpenQuestionEditor.tsx
+- OrderingEditor.tsx
+- MatchingEditor.tsx
+- CategorizingEditor.tsx
+- FindErrorEditor.tsx
+- RewriteBetterEditor.tsx
+- AiDialogEditor.tsx
+- RateCallEditor.tsx
+- WrittenAnswerEditor.tsx
+
+---
+
+## Ordering Rules
+
+- **Lessons** have `sortOrder` by their position within a skill
+- **Exercises** have `sortOrder` by their position within a lesson
+- Backend queries always `OrderBy(x => x.SortOrder)` to ensure consistent ordering
+- Visual editor allows reordering via up/down arrows
