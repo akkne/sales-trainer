@@ -163,25 +163,54 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/skills | — | `AdminSkillDto[]` |
-| POST | /admin/skills | `{title, slug, iconName, sortOrder, prerequisiteSkillId?, applicableSalesTypes[]}` | `AdminSkillDto` |
+| POST | /admin/skills | `{title, description?, orderInTree}` | `AdminSkillDto` |
 | PUT | /admin/skills/:id | same | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
+
+`AdminSkillDto`: `{id, title, description, orderInTree}`
+
+### Topics
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/topics | — | `AdminTopicWithSkillDto[]` |
+| GET | /admin/skills/:skillId/topics | — | `AdminTopicDto[]` |
+| POST | /admin/skills/:skillId/topics | `{title, orderInSkill}` | `AdminTopicDto` |
+| PUT | /admin/topics/:id | `{title, orderInSkill}` | `AdminTopicDto` |
+| DELETE | /admin/topics/:id | — | 204 |
+
+`AdminTopicDto`: `{id, skillId, title, orderInSkill}`
+`AdminTopicWithSkillDto`: `{id, skillId, skillTitle, title, orderInSkill}`
 
 ### Lessons
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /admin/skills/:skillId/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/skills/:skillId/lessons | `{title, sortOrder, difficultyLevel, xpReward}` | `AdminLessonDto` |
-| PUT | /admin/lessons/:id | same | `AdminLessonDto` |
+| GET | /admin/lessons | — | `AdminLessonWithTopicDto[]` |
+| GET | /admin/topics/:topicId/lessons | — | `AdminLessonDto[]` |
+| POST | /admin/topics/:topicId/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
+| PUT | /admin/lessons/:id | `{title, orderInTopic}` | `AdminLessonDto` |
 | DELETE | /admin/lessons/:id | — | 204 |
+
+`AdminLessonDto`: `{id, topicId, title, orderInTopic}`
+`AdminLessonWithTopicDto`: `{id, topicId, topicTitle, title, orderInTopic}`
 
 ### Exercises
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/lessons/:lessonId/exercises | — | `AdminExerciseDto[]` |
-| POST | /admin/lessons/:lessonId/exercises | `{type, sortOrder, content: <jsonb>}` | `AdminExerciseDto` |
+| POST | /admin/lessons/:lessonId/exercises | `{type, orderInLesson, content: <jsonb>, customAiPrompt?}` | `AdminExerciseDto` |
 | PUT | /admin/exercises/:id | same | `AdminExerciseDto` |
 | DELETE | /admin/exercises/:id | — | 204 |
+
+`AdminExerciseDto`: `{id, lessonId, type, orderInLesson, content, customAiPrompt}`
+
+### Exercise Type Prompts
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/exercise-type-prompts | — | `ExerciseTypePromptDto[]` |
+| GET | /admin/exercise-type-prompts/:exerciseType | — | `ExerciseTypePromptDto` |
+| PUT | /admin/exercise-type-prompts/:exerciseType | `{systemPrompt}` | `ExerciseTypePromptDto` |
+
+`ExerciseTypePromptDto`: `{id, exerciseType, systemPrompt, updatedAt}`
 
 ### Reference Materials
 | Method | Path | Body | Response |
@@ -204,12 +233,19 @@ All routes prefixed `/admin`. Unauthorized → 403.
 ### Seeder
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /admin/seeder/csv | `multipart/form-data; file=<CSV>` | `SeederImportResultDto` |
+| POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>` | `SkillsImportResultDto` |
+| POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
+| POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
 
-`SeederImportResultDto`: `{skillsCreated, skillsUpdated, lessonsCreated, lessonsUpdated, exercisesCreated, exercisesUpdated, errors: string[]}`
+**Skills JSON:** `[{ title, description?, orderInTree }]`
+**Topics JSON:** `[{ skillTitle, title, orderInSkill }]`
+**Lessons JSON:** `[{ topicTitle, title, orderInTopic, exercises: [{ type, orderInLesson, content, customAiPrompt? }] }]`
 
-Max file size: 10 MB. Upsert keys: skill by `slug`; lesson by `(skillId, title)`; exercise by `(lessonId, sortOrder)`.
-See [SEEDER.md](SEEDER.md) for full CSV format.
+`SkillsImportResultDto`: `{skillsCreated, skillsUpdated, errors: string[]}`
+`TopicsImportResultDto`: `{topicsCreated, topicsUpdated, errors: string[]}`
+`LessonsImportResultDto`: `{lessonsCreated, lessonsUpdated, exercisesCreated, exercisesUpdated, errors: string[]}`
+
+Max file size: 10 MB.
 
 
 ---
