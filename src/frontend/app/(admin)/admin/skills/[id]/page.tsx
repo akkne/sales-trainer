@@ -26,12 +26,13 @@ export default function AdminSkillDetailPage({
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState<Omit<AdminSkill, "id"> | null>(null);
 
-    const { data: topics = [], isLoading: topicsLoading } = useAdminTopics(id);
-    const createTopic = useCreateTopic(id);
+    const { data: topics = [], isLoading: topicsLoading } = useAdminTopics(skill?.iconicName || "");
+    const createTopic = useCreateTopic(skill?.iconicName || "");
     const deleteTopic = useDeleteTopic(id);
 
     const [showTopicForm, setShowTopicForm] = useState(false);
     const [topicForm, setTopicForm] = useState({
+        iconicName: "",
         title: "",
         orderInSkill: 0,
     });
@@ -40,6 +41,7 @@ export default function AdminSkillDetailPage({
     function startEdit() {
         if (!skill) return;
         setForm({
+            iconicName: skill.iconicName,
             title: skill.title,
             description: skill.description,
             orderInTree: skill.orderInTree,
@@ -55,7 +57,7 @@ export default function AdminSkillDetailPage({
 
     async function handleCreateTopic() {
         await createTopic.mutateAsync(topicForm);
-        setTopicForm({ title: "", orderInSkill: 0 });
+        setTopicForm({ iconicName: "", title: "", orderInSkill: 0 });
         setShowTopicForm(false);
     }
 
@@ -92,6 +94,14 @@ export default function AdminSkillDetailPage({
                     <div>
                         <div className="grid grid-cols-2 gap-4">
                             <label className="block">
+                                <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                                <input
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    value={form.iconicName}
+                                    onChange={(e) => setForm({ ...form, iconicName: e.target.value })}
+                                />
+                            </label>
+                            <label className="block">
                                 <span className="text-xs text-on-surface-variant">Title</span>
                                 <input
                                     className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
@@ -110,6 +120,7 @@ export default function AdminSkillDetailPage({
                                     }
                                 />
                             </label>
+                            <div />
                             <label className="block col-span-2">
                                 <span className="text-xs text-on-surface-variant">Description</span>
                                 <textarea
@@ -138,6 +149,10 @@ export default function AdminSkillDetailPage({
                     </div>
                 ) : (
                     <dl className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <dt className="text-xs text-on-surface-variant">Iconic Name</dt>
+                            <dd className="text-on-surface font-mono text-xs">{skill.iconicName}</dd>
+                        </div>
                         <div>
                             <dt className="text-xs text-on-surface-variant">Order</dt>
                             <dd className="text-on-surface">{skill.orderInTree}</dd>
@@ -171,7 +186,18 @@ export default function AdminSkillDetailPage({
 
             {showTopicForm && (
                 <div className="bg-surface-container-lowest rounded-2xl p-5 mb-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
+                        <label className="block">
+                            <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                            <input
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                value={topicForm.iconicName}
+                                onChange={(e) =>
+                                    setTopicForm({ ...topicForm, iconicName: e.target.value })
+                                }
+                                placeholder="e.g. introduction-to-sales"
+                            />
+                        </label>
                         <label className="block">
                             <span className="text-xs text-on-surface-variant">Title</span>
                             <input
@@ -199,7 +225,7 @@ export default function AdminSkillDetailPage({
                     </div>
                     <button
                         onClick={handleCreateTopic}
-                        disabled={createTopic.isPending || !topicForm.title}
+                        disabled={createTopic.isPending || !topicForm.iconicName || !topicForm.title}
                         className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
                     >
                         {createTopic.isPending ? "Saving..." : "Create topic"}
@@ -216,6 +242,9 @@ export default function AdminSkillDetailPage({
                     <thead>
                         <tr className="border-b border-outline-variant">
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                Iconic Name
+                            </th>
+                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
                                 Title
                             </th>
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
@@ -230,13 +259,16 @@ export default function AdminSkillDetailPage({
                                 key={topic.id}
                                 className="border-b border-surface-container hover:bg-surface-container-low"
                             >
-                                <td className="py-2.5 px-3 font-medium text-on-surface">
+                                <td className="py-2.5 px-3 font-mono text-xs text-on-surface">
                                     <Link
                                         href={`/admin/skills/${id}/topics/${topic.id}`}
                                         className="hover:underline"
                                     >
-                                        {topic.title}
+                                        {topic.iconicName}
                                     </Link>
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-on-surface">
+                                    {topic.title}
                                 </td>
                                 <td className="py-2.5 px-3 text-on-surface-variant">
                                     {topic.orderInSkill}

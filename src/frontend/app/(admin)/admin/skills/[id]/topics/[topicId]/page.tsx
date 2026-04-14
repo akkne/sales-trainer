@@ -16,7 +16,7 @@ import {
 
 const LESSONS_TEMPLATE = JSON.stringify([
     {
-        topicTitle: "Introduction",
+        topicIconicName: "introduction",
         title: "First Steps",
         orderInTopic: 1,
         exercises: [
@@ -60,8 +60,8 @@ export default function AdminTopicDetailPage({
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState<Omit<AdminTopic, "id" | "skillId"> | null>(null);
 
-    const { data: lessons = [], isLoading: lessonsLoading } = useAdminLessons(topicId);
-    const createLesson = useCreateLesson(topicId);
+    const { data: lessons = [], isLoading: lessonsLoading } = useAdminLessons(topic?.iconicName || "");
+    const createLesson = useCreateLesson(topic?.iconicName || "");
     const deleteLesson = useDeleteLesson(topicId);
     const importLessons = useImportLessons();
 
@@ -79,6 +79,7 @@ export default function AdminTopicDetailPage({
     function startEdit() {
         if (!topic) return;
         setForm({
+            iconicName: topic.iconicName,
             title: topic.title,
             orderInSkill: topic.orderInSkill,
         });
@@ -140,7 +141,15 @@ export default function AdminTopicDetailPage({
 
                 {editMode && form ? (
                     <div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <label className="block">
+                                <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                                <input
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    value={form.iconicName}
+                                    onChange={(e) => setForm({ ...form, iconicName: e.target.value })}
+                                />
+                            </label>
                             <label className="block">
                                 <span className="text-xs text-on-surface-variant">Title</span>
                                 <input
@@ -178,7 +187,15 @@ export default function AdminTopicDetailPage({
                         </div>
                     </div>
                 ) : (
-                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <dl className="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                            <dt className="text-xs text-on-surface-variant">Iconic Name</dt>
+                            <dd className="text-on-surface font-mono text-xs">{topic.iconicName}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-xs text-on-surface-variant">Title</dt>
+                            <dd className="text-on-surface">{topic.title}</dd>
+                        </div>
                         <div>
                             <dt className="text-xs text-on-surface-variant">Order in skill</dt>
                             <dd className="text-on-surface">{topic.orderInSkill}</dd>
@@ -200,7 +217,7 @@ export default function AdminTopicDetailPage({
                         </button>
                     </div>
                     <p className="text-xs text-on-surface-variant mb-3">
-                        JSON array with: <code className="bg-surface-container px-1 rounded">{"{ topicTitle, title, orderInTopic, exercises[] }"}</code>
+                        JSON array with: <code className="bg-surface-container px-1 rounded">{"{ topicIconicName, title, orderInTopic, exercises[] }"}</code>
                     </p>
                     <input
                         ref={fileInputRef}
