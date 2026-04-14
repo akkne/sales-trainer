@@ -25,7 +25,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Achievements.Achievement", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Achievements.Models.Achievement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -59,10 +59,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Achievements");
+                    b.ToTable("Achievements", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Achievements.UserAchievement", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Achievements.Models.UserAchievement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -79,10 +79,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserAchievements");
+                    b.ToTable("UserAchievements", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.RefreshToken", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -105,10 +105,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.User", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -136,10 +136,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.DialogBundle", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogBundle", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -184,7 +184,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.ToTable("DialogBundles", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.DialogMode", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogMode", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -266,10 +266,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.HasIndex("ExerciseType")
                         .IsUnique();
 
-                    b.ToTable("ExerciseTypePrompts");
+                    b.ToTable("ExerciseTypePrompts", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.UserStreak", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.UserStreak", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -289,10 +289,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserStreaks");
+                    b.ToTable("UserStreaks", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.UserXp", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.UserXp", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -313,10 +313,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserXpRecords");
+                    b.ToTable("UserXpRecords", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.League.League", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.League", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -334,10 +334,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Leagues");
+                    b.ToTable("Leagues", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.League.LeagueMembership", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.LeagueMembership", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -360,10 +360,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LeagueMemberships");
+                    b.ToTable("LeagueMemberships", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Exercise", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Exercise", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -385,10 +385,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Exercises");
+                    b.ToTable("Exercises", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Lesson", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Lesson", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -418,10 +418,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Lessons");
+                    b.ToTable("Lessons", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.UserExerciseAttempt", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.UserExerciseAttempt", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -451,10 +451,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserExerciseAttempts");
+                    b.ToTable("UserExerciseAttempts", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.UserLessonProgress", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.UserLessonProgress", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -478,10 +478,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserLessonProgressRecords");
+                    b.ToTable("UserLessonProgressRecords", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Onboarding.UserProfile", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Onboarding.Models.UserProfile", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -510,10 +510,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserProfiles");
+                    b.ToTable("UserProfiles", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Reference.ReferenceMaterial", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Reference.Models.ReferenceMaterial", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -541,10 +541,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ReferenceMaterials");
+                    b.ToTable("ReferenceMaterials", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.Skill", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.Models.Skill", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -574,10 +574,10 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Skills");
+                    b.ToTable("Skills", (string)null);
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.UserSkillProgress", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.Models.UserSkillProgress", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -601,7 +601,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserSkillProgressRecords");
+                    b.ToTable("UserSkillProgressRecords", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Infrastructure.Data.OpenQuestionGlobalContext", b =>
@@ -619,9 +619,9 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.ToTable("OpenQuestionGlobalContexts");
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.RefreshToken", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.RefreshToken", b =>
                 {
-                    b.HasOne("SalesTrainer.Api.Features.Auth.User", "User")
+                    b.HasOne("SalesTrainer.Api.Features.Auth.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -630,9 +630,9 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.DialogBundle", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogBundle", b =>
                 {
-                    b.HasOne("SalesTrainer.Api.Features.SkillTree.Skill", "Skill")
+                    b.HasOne("SalesTrainer.Api.Features.SkillTree.Models.Skill", "Skill")
                         .WithMany()
                         .HasForeignKey("SkillId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -641,9 +641,9 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.Navigation("Skill");
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.DialogMode", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogMode", b =>
                 {
-                    b.HasOne("SalesTrainer.Api.Features.Dialog.DialogBundle", "Bundle")
+                    b.HasOne("SalesTrainer.Api.Features.Dialog.Models.DialogBundle", "Bundle")
                         .WithMany("Modes")
                         .HasForeignKey("BundleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -652,7 +652,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.Navigation("Bundle");
                 });
 
-            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.DialogBundle", b =>
+            modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogBundle", b =>
                 {
                     b.Navigation("Modes");
                 });

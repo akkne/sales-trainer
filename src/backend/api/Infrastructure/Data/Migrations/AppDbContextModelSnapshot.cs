@@ -56,7 +56,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Achievements");
+                    b.ToTable("Achievements", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Achievements.Models.UserAchievement", b =>
@@ -76,7 +76,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserAchievements");
+                    b.ToTable("UserAchievements", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.RefreshToken", b =>
@@ -102,7 +102,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.User", b =>
@@ -133,7 +133,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Dialog.Models.DialogBundle", b =>
@@ -241,6 +241,31 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.ToTable("DialogModes", (string)null);
                 });
 
+            modelBuilder.Entity("SalesTrainer.Api.Features.Exercises.Models.ExerciseTypePrompt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExerciseType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SystemPrompt")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExerciseType")
+                        .IsUnique();
+
+                    b.ToTable("ExerciseTypePrompts", (string)null);
+                });
+
             modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.UserStreak", b =>
                 {
                     b.Property<Guid>("Id")
@@ -261,7 +286,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserStreaks");
+                    b.ToTable("UserStreaks", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.UserXp", b =>
@@ -285,7 +310,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserXpRecords");
+                    b.ToTable("UserXpRecords", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.League", b =>
@@ -306,7 +331,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Leagues");
+                    b.ToTable("Leagues", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.LeagueMembership", b =>
@@ -332,7 +357,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("LeagueMemberships");
+                    b.ToTable("LeagueMemberships", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Exercise", b =>
@@ -357,7 +382,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Exercises");
+                    b.ToTable("Exercises", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Lesson", b =>
@@ -390,7 +415,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Lessons");
+                    b.ToTable("Lessons", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.UserExerciseAttempt", b =>
@@ -423,7 +448,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserExerciseAttempts");
+                    b.ToTable("UserExerciseAttempts", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.UserLessonProgress", b =>
@@ -450,7 +475,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserLessonProgressRecords");
+                    b.ToTable("UserLessonProgressRecords", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Onboarding.Models.UserProfile", b =>
@@ -482,7 +507,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserProfiles");
+                    b.ToTable("UserProfiles", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Reference.Models.ReferenceMaterial", b =>
@@ -513,7 +538,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ReferenceMaterials");
+                    b.ToTable("ReferenceMaterials", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.Models.Skill", b =>
@@ -546,7 +571,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Skills");
+                    b.ToTable("Skills", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.SkillTree.Models.UserSkillProgress", b =>
@@ -573,7 +598,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserSkillProgressRecords");
+                    b.ToTable("UserSkillProgressRecords", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Infrastructure.Data.OpenQuestionGlobalContext", b =>
@@ -588,7 +613,7 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("OpenQuestionGlobalContexts");
+                    b.ToTable("OpenQuestionGlobalContexts", (string)null);
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Auth.Models.RefreshToken", b =>
