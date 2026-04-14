@@ -64,3 +64,10 @@ The `TestWebApplicationFactory` sets environment to `Testing` (not Development),
 auth cookies `Secure=true`. Since the test server uses HTTP, cookies with `Secure` flag cannot
 be stored by the cookie container. Refresh/Logout tests seed tokens directly in the DB and pass
 the cookie via the `Cookie` request header instead.
+
+## See Also
+
+- [BACKEND_UNIT.md](BACKEND_UNIT.md) — Unit test roadmap
+- [BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md) — Integration test roadmap
+- [FRONTEND.md](FRONTEND.md) — Frontend test setup
+- [MANUAL_CHECKLISTS.md](MANUAL_CHECKLISTS.md) — Manual test checklists for features

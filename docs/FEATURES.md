@@ -1,32 +1,97 @@
 # Features & Architecture Docs
 
-All significant features, architectural decisions, and infrastructure docs created by the agent.
-Add a new link here whenever a new docs file is created — do NOT put feature links in CLAUDE.md.
+All significant features, architectural decisions, and infrastructure docs.
 
-## Infrastructure & Architecture
-- [Architecture](ARCHITECTURE.md)
-- [API Contracts](API_CONTRACTS.md)
-- [DB Schema](DB_SCHEMA.md)
-- [Code Style](CODESTYLE.md)
-- [Better Architecture](BETTER_ARCHITECTURE.md)
-- [Logging](LOGGING.md)
-- [Testing](TESTING/)
-- [Seeder](SEEDER.md)
+## Core Documentation
 
-## Product Features
-- [Admin Panel](ADMIN_PANEL.md)
-- [Skills & Exercises reference](SKILLS_AND_EXERCISES.md)
-- [Lesson Unlock — sequential unlock logic](LESSON_UNLOCK.md)
-- [Skill Enrollment — onboarding, profile toggle, /tree sidebar](SKILL_ENROLLMENT.md)
-- [Stitch Analysis](STITCH_ANALYSIS.md)
-- [Lesson Execution Flow](LESSON_EXECUTION_FLOW.md)
-- [Lesson Execution Redesign](LESSON_EXECUTION_REDESIGN.md)
-- [Lesson Course Map — /skill/[id]/map overview page](LESSON_COURSE_MAP.md)
-- [Sales Handbook — /guidebook with search, categories, technique cards](SALES_HANDBOOK.md)
-- [Admin Reference CRUD — global /admin/reference page with category/tags](TESTING/ADMIN_REFERENCE.md)
-- [Next Lesson Button — post-session next lesson navigation](TESTING/NEXT_LESSON.md)
-- [Keyboard Controls — digit keys select options, Enter/Space submit/continue](TESTING/KEYBOARD_CONTROLS.md)
-- [Achievement Notification — toast queue on achievement unlock during session](TESTING/ACHIEVEMENT_NOTIFICATION.md)
-- [AI Dialog — conversational sales practice with GPT feedback](AI_DIALOG.md)
-- [Voice Roleplay — voice-based sales practice with VAD, Deepgram STT, ElevenLabs TTS](VOICE_ROLEPLAY.md)
-- [New Exercise Types — ordering, matching, categorizing, find-error, rewrite, AI dialog, rate-call, written-answer](NEW_EXERCISE_TYPES.md)
+| Document | Description |
+|----------|-------------|
+| [Architecture](ARCHITECTURE.md) | Stack overview, folder structure, EF column types |
+| [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
+| [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
+| [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
+| [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
+
+## Feature Documentation
+
+| Feature | Description |
+|---------|-------------|
+| [Skills & Exercises](SKILLS_AND_EXERCISES.md) | Skill/lesson/exercise data model, evaluation logic |
+| [AI Dialog](AI_DIALOG.md) | GPT-powered sales conversation practice |
+| [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
+| [New Exercise Types](NEW_EXERCISE_TYPES.md) | 8 additional exercise types with AI evaluation |
+
+## Testing
+
+All test documentation is in the [TESTING/](TESTING/) folder:
+
+| Document | Scope |
+|----------|-------|
+| [CORE.md](TESTING/CORE.md) | Test strategy, tooling, how to run |
+| [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |
+| [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
+| [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |
+| Feature checklists | Manual test checklists for each feature |
+
+---
+
+## Implemented Features Summary
+
+### Authentication & Onboarding
+- Email + password registration/login
+- Google OAuth
+- JWT access tokens + refresh token cookies
+- 4-step onboarding: persona → sales type → experience → skill selection
+- Demo mode (no registration)
+
+### Skill Tree & Lessons
+- Skill enrollment system (subscribe/unsubscribe)
+- Sequential lesson unlock within skills
+- Lazy seeding of lesson progress on first access
+- Course map view with progress tracking
+
+### Exercise Session
+- Full-screen session with hearts (lives) system
+- 11 exercise types: multiple_choice, fill_blank, free_text, ordering, matching, categorizing, find_error, rewrite_better, ai_dialog, rate_call, written_answer
+- AI evaluation for free-text and complex types
+- Keyboard shortcuts (1-4 select, Enter submit)
+- Skip button, post-session stats
+
+### Gamification
+- XP rewards for exercises and dialogs
+- Daily streak tracking with reset job
+- Achievement system with 10 default achievements
+- Achievement unlock toasts during session
+
+### Leagues
+- Weekly leaderboards (Bronze → Silver → Gold → Diamond)
+- Top-10 promotion, bottom-5 demotion
+- Countdown timer to week end
+- Weekly closure job
+
+### Reference & Handbook
+- Sales technique reference materials
+- Category filtering, full-text search
+- Markdown content with skill links
+
+### AI Dialog
+- Bundle/mode structure linked to skills
+- Multi-turn conversations with GPT-4.1-mini
+- Feedback generation with GPT-4.1
+- XP rewards based on AI evaluation
+- Session history sidebar
+
+### Voice Roleplay
+- Voice Activity Detection (@ricky0123/vad-web)
+- Deepgram Nova-3 streaming STT
+- ElevenLabs Flash v2.5 TTS
+- Target latency: ≤700ms end-to-end
+
+### Admin Panel
+- Role system: User / Admin / SuperAdmin
+- Full CRUD for skills, lessons, exercises, reference
+- Visual exercise editor for all 11 types
+- JSON import with inline editor
+- Dialog bundle/mode management with prompt editors
+- User role management (SuperAdmin only)
