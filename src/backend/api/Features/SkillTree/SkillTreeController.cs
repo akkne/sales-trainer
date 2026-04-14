@@ -33,27 +33,14 @@ public class SkillsController(ISkillTreeService skillTreeService) : ControllerBa
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
     {
-        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        if (!Guid.TryParse(rawUserId, out var userId))
-            return Unauthorized();
-
-        var skills = await skillTreeService.GetAllSkillsForUserAsync(userId);
+        var skills = await skillTreeService.GetAllSkillsAsync();
         return Ok(skills);
     }
 
-    [HttpPut("enrolled")]
-    public async Task<IActionResult> UpdateEnrolledSkills(
-        [FromBody] UpdateEnrolledSkillsRequestDto request)
+    [HttpGet("{skillId:guid}/topics")]
+    public async Task<ActionResult<IReadOnlyList<TopicDto>>> GetTopicsForSkill(Guid skillId)
     {
-        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        if (!Guid.TryParse(rawUserId, out var userId))
-            return Unauthorized();
-
-        await skillTreeService.UpdateEnrolledSkillsAsync(userId, request.SkillSlugs);
-        return NoContent();
+        var topics = await skillTreeService.GetTopicsForSkillAsync(skillId);
+        return Ok(topics);
     }
 }

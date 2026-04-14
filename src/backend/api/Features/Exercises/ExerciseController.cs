@@ -20,22 +20,15 @@ public class ExerciseController(IExerciseService exerciseService) : ControllerBa
         return Ok(lessons);
     }
 
-    [HttpGet("skills/{skillSlug}/lessons")]
-    public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(
-        string skillSlug)
+    [HttpGet("topics/{topicId:guid}/lessons")]
+    public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForTopic(
+        Guid topicId)
     {
         var userId = ResolveCurrentUserId();
         if (userId is null) return Unauthorized();
 
-        try
-        {
-            var lessonSummaries = await exerciseService.GetLessonsForSkillAsync(userId.Value, skillSlug);
-            return Ok(lessonSummaries);
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
+        var lessonSummaries = await exerciseService.GetLessonsForTopicAsync(userId.Value, topicId);
+        return Ok(lessonSummaries);
     }
 
     [HttpGet("lessons/{lessonId:guid}/exercises")]

@@ -9,29 +9,22 @@ namespace SalesTrainer.Api.Features.Admin;
 
 public record AdminLessonDto(
     Guid Id,
-    Guid SkillId,
+    Guid TopicId,
     string Title,
-    int SortOrder,
-    int DifficultyLevel,
-    int XpReward
+    int OrderInTopic
 );
 
-public record AdminLessonWithSkillDto(
+public record AdminLessonWithTopicDto(
     Guid Id,
-    Guid SkillId,
-    string SkillTitle,
-    string SkillIcon,
+    Guid TopicId,
+    string TopicTitle,
     string Title,
-    int SortOrder,
-    int DifficultyLevel,
-    int XpReward
+    int OrderInTopic
 );
 
 public record CreateLessonRequestDto(
     string Title,
-    int SortOrder,
-    int DifficultyLevel,
-    int XpReward
+    int OrderInTopic
 );
 
 [ApiController]
@@ -39,58 +32,53 @@ public record CreateLessonRequestDto(
 public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons")]
-    public async Task<ActionResult<List<AdminLessonWithSkillDto>>> GetAll()
+    public async Task<ActionResult<List<AdminLessonWithTopicDto>>> GetAll()
     {
         var lessons = await db.Lessons
-            .Join(db.Skills, l => l.SkillId, s => s.Id, (l, s) => new { l, s })
-            .OrderBy(x => x.s.Title).ThenBy(x => x.l.SortOrder)
-            .Select(x => new AdminLessonWithSkillDto(
-                x.l.Id, x.l.SkillId, x.s.Title, x.s.IconName,
-                x.l.Title, x.l.SortOrder, x.l.DifficultyLevel, x.l.XpReward))
+            .Join(db.Topics, l => l.TopicId, t => t.Id, (l, t) => new { l, t })
+            .OrderBy(x => x.t.Title).ThenBy(x => x.l.OrderInTopic)
+            .Select(x => new AdminLessonWithTopicDto(
+                x.l.Id, x.l.TopicId, x.t.Title,
+                x.l.Title, x.l.OrderInTopic))
             .ToListAsync();
 
         return Ok(lessons);
     }
 
-    [HttpGet("admin/skills/{skillId:guid}/lessons")]
-    public async Task<ActionResult<List<AdminLessonDto>>> GetBySkill(Guid skillId)
+    [HttpGet("admin/topics/{topicId:guid}/lessons")]
+    public async Task<ActionResult<List<AdminLessonDto>>> GetByTopic(Guid topicId)
     {
         var lessons = await db.Lessons
-            .Where(l => l.SkillId == skillId)
-            .OrderBy(l => l.SortOrder)
-            .Select(l => new AdminLessonDto(
-                l.Id, l.SkillId, l.Title, l.SortOrder, l.DifficultyLevel, l.XpReward))
+            .Where(l => l.TopicId == topicId)
+            .OrderBy(l => l.OrderInTopic)
+            .Select(l => new AdminLessonDto(l.Id, l.TopicId, l.Title, l.OrderInTopic))
             .ToListAsync();
 
         return Ok(lessons);
     }
 
-    [HttpPost("admin/skills/{skillId:guid}/lessons")]
+    [HttpPost("admin/topics/{topicId:guid}/lessons")]
     public async Task<ActionResult<AdminLessonDto>> Create(
-        Guid skillId, [FromBody] CreateLessonRequestDto dto)
+        Guid topicId, [FromBody] CreateLessonRequestDto dto)
     {
-        var skillExists = await db.Skills.AnyAsync(s => s.Id == skillId);
-        if (!skillExists) return NotFound();
+        var topicExists = await db.Topics.AnyAsync(t => t.Id == topicId);
+        if (!topicExists) return NotFound();
 
         var lesson = new Lesson
         {
             Id = Guid.NewGuid(),
-            SkillId = skillId,
+            TopicId = topicId,
             Title = dto.Title,
-            SortOrder = dto.SortOrder,
-            DifficultyLevel = dto.DifficultyLevel,
-            XpReward = dto.XpReward
+            OrderInTopic = dto.OrderInTopic
         };
 
         db.Lessons.Add(lesson);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Lesson created LessonId={LessonId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
-            lesson.Id, skillId, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Lesson created LessonId={LessonId} TopicId={TopicId} Title={Title} by ActorId={ActorId}",
+            lesson.Id, topicId, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminLessonDto(
-            lesson.Id, lesson.SkillId, lesson.Title,
-            lesson.SortOrder, lesson.DifficultyLevel, lesson.XpReward));
+        return Ok(new AdminLessonDto(lesson.Id, lesson.TopicId, lesson.Title, lesson.OrderInTopic));
     }
 
     [HttpPut("admin/lessons/{id:guid}")]
@@ -101,18 +89,14 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
         if (lesson is null) return NotFound();
 
         lesson.Title = dto.Title;
-        lesson.SortOrder = dto.SortOrder;
-        lesson.DifficultyLevel = dto.DifficultyLevel;
-        lesson.XpReward = dto.XpReward;
+        lesson.OrderInTopic = dto.OrderInTopic;
 
         await db.SaveChangesAsync();
 
         logger.LogInformation("Lesson updated LessonId={LessonId} Title={Title} by ActorId={ActorId}",
             id, lesson.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminLessonDto(
-            lesson.Id, lesson.SkillId, lesson.Title,
-            lesson.SortOrder, lesson.DifficultyLevel, lesson.XpReward));
+        return Ok(new AdminLessonDto(lesson.Id, lesson.TopicId, lesson.Title, lesson.OrderInTopic));
     }
 
     [HttpDelete("admin/lessons/{id:guid}")]
@@ -124,8 +108,8 @@ public class AdminLessonsController(AppDbContext db, ILogger<AdminLessonsControl
         db.Lessons.Remove(lesson);
         await db.SaveChangesAsync();
 
-        logger.LogWarning("Lesson deleted LessonId={LessonId} SkillId={SkillId} by ActorId={ActorId}",
-            id, lesson.SkillId, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogWarning("Lesson deleted LessonId={LessonId} TopicId={TopicId} by ActorId={ActorId}",
+            id, lesson.TopicId, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }

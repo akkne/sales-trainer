@@ -4,7 +4,6 @@ public sealed class DialogBundleDto
 {
     public Guid Id { get; set; }
     public Guid SkillId { get; set; }
-    public string SkillSlug { get; set; } = null!;
     public string SkillTitle { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string Description { get; set; } = null!;
@@ -16,7 +15,6 @@ public sealed class DialogBundleDto
     {
         Id = bundle.Id,
         SkillId = bundle.SkillId,
-        SkillSlug = bundle.Skill?.Slug ?? "",
         SkillTitle = bundle.Skill?.Title ?? "",
         Title = bundle.Title,
         Description = bundle.Description,

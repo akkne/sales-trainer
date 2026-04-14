@@ -12,14 +12,16 @@ public record AdminExerciseDto(
     Guid Id,
     Guid LessonId,
     string Type,
-    int SortOrder,
-    JsonElement Content
+    int OrderInLesson,
+    JsonElement Content,
+    string? CustomAiPrompt
 );
 
 public record CreateExerciseRequestDto(
     string Type,
-    int SortOrder,
-    JsonElement Content
+    int OrderInLesson,
+    JsonElement Content,
+    string? CustomAiPrompt
 );
 
 [ApiController]
@@ -31,15 +33,16 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
     {
         var exercises = await db.Exercises
             .Where(e => e.LessonId == lessonId)
-            .OrderBy(e => e.SortOrder)
+            .OrderBy(e => e.OrderInLesson)
             .ToListAsync();
 
         var result = exercises.Select(e => new AdminExerciseDto(
             e.Id,
             e.LessonId,
             e.Type,
-            e.SortOrder,
-            JsonSerializer.Deserialize<JsonElement>(e.SerializedContent)
+            e.OrderInLesson,
+            JsonSerializer.Deserialize<JsonElement>(e.SerializedContent),
+            e.CustomAiPrompt
         )).ToList();
 
         return Ok(result);
@@ -52,13 +55,17 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
         var lessonExists = await db.Lessons.AnyAsync(l => l.Id == lessonId);
         if (!lessonExists) return NotFound();
 
+        var now = DateTime.UtcNow;
         var exercise = new Exercise
         {
             Id = Guid.NewGuid(),
             LessonId = lessonId,
             Type = dto.Type,
-            SortOrder = dto.SortOrder,
-            SerializedContent = dto.Content.GetRawText()
+            OrderInLesson = dto.OrderInLesson,
+            SerializedContent = dto.Content.GetRawText(),
+            CustomAiPrompt = dto.CustomAiPrompt,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         db.Exercises.Add(exercise);
@@ -69,7 +76,7 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
 
         return Ok(new AdminExerciseDto(
             exercise.Id, exercise.LessonId, exercise.Type,
-            exercise.SortOrder, dto.Content));
+            exercise.OrderInLesson, dto.Content, exercise.CustomAiPrompt));
     }
 
     [HttpPut("admin/exercises/{id:guid}")]
@@ -80,8 +87,10 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
         if (exercise is null) return NotFound();
 
         exercise.Type = dto.Type;
-        exercise.SortOrder = dto.SortOrder;
+        exercise.OrderInLesson = dto.OrderInLesson;
         exercise.SerializedContent = dto.Content.GetRawText();
+        exercise.CustomAiPrompt = dto.CustomAiPrompt;
+        exercise.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
 
@@ -90,7 +99,7 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
 
         return Ok(new AdminExerciseDto(
             exercise.Id, exercise.LessonId, exercise.Type,
-            exercise.SortOrder, dto.Content));
+            exercise.OrderInLesson, dto.Content, exercise.CustomAiPrompt));
     }
 
     [HttpDelete("admin/exercises/{id:guid}")]

@@ -11,7 +11,6 @@ public record AdminReferenceMaterialDto(
     Guid Id,
     Guid SkillId,
     string SkillTitle,
-    string SkillSlug,
     string Title,
     string MarkdownContent,
     int SortOrder,
@@ -56,12 +55,12 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         }
 
         var results = await query
-            .OrderBy(pair => pair.skill.SortOrder)
+            .OrderBy(pair => pair.skill.OrderInTree)
             .ThenBy(pair => pair.material.SortOrder)
             .ThenBy(pair => pair.material.Title)
             .ToListAsync();
 
-        return Ok(results.Select(pair => MapToDto(pair.material, pair.skill.Title, pair.skill.Slug)).ToList());
+        return Ok(results.Select(pair => MapToDto(pair.material, pair.skill.Title)).ToList());
     }
 
     [HttpGet("admin/reference/categories")]
@@ -88,7 +87,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
             .OrderBy(r => r.SortOrder)
             .ToListAsync();
 
-        return Ok(materials.Select(m => MapToDto(m, skill.Title, skill.Slug)).ToList());
+        return Ok(materials.Select(m => MapToDto(m, skill.Title)).ToList());
     }
 
     [HttpPost("admin/skills/{skillId:guid}/reference")]
@@ -115,7 +114,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         logger.LogInformation("Reference material created MaterialId={MaterialId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
             material.Id, skillId, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(MapToDto(material, skill.Title, skill.Slug));
+        return Ok(MapToDto(material, skill.Title));
     }
 
     [HttpPut("admin/reference/{id:guid}")]
@@ -139,7 +138,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         logger.LogInformation("Reference material updated MaterialId={MaterialId} Title={Title} by ActorId={ActorId}",
             id, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(MapToDto(material, skill.Title, skill.Slug));
+        return Ok(MapToDto(material, skill.Title));
     }
 
     [HttpDelete("admin/reference/{id:guid}")]
@@ -157,12 +156,11 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         return NoContent();
     }
 
-    private static AdminReferenceMaterialDto MapToDto(ReferenceMaterial material, string skillTitle, string skillSlug) =>
+    private static AdminReferenceMaterialDto MapToDto(ReferenceMaterial material, string skillTitle) =>
         new(
             material.Id,
             material.SkillId,
             skillTitle,
-            skillSlug,
             material.Title,
             material.MarkdownContent,
             material.SortOrder,

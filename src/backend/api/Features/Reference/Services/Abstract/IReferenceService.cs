@@ -5,7 +5,7 @@ namespace SalesTrainer.Api.Features.Reference.Services.Abstract;
 public interface IReferenceService
 {
     Task<IReadOnlyList<ReferenceMaterialDto>> GetReferenceMaterialsForSkillAsync(
-        string skillSlug,
+        Guid skillId,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ReferenceMaterialDto>> GetAllReferenceMaterialsAsync(

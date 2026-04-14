@@ -6,9 +6,18 @@ namespace SalesTrainer.Api.Infrastructure.Data;
 
 public class ExerciseEntityConfiguration : IEntityTypeConfiguration<Exercise>
 {
-    public void Configure(EntityTypeBuilder<Exercise> exerciseBuilder)
+    public void Configure(EntityTypeBuilder<Exercise> builder)
     {
-        exerciseBuilder.Property(exercise => exercise.SerializedContent)
-            .HasColumnType("jsonb");
+        builder.ToTable("Exercises");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Type).IsRequired();
+        builder.Property(e => e.SerializedContent).HasColumnType("jsonb");
+
+        builder.HasOne(e => e.Lesson)
+            .WithMany()
+            .HasForeignKey(e => e.LessonId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(e => new { e.LessonId, e.OrderInLesson });
     }
 }

@@ -7,5 +7,5 @@ public record ReferenceMaterialDto(
     int SortOrder,
     string? Category,
     string[] Tags,
-    string SkillSlug
+    Guid SkillId
 );

@@ -10,20 +10,14 @@ namespace SalesTrainer.Api.Features.Admin;
 public record AdminSkillDto(
     Guid Id,
     string Title,
-    string Slug,
-    string IconName,
-    int SortOrder,
-    Guid? PrerequisiteSkillId,
-    string[] ApplicableSalesTypes
+    string? Description,
+    int OrderInTree
 );
 
 public record CreateSkillRequestDto(
     string Title,
-    string Slug,
-    string IconName,
-    int SortOrder,
-    Guid? PrerequisiteSkillId,
-    string[] ApplicableSalesTypes
+    string? Description,
+    int OrderInTree
 );
 
 [ApiController]
@@ -35,10 +29,8 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
     public async Task<ActionResult<List<AdminSkillDto>>> GetAll()
     {
         var skills = await db.Skills
-            .OrderBy(s => s.SortOrder)
-            .Select(s => new AdminSkillDto(
-                s.Id, s.Title, s.Slug, s.IconName, s.SortOrder,
-                s.PrerequisiteSkillId, s.ApplicableSalesTypes))
+            .OrderBy(s => s.OrderInTree)
+            .Select(s => new AdminSkillDto(s.Id, s.Title, s.Description, s.OrderInTree))
             .ToListAsync();
 
         return Ok(skills);
@@ -51,22 +43,17 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         {
             Id = Guid.NewGuid(),
             Title = dto.Title,
-            Slug = dto.Slug,
-            IconName = dto.IconName,
-            SortOrder = dto.SortOrder,
-            PrerequisiteSkillId = dto.PrerequisiteSkillId,
-            ApplicableSalesTypes = dto.ApplicableSalesTypes
+            Description = dto.Description,
+            OrderInTree = dto.OrderInTree
         };
 
         db.Skills.Add(skill);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Skill created SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
-            skill.Id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Skill created SkillId={SkillId} Title={Title} by ActorId={ActorId}",
+            skill.Id, skill.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(
-            skill.Id, skill.Title, skill.Slug, skill.IconName,
-            skill.SortOrder, skill.PrerequisiteSkillId, skill.ApplicableSalesTypes));
+        return Ok(new AdminSkillDto(skill.Id, skill.Title, skill.Description, skill.OrderInTree));
     }
 
     [HttpPut("{id:guid}")]
@@ -77,20 +64,15 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         if (skill is null) return NotFound();
 
         skill.Title = dto.Title;
-        skill.Slug = dto.Slug;
-        skill.IconName = dto.IconName;
-        skill.SortOrder = dto.SortOrder;
-        skill.PrerequisiteSkillId = dto.PrerequisiteSkillId;
-        skill.ApplicableSalesTypes = dto.ApplicableSalesTypes;
+        skill.Description = dto.Description;
+        skill.OrderInTree = dto.OrderInTree;
 
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Skill updated SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
-            skill.Id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogInformation("Skill updated SkillId={SkillId} Title={Title} by ActorId={ActorId}",
+            skill.Id, skill.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(
-            skill.Id, skill.Title, skill.Slug, skill.IconName,
-            skill.SortOrder, skill.PrerequisiteSkillId, skill.ApplicableSalesTypes));
+        return Ok(new AdminSkillDto(skill.Id, skill.Title, skill.Description, skill.OrderInTree));
     }
 
     [HttpDelete("{id:guid}")]
@@ -102,8 +84,8 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         db.Skills.Remove(skill);
         await db.SaveChangesAsync();
 
-        logger.LogWarning("Skill deleted SkillId={SkillId} Slug={Slug} by ActorId={ActorId}",
-            id, skill.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
+        logger.LogWarning("Skill deleted SkillId={SkillId} Title={Title} by ActorId={ActorId}",
+            id, skill.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         return NoContent();
     }

@@ -8,15 +8,11 @@ namespace SalesTrainer.Api.Features.Reference.Services.Implementation;
 internal sealed class ReferenceService(AppDbContext databaseContext) : IReferenceService
 {
     public async Task<IReadOnlyList<ReferenceMaterialDto>> GetReferenceMaterialsForSkillAsync(
-        string skillSlug,
+        Guid skillId,
         CancellationToken cancellationToken = default)
     {
-        var skill = await databaseContext.Skills
-            .FirstOrDefaultAsync(skillRecord => skillRecord.Slug == skillSlug, cancellationToken)
-            ?? throw new KeyNotFoundException($"Skill '{skillSlug}' not found.");
-
         return await databaseContext.ReferenceMaterials
-            .Where(material => material.SkillId == skill.Id)
+            .Where(material => material.SkillId == skillId)
             .OrderBy(material => material.SortOrder)
             .Select(material => new ReferenceMaterialDto(
                 material.Id,
@@ -27,7 +23,7 @@ internal sealed class ReferenceService(AppDbContext databaseContext) : IReferenc
                 material.Tags != null
                     ? material.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
                     : Array.Empty<string>(),
-                skill.Slug))
+                material.SkillId))
             .ToListAsync(cancellationToken);
     }
 
@@ -36,37 +32,34 @@ internal sealed class ReferenceService(AppDbContext databaseContext) : IReferenc
         string? search,
         CancellationToken cancellationToken = default)
     {
-        var query = from material in databaseContext.ReferenceMaterials
-                    join skill in databaseContext.Skills
-                        on material.SkillId equals skill.Id
-                    select new { material, skill };
+        var query = databaseContext.ReferenceMaterials.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(category))
-            query = query.Where(pair => pair.material.Category == category);
+            query = query.Where(material => material.Category == category);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchLower = search.ToLower();
-            query = query.Where(pair =>
-                pair.material.Title.ToLower().Contains(searchLower) ||
-                pair.material.MarkdownContent.ToLower().Contains(searchLower));
+            query = query.Where(material =>
+                material.Title.ToLower().Contains(searchLower) ||
+                material.MarkdownContent.ToLower().Contains(searchLower));
         }
 
         var results = await query
-            .OrderBy(pair => pair.material.SortOrder)
-            .ThenBy(pair => pair.material.Title)
+            .OrderBy(material => material.SortOrder)
+            .ThenBy(material => material.Title)
             .ToListAsync(cancellationToken);
 
-        return results.Select(pair => new ReferenceMaterialDto(
-            pair.material.Id,
-            pair.material.Title,
-            pair.material.MarkdownContent,
-            pair.material.SortOrder,
-            pair.material.Category,
-            pair.material.Tags != null
-                ? pair.material.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+        return results.Select(material => new ReferenceMaterialDto(
+            material.Id,
+            material.Title,
+            material.MarkdownContent,
+            material.SortOrder,
+            material.Category,
+            material.Tags != null
+                ? material.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 : Array.Empty<string>(),
-            pair.skill.Slug))
+            material.SkillId))
             .ToList();
     }
 

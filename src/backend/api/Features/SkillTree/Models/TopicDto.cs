@@ -1,8 +1,8 @@
 namespace SalesTrainer.Api.Features.SkillTree.Models;
 
-public record SkillTreeNodeDto(
+public record TopicDto(
+    Guid TopicId,
     Guid SkillId,
     string Title,
-    string? Description,
-    int OrderInTree
+    int OrderInSkill
 );

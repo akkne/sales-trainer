@@ -1,6 +1,6 @@
 # DB Schema
 
-Last updated: 2026-04-02
+Last updated: 2026-04-14
 
 ## Databases overview
 
@@ -62,40 +62,68 @@ Indexes: `IX_RefreshTokens_UserId`
 
 ### `Skills`
 
-| Column                  | Type      | Nullable | Notes                                              |
-|-------------------------|-----------|----------|----------------------------------------------------|
-| `Id`                    | `uuid`    | NOT NULL | PK                                                 |
-| `Slug`                  | `text`    | NOT NULL | URL-friendly identifier                            |
-| `Title`                 | `text`    | NOT NULL |                                                    |
-| `IconName`              | `text`    | NOT NULL |                                                    |
-| `SortOrder`             | `integer` | NOT NULL | Display order in skill tree                        |
-| `PrerequisiteSkillId`   | `uuid`    | NULL     | Self-referencing FK for sequential unlocking       |
-| `ApplicableSalesTypes`  | `text[]`  | NOT NULL | Array of sales type strings                        |
+| Column        | Type      | Nullable | Notes                  |
+|---------------|-----------|----------|------------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                     |
+| `OrderInTree` | `integer` | NOT NULL | Display order in tree  |
+| `Title`       | `text`    | NOT NULL |                        |
+| `Description` | `text`    | NULL     |                        |
+
+---
+
+### `Topics`
+
+| Column        | Type      | Nullable | Notes                |
+|---------------|-----------|----------|----------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                   |
+| `SkillId`     | `uuid`    | NOT NULL | FK → `Skills.Id`     |
+| `OrderInSkill`| `integer` | NOT NULL |                      |
+| `Title`       | `text`    | NOT NULL |                      |
+
+Indexes: `IX_Topics_SkillId_OrderInSkill`
 
 ---
 
 ### `Lessons`
 
-| Column           | Type      | Nullable | Notes                         |
-|------------------|-----------|----------|-------------------------------|
-| `Id`             | `uuid`    | NOT NULL | PK                            |
-| `SkillId`        | `uuid`    | NOT NULL | FK → `Skills.Id`              |
-| `Title`          | `text`    | NOT NULL |                               |
-| `SortOrder`      | `integer` | NOT NULL |                               |
-| `DifficultyLevel`| `integer` | NOT NULL |                               |
-| `XpReward`       | `integer` | NOT NULL | XP awarded on lesson complete |
+| Column        | Type      | Nullable | Notes                |
+|---------------|-----------|----------|----------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                   |
+| `TopicId`     | `uuid`    | NOT NULL | FK → `Topics.Id`     |
+| `OrderInTopic`| `integer` | NOT NULL |                      |
+| `Title`       | `text`    | NOT NULL |                      |
+
+Indexes: `IX_Lessons_TopicId_OrderInTopic`
 
 ---
 
 ### `Exercises`
 
-| Column              | Type      | Nullable | Notes                                                                         |
-|---------------------|-----------|----------|-------------------------------------------------------------------------------|
-| `Id`                | `uuid`    | NOT NULL | PK                                                                            |
-| `LessonId`          | `uuid`    | NOT NULL | FK → `Lessons.Id`                                                             |
-| `Type`              | `text`    | NOT NULL | `multiple_choice` / `fill_blank` / `free_text`                                |
-| `SortOrder`         | `integer` | NOT NULL |                                                                               |
-| `SerializedContent` | `jsonb`   | NOT NULL | Schema varies by type — see [Exercise Content Schemas](#exercise-content-schemas) |
+| Column              | Type                       | Nullable | Notes                                                                         |
+|---------------------|----------------------------|----------|-------------------------------------------------------------------------------|
+| `Id`                | `uuid`                     | NOT NULL | PK                                                                            |
+| `LessonId`          | `uuid`                     | NOT NULL | FK → `Lessons.Id`                                                             |
+| `Type`              | `text`                     | NOT NULL | `choose_option`, `fill_blank`, `free_text`, `reorder`, `match_pairs`, `categorize`, `spot_mistake`, `rewrite` |
+| `OrderInLesson`     | `integer`                  | NOT NULL |                                                                               |
+| `SerializedContent` | `jsonb`                    | NOT NULL | Schema varies by type                                                         |
+| `CustomAiPrompt`    | `text`                     | NULL     | Per-exercise AI evaluation criteria                                           |
+| `CreatedAt`         | `timestamp with time zone` | NOT NULL |                                                                               |
+| `UpdatedAt`         | `timestamp with time zone` | NOT NULL |                                                                               |
+
+Indexes: `IX_Exercises_LessonId_OrderInLesson`
+
+---
+
+### `ExerciseTypePrompts`
+
+| Column        | Type                       | Nullable | Notes                                          |
+|---------------|----------------------------|----------|------------------------------------------------|
+| `Id`          | `uuid`                     | NOT NULL | PK                                             |
+| `ExerciseType`| `text`                     | NOT NULL | UNIQUE — type key                              |
+| `SystemPrompt`| `text`                     | NOT NULL | Global system prompt for all exercises of type |
+| `UpdatedAt`   | `timestamp with time zone` | NOT NULL |                                                |
+
+**AI Evaluation Logic:** Final prompt = `exercise_type_prompts.system_prompt` + (if exercise.custom_ai_prompt) + exercise content + user answer.
 
 ---
 
@@ -108,6 +136,8 @@ Indexes: `IX_RefreshTokens_UserId`
 | `Title`           | `text`    | NOT NULL |                    |
 | `MarkdownContent` | `text`    | NOT NULL |                    |
 | `SortOrder`       | `integer` | NOT NULL |                    |
+| `Category`        | `text`    | NULL     |                    |
+| `Tags`            | `text`    | NULL     | Comma-separated    |
 
 ---
 
@@ -147,7 +177,7 @@ Indexes: `IX_RefreshTokens_UserId`
 | `SerializedAnswer`    | `jsonb`                    | NOT NULL | User's answer payload              |
 | `IsCorrect`           | `boolean`                  | NOT NULL |                                    |
 | `Score`               | `integer`                  | NOT NULL |                                    |
-| `SerializedAiFeedback`| `jsonb`                    | NULL     | Present for `free_text` type only  |
+| `SerializedAiFeedback`| `jsonb`                    | NULL     | Present for AI-evaluated types     |
 | `AttemptedAt`         | `timestamp with time zone` | NOT NULL |                                    |
 
 ---
@@ -200,176 +230,6 @@ Indexes: `IX_RefreshTokens_UserId`
 
 ---
 
-### `ExerciseTypePrompts`
-
-| Column        | Type                       | Nullable | Notes                                          |
-|---------------|----------------------------|----------|------------------------------------------------|
-| `Id`          | `uuid`                     | NOT NULL | PK                                             |
-| `ExerciseType`| `text`                     | NOT NULL | UNIQUE — type key (`find_error`, `ai_dialog`, etc.) |
-| `SystemPrompt`| `text`                     | NOT NULL | Global system prompt for all exercises of type |
-| `UpdatedAt`   | `timestamp with time zone` | NOT NULL |                                                |
-
-Used for AI-powered exercise types: `find_error`, `rewrite_better`, `ai_dialog`, `rate_call`, `written_answer`.
-Prompt is combined with per-exercise `aiPrompt` from `SerializedContent`.
-
----
-
-## Exercise Content Schemas
-
-The `Exercises.SerializedContent` (jsonb) varies by `Type`:
-
-### `multiple_choice`
-```json
-{
-  "situation": "string",
-  "options": [
-    { "text": "string", "isCorrect": true }
-  ],
-  "explanation": "string"
-}
-```
-
-### `fill_blank`
-```json
-{
-  "templateText": "string (use ___ for blank)",
-  "correctAnswer": "string",
-  "acceptableAnswers": ["string"]
-}
-```
-
-### `free_text`
-```json
-{
-  "prompt": "string",
-  "characterName": "string",
-  "characterReplica": "string",
-  "evaluationCriteria": "string"
-}
-```
-
-### `ordering`
-```json
-{
-  "situation": "string",
-  "items": [{"id": "string", "text": "string"}],
-  "correctOrder": ["string"],
-  "explanation": "string (optional)"
-}
-```
-
-### `matching`
-```json
-{
-  "situation": "string",
-  "leftColumn": [{"id": "string", "text": "string"}],
-  "rightColumn": [{"id": "string", "text": "string"}],
-  "correctPairs": [{"left": "string", "right": "string"}],
-  "explanation": "string (optional)"
-}
-```
-
-### `categorizing`
-```json
-{
-  "situation": "string",
-  "items": [{"id": "string", "text": "string"}],
-  "categories": [{"id": "string", "title": "string", "color": "string (hex)"}],
-  "correctMapping": {"itemId": "categoryId"},
-  "explanation": "string (optional)"
-}
-```
-
-### `find_error`
-```json
-{
-  "situation": "string",
-  "dialogLines": [{"id": "string", "speaker": "string", "text": "string"}],
-  "errorLineId": "string",
-  "aiPrompt": "string (optional, per-exercise evaluation criteria)",
-  "requireExplanation": "boolean (optional)",
-  "suggestedFixes": [{"id": "string", "text": "string"}],
-  "correctFixIds": ["string"]
-}
-```
-
-### `rewrite_better`
-```json
-{
-  "situation": "string",
-  "originalText": "string",
-  "context": "string (optional)",
-  "aiPrompt": "string",
-  "minLength": "number (optional)",
-  "maxLength": "number (optional)"
-}
-```
-
-### `ai_dialog`
-```json
-{
-  "situation": "string",
-  "persona": {"name": "string", "role": "string", "description": "string"},
-  "chatSystemPrompt": "string",
-  "aiPrompt": "string (final evaluation criteria)",
-  "maxTurns": "number (optional, default 10)",
-  "minTurnsForCompletion": "number (optional, default 4)"
-}
-```
-
-### `rate_call`
-```json
-{
-  "situation": "string",
-  "transcript": [{"speaker": "string", "text": "string"}],
-  "criteria": [{"id": "string", "name": "string", "description": "string"}],
-  "ratingScale": {"min": "number", "max": "number"},
-  "aiPrompt": "string"
-}
-```
-
-### `written_answer`
-```json
-{
-  "prompt": "string",
-  "context": "string (optional)",
-  "aiPrompt": "string",
-  "minLength": "number (optional)",
-  "maxLength": "number (optional)"
-}
-```
-
----
-
-## MongoDB
-
-### Collection: `chat_messages`
-
-| Field            | Type     | Notes                                  |
-|------------------|----------|----------------------------------------|
-| `_id`            | ObjectId |                                        |
-| `user_id`        | string   | References `Users.Id` (UUID as string) |
-| `exercise_id`    | string   | References `Exercises.Id`              |
-| `role`           | string   | `user` / `ai_character` / `system`     |
-| `character_slug` | string   | NULL for non-character messages        |
-| `content`        | string   |                                        |
-| `metadata`       | object   | Arbitrary key-value pairs              |
-| `created_at`     | date     |                                        |
-
-Planned future collections: `call_transcripts` (transcripts + scorecards).
-
----
-
-## Redis
-
-| Key pattern                        | Type   | TTL      | Purpose                              |
-|------------------------------------|--------|----------|--------------------------------------|
-| `session:{userId}`                 | Hash   | 24h      | Session data                         |
-| `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly XP leaderboard                |
-| `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
-
----
-
 ### `Achievements`
 
 | Column               | Type      | Nullable | Notes                                                       |
@@ -396,12 +256,57 @@ Planned future collections: `call_transcripts` (transcripts + scorecards).
 
 ---
 
+## Hierarchy Structure
+
+```
+Skills
+└── Topics (multiple per skill)
+    └── Lessons (multiple per topic)
+        └── Exercises (multiple per lesson)
+```
+
+---
+
+## MongoDB
+
+### Collection: `chat_messages`
+
+| Field            | Type     | Notes                                  |
+|------------------|----------|----------------------------------------|
+| `_id`            | ObjectId |                                        |
+| `user_id`        | string   | References `Users.Id` (UUID as string) |
+| `exercise_id`    | string   | References `Exercises.Id`              |
+| `role`           | string   | `user` / `ai_character` / `system`     |
+| `character_slug` | string   | NULL for non-character messages        |
+| `content`        | string   |                                        |
+| `metadata`       | object   | Arbitrary key-value pairs              |
+| `created_at`     | date     |                                        |
+
+---
+
+## Redis
+
+| Key pattern                        | Type   | TTL      | Purpose                              |
+|------------------------------------|--------|----------|--------------------------------------|
+| `session:{userId}`                 | Hash   | 24h      | Session data                         |
+| `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly XP leaderboard                |
+| `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
+
+---
+
 ## Migrations history
 
-| Migration name            | Date       | Summary                                      |
-|---------------------------|------------|----------------------------------------------|
-| `InitialSchema`           | 2026-03-31 | All base tables                              |
-| `AddRefreshTokenUserFk`   | 2026-04-01 | FK + index on `RefreshTokens.UserId`         |
-| `AddUserRole`             | 2026-04-01 | `Role` integer column on `Users` (default 0) |
-| `AddAchievements`         | 2026-04-05 | `Achievements` and `UserAchievements` tables  |
-| `AddPersonaToUserProfile` | 2026-04-05 | `Persona` nullable text column on `UserProfiles` |
+| Migration name                        | Date       | Summary                                      |
+|---------------------------------------|------------|----------------------------------------------|
+| `InitialSchema`                       | 2026-03-31 | All base tables                              |
+| `AddRefreshTokenUserFk`               | 2026-04-01 | FK + index on `RefreshTokens.UserId`         |
+| `AddUserRole`                         | 2026-04-01 | `Role` integer column on `Users` (default 0) |
+| `AddAchievements`                     | 2026-04-05 | `Achievements` and `UserAchievements` tables |
+| `AddPersonaToUserProfile`             | 2026-04-05 | `Persona` nullable text column on `UserProfiles` |
+| `AddCategoryTagsToReference`          | 2026-04-05 | `Category` and `Tags` columns on `ReferenceMaterials` |
+| `AddDialogTables`                     | 2026-04-06 | `DialogBundles` and `DialogModes` tables     |
+| `AddVoiceFieldsToDialogMode`          | 2026-04-06 | Voice fields on `DialogModes`                |
+| `AddOpenQuestionGlobalContext`        | 2026-04-06 | `OpenQuestionGlobalContexts` table           |
+| `ResetSkillsAndAddNewOnes`            | 2026-04-13 | Reset skills data                            |
+| `AddExerciseTypePrompts`              | 2026-04-13 | `ExerciseTypePrompts` table                  |
+| `RefactorSkillsTopicsLessonsExercises`| 2026-04-14 | New hierarchy: Skills → Topics → Lessons → Exercises |

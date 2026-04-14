@@ -9,20 +9,13 @@ namespace SalesTrainer.Api.Features.Reference;
 [Authorize]
 public class ReferenceController(IReferenceService referenceService) : ControllerBase
 {
-    [HttpGet("skills/{skillSlug}/reference")]
+    [HttpGet("skills/{skillId:guid}/reference")]
     public async Task<ActionResult<IReadOnlyList<ReferenceMaterialDto>>> GetReferenceMaterials(
-        string skillSlug)
+        Guid skillId)
     {
-        try
-        {
-            var referenceMaterials =
-                await referenceService.GetReferenceMaterialsForSkillAsync(skillSlug);
-            return Ok(referenceMaterials);
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return NotFound(new { message = exception.Message });
-        }
+        var referenceMaterials =
+            await referenceService.GetReferenceMaterialsForSkillAsync(skillId);
+        return Ok(referenceMaterials);
     }
 
     [HttpGet("reference")]

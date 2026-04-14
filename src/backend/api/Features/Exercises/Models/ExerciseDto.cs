@@ -5,6 +5,6 @@ namespace SalesTrainer.Api.Features.Exercises.Models;
 public record ExerciseDto(
     Guid ExerciseId,
     string Type,
-    int SortOrder,
+    int OrderInLesson,
     JsonElement Content
 );

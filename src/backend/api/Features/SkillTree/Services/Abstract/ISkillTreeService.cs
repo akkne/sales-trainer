@@ -4,13 +4,11 @@ namespace SalesTrainer.Api.Features.SkillTree.Services.Abstract;
 
 public interface ISkillTreeService
 {
-    Task UpdateEnrolledSkillsAsync(
-        Guid userId,
-        List<string> skillSlugs,
+    Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsForUserAsync(
-        Guid userId,
+    Task<IReadOnlyList<TopicDto>> GetTopicsForSkillAsync(
+        Guid skillId,
         CancellationToken cancellationToken = default);
 
     Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(

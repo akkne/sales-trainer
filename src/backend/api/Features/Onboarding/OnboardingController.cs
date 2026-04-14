@@ -25,7 +25,6 @@ public class OnboardingController(IOnboardingService onboardingService) : Contro
             userId,
             onboardingRequest.SalesType,
             onboardingRequest.ExperienceLevel,
-            onboardingRequest.SelectedSkillSlugs,
             onboardingRequest.Persona);
 
         return NoContent();
