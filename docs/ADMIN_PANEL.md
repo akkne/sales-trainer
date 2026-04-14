@@ -139,19 +139,6 @@ JSON import is available inline on Skills and Lessons pages:
 3. Upload your JSON file
 4. View import results (created/updated counts, errors)
 
-### Skills Template
-```json
-[
-  {
-    "slug": "cold-calling",
-    "title": "Cold Calling",
-    "iconName": "phone",
-    "sortOrder": 1,
-    "applicableSalesTypes": ["b2b_saas", "b2c"],
-    "prerequisiteSkillIcon": null
-  }
-]
-```
 
 ### Lessons Template (with all 10 exercise types)
 ```json
