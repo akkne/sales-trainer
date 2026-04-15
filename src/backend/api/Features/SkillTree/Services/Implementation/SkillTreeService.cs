@@ -17,10 +17,82 @@ internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTre
 
         return allSkills.Select(skill => new SkillTreeNodeDto(
             skill.Id,
+            skill.IconicName,
             skill.Title,
-            skill.Description,
-            skill.OrderInTree))
+            "school", // default icon
+            skill.OrderInTree,
+            "available",
+            0,
+            0,
+            false))
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsWithProgressAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var allSkills = await databaseContext.Skills
+            .OrderBy(skill => skill.OrderInTree)
+            .ThenBy(skill => skill.Id)
+            .ToListAsync(cancellationToken);
+
+        // Get all topics with their lessons count
+        var topicsBySkill = await databaseContext.Topics
+            .GroupBy(t => t.SkillId)
+            .Select(g => new { SkillId = g.Key, TopicIds = g.Select(t => t.Id).ToList() })
+            .ToDictionaryAsync(x => x.SkillId, x => x.TopicIds, cancellationToken);
+
+        // Get lesson counts per skill (through topics)
+        var lessonCountBySkill = new Dictionary<Guid, int>();
+        var completedLessonCountBySkill = new Dictionary<Guid, int>();
+
+        foreach (var skill in allSkills)
+        {
+            if (!topicsBySkill.TryGetValue(skill.Id, out var topicIds))
+            {
+                lessonCountBySkill[skill.Id] = 0;
+                completedLessonCountBySkill[skill.Id] = 0;
+                continue;
+            }
+
+            var totalLessons = await databaseContext.Lessons
+                .Where(l => topicIds.Contains(l.TopicId))
+                .CountAsync(cancellationToken);
+
+            var completedLessons = await databaseContext.UserLessonProgressRecords
+                .Where(p => p.UserId == userId && p.Status == "completed")
+                .Join(databaseContext.Lessons,
+                    progress => progress.LessonId,
+                    lesson => lesson.Id,
+                    (progress, lesson) => lesson)
+                .Where(lesson => topicIds.Contains(lesson.TopicId))
+                .CountAsync(cancellationToken);
+
+            lessonCountBySkill[skill.Id] = totalLessons;
+            completedLessonCountBySkill[skill.Id] = completedLessons;
+        }
+
+        return allSkills.Select(skill =>
+        {
+            var totalLessons = lessonCountBySkill.GetValueOrDefault(skill.Id, 0);
+            var completedLessons = completedLessonCountBySkill.GetValueOrDefault(skill.Id, 0);
+
+            var status = completedLessons == 0 ? "available" :
+                         completedLessons >= totalLessons && totalLessons > 0 ? "completed" :
+                         "in_progress";
+
+            return new SkillTreeNodeDto(
+                skill.Id,
+                skill.IconicName,
+                skill.Title,
+                "school",
+                skill.OrderInTree,
+                status,
+                completedLessons,
+                totalLessons,
+                false);
+        }).ToList();
     }
 
     public async Task<IReadOnlyList<TopicDto>> GetTopicsForSkillAsync(
@@ -44,7 +116,7 @@ internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTre
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var allSkills = await GetAllSkillsAsync(cancellationToken);
+        var allSkills = await GetAllSkillsWithProgressAsync(userId, cancellationToken);
 
         var currentStreakDayCount = await databaseContext.UserStreaks
             .Where(streak => streak.UserId == userId)

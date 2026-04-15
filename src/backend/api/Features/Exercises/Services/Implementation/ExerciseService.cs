@@ -65,6 +65,53 @@ internal sealed class ExerciseService(
         }).ToList();
     }
 
+    public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
+        Guid userId,
+        string skillSlug,
+        CancellationToken cancellationToken = default)
+    {
+        // Find skill by iconic name (slug)
+        var skill = await databaseContext.Skills
+            .FirstOrDefaultAsync(s => s.IconicName == skillSlug, cancellationToken);
+
+        if (skill is null)
+            return [];
+
+        // Get all topics for this skill
+        var topicIds = await databaseContext.Topics
+            .Where(t => t.SkillId == skill.Id)
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        if (topicIds.Count == 0)
+            return [];
+
+        var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
+            .Where(progressRecord => progressRecord.UserId == userId)
+            .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
+
+        var allLessons = await databaseContext.Lessons
+            .Where(lesson => topicIds.Contains(lesson.TopicId))
+            .OrderBy(lesson => lesson.OrderInTopic)
+            .ToListAsync(cancellationToken);
+
+        // Determine status for first lesson - should be available if not completed
+        var isFirstLesson = true;
+
+        return allLessons.Select(lesson =>
+        {
+            lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
+            var status = progressRecord?.Status ?? (isFirstLesson ? "available" : "locked");
+            isFirstLesson = false;
+            return new LessonSummaryDto(
+                lesson.Id,
+                lesson.Title,
+                lesson.OrderInTopic,
+                status,
+                progressRecord?.BestScore ?? 0);
+        }).ToList();
+    }
+
     public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default)

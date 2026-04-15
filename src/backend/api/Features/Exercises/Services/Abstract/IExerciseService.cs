@@ -14,6 +14,11 @@ public interface IExerciseService
         Guid topicId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
+        Guid userId,
+        string skillSlug,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default);

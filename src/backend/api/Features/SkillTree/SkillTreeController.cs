@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Exercises.Models;
+using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Features.SkillTree.Services.Abstract;
 
@@ -28,13 +30,36 @@ public class SkillTreeController(ISkillTreeService skillTreeService) : Controlle
 [ApiController]
 [Route("skills")]
 [Authorize]
-public class SkillsController(ISkillTreeService skillTreeService) : ControllerBase
+public class SkillsController(ISkillTreeService skillTreeService, IExerciseService exerciseService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
     {
-        var skills = await skillTreeService.GetAllSkillsAsync();
-        return Ok(skills);
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(rawUserId, out var userId))
+        {
+            // Return skills without progress for unauthenticated (shouldn't happen with [Authorize])
+            var skills = await skillTreeService.GetAllSkillsAsync();
+            return Ok(skills);
+        }
+
+        var skillsWithProgress = await skillTreeService.GetAllSkillsWithProgressAsync(userId);
+        return Ok(skillsWithProgress);
+    }
+
+    [HttpGet("{skillSlug}/lessons")]
+    public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(string skillSlug)
+    {
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(rawUserId, out var userId))
+            return Unauthorized();
+
+        var lessons = await exerciseService.GetLessonsForSkillAsync(userId, skillSlug);
+        return Ok(lessons);
     }
 
     [HttpGet("{skillId:guid}/topics")]
