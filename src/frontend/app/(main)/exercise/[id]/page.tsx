@@ -7,9 +7,16 @@ import {
     useSubmitExercise,
     type ExerciseSubmissionResult,
 } from "@/lib/hooks/useLesson";
-import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
+import { ChooseOptionExercise } from "@/components/exercise/ChooseOptionExercise";
 import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
-import { OpenQuestionExercise } from "@/components/exercise/OpenQuestionExercise";
+import { ReorderExercise } from "@/components/exercise/ReorderExercise";
+import { MatchPairsExercise } from "@/components/exercise/MatchPairsExercise";
+import { CategorizeExercise } from "@/components/exercise/CategorizeExercise";
+import { SpotMistakeExercise } from "@/components/exercise/SpotMistakeExercise";
+import { RewriteExercise } from "@/components/exercise/RewriteExercise";
+import { AiDialogueExercise } from "@/components/exercise/AiDialogueExercise";
+import { EvaluateCallExercise } from "@/components/exercise/EvaluateCallExercise";
+import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { ExerciseResultBanner } from "@/components/exercise/ExerciseResultBanner";
 
 const MAX_HEARTS = 4;
@@ -114,14 +121,16 @@ export default function ExercisePage({ params }: ExercisePageProps) {
                 </div>
             </div>
 
-            {currentExercise.type === "multiple_choice" && (
-                <MultipleChoiceExercise
-                    content={currentExercise.content as Parameters<typeof MultipleChoiceExercise>[0]["content"]}
+            {/* Exercise type: choose_option */}
+            {currentExercise.type === "choose_option" && (
+                <ChooseOptionExercise
+                    content={currentExercise.content as Parameters<typeof ChooseOptionExercise>[0]["content"]}
                     onSubmit={handleExerciseSubmit}
                     isSubmitting={submitExerciseMutation.isPending}
                 />
             )}
 
+            {/* Exercise type: fill_blank */}
             {currentExercise.type === "fill_blank" && (
                 <FillBlankExercise
                     content={currentExercise.content as Parameters<typeof FillBlankExercise>[0]["content"]}
@@ -130,9 +139,46 @@ export default function ExercisePage({ params }: ExercisePageProps) {
                 />
             )}
 
-            {currentExercise.type === "open_question" && (
-                <OpenQuestionExercise
-                    content={currentExercise.content as Parameters<typeof OpenQuestionExercise>[0]["content"]}
+            {/* Exercise type: reorder */}
+            {currentExercise.type === "reorder" && (
+                <ReorderExercise
+                    content={currentExercise.content as Parameters<typeof ReorderExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    isSubmitting={submitExerciseMutation.isPending}
+                />
+            )}
+
+            {/* Exercise type: match_pairs */}
+            {currentExercise.type === "match_pairs" && (
+                <MatchPairsExercise
+                    content={currentExercise.content as Parameters<typeof MatchPairsExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    isSubmitting={submitExerciseMutation.isPending}
+                />
+            )}
+
+            {/* Exercise type: categorize */}
+            {currentExercise.type === "categorize" && (
+                <CategorizeExercise
+                    content={currentExercise.content as Parameters<typeof CategorizeExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    isSubmitting={submitExerciseMutation.isPending}
+                />
+            )}
+
+            {/* Exercise type: spot_mistake */}
+            {currentExercise.type === "spot_mistake" && (
+                <SpotMistakeExercise
+                    content={currentExercise.content as Parameters<typeof SpotMistakeExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    isSubmitting={submitExerciseMutation.isPending}
+                />
+            )}
+
+            {/* Exercise type: rewrite */}
+            {currentExercise.type === "rewrite" && (
+                <RewriteExercise
+                    content={currentExercise.content as Parameters<typeof RewriteExercise>[0]["content"]}
                     onSubmit={handleExerciseSubmit}
                     onSkip={handleContinueAfterResult}
                     onContinue={handleContinueAfterResult}
@@ -141,7 +187,44 @@ export default function ExercisePage({ params }: ExercisePageProps) {
                 />
             )}
 
-            {lastSubmissionResult && (
+            {/* Exercise type: ai_dialogue */}
+            {currentExercise.type === "ai_dialogue" && (
+                <AiDialogueExercise
+                    content={currentExercise.content as Parameters<typeof AiDialogueExercise>[0]["content"]}
+                    exerciseId={currentExercise.exerciseId}
+                    onSubmit={handleExerciseSubmit}
+                    onSkip={handleContinueAfterResult}
+                    onContinue={handleContinueAfterResult}
+                    isSubmitting={submitExerciseMutation.isPending}
+                    submittedResult={lastSubmissionResult}
+                />
+            )}
+
+            {/* Exercise type: evaluate_call */}
+            {currentExercise.type === "evaluate_call" && (
+                <EvaluateCallExercise
+                    content={currentExercise.content as Parameters<typeof EvaluateCallExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    onSkip={handleContinueAfterResult}
+                    onContinue={handleContinueAfterResult}
+                    isSubmitting={submitExerciseMutation.isPending}
+                    submittedResult={lastSubmissionResult}
+                />
+            )}
+
+            {/* Exercise type: free_text */}
+            {currentExercise.type === "free_text" && (
+                <FreeTextExercise
+                    content={currentExercise.content as Parameters<typeof FreeTextExercise>[0]["content"]}
+                    onSubmit={handleExerciseSubmit}
+                    onSkip={handleContinueAfterResult}
+                    onContinue={handleContinueAfterResult}
+                    isSubmitting={submitExerciseMutation.isPending}
+                    submittedResult={lastSubmissionResult}
+                />
+            )}
+
+            {lastSubmissionResult && currentExercise.type !== "free_text" && currentExercise.type !== "rewrite" && currentExercise.type !== "evaluate_call" && (
                 <ExerciseResultBanner
                     isCorrect={lastSubmissionResult.isCorrect}
                     score={lastSubmissionResult.score}

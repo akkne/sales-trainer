@@ -17,28 +17,26 @@ import {
     TYPE_LABELS,
     ExerciseType,
     ExerciseContent,
-    MultipleChoiceContent,
+    ChooseOptionContent,
     FillBlankContent,
-    OpenQuestionContent,
-    OrderingContent,
-    MatchingContent,
-    CategorizingContent,
-    FindErrorContent,
-    RewriteBetterContent,
-    AiDialogContent,
-    RateCallContent,
-    WrittenAnswerContent,
-    emptyMultipleChoice,
+    ReorderContent,
+    MatchPairsContent,
+    CategorizeContent,
+    SpotMistakeContent,
+    RewriteContent,
+    AiDialogueContent,
+    EvaluateCallContent,
+    FreeTextContent,
+    emptyChooseOption,
     emptyFillBlank,
-    emptyOpenQuestion,
-    emptyOrdering,
-    emptyMatching,
-    emptyCategorizing,
-    emptyFindError,
-    emptyRewriteBetter,
-    emptyAiDialog,
-    emptyRateCall,
-    emptyWrittenAnswer,
+    emptyReorder,
+    emptyMatchPairs,
+    emptyCategorize,
+    emptySpotMistake,
+    emptyRewrite,
+    emptyAiDialogue,
+    emptyEvaluateCall,
+    emptyFreeText,
     inputCls,
     labelCls,
 } from "@/components/admin/exercise-editors";
@@ -77,17 +75,16 @@ interface ExerciseRow {
 
 function getEmptyContent(type: ExerciseType): ExerciseContent {
     switch (type) {
-        case "multiple_choice": return emptyMultipleChoice();
+        case "choose_option": return emptyChooseOption();
         case "fill_blank": return emptyFillBlank();
-        case "open_question": return emptyOpenQuestion();
-        case "ordering": return emptyOrdering();
-        case "matching": return emptyMatching();
-        case "categorizing": return emptyCategorizing();
-        case "find_error": return emptyFindError();
-        case "rewrite_better": return emptyRewriteBetter();
-        case "ai_dialog": return emptyAiDialog();
-        case "rate_call": return emptyRateCall();
-        case "written_answer": return emptyWrittenAnswer();
+        case "reorder": return emptyReorder();
+        case "match_pairs": return emptyMatchPairs();
+        case "categorize": return emptyCategorize();
+        case "spot_mistake": return emptySpotMistake();
+        case "rewrite": return emptyRewrite();
+        case "ai_dialogue": return emptyAiDialogue();
+        case "evaluate_call": return emptyEvaluateCall();
+        case "free_text": return emptyFreeText();
     }
 }
 
@@ -97,56 +94,52 @@ function contentEditor(
     onChange: (c: ExerciseContent) => void
 ) {
     switch (type) {
-        case "multiple_choice":
-            return <MultipleChoiceEditor content={content as MultipleChoiceContent} onChange={onChange} />;
+        case "choose_option":
+            return <MultipleChoiceEditor content={content as ChooseOptionContent} onChange={onChange} />;
         case "fill_blank":
             return <FillBlankEditor content={content as FillBlankContent} onChange={onChange} />;
-        case "open_question":
-            return <OpenQuestionEditor content={content as OpenQuestionContent} onChange={onChange} />;
-        case "ordering":
-            return <OrderingEditor content={content as OrderingContent} onChange={onChange} />;
-        case "matching":
-            return <MatchingEditor content={content as MatchingContent} onChange={onChange} />;
-        case "categorizing":
-            return <CategorizingEditor content={content as CategorizingContent} onChange={onChange} />;
-        case "find_error":
-            return <FindErrorEditor content={content as FindErrorContent} onChange={onChange} />;
-        case "rewrite_better":
-            return <RewriteBetterEditor content={content as RewriteBetterContent} onChange={onChange} />;
-        case "ai_dialog":
-            return <AiDialogEditor content={content as AiDialogContent} onChange={onChange} />;
-        case "rate_call":
-            return <RateCallEditor content={content as RateCallContent} onChange={onChange} />;
-        case "written_answer":
-            return <WrittenAnswerEditor content={content as WrittenAnswerContent} onChange={onChange} />;
+        case "free_text":
+            return <OpenQuestionEditor content={content as FreeTextContent} onChange={onChange} />;
+        case "reorder":
+            return <OrderingEditor content={content as ReorderContent} onChange={onChange} />;
+        case "match_pairs":
+            return <MatchingEditor content={content as MatchPairsContent} onChange={onChange} />;
+        case "categorize":
+            return <CategorizingEditor content={content as CategorizeContent} onChange={onChange} />;
+        case "spot_mistake":
+            return <FindErrorEditor content={content as SpotMistakeContent} onChange={onChange} />;
+        case "rewrite":
+            return <RewriteBetterEditor content={content as RewriteContent} onChange={onChange} />;
+        case "ai_dialogue":
+            return <AiDialogEditor content={content as AiDialogueContent} onChange={onChange} />;
+        case "evaluate_call":
+            return <RateCallEditor content={content as EvaluateCallContent} onChange={onChange} />;
     }
 }
 
 function renderContentPreview(row: ExerciseRow): string {
     const c = row.content;
     switch (row.type) {
-        case "multiple_choice":
-            return (c as MultipleChoiceContent).question || "(no question)";
+        case "choose_option":
+            return (c as ChooseOptionContent).question || "(no question)";
         case "fill_blank":
             return `${(c as FillBlankContent).characterName}: ${(c as FillBlankContent).characterLine}`;
-        case "open_question":
-            return (c as OpenQuestionContent).question || "(no question)";
-        case "ordering":
-            return (c as OrderingContent).instruction || "(no instruction)";
-        case "matching":
-            return (c as MatchingContent).instruction || "(no instruction)";
-        case "categorizing":
-            return (c as CategorizingContent).instruction || "(no instruction)";
-        case "find_error":
-            return (c as FindErrorContent).instruction || "(no instruction)";
-        case "rewrite_better":
-            return (c as RewriteBetterContent).originalText?.slice(0, 50) || "(no text)";
-        case "ai_dialog":
-            return (c as AiDialogContent).scenario?.slice(0, 50) || "(no scenario)";
-        case "rate_call":
-            return `${(c as RateCallContent).transcript?.length || 0} lines, ${(c as RateCallContent).criteria?.length || 0} criteria`;
-        case "written_answer":
-            return (c as WrittenAnswerContent).prompt?.slice(0, 50) || "(no prompt)";
+        case "free_text":
+            return (c as FreeTextContent).prompt?.slice(0, 50) || "(no prompt)";
+        case "reorder":
+            return (c as ReorderContent).instruction || "(no instruction)";
+        case "match_pairs":
+            return (c as MatchPairsContent).instruction || "(no instruction)";
+        case "categorize":
+            return (c as CategorizeContent).instruction || "(no instruction)";
+        case "spot_mistake":
+            return (c as SpotMistakeContent).instruction || "(no instruction)";
+        case "rewrite":
+            return (c as RewriteContent).originalText?.slice(0, 50) || "(no text)";
+        case "ai_dialogue":
+            return (c as AiDialogueContent).scenario?.slice(0, 50) || "(no scenario)";
+        case "evaluate_call":
+            return `${(c as EvaluateCallContent).transcript?.length || 0} lines, ${(c as EvaluateCallContent).criteria?.length || 0} criteria`;
         default:
             return "(preview)";
     }
@@ -217,9 +210,9 @@ export default function AdminLessonExercisesPage({
     function addExercise() {
         const newRow: ExerciseRow = {
             id: null,
-            type: "multiple_choice",
+            type: "choose_option",
             sortOrder: rows.length + 1,
-            content: emptyMultipleChoice(),
+            content: emptyChooseOption(),
             customAiPrompt: null,
         };
         setRows([...rows, newRow]);
@@ -236,6 +229,9 @@ export default function AdminLessonExercisesPage({
     }
 
     const isLoadingMut = createMut.isPending || updateExerciseMut.isPending;
+
+    // AI-powered types that show custom prompt field
+    const aiPoweredTypes: ExerciseType[] = ["spot_mistake", "rewrite", "ai_dialogue", "evaluate_call", "free_text"];
 
     return (
         <div>
@@ -291,7 +287,7 @@ export default function AdminLessonExercisesPage({
                                         </button>
                                     </div>
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
-                                        {TYPE_LABELS[row.type]}
+                                        {TYPE_LABELS[row.type] ?? row.type}
                                     </span>
                                     <span className="text-xs text-on-surface-variant">#{row.sortOrder}</span>
                                     {row.customAiPrompt && (
@@ -347,7 +343,7 @@ export default function AdminLessonExercisesPage({
                                     })}
 
                                     {/* Custom AI Prompt */}
-                                    {["open_question", "find_error", "rewrite_better", "ai_dialog", "rate_call", "written_answer"].includes(row.type) && (
+                                    {aiPoweredTypes.includes(row.type) && (
                                         <label className="block mt-4">
                                             <span className={labelCls}>Custom AI Prompt (optional)</span>
                                             <textarea

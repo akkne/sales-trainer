@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
+import type { ExerciseType } from "@/lib/exerciseTypes";
 
 export interface LessonSummary {
     lessonId: string;
@@ -15,18 +16,7 @@ export interface LessonSummary {
 
 export interface ExerciseData {
     exerciseId: string;
-    type:
-        | "multiple_choice"
-        | "fill_blank"
-        | "open_question"
-        | "ordering"
-        | "matching"
-        | "categorizing"
-        | "find_error"
-        | "rewrite_better"
-        | "ai_dialog"
-        | "rate_call"
-        | "written_answer";
+    type: ExerciseType;
     sortOrder: number;
     content: unknown;
 }

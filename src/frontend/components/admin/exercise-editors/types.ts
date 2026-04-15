@@ -1,6 +1,37 @@
-// Exercise content type definitions for all 11 exercise types
+// Exercise content type definitions for all 10 exercise types
+// Must match backend ExerciseTypes.cs
 
-export interface MultipleChoiceContent {
+// Type constants - must match backend ExerciseTypes.cs
+export const EXERCISE_TYPES = [
+    "choose_option",
+    "fill_blank",
+    "reorder",
+    "match_pairs",
+    "categorize",
+    "spot_mistake",
+    "rewrite",
+    "ai_dialogue",
+    "evaluate_call",
+    "free_text"
+] as const;
+
+export type ExerciseType = (typeof EXERCISE_TYPES)[number];
+
+export const TYPE_LABELS: Record<ExerciseType, string> = {
+    choose_option: "Choose Option",
+    fill_blank: "Fill Blank",
+    reorder: "Reorder",
+    match_pairs: "Match Pairs",
+    categorize: "Categorize",
+    spot_mistake: "Spot Mistake",
+    rewrite: "Rewrite",
+    ai_dialogue: "AI Dialogue",
+    evaluate_call: "Evaluate Call",
+    free_text: "Free Text",
+};
+
+// Content interfaces for each exercise type
+export interface ChooseOptionContent {
     situation: string;
     question: string;
     options: string[];
@@ -16,19 +47,14 @@ export interface FillBlankContent {
     explanation: string;
 }
 
-export interface OpenQuestionContent {
-    question: string;
-    aiPrompt: string;
-}
-
-export interface OrderingContent {
+export interface ReorderContent {
     instruction: string;
     items: string[];
     correctOrder: string[];
     explanation: string;
 }
 
-export interface MatchingContent {
+export interface MatchPairsContent {
     instruction: string;
     leftItems: string[];
     rightItems: string[];
@@ -36,7 +62,7 @@ export interface MatchingContent {
     explanation: string;
 }
 
-export interface CategorizingContent {
+export interface CategorizeContent {
     instruction: string;
     categories: string[];
     items: Array<{ id: string; text: string }>;
@@ -44,7 +70,7 @@ export interface CategorizingContent {
     explanation: string;
 }
 
-export interface FindErrorContent {
+export interface SpotMistakeContent {
     instruction: string;
     dialogLines: Array<{ id: string; speaker: string; text: string }>;
     errorLineId: string;
@@ -54,7 +80,7 @@ export interface FindErrorContent {
     aiPrompt: string;
 }
 
-export interface RewriteBetterContent {
+export interface RewriteContent {
     originalText: string;
     context: string;
     minLength: number;
@@ -62,7 +88,7 @@ export interface RewriteBetterContent {
     aiPrompt: string;
 }
 
-export interface AiDialogContent {
+export interface AiDialogueContent {
     scenario: string;
     persona: { name: string; role: string; personality: string };
     systemPrompt: string;
@@ -70,13 +96,13 @@ export interface AiDialogContent {
     aiPrompt: string;
 }
 
-export interface RateCallContent {
+export interface EvaluateCallContent {
     transcript: Array<{ speaker: string; text: string }>;
     criteria: Array<{ id: string; name: string; description: string }>;
     aiPrompt: string;
 }
 
-export interface WrittenAnswerContent {
+export interface FreeTextContent {
     prompt: string;
     context: string;
     minLength: number;
@@ -85,20 +111,19 @@ export interface WrittenAnswerContent {
 }
 
 export type ExerciseContent =
-    | MultipleChoiceContent
+    | ChooseOptionContent
     | FillBlankContent
-    | OpenQuestionContent
-    | OrderingContent
-    | MatchingContent
-    | CategorizingContent
-    | FindErrorContent
-    | RewriteBetterContent
-    | AiDialogContent
-    | RateCallContent
-    | WrittenAnswerContent;
+    | ReorderContent
+    | MatchPairsContent
+    | CategorizeContent
+    | SpotMistakeContent
+    | RewriteContent
+    | AiDialogueContent
+    | EvaluateCallContent
+    | FreeTextContent;
 
 // Empty content factories
-export function emptyMultipleChoice(): MultipleChoiceContent {
+export function emptyChooseOption(): ChooseOptionContent {
     return { situation: "", question: "", options: ["", "", "", ""], correctOptionIndex: 0, explanation: "" };
 }
 
@@ -106,15 +131,11 @@ export function emptyFillBlank(): FillBlankContent {
     return { characterName: "", characterLine: "___", options: ["", "", "", ""], correctOptionIndex: 0, explanation: "" };
 }
 
-export function emptyOpenQuestion(): OpenQuestionContent {
-    return { question: "", aiPrompt: "" };
-}
-
-export function emptyOrdering(): OrderingContent {
+export function emptyReorder(): ReorderContent {
     return { instruction: "", items: ["", "", ""], correctOrder: [], explanation: "" };
 }
 
-export function emptyMatching(): MatchingContent {
+export function emptyMatchPairs(): MatchPairsContent {
     return {
         instruction: "",
         leftItems: ["", ""],
@@ -124,7 +145,7 @@ export function emptyMatching(): MatchingContent {
     };
 }
 
-export function emptyCategorizing(): CategorizingContent {
+export function emptyCategorize(): CategorizeContent {
     return {
         instruction: "",
         categories: ["Category A", "Category B"],
@@ -134,7 +155,7 @@ export function emptyCategorizing(): CategorizingContent {
     };
 }
 
-export function emptyFindError(): FindErrorContent {
+export function emptySpotMistake(): SpotMistakeContent {
     return {
         instruction: "",
         dialogLines: [{ id: "1", speaker: "", text: "" }],
@@ -146,11 +167,11 @@ export function emptyFindError(): FindErrorContent {
     };
 }
 
-export function emptyRewriteBetter(): RewriteBetterContent {
+export function emptyRewrite(): RewriteContent {
     return { originalText: "", context: "", minLength: 20, maxLength: 500, aiPrompt: "" };
 }
 
-export function emptyAiDialog(): AiDialogContent {
+export function emptyAiDialogue(): AiDialogueContent {
     return {
         scenario: "",
         persona: { name: "", role: "", personality: "" },
@@ -160,7 +181,7 @@ export function emptyAiDialog(): AiDialogContent {
     };
 }
 
-export function emptyRateCall(): RateCallContent {
+export function emptyEvaluateCall(): EvaluateCallContent {
     return {
         transcript: [{ speaker: "", text: "" }],
         criteria: [{ id: "1", name: "", description: "" }],
@@ -168,42 +189,34 @@ export function emptyRateCall(): RateCallContent {
     };
 }
 
-export function emptyWrittenAnswer(): WrittenAnswerContent {
+export function emptyFreeText(): FreeTextContent {
     return { prompt: "", context: "", minLength: 50, maxLength: 1000, aiPrompt: "" };
 }
-
-// Type constants
-export const EXERCISE_TYPES = [
-    "multiple_choice",
-    "fill_blank",
-    "open_question",
-    "ordering",
-    "matching",
-    "categorizing",
-    "find_error",
-    "rewrite_better",
-    "ai_dialog",
-    "rate_call",
-    "written_answer"
-] as const;
-
-export type ExerciseType = (typeof EXERCISE_TYPES)[number];
-
-export const TYPE_LABELS: Record<ExerciseType, string> = {
-    multiple_choice: "Multiple Choice",
-    fill_blank: "Fill Blank",
-    open_question: "Open Question",
-    ordering: "Ordering",
-    matching: "Matching",
-    categorizing: "Categorizing",
-    find_error: "Find Error",
-    rewrite_better: "Rewrite Better",
-    ai_dialog: "AI Dialog",
-    rate_call: "Rate Call",
-    written_answer: "Written Answer",
-};
 
 // Shared styling classes
 export const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-surface";
 export const labelCls = "text-xs text-on-surface-variant";
 export const textareaCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono bg-surface";
+
+// Legacy aliases for backward compatibility during migration
+export type MultipleChoiceContent = ChooseOptionContent;
+export type OpenQuestionContent = FreeTextContent;
+export type OrderingContent = ReorderContent;
+export type MatchingContent = MatchPairsContent;
+export type CategorizingContent = CategorizeContent;
+export type FindErrorContent = SpotMistakeContent;
+export type RewriteBetterContent = RewriteContent;
+export type AiDialogContent = AiDialogueContent;
+export type RateCallContent = EvaluateCallContent;
+export type WrittenAnswerContent = FreeTextContent;
+
+export const emptyMultipleChoice = emptyChooseOption;
+export const emptyOpenQuestion = emptyFreeText;
+export const emptyOrdering = emptyReorder;
+export const emptyMatching = emptyMatchPairs;
+export const emptyCategorizing = emptyCategorize;
+export const emptyFindError = emptySpotMistake;
+export const emptyRewriteBetter = emptyRewrite;
+export const emptyAiDialog = emptyAiDialogue;
+export const emptyRateCall = emptyEvaluateCall;
+export const emptyWrittenAnswer = emptyFreeText;
