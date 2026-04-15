@@ -5,11 +5,7 @@ import type { ExerciseType } from "@/lib/exerciseTypes";
 export interface LessonSummary {
     lessonId: string;
     title: string;
-    description?: string;
-    sortOrder: number;
-    difficultyLevel: number;
-    xpReward: number;
-    estimatedMinutes: number;
+    orderInTopic: number;
     status: "locked" | "available" | "in_progress" | "completed";
     bestScore: number;
 }

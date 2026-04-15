@@ -26,15 +26,10 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
     }
 
     const skill = skills?.find((s) => s.slug === skillSlug);
-    const lessons = (lessonSummaries ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    const lessons = (lessonSummaries ?? []).slice().sort((a, b) => a.orderInTopic - b.orderInTopic);
     const completedCount = lessons.filter((l) => l.status === "completed").length;
     const totalCount = lessons.length;
     const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-    // Calculate total XP earned
-    const totalXpEarned = lessons
-        .filter((l) => l.status === "completed")
-        .reduce((sum, l) => sum + (l.xpReward || 0), 0);
 
     return (
         <div className="max-w-2xl mx-auto px-4 py-8">
@@ -88,9 +83,6 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                         </div>
                         <p className="text-sm text-on-surface-variant mb-2">
                             {completedCount} из {totalCount} уроков пройдено
-                        </p>
-                        <p className="text-sm font-semibold text-primary">
-                            +{totalXpEarned} XP заработано
                         </p>
                     </div>
                 </div>
@@ -153,15 +145,6 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                             Далее
                                         </span>
                                     )}
-                                    <span className="text-xs font-semibold text-primary bg-primary-container px-2 py-0.5 rounded-full">
-                                        +{lesson.xpReward} XP
-                                    </span>
-                                    {lesson.estimatedMinutes > 0 && (
-                                        <span className="flex items-center gap-0.5 text-xs text-on-surface-variant">
-                                            <Icon name="schedule" size="sm" />
-                                            {lesson.estimatedMinutes} мин
-                                        </span>
-                                    )}
                                 </div>
 
                                 <h3
@@ -171,12 +154,6 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                 >
                                     {lesson.title}
                                 </h3>
-
-                                {lesson.description && (
-                                    <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
-                                        {lesson.description}
-                                    </p>
-                                )}
 
                                 {isLocked && (
                                     <p className="flex items-center gap-1 text-xs text-outline mt-2">
@@ -189,7 +166,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {/* CTA button */}
                             {isCompleted && (
                                 <Link
-                                    href={`/session/${lesson.lessonId}`}
+                                    href={`/exercise/${lesson.lessonId}`}
                                     className="shrink-0 self-center px-4 py-2 rounded-full border border-outline text-sm font-medium text-on-surface hover:bg-surface-container-high tonal-transition"
                                 >
                                     Повторить
@@ -197,7 +174,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             )}
                             {isUpNext && (
                                 <Link
-                                    href={`/session/${lesson.lessonId}`}
+                                    href={`/exercise/${lesson.lessonId}`}
                                     className="shrink-0 self-center flex items-center gap-1 px-4 py-2 rounded-full bg-secondary text-on-secondary text-sm font-semibold hover:opacity-90 tonal-transition"
                                 >
                                     Начать
@@ -206,7 +183,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             )}
                             {isActive && !isUpNext && (
                                 <Link
-                                    href={`/session/${lesson.lessonId}`}
+                                    href={`/exercise/${lesson.lessonId}`}
                                     className="shrink-0 self-center px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:opacity-90 tonal-transition"
                                 >
                                     Продолжить

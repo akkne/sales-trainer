@@ -21,7 +21,7 @@ export default function SkillPage({ params }: SkillPageProps) {
         );
     }
 
-    const lessons = (lessonSummaries ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+    const lessons = (lessonSummaries ?? []).slice().sort((a, b) => a.orderInTopic - b.orderInTopic);
     const completedCount = lessons.filter((l) => l.status === "completed").length;
 
     return (

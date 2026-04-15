@@ -90,12 +90,9 @@ function LessonNode({
                         <span className="text-xs text-on-surface-variant">
                             Урок {index + 1} из {total}
                         </span>
-                        <span className="text-xs font-semibold text-primary bg-primary-container px-2 py-0.5 rounded-full">
-                            +{lesson.xpReward} XP
-                        </span>
                     </div>
                     <Link
-                        href={`/session/${lesson.lessonId}`}
+                        href={`/exercise/${lesson.lessonId}`}
                         onClick={onClosePopover}
                         className="flex items-center justify-center gap-1 w-full py-2.5 rounded-full bg-primary text-on-primary text-sm font-bold shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
                     >
