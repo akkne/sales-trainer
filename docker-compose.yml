@@ -30,6 +30,8 @@ services:
       - Frontend__Url=http://localhost:3000
       - Google__ClientId=${GOOGLE_CLIENT_ID}
       - Logging__Loki__Url=http://loki:3100
+    volumes:
+      - ./src/backend/api/appsettings.Development.json:/app/appsettings.Development.json:ro
     depends_on:
       postgres:
         condition: service_healthy
