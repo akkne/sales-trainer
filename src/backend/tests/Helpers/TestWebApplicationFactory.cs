@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SalesTrainer.Api.Features.Auth.Models;
 
 namespace SalesTrainer.Tests.Helpers;
 
@@ -47,7 +48,7 @@ public class TestWebApplicationFactory(string connectionString) : WebApplication
     }
 
     public HttpClient CreateAuthenticatedClient(Guid userId, string email, string displayName,
-        SalesTrainer.Api.Features.Auth.UserRole role = SalesTrainer.Api.Features.Auth.UserRole.User)
+        UserRole role = UserRole.User)
     {
         var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
         var token = JwtTestHelper.BuildToken(userId, email, displayName, role);

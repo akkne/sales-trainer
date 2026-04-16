@@ -1,12 +1,15 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Achievements;
-using SalesTrainer.Api.Features.Exercises;
-using SalesTrainer.Api.Features.Gamification;
-using SalesTrainer.Api.Features.Lessons;
-using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.Achievements.Services.Abstract;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
+using SalesTrainer.Api.Features.Gamification.Models;
+using SalesTrainer.Api.Features.Lessons.Models;
+using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 
@@ -26,8 +29,9 @@ public class ExerciseServiceTests
             new MultipleChoiceEvaluationStrategy(),
             new FillBlankEvaluationStrategy()
         ]);
-        var achievementService = new AchievementService(_db);
-        _service = new ExerciseService(_db, factory, achievementService);
+        var achievementService = Substitute.For<IAchievementService>();
+        var openAiChatService = Substitute.For<IOpenAiChatService>();
+        _service = new ExerciseService(_db, factory, achievementService, openAiChatService);
     }
 
     [TearDown]
@@ -41,14 +45,14 @@ public class ExerciseServiceTests
         var lessonId = Guid.NewGuid();
         var exerciseId = Guid.NewGuid();
 
-        _db.Users.Add(new SalesTrainer.Api.Features.Auth.User
+        _db.Users.Add(new User
         {
             Id = userId,
             Email = $"u{userId}@test.com",
             DisplayName = "Test",
             CreatedAt = DateTime.UtcNow
         });
-        _db.Skills.Add(new SalesTrainer.Api.Features.SkillTree.Skill
+        _db.Skills.Add(new Skill
         {
             Id = skillId,
             Slug = $"skill-{skillId}",
@@ -163,7 +167,7 @@ public class ExerciseServiceTests
             correctOptionIndex: 0, totalLessons: 1);
 
         var nextSkillId = Guid.NewGuid();
-        _db.Skills.Add(new SalesTrainer.Api.Features.SkillTree.Skill
+        _db.Skills.Add(new Skill
         {
             Id = nextSkillId,
             Slug = $"next-{nextSkillId}",
@@ -259,11 +263,11 @@ public class ExerciseServiceTests
         var lesson2Id = Guid.NewGuid();
         var lesson3Id = Guid.NewGuid();
 
-        _db.Users.Add(new SalesTrainer.Api.Features.Auth.User
+        _db.Users.Add(new User
         {
             Id = userId, Email = $"u{userId}@test.com", DisplayName = "T", CreatedAt = DateTime.UtcNow
         });
-        _db.Skills.Add(new SalesTrainer.Api.Features.SkillTree.Skill
+        _db.Skills.Add(new Skill
         {
             Id = skillId, Slug = slug, Title = "S", IconName = "i", SortOrder = 1,
             ApplicableSalesTypes = ["all"]

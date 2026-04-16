@@ -1,8 +1,9 @@
 using FluentAssertions;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Auth;
-using SalesTrainer.Api.Features.Gamification;
-using SalesTrainer.Api.Features.League;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Gamification.Models;
+using SalesTrainer.Api.Features.League.Models;
+using SalesTrainer.Api.Features.League.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 

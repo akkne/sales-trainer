@@ -2,7 +2,8 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Auth;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Auth.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 

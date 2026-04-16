@@ -1,0 +1,232 @@
+using System.Net;
+using System.Text.Json;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using NSubstitute;
+using NUnit.Framework;
+using SalesTrainer.Api.Features.Exercises.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Data;
+
+namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
+
+[TestFixture]
+public class AiDialogueEvaluationStrategyTests
+{
+    private IHttpClientFactory _httpClientFactory = null!;
+    private IConfiguration _configuration = null!;
+    private AppDbContext _dbContext = null!;
+    private AiDialogueEvaluationStrategy _strategy = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _httpClientFactory = Substitute.For<IHttpClientFactory>();
+
+        var configValues = new Dictionary<string, string?>
+        {
+            ["OpenAI:ApiKey"] = "test-api-key",
+            ["OpenAI:BaseUrl"] = "https://api.test.com",
+            ["OpenAI:ChatCompletionsPath"] = "/v1/chat/completions",
+            ["OpenAI:OpenQuestionModel"] = "gpt-4",
+            ["OpenAI:MaxTokensOpenQuestion"] = "300"
+        };
+        _configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configValues)
+            .Build();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        _dbContext = new AppDbContext(options);
+
+        _strategy = new AiDialogueEvaluationStrategy(_httpClientFactory, _configuration, _dbContext);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _dbContext.Dispose();
+    }
+
+    private static JsonElement BuildContent(
+        string persona,
+        string scenario,
+        string[]? successCriteria = null,
+        string? aiPrompt = null)
+    {
+        var obj = new Dictionary<string, object?>
+        {
+            ["persona"] = persona,
+            ["scenario"] = scenario
+        };
+        if (successCriteria != null)
+            obj["success_criteria"] = successCriteria;
+        if (aiPrompt != null)
+            obj["ai_prompt"] = aiPrompt;
+
+        return JsonDocument.Parse(JsonSerializer.Serialize(obj)).RootElement;
+    }
+
+    private static JsonElement BuildAnswer(
+        object[] messages,
+        bool completedNaturally = true)
+    {
+        return JsonDocument.Parse(
+            JsonSerializer.Serialize(new { messages, completedNaturally })).RootElement;
+    }
+
+    [Test]
+    public void SupportedExerciseType_ReturnsAiDialog()
+    {
+        _strategy.SupportedExerciseType.Should().Be("ai_dialog");
+    }
+
+    [Test]
+    public async Task EvaluateAnswerAsync_WithSuccessfulDialogue_ReturnsHighScore()
+    {
+        var aiResponse = JsonSerializer.Serialize(new
+        {
+            passed = true,
+            rating = 9,
+            feedback = "Отлично провели разговор. Клиент согласился на встречу."
+        });
+
+        var mockHandler = new MockHttpMessageHandler(
+            HttpStatusCode.OK,
+            BuildOpenAiResponse(aiResponse));
+
+        var httpClient = new HttpClient(mockHandler);
+        _httpClientFactory.CreateClient("OpenAI").Returns(httpClient);
+
+        var content = BuildContent(
+            persona: "Секретарь Мария",
+            scenario: "Холодный звонок в офис",
+            successCriteria: new[] { "Назначить встречу", "Получить контакт ЛПР" });
+
+        var messages = new object[]
+        {
+            new { role = "assistant", content = "Компания АБВ, слушаю вас." },
+            new { role = "user", content = "Добрый день! Я звоню по вопросу оптимизации закупок." },
+            new { role = "assistant", content = "И что вы предлагаете?" },
+            new { role = "user", content = "Мы помогаем сократить расходы на 20%. Могу я поговорить с руководителем отдела закупок?" }
+        };
+
+        var answer = BuildAnswer(messages, completedNaturally: true);
+
+        var result = await _strategy.EvaluateAnswerAsync(content, answer);
+
+        result.IsCorrect.Should().BeTrue();
+        result.Score.Should().Be(90);
+        result.AiFeedback.Should().Contain("Отлично");
+    }
+
+    [Test]
+    public async Task EvaluateAnswerAsync_WithPoorDialogue_ReturnsLowScore()
+    {
+        var aiResponse = JsonSerializer.Serialize(new
+        {
+            passed = false,
+            rating = 3,
+            feedback = "Диалог завершился неудачно. Секретарь отказала в соединении."
+        });
+
+        var mockHandler = new MockHttpMessageHandler(
+            HttpStatusCode.OK,
+            BuildOpenAiResponse(aiResponse));
+
+        var httpClient = new HttpClient(mockHandler);
+        _httpClientFactory.CreateClient("OpenAI").Returns(httpClient);
+
+        var content = BuildContent(
+            persona: "Строгий секретарь",
+            scenario: "Холодный звонок");
+
+        var messages = new object[]
+        {
+            new { role = "assistant", content = "Да, слушаю." },
+            new { role = "user", content = "Здравствуйте, э-э-э... можно директора?" },
+            new { role = "assistant", content = "По какому вопросу?" },
+            new { role = "user", content = "Ну... хотел предложить сотрудничество..." }
+        };
+
+        var answer = BuildAnswer(messages, completedNaturally: false);
+
+        var result = await _strategy.EvaluateAnswerAsync(content, answer);
+
+        result.IsCorrect.Should().BeFalse();
+        result.Score.Should().Be(30);
+    }
+
+    [Test]
+    public async Task EvaluateAnswerAsync_ExtractsConversationCorrectly()
+    {
+        var aiResponse = JsonSerializer.Serialize(new
+        {
+            passed = true,
+            rating = 8,
+            feedback = "Хороший диалог."
+        });
+
+        var mockHandler = new MockHttpMessageHandler(
+            HttpStatusCode.OK,
+            BuildOpenAiResponse(aiResponse));
+
+        var httpClient = new HttpClient(mockHandler);
+        _httpClientFactory.CreateClient("OpenAI").Returns(httpClient);
+
+        var content = BuildContent(
+            persona: "Клиент",
+            scenario: "Презентация продукта");
+
+        var messages = new object[]
+        {
+            new { role = "assistant", content = "Расскажите о вашем продукте." },
+            new { role = "user", content = "Наш продукт помогает экономить время." }
+        };
+
+        var answer = BuildAnswer(messages);
+
+        var result = await _strategy.EvaluateAnswerAsync(content, answer);
+
+        result.IsCorrect.Should().BeTrue();
+        result.Score.Should().Be(80);
+    }
+
+    private static string BuildOpenAiResponse(string content)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    message = new { content }
+                }
+            }
+        });
+    }
+
+    private class MockHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _responseContent;
+
+        public MockHttpMessageHandler(HttpStatusCode statusCode, string responseContent)
+        {
+            _statusCode = statusCode;
+            _responseContent = responseContent;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage
+            {
+                StatusCode = _statusCode,
+                Content = new StringContent(_responseContent)
+            });
+        }
+    }
+}

@@ -1,8 +1,9 @@
 using System.Text.Json;
-using SalesTrainer.Api.Features.Auth;
-using SalesTrainer.Api.Features.Lessons;
-using SalesTrainer.Api.Features.Onboarding;
-using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Exercises.Models;
+using SalesTrainer.Api.Features.Lessons.Models;
+using SalesTrainer.Api.Features.Onboarding.Models;
+using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Tests.Helpers;

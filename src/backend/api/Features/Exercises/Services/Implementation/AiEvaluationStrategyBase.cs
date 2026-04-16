@@ -24,11 +24,7 @@ internal abstract class AiEvaluationStrategyBase(
         var openAiApiKey = configuration["OpenAI:ApiKey"];
         if (string.IsNullOrEmpty(openAiApiKey) || openAiApiKey.StartsWith("REPLACE_"))
         {
-            return new ExerciseEvaluationResult(
-                IsCorrect: true,
-                Score: 80,
-                Explanation: null,
-                AiFeedback: "AI-оценка недоступна — ключ OpenAI не настроен.");
+            throw new InvalidOperationException("OpenAI API key is not configured");
         }
 
         // Load global type prompt
@@ -87,11 +83,8 @@ internal abstract class AiEvaluationStrategyBase(
 
         if (!response.IsSuccessStatusCode)
         {
-            return new ExerciseEvaluationResult(
-                IsCorrect: true,
-                Score: 50,
-                Explanation: null,
-                AiFeedback: "Не удалось получить AI-оценку. Попробуй ещё раз.");
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {errorBody}");
         }
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -129,13 +122,9 @@ internal abstract class AiEvaluationStrategyBase(
                 Explanation: $"Оценка: {rating}/10",
                 AiFeedback: feedback);
         }
-        catch
+        catch (Exception ex)
         {
-            return new ExerciseEvaluationResult(
-                IsCorrect: true,
-                Score: 50,
-                Explanation: null,
-                AiFeedback: "Ошибка разбора ответа AI.");
+            throw new InvalidOperationException($"Failed to parse AI response: {aiResponseText}", ex);
         }
     }
 }
