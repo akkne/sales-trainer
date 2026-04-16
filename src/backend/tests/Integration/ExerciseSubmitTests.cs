@@ -31,8 +31,9 @@ public class ExerciseSubmitTests
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
             email: $"ex_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-{Guid.NewGuid()}");
-        var lesson = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, xpReward: 50);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"skill-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson = await TestDbSeeder.SeedLessonAsync(_db, topic.Id);
         await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
             status: "available", totalLessonCount: 1);
         var exercise = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db,
@@ -49,7 +50,7 @@ public class ExerciseSubmitTests
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         body.GetProperty("isCorrect").GetBoolean().Should().BeTrue();
         body.GetProperty("score").GetInt32().Should().Be(100);
-        body.GetProperty("xpEarned").GetInt32().Should().Be(50);
+        body.GetProperty("xpEarned").GetInt32().Should().Be(10);
     }
 
     [Test]
@@ -57,8 +58,9 @@ public class ExerciseSubmitTests
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
             email: $"ex_w_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-w-{Guid.NewGuid()}");
-        var lesson = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, xpReward: 50);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"skill-w-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson = await TestDbSeeder.SeedLessonAsync(_db, topic.Id);
         var exercise = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db,
             lesson.Id, correctOptionIndex: 1);
 
@@ -107,12 +109,13 @@ public class ExerciseSubmitTests
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
             email: $"gl_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-gl-{Guid.NewGuid()}");
-        await TestDbSeeder.SeedLessonAsync(_db, skill.Id);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"skill-gl-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        await TestDbSeeder.SeedLessonAsync(_db, topic.Id);
         var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
             user.Id, user.Email, user.DisplayName);
 
-        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var response = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var lessons = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -145,8 +148,9 @@ public class ExerciseSubmitTests
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
             email: $"ge_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-ge-{Guid.NewGuid()}");
-        var lesson = await TestDbSeeder.SeedLessonAsync(_db, skill.Id);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"skill-ge-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson = await TestDbSeeder.SeedLessonAsync(_db, topic.Id);
         await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson.Id);
         var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
             user.Id, user.Email, user.DisplayName);
@@ -163,8 +167,9 @@ public class ExerciseSubmitTests
     {
         var user = await TestDbSeeder.SeedUserAsync(_db,
             email: $"ex_lp_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"skill-lp-{Guid.NewGuid()}");
-        var lesson = await TestDbSeeder.SeedLessonAsync(_db, skill.Id);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"skill-lp-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson = await TestDbSeeder.SeedLessonAsync(_db, topic.Id);
         await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
             status: "available", totalLessonCount: 1);
         var exercise = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db,
@@ -178,7 +183,7 @@ public class ExerciseSubmitTests
             new { answer = new { selectedOptionIndex = 0 } });
 
         // Verify via GET lessons
-        var lessonsResponse = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var lessonsResponse = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         lessonsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var lessons = await lessonsResponse.Content.ReadFromJsonAsync<JsonElement>();
         var first = lessons.EnumerateArray().First();
@@ -193,22 +198,23 @@ public class ExerciseSubmitTests
     public async Task GetLessons_FirstAccess_FirstLessonAvailable_RestLocked()
     {
         var user = await TestDbSeeder.SeedUserAsync(_db, email: $"seed_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"seed-skill-{Guid.NewGuid()}");
-        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
-        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
-        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L3", sortOrder: 3);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"seed-skill-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L1", orderInTopic: 1);
+        await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L2", orderInTopic: 2);
+        await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L3", orderInTopic: 3);
         await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
             status: "available", totalLessonCount: 3);
 
         var client = IntegrationTestSetup.Factory.CreateAuthenticatedClient(
             user.Id, user.Email, user.DisplayName);
 
-        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var response = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var lessons = (await response.Content.ReadFromJsonAsync<JsonElement>())
             .EnumerateArray()
-            .OrderBy(l => l.GetProperty("sortOrder").GetInt32())
+            .OrderBy(l => l.GetProperty("orderInTopic").GetInt32())
             .ToList();
 
         lessons.Should().HaveCount(3);
@@ -221,9 +227,10 @@ public class ExerciseSubmitTests
     public async Task SubmitLesson1_UnlocksLesson2()
     {
         var user = await TestDbSeeder.SeedUserAsync(_db, email: $"unlock_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"unlock-skill-{Guid.NewGuid()}");
-        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
-        await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"unlock-skill-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L1", orderInTopic: 1);
+        await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L2", orderInTopic: 2);
         await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
             status: "available", totalLessonCount: 2);
         var exercise = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db,
@@ -233,7 +240,7 @@ public class ExerciseSubmitTests
             user.Id, user.Email, user.DisplayName);
 
         // Trigger seed by first GET
-        await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        await client.GetAsync($"/skills/{skill.IconicName}/lessons");
 
         // Complete lesson 1
         await client.PostAsJsonAsync(
@@ -241,10 +248,10 @@ public class ExerciseSubmitTests
             new { answer = new { selectedOptionIndex = 0 } });
 
         // Check lesson 2 is now available
-        var response = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var response = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         var lessons = (await response.Content.ReadFromJsonAsync<JsonElement>())
             .EnumerateArray()
-            .OrderBy(l => l.GetProperty("sortOrder").GetInt32())
+            .OrderBy(l => l.GetProperty("orderInTopic").GetInt32())
             .ToList();
 
         lessons[0].GetProperty("status").GetString().Should().Be("completed");
@@ -255,10 +262,11 @@ public class ExerciseSubmitTests
     public async Task FullLessonUnlockFlow_ThreeLessons_UnlocksSequentially()
     {
         var user = await TestDbSeeder.SeedUserAsync(_db, email: $"flow_{Guid.NewGuid()}@test.com");
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"flow-skill-{Guid.NewGuid()}");
-        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L1", sortOrder: 1);
-        var lesson2 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L2", sortOrder: 2);
-        var lesson3 = await TestDbSeeder.SeedLessonAsync(_db, skill.Id, title: "L3", sortOrder: 3);
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"flow-skill-{Guid.NewGuid()}");
+        var topic = await TestDbSeeder.SeedTopicAsync(_db, skill.Id);
+        var lesson1 = await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L1", orderInTopic: 1);
+        var lesson2 = await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L2", orderInTopic: 2);
+        var lesson3 = await TestDbSeeder.SeedLessonAsync(_db, topic.Id, title: "L3", orderInTopic: 3);
         await TestDbSeeder.SeedSkillProgressAsync(_db, user.Id, skill.Id,
             status: "available", totalLessonCount: 3);
         var ex1 = await TestDbSeeder.SeedMultipleChoiceExerciseAsync(_db, lesson1.Id, correctOptionIndex: 0);
@@ -269,14 +277,14 @@ public class ExerciseSubmitTests
             user.Id, user.Email, user.DisplayName);
 
         // Access to trigger seeding
-        await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        await client.GetAsync($"/skills/{skill.IconicName}/lessons");
 
         // Complete lesson 1 → lesson 2 unlocks
         await client.PostAsJsonAsync($"/exercises/{ex1.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
 
-        var r2 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var r2 = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         var l2 = (await r2.Content.ReadFromJsonAsync<JsonElement>())
-            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+            .EnumerateArray().OrderBy(l => l.GetProperty("orderInTopic").GetInt32()).ToList();
         l2[0].GetProperty("status").GetString().Should().Be("completed");
         l2[1].GetProperty("status").GetString().Should().Be("available");
         l2[2].GetProperty("status").GetString().Should().Be("locked");
@@ -284,9 +292,9 @@ public class ExerciseSubmitTests
         // Complete lesson 2 → lesson 3 unlocks
         await client.PostAsJsonAsync($"/exercises/{ex2.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
 
-        var r3 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var r3 = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         var l3 = (await r3.Content.ReadFromJsonAsync<JsonElement>())
-            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+            .EnumerateArray().OrderBy(l => l.GetProperty("orderInTopic").GetInt32()).ToList();
         l3[0].GetProperty("status").GetString().Should().Be("completed");
         l3[1].GetProperty("status").GetString().Should().Be("completed");
         l3[2].GetProperty("status").GetString().Should().Be("available");
@@ -294,9 +302,9 @@ public class ExerciseSubmitTests
         // Complete lesson 3 → skill completed
         await client.PostAsJsonAsync($"/exercises/{ex3.Id}/submit", new { answer = new { selectedOptionIndex = 0 } });
 
-        var r4 = await client.GetAsync($"/skills/{skill.Slug}/lessons");
+        var r4 = await client.GetAsync($"/skills/{skill.IconicName}/lessons");
         var l4 = (await r4.Content.ReadFromJsonAsync<JsonElement>())
-            .EnumerateArray().OrderBy(l => l.GetProperty("sortOrder").GetInt32()).ToList();
+            .EnumerateArray().OrderBy(l => l.GetProperty("orderInTopic").GetInt32()).ToList();
         l4.Should().AllSatisfy(l => l.GetProperty("status").GetString().Should().Be("completed"));
     }
 }

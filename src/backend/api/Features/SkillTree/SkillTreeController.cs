@@ -59,6 +59,10 @@ public class SkillsController(ISkillTreeService skillTreeService, IExerciseServi
             return Unauthorized();
 
         var lessons = await exerciseService.GetLessonsForSkillAsync(userId, skillSlug);
+
+        if (lessons.Count == 0)
+            return NotFound(new { message = $"Skill '{skillSlug}' not found or has no lessons." });
+
         return Ok(lessons);
     }
 

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using SalesTrainer.Api.Features.Auth.Models;
-using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.Onboarding.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
@@ -46,42 +45,55 @@ public static class TestDbSeeder
 
     public static async Task<Skill> SeedSkillAsync(
         AppDbContext db,
-        string slug = "cold-calling",
+        string iconicName = "cold-calling",
         string title = "Cold Calling",
-        int sortOrder = 1,
-        Guid? prerequisiteSkillId = null,
-        string[]? applicableSalesTypes = null)
+        int orderInTree = 1)
     {
         var skill = new Skill
         {
             Id = Guid.NewGuid(),
-            Slug = slug,
+            IconicName = iconicName,
             Title = title,
-            IconName = "phone",
-            SortOrder = sortOrder,
-            PrerequisiteSkillId = prerequisiteSkillId,
-            ApplicableSalesTypes = applicableSalesTypes ?? ["enterprise", "smb"]
+            OrderInTree = orderInTree,
+            Description = "Test skill description"
         };
         db.Skills.Add(skill);
         await db.SaveChangesAsync();
         return skill;
     }
 
-    public static async Task<Lesson> SeedLessonAsync(
+    public static async Task<Topic> SeedTopicAsync(
         AppDbContext db,
         Guid skillId,
+        string? iconicName = null,
+        string title = "Basics",
+        int orderInSkill = 1)
+    {
+        var topic = new Topic
+        {
+            Id = Guid.NewGuid(),
+            SkillId = skillId,
+            IconicName = iconicName ?? $"topic-{Guid.NewGuid()}",
+            Title = title,
+            OrderInSkill = orderInSkill
+        };
+        db.Topics.Add(topic);
+        await db.SaveChangesAsync();
+        return topic;
+    }
+
+    public static async Task<Lesson> SeedLessonAsync(
+        AppDbContext db,
+        Guid topicId,
         string title = "Lesson 1",
-        int sortOrder = 1,
-        int xpReward = 50)
+        int orderInTopic = 1)
     {
         var lesson = new Lesson
         {
             Id = Guid.NewGuid(),
-            SkillId = skillId,
+            TopicId = topicId,
             Title = title,
-            SortOrder = sortOrder,
-            DifficultyLevel = 1,
-            XpReward = xpReward
+            OrderInTopic = orderInTopic
         };
         db.Lessons.Add(lesson);
         await db.SaveChangesAsync();
@@ -92,23 +104,31 @@ public static class TestDbSeeder
         AppDbContext db,
         Guid lessonId,
         int correctOptionIndex = 1,
-        int sortOrder = 1)
+        int orderInLesson = 1)
     {
+        var options = new[]
+        {
+            new { text = "Option A", is_correct = correctOptionIndex == 0 },
+            new { text = "Option B", is_correct = correctOptionIndex == 1 },
+            new { text = "Option C", is_correct = correctOptionIndex == 2 }
+        };
+
         var content = JsonSerializer.Serialize(new
         {
-            question = "What is the best approach?",
-            options = new[] { "Option A", "Option B", "Option C" },
-            correctOptionIndex,
-            explanation = "Option B is correct because it works."
+            situation = "What is the best approach?",
+            options,
+            explanation = "The correct option is the best because it works."
         });
 
         var exercise = new Exercise
         {
             Id = Guid.NewGuid(),
             LessonId = lessonId,
-            Type = "multiple_choice",
-            SortOrder = sortOrder,
-            SerializedContent = content
+            Type = "choose_option",
+            OrderInLesson = orderInLesson,
+            SerializedContent = content,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
         db.Exercises.Add(exercise);
         await db.SaveChangesAsync();

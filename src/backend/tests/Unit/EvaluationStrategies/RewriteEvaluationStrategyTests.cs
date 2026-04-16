@@ -178,7 +178,7 @@ public class RewriteEvaluationStrategyTests
         var act = async () => await _strategy.EvaluateAnswerAsync(content, answer);
 
         await act.Should().ThrowAsync<HttpRequestException>()
-            .WithMessage("*500*");
+            .WithMessage("*InternalServerError*");
     }
 
     private static string BuildOpenAiResponse(string content)

@@ -42,7 +42,7 @@ public class AdminSkillsTests
     [Test]
     public async Task GetAll_AsAdmin_Returns200WithList()
     {
-        await TestDbSeeder.SeedSkillAsync(_db, slug: $"slug-{Guid.NewGuid()}");
+        await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"slug-{Guid.NewGuid()}");
 
         var response = await _adminClient.GetAsync("/admin/skills");
 
@@ -61,37 +61,31 @@ public class AdminSkillsTests
     [Test]
     public async Task Create_AsAdmin_Returns200WithCreatedSkill()
     {
-        var slug = $"new-skill-{Guid.NewGuid()}";
+        var iconicName = $"new-skill-{Guid.NewGuid()}";
 
         var response = await _adminClient.PostAsJsonAsync("/admin/skills", new
         {
             title = "New Skill",
-            slug,
-            iconName = "star",
-            sortOrder = 99,
-            prerequisiteSkillId = (Guid?)null,
-            applicableSalesTypes = new[] { "enterprise" }
+            iconicName,
+            orderInTree = 99
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("slug").GetString().Should().Be(slug);
+        body.GetProperty("iconicName").GetString().Should().Be(iconicName);
         body.GetProperty("title").GetString().Should().Be("New Skill");
     }
 
     [Test]
     public async Task Update_AsAdmin_Returns200WithUpdatedData()
     {
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"upd-{Guid.NewGuid()}");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"upd-{Guid.NewGuid()}");
 
         var response = await _adminClient.PutAsJsonAsync($"/admin/skills/{skill.Id}", new
         {
             title = "Updated Title",
-            slug = skill.Slug,
-            iconName = "pencil",
-            sortOrder = skill.SortOrder,
-            prerequisiteSkillId = (Guid?)null,
-            applicableSalesTypes = new[] { "smb" }
+            iconicName = skill.IconicName,
+            orderInTree = skill.OrderInTree
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -105,11 +99,8 @@ public class AdminSkillsTests
         var response = await _adminClient.PutAsJsonAsync($"/admin/skills/{Guid.NewGuid()}", new
         {
             title = "X",
-            slug = "x",
-            iconName = "x",
-            sortOrder = 1,
-            prerequisiteSkillId = (Guid?)null,
-            applicableSalesTypes = new[] { "enterprise" }
+            iconicName = "x",
+            orderInTree = 1
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -118,7 +109,7 @@ public class AdminSkillsTests
     [Test]
     public async Task Delete_AsAdmin_Returns204()
     {
-        var skill = await TestDbSeeder.SeedSkillAsync(_db, slug: $"del-{Guid.NewGuid()}");
+        var skill = await TestDbSeeder.SeedSkillAsync(_db, iconicName: $"del-{Guid.NewGuid()}");
 
         var response = await _adminClient.DeleteAsync($"/admin/skills/{skill.Id}");
 

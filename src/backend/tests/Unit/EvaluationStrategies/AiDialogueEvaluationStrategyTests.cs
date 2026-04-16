@@ -53,12 +53,14 @@ public class AiDialogueEvaluationStrategyTests
         string persona,
         string scenario,
         string[]? successCriteria = null,
-        string? aiPrompt = null)
+        string? aiPrompt = null,
+        int maxTurns = 6)
     {
         var obj = new Dictionary<string, object?>
         {
             ["persona"] = persona,
-            ["scenario"] = scenario
+            ["scenario"] = scenario,
+            ["max_turns"] = maxTurns
         };
         if (successCriteria != null)
             obj["success_criteria"] = successCriteria;
@@ -79,7 +81,7 @@ public class AiDialogueEvaluationStrategyTests
     [Test]
     public void SupportedExerciseType_ReturnsAiDialog()
     {
-        _strategy.SupportedExerciseType.Should().Be("ai_dialog");
+        _strategy.SupportedExerciseType.Should().Be("ai_dialogue");
     }
 
     [Test]
@@ -102,14 +104,17 @@ public class AiDialogueEvaluationStrategyTests
         var content = BuildContent(
             persona: "Секретарь Мария",
             scenario: "Холодный звонок в офис",
-            successCriteria: new[] { "Назначить встречу", "Получить контакт ЛПР" });
+            successCriteria: new[] { "Назначить встречу", "Получить контакт ЛПР" },
+            maxTurns: 6);
 
         var messages = new object[]
         {
             new { role = "assistant", content = "Компания АБВ, слушаю вас." },
             new { role = "user", content = "Добрый день! Я звоню по вопросу оптимизации закупок." },
             new { role = "assistant", content = "И что вы предлагаете?" },
-            new { role = "user", content = "Мы помогаем сократить расходы на 20%. Могу я поговорить с руководителем отдела закупок?" }
+            new { role = "user", content = "Мы помогаем сократить расходы на 20%. Могу я поговорить с руководителем отдела закупок?" },
+            new { role = "assistant", content = "Хорошо, соединяю." },
+            new { role = "user", content = "Спасибо большое!" }
         };
 
         var answer = BuildAnswer(messages, completedNaturally: true);
@@ -177,12 +182,15 @@ public class AiDialogueEvaluationStrategyTests
 
         var content = BuildContent(
             persona: "Клиент",
-            scenario: "Презентация продукта");
+            scenario: "Презентация продукта",
+            maxTurns: 4);
 
         var messages = new object[]
         {
             new { role = "assistant", content = "Расскажите о вашем продукте." },
-            new { role = "user", content = "Наш продукт помогает экономить время." }
+            new { role = "user", content = "Наш продукт помогает экономить время." },
+            new { role = "assistant", content = "Интересно, а сколько стоит?" },
+            new { role = "user", content = "Цена зависит от объема." }
         };
 
         var answer = BuildAnswer(messages);

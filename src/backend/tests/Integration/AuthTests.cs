@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests;
 using SalesTrainer.Tests.Helpers;
@@ -126,7 +127,7 @@ public class AuthTests
             email: $"rf_{Guid.NewGuid()}@test.com");
 
         var rawToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
-        _db.Set<SalesTrainer.Api.Features.Auth.RefreshToken>().Add(new SalesTrainer.Api.Features.Auth.RefreshToken
+        _db.Set<RefreshToken>().Add(new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
@@ -160,7 +161,7 @@ public class AuthTests
             email: $"lo_{Guid.NewGuid()}@test.com");
 
         var rawToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
-        _db.Set<SalesTrainer.Api.Features.Auth.RefreshToken>().Add(new SalesTrainer.Api.Features.Auth.RefreshToken
+        _db.Set<RefreshToken>().Add(new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
