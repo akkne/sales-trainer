@@ -4,7 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using SalesTrainer.Api.Features.Auth;
+using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests;
 using SalesTrainer.Tests.Helpers;

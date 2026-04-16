@@ -92,7 +92,7 @@ public class RewriteEvaluationStrategyTests
 
         var mockHandler = new MockHttpMessageHandler(
             HttpStatusCode.OK,
-            BuildOpenAiResponse(aiResponse));
+            BuildF5aiResponse(aiResponse));
 
         var httpClient = new HttpClient(mockHandler);
         _httpClientFactory.CreateClient("OpenAI").Returns(httpClient);
@@ -123,7 +123,7 @@ public class RewriteEvaluationStrategyTests
 
         var mockHandler = new MockHttpMessageHandler(
             HttpStatusCode.OK,
-            BuildOpenAiResponse(aiResponse));
+            BuildF5aiResponse(aiResponse));
 
         var httpClient = new HttpClient(mockHandler);
         _httpClientFactory.CreateClient("OpenAI").Returns(httpClient);
@@ -192,6 +192,15 @@ public class RewriteEvaluationStrategyTests
                     message = new { content }
                 }
             }
+        });
+    }
+
+    // f5ai returns different format
+    private static string BuildF5aiResponse(string content)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            message = new { role = "assistant", content }
         });
     }
 

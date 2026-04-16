@@ -53,16 +53,22 @@ internal abstract class AiEvaluationStrategyBase(
         var model = configuration["OpenAI:OpenQuestionModel"] ?? "gpt-4.1";
         var maxTokens = int.TryParse(configuration["OpenAI:MaxTokensOpenQuestion"], out var t) ? t : 300;
 
+        var systemPromptWithFormat = systemPromptBuilder.ToString();
+        if (string.IsNullOrEmpty(systemPromptWithFormat))
+        {
+            systemPromptWithFormat = "Ты — эксперт по оценке ответов на упражнения. Оценивай ответ пользователя.";
+        }
+        systemPromptWithFormat += "\n\nОТВЕТ СТРОГО В ФОРМАТЕ JSON: {\"passed\": true/false, \"rating\": 1-10, \"feedback\": \"текст обратной связи\"}";
+
         var requestPayload = new
         {
             model,
             messages = new[]
             {
-                new { role = "system", content = systemPromptBuilder.ToString() },
+                new { role = "system", content = systemPromptWithFormat },
                 new { role = "user", content = userPrompt }
             },
-            max_tokens = maxTokens,
-            response_format = new { type = "json_object" }
+            max_tokens = maxTokens
         };
 
         var requestContent = new StringContent(
@@ -89,11 +95,26 @@ internal abstract class AiEvaluationStrategyBase(
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         var responseJson = JsonDocument.Parse(responseBody);
-        var aiResponseText = responseJson.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString() ?? "{}";
+
+        // f5ai returns "message" instead of "choices"
+        string aiResponseText;
+        if (responseJson.RootElement.TryGetProperty("message", out var messageEl) &&
+            messageEl.TryGetProperty("content", out var contentEl))
+        {
+            aiResponseText = contentEl.GetString() ?? "{}";
+        }
+        else if (responseJson.RootElement.TryGetProperty("choices", out var choices) &&
+                 choices.GetArrayLength() > 0)
+        {
+            aiResponseText = choices[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? "{}";
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unexpected API response format: {responseBody}");
+        }
 
         return ParseAiResponse(aiResponseText);
     }
