@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements.Services.Abstract;
+using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Dialog.Services.Abstract;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 using SalesTrainer.Api.Features.Gamification.Models;
@@ -12,7 +14,8 @@ namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 internal sealed class ExerciseService(
     AppDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory,
-    IAchievementService achievementService) : IExerciseService
+    IAchievementService achievementService,
+    IOpenAiChatService openAiChatService) : IExerciseService
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
@@ -337,17 +340,27 @@ internal sealed class ExerciseService(
             throw new NotSupportedException("Chat is only supported for ai_dialog exercises.");
 
         var content = JsonDocument.Parse(exercise.SerializedContent).RootElement;
-        var maxTurns = content.TryGetProperty("maxTurns", out var maxEl) ? maxEl.GetInt32() : 10;
-        var chatSystemPrompt = content.GetProperty("chatSystemPrompt").GetString() ?? "";
+        var maxTurns = content.TryGetProperty("max_turns", out var maxEl) ? maxEl.GetInt32() : 10;
 
-        // Get or create chat state from cache (using Redis pattern key)
+        // Build system prompt from exercise content
+        var persona = content.TryGetProperty("persona", out var personaEl) ? personaEl.GetString() ?? "" : "";
+        var scenario = content.TryGetProperty("scenario", out var scenarioEl) ? scenarioEl.GetString() ?? "" : "";
+        var contextInfo = content.TryGetProperty("context", out var contextEl) ? contextEl.GetString() ?? "" : "";
+        var aiPrompt = content.TryGetProperty("ai_prompt", out var aiPromptEl) ? aiPromptEl.GetString() ?? "" : "";
+
+        var systemPrompt = !string.IsNullOrEmpty(aiPrompt)
+            ? aiPrompt
+            : $"Ты играешь роль: {persona}. Сценарий: {scenario}. {contextInfo}\n\nОтвечай кратко, в 1-3 предложения. Веди себя естественно для своей роли.";
+
+        // Get or create chat state from cache
         var cacheKey = $"exercise_chat:{userId}:{exerciseId}";
         var messages = await GetChatMessagesFromCacheAsync(cacheKey, cancellationToken);
 
         // If no messages, start with AI greeting
         if (messages.Count == 0)
         {
-            var greeting = await GenerateAiResponseAsync(chatSystemPrompt, messages, cancellationToken);
+            var greetingHistory = new List<DialogMessage>();
+            var greeting = await GenerateAiResponseAsync(systemPrompt, greetingHistory, cancellationToken);
             messages.Add(new ChatMessage("assistant", greeting.Response));
             await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
 
@@ -359,7 +372,10 @@ internal sealed class ExerciseService(
         }
 
         // Add user message
-        messages.Add(new ChatMessage("user", userMessage));
+        if (!string.IsNullOrEmpty(userMessage))
+        {
+            messages.Add(new ChatMessage("user", userMessage));
+        }
 
         var turnNumber = messages.Count(m => m.Role == "user");
         if (turnNumber >= maxTurns)
@@ -372,8 +388,16 @@ internal sealed class ExerciseService(
                 MaxTurns: maxTurns);
         }
 
+        // Convert to DialogMessage format for OpenAI service
+        var dialogHistory = messages.Select(m => new DialogMessage
+        {
+            Role = m.Role,
+            Content = m.Content,
+            Timestamp = DateTime.UtcNow
+        }).ToList();
+
         // Generate AI response
-        var aiResponse = await GenerateAiResponseAsync(chatSystemPrompt, messages, cancellationToken);
+        var aiResponse = await GenerateAiResponseAsync(systemPrompt, dialogHistory, cancellationToken);
         messages.Add(new ChatMessage("assistant", aiResponse.Response));
 
         await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
@@ -408,20 +432,33 @@ internal sealed class ExerciseService(
 
     private async Task<AiChatResponse> GenerateAiResponseAsync(
         string systemPrompt,
-        List<ChatMessage> messages,
+        List<DialogMessage> messages,
         CancellationToken cancellationToken)
     {
-        // This is a simplified implementation - in production should use OpenAI service
-        // For now, return a placeholder that indicates the chat endpoint works
-        await Task.CompletedTask;
+        if (!openAiChatService.IsConfigured)
+        {
+            // Fallback for when AI is not configured
+            var isComplete = messages.Count(m => m.Role == "user") >= 3 &&
+                             messages.LastOrDefault()?.Content.Contains("спасибо", StringComparison.OrdinalIgnoreCase) == true;
 
-        // TODO: Implement actual OpenAI call similar to DialogService
-        // For now, return placeholder
-        var isComplete = messages.Count(m => m.Role == "user") >= 3 &&
-                         messages.LastOrDefault()?.Content.Contains("спасибо", StringComparison.OrdinalIgnoreCase) == true;
+            return new AiChatResponse(
+                Response: "Понял вас. Что ещё вы хотели бы обсудить?",
+                IsComplete: isComplete);
+        }
 
-        return new AiChatResponse(
-            Response: "Понял вас. Что ещё вы хотели бы обсудить?",
-            IsComplete: isComplete);
+        try
+        {
+            var result = await openAiChatService.SendChatMessageAsync(systemPrompt, messages, cancellationToken);
+            return new AiChatResponse(
+                Response: result.Content,
+                IsComplete: result.IsStopSignal);
+        }
+        catch (Exception)
+        {
+            // Fallback on error
+            return new AiChatResponse(
+                Response: "Понял вас. Что ещё вы хотели бы обсудить?",
+                IsComplete: false);
+        }
     }
 }

@@ -24,6 +24,14 @@ interface MatchPairsExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
+// Colors for different connected pairs (cycled if more pairs than colors)
+const PAIR_COLORS = [
+    { border: "border-primary", bg: "bg-primary-container", text: "text-primary" },
+    { border: "border-tertiary", bg: "bg-tertiary-container", text: "text-tertiary" },
+    { border: "border-secondary", bg: "bg-secondary-container", text: "text-secondary" },
+    { border: "border-[#7c5800]", bg: "bg-[#fff0c3]", text: "text-[#7c5800]" },
+];
+
 export function MatchPairsExercise({
     content,
     onSubmit,
@@ -48,8 +56,23 @@ export function MatchPairsExercise({
     const connectedLefts = useMemo(() => new Set(userPairs.map(p => p.left)), [userPairs]);
     const connectedRights = useMemo(() => new Set(userPairs.map(p => p.right)), [userPairs]);
 
+    // Map items to their pair index for color assignment
+    const pairIndexByLeft = useMemo(() => {
+        const map = new Map<string, number>();
+        userPairs.forEach((p, idx) => map.set(p.left, idx));
+        return map;
+    }, [userPairs]);
+
+    const pairIndexByRight = useMemo(() => {
+        const map = new Map<string, number>();
+        userPairs.forEach((p, idx) => map.set(p.right, idx));
+        return map;
+    }, [userPairs]);
+
     function handleLeftClick(item: string) {
-        if (isAnswered || connectedLefts.has(item)) return;
+        if (isAnswered) return;
+        // If already connected, allow clicking to deselect current selection only
+        if (connectedLefts.has(item)) return;
         setSelectedLeft(item === selectedLeft ? null : item);
     }
 
@@ -73,15 +96,21 @@ export function MatchPairsExercise({
         return new Set(content.pairs.map(p => `${p.left}:${p.right}`));
     }, [content.pairs]);
 
+    function getColorForPairIndex(index: number) {
+        return PAIR_COLORS[index % PAIR_COLORS.length];
+    }
+
     function leftItemStyle(item: string): string {
         const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
 
         if (!isAnswered) {
-            if (connectedLefts.has(item)) {
-                return `${base} border-tertiary bg-tertiary-container text-tertiary`;
+            const pairIdx = pairIndexByLeft.get(item);
+            if (pairIdx !== undefined) {
+                const color = getColorForPairIndex(pairIdx);
+                return `${base} ${color.border} ${color.bg} ${color.text}`;
             }
             if (selectedLeft === item) {
-                return `${base} border-primary bg-primary-container text-primary`;
+                return `${base} border-primary bg-primary-container text-primary ring-2 ring-primary/30`;
             }
             return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-outline`;
         }
@@ -97,8 +126,10 @@ export function MatchPairsExercise({
         const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
 
         if (!isAnswered) {
-            if (connectedRights.has(item)) {
-                return `${base} border-tertiary bg-tertiary-container text-tertiary`;
+            const pairIdx = pairIndexByRight.get(item);
+            if (pairIdx !== undefined) {
+                const color = getColorForPairIndex(pairIdx);
+                return `${base} ${color.border} ${color.bg} ${color.text}`;
             }
             if (selectedLeft && !connectedRights.has(item)) {
                 return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-primary cursor-pointer`;
@@ -137,25 +168,30 @@ export function MatchPairsExercise({
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                    {leftItems.map((item) => (
-                        <button
-                            key={item}
-                            onClick={() => handleLeftClick(item)}
-                            disabled={isAnswered || connectedLefts.has(item)}
-                            className={leftItemStyle(item)}
-                        >
-                            {item}
-                            {!isAnswered && connectedLefts.has(item) && (
+                    {leftItems.map((item) => {
+                        const isConnected = connectedLefts.has(item);
+                        return (
+                            <div key={item} className="relative">
                                 <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); removePair(item); }}
-                                    className="ml-2 text-xs text-tertiary hover:text-error"
+                                    onClick={() => handleLeftClick(item)}
+                                    disabled={isAnswered}
+                                    className={`w-full ${leftItemStyle(item)} ${isConnected ? 'pr-10' : ''}`}
                                 >
-                                    ✕
+                                    {item}
                                 </button>
-                            )}
-                        </button>
-                    ))}
+                                {!isAnswered && isConnected && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removePair(item)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-surface hover:bg-error-container text-on-surface-variant hover:text-error transition-colors"
+                                        aria-label="Удалить связь"
+                                    >
+                                        <Icon name="x" size="sm" />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div className="flex flex-col gap-2">
