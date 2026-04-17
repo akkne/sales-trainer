@@ -64,12 +64,12 @@ export function AiDialogueExercise({
     async function startConversation() {
         setIsSending(true);
         try {
-            const data = await apiClient.post<{ response: string; isComplete: boolean }>(
+            const data = await apiClient.post<{ response: string; isComplete: boolean; isFinished: boolean }>(
                 `/exercises/${exerciseId}/chat`,
                 { message: "" }
             );
             setMessages([{ role: "assistant", content: data.response }]);
-            if (data.isComplete) setIsComplete(true);
+            if (data.isComplete || data.isFinished) setIsComplete(true);
         } catch (error) {
             console.error("Failed to start conversation:", error);
             // Fallback greeting
@@ -91,12 +91,12 @@ export function AiDialogueExercise({
         setIsSending(true);
 
         try {
-            const data = await apiClient.post<{ response: string; isComplete: boolean }>(
+            const data = await apiClient.post<{ response: string; isComplete: boolean; isFinished: boolean }>(
                 `/exercises/${exerciseId}/chat`,
                 { message: inputText }
             );
             setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
-            if (data.isComplete) setIsComplete(true);
+            if (data.isComplete || data.isFinished) setIsComplete(true);
         } catch (error) {
             console.error("Failed to send message:", error);
             setMessages(prev => [...prev, {

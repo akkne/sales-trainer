@@ -367,6 +367,7 @@ internal sealed class ExerciseService(
             return new ExerciseChatResponseDto(
                 Response: greeting.Response,
                 IsComplete: greeting.IsComplete,
+                IsFinished: greeting.IsFinished,
                 TurnNumber: 1,
                 MaxTurns: maxTurns);
         }
@@ -384,6 +385,7 @@ internal sealed class ExerciseService(
             return new ExerciseChatResponseDto(
                 Response: "Диалог завершён — достигнуто максимальное количество реплик.",
                 IsComplete: true,
+                IsFinished: false,
                 TurnNumber: turnNumber,
                 MaxTurns: maxTurns);
         }
@@ -405,13 +407,14 @@ internal sealed class ExerciseService(
         return new ExerciseChatResponseDto(
             Response: aiResponse.Response,
             IsComplete: aiResponse.IsComplete,
+            IsFinished: aiResponse.IsFinished,
             TurnNumber: turnNumber,
             MaxTurns: maxTurns);
     }
 
     private record ChatMessage(string Role, string Content);
 
-    private record AiChatResponse(string Response, bool IsComplete);
+    private record AiChatResponse(string Response, bool IsComplete, bool IsFinished);
 
     private Task<List<ChatMessage>> GetChatMessagesFromCacheAsync(string cacheKey, CancellationToken cancellationToken)
     {
@@ -443,7 +446,8 @@ internal sealed class ExerciseService(
 
             return new AiChatResponse(
                 Response: "Понял вас. Что ещё вы хотели бы обсудить?",
-                IsComplete: isComplete);
+                IsComplete: isComplete,
+                IsFinished: false);
         }
 
         try
@@ -451,14 +455,16 @@ internal sealed class ExerciseService(
             var result = await openAiChatService.SendChatMessageAsync(systemPrompt, messages, cancellationToken);
             return new AiChatResponse(
                 Response: result.Content,
-                IsComplete: result.IsStopSignal);
+                IsComplete: result.IsStopSignal,
+                IsFinished: result.IsStopSignal);
         }
         catch (Exception)
         {
             // Fallback on error
             return new AiChatResponse(
                 Response: "Понял вас. Что ещё вы хотели бы обсудить?",
-                IsComplete: false);
+                IsComplete: false,
+                IsFinished: false);
         }
     }
 }
