@@ -92,7 +92,7 @@ function LessonNode({
                         </span>
                     </div>
                     <Link
-                        href={`/exercise/${lesson.lessonId}`}
+                        href={`/session/${lesson.lessonId}`}
                         onClick={onClosePopover}
                         className="flex items-center justify-center gap-1 w-full py-2.5 rounded-full bg-primary text-on-primary text-sm font-bold shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
                     >

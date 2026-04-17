@@ -166,7 +166,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {/* CTA button */}
                             {isCompleted && (
                                 <Link
-                                    href={`/exercise/${lesson.lessonId}`}
+                                    href={`/session/${lesson.lessonId}`}
                                     className="shrink-0 self-center px-4 py-2 rounded-full border border-outline text-sm font-medium text-on-surface hover:bg-surface-container-high tonal-transition"
                                 >
                                     Повторить
@@ -174,7 +174,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             )}
                             {isUpNext && (
                                 <Link
-                                    href={`/exercise/${lesson.lessonId}`}
+                                    href={`/session/${lesson.lessonId}`}
                                     className="shrink-0 self-center flex items-center gap-1 px-4 py-2 rounded-full bg-secondary text-on-secondary text-sm font-semibold hover:opacity-90 tonal-transition"
                                 >
                                     Начать
@@ -183,7 +183,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             )}
                             {isActive && !isUpNext && (
                                 <Link
-                                    href={`/exercise/${lesson.lessonId}`}
+                                    href={`/session/${lesson.lessonId}`}
                                     className="shrink-0 self-center px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:opacity-90 tonal-transition"
                                 >
                                     Продолжить
