@@ -53,3 +53,4 @@ logs/
 # Except Next.js API route named "logs"
 !src/frontend/app/api/logs/
 !src/frontend/app/api/logs/**
+.playwright-mcp/
