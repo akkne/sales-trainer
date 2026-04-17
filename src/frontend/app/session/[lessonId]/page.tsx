@@ -103,7 +103,8 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
                     // For AI-evaluated exercises (score 0-10), check against threshold
                     // For standard exercises, isCorrect is already set by backend
-                    const isPassing = result.isCorrect || result.score >= PASSING_SCORE_THRESHOLD;
+                    // Note: result.score is 0-100 scale, threshold is 0-10 scale
+                    const isPassing = result.isCorrect || (result.score !== undefined && result.score >= PASSING_SCORE_THRESHOLD * 10);
 
                     if (isPassing) {
                         setTotalXpEarned((prev) => prev + result.xpEarned);

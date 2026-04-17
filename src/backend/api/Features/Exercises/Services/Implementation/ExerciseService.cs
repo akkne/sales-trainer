@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SalesTrainer.Api.Features.Achievements.Services.Abstract;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
@@ -15,7 +16,8 @@ internal sealed class ExerciseService(
     AppDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory,
     IAchievementService achievementService,
-    IOpenAiChatService openAiChatService) : IExerciseService
+    IOpenAiChatService openAiChatService,
+    ILogger<ExerciseService> logger) : IExerciseService
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
@@ -440,6 +442,7 @@ internal sealed class ExerciseService(
     {
         if (!openAiChatService.IsConfigured)
         {
+            logger.LogWarning("OpenAI service is not configured, using fallback response");
             // Fallback for when AI is not configured
             var isComplete = messages.Count(m => m.Role == "user") >= 3 &&
                              messages.LastOrDefault()?.Content.Contains("спасибо", StringComparison.OrdinalIgnoreCase) == true;
@@ -458,8 +461,9 @@ internal sealed class ExerciseService(
                 IsComplete: result.IsStopSignal,
                 IsFinished: result.IsStopSignal);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger.LogError(ex, "Failed to generate AI response for chat, using fallback");
             // Fallback on error
             return new AiChatResponse(
                 Response: "Понял вас. Что ещё вы хотели бы обсудить?",
