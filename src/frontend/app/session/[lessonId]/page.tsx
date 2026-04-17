@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
@@ -65,37 +65,33 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
     const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
 
-    // Build initial exercise queue from exercises
-    const initialQueue = useMemo<QueuedExercise[]>(() => {
-        if (!exercises) return [];
-        return exercises.map((ex, idx) => ({
-            exercise: ex,
-            attemptNumber: 1,
-            queueKey: `${ex.exerciseId}-1`,
-        }));
-    }, [exercises]);
-
     // Exercise queue: starts with all exercises, failed ones get added to end
     const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
     const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
 
     // Initialize queue when exercises load
-    const isQueueInitialized = useRef(false);
-    if (exercises && !isQueueInitialized.current && initialQueue.length > 0) {
-        isQueueInitialized.current = true;
-        setExerciseQueue(initialQueue);
-    }
+    useEffect(() => {
+        if (exercises && exercises.length > 0 && exerciseQueue.length === 0) {
+            const initialQueue: QueuedExercise[] = exercises.map((ex) => ({
+                exercise: ex,
+                attemptNumber: 1,
+                queueKey: `${ex.exerciseId}-1`,
+            }));
+            setExerciseQueue(initialQueue);
+        }
+    }, [exercises, exerciseQueue.length]);
 
     const currentQueued = exerciseQueue[currentQueueIndex];
     const currentExercise = currentQueued?.exercise;
-    const totalQueueLength = exerciseQueue.length;
-    const progressPercent =
-        totalQueueLength > 0
-            ? Math.round((currentQueueIndex / totalQueueLength) * 100)
-            : 0;
 
     // Track original exercise count for accuracy calculation
     const originalExerciseCount = exercises?.length ?? 0;
+
+    // Progress is based on current index vs current queue length
+    const progressPercent =
+        exerciseQueue.length > 0
+            ? Math.round((currentQueueIndex / exerciseQueue.length) * 100)
+            : 0;
 
     function handleExerciseSubmit(answer: unknown) {
         if (!currentExercise || !currentQueued) return;
@@ -170,7 +166,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
         }
     }
 
-    if (isLoading) {
+    if (isLoading || exerciseQueue.length === 0) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-surface">
                 <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
