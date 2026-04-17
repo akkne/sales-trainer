@@ -8,7 +8,7 @@ namespace SalesTrainer.Api.Features.Exercises;
 
 [ApiController]
 [Authorize]
-public class ExerciseController(IExerciseService exerciseService) : ControllerBase
+public class ExerciseController(IExerciseService exerciseService, ILogger<ExerciseController> logger) : ControllerBase
 {
     [HttpGet("lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetAllLessons()
@@ -60,6 +60,21 @@ public class ExerciseController(IExerciseService exerciseService) : ControllerBa
         catch (NotSupportedException exception)
         {
             return BadRequest(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains("API key"))
+        {
+            logger.LogError(exception, "AI service error (API key issue)");
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+        }
+        catch (InvalidOperationException exception)
+        {
+            logger.LogError(exception, "AI service error (InvalidOperationException)");
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogError(exception, "AI service HTTP error");
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
         }
     }
 

@@ -18,6 +18,7 @@ interface RewriteExerciseProps {
     onContinue?: () => void;
     isSubmitting: boolean;
     submittedResult?: ExerciseSubmissionResult | null;
+    submitError?: Error | null;
 }
 
 export function RewriteExercise({
@@ -27,6 +28,7 @@ export function RewriteExercise({
     onContinue,
     isSubmitting,
     submittedResult,
+    submitError,
 }: RewriteExerciseProps) {
     const [rewrittenText, setRewrittenText] = useState("");
 
@@ -106,6 +108,14 @@ export function RewriteExercise({
                             {submittedResult.aiFeedback}
                         </p>
                     )}
+                </div>
+            )}
+
+            {submitError && !isAnswered && (
+                <div className="p-4 rounded-xl bg-error-container border border-error">
+                    <p className="text-sm text-on-error-container">
+                        Произошла ошибка при проверке. Попробуйте ещё раз.
+                    </p>
                 </div>
             )}
 

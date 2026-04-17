@@ -87,13 +87,32 @@ internal abstract class AiEvaluationStrategyBase(
 
         using var response = await httpClient.PostAsync(apiUrl, requestContent, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        // Handle f5ai error format: {"error": {"message": "Something went wrong: {...}"}}
+        if (responseBody.Contains("\"error\""))
         {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {errorBody}");
+            try
+            {
+                var errorDoc = JsonDocument.Parse(responseBody);
+                if (errorDoc.RootElement.TryGetProperty("error", out var errorEl))
+                {
+                    var errorMessage = errorEl.TryGetProperty("message", out var msgEl)
+                        ? msgEl.GetString()
+                        : responseBody;
+                    throw new HttpRequestException($"OpenAI API error: {errorMessage}. Full response: {responseBody}");
+                }
+            }
+            catch (JsonException)
+            {
+                // Fall through to normal processing
+            }
         }
 
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseBody}");
+        }
         var responseJson = JsonDocument.Parse(responseBody);
 
         // f5ai returns "message" instead of "choices"

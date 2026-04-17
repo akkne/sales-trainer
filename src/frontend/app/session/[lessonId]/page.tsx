@@ -371,6 +371,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                         onContinue={handleContinueAfterResult}
                         isSubmitting={submitExerciseMutation.isPending}
                         submittedResult={lastSubmissionResult}
+                        submitError={submitExerciseMutation.error}
                     />
                 )}
                 {currentExercise.type === ExerciseTypes.AiDialogue && (

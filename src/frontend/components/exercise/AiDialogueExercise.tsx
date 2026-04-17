@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { apiClient } from "@/lib/api/apiClient";
 
 interface ChatMessage {
     role: "user" | "assistant";
@@ -63,17 +64,12 @@ export function AiDialogueExercise({
     async function startConversation() {
         setIsSending(true);
         try {
-            const response = await fetch(`/api/exercises/${exerciseId}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: "" }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setMessages([{ role: "assistant", content: data.response }]);
-                if (data.isComplete) setIsComplete(true);
-            }
+            const data = await apiClient.post<{ response: string; isComplete: boolean }>(
+                `/exercises/${exerciseId}/chat`,
+                { message: "" }
+            );
+            setMessages([{ role: "assistant", content: data.response }]);
+            if (data.isComplete) setIsComplete(true);
         } catch (error) {
             console.error("Failed to start conversation:", error);
             // Fallback greeting
@@ -95,17 +91,12 @@ export function AiDialogueExercise({
         setIsSending(true);
 
         try {
-            const response = await fetch(`/api/exercises/${exerciseId}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: inputText }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
-                if (data.isComplete) setIsComplete(true);
-            }
+            const data = await apiClient.post<{ response: string; isComplete: boolean }>(
+                `/exercises/${exerciseId}/chat`,
+                { message: inputText }
+            );
+            setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+            if (data.isComplete) setIsComplete(true);
         } catch (error) {
             console.error("Failed to send message:", error);
             setMessages(prev => [...prev, {
