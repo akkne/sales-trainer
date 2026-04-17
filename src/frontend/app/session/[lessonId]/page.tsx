@@ -1,11 +1,12 @@
 "use client";
 
-import { use, useCallback, useRef, useState } from "react";
+import { use, useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
     useSubmitExercise,
     type ExerciseSubmissionResult,
+    type ExerciseData,
 } from "@/lib/hooks/useLesson";
 import { useAchievements } from "@/lib/hooks/useAchievements";
 import { ExerciseTypes } from "@/lib/exerciseTypes";
@@ -22,17 +23,24 @@ import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
 import { Icon } from "@/components/ui/Icon";
 
-const MAX_HEARTS = 4;
+// Score threshold for passing (7/10 or higher is passing)
+const PASSING_SCORE_THRESHOLD = 7;
+const MAX_RETRY_ATTEMPTS = 2;
 
 interface SessionPageProps {
     params: Promise<{ lessonId: string }>;
 }
 
-type SessionState = "playing" | "complete" | "failed";
+type SessionState = "playing" | "complete";
 
 interface SessionFlowProps {
     lessonId: string;
-    onRestart: () => void;
+}
+
+interface QueuedExercise {
+    exercise: ExerciseData;
+    attemptNumber: number; // 1 = first attempt, 2 = retry
+    queueKey: string; // unique key for React
 }
 
 function formatSessionDuration(totalSeconds: number): string {
@@ -42,7 +50,7 @@ function formatSessionDuration(totalSeconds: number): string {
     return `${minutes} мин ${seconds} сек`;
 }
 
-function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
+function SessionFlow({ lessonId }: SessionFlowProps) {
     const router = useRouter();
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
     const submitExerciseMutation = useSubmitExercise();
@@ -50,32 +58,58 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
     const sessionStartTimeRef = useRef<number>(Date.now());
     const sessionEndTimeRef = useRef<number>(0);
-    const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
     const [lastSubmissionResult, setLastSubmissionResult] =
         useState<ExerciseSubmissionResult | null>(null);
-    const [hearts, setHearts] = useState(MAX_HEARTS);
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
     const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
 
-    const currentExercise = exercises?.[currentExerciseIndex];
-    const totalExerciseCount = exercises?.length ?? 0;
+    // Build initial exercise queue from exercises
+    const initialQueue = useMemo<QueuedExercise[]>(() => {
+        if (!exercises) return [];
+        return exercises.map((ex, idx) => ({
+            exercise: ex,
+            attemptNumber: 1,
+            queueKey: `${ex.exerciseId}-1`,
+        }));
+    }, [exercises]);
+
+    // Exercise queue: starts with all exercises, failed ones get added to end
+    const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
+    const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
+
+    // Initialize queue when exercises load
+    const isQueueInitialized = useRef(false);
+    if (exercises && !isQueueInitialized.current && initialQueue.length > 0) {
+        isQueueInitialized.current = true;
+        setExerciseQueue(initialQueue);
+    }
+
+    const currentQueued = exerciseQueue[currentQueueIndex];
+    const currentExercise = currentQueued?.exercise;
+    const totalQueueLength = exerciseQueue.length;
     const progressPercent =
-        totalExerciseCount > 0
-            ? Math.round((currentExerciseIndex / totalExerciseCount) * 100)
+        totalQueueLength > 0
+            ? Math.round((currentQueueIndex / totalQueueLength) * 100)
             : 0;
 
+    // Track original exercise count for accuracy calculation
+    const originalExerciseCount = exercises?.length ?? 0;
+
     function handleExerciseSubmit(answer: unknown) {
-        if (!currentExercise) return;
+        if (!currentExercise || !currentQueued) return;
         submitExerciseMutation.mutate(
             { exerciseId: currentExercise.exerciseId, answer },
             {
                 onSuccess: (result) => {
                     setLastSubmissionResult(result);
-                    if (!result.isCorrect) {
-                        setHearts((h) => Math.max(0, h - 1));
-                    } else {
+
+                    // For AI-evaluated exercises (score 0-10), check against threshold
+                    // For standard exercises, isCorrect is already set by backend
+                    const isPassing = result.isCorrect || result.score >= PASSING_SCORE_THRESHOLD;
+
+                    if (isPassing) {
                         setTotalXpEarned((prev) => prev + result.xpEarned);
                         setCorrectAnswerCount((prev) => prev + 1);
                         // Queue achievement toasts for newly unlocked achievements
@@ -93,6 +127,16 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                                 setToastQueue((prev) => [...prev, ...newToasts]);
                             }
                         }
+                    } else {
+                        // Failed: if under max retries, queue for retry at end
+                        if (currentQueued.attemptNumber < MAX_RETRY_ATTEMPTS) {
+                            const retryEntry: QueuedExercise = {
+                                exercise: currentExercise,
+                                attemptNumber: currentQueued.attemptNumber + 1,
+                                queueKey: `${currentExercise.exerciseId}-${currentQueued.attemptNumber + 1}`,
+                            };
+                            setExerciseQueue((prev) => [...prev, retryEntry]);
+                        }
                     }
                 },
             }
@@ -108,27 +152,21 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
     }
 
     function handleSkip() {
-        if (currentExerciseIndex + 1 >= totalExerciseCount) {
+        if (currentQueueIndex + 1 >= exerciseQueue.length) {
             recordSessionEnd();
             setSessionState("complete");
         } else {
-            setCurrentExerciseIndex((prev) => prev + 1);
+            setCurrentQueueIndex((prev) => prev + 1);
         }
     }
 
     function handleContinueAfterResult() {
         setLastSubmissionResult(null);
-        const currentHearts = hearts;
-        if (currentHearts === 0) {
-            recordSessionEnd();
-            setSessionState("failed");
-            return;
-        }
-        if (currentExerciseIndex + 1 >= totalExerciseCount) {
+        if (currentQueueIndex + 1 >= exerciseQueue.length) {
             recordSessionEnd();
             setSessionState("complete");
         } else {
-            setCurrentExerciseIndex((prev) => prev + 1);
+            setCurrentQueueIndex((prev) => prev + 1);
         }
     }
 
@@ -146,8 +184,8 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
             (sessionEndTimeRef.current - sessionStartTimeRef.current) / 1000
         );
         const accuracyPercent =
-            totalExerciseCount > 0
-                ? Math.round((correctAnswerCount / totalExerciseCount) * 100)
+            originalExerciseCount > 0
+                ? Math.round((correctAnswerCount / originalExerciseCount) * 100)
                 : 100;
 
         return (
@@ -160,7 +198,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                     Отличная работа. Продолжай в том же духе!
                 </p>
 
-                <div className="grid grid-cols-2 gap-3 mb-4 w-full max-w-sm">
+                <div className="grid grid-cols-3 gap-3 mb-4 w-full max-w-sm">
                     <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
                         <div className="font-headline text-2xl font-bold text-secondary">
                             +{totalXpEarned}
@@ -185,54 +223,12 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                             Время
                         </div>
                     </div>
-                    <div className="bg-surface-container rounded-2xl px-4 py-4 text-center">
-                        <div className="flex items-center justify-center gap-0.5">
-                            {Array.from({ length: hearts }, (_, i) => (
-                                <Icon key={i} name="favorite" size="md" variant="filled" className="text-error" />
-                            ))}
-                        </div>
-                        <div className="text-xs text-on-surface-variant uppercase tracking-wider mt-1">
-                            Жизни
-                        </div>
-                    </div>
                 </div>
 
                 <div className="w-full max-w-sm flex flex-col gap-3 mt-6">
                     <button
                         onClick={() => router.back()}
                         className="w-full py-4 rounded-full bg-primary text-on-primary font-bold shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
-                    >
-                        Вернуться к пути
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    // Failure screen
-    if (sessionState === "failed") {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-surface">
-                <div className="w-24 h-24 rounded-full bg-error-container flex items-center justify-center mb-6">
-                    <Icon name="heart_broken" size="2xl" className="text-error" />
-                </div>
-                <h1 className="font-headline text-3xl font-bold text-on-surface mb-2">
-                    Жизни закончились
-                </h1>
-                <p className="text-on-surface-variant mb-10">
-                    Не сдавайся — попробуй ещё раз!
-                </p>
-
-                <div className="w-full max-w-xs flex flex-col gap-3">
-                    <button
-                        onClick={onRestart}
-                        className="w-full py-4 rounded-full bg-error text-on-error font-bold shadow-[0_4px_0_var(--color-red-shadow)] active:shadow-none active:translate-y-1 tonal-transition"
-                    >
-                        Попробовать снова
-                    </button>
-                    <button
-                        onClick={() => router.back()}
-                        className="w-full py-4 rounded-full text-on-surface-variant font-semibold hover:text-on-surface tonal-transition"
                     >
                         Вернуться к пути
                     </button>
@@ -254,7 +250,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
             {/* Achievement toast queue */}
             <AchievementToastQueue queue={toastQueue} onDismiss={dismissToast} />
 
-            {/* Header: ✕ + progress bar + hearts */}
+            {/* Header: ✕ + progress bar */}
             <div className="flex items-center gap-3 px-4 py-5 border-b border-outline-variant sticky top-0 bg-surface z-10">
                 <button
                     onClick={() => router.back()}
@@ -271,26 +267,18 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                     />
                 </div>
 
-                <div className="flex items-center gap-0.5 shrink-0">
-                    {Array.from({ length: MAX_HEARTS }).map((_, i) => (
-                        <Icon
-                            key={i}
-                            name="favorite"
-                            size="md"
-                            variant="filled"
-                            className={`transition-all duration-200 ${
-                                i < hearts ? "text-error" : "text-surface-container-highest"
-                            }`}
-                        />
-                    ))}
-                </div>
+                {currentQueued.attemptNumber > 1 && (
+                    <span className="text-xs text-on-surface-variant bg-surface-container px-2 py-1 rounded-full shrink-0">
+                        Повтор
+                    </span>
+                )}
             </div>
 
-            {/* Exercise content — keyed by exerciseId to fully reset state on each new question */}
-            <div key={currentExercise.exerciseId} className="flex-1 overflow-y-auto px-4 pb-10 pt-6 max-w-2xl w-full mx-auto">
+            {/* Exercise content — keyed by queueKey to fully reset state on each new question */}
+            <div key={currentQueued.queueKey} className="flex-1 overflow-y-auto px-4 pb-10 pt-6 max-w-2xl w-full mx-auto">
                 {currentExercise.type === ExerciseTypes.ChooseOption && (
                     <ChooseOptionExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={
                             currentExercise.content as Parameters<
                                 typeof ChooseOptionExercise
@@ -305,7 +293,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.FillBlank && (
                     <FillBlankExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={
                             currentExercise.content as Parameters<
                                 typeof FillBlankExercise
@@ -320,7 +308,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.Reorder && (
                     <ReorderExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof ReorderExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -331,7 +319,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.MatchPairs && (
                     <MatchPairsExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof MatchPairsExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -342,7 +330,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.Categorize && (
                     <CategorizeExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof CategorizeExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -353,7 +341,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.SpotMistake && (
                     <SpotMistakeExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof SpotMistakeExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -364,7 +352,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.Rewrite && (
                     <RewriteExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof RewriteExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -376,7 +364,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.AiDialogue && (
                     <AiDialogueExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         exerciseId={currentExercise.exerciseId}
                         content={currentExercise.content as Parameters<typeof AiDialogueExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
@@ -388,7 +376,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.EvaluateCall && (
                     <EvaluateCallExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof EvaluateCallExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -399,7 +387,7 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
                 )}
                 {currentExercise.type === ExerciseTypes.FreeText && (
                     <FreeTextExercise
-                        key={currentExercise.exerciseId}
+                        key={currentQueued.queueKey}
                         content={currentExercise.content as Parameters<typeof FreeTextExercise>[0]["content"]}
                         onSubmit={handleExerciseSubmit}
                         onSkip={handleSkip}
@@ -416,13 +404,6 @@ function SessionFlow({ lessonId, onRestart }: SessionFlowProps) {
 
 export default function SessionPage({ params }: SessionPageProps) {
     const { lessonId } = use(params);
-    const [restartKey, setRestartKey] = useState(0);
 
-    return (
-        <SessionFlow
-            key={restartKey}
-            lessonId={lessonId}
-            onRestart={() => setRestartKey((k) => k + 1)}
-        />
-    );
+    return <SessionFlow lessonId={lessonId} />;
 }
