@@ -21,6 +21,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [AI Dialog](AI_DIALOG.md) | GPT-powered sales conversation practice |
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
 | [New Exercise Types](NEW_EXERCISE_TYPES.md) | 8 additional exercise types with AI evaluation |
+| [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 
 ## Testing
 
