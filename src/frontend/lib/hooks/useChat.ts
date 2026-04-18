@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
+import { clientLogger } from "@/lib/clientLogger";
 
 export interface ChatConversationSummary {
     conversationId: string;
@@ -33,6 +34,13 @@ export function useCreateConversation() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["chatConversations"] });
         },
+        onError: (error) => {
+            const message = (error as Error).message;
+            clientLogger.warn("Failed to open chat", { error: message });
+            if (typeof window !== "undefined") {
+                window.alert(`Не удалось открыть чат: ${message}`);
+            }
+        },
     });
 }
 
@@ -54,6 +62,16 @@ export function useSendChatMessage() {
         onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: ["chatMessages", variables.conversationId] });
             queryClient.invalidateQueries({ queryKey: ["chatConversations"] });
+        },
+        onError: (error, variables) => {
+            const message = (error as Error).message;
+            clientLogger.warn("Failed to send chat message", {
+                conversationId: variables.conversationId,
+                error: message,
+            });
+            if (typeof window !== "undefined") {
+                window.alert(`Не удалось отправить сообщение: ${message}`);
+            }
         },
     });
 }
