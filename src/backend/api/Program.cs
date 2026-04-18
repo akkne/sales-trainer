@@ -4,6 +4,9 @@ using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Prometheus;
 using Serilog;
@@ -23,6 +26,8 @@ using SalesTrainer.Api.Features.SkillTree;
 using SalesTrainer.Api.Features.Transcription;
 using SalesTrainer.Api.Features.Voice;
 using StackExchange.Redis;
+
+BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
 var builder = WebApplication.CreateBuilder(args);
 
