@@ -3,6 +3,7 @@ using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Exercises.Models;
+using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.League.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
@@ -35,6 +36,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DialogMode> DialogModes => Set<DialogMode>();
     public DbSet<OpenQuestionGlobalContext> OpenQuestionGlobalContexts => Set<OpenQuestionGlobalContext>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
