@@ -129,6 +129,26 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 
 ---
 
+### `Friendships`
+
+| Column        | Type                       | Nullable | Notes                              |
+|---------------|----------------------------|----------|------------------------------------|
+| `Id`          | `uuid`                     | NOT NULL | PK                                 |
+| `RequesterId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who sent        |
+| `AddresseeId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who received    |
+| `Status`      | `integer`                  | NOT NULL | 0=Pending, 1=Accepted, 2=Declined |
+| `CreatedAt`   | `timestamp with time zone` | NOT NULL |                                    |
+| `AcceptedAt`  | `timestamp with time zone` | NULL     |                                    |
+
+**Indexes:**
+- UNIQUE `(RequesterId, AddresseeId)` — no duplicate requests
+- Individual on `RequesterId` and `AddresseeId`
+
+**Constraints:**
+- CHECK `RequesterId != AddresseeId` — cannot friend yourself
+
+---
+
 ### `ReferenceMaterials`
 
 | Column            | Type      | Nullable | Notes              |
@@ -284,6 +304,27 @@ Skills
 | `metadata`       | object   | Arbitrary key-value pairs              |
 | `created_at`     | date     |                                        |
 
+### Collection: `chat_conversations`
+
+| Field            | Type       | Notes                                  |
+|------------------|------------|----------------------------------------|
+| `_id`            | ObjectId   |                                        |
+| `participantIds` | Guid[]     | Always 2 elements, sorted              |
+| `messages`       | ChatMessage[] | Embedded array                      |
+| `lastMessageAt`  | date?      | Updated on each new message            |
+| `createdAt`      | date       |                                        |
+
+**ChatMessage (embedded):**
+
+| Field      | Type     | Notes                          |
+|------------|----------|--------------------------------|
+| `id`       | string   | ObjectId as string             |
+| `senderId` | Guid     |                                |
+| `content`  | string   |                                |
+| `sentAt`   | date     |                                |
+
+**Index:** `participantIds` for efficient conversation lookup by user.
+
 ---
 
 ## Redis
@@ -312,3 +353,4 @@ Skills
 | `ResetSkillsAndAddNewOnes`            | 2026-04-13 | Reset skills data                            |
 | `AddExerciseTypePrompts`              | 2026-04-13 | `ExerciseTypePrompts` table                  |
 | `AddIconicNameToSkillsAndTopics`      | 2026-04-14 | Add IconicName (unique) to Skills and Topics |
+| `AddFriendships`                      | 2026-04-18 | `Friendships` table with unique composite index |

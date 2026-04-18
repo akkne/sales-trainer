@@ -382,3 +382,56 @@ Errors:
 `CreateModeRequestDto` / `UpdateModeRequestDto` accept:
 - `voiceEnabled?: boolean`
 - `voiceId?: string | null`
+
+---
+
+## Friends
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /friends | — | `FriendDto[]` |
+| GET | /friends/requests | — | `FriendRequestDto[]` |
+| POST | /friends/requests | `{addresseeId}` | 201 `{friendshipId}` |
+| PUT | /friends/requests/{friendshipId}/accept | — | 204 |
+| PUT | /friends/requests/{friendshipId}/decline | — | 204 |
+| DELETE | /friends/{friendUserId} | — | 204 |
+| GET | /friends/search?query={q} | — | `UserSearchResultDto[]` |
+| GET | /friends/leaderboard | — | `FriendLeaderboardEntryDto[]` |
+| GET | /friends/activity | — | `FriendActivityDto[]` |
+| GET | /friends/profile/{userId} | — | `PublicProfileDto` |
+
+`FriendDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount}`
+
+`FriendRequestDto`: `{friendshipId, userId, displayName, persona?, direction, createdAt}`
+- `direction`: `"incoming"` | `"outgoing"`
+
+`PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus}`
+- `friendshipStatus`: `"none"` | `"pending_outgoing"` | `"pending_incoming"` | `"friends"`
+
+`UserSearchResultDto`: `{userId, displayName, persona?, friendshipStatus}`
+
+`FriendLeaderboardEntryDto`: `{userId, displayName, totalXpAmount, rank, isCurrentUser}`
+
+`FriendActivityDto`: `{userId, displayName, activityType, description, occurredAt}`
+- `activityType`: `"earned_achievement"` | `"earned_xp"` | `"completed_lesson"` | `"streak_milestone"`
+
+---
+
+## Chat
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /chat/conversations | — | `ChatConversationSummaryDto[]` |
+| POST | /chat/conversations | `{friendUserId}` | `ChatConversationSummaryDto` |
+| GET | /chat/conversations/{id}/messages?limit=50&before={msgId} | — | `ChatMessageDto[]` |
+| POST | /chat/conversations/{id}/messages | `{content}` | `ChatMessageDto` |
+
+`ChatConversationSummaryDto`: `{conversationId, friendUserId, friendDisplayName, lastMessagePreview?, lastMessageAt?}`
+
+`ChatMessageDto`: `{id, senderId, content, sentAt, isOwn}`
+
+**Business rules:**
+- Chat only available between accepted friends
+- Creating a conversation validates active friendship
+- Messages are stored in MongoDB `chat_conversations` collection
+- Participant IDs are always sorted for canonical document identity

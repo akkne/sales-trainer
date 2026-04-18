@@ -91,6 +91,16 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - ElevenLabs Flash v2.5 TTS
 - Target latency: ≤700ms end-to-end
 
+### Friends & Chat
+- Friend request system (send, accept, decline, remove)
+- Public profiles with stats and friendship status
+- User search by display name and email
+- Friend XP leaderboard
+- Friend activity feed (achievements, XP earned)
+- 1-to-1 chat between friends (MongoDB, 5s polling)
+- Conversations list with last message preview
+- Navigation badge for pending friend requests
+
 ### Admin Panel
 - Role system: User / Admin / SuperAdmin
 - Full CRUD for skills, lessons, exercises, reference
