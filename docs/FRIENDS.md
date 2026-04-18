@@ -179,20 +179,24 @@ All endpoints require `Authorization: Bearer` token.
 
 | Route | Page |
 |-------|------|
-| `/friends` | Friends tab: friend list, requests, leaderboard |
+| `/friends` | Main tabbed page: Друзья / Запросы / Рейтинг / Чаты |
+| `/friends?tab=chats` | Чаты tab — messenger-style list + window |
+| `/friends?tab=chats&conv={id}` | Чаты tab with conversation selected |
 | `/friends/[userId]` | Public profile of another user |
-| `/friends/chat` | Conversations list |
-| `/friends/chat/[conversationId]` | Chat view |
+| `/friends/chat` | Deprecated, redirects to `/friends?tab=chats` |
+| `/friends/chat/[conversationId]` | Deprecated, redirects to `/friends?tab=chats&conv={id}` |
 
 ---
 
 ## UI Components
 
 ### Friends Tab (`/friends`)
-- Pill-style tab bar: "Друзья" / "Запросы" (badge) / "Рейтинг"
-- Search bar at top of friends tab
-- Friend cards with avatar, stats, Chat/Profile buttons
-- Activity feed below search
+- Pill-style tab bar: "Друзья" / "Запросы" (badge) / "Рейтинг" / "Чаты"
+- Active tab and selected conversation synced to URL (`?tab=...&conv=...`)
+- Friends tab: search bar, activity feed, friend cards with avatar, stats, Chat/Profile buttons
+- Requests tab: incoming + outgoing friend requests
+- Leaderboard tab: friend XP ranking
+- Chats tab: two-pane messenger (list left, chat right on desktop; stacked on mobile)
 - Empty state: "Найди первого напарника!"
 
 ### Public Profile (`/friends/[userId]`)

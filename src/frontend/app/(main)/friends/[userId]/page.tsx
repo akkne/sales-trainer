@@ -24,7 +24,7 @@ export default function PublicProfilePage() {
     function handleChatClick() {
         createConversationMutation.mutate(params.userId, {
             onSuccess: (conversation) => {
-                router.push(`/friends/chat/${conversation.conversationId}`);
+                router.push(`/friends?tab=chats&conv=${conversation.conversationId}`);
             },
         });
     }
