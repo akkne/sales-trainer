@@ -1,5 +1,6 @@
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Friends.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Mongo;
 
@@ -15,4 +16,7 @@ public class MongoDbContext
 
     public IMongoCollection<DialogSession> DialogSessions =>
         _database.GetCollection<DialogSession>("dialog_sessions");
+
+    public IMongoCollection<ChatConversation> ChatConversations =>
+        _database.GetCollection<ChatConversation>("chat_conversations");
 }
