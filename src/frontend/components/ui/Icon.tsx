@@ -129,6 +129,16 @@ export const ICON_NAMES = {
     accountBalance: "account_balance",
     diversity3: "diversity_3",
 
+    // Social
+    group: "group",
+    groupAdd: "group_add",
+    personAdd: "person_add",
+    chat: "chat",
+    chatBubble: "chat_bubble",
+    send: "send",
+    mail: "mail",
+    badge: "badge",
+
     // Misc
     localFireDepartment: "local_fire_department",
     trendingUp: "trending_up",
