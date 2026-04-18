@@ -23,8 +23,12 @@ internal sealed class ChatService(
 
         var sortedParticipantIds = BuildSortedParticipantIds(userId, friendUserId);
 
+        var participantsFilter = Builders<ChatConversation>.Filter.Eq(
+            conversation => conversation.ParticipantIds,
+            sortedParticipantIds);
+
         var existingConversation = await mongoContext.ChatConversations
-            .Find(conversation => conversation.ParticipantIds == sortedParticipantIds)
+            .Find(participantsFilter)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (existingConversation is not null)
