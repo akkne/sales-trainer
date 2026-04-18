@@ -811,35 +811,35 @@
 > Social layer: friendships, public profiles, user search, friend leaderboard, activity feed, and 1-to-1 chat.
 > Spec: [docs/FRIENDS.md](FRIENDS.md)
 
-### [ ] Backend — Friendship system (PostgreSQL)
-- [ ] `Friendship` entity with `FriendshipStatus` enum (Pending, Accepted, Declined)
-- [ ] EF configuration: unique composite index on (RequesterId, AddresseeId)
-- [ ] Migration `AddFriendships`
-- [ ] DTOs: FriendDto, FriendRequestDto, PublicProfileDto, UserSearchResultDto, FriendLeaderboardEntryDto, FriendActivityDto
-- [ ] `IFriendService` interface + `FriendService` implementation
-- [ ] `FriendController` — 10 endpoints (CRUD, search, leaderboard, activity, public profile)
-- [ ] DI registration via `AddFriendFeatureServices()`
+### [x] Backend — Friendship system (PostgreSQL)
+- [x] `Friendship` entity with `FriendshipStatus` enum (Pending, Accepted, Declined)
+- [x] EF configuration: unique composite index on (RequesterId, AddresseeId)
+- [x] Migration `AddFriendships`
+- [x] DTOs: FriendDto, FriendRequestDto, PublicProfileDto, UserSearchResultDto, FriendLeaderboardEntryDto, FriendActivityDto
+- [x] `IFriendService` interface + `FriendService` implementation
+- [x] `FriendController` — 10 endpoints (CRUD, search, leaderboard, activity, public profile)
+- [x] DI registration via `AddFriendFeatureServices()`
 
-### [ ] Backend — Chat system (MongoDB)
-- [ ] `ChatConversation` + `ChatMessage` MongoDB entities
-- [ ] Add `ChatConversations` collection to `MongoDbContext`
-- [ ] DTOs: ChatMessageDto, ChatConversationSummaryDto, SendChatMessageRequestDto, CreateConversationRequestDto
-- [ ] `IChatService` interface + `ChatService` implementation
-- [ ] `ChatController` — 4 endpoints (conversations CRUD, messages)
+### [x] Backend — Chat system (MongoDB)
+- [x] `ChatConversation` + `ChatMessage` MongoDB entities
+- [x] Add `ChatConversations` collection to `MongoDbContext`
+- [x] DTOs: ChatMessageDto, ChatConversationSummaryDto, SendChatMessageRequestDto, CreateConversationRequestDto
+- [x] `IChatService` interface + `ChatService` implementation
+- [x] `ChatController` — 4 endpoints (conversations CRUD, messages)
 
-### [ ] Frontend — Hooks & navigation
-- [ ] `useFriends.ts` — queries + mutations for friendship operations
-- [ ] `useChat.ts` — queries + mutations for chat with 5s polling
-- [ ] Add "Друзья" tab to BottomNav and TopAppBar with pending request badge
+### [x] Frontend — Hooks & navigation
+- [x] `useFriends.ts` — queries + mutations for friendship operations
+- [x] `useChat.ts` — queries + mutations for chat with 5s polling
+- [x] Add "Друзья" tab to BottomNav and TopAppBar with pending request badge
 
-### [ ] Frontend — Friends pages
-- [ ] `/friends` page — tabbed view (friends list, requests, leaderboard)
-- [ ] `/friends/[userId]` page — public profile with friendship button
-- [ ] `/friends/chat` page — conversations list
-- [ ] `/friends/chat/[conversationId]` page — chat view with polling
-- [ ] Components: FriendCard, FriendRequestCard, UserSearchBar, FriendLeaderboard, FriendActivityFeed, ChatBubble, ChatInput, etc.
+### [x] Frontend — Friends pages
+- [x] `/friends` page — tabbed view (friends list, requests, leaderboard)
+- [x] `/friends/[userId]` page — public profile with friendship button
+- [x] `/friends/chat` page — conversations list
+- [x] `/friends/chat/[conversationId]` page — chat view with polling
+- [x] Components: FriendCard, FriendRequestCard, UserSearchBar, FriendLeaderboard, FriendActivityFeed, ChatBubble, ChatInput, etc.
 
-### [ ] Docs & tests
-- [ ] Update `docs/API_CONTRACTS.md` with friend and chat endpoints
-- [ ] Update `docs/DB_SCHEMA.md` with Friendships table and chat_conversations collection
-- [ ] Create `docs/TESTING/FRIENDS.md` — manual test checklist
+### [x] Docs & tests
+- [x] Update `docs/API_CONTRACTS.md` with friend and chat endpoints
+- [x] Update `docs/DB_SCHEMA.md` with Friendships table and chat_conversations collection
+- [x] Create `docs/TESTING/FRIENDS.md` — manual test checklist
