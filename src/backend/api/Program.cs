@@ -13,6 +13,7 @@ using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
 using SalesTrainer.Api.Features.Dialog;
 using SalesTrainer.Api.Features.Exercises;
+using SalesTrainer.Api.Features.Friends;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.League;
 using SalesTrainer.Api.Features.Onboarding;
@@ -97,6 +98,7 @@ builder.Services
     .AddAuthenticationFeatureServices()
     .AddDialogFeatureServices()
     .AddExerciseFeatureServices()
+    .AddFriendFeatureServices()
     .AddGamificationFeatureServices()
     .AddLeagueFeatureServices()
     .AddOnboardingFeatureServices()
