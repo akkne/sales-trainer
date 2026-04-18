@@ -5,18 +5,25 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkillTree } from "@/lib/hooks/useSkillTree";
+import { useFriendRequests } from "@/lib/hooks/useFriends";
 
 const NAV_LINKS = [
     { href: "/tree", icon: "school", label: "Мастерство" },
     { href: "/league", icon: "trophy", label: "Лиги" },
     { href: "/guidebook", icon: "menu_book", label: "Библиотека" },
     { href: "/dialog", icon: "forum", label: "Диалоги" },
+    { href: "/friends", icon: "group", label: "Друзья" },
 ] as const;
 
 export function TopAppBar() {
     const currentPathname = usePathname();
     const { authenticatedUser } = useAuthStore();
     const { data: skillTreeData } = useSkillTree();
+    const { data: friendRequests } = useFriendRequests();
+
+    const incomingRequestCount = friendRequests?.filter(
+        (request) => request.direction === "incoming"
+    ).length ?? 0;
 
     const displayName = authenticatedUser?.displayName ?? "?";
     const firstLetter = displayName[0]?.toUpperCase() ?? "?";
@@ -41,7 +48,7 @@ export function TopAppBar() {
                         <Link
                             key={link.href}
                             href={link.href}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium tonal-transition ${
+                            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium tonal-transition ${
                                 isActive
                                     ? "text-primary font-semibold"
                                     : "text-on-surface-variant hover:text-primary hover:bg-surface-container"
@@ -53,6 +60,11 @@ export function TopAppBar() {
                                 size="sm"
                             />
                             {link.label}
+                            {link.href === "/friends" && incomingRequestCount > 0 && (
+                                <span className="absolute -top-1 -right-1 min-w-5 h-5 flex items-center justify-center rounded-full bg-error text-on-error text-[10px] font-bold px-1">
+                                    {incomingRequestCount}
+                                </span>
+                            )}
                         </Link>
                     );
                 })}

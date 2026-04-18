@@ -9,6 +9,7 @@ const NAV_ITEMS = [
     { href: "/league", icon: "trophy", label: "Лига" },
     { href: "/guidebook", icon: "menu_book", label: "Справочник" },
     { href: "/dialog", icon: "forum", label: "Диалог" },
+    { href: "/friends", icon: "group", label: "Друзья" },
     { href: "/profile", icon: "person", label: "Профиль" },
 ] as const;
 
