@@ -3,7 +3,7 @@
 
 // Icon
 export { Icon, ICON_NAMES } from "./Icon";
-export type { IconVariant, IconSize, IconName } from "./Icon";
+export type { IconName } from "./Icon";
 
 // Button
 export { Button, IconButton } from "./Button";
@@ -21,26 +21,27 @@ export {
 } from "./Input";
 
 // Progress
-export {
-    ProgressBar,
-    CircularProgress,
-    StepProgress,
-    ProgressSkeleton,
-} from "./Progress";
-export type { ProgressVariant, ProgressSize } from "./Progress";
+export { Progress, CircularProgress, StepProgress } from "./Progress";
+export type { ProgressTone } from "./Progress";
 
 // Card
-export {
-    Card,
-    CardHeader,
-    CardContent,
-    CardFooter,
-    StatCard,
-    CardSkeleton,
-} from "./Card";
-export type { CardVariant, CardSize } from "./Card";
+export { Card, CardHeader, CardContent, CardFooter, CardSkeleton } from "./Card";
 
-// Common
+// Chip
+export { Chip } from "./Chip";
+export type { ChipTone, ChipSize } from "./Chip";
+
+// StatTile
+export { StatTile } from "./StatTile";
+export type { StatTileTone } from "./StatTile";
+
+// GeoAvatar
+export { GeoAvatar } from "./GeoAvatar";
+
+// Wordmark
+export { Wordmark } from "./Wordmark";
+
+// Common (legacy, will be migrated)
 export {
     Badge,
     StatusBadge,
@@ -48,6 +49,5 @@ export {
     Avatar,
     AvatarGroup,
     Divider,
-    Chip,
 } from "./Common";
 export type { BadgeVariant, BadgeSize } from "./Common";

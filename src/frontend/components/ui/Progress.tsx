@@ -1,112 +1,83 @@
 "use client";
 
-import { CSSProperties } from "react";
+export type ProgressTone = "rust" | "olive" | "indigo" | "ink";
 
-export type ProgressVariant = "primary" | "tertiary" | "secondary" | "error";
-export type ProgressSize = "sm" | "md" | "lg";
-
-interface ProgressBarProps {
-    /** Progress value (0-100) */
+interface ProgressProps {
     value: number;
-    /** Maximum value (defaults to 100) */
     max?: number;
-    /** Visual variant */
-    variant?: ProgressVariant;
-    /** Size preset */
-    size?: ProgressSize;
-    /** Show percentage label */
+    tone?: ProgressTone;
+    height?: number;
     showLabel?: boolean;
-    /** Custom label text (overrides percentage) */
-    label?: string;
-    /** Animate the progress fill */
-    animated?: boolean;
-    /** Additional CSS classes */
     className?: string;
 }
 
-const VARIANT_CLASSES: Record<ProgressVariant, string> = {
-    primary: "bg-primary",
-    secondary: "bg-secondary",
-    tertiary: "bg-tertiary",
-    error: "bg-error",
+const TONE_COLORS: Record<ProgressTone, string> = {
+    rust: "var(--rust)",
+    olive: "var(--olive)",
+    indigo: "var(--indigo)",
+    ink: "var(--ink)",
 };
 
-const SIZE_CLASSES: Record<ProgressSize, string> = {
-    sm: "h-1.5",
-    md: "h-3",
-    lg: "h-4",
-};
-
-/**
- * Progress bar component with design system styling.
- *
- * @example
- * <ProgressBar value={75} />
- * <ProgressBar value={50} variant="tertiary" showLabel />
- * <ProgressBar value={30} max={50} size="lg" animated />
- */
-export function ProgressBar({
+export function Progress({
     value,
     max = 100,
-    variant = "primary",
-    size = "md",
+    tone = "indigo",
+    height = 6,
     showLabel = false,
-    label,
-    animated = true,
     className = "",
-}: ProgressBarProps) {
-    const percentage = Math.min(100, Math.max(0, (value / max) * 100));
-    const displayLabel = label ?? `${Math.round(percentage)}%`;
+}: ProgressProps) {
+    const pct = Math.min(100, Math.max(0, (value / max) * 100));
 
     return (
-        <div className={`flex flex-col gap-1 ${className}`}>
-            {showLabel && (
-                <div className="flex justify-between text-xs text-on-surface-variant">
-                    <span>{displayLabel}</span>
-                </div>
-            )}
+        <div className={className} style={{ width: "100%" }}>
             <div
-                className={`
-                    w-full rounded-full bg-surface-variant overflow-hidden
-                    ${SIZE_CLASSES[size]}
-                `}
+                style={{
+                    width: "100%",
+                    height: `${height}px`,
+                    background: "var(--bg-2)",
+                    borderRadius: height,
+                    overflow: "hidden",
+                    position: "relative",
+                }}
                 role="progressbar"
                 aria-valuenow={value}
                 aria-valuemin={0}
                 aria-valuemax={max}
             >
                 <div
-                    className={`
-                        h-full rounded-full
-                        ${VARIANT_CLASSES[variant]}
-                        ${animated ? "transition-all duration-500" : ""}
-                    `}
-                    style={{ width: `${percentage}%` }}
+                    style={{
+                        width: `${pct}%`,
+                        height: "100%",
+                        background: TONE_COLORS[tone],
+                        borderRadius: height,
+                        transition: "width 0.6s cubic-bezier(.2,.8,.2,1)",
+                    }}
                 />
             </div>
+            {showLabel && (
+                <div
+                    style={{
+                        marginTop: "4px",
+                        fontSize: "11px",
+                        color: "var(--ink-3)",
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    {value}/{max}
+                </div>
+            )}
         </div>
     );
 }
 
-/**
- * Circular progress indicator
- */
 interface CircularProgressProps {
-    /** Progress value (0-100) */
     value: number;
-    /** Maximum value (defaults to 100) */
     max?: number;
-    /** Circle size in pixels */
     size?: number;
-    /** Stroke width */
     strokeWidth?: number;
-    /** Visual variant */
-    variant?: ProgressVariant;
-    /** Show percentage in center */
+    tone?: ProgressTone;
     showLabel?: boolean;
-    /** Custom label (overrides percentage) */
     label?: string;
-    /** Additional CSS classes */
     className?: string;
 }
 
@@ -115,7 +86,7 @@ export function CircularProgress({
     max = 100,
     size = 48,
     strokeWidth = 4,
-    variant = "primary",
+    tone = "indigo",
     showLabel = false,
     label,
     className = "",
@@ -126,52 +97,58 @@ export function CircularProgress({
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
     const displayLabel = label ?? `${Math.round(percentage)}%`;
 
-    const variantColors: Record<ProgressVariant, string> = {
-        primary: "var(--color-primary)",
-        secondary: "var(--color-secondary)",
-        tertiary: "var(--color-tertiary)",
-        error: "var(--color-error)",
-    };
-
     return (
         <div
-            className={`relative inline-flex items-center justify-center ${className}`}
-            style={{ width: size, height: size }}
+            className={className}
+            style={{
+                position: "relative",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: size,
+                height: size,
+            }}
         >
             <svg
-                className="transform -rotate-90"
                 width={size}
                 height={size}
+                style={{ transform: "rotate(-90deg)" }}
                 role="progressbar"
                 aria-valuenow={value}
                 aria-valuemin={0}
                 aria-valuemax={max}
             >
-                {/* Background circle */}
                 <circle
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke="var(--color-surface-variant)"
+                    stroke="var(--bg-2)"
                     strokeWidth={strokeWidth}
                 />
-                {/* Progress circle */}
                 <circle
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke={variantColors[variant]}
+                    stroke={TONE_COLORS[tone]}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeDasharray={circumference}
                     strokeDashoffset={strokeDashoffset}
-                    className="transition-all duration-500"
+                    style={{ transition: "stroke-dashoffset 0.5s ease" }}
                 />
             </svg>
             {showLabel && (
-                <span className="absolute text-xs font-semibold text-on-surface">
+                <span
+                    style={{
+                        position: "absolute",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--ink)",
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
                     {displayLabel}
                 </span>
             )}
@@ -179,64 +156,44 @@ export function CircularProgress({
     );
 }
 
-/**
- * Step progress indicator for multi-step forms
- */
 interface StepProgressProps {
-    /** Current step (1-indexed) */
     currentStep: number;
-    /** Total number of steps */
     totalSteps: number;
-    /** Visual variant */
-    variant?: ProgressVariant;
-    /** Show step label */
-    showLabel?: boolean;
-    /** Additional CSS classes */
     className?: string;
 }
 
 export function StepProgress({
     currentStep,
     totalSteps,
-    variant = "primary",
-    showLabel = true,
     className = "",
 }: StepProgressProps) {
-    const progress = (currentStep / totalSteps) * 100;
-
-    return (
-        <div className={`flex flex-col gap-2 ${className}`}>
-            {showLabel && (
-                <p className="text-sm text-on-surface-variant">
-                    Шаг {currentStep} из {totalSteps}
-                </p>
-            )}
-            <ProgressBar value={progress} variant={variant} size="sm" animated />
-        </div>
-    );
-}
-
-/**
- * Skeleton progress bar for loading states
- */
-interface ProgressSkeletonProps {
-    /** Size preset */
-    size?: ProgressSize;
-    /** Additional CSS classes */
-    className?: string;
-}
-
-export function ProgressSkeleton({
-    size = "md",
-    className = "",
-}: ProgressSkeletonProps) {
     return (
         <div
-            className={`
-                w-full rounded-full bg-surface-container animate-pulse
-                ${SIZE_CLASSES[size]}
-                ${className}
-            `}
-        />
+            className={className}
+            style={{ display: "flex", alignItems: "center", gap: "6px" }}
+        >
+            {Array.from({ length: totalSteps }).map((_, i) => (
+                <div
+                    key={i}
+                    style={{
+                        width: i === currentStep - 1 ? 28 : 8,
+                        height: 8,
+                        borderRadius: 4,
+                        background: i < currentStep ? "var(--ink)" : "var(--line-2)",
+                        transition: "width 0.3s cubic-bezier(.2,.8,.2,1), background 0.3s",
+                    }}
+                />
+            ))}
+            <span
+                style={{
+                    marginLeft: 12,
+                    fontFamily: "var(--f-mono)",
+                    fontSize: 12,
+                    color: "var(--ink-3)",
+                }}
+            >
+                {String(currentStep).padStart(2, "0")} / {String(totalSteps).padStart(2, "0")}
+            </span>
+        </div>
     );
 }

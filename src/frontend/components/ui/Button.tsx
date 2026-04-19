@@ -3,107 +3,149 @@
 import { ButtonHTMLAttributes, forwardRef, ReactNode } from "react";
 import { Icon, IconName } from "./Icon";
 
-export type ButtonVariant = "primary" | "secondary" | "tertiary" | "ghost" | "error";
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonVariant = "primary" | "accent" | "secondary" | "ghost" | "outline" | "destructive";
+export type ButtonSize = "sm" | "md" | "lg" | "xl";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-    /** Visual variant */
     variant?: ButtonVariant;
-    /** Size preset */
     size?: ButtonSize;
-    /** Icon name to show before text */
+    icon?: ReactNode;
+    iconRight?: ReactNode;
     iconLeft?: IconName;
-    /** Icon name to show after text */
-    iconRight?: IconName;
-    /** Show loading spinner */
+    iconRightName?: IconName;
     loading?: boolean;
-    /** Full width button */
     fullWidth?: boolean;
-    /** Children */
     children?: ReactNode;
 }
 
-const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-    primary:
-        "bg-primary text-on-primary shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 hover:bg-primary-dim",
-    secondary:
-        "bg-secondary-container text-on-secondary-container hover:bg-secondary hover:text-on-secondary",
-    tertiary:
-        "bg-surface-container-high text-on-surface hover:bg-surface-container-highest",
-    ghost:
-        "bg-transparent text-primary hover:bg-primary-container hover:text-on-primary-container",
-    error:
-        "bg-error text-on-error shadow-[0_4px_0_var(--color-red-shadow)] active:shadow-none active:translate-y-1 hover:opacity-90",
+const SIZE_STYLES: Record<ButtonSize, { padding: string; fontSize: string; height: string; radius: string; iconSize: number }> = {
+    sm: { padding: "6px 12px", fontSize: "13px", height: "30px", radius: "8px", iconSize: 14 },
+    md: { padding: "10px 16px", fontSize: "14px", height: "38px", radius: "10px", iconSize: 16 },
+    lg: { padding: "14px 22px", fontSize: "15px", height: "48px", radius: "12px", iconSize: 18 },
+    xl: { padding: "18px 28px", fontSize: "16px", height: "56px", radius: "14px", iconSize: 20 },
 };
 
-const SIZE_CLASSES: Record<ButtonSize, string> = {
-    sm: "px-4 py-2 text-sm gap-1.5",
-    md: "px-5 py-3 text-base gap-2",
-    lg: "px-6 py-4 text-base gap-2 font-bold",
-};
-
-const ICON_SIZE_MAP: Record<ButtonSize, "sm" | "md" | "lg"> = {
-    sm: "sm",
-    md: "md",
-    lg: "md",
-};
-
-/**
- * Standardized Button component with design system variants.
- *
- * Variants:
- * - primary: Main CTA, rounded-full, deep green with 3D shadow
- * - secondary: Secondary actions, teal container background
- * - tertiary: Neutral surface background
- * - ghost: Transparent with primary text, no background
- * - error: Destructive actions, red with 3D shadow
- *
- * @example
- * <Button variant="primary" size="lg">Continue</Button>
- * <Button variant="ghost" iconLeft="arrow_back">Back</Button>
- * <Button variant="primary" iconRight="arrow_forward" loading>Loading</Button>
- */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     (
         {
             variant = "primary",
             size = "md",
-            iconLeft,
+            icon,
             iconRight,
+            iconLeft,
+            iconRightName,
             loading = false,
             fullWidth = false,
             disabled,
             className = "",
             children,
+            style,
             ...props
         },
         ref
     ) => {
         const isDisabled = disabled || loading;
-        const iconSize = ICON_SIZE_MAP[size];
+        const s = SIZE_STYLES[size];
+
+        const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
+            primary: {
+                background: "var(--ink)",
+                color: "var(--bg)",
+                boxShadow: "var(--sh-2)",
+            },
+            accent: {
+                background: "var(--indigo)",
+                color: "white",
+                boxShadow: "var(--sh-2)",
+            },
+            secondary: {
+                background: "var(--surface)",
+                color: "var(--ink)",
+                border: "1px solid var(--line-2)",
+                boxShadow: "var(--sh-1)",
+            },
+            ghost: {
+                background: "transparent",
+                color: "var(--ink-2)",
+            },
+            outline: {
+                background: "transparent",
+                color: "var(--ink)",
+                border: "1px solid var(--line-2)",
+            },
+            destructive: {
+                background: "var(--bad)",
+                color: "white",
+            },
+        };
+
+        const baseStyle: React.CSSProperties = {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            padding: s.padding,
+            height: s.height,
+            fontSize: s.fontSize,
+            borderRadius: s.radius,
+            border: "1px solid transparent",
+            fontWeight: 500,
+            letterSpacing: "-0.1px",
+            cursor: isDisabled ? "not-allowed" : "pointer",
+            transition: "transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease",
+            width: fullWidth ? "100%" : "auto",
+            fontFamily: "var(--f-sans)",
+            opacity: isDisabled ? 0.6 : 1,
+            ...variantStyles[variant],
+            ...style,
+        };
+
+        const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+            if (!isDisabled) {
+                e.currentTarget.style.transform = "translateY(1px)";
+            }
+            props.onMouseDown?.(e);
+        };
+
+        const handleMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            props.onMouseUp?.(e);
+        };
+
+        const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            props.onMouseLeave?.(e);
+        };
 
         return (
             <button
                 ref={ref}
                 disabled={isDisabled}
-                className={`
-                    inline-flex items-center justify-center rounded-full font-semibold
-                    tonal-transition select-none
-                    disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0
-                    ${VARIANT_CLASSES[variant]}
-                    ${SIZE_CLASSES[size]}
-                    ${fullWidth ? "w-full" : ""}
-                    ${className}
-                `.trim()}
+                style={baseStyle}
+                className={className}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
                 {...props}
             >
                 {loading ? (
-                    <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span
+                        style={{
+                            width: s.iconSize,
+                            height: s.iconSize,
+                            border: "2px solid currentColor",
+                            borderTopColor: "transparent",
+                            borderRadius: "50%",
+                            animation: "spin 0.8s linear infinite",
+                        }}
+                    />
                 ) : (
                     <>
-                        {iconLeft && <Icon name={iconLeft} size={iconSize} />}
+                        {icon}
+                        {iconLeft && <Icon name={iconLeft} size={s.iconSize} />}
                         {children}
-                        {iconRight && <Icon name={iconRight} size={iconSize} />}
+                        {iconRightName && <Icon name={iconRightName} size={s.iconSize} />}
+                        {iconRight}
                     </>
                 )}
             </button>
@@ -113,36 +155,35 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
 Button.displayName = "Button";
 
-/**
- * Icon-only button variant for compact actions.
- *
- * @example
- * <IconButton icon="close" aria-label="Close" />
- * <IconButton icon="settings" variant="ghost" size="lg" />
- */
-interface IconButtonProps extends Omit<ButtonProps, "iconLeft" | "iconRight" | "children"> {
-    /** Icon name */
+interface IconButtonProps extends Omit<ButtonProps, "icon" | "iconRight" | "iconLeft" | "iconRightName" | "children"> {
     icon: IconName;
-    /** Accessible label (required for icon-only buttons) */
     "aria-label": string;
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-    ({ icon, size = "md", className = "", ...props }, ref) => {
-        const sizeClasses: Record<ButtonSize, string> = {
-            sm: "w-8 h-8",
-            md: "w-10 h-10",
-            lg: "w-12 h-12",
+    ({ icon, size = "md", ...props }, ref) => {
+        const sizeMap: Record<ButtonSize, number> = {
+            sm: 30,
+            md: 38,
+            lg: 48,
+            xl: 56,
         };
+        const iconSizeMap: Record<ButtonSize, number> = {
+            sm: 14,
+            md: 16,
+            lg: 18,
+            xl: 20,
+        };
+        const dimension = sizeMap[size];
 
         return (
             <Button
                 ref={ref}
                 size={size}
-                className={`!p-0 ${sizeClasses[size]} ${className}`}
+                style={{ width: dimension, height: dimension, padding: 0 }}
                 {...props}
             >
-                <Icon name={icon} size={ICON_SIZE_MAP[size]} />
+                <Icon name={icon} size={iconSizeMap[size]} />
             </Button>
         );
     }
