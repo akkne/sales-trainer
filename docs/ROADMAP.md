@@ -985,34 +985,34 @@
 
 > Redesign `/league` with improved visual hierarchy.
 
-- [ ] Week countdown timer above leaderboard
-- [ ] Current user highlight row with promotion zone badge
-- [ ] Stat tiles for user's XP and rank
-- [ ] Responsive mobile layout
+- [x] Week countdown timer above leaderboard
+- [x] Current user highlight row with promotion zone badge
+- [x] Stat tiles for user's XP and rank
+- [x] Responsive mobile layout
 
 ### Phase 33.7 — Profile Page Redesign
 
 > Redesign `/profile` with stat tiles and badges grid.
 
-- [ ] Stat tiles grid: streak, XP, level, accuracy
-- [ ] Achievements section with mastery rings
-- [ ] Persona badge display
-- [ ] Settings section styling
+- [x] Stat tiles grid: streak, XP, level, accuracy
+- [x] Achievements section with mastery rings
+- [x] Persona badge display
+- [x] Settings section styling
 
 ### Phase 33.8 — Friends Pages Redesign
 
 > Redesign `/friends` flow with improved cards and chat.
 
-- [ ] Friends list with GeoAvatar, status indicators
-- [ ] Friend request cards with accept/decline buttons
-- [ ] Leaderboard tab styling
-- [ ] Chat page with message bubbles, input styling
+- [x] Friends list with GeoAvatar, status indicators
+- [x] Friend request cards with accept/decline buttons
+- [x] Leaderboard tab styling
+- [x] Chat page with message bubbles, input styling
 
 ### Phase 33.9 — Dark Theme Polish
 
 > Ensure all components work correctly in dark theme.
 
-- [ ] Verify all color variables have dark theme overrides
-- [ ] Test all pages in dark theme
-- [ ] Fix any contrast or readability issues
-- [ ] Add theme toggle to profile settings
+- [x] Verify all color variables have dark theme overrides
+- [x] Test all pages in dark theme
+- [x] Fix any contrast or readability issues
+- [x] Add theme toggle to profile settings

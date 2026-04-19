@@ -16,39 +16,46 @@ export function UserSearchBar() {
                 <Icon
                     name="search"
                     size="md"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4"
                 />
                 <input
                     type="text"
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder="Найти пользователя..."
-                    className="w-full pl-10 pr-4 py-3 rounded-2xl bg-surface-container text-on-surface placeholder:text-on-surface-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-4 text-sm focus:outline-none focus:ring-2"
+                    style={{ "--tw-ring-color": "var(--indigo)", boxShadow: "var(--sh-1)" } as React.CSSProperties}
                 />
             </div>
 
             {deferredQuery.length >= 2 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-low rounded-2xl shadow-lg z-20 overflow-hidden max-h-80 overflow-y-auto">
+                <div
+                    className="absolute top-full left-0 right-0 mt-2 bg-surface border border-line rounded-xl overflow-hidden max-h-80 overflow-y-auto z-20"
+                    style={{ boxShadow: "var(--sh-3)" }}
+                >
                     {isLoading ? (
                         <div className="p-4 text-center">
-                            <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                            <div className="w-6 h-6 rounded-full border-2 border-indigo border-t-transparent animate-spin mx-auto" />
                         </div>
                     ) : searchResults && searchResults.length > 0 ? (
-                        <div className="divide-y divide-outline-variant">
+                        <div className="divide-y divide-line">
                             {searchResults.map((result) => (
                                 <div
                                     key={result.userId}
                                     className="flex items-center gap-3 px-4 py-3"
                                 >
-                                    <div className="w-9 h-9 rounded-full bg-secondary-container flex items-center justify-center text-secondary font-bold text-sm shrink-0">
+                                    <div
+                                        className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0"
+                                        style={{ background: "var(--clay)", color: "white" }}
+                                    >
                                         {result.displayName[0]?.toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-on-surface text-sm truncate">
+                                        <p className="font-medium text-ink text-sm truncate">
                                             {result.displayName}
                                         </p>
                                         {result.persona && (
-                                            <p className="text-xs text-on-surface-variant">
+                                            <p className="text-xs text-ink-4">
                                                 {result.persona}
                                             </p>
                                         )}
@@ -61,7 +68,7 @@ export function UserSearchBar() {
                             ))}
                         </div>
                     ) : (
-                        <p className="p-4 text-center text-sm text-on-surface-variant">
+                        <p className="p-4 text-center text-sm text-ink-4">
                             Никого не найдено
                         </p>
                     )}

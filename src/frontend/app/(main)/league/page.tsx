@@ -30,30 +30,11 @@ function useCountdown(weekEndDate: string) {
     return timeLeft;
 }
 
-const TIER_LABELS: Record<string, { label: string; icon: string }> = {
-    bronze: { label: "Бронза", icon: "military_tech" },
-    silver: { label: "Серебро", icon: "military_tech" },
-    gold: { label: "Золото", icon: "military_tech" },
-    diamond: { label: "Алмаз", icon: "diamond" },
-};
-
-const OUTCOME_BANNERS = {
-    promoted: {
-        bg: "bg-primary-container",
-        icon: "rocket_launch",
-        iconColor: "text-primary",
-        title: "Повышение!",
-        text: "Ты поднялся в следующую лигу. Отличная работа!",
-        textColor: "text-on-primary-container",
-    },
-    demoted: {
-        bg: "bg-error-container",
-        icon: "trending_down",
-        iconColor: "text-error",
-        title: "Понижение",
-        text: "На прошлой неделе не хватило XP. Держись — впереди новая неделя!",
-        textColor: "text-on-error-container",
-    },
+const TIER_CONFIG: Record<string, { label: string; color: string }> = {
+    bronze: { label: "Бронза", color: "var(--clay)" },
+    silver: { label: "Серебро", color: "var(--ink-3)" },
+    gold: { label: "Золото", color: "var(--rust)" },
+    diamond: { label: "Алмаз", color: "var(--indigo)" },
 };
 
 const PROMOTION_ZONE_SIZE = 10;
@@ -66,265 +47,336 @@ export default function LeaguePage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            <div className="flex items-center justify-center min-h-screen bg-bg">
+                <div className="w-12 h-12 rounded-full border-3 border-line-2 border-t-indigo animate-spin" />
             </div>
         );
     }
 
     if (!leagueData) return null;
 
-    const tierInfo = TIER_LABELS[leagueData.tier] ?? { label: leagueData.tier, icon: "emoji_events" };
+    const tierInfo = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
     const totalParticipantCount = leagueData.participantsByRank.length;
-    const outcomeConfig = leagueData.previousWeekOutcome
-        ? OUTCOME_BANNERS[leagueData.previousWeekOutcome]
-        : null;
-
-    // Calculate XP to top 10
+    const currentUser = leagueData.participantsByRank.find(p => p.isCurrentUser);
+    const currentUserXp = currentUser?.weeklyXpAmount ?? 0;
     const topTenMinXp = leagueData.participantsByRank[PROMOTION_ZONE_SIZE - 1]?.weeklyXpAmount ?? 0;
-    const currentUserXp = leagueData.participantsByRank.find(p => p.isCurrentUser)?.weeklyXpAmount ?? 0;
     const xpToTopTen = Math.max(0, topTenMinXp - currentUserXp + 1);
 
+    const isInPromotionZone = leagueData.currentUserRank <= PROMOTION_ZONE_SIZE;
+    const isInDemotionZone = leagueData.currentUserRank > totalParticipantCount - DEMOTION_ZONE_SIZE;
+
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
-            {/* Previous week outcome banner */}
-            {outcomeConfig && !bannerDismissed && (
-                <div className={`${outcomeConfig.bg} rounded-2xl p-4 mb-6 flex items-start gap-3`}>
-                    <Icon name={outcomeConfig.icon} size="lg" className={outcomeConfig.iconColor} />
-                    <div className="flex-1">
-                        <p className={`font-bold ${outcomeConfig.textColor}`}>
-                            {outcomeConfig.title}
-                        </p>
-                        <p className={`text-sm ${outcomeConfig.textColor} opacity-80`}>
-                            {outcomeConfig.text}
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setBannerDismissed(true)}
-                        className="text-on-surface-variant hover:text-on-surface tonal-transition"
-                    >
-                        <Icon name="close" size="sm" />
-                    </button>
-                </div>
-            )}
-
-            {/* League Header Card */}
-            <section className="rounded-2xl bg-secondary-container text-on-secondary-container p-5 mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <Icon name={tierInfo.icon} size="md" />
-                    <span className="text-sm font-semibold uppercase tracking-widest">Арена</span>
-                </div>
-                <h1 className="font-headline text-3xl font-bold mb-1">Лига {tierInfo.label}</h1>
-                <p className="text-sm opacity-80 mb-4">
-                    Топ {PROMOTION_ZONE_SIZE} поднимаются выше. Займи место до окончания недели.
-                </p>
-
-                {/* Countdown */}
-                <div className="flex items-end gap-3">
-                    <div className="flex flex-col items-center">
-                        <span className="font-headline text-3xl font-bold tabular-nums">
-                            {String(countdown.days).padStart(2, "0")}
+        <div className="min-h-screen bg-bg pb-20">
+            {/* Header */}
+            <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
+                <div className="max-w-2xl mx-auto">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span
+                            className="text-[10px] font-mono tracking-[2px] uppercase"
+                            style={{ color: tierInfo.color }}
+                        >
+                            АРЕНА · НЕДЕЛЯ
                         </span>
-                        <span className="text-[10px] uppercase tracking-wider opacity-70">Дней</span>
                     </div>
-                    <span className="font-headline text-2xl font-bold mb-1">:</span>
-                    <div className="flex flex-col items-center">
-                        <span className="font-headline text-3xl font-bold tabular-nums">
-                            {String(countdown.hours).padStart(2, "0")}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider opacity-70">Часов</span>
-                    </div>
-                    <span className="font-headline text-2xl font-bold mb-1">:</span>
-                    <div className="flex flex-col items-center">
-                        <span className="font-headline text-3xl font-bold tabular-nums">
-                            {String(countdown.mins).padStart(2, "0")}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider opacity-70">Минут</span>
-                    </div>
-                </div>
-            </section>
-
-            {/* Stat Cards Row */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-                {/* Rank Card */}
-                <div className="rounded-2xl bg-surface-container p-4">
-                    <div className="flex items-center gap-1 text-xs text-on-surface-variant font-medium uppercase tracking-wide mb-1">
-                        <Icon name="trending_up" size="sm" className="text-primary" />
-                        Твоё место
-                    </div>
-                    <p className="font-headline text-4xl font-bold text-primary tabular-nums">
-                        #{leagueData.currentUserRank}
+                    <h1 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">
+                        Лига {tierInfo.label}
+                    </h1>
+                    <p className="text-sm text-ink-3 mt-2 max-w-md">
+                        Топ {PROMOTION_ZONE_SIZE} поднимаются выше. Займи место до окончания недели.
                     </p>
-                    {leagueData.currentUserRank <= PROMOTION_ZONE_SIZE && (
-                        <p className="text-xs text-secondary flex items-center gap-1 mt-1">
-                            <Icon name="expand_less" size="sm" />
-                            Зона повышения
-                        </p>
-                    )}
-                </div>
-
-                {/* Status Card */}
-                <div className="rounded-2xl bg-surface-container p-4">
-                    <p className="text-xs text-on-surface-variant font-medium uppercase tracking-wide mb-1">
-                        Статус
-                    </p>
-                    <p className="font-headline text-lg font-bold text-on-surface">
-                        {leagueData.currentUserRank <= PROMOTION_ZONE_SIZE
-                            ? "В зоне повышения"
-                            : leagueData.currentUserRank > totalParticipantCount - DEMOTION_ZONE_SIZE
-                            ? "Зона вылета"
-                            : "Безопасная зона"}
-                    </p>
-                    {leagueData.currentUserRank > PROMOTION_ZONE_SIZE && (
-                        <p className="text-xs text-on-surface-variant mt-1">
-                            {xpToTopTen} XP до топ-{PROMOTION_ZONE_SIZE}
-                        </p>
-                    )}
                 </div>
             </div>
 
-            {/* Leaderboard Table */}
-            <section className="rounded-2xl bg-surface-container overflow-hidden">
-                {/* Table Header */}
-                <div className="grid grid-cols-[3rem_1fr_auto] items-center px-4 py-2 bg-surface-container-high text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
-                    <span>Место</span>
-                    <span>Участник</span>
-                    <span className="text-right">XP</span>
+            <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
+                {/* Outcome Banner */}
+                {leagueData.previousWeekOutcome && !bannerDismissed && (
+                    <div
+                        className={`rounded-2xl p-4 mb-6 flex items-start gap-3 ${
+                            leagueData.previousWeekOutcome === "promoted"
+                                ? "bg-olive-soft"
+                                : "bg-bad-soft"
+                        }`}
+                    >
+                        <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                leagueData.previousWeekOutcome === "promoted"
+                                    ? "bg-olive text-white"
+                                    : "bg-bad text-white"
+                            }`}
+                        >
+                            <Icon
+                                name={leagueData.previousWeekOutcome === "promoted" ? "trending_up" : "trending_down"}
+                                size="md"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-medium text-ink">
+                                {leagueData.previousWeekOutcome === "promoted" ? "Повышение!" : "Понижение"}
+                            </p>
+                            <p className="text-sm text-ink-3">
+                                {leagueData.previousWeekOutcome === "promoted"
+                                    ? "Ты поднялся в следующую лигу. Отличная работа!"
+                                    : "На прошлой неделе не хватило XP. Держись — впереди новая неделя!"}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setBannerDismissed(true)}
+                            className="text-ink-4 hover:text-ink-2 transition-colors p-1"
+                        >
+                            <Icon name="close" size="sm" />
+                        </button>
+                    </div>
+                )}
+
+                {/* Countdown Timer */}
+                <div className="bg-surface border border-line rounded-2xl p-5 mb-4" style={{ boxShadow: "var(--sh-1)" }}>
+                    <div className="text-[10px] font-mono tracking-[1.5px] uppercase text-ink-4 mb-3">
+                        До конца недели
+                    </div>
+                    <div className="flex items-end gap-3">
+                        <TimeUnit value={countdown.days} label="Дней" />
+                        <span className="text-2xl font-medium text-ink-4 mb-1">:</span>
+                        <TimeUnit value={countdown.hours} label="Часов" />
+                        <span className="text-2xl font-medium text-ink-4 mb-1">:</span>
+                        <TimeUnit value={countdown.mins} label="Минут" />
+                    </div>
                 </div>
 
-                {/* Rows */}
-                {leagueData.participantsByRank.map((participant, participantIndex) => {
-                    const isInPromotionZone = participantIndex < PROMOTION_ZONE_SIZE;
-                    const isInDemotionZone = participantIndex >= totalParticipantCount - DEMOTION_ZONE_SIZE;
+                {/* Stats Row */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* Rank Stat */}
+                    <StatTile
+                        label="Твоё место"
+                        value={`#${leagueData.currentUserRank}`}
+                        tone={isInPromotionZone ? "olive" : isInDemotionZone ? "bad" : "neutral"}
+                        badge={isInPromotionZone ? "Зона повышения" : isInDemotionZone ? "Зона вылета" : undefined}
+                    />
+                    {/* XP Stat */}
+                    <StatTile
+                        label="Твой XP"
+                        value={currentUserXp.toLocaleString()}
+                        tone="indigo"
+                        badge={!isInPromotionZone && xpToTopTen > 0 ? `${xpToTopTen} до топ-${PROMOTION_ZONE_SIZE}` : undefined}
+                    />
+                </div>
 
-                    // Zone separator lines
-                    const isPromotionBoundary = participantIndex === PROMOTION_ZONE_SIZE;
-                    const isDemotionBoundary = participantIndex === totalParticipantCount - DEMOTION_ZONE_SIZE;
+                {/* Leaderboard */}
+                <div className="bg-surface border border-line rounded-2xl overflow-hidden" style={{ boxShadow: "var(--sh-1)" }}>
+                    {/* Table Header */}
+                    <div className="grid grid-cols-[3rem_1fr_auto] items-center px-4 py-3 bg-bg-2 border-b border-line">
+                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4">#</span>
+                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4">Участник</span>
+                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 text-right">XP</span>
+                    </div>
 
-                    // Rank badge styles
-                    const getRankBadgeClass = () => {
-                        if (participant.rank === 1) return "bg-[#FFD700] text-[#5a4000]";
-                        if (participant.rank === 2) return "bg-[#C0C0C0] text-[#3a3a3a]";
-                        if (participant.rank === 3) return "bg-[#CD7F32] text-white";
-                        if (participant.isCurrentUser) return "bg-primary text-on-primary";
-                        if (isInDemotionZone) return "bg-error-container text-on-error-container";
-                        return "bg-surface-container-high text-on-surface-variant";
-                    };
+                    {/* Rows */}
+                    {leagueData.participantsByRank.map((participant, idx) => {
+                        const isInPromoZone = idx < PROMOTION_ZONE_SIZE;
+                        const isInDemoZone = idx >= totalParticipantCount - DEMOTION_ZONE_SIZE;
+                        const showPromoBoundary = idx === PROMOTION_ZONE_SIZE;
+                        const showDemoBoundary = idx === totalParticipantCount - DEMOTION_ZONE_SIZE;
 
-                    // Row background
-                    const getRowClass = () => {
-                        if (participant.isCurrentUser) return "bg-primary/10 border-l-4 border-primary";
-                        if (isInPromotionZone) return "bg-primary/5";
-                        if (isInDemotionZone) return "bg-error/5";
-                        return "";
-                    };
+                        return (
+                            <div key={participant.userId}>
+                                {showPromoBoundary && <ZoneDivider label="Безопасная зона" />}
+                                {showDemoBoundary && <ZoneDivider label="Зона вылета" tone="bad" />}
 
-                    return (
-                        <div key={participant.userId}>
-                            {isPromotionBoundary && (
-                                <div className="flex items-center gap-2 py-2 px-4">
-                                    <div className="flex-1 h-px bg-outline-variant" />
-                                    <span className="text-xs text-on-surface-variant uppercase tracking-wider whitespace-nowrap">
-                                        Безопасная зона
-                                    </span>
-                                    <div className="flex-1 h-px bg-outline-variant" />
-                                </div>
-                            )}
-                            {isDemotionBoundary && (
-                                <div className="flex items-center gap-2 py-2 px-4">
-                                    <div className="flex-1 h-px bg-error/30" />
-                                    <span className="text-xs text-error uppercase tracking-wider whitespace-nowrap">
-                                        Зона вылета
-                                    </span>
-                                    <div className="flex-1 h-px bg-error/30" />
-                                </div>
-                            )}
-
-                            <div
-                                className={`grid grid-cols-[3rem_1fr_auto] items-center px-4 py-3 gap-3 border-b border-outline-variant/50 ${getRowClass()}`}
-                            >
-                                {/* Rank badge */}
                                 <div
-                                    className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${getRankBadgeClass()}`}
+                                    className={`grid grid-cols-[3rem_1fr_auto] items-center px-4 py-3 gap-3 border-b border-line/50 transition-colors ${
+                                        participant.isCurrentUser
+                                            ? "bg-indigo-soft"
+                                            : isInPromoZone
+                                            ? "bg-olive-soft/30"
+                                            : isInDemoZone
+                                            ? "bg-bad-soft/30"
+                                            : ""
+                                    }`}
+                                    style={participant.isCurrentUser ? { borderLeft: "3px solid var(--indigo)" } : undefined}
                                 >
-                                    {String(participant.rank).padStart(2, "0")}
-                                </div>
+                                    {/* Rank Badge */}
+                                    <RankBadge
+                                        rank={participant.rank}
+                                        isCurrentUser={participant.isCurrentUser}
+                                        isInDemotionZone={isInDemoZone}
+                                    />
 
-                                {/* Participant info */}
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div
-                                        className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 ${
-                                            participant.isCurrentUser ? "bg-primary ring-2 ring-primary-container" : "bg-surface-container-highest text-on-surface-variant"
-                                        }`}
-                                    >
-                                        {participant.displayName[0]?.toUpperCase()}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p
-                                            className={`font-semibold text-sm truncate ${
+                                    {/* Participant Info */}
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div
+                                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0 ${
                                                 participant.isCurrentUser
-                                                    ? "text-primary"
-                                                    : "text-on-surface"
+                                                    ? "bg-indigo text-white"
+                                                    : "bg-bg-2 text-ink-3"
                                             }`}
                                         >
-                                            {participant.displayName}
-                                            {participant.isCurrentUser && " (ты)"}
-                                        </p>
-                                        {participant.rank <= 3 && (
-                                            <p className="text-xs text-on-surface-variant">
-                                                {participant.rank === 1 ? "Лидер" : participant.rank === 2 ? "2-е место" : "3-е место"}
+                                            {participant.displayName[0]?.toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p
+                                                className={`font-medium text-sm truncate ${
+                                                    participant.isCurrentUser ? "text-indigo" : "text-ink"
+                                                }`}
+                                            >
+                                                {participant.displayName}
+                                                {participant.isCurrentUser && (
+                                                    <span className="text-ink-4 font-normal"> (ты)</span>
+                                                )}
                                             </p>
-                                        )}
+                                            {participant.rank <= 3 && (
+                                                <p className="text-[10px] font-mono text-ink-4">
+                                                    {participant.rank === 1 ? "Лидер" : `${participant.rank}-е место`}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
+
+                                    {/* XP */}
+                                    <span
+                                        className={`font-mono font-medium text-sm tabular-nums ${
+                                            participant.isCurrentUser
+                                                ? "text-indigo"
+                                                : isInDemoZone
+                                                ? "text-bad"
+                                                : "text-ink-2"
+                                        }`}
+                                    >
+                                        {participant.weeklyXpAmount}
+                                    </span>
                                 </div>
-
-                                {/* XP */}
-                                <span
-                                    className={`tabular-nums font-bold text-sm text-right ${
-                                        participant.isCurrentUser
-                                            ? "text-primary"
-                                            : isInDemotionZone
-                                            ? "text-error"
-                                            : "text-tertiary"
-                                    }`}
-                                >
-                                    {participant.weeklyXpAmount}
-                                </span>
                             </div>
-                        </div>
-                    );
-                })}
-            </section>
-
-            {/* Zone legend */}
-            <div className="mt-4 flex gap-4 justify-center text-xs text-on-surface-variant">
-                <span className="flex items-center gap-1">
-                    <Icon name="expand_less" size="sm" className="text-primary" />
-                    Топ {PROMOTION_ZONE_SIZE} → повышение
-                </span>
-                <span className="flex items-center gap-1">
-                    <Icon name="expand_more" size="sm" className="text-error" />
-                    Низ {DEMOTION_ZONE_SIZE} → вылет
-                </span>
-            </div>
-
-            {/* Boost CTA Banner */}
-            <div className="mt-6 rounded-2xl bg-tertiary-container text-on-tertiary-container p-4 flex items-start gap-3">
-                <Icon name="bolt" size="lg" className="text-tertiary mt-0.5" />
-                <div className="flex-1">
-                    <p className="font-headline font-bold text-sm">Ускорь продвижение</p>
-                    <p className="text-xs mt-0.5 opacity-80">
-                        Пройди урок, чтобы заработать XP и подняться выше.
-                    </p>
+                        );
+                    })}
                 </div>
-                <Link
-                    href="/tree"
-                    className="shrink-0 bg-tertiary text-on-tertiary text-xs font-semibold px-3 py-1.5 rounded-full hover:opacity-90 tonal-transition flex items-center gap-1"
+
+                {/* Zone Legend */}
+                <div className="mt-4 flex flex-wrap gap-4 justify-center text-xs text-ink-4">
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-sm bg-olive" />
+                        Топ {PROMOTION_ZONE_SIZE} → повышение
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-sm bg-bad" />
+                        Низ {DEMOTION_ZONE_SIZE} → вылет
+                    </span>
+                </div>
+
+                {/* CTA Banner */}
+                <div
+                    className="mt-6 rounded-2xl bg-indigo-soft p-5 flex items-center gap-4"
+                    style={{ boxShadow: "var(--sh-1)" }}
                 >
-                    <Icon name="school" size="sm" />
-                    Учиться
-                </Link>
+                    <div className="w-12 h-12 rounded-xl bg-indigo text-white flex items-center justify-center shrink-0">
+                        <Icon name="bolt" size="md" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="font-medium text-ink text-sm">Ускорь продвижение</p>
+                        <p className="text-xs text-ink-3 mt-0.5">
+                            Пройди урок, чтобы заработать XP и подняться выше.
+                        </p>
+                    </div>
+                    <Link
+                        href="/tree"
+                        className="shrink-0 bg-indigo text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
+                    >
+                        Учиться
+                        <Icon name="arrow_forward" size="sm" />
+                    </Link>
+                </div>
             </div>
+        </div>
+    );
+}
+
+function TimeUnit({ value, label }: { value: number; label: string }) {
+    return (
+        <div className="flex flex-col items-center">
+            <span className="text-3xl md:text-4xl font-medium tabular-nums text-ink tracking-tight">
+                {String(value).padStart(2, "0")}
+            </span>
+            <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mt-1">
+                {label}
+            </span>
+        </div>
+    );
+}
+
+function StatTile({
+    label,
+    value,
+    tone = "neutral",
+    badge
+}: {
+    label: string;
+    value: string;
+    tone?: "neutral" | "olive" | "indigo" | "bad";
+    badge?: string;
+}) {
+    const toneStyles = {
+        neutral: { bg: "bg-surface", valueColor: "text-ink" },
+        olive: { bg: "bg-olive-soft", valueColor: "text-olive" },
+        indigo: { bg: "bg-indigo-soft", valueColor: "text-indigo" },
+        bad: { bg: "bg-bad-soft", valueColor: "text-bad" },
+    };
+    const style = toneStyles[tone];
+
+    return (
+        <div
+            className={`${style.bg} border border-line rounded-2xl p-4`}
+            style={{ boxShadow: "var(--sh-1)" }}
+        >
+            <div className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mb-2">
+                {label}
+            </div>
+            <div className={`text-3xl font-medium tabular-nums ${style.valueColor}`}>
+                {value}
+            </div>
+            {badge && (
+                <div className="text-[11px] text-ink-3 mt-1 font-mono">
+                    {badge}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function RankBadge({
+    rank,
+    isCurrentUser,
+    isInDemotionZone
+}: {
+    rank: number;
+    isCurrentUser: boolean;
+    isInDemotionZone: boolean;
+}) {
+    const getBadgeStyles = () => {
+        if (rank === 1) return "bg-rust text-white";
+        if (rank === 2) return "bg-ink-3 text-white";
+        if (rank === 3) return "bg-clay text-white";
+        if (isCurrentUser) return "bg-indigo text-white";
+        if (isInDemotionZone) return "bg-bad-soft text-bad";
+        return "bg-bg-2 text-ink-3";
+    };
+
+    return (
+        <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-medium text-xs ${getBadgeStyles()}`}
+        >
+            {String(rank).padStart(2, "0")}
+        </div>
+    );
+}
+
+function ZoneDivider({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "bad" }) {
+    const lineColor = tone === "bad" ? "bg-bad/30" : "bg-line";
+    const textColor = tone === "bad" ? "text-bad" : "text-ink-4";
+
+    return (
+        <div className="flex items-center gap-3 py-2 px-4">
+            <div className={`flex-1 h-px ${lineColor}`} />
+            <span className={`text-[10px] font-mono tracking-[1px] uppercase whitespace-nowrap ${textColor}`}>
+                {label}
+            </span>
+            <div className={`flex-1 h-px ${lineColor}`} />
         </div>
     );
 }

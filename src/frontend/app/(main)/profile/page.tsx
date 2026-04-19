@@ -7,6 +7,7 @@ import { useLogout } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkills, useUpdateEnrolledSkills } from "@/lib/hooks/useSkillTree";
 import { Icon } from "@/components/ui/Icon";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
@@ -30,8 +31,8 @@ export default function ProfilePage() {
 
     if (profileLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            <div className="flex items-center justify-center min-h-screen bg-bg">
+                <div className="w-12 h-12 rounded-full border-3 border-line-2 border-t-indigo animate-spin" />
             </div>
         );
     }
@@ -45,7 +46,6 @@ export default function ProfilePage() {
               )
             : 0;
 
-    /** Enrolled = has an active (non-locked) progress record */
     const enrolledSlugs = new Set(
         (allSkills ?? [])
             .filter((s) => s.status !== "locked")
@@ -60,241 +60,330 @@ export default function ProfilePage() {
         updateEnrolledMutation.mutate(Array.from(next));
     }
 
+    const unlockedAchievements = achievements?.filter((a) => a.isUnlocked) ?? [];
+
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
-            {/* User header */}
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="font-headline font-bold text-2xl text-on-surface">
-                        {profileStats.displayName}
-                    </h1>
-                    <p className="text-sm text-on-surface-variant">{profileStats.email}</p>
-                    {profileStats.persona && (
-                        <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full bg-primary-container text-primary text-xs font-semibold">
-                            <Icon name="badge" size="sm" />
-                            {PERSONA_LABELS[profileStats.persona] ?? profileStats.persona}
-                        </span>
-                    )}
-                </div>
-                <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-2xl ring-4 ring-primary-container">
-                    {profileStats.displayName[0]?.toUpperCase()}
-                </div>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center mb-2">
-                        <Icon name="local_fire_department" size="md" className="text-error" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-on-surface">
-                        {profileStats.currentStreakDayCount}
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">Стрик</span>
-                </div>
-
-                <div className="bg-primary-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center mb-2">
-                        <Icon name="bolt" size="md" className="text-on-primary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-primary">
-                        {profileStats.totalXpAmount}
-                    </span>
-                    <span className="text-xs text-on-primary-container uppercase tracking-wider">Всего XP</span>
-                </div>
-
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center mb-2">
-                        <Icon name="emoji_events" size="md" className="text-secondary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-on-surface">
-                        {profileStats.longestStreakDayCount}
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">Рекорд</span>
-                </div>
-
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center mb-2">
-                        <Icon name="target" size="md" className="text-tertiary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-tertiary">
-                        {profileStats.averageExerciseScore}%
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">Средний балл</span>
-                </div>
-            </div>
-
-            {/* Skills progress bar */}
-            <div className="bg-surface-container rounded-2xl p-5 mb-6">
-                <div className="flex items-center justify-between mb-3">
-                    <span className="font-semibold text-on-surface">Навыки пройдено</span>
-                    <span className="font-bold text-on-surface">
-                        {profileStats.completedSkillCount} / {profileStats.totalSkillCount}
-                    </span>
-                </div>
-                <div className="h-3 bg-surface-container-highest rounded-full overflow-hidden">
+        <div className="min-h-screen bg-bg pb-20">
+            {/* Header */}
+            <div className="bg-surface border-b border-line px-6 py-6 md:px-8">
+                <div className="max-w-2xl mx-auto flex items-center gap-5">
+                    {/* Avatar */}
                     <div
-                        className="h-full bg-primary rounded-full transition-all duration-500"
-                        style={{ width: `${completionPercent}%` }}
+                        className="w-20 h-20 rounded-2xl flex items-center justify-center text-white font-medium text-3xl shrink-0"
+                        style={{ background: "var(--indigo)", boxShadow: "var(--sh-2)" }}
+                    >
+                        {profileStats.displayName[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-2xl md:text-3xl font-medium tracking-tight text-ink truncate">
+                            {profileStats.displayName}
+                        </h1>
+                        <p className="text-sm text-ink-3 mt-0.5">{profileStats.email}</p>
+                        {profileStats.persona && (
+                            <span
+                                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-medium"
+                                style={{ background: "var(--indigo-soft)", color: "var(--indigo)" }}
+                            >
+                                {PERSONA_LABELS[profileStats.persona] ?? profileStats.persona}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <StatTile
+                        icon="flame"
+                        label="Стрик"
+                        value={profileStats.currentStreakDayCount}
+                        tone="rust"
+                    />
+                    <StatTile
+                        icon="bolt"
+                        label="Всего XP"
+                        value={profileStats.totalXpAmount.toLocaleString()}
+                        tone="indigo"
+                    />
+                    <StatTile
+                        icon="trophy"
+                        label="Рекорд"
+                        value={profileStats.longestStreakDayCount}
+                        unit="дн"
+                        tone="olive"
+                    />
+                    <StatTile
+                        icon="target"
+                        label="Точность"
+                        value={profileStats.averageExerciseScore}
+                        unit="%"
+                        tone="clay"
                     />
                 </div>
-            </div>
 
-            {/* ── Achievements ─────────────────────────────────────────────── */}
-            {achievements && achievements.length > 0 && (
-                <div className="mb-6">
-                    <h2 className="font-bold text-on-surface text-lg mb-4">Достижения</h2>
-                    <div className="grid grid-cols-5 gap-2">
-                        {achievements.map((achievement) => (
-                            <div
-                                key={achievement.achievementId}
-                                title={`${achievement.title}: ${achievement.description}`}
-                                className={`flex flex-col items-center gap-1 p-3 rounded-2xl text-center tonal-transition ${
-                                    achievement.isUnlocked
-                                        ? "bg-primary-container"
-                                        : "bg-surface-container opacity-40 grayscale"
-                                }`}
-                            >
-                                <span className="text-2xl">{achievement.iconEmoji}</span>
-                                <span className="text-[10px] font-semibold text-on-surface leading-tight">
-                                    {achievement.title}
-                                </span>
-                            </div>
-                        ))}
+                {/* Skills progress bar */}
+                <div
+                    className="bg-surface border border-line rounded-2xl p-5 mb-6"
+                    style={{ boxShadow: "var(--sh-1)" }}
+                >
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-ink">Навыки пройдено</span>
+                        <span className="font-mono text-sm text-ink-2">
+                            {profileStats.completedSkillCount} / {profileStats.totalSkillCount}
+                        </span>
                     </div>
-                    <p className="text-xs text-on-surface-variant mt-2 text-center">
-                        {achievements.filter((a) => a.isUnlocked).length} из {achievements.length} разблокировано
-                    </p>
-                </div>
-            )}
-
-            {/* ── My Skills (enrollment manager) ──────────────────────────── */}
-            <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-on-surface text-lg">Мои навыки</h2>
-                    <span className="text-xs text-on-surface-variant">
-                        Включи навыки для изучения
-                    </span>
+                    <div className="h-2 bg-bg-2 rounded-full overflow-hidden">
+                        <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${completionPercent}%`, background: "var(--indigo)" }}
+                        />
+                    </div>
                 </div>
 
-                {skillsLoading ? (
-                    <div className="flex flex-col gap-3">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-16 rounded-2xl bg-surface-container animate-pulse" />
-                        ))}
-                    </div>
-                ) : !allSkills || allSkills.length === 0 ? (
-                    <div className="bg-surface-container rounded-2xl px-5 py-8 text-center">
-                        <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mx-auto mb-3">
-                            <Icon name="school" size="lg" className="text-on-surface-variant" />
+                {/* Achievements */}
+                {achievements && achievements.length > 0 && (
+                    <div className="mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="font-medium text-ink">Достижения</h2>
+                            <span className="text-xs text-ink-4 font-mono">
+                                {unlockedAchievements.length}/{achievements.length}
+                            </span>
                         </div>
-                        <p className="text-sm font-semibold text-on-surface-variant">
-                            Навыки ещё не добавлены
-                        </p>
-                        <p className="text-xs text-on-surface-variant mt-1">
-                            Попросите администратора добавить навыки
-                        </p>
+                        <div className="grid grid-cols-5 gap-2">
+                            {achievements.map((achievement) => (
+                                <AchievementBadge key={achievement.achievementId} achievement={achievement} />
+                            ))}
+                        </div>
                     </div>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {allSkills.map((skill) => {
-                            const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
-                            const isEnrolled = enrolledSlugs.has(skill.slug);
-                            const isSaving = updateEnrolledMutation.isPending;
+                )}
 
-                            return (
-                                <button
-                                    key={skill.skillId}
-                                    onClick={() => toggleEnrollment(skill.slug)}
-                                    disabled={isAlwaysOn || isSaving}
-                                    className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-left tonal-transition border-2 ${
-                                        isAlwaysOn
-                                            ? "border-outline-variant bg-surface-container-low cursor-default opacity-60"
-                                            : isEnrolled
-                                            ? "border-primary bg-primary-container cursor-pointer hover:opacity-90"
-                                            : "border-transparent bg-surface-container cursor-pointer hover:bg-surface-container-high"
-                                    }`}
-                                >
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <p
-                                            className={`font-semibold truncate ${
-                                                isAlwaysOn
-                                                    ? "text-on-surface-variant"
-                                                    : isEnrolled
-                                                    ? "text-primary"
-                                                    : "text-on-surface"
-                                            }`}
-                                        >
-                                            {skill.title}
-                                        </p>
-                                        <p className="text-xs text-on-surface-variant mt-0.5">
-                                            {isAlwaysOn
+                {/* My Skills */}
+                <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-medium text-ink">Мои навыки</h2>
+                        <span className="text-xs text-ink-4">Включи навыки для изучения</span>
+                    </div>
+
+                    {skillsLoading ? (
+                        <div className="flex flex-col gap-3">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-16 rounded-2xl bg-surface animate-pulse" />
+                            ))}
+                        </div>
+                    ) : !allSkills || allSkills.length === 0 ? (
+                        <div
+                            className="bg-surface border border-line rounded-2xl px-5 py-8 text-center"
+                            style={{ boxShadow: "var(--sh-1)" }}
+                        >
+                            <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mx-auto mb-3">
+                                <Icon name="school" size="lg" className="text-ink-4" />
+                            </div>
+                            <p className="text-sm font-medium text-ink-3">Навыки ещё не добавлены</p>
+                            <p className="text-xs text-ink-4 mt-1">
+                                Попросите администратора добавить навыки
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2">
+                            {allSkills.map((skill) => {
+                                const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
+                                const isEnrolled = enrolledSlugs.has(skill.slug);
+                                const isSaving = updateEnrolledMutation.isPending;
+
+                                return (
+                                    <SkillToggle
+                                        key={skill.skillId}
+                                        title={skill.title}
+                                        subtitle={
+                                            isAlwaysOn
                                                 ? "Базовый — всегда включён"
                                                 : isEnrolled
-                                                ? `${skill.completedLessonCount}/${skill.totalLessonCount} уроков пройдено`
-                                                : "Нажми, чтобы добавить"}
-                                        </p>
-                                    </div>
+                                                ? `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`
+                                                : "Нажми, чтобы добавить"
+                                        }
+                                        isAlwaysOn={isAlwaysOn}
+                                        isEnrolled={isEnrolled}
+                                        disabled={isAlwaysOn || isSaving}
+                                        onClick={() => toggleEnrollment(skill.slug)}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
 
-                                    {/* Toggle switch */}
-                                    <div
-                                        className={`w-12 h-6 rounded-full tonal-transition shrink-0 flex items-center px-1 ${
-                                            isAlwaysOn
-                                                ? "bg-outline-variant"
-                                                : isEnrolled
-                                                ? "bg-primary"
-                                                : "bg-surface-container-highest"
-                                        }`}
-                                    >
-                                        <div
-                                            className={`w-4 h-4 rounded-full bg-surface-container-lowest shadow transition-transform ${
-                                                isAlwaysOn || isEnrolled
-                                                    ? "translate-x-6"
-                                                    : "translate-x-0"
-                                            }`}
-                                        />
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
+                    {updateEnrolledMutation.isError && (
+                        <p className="mt-3 text-xs text-bad text-center">
+                            Не удалось сохранить изменения. Попробуй ещё раз.
+                        </p>
+                    )}
 
-                {updateEnrolledMutation.isError && (
-                    <p className="mt-3 text-xs text-error text-center">
-                        Не удалось сохранить изменения. Попробуй ещё раз.
+                    <p className="text-xs text-ink-4 mt-3 text-center">
+                        Выбранные навыки доступны на вкладке{" "}
+                        <Link href="/tree" className="text-indigo font-medium">
+                            Путь
+                        </Link>
                     </p>
-                )}
+                </div>
 
-                <p className="text-xs text-on-surface-variant mt-3 text-center">
-                    Выбранные навыки доступны на вкладке{" "}
-                    <Link href="/tree" className="text-primary font-semibold">
-                        Путь
-                    </Link>
+                {/* Settings Section */}
+                <div className="border-t border-line pt-6 space-y-3">
+                    <ThemeToggle />
+
+                    {isAdmin && (
+                        <Link
+                            href="/admin/skills"
+                            className="flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface border border-line hover:border-line-2 transition-colors mb-2"
+                            style={{ boxShadow: "var(--sh-1)" }}
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-indigo-soft flex items-center justify-center text-indigo">
+                                <Icon name="settings" size="md" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-ink text-sm">Панель администратора</p>
+                                <p className="text-xs text-ink-4">Управление контентом</p>
+                            </div>
+                            <Icon name="chevron_right" size="sm" className="text-ink-4" />
+                        </Link>
+                    )}
+
+                    <button
+                        onClick={() => logoutMutation.mutate()}
+                        disabled={logoutMutation.isPending}
+                        className="flex items-center gap-3 px-5 py-4 rounded-2xl bg-surface border border-line hover:border-bad/30 transition-colors w-full text-left"
+                        style={{ boxShadow: "var(--sh-1)" }}
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-bad-soft flex items-center justify-center text-bad">
+                            <Icon name="logout" size="md" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-medium text-ink text-sm">Выйти из аккаунта</p>
+                            <p className="text-xs text-ink-4">Завершить сессию</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function StatTile({
+    icon,
+    label,
+    value,
+    unit,
+    tone = "neutral"
+}: {
+    icon: string;
+    label: string;
+    value: string | number;
+    unit?: string;
+    tone?: "neutral" | "rust" | "olive" | "indigo" | "clay";
+}) {
+    const toneStyles = {
+        neutral: { bg: "bg-surface", iconBg: "bg-bg-2", iconColor: "text-ink-3", valueColor: "text-ink" },
+        rust: { bg: "bg-rust-soft", iconBg: "bg-rust", iconColor: "text-white", valueColor: "text-rust" },
+        olive: { bg: "bg-olive-soft", iconBg: "bg-olive", iconColor: "text-white", valueColor: "text-olive" },
+        indigo: { bg: "bg-indigo-soft", iconBg: "bg-indigo", iconColor: "text-white", valueColor: "text-indigo" },
+        clay: { bg: "bg-surface", iconBg: "bg-clay", iconColor: "text-white", valueColor: "text-clay" },
+    };
+    const style = toneStyles[tone];
+
+    return (
+        <div
+            className={`${style.bg} border border-line rounded-2xl p-4 flex flex-col items-center`}
+            style={{ boxShadow: "var(--sh-1)" }}
+        >
+            <div className={`w-9 h-9 rounded-xl ${style.iconBg} ${style.iconColor} flex items-center justify-center mb-2`}>
+                <Icon name={icon} size="sm" />
+            </div>
+            <div className={`text-2xl font-medium tabular-nums ${style.valueColor} flex items-baseline gap-0.5`}>
+                {value}
+                {unit && <span className="text-sm text-ink-4">{unit}</span>}
+            </div>
+            <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mt-1">{label}</span>
+        </div>
+    );
+}
+
+function AchievementBadge({ achievement }: { achievement: { achievementId: string; title: string; description: string; iconEmoji: string; isUnlocked: boolean } }) {
+    return (
+        <div
+            title={`${achievement.title}: ${achievement.description}`}
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl text-center transition-all ${
+                achievement.isUnlocked
+                    ? "bg-indigo-soft"
+                    : "bg-surface opacity-40 grayscale"
+            }`}
+            style={achievement.isUnlocked ? {} : { filter: "grayscale(1)" }}
+        >
+            <span className="text-2xl">{achievement.iconEmoji}</span>
+            <span className="text-[10px] font-medium text-ink leading-tight line-clamp-2">
+                {achievement.title}
+            </span>
+        </div>
+    );
+}
+
+function SkillToggle({
+    title,
+    subtitle,
+    isAlwaysOn,
+    isEnrolled,
+    disabled,
+    onClick
+}: {
+    title: string;
+    subtitle: string;
+    isAlwaysOn: boolean;
+    isEnrolled: boolean;
+    disabled: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            className={`flex items-center gap-4 px-4 py-3 rounded-2xl text-left transition-all border ${
+                isAlwaysOn
+                    ? "border-line bg-bg-2 cursor-default opacity-60"
+                    : isEnrolled
+                    ? "border-indigo bg-indigo-soft cursor-pointer hover:opacity-90"
+                    : "border-line bg-surface cursor-pointer hover:border-line-2"
+            }`}
+            style={{ boxShadow: isEnrolled ? "none" : "var(--sh-1)" }}
+        >
+            <div className="flex-1 min-w-0">
+                <p
+                    className={`font-medium text-sm truncate ${
+                        isAlwaysOn
+                            ? "text-ink-3"
+                            : isEnrolled
+                            ? "text-indigo"
+                            : "text-ink"
+                    }`}
+                >
+                    {title}
                 </p>
+                <p className="text-xs text-ink-4 mt-0.5">{subtitle}</p>
             </div>
 
-            {/* Admin link */}
-            {isAdmin && (
-                <Link
-                    href="/admin/skills"
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-surface-container text-on-surface-variant hover:text-on-surface font-semibold tonal-transition mb-2"
-                >
-                    <Icon name="admin_panel_settings" size="md" />
-                    Панель администратора
-                </Link>
-            )}
-
-            {/* Logout button */}
-            <button
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                className="w-full py-3 rounded-2xl text-on-surface-variant hover:text-error font-semibold tonal-transition flex items-center justify-center gap-2"
+            {/* Toggle switch */}
+            <div
+                className={`w-11 h-6 rounded-full shrink-0 flex items-center px-0.5 transition-colors ${
+                    isAlwaysOn
+                        ? "bg-line-2"
+                        : isEnrolled
+                        ? "bg-indigo"
+                        : "bg-line"
+                }`}
             >
-                <Icon name="logout" size="md" />
-                Выйти
-            </button>
-        </div>
+                <div
+                    className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        isAlwaysOn || isEnrolled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                />
+            </div>
+        </button>
     );
 }

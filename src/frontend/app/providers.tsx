@@ -2,13 +2,32 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useInitAuth } from "@/lib/hooks/useAuth";
+import { useThemeStore } from "@/lib/store/themeStore";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 function AuthInitializer() {
     useInitAuth();
+    return null;
+}
+
+function ThemeInitializer() {
+    const { theme } = useThemeStore();
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const isDark = theme === "dark" || (theme === "system" && systemDark);
+
+        if (isDark) {
+            root.setAttribute("data-theme", "dark");
+        } else {
+            root.removeAttribute("data-theme");
+        }
+    }, [theme]);
+
     return null;
 }
 
@@ -26,6 +45,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <QueryClientProvider client={queryClient}>
                 <AuthInitializer />
+                <ThemeInitializer />
                 {children}
             </QueryClientProvider>
         </GoogleOAuthProvider>

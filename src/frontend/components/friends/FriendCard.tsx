@@ -19,47 +19,52 @@ interface FriendCardProps {
 
 export function FriendCard({ friend, onChatClick }: FriendCardProps) {
     return (
-        <div className="bg-surface-container rounded-2xl p-4 flex items-center gap-4 tonal-transition hover:bg-surface-container-high">
+        <div
+            className="bg-surface border border-line rounded-2xl p-4 flex items-center gap-4 transition-all hover:border-line-2"
+            style={{ boxShadow: "var(--sh-1)" }}
+        >
             <Link
                 href={`/friends/${friend.userId}`}
-                className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-lg ring-2 ring-primary-container shrink-0"
+                className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-medium text-lg shrink-0"
+                style={{ background: "var(--indigo)" }}
             >
                 {friend.displayName[0]?.toUpperCase()}
             </Link>
 
             <Link href={`/friends/${friend.userId}`} className="flex-1 min-w-0">
-                <p className="font-semibold text-on-surface truncate">
+                <p className="font-medium text-ink truncate">
                     {friend.displayName}
                 </p>
                 {friend.persona && (
-                    <p className="text-xs text-on-surface-variant">
+                    <p className="text-xs text-ink-4">
                         {PERSONA_LABELS[friend.persona] ?? friend.persona}
                     </p>
                 )}
-                <div className="flex items-center gap-3 mt-1">
-                    <span className="flex items-center gap-0.5 text-xs text-on-surface-variant">
-                        <Icon name="bolt" size="sm" className="text-primary" />
-                        {friend.totalXpAmount} XP
+                <div className="flex items-center gap-3 mt-1.5">
+                    <span className="flex items-center gap-1 text-xs text-ink-3">
+                        <Icon name="bolt" size="sm" className="text-indigo" />
+                        <span className="font-mono">{friend.totalXpAmount}</span>
                     </span>
                     {friend.currentStreakDayCount > 0 && (
-                        <span className="flex items-center gap-0.5 text-xs text-on-surface-variant">
-                            <Icon name="local_fire_department" size="sm" className="text-error" />
-                            {friend.currentStreakDayCount}
+                        <span className="flex items-center gap-1 text-xs text-ink-3">
+                            <Icon name="flame" size="sm" className="text-rust" />
+                            <span className="font-mono">{friend.currentStreakDayCount}</span>
                         </span>
                     )}
-                    <span className="flex items-center gap-0.5 text-xs text-on-surface-variant">
-                        <Icon name="emoji_events" size="sm" className="text-tertiary" />
-                        {friend.achievementCount}
+                    <span className="flex items-center gap-1 text-xs text-ink-3">
+                        <Icon name="trophy" size="sm" className="text-olive" />
+                        <span className="font-mono">{friend.achievementCount}</span>
                     </span>
                 </div>
             </Link>
 
             <button
                 onClick={() => onChatClick(friend.userId)}
-                className="p-2 rounded-full hover:bg-primary-container tonal-transition"
+                className="p-2.5 rounded-xl transition-colors hover:bg-indigo-soft"
+                style={{ color: "var(--indigo)" }}
                 aria-label="Написать"
             >
-                <Icon name="chat" size="md" className="text-primary" />
+                <Icon name="message" size="md" />
             </button>
         </div>
     );
