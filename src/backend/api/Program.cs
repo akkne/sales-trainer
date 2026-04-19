@@ -19,6 +19,7 @@ using SalesTrainer.Api.Features.Exercises;
 using SalesTrainer.Api.Features.Friends;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.League;
+using SalesTrainer.Api.Features.Notifications;
 using SalesTrainer.Api.Features.Onboarding;
 using SalesTrainer.Api.Features.Profile;
 using SalesTrainer.Api.Features.Reference;
@@ -106,6 +107,7 @@ builder.Services
     .AddFriendFeatureServices()
     .AddGamificationFeatureServices()
     .AddLeagueFeatureServices()
+    .AddNotificationFeatureServices()
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices()
     .AddReferenceFeatureServices()
@@ -155,6 +157,11 @@ RecurringJob.AddOrUpdate<StreakResetJob>(
     "daily-streak-reset",
     streakResetJob => streakResetJob.ExecuteAsync(),
     "5 0 * * *");
+
+RecurringJob.AddOrUpdate<NotificationCleanupJob>(
+    "notification-cleanup",
+    notificationCleanupJob => notificationCleanupJob.ExecuteAsync(),
+    "30 0 * * *");
 
 using (var serviceScope = application.Services.CreateScope())
 {

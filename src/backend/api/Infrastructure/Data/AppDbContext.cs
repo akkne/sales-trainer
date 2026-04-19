@@ -7,6 +7,7 @@ using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.League.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
+using SalesTrainer.Api.Features.Notifications.Models;
 using SalesTrainer.Api.Features.Onboarding.Models;
 using SalesTrainer.Api.Features.Reference.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
@@ -37,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OpenQuestionGlobalContext> OpenQuestionGlobalContexts => Set<OpenQuestionGlobalContext>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
