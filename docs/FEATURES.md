@@ -34,6 +34,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
 | [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |
+| [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and achievement button cleanup |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

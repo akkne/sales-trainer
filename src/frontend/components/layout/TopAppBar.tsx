@@ -86,21 +86,15 @@ export function TopAppBar() {
                 {/* Notifications */}
                 <NotificationBell />
 
-                {/* Achievements */}
+                {/* Profile chip with user avatar */}
                 <Link
                     href="/profile"
-                    className="p-2 rounded-full hover:bg-surface-container tonal-transition"
-                    aria-label="Достижения"
+                    className="flex items-center gap-2 bg-primary-container text-on-primary-container rounded-full pl-1 pr-3 py-1 hover:opacity-90 tonal-transition"
+                    aria-label={`Профиль (${displayName})`}
                 >
-                    <Icon name="emoji_events" size="md" className="text-primary" />
-                </Link>
-
-                {/* User chip */}
-                <Link
-                    href="/profile"
-                    className="flex items-center gap-2 bg-primary-container text-on-primary-container rounded-full px-3 py-1.5 hover:opacity-90 tonal-transition"
-                >
-                    <Icon name="military_tech" size="sm" />
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-on-primary text-xs font-bold">
+                        {firstLetter}
+                    </span>
                     <span className="text-xs font-semibold">Уровень {level}</span>
                 </Link>
             </div>

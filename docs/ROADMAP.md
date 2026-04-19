@@ -894,3 +894,24 @@
 - [x] Update `docs/DB_SCHEMA.md` with `Notifications` table
 - [x] Update `docs/FEATURES.md` with notifications entry
 - [x] `docs/TESTING/NOTIFICATIONS.md` — manual checklist
+
+---
+
+## Phase 32 — Header Profile Button Cleanup
+
+> Убрать «лидербордную» трофейную кнопку из правой части `TopAppBar` и заменить
+> медальную иконку в чипе профиля на аватар с первой буквой имени пользователя —
+> чтобы кнопка явно читалась как «мой профиль». Страница `/league` и навигационная
+> вкладка «Лиги» остаются без изменений.
+
+### [x] Frontend — TopAppBar cleanup
+- [x] Remove the `emoji_events` (trophy) achievements Link from `TopAppBar.tsx` right-side cluster
+- [x] Replace the `military_tech` (medal) icon inside the profile chip with a circular
+      avatar showing `firstLetter` from the authenticated user's display name
+- [x] Keep the "Уровень {level}" label and the `/profile` navigation target
+- [x] Add `aria-label="Профиль (displayName)"` to the chip for accessibility
+- [x] Keep `Лиги` nav link (`/league`) untouched
+
+### [x] Docs & tests
+- [x] `docs/TESTING/HEADER_PROFILE_BUTTON.md` — manual checklist
+- [x] Update `docs/FEATURES.md` testing table with the new checklist
