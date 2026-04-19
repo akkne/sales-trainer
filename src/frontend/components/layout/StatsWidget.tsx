@@ -1,72 +1,188 @@
 "use client";
 
+import { StatTile } from "@/components/ui/StatTile";
+import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { Progress } from "@/components/ui/Progress";
+import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
+import Link from "next/link";
 
 interface StatsWidgetProps {
     currentStreakDayCount: number;
     totalXpAmount: number;
     weeklyXpAmount: number;
+    dailyXpGoal?: number;
+    dailyXpCurrent?: number;
 }
 
 export function StatsWidget({
     currentStreakDayCount,
     totalXpAmount,
     weeklyXpAmount,
+    dailyXpGoal = 100,
+    dailyXpCurrent = 40,
 }: StatsWidgetProps) {
+    const remaining = Math.max(0, dailyXpGoal - dailyXpCurrent);
+
     return (
-        <div className="flex flex-col gap-3">
-            {/* Streak card */}
-            <div className="bg-surface-container rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center">
-                    <Icon name="local_fire_department" size="md" className="text-on-error-container" />
-                </div>
-                <div>
-                    <div className="font-headline font-bold text-xl text-on-surface">
-                        {currentStreakDayCount}
-                    </div>
-                    <div className="text-xs text-on-surface-variant uppercase tracking-wider">
-                        Стрик
-                    </div>
-                </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Stats grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <StatTile
+                    label="Стрик"
+                    value={currentStreakDayCount}
+                    unit="дн"
+                    icon={<Icon name="flame" size="xs" />}
+                    tone="rust"
+                />
+                <StatTile
+                    label="Неделя"
+                    value={weeklyXpAmount}
+                    unit="XP"
+                    icon={<Icon name="bolt" size="xs" />}
+                    tone="olive"
+                />
+                <StatTile
+                    label="Всего"
+                    value={totalXpAmount.toLocaleString()}
+                    unit="XP"
+                    icon={<Icon name="trophy" size="xs" />}
+                    tone="indigo"
+                />
+                <StatTile
+                    label="Точность"
+                    value={87}
+                    unit="%"
+                    icon={<Icon name="target" size="xs" />}
+                />
             </div>
 
-            {/* Weekly XP card */}
-            <div className="bg-surface-container rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center">
-                    <Icon name="bolt" size="md" className="text-on-tertiary-container" />
+            {/* Daily goal card */}
+            <Card
+                padding={18}
+                style={{
+                    background: "var(--ink)",
+                    color: "var(--bg)",
+                    borderColor: "var(--ink)",
+                }}
+            >
+                <div
+                    style={{
+                        fontSize: 11,
+                        color: "var(--ink-4)",
+                        letterSpacing: 1,
+                        textTransform: "uppercase",
+                        marginBottom: 8,
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    Сегодня
                 </div>
-                <div>
-                    <div className="font-headline font-bold text-xl text-tertiary">
-                        {weeklyXpAmount}
-                    </div>
-                    <div className="text-xs text-on-surface-variant uppercase tracking-wider">
-                        XP за неделю
-                    </div>
+                <div
+                    style={{
+                        fontSize: 20,
+                        letterSpacing: -0.3,
+                        fontWeight: 500,
+                        marginBottom: 12,
+                    }}
+                >
+                    ещё {remaining} XP
                 </div>
-            </div>
+                <Progress value={dailyXpCurrent} max={dailyXpGoal} tone="indigo" />
+                <div
+                    style={{
+                        marginTop: 10,
+                        fontSize: 12,
+                        color: "var(--ink-4)",
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    {dailyXpCurrent} / {dailyXpGoal} XP
+                </div>
+            </Card>
 
-            {/* Total XP card - highlighted */}
-            <div className="bg-primary-container rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                    <Icon name="emoji_events" size="md" className="text-on-primary" />
+            {/* Tip card */}
+            <Card padding={18}>
+                <div
+                    style={{
+                        fontSize: 11,
+                        color: "var(--ink-3)",
+                        letterSpacing: 1,
+                        textTransform: "uppercase",
+                        marginBottom: 10,
+                        fontWeight: 500,
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    Совет дня
                 </div>
-                <div>
-                    <div className="font-headline font-bold text-xl text-primary">
-                        {totalXpAmount}
-                    </div>
-                    <div className="text-xs text-on-primary-container uppercase tracking-wider">
-                        Всего XP
-                    </div>
+                <div
+                    style={{
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        color: "var(--ink-2)",
+                    }}
+                >
+                    Когда клиент говорит «дорого», не называйте скидку. Спросите —
+                    <span style={{ color: "var(--indigo)" }}> «дорого по сравнению с чем?»</span>
                 </div>
-            </div>
+                <div
+                    style={{
+                        fontSize: 11,
+                        color: "var(--ink-3)",
+                        marginTop: 12,
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    — Skeptic Sergey
+                </div>
+            </Card>
 
-            {/* Motivational tip card */}
-            <div className="bg-surface-container-low rounded-2xl p-4 flex items-start gap-3 mt-1">
-                <Icon name="lightbulb" size="md" className="text-secondary shrink-0" />
-                <p className="text-xs text-on-surface-variant leading-relaxed">
-                    Каждый урок приближает тебя к мастерству. Продолжай!
-                </p>
-            </div>
+            {/* League card */}
+            <Card padding={18}>
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 12,
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 11,
+                            color: "var(--ink-3)",
+                            letterSpacing: 1,
+                            textTransform: "uppercase",
+                            fontWeight: 500,
+                            fontFamily: "var(--f-mono)",
+                        }}
+                    >
+                        Лига
+                    </div>
+                    <Chip tone="olive" size="sm">
+                        Серебро
+                    </Chip>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
+                    Вы на <span className="tnum" style={{ fontWeight: 600 }}>4</span> месте · до
+                    повышения{" "}
+                    <span className="tnum" style={{ color: "var(--olive)", fontWeight: 600 }}>
+                        +120 XP
+                    </span>
+                </div>
+                <Link href="/league" style={{ display: "block" }}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        fullWidth
+                        iconRightName="chevron-right"
+                    >
+                        Открыть лигу
+                    </Button>
+                </Link>
+            </Card>
         </div>
     );
 }

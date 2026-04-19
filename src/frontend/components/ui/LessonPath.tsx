@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { LessonSummary } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 
-// Zigzag horizontal offsets (px)
-const OFFSETS = [0, 80, 80, 0, -80, -80];
+const OFFSETS = [0, 80, 120, 80, 0, -80, -120];
+const NODE_H = 104;
 
 interface LessonNodeProps {
     lesson: LessonSummary;
     index: number;
     total: number;
+    tone: string;
     isPopoverOpen: boolean;
     onTogglePopover: () => void;
     onClosePopover: () => void;
@@ -21,6 +24,7 @@ function LessonNode({
     lesson,
     index,
     total,
+    tone,
     isPopoverOpen,
     onTogglePopover,
     onClosePopover,
@@ -28,10 +32,11 @@ function LessonNode({
     const isLocked = lesson.status === "locked";
     const isCompleted = lesson.status === "completed";
     const isActive = lesson.status === "available" || lesson.status === "in_progress";
-    const offsetX = OFFSETS[index % OFFSETS.length];
     const nodeRef = useRef<HTMLDivElement>(null);
 
-    // Close popover on outside click
+    const toneColor = `var(--${tone})`;
+    const size = 64;
+
     useEffect(() => {
         if (!isPopoverOpen) return;
         function handleOutsideClick(e: MouseEvent) {
@@ -43,157 +48,274 @@ function LessonNode({
         return () => document.removeEventListener("mousedown", handleOutsideClick);
     }, [isPopoverOpen, onClosePopover]);
 
-    const nodeCircle = (
-        <div className="relative flex items-center justify-center" ref={nodeRef}>
-            {isActive && (
-                <span className="absolute w-16 h-16 rounded-full bg-primary opacity-20 animate-ping" />
-            )}
+    const palette = {
+        completed: { bg: toneColor, fg: "white", border: "none" },
+        active: { bg: "var(--indigo)", fg: "white", border: "none", pulse: true },
+        locked: { bg: "var(--bg-2)", fg: "var(--ink-4)", border: "1px solid var(--line-2)" },
+    };
+    const p = isCompleted ? palette.completed : isActive ? palette.active : palette.locked;
 
-            <div
-                onClick={isLocked ? undefined : onTogglePopover}
-                role={isLocked ? undefined : "button"}
-                tabIndex={isLocked ? undefined : 0}
-                onKeyDown={(e) => {
-                    if (!isLocked && (e.key === "Enter" || e.key === " ")) onTogglePopover();
-                }}
-                className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg relative z-10 transition-transform active:translate-y-1 select-none ${
-                    isLocked
-                        ? "bg-surface-container-high border-4 border-outline-variant text-on-surface-variant cursor-not-allowed"
-                        : isCompleted
-                          ? "bg-secondary text-on-secondary cursor-pointer"
-                          : "bg-primary text-on-primary cursor-pointer"
-                }`}
-                style={{
-                    boxShadow: isLocked
-                        ? "0 4px 0 var(--color-outline-variant)"
-                        : isCompleted
-                          ? "0 4px 0 var(--color-on-secondary-container)"
-                          : "0 4px 0 var(--color-primary-dim)",
-                }}
-            >
-                {isLocked ? (
-                    <Icon name="lock" size="md" />
-                ) : isCompleted ? (
-                    <Icon name="check" size="md" variant="filled" />
-                ) : (
-                    index + 1
-                )}
-            </div>
-
-            {/* Tap-to-open popover */}
-            {isPopoverOpen && !isLocked && (
-                <div className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 w-56 bg-surface-container-lowest rounded-2xl shadow-xl px-4 py-3 z-30">
-                    <p className="font-bold text-sm text-on-surface mb-0.5 truncate">
-                        {lesson.title}
-                    </p>
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs text-on-surface-variant">
-                            Урок {index + 1} из {total}
-                        </span>
-                    </div>
-                    <Link
-                        href={`/session/${lesson.lessonId}`}
-                        onClick={onClosePopover}
-                        className="flex items-center justify-center gap-1 w-full py-2.5 rounded-full bg-primary text-on-primary text-sm font-bold shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
-                    >
-                        {isCompleted ? "Повторить" : "Начать урок"}
-                        <Icon name="arrow_forward" size="sm" />
-                    </Link>
-                    {/* Arrow pointing down */}
-                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-2 overflow-hidden">
-                        <div className="w-3 h-3 bg-surface-container-lowest rotate-45 -translate-y-1.5 mx-auto" />
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+    const icon = isCompleted ? "check" : isActive ? "play" : "lock";
 
     return (
-        <div
-            className="flex flex-col items-center gap-2"
-            style={{ marginLeft: `${offsetX}px` }}
-        >
-            {nodeCircle}
-            <span
-                className={`text-xs font-semibold text-center max-w-[100px] leading-tight ${
-                    isLocked ? "text-on-surface-variant" : "text-on-surface"
-                }`}
+        <div style={{ position: "relative" }} ref={nodeRef}>
+            {/* Pulse ring */}
+            {isActive && (
+                <div
+                    style={{
+                        position: "absolute",
+                        left: -10,
+                        top: -10,
+                        width: size + 20,
+                        height: size + 20,
+                        borderRadius: "50%",
+                        background: "var(--indigo-soft)",
+                        animation: "pulse 2s ease-in-out infinite",
+                        pointerEvents: "none",
+                    }}
+                />
+            )}
+
+            <button
+                onClick={isLocked ? undefined : onTogglePopover}
+                disabled={isLocked}
+                title={`Урок ${index + 1} · ${lesson.title}`}
+                style={{
+                    position: "relative",
+                    zIndex: 2,
+                    width: size,
+                    height: size,
+                    borderRadius: "50%",
+                    background: p.bg,
+                    color: p.fg,
+                    border: p.border || "none",
+                    boxShadow: isActive ? "var(--sh-3)" : "var(--sh-1)",
+                    cursor: isLocked ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "transform 0.15s",
+                    padding: 0,
+                }}
             >
-                {lesson.title}
-            </span>
+                <Icon name={icon} size={24} />
+            </button>
+
+            {/* Label */}
+            <div
+                style={{
+                    position: "absolute",
+                    top: size + 6,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: 140,
+                    textAlign: "center",
+                    pointerEvents: "none",
+                }}
+            >
+                <div
+                    style={{
+                        fontSize: 9,
+                        fontFamily: "var(--f-mono)",
+                        color: "var(--ink-4)",
+                        letterSpacing: 0.5,
+                    }}
+                >
+                    УРОК {index + 1}
+                </div>
+                <div
+                    style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: isLocked ? "var(--ink-4)" : "var(--ink)",
+                        lineHeight: 1.3,
+                        marginTop: 1,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                    }}
+                >
+                    {lesson.title}
+                </div>
+            </div>
+
+            {/* Popover */}
+            {isPopoverOpen && !isLocked && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: size + 52,
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        width: 280,
+                        background: "var(--surface)",
+                        borderRadius: 16,
+                        border: "1px solid var(--line-2)",
+                        boxShadow: "var(--sh-3)",
+                        padding: 16,
+                        zIndex: 30,
+                    }}
+                >
+                    {/* Arrow */}
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: -7,
+                            left: "50%",
+                            transform: "translateX(-50%) rotate(45deg)",
+                            width: 12,
+                            height: 12,
+                            background: "var(--surface)",
+                            borderTop: "1px solid var(--line-2)",
+                            borderLeft: "1px solid var(--line-2)",
+                        }}
+                    />
+
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                        }}
+                    >
+                        <div
+                            style={{
+                                fontSize: 11,
+                                color: toneColor,
+                                letterSpacing: 1.5,
+                                textTransform: "uppercase",
+                                fontWeight: 500,
+                                fontFamily: "var(--f-mono)",
+                            }}
+                        >
+                            Урок {index + 1}
+                        </div>
+                        {isCompleted && (
+                            <Chip tone="olive" size="sm">
+                                ✓
+                            </Chip>
+                        )}
+                    </div>
+
+                    <div
+                        style={{
+                            fontSize: 16,
+                            fontWeight: 500,
+                            letterSpacing: -0.2,
+                            marginBottom: 10,
+                        }}
+                    >
+                        {lesson.title}
+                    </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: 14,
+                            marginBottom: 14,
+                            fontSize: 12,
+                            color: "var(--ink-3)",
+                            fontFamily: "var(--f-mono)",
+                        }}
+                    >
+                        <span>
+                            <Icon name="layers" size={11} /> {lesson.exerciseCount || 6} упр.
+                        </span>
+                        <span>
+                            <Icon name="bolt" size={11} /> {(lesson.exerciseCount || 6) * 10} XP
+                        </span>
+                    </div>
+
+                    <Link href={`/session/${lesson.lessonId}`} onClick={onClosePopover}>
+                        <Button
+                            variant={isCompleted ? "secondary" : "accent"}
+                            size="md"
+                            fullWidth
+                            iconRightName="arrow-right"
+                        >
+                            {isCompleted ? "Повторить" : "Продолжить"}
+                        </Button>
+                    </Link>
+                </div>
+            )}
         </div>
     );
 }
 
 interface LessonPathProps {
     lessons: LessonSummary[];
+    tone?: string;
 }
 
-export function LessonPath({ lessons }: LessonPathProps) {
+export function LessonPath({ lessons, tone = "indigo" }: LessonPathProps) {
     const [openPopoverIndex, setOpenPopoverIndex] = useState<number | null>(null);
+    const toneColor = `var(--${tone})`;
 
     function togglePopover(index: number) {
         setOpenPopoverIndex((prev) => (prev === index ? null : index));
     }
 
     return (
-        <div className="relative flex flex-col items-center gap-0 pb-8">
-            {/* Static background path line */}
-            <div
-                className="absolute left-1/2 -translate-x-1/2 top-7 bottom-7 w-1 rounded-full bg-surface-container-highest"
-                aria-hidden
-            />
-
-            {lessons.map((lesson, lessonIndex) => {
-                const isPassedOrActive =
-                    lesson.status === "completed" ||
-                    lesson.status === "in_progress" ||
-                    lesson.status === "available";
-                const isCurrentlyActive =
-                    lesson.status === "available" || lesson.status === "in_progress";
-
-                return (
-                    <div
-                        key={lesson.lessonId}
-                        className="relative w-full flex flex-col items-center pb-12"
-                    >
-                        {/* Completed segment: solid primary */}
-                        {lessonIndex < lessons.length - 1 && isPassedOrActive && !isCurrentlyActive && (
-                            <div
-                                className="absolute left-1/2 -translate-x-1/2 top-7 w-1 rounded-full bg-primary"
-                                style={{ height: "calc(100% - 28px)" }}
-                                aria-hidden
-                            />
-                        )}
-                        {/* Active segment: animated dashed SVG line */}
-                        {lessonIndex < lessons.length - 1 && isCurrentlyActive && (
-                            <svg
-                                className="absolute left-1/2 -translate-x-1/2 top-7 overflow-visible"
-                                width="4"
-                                style={{ height: "calc(100% - 28px)" }}
-                                aria-hidden
-                            >
-                                <line
-                                    x1="2" y1="0" x2="2" y2="100%"
-                                    stroke="var(--color-primary)"
-                                    strokeWidth="4"
-                                    strokeLinecap="round"
-                                    strokeDasharray="10 10"
-                                    className="path-dash-animated"
-                                />
-                            </svg>
-                        )}
-                        <LessonNode
-                            lesson={lesson}
-                            index={lessonIndex}
-                            total={lessons.length}
-                            isPopoverOpen={openPopoverIndex === lessonIndex}
-                            onTogglePopover={() => togglePopover(lessonIndex)}
-                            onClosePopover={() => setOpenPopoverIndex(null)}
+        <div style={{ position: "relative", height: lessons.length * NODE_H, marginBottom: 8 }}>
+            {/* Connectors SVG */}
+            <svg
+                width="100%"
+                height={lessons.length * NODE_H}
+                style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
+                viewBox={`-240 0 480 ${lessons.length * NODE_H}`}
+                preserveAspectRatio="xMidYMid meet"
+            >
+                {lessons.slice(0, -1).map((l, i) => {
+                    const from = { x: OFFSETS[i % OFFSETS.length], y: i * NODE_H + 44 };
+                    const to = { x: OFFSETS[(i + 1) % OFFSETS.length], y: (i + 1) * NODE_H + 44 };
+                    const next = lessons[i + 1];
+                    const dashed = next.status === "locked";
+                    const isCurrentActive = l.status === "available" || l.status === "in_progress";
+                    const stroke =
+                        (l.status === "completed" || isCurrentActive) && next.status !== "locked"
+                            ? toneColor
+                            : "var(--line-2)";
+                    const midY = (from.y + to.y) / 2;
+                    const d = `M ${from.x} ${from.y} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y}`;
+                    return (
+                        <path
+                            key={i}
+                            d={d}
+                            fill="none"
+                            stroke={stroke}
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            strokeDasharray={dashed ? "4 6" : isCurrentActive ? "10 10" : "none"}
+                            opacity={dashed ? 0.5 : 1}
+                            className={isCurrentActive ? "path-dash-animated" : undefined}
                         />
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </svg>
+
+            {/* Lesson nodes */}
+            {lessons.map((l, i) => (
+                <div
+                    key={l.lessonId}
+                    style={{
+                        position: "absolute",
+                        top: i * NODE_H,
+                        left: "50%",
+                        transform: `translateX(calc(-50% + ${OFFSETS[i % OFFSETS.length]}px))`,
+                    }}
+                >
+                    <LessonNode
+                        lesson={l}
+                        index={i}
+                        total={lessons.length}
+                        tone={tone}
+                        isPopoverOpen={openPopoverIndex === i}
+                        onTogglePopover={() => togglePopover(i)}
+                        onClosePopover={() => setOpenPopoverIndex(null)}
+                    />
+                </div>
+            ))}
         </div>
     );
 }
