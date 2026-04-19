@@ -3,12 +3,10 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { useKeyboardControls } from "@/lib/hooks/useKeyboardControls";
-import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
-/**
- * fill_blank content: dialogue with a blank to fill
- * Schema: { before, after, options: [{ text, is_correct }] }
- */
 interface FillBlankContent {
     before: string;
     after: string;
@@ -36,7 +34,6 @@ export function FillBlankExercise({
     const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const correctOptionIndex = content.options.findIndex(opt => opt.is_correct);
 
     useKeyboardControls({
         optionCount: content.options?.length ?? 0,
@@ -53,145 +50,224 @@ export function FillBlankExercise({
         disabled: isSubmitting,
     });
 
-    function optionStyle(optionIndex: number): string {
-        const base = "flex items-center gap-4 px-4 py-4 rounded-2xl text-left font-semibold transition-colors border-b-4";
-
-        if (!isAnswered) {
-            return `${base} ${
-                selectedOptionIndex === optionIndex
-                    ? "border-tertiary bg-tertiary-container text-tertiary"
-                    : "border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high"
-            }`;
-        }
-
-        const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === correctOptionIndex;
-
-        if (isSelected && submittedResult.isCorrect)       return `${base} border-primary bg-primary-container text-primary`;
-        if (isSelected && !submittedResult.isCorrect)      return `${base} border-error bg-error-container text-error`;
-        if (!submittedResult.isCorrect && isCorrectOption) return `${base} border-primary bg-primary-container text-primary`;
-        return `${base} border-outline-variant bg-surface-container text-on-surface-variant`;
-    }
-
-    function badgeStyle(optionIndex: number): string {
-        const base = "w-7 h-7 rounded-full flex items-center justify-center text-sm font-extrabold shrink-0";
-
-        if (!isAnswered) {
-            return `${base} ${
-                selectedOptionIndex === optionIndex
-                    ? "bg-tertiary text-on-tertiary"
-                    : "bg-surface-container-highest text-on-surface-variant"
-            }`;
-        }
-
-        const isSelected = selectedOptionIndex === optionIndex;
-        const isCorrectOption = optionIndex === correctOptionIndex;
-
-        if (isSelected && submittedResult.isCorrect)       return `${base} bg-primary text-on-primary`;
-        if (isSelected && !submittedResult.isCorrect)      return `${base} bg-error text-on-error`;
-        if (!submittedResult.isCorrect && isCorrectOption) return `${base} bg-primary text-on-primary`;
-        return `${base} bg-surface-container-highest text-on-surface-variant`;
-    }
+    const selectedText = selectedOptionIndex !== null ? content.options[selectedOptionIndex]?.text : null;
 
     return (
-        <div className="flex flex-col gap-6">
-            {/* Dialogue context */}
-            <div className="flex flex-col gap-2">
-                {/* Before text */}
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="person" size="sm" className="text-secondary" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* Context bubble */}
+            <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+                <GeoAvatar seed="client" size={56} />
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Клиент</span>
+                        <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>prospect</span>
                     </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-on-surface">{content.before}</p>
-                    </div>
-                </div>
-
-                {/* Blank indicator */}
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="edit" size="sm" className="text-tertiary" />
-                    </div>
-                    <div className="relative bg-tertiary-container/50 border-2 border-dashed border-tertiary rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-tertiary font-medium">???</p>
-                    </div>
-                </div>
-
-                {/* After text */}
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="person" size="sm" className="text-secondary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-on-surface">{content.after}</p>
-                    </div>
-                </div>
-            </div>
-
-            <p className="font-headline font-bold text-xl text-on-surface">
-                Что сказал продавец?
-            </p>
-
-            <div className="flex flex-col gap-3">
-                {(content.options ?? []).map((option, optionIndex) => (
-                    <button
-                        key={optionIndex}
-                        onClick={() => {
-                            if (!isAnswered) setSelectedOptionIndex(optionIndex);
+                    <div
+                        style={{
+                            position: "relative",
+                            background: "var(--surface)",
+                            border: "1px solid var(--line)",
+                            borderRadius: "4px 14px 14px 14px",
+                            padding: "14px 18px",
+                            fontSize: 15,
+                            lineHeight: 1.5,
+                            boxShadow: "var(--sh-1)",
                         }}
-                        disabled={isAnswered}
-                        className={optionStyle(optionIndex)}
                     >
-                        <span className={badgeStyle(optionIndex)}>{optionIndex + 1}</span>
-                        {option.text}
-                    </button>
-                ))}
+                        {content.before}
+                    </div>
+                </div>
             </div>
 
-            {/* Inline explanation */}
-            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
-                <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-primary" : "text-error"
-                }`}>
-                    {submittedResult.explanation ?? submittedResult.aiFeedback}
-                </p>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                Дополните реплику:
+            </h2>
+
+            {/* Fill blank sentence */}
+            <div
+                style={{
+                    fontSize: 22,
+                    lineHeight: 1.6,
+                    letterSpacing: -0.2,
+                    padding: 24,
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    marginBottom: 4,
+                }}
+            >
+                «{content.before}{" "}
+                <span
+                    style={{
+                        display: "inline-block",
+                        minWidth: 180,
+                        padding: "4px 12px",
+                        borderRadius: 8,
+                        background: selectedText ? "var(--indigo-soft)" : "var(--bg-2)",
+                        color: selectedText ? "var(--indigo-ink)" : "var(--ink-4)",
+                        border: selectedText ? "1px dashed var(--indigo)" : "1px dashed var(--line-2)",
+                        textAlign: "center",
+                        fontSize: 18,
+                    }}
+                >
+                    {selectedText ?? "???"}
+                </span>{" "}
+                {content.after}»
+            </div>
+
+            {/* Options grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {(content.options ?? []).map((option, optionIndex) => {
+                    const isSelected = selectedOptionIndex === optionIndex;
+                    const isCorrectOption = option.is_correct;
+                    const showCorrect = isAnswered && !submittedResult?.isCorrect && isCorrectOption;
+                    const showWrong = isAnswered && isSelected && !submittedResult?.isCorrect;
+                    const showSuccess = isAnswered && isSelected && submittedResult?.isCorrect;
+
+                    let bgColor = isSelected ? "var(--ink)" : "var(--surface)";
+                    let textColor = isSelected ? "var(--bg)" : "var(--ink)";
+                    let borderColor = isSelected ? "var(--ink)" : "var(--line)";
+                    let badgeBg = isSelected ? "var(--bg)" : "var(--bg-2)";
+                    let badgeColor = isSelected ? "var(--ink)" : "var(--ink-3)";
+
+                    if (showSuccess) {
+                        bgColor = "var(--good-soft)";
+                        textColor = "var(--ink)";
+                        borderColor = "var(--good)";
+                        badgeBg = "var(--good)";
+                        badgeColor = "white";
+                    } else if (showWrong) {
+                        bgColor = "var(--bad-soft)";
+                        textColor = "var(--ink)";
+                        borderColor = "var(--bad)";
+                        badgeBg = "var(--bad)";
+                        badgeColor = "white";
+                    } else if (showCorrect) {
+                        bgColor = "var(--good-soft)";
+                        textColor = "var(--ink)";
+                        borderColor = "var(--good)";
+                        badgeBg = "var(--good)";
+                        badgeColor = "white";
+                    }
+
+                    return (
+                        <button
+                            key={optionIndex}
+                            onClick={() => {
+                                if (!isAnswered) setSelectedOptionIndex(optionIndex);
+                            }}
+                            disabled={isAnswered}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 14,
+                                padding: "14px 18px",
+                                background: bgColor,
+                                color: textColor,
+                                border: `1px solid ${borderColor}`,
+                                borderRadius: 12,
+                                cursor: isAnswered ? "default" : "pointer",
+                                textAlign: "left",
+                                fontSize: 15,
+                                fontFamily: "var(--f-sans)",
+                                fontWeight: 400,
+                                lineHeight: 1.4,
+                                transition: "all 0.12s",
+                                boxShadow: isSelected && !isAnswered ? "var(--sh-2)" : "var(--sh-1)",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    width: 26,
+                                    height: 26,
+                                    borderRadius: 7,
+                                    background: badgeBg,
+                                    color: badgeColor,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 12,
+                                    fontFamily: "var(--f-mono)",
+                                    fontWeight: 500,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {optionIndex + 1}
+                            </span>
+                            <span>{option.text}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Footer */}
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <div
+                                className="mono"
+                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
+                                data-keyboard-hint
+                            >
+                                1–4 выбрать · Enter — проверить
+                            </div>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={() => {
+                                    if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
+                                }}
+                                disabled={selectedOptionIndex === null || isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ПРОВЕРИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                    <style jsx global>{`
+                        @media (pointer: fine) {
+                            [data-keyboard-hint] {
+                                display: block !important;
+                            }
+                        }
+                    `}</style>
+                </div>
             )}
-
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => {
-                            if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
-                        }}
-                        disabled={selectedOptionIndex === null || isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
-
-            {/* Keyboard hint — hidden on touch devices */}
-            <p className="hidden pointer-fine:block text-center text-xs text-on-surface-variant">
-                {isAnswered ? "Enter — продолжить" : "1–4 выбрать · Enter — проверить"}
-            </p>
         </div>
     );
 }

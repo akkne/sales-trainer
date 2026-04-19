@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
 
 interface ExerciseResultBannerProps {
     isCorrect: boolean;
@@ -18,59 +19,73 @@ export function ExerciseResultBanner({
     xpEarned,
     onContinue,
 }: ExerciseResultBannerProps) {
+    const toneStyles = isCorrect
+        ? { bg: "var(--good-soft)", color: "var(--good)", title: "Верно!", sub: explanation ?? aiFeedback ?? "Отличный ответ." }
+        : { bg: "var(--bad-soft)", color: "var(--bad)", title: "Не совсем", sub: explanation ?? aiFeedback ?? "Попробуйте без намёка на решение — пусть клиент откроется." };
+
     return (
         <div
-            className={`fixed bottom-0 left-0 right-0 rounded-t-3xl px-6 pt-6 pb-8 shadow-xl slide-up ${
-                isCorrect ? "bg-primary-container" : "bg-error-container"
-            }`}
+            style={{
+                position: "fixed",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: "var(--surface)",
+                borderTop: "1px solid var(--line)",
+                padding: "20px 32px",
+                paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+            }}
         >
-            <div className="max-w-2xl mx-auto">
-                <div className="flex items-center gap-4 mb-3">
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 20,
+                    maxWidth: 820,
+                    margin: "0 auto",
+                    padding: 16,
+                    background: toneStyles.bg,
+                    borderRadius: 14,
+                    animation: "slideUp 0.3s cubic-bezier(0.5, 1.6, 0.4, 1)",
+                }}
+                className="slide-up"
+            >
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                     <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
-                            isCorrect ? "bg-primary" : "bg-error"
-                        }`}
+                        style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 12,
+                            background: toneStyles.color,
+                            color: "white",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
                     >
-                        <Icon
-                            name={isCorrect ? "check" : "close"}
-                            size="md"
-                            className={isCorrect ? "text-on-primary" : "text-on-error"}
-                        />
+                        <Icon name={isCorrect ? "check" : "close"} size={20} />
                     </div>
                     <div>
-                        <p
-                            className={`font-headline font-bold text-lg leading-tight ${
-                                isCorrect ? "text-on-primary-container" : "text-on-error-container"
-                            }`}
-                        >
-                            {isCorrect ? "Отлично!" : "Неверно"}
-                        </p>
-                        {isCorrect && xpEarned > 0 && (
-                            <p className="text-sm font-semibold text-primary">+{xpEarned} XP</p>
-                        )}
+                        <div style={{ fontSize: 15, fontWeight: 600, color: toneStyles.color }}>
+                            {toneStyles.title}
+                        </div>
+                        <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2, maxWidth: 400 }}>
+                            {toneStyles.sub}
+                        </div>
                     </div>
                 </div>
 
-                {(explanation || aiFeedback) && (
-                    <p
-                        className={`text-sm mb-4 leading-relaxed ${
-                            isCorrect ? "text-on-primary-container" : "text-on-error-container"
-                        }`}
-                    >
-                        {explanation ?? aiFeedback}
-                    </p>
-                )}
-
-                <button
-                    onClick={onContinue}
-                    className={`w-full py-4 rounded-full font-extrabold ${
-                        isCorrect
-                            ? "bg-primary text-on-primary btn-3d"
-                            : "bg-error text-on-error btn-3d-red"
-                    }`}
-                >
-                    {isCorrect ? "ПРОДОЛЖИТЬ" : "ПОНЯТНО"}
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    {isCorrect && xpEarned > 0 && (
+                        <span style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 500, color: toneStyles.color }}>
+                            +{xpEarned} XP
+                        </span>
+                    )}
+                    <Button variant="primary" onClick={onContinue} iconRightName="arrow-right">
+                        ПРОДОЛЖИТЬ
+                    </Button>
+                </div>
             </div>
         </div>
     );

@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface ReorderItem {
     text: string;
@@ -32,10 +34,8 @@ export function ReorderExercise({
     isSubmitting,
     submittedResult,
 }: ReorderExerciseProps) {
-    // Shuffle items on first render
     const shuffledIndices = useMemo(() => {
         const indices = content.items.map((_, i) => i);
-        // Simple shuffle
         for (let i = indices.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
@@ -48,7 +48,6 @@ export function ReorderExercise({
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
-    // Build correct order from correct_position
     const correctOrder = useMemo(() => {
         return content.items
             .map((item, idx) => ({ idx, pos: item.correct_position }))
@@ -86,43 +85,38 @@ export function ReorderExercise({
         setOrderedIndices(newOrder);
     }
 
-    function itemStyle(itemIdx: number, position: number): string {
-        const base = "flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-colors border-b-4 cursor-grab active:cursor-grabbing";
-
-        if (!isAnswered) {
-            return `${base} border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high`;
-        }
-
-        const correctPosition = correctOrder.indexOf(itemIdx);
-        const isCorrectPosition = position === correctPosition;
-
-        if (isCorrectPosition) {
-            return `${base} border-primary bg-primary-container text-primary cursor-default`;
-        }
-        return `${base} border-error bg-error-container text-error cursor-default`;
-    }
-
     return (
-        <div className="flex flex-col gap-6">
-            {content.instruction && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="list-ordered" size="sm" className="text-primary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
-                    </div>
-                </div>
-            )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                {content.instruction || "Расставьте элементы в правильном порядке:"}
+            </h2>
 
-            <p className="font-headline font-bold text-lg text-on-surface">
-                Расставьте элементы в правильном порядке:
-            </p>
-
-            <div className="flex flex-col gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {orderedIndices.map((itemIdx, position) => {
                     const item = content.items[itemIdx];
                     if (!item) return null;
+
+                    const correctPosition = correctOrder.indexOf(itemIdx);
+                    const isCorrectPosition = position === correctPosition;
+                    const showCorrect = isAnswered && isCorrectPosition;
+                    const showWrong = isAnswered && !isCorrectPosition;
+
+                    let bgColor = "var(--surface)";
+                    let borderColor = "var(--line)";
+                    let badgeBg = "var(--ink)";
+                    let badgeColor = "var(--bg)";
+
+                    if (showCorrect) {
+                        bgColor = "var(--good-soft)";
+                        borderColor = "var(--good)";
+                        badgeBg = "var(--good)";
+                        badgeColor = "white";
+                    } else if (showWrong) {
+                        bgColor = "var(--bad-soft)";
+                        borderColor = "var(--bad)";
+                        badgeBg = "var(--bad)";
+                        badgeColor = "white";
+                    }
 
                     return (
                         <div
@@ -131,29 +125,72 @@ export function ReorderExercise({
                             onDragStart={() => handleDragStart(position)}
                             onDragOver={(e) => handleDragOver(e, position)}
                             onDragEnd={handleDragEnd}
-                            className={itemStyle(itemIdx, position)}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                padding: "12px 14px",
+                                background: bgColor,
+                                border: `1px solid ${borderColor}`,
+                                borderRadius: 12,
+                                cursor: isAnswered ? "default" : "grab",
+                            }}
                         >
-                            <span className="w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center text-sm font-bold shrink-0">
+                            <div
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    background: badgeBg,
+                                    color: badgeColor,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 13,
+                                    fontFamily: "var(--f-mono)",
+                                    fontWeight: 500,
+                                }}
+                            >
                                 {position + 1}
-                            </span>
-                            <span className="flex-1">{item.text}</span>
+                            </div>
+                            <div style={{ flex: 1, fontSize: 14 }}>{item.text}</div>
                             {!isAnswered && (
-                                <div className="flex flex-col gap-1">
+                                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                                     <button
-                                        type="button"
                                         onClick={() => moveItem(position, "up")}
                                         disabled={position === 0}
-                                        className="p-1 rounded hover:bg-surface-container-highest disabled:opacity-30"
+                                        style={{
+                                            background: "var(--bg-2)",
+                                            border: "none",
+                                            borderRadius: 6,
+                                            width: 28,
+                                            height: 22,
+                                            cursor: "pointer",
+                                            color: position === 0 ? "var(--ink-4)" : "var(--ink-2)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
                                     >
-                                        <Icon name="chevron-up" size="sm" />
+                                        <Icon name="chevron-up" size="xs" />
                                     </button>
                                     <button
-                                        type="button"
                                         onClick={() => moveItem(position, "down")}
                                         disabled={position === orderedIndices.length - 1}
-                                        className="p-1 rounded hover:bg-surface-container-highest disabled:opacity-30"
+                                        style={{
+                                            background: "var(--bg-2)",
+                                            border: "none",
+                                            borderRadius: 6,
+                                            width: 28,
+                                            height: 22,
+                                            cursor: "pointer",
+                                            color: position === orderedIndices.length - 1 ? "var(--ink-4)" : "var(--ink-2)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
                                     >
-                                        <Icon name="chevron-down" size="sm" />
+                                        <Icon name="chevron-down" size="xs" />
                                     </button>
                                 </div>
                             )}
@@ -162,42 +199,58 @@ export function ReorderExercise({
                 })}
             </div>
 
-            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
-                <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-primary" : "text-error"
-                }`}>
-                    {submittedResult.explanation ?? submittedResult.aiFeedback}
-                </p>
+            {/* Footer */}
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={() => onSubmit({ order: orderedIndices })}
+                                disabled={isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ПРОВЕРИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
-
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => onSubmit({ order: orderedIndices })}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
         </div>
     );
 }

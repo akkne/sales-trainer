@@ -220,10 +220,10 @@ function LessonNode({
                         }}
                     >
                         <span>
-                            <Icon name="layers" size={11} /> {lesson.exerciseCount || 6} упр.
+                            <Icon name="layers" size={11} /> 6 упр.
                         </span>
                         <span>
-                            <Icon name="bolt" size={11} /> {(lesson.exerciseCount || 6) * 10} XP
+                            <Icon name="bolt" size={11} /> 60 XP
                         </span>
                     </div>
 

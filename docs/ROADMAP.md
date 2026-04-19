@@ -915,3 +915,109 @@
 ### [x] Docs & tests
 - [x] `docs/TESTING/HEADER_PROFILE_BUTTON.md` — manual checklist
 - [x] Update `docs/FEATURES.md` testing table with the new checklist
+
+---
+
+## Phase 33 — April Design Refresh
+
+> Полный визуальный редизайн на основе макетов из `.design/redesign/`.
+> Дизайн-система: Geist шрифт, earthy палитра (rust/olive/indigo), тёмная тема.
+> Ранее выполнено: Phase 1-5 (токены, иконки, UI компоненты, навигация, Skill Tree).
+
+### Phase 33.1 — Session Page Redesign
+
+> Redesign session page header, footer, and overall layout per `session.jsx`.
+
+- [x] Update session header: close button, progress bar, hearts counter with indigo/rust tones
+- [x] Update session footer: result banner with slide-up animation
+- [x] Update completion screen: confetti, stat tiles grid (XP, accuracy, time, hearts)
+- [x] ChooseOptionExercise: numbered badge + selected state (ink background, sh-2 shadow)
+- [x] FillBlankExercise: inline blank styling with dashed border, rust-soft background when filled
+- [x] ReorderExercise: ordering cards with up/down buttons, numbered position badges
+- [ ] Add "1–4 выбрать · Enter — проверить" keyboard hint below footer
+- [ ] Add achievement toast slide-in animation on completion
+
+### Phase 33.2 — Exercise Components Polish
+
+> Align exercise components with `session.jsx` visual patterns.
+
+- [ ] `ChooseOptionExercise`: numbered badge + selected state (ink background, sh-2 shadow)
+- [ ] `FillBlankExercise`: inline blank styling with dashed border, rust-soft background when filled
+- [ ] `ReorderExercise`: ordering cards with up/down buttons, numbered position badges
+- [ ] `MatchingExercise`: two-column layout with olive-soft connected state
+- [ ] `CategorizeExercise`: category columns with color-coded headers
+- [ ] `SpotMistakeExercise`: line selection with good-soft/bad-soft highlight
+- [ ] `RewriteExercise`: textarea with character counter, criteria list
+- [ ] `FreeTextExercise`: voice button styling
+- [ ] `AiDialogueExercise`: chat bubbles with typing indicator
+- [ ] `EvaluateCallExercise`: transcript accordion, star rating buttons
+
+### Phase 33.3 — Guidebook Page Redesign
+
+> Redesign `/guidebook` per `screens.jsx` Handbook section.
+
+- [ ] Hero header with stat tiles (Освоено, Мастер, Новых)
+- [ ] Category chips bar with search input
+- [ ] Technique cards with mastery ring, category badge, tags
+- [ ] Expanded card with sample dialog bubbles and coach sidecar
+- [ ] "Практиковать сейчас" CTA button
+
+### Phase 33.4 — AI Dialog Pages Redesign
+
+> Redesign `/dialog` flow per `screens.jsx` DialogScene.
+
+- [ ] Bundles grid page: icon, title, description cards
+- [ ] Mode selection page: mode cards grid
+- [ ] Chat page: 3-column layout (case files, scene, coach rail)
+- [ ] Scene header: persona avatar, mood chip, timer, goals
+- [ ] Chat bubbles with AI flags (good/warn chips)
+- [ ] Live commentary sidebar with coach notes
+- [ ] Scorecard progress bars
+- [ ] Voice mic overlay per `screens.jsx` VoiceMic
+
+### Phase 33.5 — Onboarding Flow Redesign
+
+> Redesign `/onboarding` per `onboarding.jsx`.
+
+- [ ] Step indicator with expanding current step
+- [ ] Step 1 (Persona): 5-column grid with shape icons
+- [ ] Step 2 (Sales Type): 3×2 button grid
+- [ ] Step 3 (Experience): 4-column large buttons with years
+- [ ] Step 4 (Skills): skill cards with checkbox, icon, lesson count
+- [ ] Footer with back/continue buttons
+
+### Phase 33.6 — League Page Redesign
+
+> Redesign `/league` with improved visual hierarchy.
+
+- [ ] Week countdown timer above leaderboard
+- [ ] Current user highlight row with promotion zone badge
+- [ ] Stat tiles for user's XP and rank
+- [ ] Responsive mobile layout
+
+### Phase 33.7 — Profile Page Redesign
+
+> Redesign `/profile` with stat tiles and badges grid.
+
+- [ ] Stat tiles grid: streak, XP, level, accuracy
+- [ ] Achievements section with mastery rings
+- [ ] Persona badge display
+- [ ] Settings section styling
+
+### Phase 33.8 — Friends Pages Redesign
+
+> Redesign `/friends` flow with improved cards and chat.
+
+- [ ] Friends list with GeoAvatar, status indicators
+- [ ] Friend request cards with accept/decline buttons
+- [ ] Leaderboard tab styling
+- [ ] Chat page with message bubbles, input styling
+
+### Phase 33.9 — Dark Theme Polish
+
+> Ensure all components work correctly in dark theme.
+
+- [ ] Verify all color variables have dark theme overrides
+- [ ] Test all pages in dark theme
+- [ ] Fix any contrast or readability issues
+- [ ] Add theme toggle to profile settings

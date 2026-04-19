@@ -48,7 +48,7 @@ export function RewriteExercise({
             {content.instruction && (
                 <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="edit-3" size="sm" className="text-primary" />
+                        <Icon name="edit" size="sm" className="text-primary" />
                     </div>
                     <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
                         <p className="text-sm text-on-surface-variant">{content.instruction}</p>

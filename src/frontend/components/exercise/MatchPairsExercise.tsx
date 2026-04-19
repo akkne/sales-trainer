@@ -186,7 +186,7 @@ export function MatchPairsExercise({
                                         className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-surface hover:bg-error-container text-on-surface-variant hover:text-error transition-colors"
                                         aria-label="Удалить связь"
                                     >
-                                        <Icon name="x" size="sm" />
+                                        <Icon name="close" size="sm" />
                                     </button>
                                 )}
                             </div>
