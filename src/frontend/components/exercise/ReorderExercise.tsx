@@ -237,6 +237,13 @@ export function ReorderExercise({
                             </Button>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <div
+                                className="mono"
+                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
+                                data-keyboard-hint
+                            >
+                                ↑↓ порядок · Enter — проверить
+                            </div>
                             <Button
                                 variant="accent"
                                 size="lg"
@@ -249,6 +256,13 @@ export function ReorderExercise({
                             </Button>
                         </div>
                     </div>
+                    <style jsx global>{`
+                        @media (pointer: fine) {
+                            [data-keyboard-hint] {
+                                display: block !important;
+                            }
+                        }
+                    `}</style>
                 </div>
             )}
         </div>

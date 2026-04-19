@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface MatchPair {
     left: string;
@@ -24,13 +26,8 @@ interface MatchPairsExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-// Colors for different connected pairs (cycled if more pairs than colors)
-const PAIR_COLORS = [
-    { border: "border-primary", bg: "bg-primary-container", text: "text-primary" },
-    { border: "border-tertiary", bg: "bg-tertiary-container", text: "text-tertiary" },
-    { border: "border-secondary", bg: "bg-secondary-container", text: "text-secondary" },
-    { border: "border-[#7c5800]", bg: "bg-[#fff0c3]", text: "text-[#7c5800]" },
-];
+const PAIR_COLORS = ["var(--olive)", "var(--indigo)", "var(--rust)", "var(--clay)"];
+const PAIR_BG_COLORS = ["var(--olive-soft)", "var(--indigo-soft)", "var(--rust-soft)", "var(--bg-2)"];
 
 export function MatchPairsExercise({
     content,
@@ -40,10 +37,8 @@ export function MatchPairsExercise({
     isSubmitting,
     submittedResult,
 }: MatchPairsExerciseProps) {
-    // Extract unique left and right items from pairs
     const leftItems = useMemo(() => content.pairs.map(p => p.left), [content.pairs]);
     const rightItems = useMemo(() => {
-        // Shuffle right items
         const items = content.pairs.map(p => p.right);
         return items.sort(() => Math.random() - 0.5);
     }, [content.pairs]);
@@ -56,7 +51,6 @@ export function MatchPairsExercise({
     const connectedLefts = useMemo(() => new Set(userPairs.map(p => p.left)), [userPairs]);
     const connectedRights = useMemo(() => new Set(userPairs.map(p => p.right)), [userPairs]);
 
-    // Map items to their pair index for color assignment
     const pairIndexByLeft = useMemo(() => {
         const map = new Map<string, number>();
         userPairs.forEach((p, idx) => map.set(p.left, idx));
@@ -71,7 +65,6 @@ export function MatchPairsExercise({
 
     function handleLeftClick(item: string) {
         if (isAnswered) return;
-        // If already connected, allow clicking to deselect current selection only
         if (connectedLefts.has(item)) return;
         setSelectedLeft(item === selectedLeft ? null : item);
     }
@@ -96,164 +89,225 @@ export function MatchPairsExercise({
         return new Set(content.pairs.map(p => `${p.left}:${p.right}`));
     }, [content.pairs]);
 
-    function getColorForPairIndex(index: number) {
-        return PAIR_COLORS[index % PAIR_COLORS.length];
-    }
-
-    function leftItemStyle(item: string): string {
-        const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
-
-        if (!isAnswered) {
-            const pairIdx = pairIndexByLeft.get(item);
-            if (pairIdx !== undefined) {
-                const color = getColorForPairIndex(pairIdx);
-                return `${base} ${color.border} ${color.bg} ${color.text}`;
-            }
-            if (selectedLeft === item) {
-                return `${base} border-primary bg-primary-container text-primary ring-2 ring-primary/30`;
-            }
-            return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-outline`;
-        }
-
-        const pair = userPairs.find(p => p.left === item);
-        if (pair && correctPairsSet.has(`${pair.left}:${pair.right}`)) {
-            return `${base} border-primary bg-primary-container text-primary`;
-        }
-        return `${base} border-error bg-error-container text-error`;
-    }
-
-    function rightItemStyle(item: string): string {
-        const base = "px-4 py-3 rounded-xl font-medium transition-colors border-2 text-left";
-
-        if (!isAnswered) {
-            const pairIdx = pairIndexByRight.get(item);
-            if (pairIdx !== undefined) {
-                const color = getColorForPairIndex(pairIdx);
-                return `${base} ${color.border} ${color.bg} ${color.text}`;
-            }
-            if (selectedLeft && !connectedRights.has(item)) {
-                return `${base} border-outline-variant bg-surface-container text-on-surface hover:border-primary cursor-pointer`;
-            }
-            return `${base} border-outline-variant bg-surface-container text-on-surface`;
-        }
-
-        const pair = userPairs.find(p => p.right === item);
-        if (pair && correctPairsSet.has(`${pair.left}:${pair.right}`)) {
-            return `${base} border-primary bg-primary-container text-primary`;
-        }
-        if (pair) {
-            return `${base} border-error bg-error-container text-error`;
-        }
-        return `${base} border-outline-variant bg-surface-container text-on-surface-variant`;
-    }
-
     const canSubmit = userPairs.length === leftItems.length;
 
     return (
-        <div className="flex flex-col gap-6">
-            {content.instruction && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="link" size="sm" className="text-primary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
-                    </div>
-                </div>
-            )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                {content.instruction || "Сопоставьте пары:"}
+            </h2>
 
-            <p className="font-headline font-bold text-lg text-on-surface">
-                Соедините пары:
-            </p>
+            <div
+                style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    padding: 20,
+                }}
+            >
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 80px 1fr",
+                        gap: 16,
+                        alignItems: "center",
+                    }}
+                >
+                    {/* Left column */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div
+                            style={{
+                                fontSize: 10,
+                                color: "var(--ink-3)",
+                                letterSpacing: 1,
+                                textTransform: "uppercase",
+                                fontWeight: 500,
+                                marginBottom: 4,
+                            }}
+                        >
+                            Возражение
+                        </div>
+                        {leftItems.map((item) => {
+                            const isConnected = connectedLefts.has(item);
+                            const pairIdx = pairIndexByLeft.get(item);
+                            const isSelected = selectedLeft === item;
 
-            <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                    {leftItems.map((item) => {
-                        const isConnected = connectedLefts.has(item);
-                        return (
-                            <div key={item} className="relative">
+                            let bgColor = isSelected ? "var(--ink)" : isConnected ? PAIR_BG_COLORS[pairIdx! % PAIR_BG_COLORS.length] : "var(--bg-2)";
+                            let textColor = isSelected ? "var(--bg)" : "var(--ink)";
+                            let borderColor = isSelected ? "var(--ink)" : isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--line)";
+
+                            if (isAnswered) {
+                                const pair = userPairs.find(p => p.left === item);
+                                const isCorrect = pair && correctPairsSet.has(`${pair.left}:${pair.right}`);
+                                bgColor = isCorrect ? "var(--good-soft)" : "var(--bad-soft)";
+                                borderColor = isCorrect ? "var(--good)" : "var(--bad)";
+                            }
+
+                            return (
                                 <button
+                                    key={item}
                                     onClick={() => handleLeftClick(item)}
-                                    disabled={isAnswered}
-                                    className={`w-full ${leftItemStyle(item)} ${isConnected ? 'pr-10' : ''}`}
+                                    disabled={isAnswered || isConnected}
+                                    style={{
+                                        padding: "12px 14px",
+                                        background: bgColor,
+                                        color: textColor,
+                                        border: `1px solid ${borderColor}`,
+                                        borderRadius: 10,
+                                        cursor: isAnswered || isConnected ? "default" : "pointer",
+                                        textAlign: "left",
+                                        fontSize: 14,
+                                        fontFamily: "var(--f-sans)",
+                                    }}
                                 >
                                     {item}
                                 </button>
-                                {!isAnswered && isConnected && (
-                                    <button
-                                        type="button"
-                                        onClick={() => removePair(item)}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-surface hover:bg-error-container text-on-surface-variant hover:text-error transition-colors"
-                                        aria-label="Удалить связь"
-                                    >
-                                        <Icon name="close" size="sm" />
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
 
-                <div className="flex flex-col gap-2">
-                    {rightItems.map((item) => (
-                        <button
-                            key={item}
-                            onClick={() => handleRightClick(item)}
-                            disabled={isAnswered || connectedRights.has(item) || !selectedLeft}
-                            className={rightItemStyle(item)}
+                    <div />
+
+                    {/* Right column */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div
+                            style={{
+                                fontSize: 10,
+                                color: "var(--ink-3)",
+                                letterSpacing: 1,
+                                textTransform: "uppercase",
+                                fontWeight: 500,
+                                marginBottom: 4,
+                            }}
                         >
-                            {item}
-                        </button>
-                    ))}
+                            Техника
+                        </div>
+                        {rightItems.map((item) => {
+                            const isConnected = connectedRights.has(item);
+                            const pairIdx = pairIndexByRight.get(item);
+                            const isAvailable = selectedLeft && !isConnected;
+
+                            let bgColor = isConnected ? PAIR_BG_COLORS[pairIdx! % PAIR_BG_COLORS.length] : "var(--bg-2)";
+                            let textColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--ink)";
+                            let borderColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--line)";
+
+                            if (isAnswered) {
+                                const pair = userPairs.find(p => p.right === item);
+                                const isCorrect = pair && correctPairsSet.has(`${pair.left}:${pair.right}`);
+                                bgColor = isCorrect ? "var(--good-soft)" : pair ? "var(--bad-soft)" : "var(--bg-2)";
+                                borderColor = isCorrect ? "var(--good)" : pair ? "var(--bad)" : "var(--line)";
+                                textColor = "var(--ink)";
+                            }
+
+                            return (
+                                <button
+                                    key={item}
+                                    onClick={() => handleRightClick(item)}
+                                    disabled={isAnswered || isConnected || !selectedLeft}
+                                    style={{
+                                        padding: "12px 14px",
+                                        background: bgColor,
+                                        color: textColor,
+                                        border: `1px solid ${borderColor}`,
+                                        borderRadius: 10,
+                                        cursor: isAvailable ? "pointer" : "not-allowed",
+                                        opacity: selectedLeft && isConnected ? 0.6 : 1,
+                                        textAlign: "left",
+                                        fontSize: 14,
+                                        fontFamily: "var(--f-sans)",
+                                    }}
+                                >
+                                    {item}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
+
+                {!isAnswered && userPairs.length > 0 && (
+                    <button
+                        onClick={resetAll}
+                        style={{
+                            marginTop: 16,
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--ink-3)",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            fontFamily: "var(--f-mono)",
+                        }}
+                    >
+                        ↺ Сбросить
+                    </button>
+                )}
             </div>
 
-            {!isAnswered && userPairs.length > 0 && (
-                <button
-                    type="button"
-                    onClick={resetAll}
-                    className="text-sm text-on-surface-variant hover:text-error transition-colors"
+            {/* Footer */}
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
                 >
-                    Сбросить все связи
-                </button>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <div
+                                className="mono"
+                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
+                                data-keyboard-hint
+                            >
+                                Enter — проверить
+                            </div>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={() => onSubmit({ pairs: userPairs })}
+                                disabled={!canSubmit || isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ПРОВЕРИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                    <style jsx global>{`
+                        @media (pointer: fine) {
+                            [data-keyboard-hint] {
+                                display: block !important;
+                            }
+                        }
+                    `}</style>
+                </div>
             )}
-
-            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
-                <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-primary" : "text-error"
-                }`}>
-                    {submittedResult.explanation ?? submittedResult.aiFeedback}
-                </p>
-            )}
-
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => onSubmit({ pairs: userPairs })}
-                        disabled={!canSubmit || isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
         </div>
     );
 }

@@ -934,8 +934,8 @@
 - [x] ChooseOptionExercise: numbered badge + selected state (ink background, sh-2 shadow)
 - [x] FillBlankExercise: inline blank styling with dashed border, rust-soft background when filled
 - [x] ReorderExercise: ordering cards with up/down buttons, numbered position badges
-- [ ] Add "1–4 выбрать · Enter — проверить" keyboard hint below footer
-- [ ] Add achievement toast slide-in animation on completion
+- [x] Add "1–4 выбрать · Enter — проверить" keyboard hint below footer
+- [x] Add achievement toast slide-in animation on completion
 
 ### Phase 33.2 — Exercise Components Polish
 

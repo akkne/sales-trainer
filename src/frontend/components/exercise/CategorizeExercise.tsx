@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
-import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface CategorizeItem {
     text: string;
@@ -25,8 +26,11 @@ interface CategorizeExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-// Colors for categories
-const CATEGORY_COLORS = ["#58CC02", "#FF4B4B", "#1CB0F6", "#FF9600"];
+const CATEGORY_COLORS = [
+    { color: "oklch(0.58 0.10 120)", bg: "oklch(0.92 0.04 120)" },
+    { color: "oklch(0.62 0.14 42)", bg: "oklch(0.92 0.04 42)" },
+    { color: "oklch(0.50 0.18 270)", bg: "oklch(0.92 0.06 270)" },
+];
 
 export function CategorizeExercise({
     content,
@@ -81,156 +85,237 @@ export function CategorizeExercise({
         setMapping(newMapping);
     }
 
-    function handleItemClick(itemIdx: number, currentCategory?: string) {
+    function assignToCategory(itemIdx: number, categoryName: string) {
         if (isAnswered) return;
-
-        if (currentCategory) {
-            const categoryIndex = content.categories.indexOf(currentCategory);
-            if (categoryIndex < content.categories.length - 1) {
-                setMapping({ ...mapping, [itemIdx]: content.categories[categoryIndex + 1] });
-            } else {
-                removeFromCategory(itemIdx);
-            }
-        } else {
-            if (content.categories.length > 0) {
-                setMapping({ ...mapping, [itemIdx]: content.categories[0] });
-            }
-        }
-    }
-
-    function itemStyle(itemIdx: number): string {
-        const base = "px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all";
-
-        if (!isAnswered) {
-            return `${base} bg-surface-container-high text-on-surface hover:bg-surface-container-highest active:scale-95`;
-        }
-
-        const userCategory = mapping[itemIdx];
-        const correctCategory = content.items[itemIdx].category;
-
-        if (userCategory === correctCategory) {
-            return `${base} bg-primary-container text-primary`;
-        }
-        return `${base} bg-error-container text-error`;
+        setMapping({ ...mapping, [itemIdx]: categoryName });
     }
 
     const canSubmit = Object.keys(mapping).length === content.items.length;
 
     return (
-        <div className="flex flex-col gap-6">
-            {content.instruction && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="folder" size="sm" className="text-primary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
-                    </div>
-                </div>
-            )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                {content.instruction || "Распределите реплики по типам:"}
+            </h2>
 
-            <p className="font-headline font-bold text-lg text-on-surface">
-                Распределите элементы по категориям:
-            </p>
-
-            {/* Unplaced items pool */}
+            {/* Unplaced items */}
             {!isAnswered && unplacedItems.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-3 bg-surface-container rounded-xl min-h-[60px]">
-                    {unplacedItems.map((item) => (
-                        <div
-                            key={item.idx}
-                            draggable={!isAnswered}
-                            onDragStart={() => handleDragStart(item.idx)}
-                            onClick={() => handleItemClick(item.idx)}
-                            className={itemStyle(item.idx)}
-                        >
-                            {item.text}
-                        </div>
-                    ))}
+                <div
+                    style={{
+                        padding: 14,
+                        background: "var(--surface)",
+                        border: "1px dashed var(--line-2)",
+                        borderRadius: 12,
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 10,
+                            color: "var(--ink-3)",
+                            letterSpacing: 1,
+                            textTransform: "uppercase",
+                            fontWeight: 500,
+                            marginBottom: 8,
+                        }}
+                    >
+                        ЕЩЁ НЕ РАСПРЕДЕЛЕНО
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {unplacedItems.map((item) => (
+                            <div
+                                key={item.idx}
+                                draggable
+                                onDragStart={() => handleDragStart(item.idx)}
+                                style={{
+                                    padding: "8px 14px",
+                                    background: "var(--bg-2)",
+                                    borderRadius: 20,
+                                    fontSize: 13,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    cursor: "grab",
+                                }}
+                            >
+                                {item.text}
+                                <span style={{ display: "flex", gap: 4 }}>
+                                    {content.categories.map((cat, catIdx) => {
+                                        const catColor = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
+                                        return (
+                                            <button
+                                                key={cat}
+                                                onClick={() => assignToCategory(item.idx, cat)}
+                                                title={cat}
+                                                style={{
+                                                    width: 20,
+                                                    height: 20,
+                                                    borderRadius: 6,
+                                                    border: "none",
+                                                    background: catColor.color,
+                                                    cursor: "pointer",
+                                                    fontSize: 10,
+                                                    color: "white",
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                {cat[0]}
+                                            </button>
+                                        );
+                                    })}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
-            {/* Categories */}
-            <div className={`grid gap-4 ${content.categories.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {/* Category columns */}
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${content.categories.length}, 1fr)`,
+                    gap: 10,
+                }}
+            >
                 {content.categories.map((category, catIdx) => {
-                    const color = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
+                    const catColor = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
                     return (
                         <div
                             key={category}
                             onDragOver={handleDragOver}
                             onDrop={() => handleDrop(category)}
-                            className="flex flex-col gap-2 p-3 rounded-xl border-2 border-dashed min-h-[120px]"
-                            style={{ borderColor: color + "80", backgroundColor: color + "10" }}
+                            style={{
+                                padding: 14,
+                                background: "var(--surface)",
+                                border: "1px solid var(--line)",
+                                borderTop: `3px solid ${catColor.color}`,
+                                borderRadius: 12,
+                                minHeight: 140,
+                            }}
                         >
-                            <h4
-                                className="font-bold text-sm text-center"
-                                style={{ color }}
+                            <div
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    color: catColor.color,
+                                    marginBottom: 10,
+                                }}
                             >
                                 {category}
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                                {itemsByCategory[category]?.map((item) => (
-                                    <div
-                                        key={item.idx}
-                                        draggable={!isAnswered}
-                                        onDragStart={() => handleDragStart(item.idx)}
-                                        onClick={() => handleItemClick(item.idx, category)}
-                                        className={itemStyle(item.idx)}
-                                    >
-                                        {item.text}
-                                        {!isAnswered && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); removeFromCategory(item.idx); }}
-                                                className="ml-1 text-xs opacity-50 hover:opacity-100"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                {itemsByCategory[category]?.map((item) => {
+                                    const isCorrect = content.items[item.idx].category === category;
+                                    let itemBg = "var(--bg-2)";
+                                    if (isAnswered) {
+                                        itemBg = isCorrect ? "var(--good-soft)" : "var(--bad-soft)";
+                                    }
+                                    return (
+                                        <div
+                                            key={item.idx}
+                                            draggable={!isAnswered}
+                                            onDragStart={() => handleDragStart(item.idx)}
+                                            style={{
+                                                padding: "8px 10px",
+                                                background: itemBg,
+                                                borderRadius: 8,
+                                                fontSize: 13,
+                                                cursor: isAnswered ? "default" : "grab",
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                            }}
+                                        >
+                                            {item.text}
+                                            {!isAnswered && (
+                                                <button
+                                                    onClick={() => removeFromCategory(item.idx)}
+                                                    style={{
+                                                        background: "transparent",
+                                                        border: "none",
+                                                        color: "var(--ink-4)",
+                                                        cursor: "pointer",
+                                                        fontSize: 12,
+                                                    }}
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     );
                 })}
             </div>
 
-            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
-                <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-primary" : "text-error"
-                }`}>
-                    {submittedResult.explanation ?? submittedResult.aiFeedback}
-                </p>
+            {/* Footer */}
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <div
+                                className="mono"
+                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
+                                data-keyboard-hint
+                            >
+                                Enter — проверить
+                            </div>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={() => onSubmit({ mapping })}
+                                disabled={!canSubmit || isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ПРОВЕРИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                    <style jsx global>{`
+                        @media (pointer: fine) {
+                            [data-keyboard-hint] {
+                                display: block !important;
+                            }
+                        }
+                    `}</style>
+                </div>
             )}
-
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => onSubmit({ mapping })}
-                        disabled={!canSubmit || isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
         </div>
     );
 }
