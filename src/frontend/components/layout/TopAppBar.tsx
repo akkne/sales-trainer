@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkillTree } from "@/lib/hooks/useSkillTree";
 import { useFriendRequests } from "@/lib/hooks/useFriends";
@@ -83,14 +84,7 @@ export function TopAppBar() {
                 )}
 
                 {/* Notifications */}
-                <button
-                    className="relative p-2 rounded-full hover:bg-surface-container tonal-transition"
-                    aria-label="Уведомления"
-                >
-                    <Icon name="notifications" size="md" className="text-on-surface-variant" />
-                    {/* Unread indicator dot */}
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full" />
-                </button>
+                <NotificationBell />
 
                 {/* Achievements */}
                 <Link
