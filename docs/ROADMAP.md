@@ -951,11 +951,11 @@
 
 > Redesign `/guidebook` per `screens.jsx` Handbook section.
 
-- [ ] Hero header with stat tiles (Освоено, Мастер, Новых)
-- [ ] Category chips bar with search input
-- [ ] Technique cards with mastery ring, category badge, tags
-- [ ] Expanded card with sample dialog bubbles and coach sidecar
-- [ ] "Практиковать сейчас" CTA button
+- [x] Hero header with stat tiles (Освоено, Мастер, Новых)
+- [x] Category chips bar with search input
+- [x] Technique cards with mastery ring, category badge, tags
+- [x] Expanded card with sample dialog bubbles and coach sidecar
+- [x] "Практиковать сейчас" CTA button
 
 ### Phase 33.4 — AI Dialog Pages Redesign
 
