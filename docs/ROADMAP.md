@@ -961,8 +961,8 @@
 
 > Redesign `/dialog` flow per `screens.jsx` DialogScene.
 
-- [ ] Bundles grid page: icon, title, description cards
-- [ ] Mode selection page: mode cards grid
+- [x] Bundles grid page: icon, title, description cards
+- [x] Mode selection page: mode cards grid
 - [ ] Chat page: 3-column layout (case files, scene, coach rail)
 - [ ] Scene header: persona avatar, mood chip, timer, goals
 - [ ] Chat bubbles with AI flags (good/warn chips)
