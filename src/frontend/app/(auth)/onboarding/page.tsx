@@ -4,71 +4,73 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { useCompleteOnboarding, useSkillsForOnboarding } from "@/lib/hooks/useOnboarding";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
 
 const PERSONA_OPTIONS = [
-    { value: "sdr", label: "SDR", description: "Разведчик продаж — ищу и квалифицирую лиды", icon: "call" },
-    { value: "account_executive", label: "Account Executive", description: "Провожу сделки от демо до закрытия", icon: "handshake" },
-    { value: "account_manager", label: "Account Manager", description: "Развиваю текущих клиентов", icon: "assignment_turned_in" },
-    { value: "founder", label: "Основатель", description: "Продаю лично как CEO или co-founder", icon: "rocket_launch" },
-    { value: "other", label: "Другое", description: "Моя роль не вписывается в список", icon: "star" },
+    { id: "sdr", label: "SDR", desc: "Холодный outbound, квалификация", shape: "square" },
+    { id: "account_executive", label: "Account Executive", desc: "Переговоры, закрытие", shape: "circle" },
+    { id: "account_manager", label: "Account Manager", desc: "Развитие клиента, upsell", shape: "triangle" },
+    { id: "founder", label: "Основатель", desc: "Founder-led sales", shape: "diamond" },
+    { id: "other", label: "Другое", desc: "Продажи в свободной форме", shape: "arc" },
 ];
 
 const SALES_TYPE_OPTIONS = [
-    { value: "b2b_saas", label: "B2B SaaS", icon: "cloud_done", popular: true },
-    { value: "retail", label: "Розница", icon: "shopping_bag" },
-    { value: "real_estate", label: "Недвижимость", icon: "home_work" },
-    { value: "finance", label: "Финансы", icon: "account_balance" },
-    { value: "b2c", label: "B2C", icon: "diversity_3" },
+    { id: "b2b_saas", label: "B2B SaaS" },
+    { id: "enterprise", label: "Enterprise / complex" },
+    { id: "smb", label: "SMB / транзакционные" },
+    { id: "services", label: "Услуги / консалтинг" },
+    { id: "agency", label: "Агентство" },
+    { id: "other", label: "Другое" },
 ];
 
-const EXPERIENCE_LEVEL_OPTIONS = [
-    { value: "beginner", label: "Новичок", description: "Менее 1 года в продажах", icon: "school" },
-    { value: "experienced", label: "Опытный", description: "1–5 лет в продажах", icon: "trending_up" },
-    { value: "manager", label: "Руководитель", description: "Управляю командой продаж", icon: "groups" },
+const EXPERIENCE_OPTIONS = [
+    { id: "0-1", label: "< 1 года", desc: "только начинаю" },
+    { id: "1-3", label: "1–3 года", desc: "есть рутина" },
+    { id: "3-5", label: "3–5 лет", desc: "понимаю систему" },
+    { id: "5+", label: "5+ лет", desc: "руковожу командой" },
 ];
 
 const DEFAULT_SKILL_SLUG = "sales-basics";
 
-const SLIDE_VARIANTS = {
-    enter: { x: 60, opacity: 0 },
-    center: { x: 0, opacity: 1 },
-    exit: { x: -60, opacity: 0 },
-};
+function PersonaShape({ shape, selected }: { shape: string; selected: boolean }) {
+    const c = selected ? "var(--rust)" : "var(--ink)";
+    const bg = selected ? "var(--bg)" : "var(--rust-soft)";
+    return (
+        <div style={{ width: 48, height: 48, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width={26} height={26} viewBox="0 0 26 26" fill="none">
+                {shape === "square" && <rect x="4" y="4" width="18" height="18" rx="2" fill={c} />}
+                {shape === "circle" && <circle cx="13" cy="13" r="9" fill={c} />}
+                {shape === "triangle" && <polygon points="13,3 23,22 3,22" fill={c} />}
+                {shape === "diamond" && <polygon points="13,2 24,13 13,24 2,13" fill={c} />}
+                {shape === "arc" && <path d="M4 20 Q 13 2 22 20 Z" fill={c} />}
+            </svg>
+        </div>
+    );
+}
 
 export default function OnboardingPage() {
-    const [currentStep, setCurrentStep] = useState(0);
+    const [step, setStep] = useState(0);
     const [selectedPersona, setSelectedPersona] = useState("");
     const [selectedSalesType, setSelectedSalesType] = useState("");
-    const [selectedExperienceLevel, setSelectedExperienceLevel] = useState("");
-    const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(
-        new Set([DEFAULT_SKILL_SLUG])
-    );
+    const [selectedExperience, setSelectedExperience] = useState("");
+    const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set([DEFAULT_SKILL_SLUG]));
+
     const completeOnboardingMutation = useCompleteOnboarding();
     const { data: allSkills, isLoading: skillsLoading } = useSkillsForOnboarding();
 
-    const totalStepCount = 4;
+    const totalSteps = 4;
 
-    function handlePersonaSelection(persona: string) {
-        setSelectedPersona(persona);
-        setCurrentStep(1);
+    function next() {
+        if (step < totalSteps - 1) setStep(step + 1);
+        else handleSubmit();
     }
 
-    function handlePersonaSkip() {
-        setCurrentStep(1);
-    }
-
-    function handleSalesTypeSelection(salesType: string) {
-        setSelectedSalesType(salesType);
-        setCurrentStep(2);
-    }
-
-    function handleExperienceLevelSelection(experienceLevel: string) {
-        setSelectedExperienceLevel(experienceLevel);
-        setCurrentStep(3);
+    function back() {
+        if (step > 0) setStep(step - 1);
     }
 
     function toggleSkill(slug: string) {
-        if (slug === DEFAULT_SKILL_SLUG) return; // sales-basics is always on
+        if (slug === DEFAULT_SKILL_SLUG) return;
         setSelectedSlugs((prev) => {
             const next = new Set(prev);
             if (next.has(slug)) next.delete(slug);
@@ -77,283 +79,342 @@ export default function OnboardingPage() {
         });
     }
 
-    function handleSubmitSkills() {
+    function handleSubmit() {
         completeOnboardingMutation.mutate({
             salesType: selectedSalesType,
-            experienceLevel: selectedExperienceLevel,
+            experienceLevel: selectedExperience,
             selectedSkillSlugs: Array.from(selectedSlugs),
             persona: selectedPersona || undefined,
         });
     }
 
+    const canContinue =
+        (step === 0) ||
+        (step === 1 && selectedSalesType) ||
+        (step === 2 && selectedExperience) ||
+        (step === 3 && selectedSlugs.size > 0);
+
     return (
-        <div className="w-full max-w-2xl px-4">
-            {/* Progress bar */}
-            <div className="mb-8">
-                <p className="text-sm text-on-surface-variant font-medium mb-2">
-                    Шаг {currentStep + 1} из {totalStepCount}
-                </p>
-                <div className="h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                    <div
-                        className="h-full bg-primary rounded-full transition-all duration-300"
-                        style={{ width: `${((currentStep + 1) / totalStepCount) * 100}%` }}
-                    />
+        <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+            {/* Top bar */}
+            <div style={{ padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontWeight: 600, fontSize: 18, letterSpacing: -0.5 }}>Sellevate</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {Array.from({ length: totalSteps }).map((_, i) => (
+                        <div
+                            key={i}
+                            style={{
+                                width: i === step ? 28 : 8,
+                                height: 8,
+                                borderRadius: 4,
+                                background: i <= step ? "var(--ink)" : "var(--line-2)",
+                                transition: "width 0.3s cubic-bezier(.2,.8,.2,1), background 0.3s",
+                            }}
+                        />
+                    ))}
+                    <span style={{ marginLeft: 12, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ink-3)" }}>
+                        0{step + 1} / 0{totalSteps}
+                    </span>
+                </div>
+                <button
+                    onClick={handleSubmit}
+                    style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--ink-3)",
+                        fontSize: 13,
+                        cursor: "pointer",
+                        fontFamily: "var(--f-sans)",
+                    }}
+                >
+                    Пропустить
+                </button>
+            </div>
+
+            {/* Step body */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+                <div style={{ maxWidth: 880, width: "100%" }}>
+                    <AnimatePresence mode="wait">
+                        {/* Step 0: Persona */}
+                        {step === 0 && (
+                            <motion.div
+                                key="step-persona"
+                                initial={{ x: 60, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: -60, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <div style={{ textAlign: "center", marginBottom: 48 }}>
+                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
+                                        ШАГ 01 / 04
+                                    </div>
+                                    <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
+                                        Кто вы в продажах?
+                                    </h1>
+                                    <p style={{ color: "var(--ink-3)", fontSize: 16, marginTop: 12 }}>
+                                        Настроим сценарии под вашу роль. Можно поменять позже.
+                                    </p>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+                                    {PERSONA_OPTIONS.map((p) => {
+                                        const selected = selectedPersona === p.id;
+                                        return (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => setSelectedPersona(p.id)}
+                                                style={{
+                                                    padding: 20,
+                                                    textAlign: "left",
+                                                    background: selected ? "var(--ink)" : "var(--surface)",
+                                                    color: selected ? "var(--bg)" : "var(--ink)",
+                                                    border: `1px solid ${selected ? "var(--ink)" : "var(--line)"}`,
+                                                    borderRadius: 16,
+                                                    cursor: "pointer",
+                                                    transition: "all 0.15s",
+                                                    boxShadow: selected ? "var(--sh-2)" : "var(--sh-1)",
+                                                    minHeight: 180,
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    justifyContent: "space-between",
+                                                    fontFamily: "var(--f-sans)",
+                                                }}
+                                            >
+                                                <PersonaShape shape={p.shape} selected={selected} />
+                                                <div>
+                                                    <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{p.label}</div>
+                                                    <div style={{ fontSize: 12, color: selected ? "var(--ink-4)" : "var(--ink-3)", lineHeight: 1.4 }}>
+                                                        {p.desc}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Step 1: Sales type */}
+                        {step === 1 && (
+                            <motion.div
+                                key="step-sales"
+                                initial={{ x: 60, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: -60, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <div style={{ textAlign: "center", marginBottom: 48 }}>
+                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
+                                        ШАГ 02 / 04
+                                    </div>
+                                    <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
+                                        Что вы продаёте?
+                                    </h1>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, maxWidth: 720, margin: "0 auto" }}>
+                                    {SALES_TYPE_OPTIONS.map((t) => {
+                                        const sel = selectedSalesType === t.id;
+                                        return (
+                                            <button
+                                                key={t.id}
+                                                onClick={() => setSelectedSalesType(t.id)}
+                                                style={{
+                                                    padding: "20px 24px",
+                                                    background: sel ? "var(--rust)" : "var(--surface)",
+                                                    color: sel ? "white" : "var(--ink)",
+                                                    border: `1px solid ${sel ? "var(--rust)" : "var(--line)"}`,
+                                                    borderRadius: 14,
+                                                    cursor: "pointer",
+                                                    fontSize: 15,
+                                                    fontWeight: 500,
+                                                    textAlign: "left",
+                                                    fontFamily: "var(--f-sans)",
+                                                }}
+                                            >
+                                                {t.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Step 2: Experience */}
+                        {step === 2 && (
+                            <motion.div
+                                key="step-exp"
+                                initial={{ x: 60, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: -60, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <div style={{ textAlign: "center", marginBottom: 48 }}>
+                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
+                                        ШАГ 03 / 04
+                                    </div>
+                                    <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
+                                        Сколько лет в продажах?
+                                    </h1>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                                    {EXPERIENCE_OPTIONS.map((l) => {
+                                        const sel = selectedExperience === l.id;
+                                        return (
+                                            <button
+                                                key={l.id}
+                                                onClick={() => setSelectedExperience(l.id)}
+                                                style={{
+                                                    padding: 28,
+                                                    background: sel ? "var(--ink)" : "var(--surface)",
+                                                    color: sel ? "var(--bg)" : "var(--ink)",
+                                                    border: `1px solid ${sel ? "var(--ink)" : "var(--line)"}`,
+                                                    borderRadius: 16,
+                                                    cursor: "pointer",
+                                                    textAlign: "left",
+                                                    fontFamily: "var(--f-sans)",
+                                                }}
+                                            >
+                                                <div style={{ fontSize: 36, fontWeight: 500, letterSpacing: -1, fontFamily: "var(--f-mono)" }}>
+                                                    {l.label}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: sel ? "var(--ink-4)" : "var(--ink-3)", marginTop: 6 }}>
+                                                    {l.desc}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Step 3: Skills */}
+                        {step === 3 && (
+                            <motion.div
+                                key="step-skills"
+                                initial={{ x: 60, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: -60, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <div style={{ textAlign: "center", marginBottom: 48 }}>
+                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
+                                        ШАГ 04 / 04
+                                    </div>
+                                    <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
+                                        С чего начнём?
+                                    </h1>
+                                    <p style={{ color: "var(--ink-3)", fontSize: 16, marginTop: 12 }}>
+                                        Выберите 2–3 навыка. Остальные разблокируются по ходу.
+                                    </p>
+                                </div>
+
+                                {skillsLoading ? (
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                                            <div key={i} style={{ height: 80, borderRadius: 14, background: "var(--surface)", animation: "pulse 2s infinite" }} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                                        {(allSkills ?? []).map((skill) => {
+                                            const sel = selectedSlugs.has(skill.slug);
+                                            const isDefault = skill.slug === DEFAULT_SKILL_SLUG;
+                                            return (
+                                                <button
+                                                    key={skill.skillId}
+                                                    onClick={() => toggleSkill(skill.slug)}
+                                                    disabled={isDefault}
+                                                    style={{
+                                                        padding: 20,
+                                                        textAlign: "left",
+                                                        background: sel ? "var(--rust-soft)" : "var(--surface)",
+                                                        border: `1px solid ${sel ? "var(--rust)" : "var(--line)"}`,
+                                                        borderRadius: 14,
+                                                        cursor: isDefault ? "default" : "pointer",
+                                                        fontFamily: "var(--f-sans)",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 14,
+                                                        opacity: isDefault ? 0.6 : 1,
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: 44,
+                                                            height: 44,
+                                                            borderRadius: 10,
+                                                            background: sel ? "var(--rust)" : "var(--bg-2)",
+                                                            color: sel ? "white" : "var(--ink-2)",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                        }}
+                                                    >
+                                                        <Icon name="target" size="sm" />
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 500, color: sel ? "var(--rust-ink)" : "var(--ink)" }}>
+                                                            {skill.title}
+                                                        </div>
+                                                        <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)", marginTop: 2 }}>
+                                                            {skill.totalLessonCount ?? "—"} уроков
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            width: 20,
+                                                            height: 20,
+                                                            borderRadius: 6,
+                                                            background: sel ? "var(--rust)" : "transparent",
+                                                            border: `1.5px solid ${sel ? "var(--rust)" : "var(--line-2)"}`,
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                        }}
+                                                    >
+                                                        {sel && <Icon name="check" size="xs" color="white" />}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {completeOnboardingMutation.isError && (
+                                    <p style={{ marginTop: 16, color: "var(--bad)", fontSize: 14, textAlign: "center" }}>
+                                        Произошла ошибка. Попробуй ещё раз.
+                                    </p>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
 
-            <AnimatePresence mode="wait">
-                {/* ── Step 0: Persona selection ────────────────────────────── */}
-                {currentStep === 0 && (
-                    <motion.div
-                        key="step-persona"
-                        variants={SLIDE_VARIANTS}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.25 }}
-                    >
-                        <h1 className="font-headline text-3xl font-bold text-on-surface mb-3">
-                            Кто ты в продажах?
-                        </h1>
-                        <p className="text-on-surface-variant mb-8 max-w-xl">
-                            Выбери свою роль — мы подберём упражнения под твои задачи
-                        </p>
-                        <div className="flex flex-col gap-3">
-                            {PERSONA_OPTIONS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => handlePersonaSelection(opt.value)}
-                                    className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-surface-container text-left hover:bg-surface-container-high tonal-transition group"
-                                >
-                                    <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center group-hover:bg-primary-container tonal-transition">
-                                        <Icon name={opt.icon} size="md" className="text-on-surface-variant group-hover:text-primary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-on-surface">{opt.label}</p>
-                                        <p className="text-sm text-on-surface-variant mt-0.5">{opt.description}</p>
-                                    </div>
-                                    <Icon name="chevron_right" size="md" className="text-outline" />
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            onClick={handlePersonaSkip}
-                            className="mt-6 w-full py-3 text-sm text-on-surface-variant hover:text-on-surface tonal-transition"
-                        >
-                            Пропустить
-                        </button>
-                    </motion.div>
-                )}
-
-                {/* ── Step 1: Sales type (Bento Grid) ───────────────────────── */}
-                {currentStep === 1 && (
-                    <motion.div
-                        key="step-sales-type"
-                        variants={SLIDE_VARIANTS}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.25 }}
-                    >
-                        <h1 className="font-headline text-3xl font-bold text-on-surface mb-3">
-                            Выбери сферу
-                        </h1>
-                        <p className="text-on-surface-variant mb-8 max-w-xl">
-                            Мы адаптируем контент под специфику твоей индустрии
-                        </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {SALES_TYPE_OPTIONS.map((opt) => {
-                                const isSelected = selectedSalesType === opt.value;
-                                return (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => handleSalesTypeSelection(opt.value)}
-                                        className={`relative flex flex-col items-start p-5 rounded-2xl text-left tonal-transition ${
-                                            isSelected
-                                                ? "bg-primary-container border-2 border-primary"
-                                                : "bg-surface-container border-2 border-transparent hover:border-outline-variant hover:bg-surface-container-high"
-                                        }`}
-                                    >
-                                        {opt.popular && (
-                                            <span className="absolute top-3 right-3 text-xs font-semibold bg-primary text-on-primary px-2.5 py-0.5 rounded-full">
-                                                Популярно
-                                            </span>
-                                        )}
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 ${
-                                            isSelected ? "bg-primary" : "bg-surface-container-high"
-                                        }`}>
-                                            <Icon
-                                                name={opt.icon}
-                                                size="md"
-                                                className={isSelected ? "text-on-primary" : "text-on-surface-variant"}
-                                            />
-                                        </div>
-                                        <p className={`font-semibold ${isSelected ? "text-primary" : "text-on-surface"}`}>
-                                            {opt.label}
-                                        </p>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* ── Step 2: Experience level ─────────────────────────────── */}
-                {currentStep === 2 && (
-                    <motion.div
-                        key="step-experience"
-                        variants={SLIDE_VARIANTS}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.25 }}
-                    >
-                        <h1 className="font-headline text-3xl font-bold text-on-surface mb-3">
-                            Твой опыт?
-                        </h1>
-                        <p className="text-on-surface-variant mb-8 max-w-xl">
-                            Это поможет подобрать уровень сложности
-                        </p>
-                        <div className="flex flex-col gap-3">
-                            {EXPERIENCE_LEVEL_OPTIONS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => handleExperienceLevelSelection(opt.value)}
-                                    className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-surface-container text-left hover:bg-surface-container-high tonal-transition group"
-                                >
-                                    <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center group-hover:bg-secondary-container tonal-transition">
-                                        <Icon name={opt.icon} size="md" className="text-on-surface-variant group-hover:text-secondary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-on-surface">{opt.label}</p>
-                                        <p className="text-sm text-on-surface-variant mt-0.5">{opt.description}</p>
-                                    </div>
-                                    <Icon name="chevron_right" size="md" className="text-outline" />
-                                </button>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* ── Step 3: Skill selection ──────────────────────────────── */}
-                {currentStep === 3 && (
-                    <motion.div
-                        key="step-skills"
-                        variants={SLIDE_VARIANTS}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.25 }}
-                    >
-                        <h1 className="font-headline text-3xl font-bold text-on-surface mb-3">
-                            Что будешь изучать?
-                        </h1>
-                        <p className="text-on-surface-variant mb-8 max-w-xl">
-                            Выбери навыки для старта. Можно изменить позже в профиле.
-                        </p>
-
-                        {skillsLoading ? (
-                            <div className="flex flex-col gap-3">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="h-16 rounded-2xl bg-surface-container animate-pulse" />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-3 mb-6">
-                                {(allSkills ?? []).map((skill) => {
-                                    const isDefault = skill.slug === DEFAULT_SKILL_SLUG;
-                                    const isSelected = selectedSlugs.has(skill.slug);
-
-                                    return (
-                                        <button
-                                            key={skill.skillId}
-                                            onClick={() => toggleSkill(skill.slug)}
-                                            disabled={isDefault}
-                                            className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-left tonal-transition border-2 ${
-                                                isDefault
-                                                    ? "border-outline-variant bg-surface-container-low cursor-default opacity-60"
-                                                    : isSelected
-                                                    ? "border-primary bg-primary-container cursor-pointer"
-                                                    : "border-transparent bg-surface-container hover:bg-surface-container-high cursor-pointer"
-                                            }`}
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <p
-                                                    className={`font-semibold truncate ${
-                                                        isDefault
-                                                            ? "text-on-surface-variant"
-                                                            : isSelected
-                                                            ? "text-primary"
-                                                            : "text-on-surface"
-                                                    }`}
-                                                >
-                                                    {skill.title}
-                                                </p>
-                                                {isDefault && (
-                                                    <p className="text-xs text-on-surface-variant font-medium mt-0.5">
-                                                        Базовый — всегда включён
-                                                    </p>
-                                                )}
-                                            </div>
-                                            {/* Toggle switch */}
-                                            <div
-                                                className={`w-12 h-6 rounded-full shrink-0 flex items-center px-1 tonal-transition ${
-                                                    isDefault
-                                                        ? "bg-outline-variant"
-                                                        : isSelected
-                                                        ? "bg-primary"
-                                                        : "bg-surface-container-highest"
-                                                }`}
-                                            >
-                                                <div
-                                                    className={`w-4 h-4 rounded-full bg-surface-container-lowest shadow transition-transform ${
-                                                        isDefault || isSelected
-                                                            ? "translate-x-6"
-                                                            : "translate-x-0"
-                                                    }`}
-                                                />
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-
-                                {(!allSkills || allSkills.length === 0) && (
-                                    <div className="text-center py-6 text-on-surface-variant">
-                                        Навыки ещё не добавлены администратором
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Info hint */}
-                        <div className="flex items-center gap-2 text-sm text-on-surface-variant mb-6">
-                            <Icon name="info" size="sm" />
-                            <span>Выбрано: {selectedSlugs.size} навык(а)</span>
-                        </div>
-
-                        <button
-                            onClick={handleSubmitSkills}
-                            disabled={completeOnboardingMutation.isPending}
-                            className="w-full py-4 rounded-full bg-primary text-on-primary font-bold text-base shadow-[0_4px_0_0_var(--color-primary-dim)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                        >
-                            {completeOnboardingMutation.isPending ? (
-                                "Сохраняем..."
-                            ) : (
-                                <>
-                                    Начать обучение
-                                    <Icon name="arrow_forward" size="sm" />
-                                </>
-                            )}
-                        </button>
-
-                        {completeOnboardingMutation.isError && (
-                            <p className="mt-4 text-error text-sm text-center">
-                                Произошла ошибка. Попробуй ещё раз.
-                            </p>
-                        )}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Bottom bar */}
+            <div
+                style={{
+                    padding: 32,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    borderTop: "1px solid var(--line)",
+                    background: "var(--surface)",
+                }}
+            >
+                <Button variant="ghost" onClick={back} iconLeftName="chevron-left" disabled={step === 0}>
+                    Назад
+                </Button>
+                <Button
+                    variant="accent"
+                    size="lg"
+                    onClick={next}
+                    iconRightName="arrow-right"
+                    disabled={!canContinue || completeOnboardingMutation.isPending}
+                    loading={completeOnboardingMutation.isPending}
+                >
+                    {step === totalSteps - 1 ? "Начать" : "Продолжить"}
+                </Button>
+            </div>
         </div>
     );
 }

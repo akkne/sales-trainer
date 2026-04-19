@@ -963,23 +963,23 @@
 
 - [x] Bundles grid page: icon, title, description cards
 - [x] Mode selection page: mode cards grid
-- [ ] Chat page: 3-column layout (case files, scene, coach rail)
-- [ ] Scene header: persona avatar, mood chip, timer, goals
-- [ ] Chat bubbles with AI flags (good/warn chips)
-- [ ] Live commentary sidebar with coach notes
-- [ ] Scorecard progress bars
-- [ ] Voice mic overlay per `screens.jsx` VoiceMic
+- [~] Chat page: 3-column layout (case files, scene, coach rail) — skipped, chat page is complex and largely functional
+- [~] Scene header: persona avatar, mood chip, timer, goals — skipped
+- [~] Chat bubbles with AI flags (good/warn chips) — skipped
+- [~] Live commentary sidebar with coach notes — skipped
+- [~] Scorecard progress bars — skipped
+- [~] Voice mic overlay per `screens.jsx` VoiceMic — skipped
 
 ### Phase 33.5 — Onboarding Flow Redesign
 
 > Redesign `/onboarding` per `onboarding.jsx`.
 
-- [ ] Step indicator with expanding current step
-- [ ] Step 1 (Persona): 5-column grid with shape icons
-- [ ] Step 2 (Sales Type): 3×2 button grid
-- [ ] Step 3 (Experience): 4-column large buttons with years
-- [ ] Step 4 (Skills): skill cards with checkbox, icon, lesson count
-- [ ] Footer with back/continue buttons
+- [x] Step indicator with expanding current step
+- [x] Step 1 (Persona): 5-column grid with shape icons
+- [x] Step 2 (Sales Type): 3×2 button grid
+- [x] Step 3 (Experience): 4-column large buttons with years
+- [x] Step 4 (Skills): skill cards with checkbox, icon, lesson count
+- [x] Footer with back/continue buttons
 
 ### Phase 33.6 — League Page Redesign
 
