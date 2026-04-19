@@ -22,6 +22,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
 | [New Exercise Types](NEW_EXERCISE_TYPES.md) | 8 additional exercise types with AI evaluation |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
+| [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
 
 ## Testing
 
@@ -100,6 +101,14 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - 1-to-1 chat between friends (MongoDB, 5s polling)
 - Conversations list with last message preview
 - Navigation badge for pending friend requests
+
+### Notifications
+- In-app bell with unread badge in top app bar
+- Dropdown panel with recent notifications and "Mark all as read"
+- Triggers: friend request received/accepted, chat message received, achievement unlocked, streak milestone
+- 20s unread count polling, 30s list polling
+- Deep-links via actionUrl on notification activation
+- Hangfire daily cleanup job deletes read notifications older than 30 days
 
 ### Admin Panel
 - Role system: User / Admin / SuperAdmin

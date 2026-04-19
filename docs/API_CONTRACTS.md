@@ -435,3 +435,26 @@ Errors:
 - Creating a conversation validates active friendship
 - Messages are stored in MongoDB `chat_conversations` collection
 - Participant IDs are always sorted for canonical document identity
+
+---
+
+## Notifications
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /notifications?limit=20&includeRead=true | — | `NotificationDto[]` |
+| GET | /notifications/unread-count | — | `UnreadNotificationCountDto` |
+| PUT | /notifications/{notificationId}/read | — | 204 |
+| PUT | /notifications/read-all | — | 204 |
+
+`NotificationDto`: `{id, notificationType, title, body, actionUrl?, relatedEntityId?, isRead, createdAt, readAt?}`
+- `notificationType`: `"FriendRequestReceived"` | `"FriendRequestAccepted"` | `"ChatMessageReceived"` | `"AchievementUnlocked"` | `"StreakMilestone"`
+
+`UnreadNotificationCountDto`: `{count}`
+
+**Business rules:**
+- Notifications are scoped to the authenticated recipient
+- `actionUrl` is a relative frontend route (e.g. `/friends?tab=requests`, `/friends/chat/{conversationId}`, `/profile`)
+- `relatedEntityId` stores source-entity id as string (friendship id, conversation id, achievement key, etc.)
+- Marking a single notification as read is idempotent; already-read notifications return 204
+- Hangfire recurring job `notification-cleanup` deletes read notifications older than 30 days (daily at 00:30 UTC)

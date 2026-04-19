@@ -843,3 +843,54 @@
 - [x] Update `docs/API_CONTRACTS.md` with friend and chat endpoints
 - [x] Update `docs/DB_SCHEMA.md` with Friendships table and chat_conversations collection
 - [x] Create `docs/TESTING/FRIENDS.md` — manual test checklist
+
+---
+
+## Phase 31 — Notifications
+
+> In-app notification center behind the bell icon in the top bar. Covers social events (friend requests, friend request accepted, new chat messages) and gamification (achievement unlocked, streak milestones 7/30 days).
+> Spec: [docs/NOTIFICATIONS.md](NOTIFICATIONS.md)
+
+### [x] Backend — Notification storage
+- [x] `Notification` entity (PostgreSQL): `Id`, `RecipientUserId`, `NotificationType`, `Title`, `Body`, `ActionUrl?`, `RelatedEntityId?`, `IsRead`, `CreatedAt`, `ReadAt?`
+- [x] `NotificationType` enum: `FriendRequestReceived`, `FriendRequestAccepted`, `ChatMessageReceived`, `AchievementUnlocked`, `StreakMilestone`
+- [x] `NotificationEntityConfiguration` with indexes on `(RecipientUserId, IsRead)` and `(RecipientUserId, CreatedAt DESC)`
+- [x] EF migration `AddNotifications`
+- [x] Register `DbSet<Notification>` in `AppDbContext`
+
+### [x] Backend — Service, controller, DI
+- [x] `INotificationService` interface + `NotificationService` implementation
+- [x] Methods: `CreateAsync`, `GetRecentAsync`, `GetUnreadCountAsync`, `MarkAsReadAsync`, `MarkAllAsReadAsync`, `DeleteReadNotificationsOlderThanAsync`
+- [x] `NotificationController` with endpoints:
+  - `GET /notifications` — paginated list (query `?limit=20&includeRead=true`)
+  - `GET /notifications/unread-count` — `{count}`
+  - `PUT /notifications/{notificationId}/read`
+  - `PUT /notifications/read-all`
+- [x] `NotificationFeatureServiceCollectionExtensions.AddNotificationFeatureServices()`
+- [x] Register in `Program.cs`
+
+### [x] Backend — Trigger wiring
+- [x] `FriendService.SendFriendRequestAsync` → notification to addressee (type `FriendRequestReceived`)
+- [x] `FriendService.AcceptFriendRequestAsync` → notification to original requester (type `FriendRequestAccepted`)
+- [x] `ChatService.SendMessageAsync` → notification to recipient participant (type `ChatMessageReceived`, action url `/friends/chat/{conversationId}`)
+- [x] `AchievementService.EvaluateAchievementsForUserAsync` → notification per unlocked achievement (type `AchievementUnlocked`)
+- [x] `ExerciseService.AwardStreakBonusExperiencePointsIfMilestoneAsync` → notification at milestone (type `StreakMilestone`)
+
+### [x] Backend — Cleanup job
+- [x] `NotificationCleanupJob` (Hangfire) — deletes read notifications older than 30 days
+- [x] Register recurring job in `Program.cs` at `30 0 * * *` (00:30 UTC daily)
+
+### [x] Frontend — Hook & UI
+- [x] `useNotifications.ts` — queries (list + unread count with 20s polling) + mutations (mark read, mark all read)
+- [x] `NotificationBell.tsx` — button with unread dot, click → dropdown panel
+- [x] `NotificationPanel.tsx` — dropdown anchored to bell; list of cards; "Прочитать всё" button; empty state
+- [x] `NotificationCard.tsx` — icon by type, title, body, relative time, unread background tint; click → mark read + navigate
+- [x] Replace placeholder bell button in `TopAppBar` with `NotificationBell`
+- [x] Mobile: full-screen sheet overlay via CSS breakpoint
+
+### [x] Docs & tests
+- [x] `docs/NOTIFICATIONS.md` — full feature spec
+- [x] Update `docs/API_CONTRACTS.md` with notification endpoints
+- [x] Update `docs/DB_SCHEMA.md` with `Notifications` table
+- [x] Update `docs/FEATURES.md` with notifications entry
+- [x] `docs/TESTING/NOTIFICATIONS.md` — manual checklist

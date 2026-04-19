@@ -149,6 +149,29 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 
 ---
 
+### `Notifications`
+
+| Column              | Type                       | Nullable | Notes                                                             |
+|---------------------|----------------------------|----------|-------------------------------------------------------------------|
+| `Id`                | `uuid`                     | NOT NULL | PK                                                                |
+| `RecipientUserId`   | `uuid`                     | NOT NULL | FK → `Users.Id`                                                   |
+| `NotificationType`  | `integer`                  | NOT NULL | 1=FriendRequestReceived, 2=FriendRequestAccepted, 3=ChatMessageReceived, 4=AchievementUnlocked, 5=StreakMilestone |
+| `Title`             | `varchar(200)`             | NOT NULL |                                                                   |
+| `Body`              | `varchar(1000)`            | NOT NULL |                                                                   |
+| `ActionUrl`         | `varchar(500)`             | NULL     | Relative frontend route for deep link                             |
+| `RelatedEntityId`   | `varchar(64)`              | NULL     | Source entity id (friendship id, conversation id, achievement key)|
+| `IsRead`            | `boolean`                  | NOT NULL | Default false                                                     |
+| `CreatedAt`         | `timestamp with time zone` | NOT NULL |                                                                   |
+| `ReadAt`            | `timestamp with time zone` | NULL     | Set when notification is marked as read                           |
+
+**Indexes:**
+- `(RecipientUserId, IsRead)` — unread lookup per user
+- `(RecipientUserId, CreatedAt)` — reverse-chronological listing per user
+
+**Cleanup:** Hangfire recurring job `notification-cleanup` deletes rows where `IsRead = true AND CreatedAt < now() - 30 days` (runs daily at 00:30 UTC).
+
+---
+
 ### `ReferenceMaterials`
 
 | Column            | Type      | Nullable | Notes              |
@@ -354,3 +377,4 @@ Skills
 | `AddExerciseTypePrompts`              | 2026-04-13 | `ExerciseTypePrompts` table                  |
 | `AddIconicNameToSkillsAndTopics`      | 2026-04-14 | Add IconicName (unique) to Skills and Topics |
 | `AddFriendships`                      | 2026-04-18 | `Friendships` table with unique composite index |
+| `AddNotifications`                    | 2026-04-18 | `Notifications` table with recipient+read and recipient+createdAt indexes |
