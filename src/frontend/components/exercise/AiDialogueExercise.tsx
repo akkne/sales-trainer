@@ -3,7 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import { apiClient } from "@/lib/api/apiClient";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface ChatMessage {
     role: "user" | "assistant";
@@ -54,7 +57,6 @@ export function AiDialogueExercise({
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // Start conversation with AI greeting on mount
     useEffect(() => {
         if (messages.length === 0 && !isAnswered) {
             startConversation();
@@ -72,7 +74,6 @@ export function AiDialogueExercise({
             if (data.isComplete || data.isFinished) setIsComplete(true);
         } catch (error) {
             console.error("Failed to start conversation:", error);
-            // Fallback greeting
             setMessages([{
                 role: "assistant",
                 content: `${content.persona}: Да, слушаю. Что вы хотели?`
@@ -122,51 +123,82 @@ export function AiDialogueExercise({
         }
     }
 
-    function getRatingColor(score: number): string {
-        if (score >= 80) return "bg-primary text-on-primary";
-        if (score >= 60) return "bg-tertiary text-on-tertiary";
-        return "bg-error text-on-error";
-    }
-
     return (
-        <div className="flex flex-col gap-4 h-full">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
             {/* Persona header */}
-            <div className="flex items-center gap-3 p-3 bg-surface-container rounded-xl">
-                <div className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center">
-                    <Icon name="user" size="md" className="text-primary" />
-                </div>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 12,
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                }}
+            >
+                <GeoAvatar seed={content.persona} size={48} />
                 <div>
-                    <p className="font-bold text-on-surface">{content.persona}</p>
-                    <p className="text-sm text-on-surface-variant">{content.scenario}</p>
+                    <p style={{ fontWeight: 600, margin: 0 }}>{content.persona}</p>
+                    <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>{content.scenario}</p>
                 </div>
             </div>
 
             {content.context && (
-                <p className="text-sm text-on-surface-variant px-1">{content.context}</p>
+                <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>{content.context}</p>
             )}
 
             {/* Chat messages */}
-            <div className="flex-1 overflow-y-auto flex flex-col gap-3 min-h-[200px] max-h-[400px] p-2">
+            <div
+                style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    minHeight: 200,
+                    maxHeight: 400,
+                    padding: 8,
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                }}
+            >
                 {messages.map((msg, idx) => (
                     <div
                         key={idx}
-                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                        style={{
+                            display: "flex",
+                            justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                        }}
                     >
                         <div
-                            className={`max-w-[80%] px-4 py-2 rounded-2xl ${
-                                msg.role === "user"
-                                    ? "bg-primary text-on-primary rounded-br-sm"
-                                    : "bg-surface-container text-on-surface rounded-bl-sm"
-                            }`}
+                            style={{
+                                maxWidth: "80%",
+                                padding: "10px 14px",
+                                borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
+                                background: msg.role === "user" ? "var(--indigo)" : "var(--bg-2)",
+                                color: msg.role === "user" ? "white" : "var(--ink)",
+                                fontSize: 14,
+                                lineHeight: 1.4,
+                            }}
                         >
                             {msg.content}
                         </div>
                     </div>
                 ))}
                 {isSending && (
-                    <div className="flex justify-start">
-                        <div className="px-4 py-2 rounded-2xl bg-surface-container text-on-surface-variant rounded-bl-sm">
-                            <span className="animate-pulse">Печатает...</span>
+                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                        <div
+                            style={{
+                                padding: "10px 14px",
+                                borderRadius: "4px 14px 14px 14px",
+                                background: "var(--bg-2)",
+                                color: "var(--ink-3)",
+                                fontSize: 14,
+                            }}
+                        >
+                            <span style={{ opacity: 0.7 }}>Печатает...</span>
                         </div>
                     </div>
                 )}
@@ -175,78 +207,92 @@ export function AiDialogueExercise({
 
             {/* Input or result */}
             {!isAnswered && !isComplete && (
-                <div className="flex gap-2">
+                <div style={{ display: "flex", gap: 8 }}>
                     <input
                         type="text"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Ваша реплика..."
+                        placeholder="Ваша реплика…"
                         disabled={isSending}
-                        className="flex-1 px-4 py-3 rounded-full bg-surface-container border-2 border-outline-variant focus:border-primary outline-none"
+                        style={{
+                            flex: 1,
+                            padding: "10px 14px",
+                            border: "1px solid var(--line-2)",
+                            borderRadius: 10,
+                            fontFamily: "var(--f-sans)",
+                            fontSize: 14,
+                            outline: "none",
+                            background: "var(--surface)",
+                        }}
                     />
-                    <button
+                    <Button
+                        variant="accent"
                         onClick={sendMessage}
                         disabled={!inputText.trim() || isSending}
-                        className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center disabled:opacity-40"
                     >
                         <Icon name="send" size="sm" />
-                    </button>
+                    </Button>
                 </div>
             )}
-
-            {isAnswered && (
-                <div className="flex flex-col gap-3 p-4 bg-surface-container rounded-xl">
-                    <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${getRatingColor(submittedResult.score)}`}>
-                            {Math.round(submittedResult.score / 10)}/10
-                        </span>
-                        <span className={`font-medium ${submittedResult.isCorrect ? "text-primary" : "text-error"}`}>
-                            {submittedResult.isCorrect ? "Отличный диалог!" : "Есть что улучшить"}
-                        </span>
-                    </div>
-                    {submittedResult.aiFeedback && (
-                        <p className="text-sm text-on-surface-variant leading-relaxed">
-                            {submittedResult.aiFeedback}
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (canComplete || isComplete) && (
-                    <button
-                        onClick={handleComplete}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Анализируем..." : "Завершить диалог"}
-                    </button>
-                )}
-            </div>
 
             {!isAnswered && !canComplete && (
-                <p className="text-xs text-on-surface-variant text-center">
+                <p style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", margin: 0 }}>
                     Ещё {minTurns - userTurnCount} реплик до возможности завершить
                 </p>
+            )}
+
+            {/* Footer */}
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (canComplete || isComplete) && (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={handleComplete}
+                                disabled={isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ЗАВЕРШИТЬ ДИАЛОГ
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

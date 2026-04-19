@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface DialogueLine {
     speaker: string;
@@ -39,29 +41,28 @@ export function SpotMistakeExercise({
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
     const mistakeIndex = content.dialogue.findIndex(line => line.is_mistake);
 
-    function lineStyle(lineIndex: number): string {
-        const base = "flex gap-3 px-4 py-3 rounded-xl transition-colors cursor-pointer";
-
-        if (!isAnswered) {
-            if (selectedLineIndex === lineIndex) {
-                return `${base} bg-error-container border-2 border-error`;
-            }
-            return `${base} bg-surface-container hover:bg-surface-container-high`;
-        }
-
+    function getLineStyle(lineIndex: number) {
+        const isSelected = selectedLineIndex === lineIndex;
         const isMistakeLine = lineIndex === mistakeIndex;
         const wasSelected = selectedLineIndex === lineIndex;
 
+        if (!isAnswered) {
+            return {
+                background: isSelected ? "var(--bad-soft)" : "transparent",
+                border: `1px solid ${isSelected ? "var(--bad)" : "transparent"}`,
+            };
+        }
+
         if (wasSelected && isMistakeLine) {
-            return `${base} bg-primary-container border-2 border-primary`;
+            return { background: "var(--good-soft)", border: "1px solid var(--good)" };
         }
         if (wasSelected && !isMistakeLine) {
-            return `${base} bg-error-container border-2 border-error`;
+            return { background: "var(--bad-soft)", border: "1px solid var(--bad)" };
         }
         if (isMistakeLine) {
-            return `${base} bg-primary-container/50 border-2 border-primary/50`;
+            return { background: "var(--good-soft)", border: "1px solid var(--good)", opacity: 0.7 };
         }
-        return `${base} bg-surface-container`;
+        return { background: "transparent", border: "1px solid transparent" };
     }
 
     const canSubmit = selectedLineIndex !== null;
@@ -75,85 +76,136 @@ export function SpotMistakeExercise({
     }
 
     return (
-        <div className="flex flex-col gap-6">
-            <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center shrink-0 mt-1">
-                    <Icon name="search" size="sm" className="text-error" />
-                </div>
-                <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                    <p className="text-sm text-on-surface-variant">Найдите ошибку в диалоге</p>
-                </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                Найдите реплику, где продавец допустил ошибку:
+            </h2>
+
+            <div
+                style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    padding: 8,
+                }}
+            >
+                {content.dialogue.map((line, index) => {
+                    const lineStyle = getLineStyle(index);
+                    return (
+                        <button
+                            key={index}
+                            onClick={() => !isAnswered && setSelectedLineIndex(index)}
+                            disabled={isAnswered}
+                            style={{
+                                width: "100%",
+                                textAlign: "left",
+                                padding: "12px 14px",
+                                margin: "2px 0",
+                                background: lineStyle.background,
+                                border: lineStyle.border,
+                                borderRadius: 10,
+                                cursor: isAnswered ? "default" : "pointer",
+                                fontSize: 14,
+                                fontFamily: "var(--f-sans)",
+                                display: "flex",
+                                gap: 10,
+                                opacity: (lineStyle as { opacity?: number }).opacity ?? 1,
+                            }}
+                        >
+                            <span
+                                style={{
+                                    fontSize: 11,
+                                    fontFamily: "var(--f-mono)",
+                                    color: "var(--ink-4)",
+                                    marginTop: 2,
+                                    width: 28,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {line.speaker}
+                            </span>
+                            <span>{line.text}</span>
+                        </button>
+                    );
+                })}
             </div>
 
-            <p className="font-headline font-bold text-lg text-on-surface">
-                Нажмите на строку с ошибкой:
-            </p>
-
-            <div className="flex flex-col gap-2">
-                {content.dialogue.map((line, index) => (
-                    <button
-                        key={index}
-                        onClick={() => !isAnswered && setSelectedLineIndex(index)}
-                        disabled={isAnswered}
-                        className={lineStyle(index)}
-                    >
-                        <span className="font-bold text-sm shrink-0 w-20 capitalize">{line.speaker}:</span>
-                        <span className="text-left">{line.text}</span>
-                    </button>
-                ))}
-            </div>
-
-            {/* Optional explanation textarea */}
             {selectedLineIndex !== null && !isAnswered && (
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-sm text-on-surface">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label style={{ fontWeight: 500, fontSize: 14 }}>
                         Объясните, почему это ошибка (опционально):
                     </label>
                     <textarea
                         value={explanation}
                         onChange={(e) => setExplanation(e.target.value)}
                         placeholder="Напишите ваше объяснение..."
-                        className="w-full p-4 rounded-xl bg-surface-container border-2 border-outline-variant focus:border-primary outline-none resize-none min-h-[100px]"
+                        style={{
+                            width: "100%",
+                            padding: 16,
+                            borderRadius: 12,
+                            background: "var(--surface)",
+                            border: "1px solid var(--line)",
+                            outline: "none",
+                            resize: "none",
+                            minHeight: 100,
+                            fontFamily: "var(--f-sans)",
+                            fontSize: 14,
+                        }}
                     />
                 </div>
             )}
 
-            {isAnswered && (submittedResult.explanation || submittedResult.aiFeedback) && (
-                <p className={`text-sm leading-relaxed px-1 ${
-                    submittedResult.isCorrect ? "text-primary" : "text-error"
-                }`}>
-                    {submittedResult.explanation ?? submittedResult.aiFeedback}
-                </p>
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
+                    >
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={handleSubmit}
+                                disabled={!canSubmit || isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ПРОВЕРИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
-
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
-                    >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!canSubmit || isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
         </div>
     );
 }

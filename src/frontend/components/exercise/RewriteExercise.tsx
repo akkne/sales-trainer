@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
 import { Icon } from "@/components/ui/Icon";
+import { Button } from "@/components/ui/Button";
+import { ExerciseResultBanner } from "./ExerciseResultBanner";
 
 interface RewriteContent {
     instruction: string;
@@ -33,33 +35,99 @@ export function RewriteExercise({
     const [rewrittenText, setRewrittenText] = useState("");
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
-    const minLength = 10;
+    const minLength = 20;
     const charCount = rewrittenText.length;
     const isValidLength = charCount >= minLength;
 
-    function getRatingColor(score: number): string {
-        if (score >= 80) return "bg-primary text-on-primary";
-        if (score >= 60) return "bg-tertiary text-on-tertiary";
-        return "bg-error text-on-error";
-    }
-
     return (
-        <div className="flex flex-col gap-6">
-            {content.instruction && (
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center shrink-0 mt-1">
-                        <Icon name="edit" size="sm" className="text-primary" />
-                    </div>
-                    <div className="relative bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 flex-1">
-                        <p className="text-sm text-on-surface-variant">{content.instruction}</p>
-                    </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+                {content.instruction || "Перепишите реплику лучше:"}
+            </h2>
+
+            <div
+                style={{
+                    padding: 18,
+                    background: "var(--bg-2)",
+                    borderRadius: 14,
+                    color: "var(--ink-3)",
+                    fontSize: 15,
+                    lineHeight: 1.5,
+                    fontStyle: "italic",
+                }}
+            >
+                «{content.original}»
+            </div>
+
+            <div
+                style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    padding: 16,
+                }}
+            >
+                <textarea
+                    placeholder="Ваш вариант…"
+                    value={rewrittenText}
+                    onChange={(e) => setRewrittenText(e.target.value)}
+                    disabled={isAnswered}
+                    rows={5}
+                    style={{
+                        width: "100%",
+                        border: "none",
+                        outline: "none",
+                        resize: "vertical",
+                        background: "transparent",
+                        fontFamily: "var(--f-sans)",
+                        fontSize: 15,
+                        color: "var(--ink)",
+                        lineHeight: 1.5,
+                    }}
+                />
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "var(--ink-3)",
+                        fontFamily: "var(--f-mono)",
+                    }}
+                >
+                    <span>
+                        {charCount < minLength ? (
+                            <span style={{ color: "var(--warn)" }}>минимум {minLength} · сейчас {charCount}</span>
+                        ) : (
+                            <span style={{ color: "var(--good)" }}>{charCount} символов ✓</span>
+                        )}
+                    </span>
                 </div>
-            )}
+            </div>
 
             {content.evaluation_criteria && content.evaluation_criteria.length > 0 && (
-                <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant">
-                    <p className="text-xs font-medium text-on-surface-variant mb-2">Критерии оценки:</p>
-                    <ul className="text-sm text-on-surface-variant list-disc list-inside space-y-1">
+                <div
+                    style={{
+                        padding: 16,
+                        borderRadius: 12,
+                        background: "var(--surface)",
+                        border: "1px solid var(--line)",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 11,
+                            color: "var(--ink-3)",
+                            textTransform: "uppercase",
+                            letterSpacing: 1,
+                            marginBottom: 8,
+                            fontWeight: 500,
+                        }}
+                    >
+                        Критерии оценки
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 13, lineHeight: 1.8 }}>
                         {content.evaluation_criteria.map((criterion, idx) => (
                             <li key={idx}>{criterion}</li>
                         ))}
@@ -67,86 +135,72 @@ export function RewriteExercise({
                 </div>
             )}
 
-            <div className="p-4 rounded-xl bg-surface-container border-2 border-outline-variant">
-                <p className="text-xs font-medium text-on-surface-variant mb-2">Оригинал:</p>
-                <p className="text-on-surface italic">{content.original}</p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <label className="font-medium text-sm text-on-surface">
-                    Ваша улучшенная версия:
-                </label>
-                <textarea
-                    value={rewrittenText}
-                    onChange={(e) => setRewrittenText(e.target.value)}
-                    disabled={isAnswered}
-                    placeholder="Напишите улучшенную версию..."
-                    className="w-full p-4 rounded-xl bg-surface-container border-2 border-outline-variant focus:border-primary outline-none resize-none min-h-[120px] disabled:opacity-60"
-                />
-                <div className="flex justify-between text-xs">
-                    <span className={charCount < minLength ? "text-error" : "text-on-surface-variant"}>
-                        Минимум {minLength} символов
-                    </span>
-                    <span className="text-on-surface-variant">
-                        {charCount} символов
-                    </span>
-                </div>
-            </div>
-
-            {isAnswered && (
-                <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${getRatingColor(submittedResult.score)}`}>
-                            {Math.round(submittedResult.score / 10)}/10
-                        </span>
-                        <span className={`font-medium ${submittedResult.isCorrect ? "text-primary" : "text-error"}`}>
-                            {submittedResult.isCorrect ? "Отличное улучшение!" : "Есть куда расти"}
-                        </span>
-                    </div>
-                    {submittedResult.aiFeedback && (
-                        <p className="text-sm text-on-surface-variant leading-relaxed">
-                            {submittedResult.aiFeedback}
-                        </p>
-                    )}
-                </div>
-            )}
-
             {submitError && !isAnswered && (
-                <div className="p-4 rounded-xl bg-error-container border border-error">
-                    <p className="text-sm text-on-error-container">
+                <div
+                    style={{
+                        padding: 16,
+                        borderRadius: 12,
+                        background: "var(--bad-soft)",
+                        border: "1px solid var(--bad)",
+                    }}
+                >
+                    <p style={{ margin: 0, fontSize: 14, color: "var(--bad)" }}>
                         Произошла ошибка при проверке. Попробуйте ещё раз.
                     </p>
                 </div>
             )}
 
-            <div className="flex gap-3">
-                {!isAnswered && onSkip && (
-                    <button
-                        onClick={onSkip}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-extrabold hover:border-outline hover:text-on-surface transition-colors disabled:opacity-40"
+            {isAnswered ? (
+                <ExerciseResultBanner
+                    isCorrect={submittedResult.isCorrect}
+                    score={submittedResult.score}
+                    explanation={submittedResult.explanation ?? null}
+                    aiFeedback={submittedResult.aiFeedback ?? null}
+                    xpEarned={submittedResult.xpEarned}
+                    onContinue={onContinue ?? (() => {})}
+                />
+            ) : (
+                <div
+                    style={{
+                        position: "fixed",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: "var(--surface)",
+                        borderTop: "1px solid var(--line)",
+                        padding: "20px 32px",
+                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            maxWidth: 820,
+                            margin: "0 auto",
+                        }}
                     >
-                        Пропустить
-                    </button>
-                )}
-
-                {isAnswered ? (
-                    <button
-                        onClick={onContinue}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d"
-                    >
-                        Продолжить
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => onSubmit({ rewrittenText })}
-                        disabled={!isValidLength || isSubmitting}
-                        className="flex-1 py-4 rounded-full bg-primary text-on-primary font-extrabold btn-3d disabled:opacity-40"
-                    >
-                        {isSubmitting ? "Проверяем..." : "Проверить"}
-                    </button>
-                )}
-            </div>
+                        {onSkip && (
+                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
+                                ПРОПУСТИТЬ
+                            </Button>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+                            <Button
+                                variant="accent"
+                                size="lg"
+                                onClick={() => onSubmit({ rewrittenText })}
+                                disabled={!isValidLength || isSubmitting}
+                                loading={isSubmitting}
+                                iconRightName="arrow-right"
+                            >
+                                ОТПРАВИТЬ
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

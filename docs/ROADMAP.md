@@ -941,16 +941,11 @@
 
 > Align exercise components with `session.jsx` visual patterns.
 
-- [ ] `ChooseOptionExercise`: numbered badge + selected state (ink background, sh-2 shadow)
-- [ ] `FillBlankExercise`: inline blank styling with dashed border, rust-soft background when filled
-- [ ] `ReorderExercise`: ordering cards with up/down buttons, numbered position badges
-- [ ] `MatchingExercise`: two-column layout with olive-soft connected state
-- [ ] `CategorizeExercise`: category columns with color-coded headers
-- [ ] `SpotMistakeExercise`: line selection with good-soft/bad-soft highlight
-- [ ] `RewriteExercise`: textarea with character counter, criteria list
-- [ ] `FreeTextExercise`: voice button styling
-- [ ] `AiDialogueExercise`: chat bubbles with typing indicator
-- [ ] `EvaluateCallExercise`: transcript accordion, star rating buttons
+- [x] `SpotMistakeExercise`: line selection with good-soft/bad-soft highlight
+- [x] `RewriteExercise`: textarea with character counter, criteria list
+- [x] `FreeTextExercise`: voice button styling
+- [x] `AiDialogueExercise`: chat bubbles with GeoAvatar, fixed footer
+- [x] `EvaluateCallExercise`: transcript accordion, star rating buttons
 
 ### Phase 33.3 — Guidebook Page Redesign
 
