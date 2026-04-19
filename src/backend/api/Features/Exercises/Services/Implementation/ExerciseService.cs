@@ -8,6 +8,8 @@ using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
+using SalesTrainer.Api.Features.Notifications.Models;
+using SalesTrainer.Api.Features.Notifications.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
@@ -17,6 +19,7 @@ internal sealed class ExerciseService(
     ExerciseEvaluationFactory evaluationFactory,
     IAchievementService achievementService,
     IOpenAiChatService openAiChatService,
+    INotificationService notificationService,
     ILogger<ExerciseService> logger) : IExerciseService
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
@@ -288,7 +291,7 @@ internal sealed class ExerciseService(
                 LongestStreakDayCount = 1,
                 LastActivityDate = today
             });
-            AwardStreakBonusExperiencePointsIfMilestone(userId, 1);
+            await AwardStreakBonusExperiencePointsIfMilestoneAsync(userId, 1, cancellationToken);
             return;
         }
 
@@ -304,10 +307,16 @@ internal sealed class ExerciseService(
 
         streakRecord.LastActivityDate = today;
 
-        AwardStreakBonusExperiencePointsIfMilestone(userId, streakRecord.CurrentStreakDayCount);
+        await AwardStreakBonusExperiencePointsIfMilestoneAsync(
+            userId,
+            streakRecord.CurrentStreakDayCount,
+            cancellationToken);
     }
 
-    private void AwardStreakBonusExperiencePointsIfMilestone(Guid userId, int currentStreak)
+    private async Task AwardStreakBonusExperiencePointsIfMilestoneAsync(
+        Guid userId,
+        int currentStreak,
+        CancellationToken cancellationToken)
     {
         int bonusExperiencePoints = currentStreak switch
         {
@@ -326,6 +335,15 @@ internal sealed class ExerciseService(
             Source = "streak_bonus",
             EarnedAt = DateTime.UtcNow
         });
+
+        await notificationService.CreateAsync(
+            recipientUserId: userId,
+            notificationType: NotificationType.StreakMilestone,
+            title: $"🔥 Стрик {currentStreak} дней!",
+            body: $"Вы получили бонус +{bonusExperiencePoints} XP за серию из {currentStreak} дней подряд.",
+            actionUrl: "/profile",
+            relatedEntityId: currentStreak.ToString(),
+            cancellationToken: cancellationToken);
     }
 
     public async Task<ExerciseChatResponseDto> SendChatMessageAsync(

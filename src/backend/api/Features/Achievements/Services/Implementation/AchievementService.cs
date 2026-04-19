@@ -1,11 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Achievements.Services.Abstract;
+using SalesTrainer.Api.Features.Notifications.Models;
+using SalesTrainer.Api.Features.Notifications.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Achievements.Services.Implementation;
 
-internal sealed class AchievementService(AppDbContext databaseContext) : IAchievementService
+internal sealed class AchievementService(
+    AppDbContext databaseContext,
+    INotificationService notificationService) : IAchievementService
 {
     public async Task<IReadOnlyList<AchievementDto>> GetAchievementsForUserAsync(
         Guid userId,
@@ -66,6 +70,7 @@ internal sealed class AchievementService(AppDbContext databaseContext) : IAchiev
             .AnyAsync(progressRecord => progressRecord.UserId == userId && progressRecord.Status == "completed", cancellationToken);
 
         var newlyUnlockedKeys = new List<string>();
+        var newlyUnlockedAchievements = new List<Achievement>();
         var currentTimestamp = DateTime.UtcNow;
 
         foreach (var achievement in lockedAchievements)
@@ -90,6 +95,19 @@ internal sealed class AchievementService(AppDbContext databaseContext) : IAchiev
                 UnlockedAt = currentTimestamp
             });
             newlyUnlockedKeys.Add(achievement.Key);
+            newlyUnlockedAchievements.Add(achievement);
+        }
+
+        foreach (var unlockedAchievement in newlyUnlockedAchievements)
+        {
+            await notificationService.CreateAsync(
+                recipientUserId: userId,
+                notificationType: NotificationType.AchievementUnlocked,
+                title: $"{unlockedAchievement.IconEmoji} Достижение разблокировано",
+                body: $"«{unlockedAchievement.Title}» — {unlockedAchievement.Description}",
+                actionUrl: "/profile",
+                relatedEntityId: unlockedAchievement.Key,
+                cancellationToken: cancellationToken);
         }
 
         return newlyUnlockedKeys;

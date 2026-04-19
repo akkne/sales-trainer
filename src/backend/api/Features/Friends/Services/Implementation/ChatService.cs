@@ -3,6 +3,8 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Friends.Services.Abstract;
+using SalesTrainer.Api.Features.Notifications.Models;
+using SalesTrainer.Api.Features.Notifications.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
@@ -10,9 +12,11 @@ namespace SalesTrainer.Api.Features.Friends.Services.Implementation;
 
 internal sealed class ChatService(
     MongoDbContext mongoContext,
-    AppDbContext databaseContext) : IChatService
+    AppDbContext databaseContext,
+    INotificationService notificationService) : IChatService
 {
     private const int MaximumMessagePreviewLength = 100;
+    private const int MaximumNotificationBodyLength = 160;
 
     public async Task<ChatConversationSummaryDto> GetOrCreateConversationAsync(
         Guid userId,
@@ -80,12 +84,45 @@ internal sealed class ChatService(
             updateDefinition,
             cancellationToken: cancellationToken);
 
+        await CreateChatMessageReceivedNotificationAsync(conversation, senderId, content, cancellationToken);
+
         return new ChatMessageDto(
             chatMessage.Id,
             chatMessage.SenderId,
             chatMessage.Content,
             chatMessage.SentAt,
             true);
+    }
+
+    private async Task CreateChatMessageReceivedNotificationAsync(
+        ChatConversation conversation,
+        Guid senderId,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var recipientUserId = conversation.ParticipantIds
+            .FirstOrDefault(participantId => participantId != senderId);
+
+        if (recipientUserId == Guid.Empty) return;
+
+        var senderDisplayName = await databaseContext.Users
+            .Where(user => user.Id == senderId)
+            .Select(user => user.DisplayName)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? "Пользователь";
+
+        var trimmedBody = content.Length > MaximumNotificationBodyLength
+            ? content[..MaximumNotificationBodyLength] + "..."
+            : content;
+
+        await notificationService.CreateAsync(
+            recipientUserId: recipientUserId,
+            notificationType: NotificationType.ChatMessageReceived,
+            title: $"Новое сообщение от {senderDisplayName}",
+            body: trimmedBody,
+            actionUrl: $"/friends/chat/{conversation.Id}",
+            relatedEntityId: conversation.Id,
+            cancellationToken: cancellationToken);
     }
 
     public async Task<List<ChatMessageDto>> GetMessagesAsync(

@@ -1,11 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Friends.Services.Abstract;
+using SalesTrainer.Api.Features.Notifications.Models;
+using SalesTrainer.Api.Features.Notifications.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Friends.Services.Implementation;
 
-internal sealed class FriendService(AppDbContext databaseContext) : IFriendService
+internal sealed class FriendService(
+    AppDbContext databaseContext,
+    INotificationService notificationService) : IFriendService
 {
     private const int MaximumSearchResultCount = 20;
     private const string DirectionIncoming = "incoming";
@@ -159,6 +163,9 @@ internal sealed class FriendService(AppDbContext databaseContext) : IFriendServi
                 existingFriendship.CreatedAt = DateTime.UtcNow;
                 existingFriendship.AcceptedAt = null;
                 await databaseContext.SaveChangesAsync(cancellationToken);
+
+                await CreateFriendRequestReceivedNotificationAsync(existingFriendship, cancellationToken);
+
                 return existingFriendship;
             }
         }
@@ -174,6 +181,9 @@ internal sealed class FriendService(AppDbContext databaseContext) : IFriendServi
 
         databaseContext.Friendships.Add(friendship);
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        await CreateFriendRequestReceivedNotificationAsync(friendship, cancellationToken);
+
         return friendship;
     }
 
@@ -195,6 +205,8 @@ internal sealed class FriendService(AppDbContext databaseContext) : IFriendServi
         friendship.Status = FriendshipStatus.Accepted;
         friendship.AcceptedAt = DateTime.UtcNow;
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        await CreateFriendRequestAcceptedNotificationAsync(friendship, cancellationToken);
     }
 
     public async Task DeclineFriendRequestAsync(
@@ -469,6 +481,46 @@ internal sealed class FriendService(AppDbContext databaseContext) : IFriendServi
                 : friendship.RequesterId)
             .Distinct()
             .ToList();
+    }
+
+    private async Task CreateFriendRequestReceivedNotificationAsync(
+        Friendship friendship,
+        CancellationToken cancellationToken)
+    {
+        var requesterDisplayName = await databaseContext.Users
+            .Where(user => user.Id == friendship.RequesterId)
+            .Select(user => user.DisplayName)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? "Пользователь";
+
+        await notificationService.CreateAsync(
+            recipientUserId: friendship.AddresseeId,
+            notificationType: NotificationType.FriendRequestReceived,
+            title: "Новая заявка в друзья",
+            body: $"{requesterDisplayName} хочет добавить вас в друзья.",
+            actionUrl: "/friends?tab=requests",
+            relatedEntityId: friendship.Id.ToString(),
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task CreateFriendRequestAcceptedNotificationAsync(
+        Friendship friendship,
+        CancellationToken cancellationToken)
+    {
+        var addresseeDisplayName = await databaseContext.Users
+            .Where(user => user.Id == friendship.AddresseeId)
+            .Select(user => user.DisplayName)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? "Пользователь";
+
+        await notificationService.CreateAsync(
+            recipientUserId: friendship.RequesterId,
+            notificationType: NotificationType.FriendRequestAccepted,
+            title: "Заявка принята",
+            body: $"{addresseeDisplayName} принял(а) вашу заявку в друзья.",
+            actionUrl: $"/friends/{friendship.AddresseeId}",
+            relatedEntityId: friendship.Id.ToString(),
+            cancellationToken: cancellationToken);
     }
 
     private static string ResolveFriendshipStatus(Friendship? friendship, Guid currentUserId)
