@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using SalesTrainer.Api.Infrastructure.Data;
 
 #nullable disable
 
 namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260417210520_UpdateExerciseTypePrompts")]
     public partial class UpdateExerciseTypePrompts : Migration
     {
         /// <inheritdoc />

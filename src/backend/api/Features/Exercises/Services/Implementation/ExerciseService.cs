@@ -356,8 +356,8 @@ internal sealed class ExerciseService(
             .FirstOrDefaultAsync(e => e.Id == exerciseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
 
-        if (exercise.Type != "ai_dialog")
-            throw new NotSupportedException("Chat is only supported for ai_dialog exercises.");
+        if (exercise.Type != ExerciseTypes.AiDialogue)
+            throw new NotSupportedException("Chat is only supported for ai_dialogue exercises.");
 
         var content = JsonDocument.Parse(exercise.SerializedContent).RootElement;
         var maxTurns = content.TryGetProperty("max_turns", out var maxEl) ? maxEl.GetInt32() : 10;
