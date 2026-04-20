@@ -1,11 +1,11 @@
 "use client";
 
 import { useThemeStore } from "@/lib/store/themeStore";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 
 type Theme = "light" | "dark" | "system";
 
-const THEME_OPTIONS: { value: Theme; label: string; icon: string }[] = [
+const THEME_OPTIONS: { value: Theme; label: string; icon: IconName }[] = [
     { value: "light", label: "Светлая", icon: "sun" },
     { value: "dark", label: "Тёмная", icon: "moon" },
     { value: "system", label: "Системная", icon: "settings" },

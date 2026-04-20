@@ -71,15 +71,14 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
                     <div className={`w-7 h-7 border-3 border-current border-t-transparent rounded-full animate-spin ${isActive ? "text-on-primary" : "text-on-surface-variant"}`} />
                 ) : isPlaying ? (
                     <Icon
-                        name="volume_up"
+                        name="bell"
                         size="xl"
                         className={isActive ? "text-on-primary" : "text-on-surface-variant"}
                     />
                 ) : (
                     <Icon
-                        name={isActive ? "mic" : "mic_off"}
+                        name="mic"
                         size="xl"
-                        variant={isActive ? "filled" : "outlined"}
                         className={isActive ? "text-on-primary" : "text-on-surface-variant"}
                     />
                 )}

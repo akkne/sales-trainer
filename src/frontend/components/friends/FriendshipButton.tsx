@@ -22,7 +22,7 @@ export function FriendshipButton({
 
     if (friendshipStatus === "friends") {
         return (
-            <Button variant="tertiary" size="sm" disabled>
+            <Button variant="secondary" size="sm" disabled>
                 Уже друзья
             </Button>
         );
@@ -54,7 +54,7 @@ export function FriendshipButton({
         <Button
             variant="primary"
             size="sm"
-            iconLeft="person_add"
+            iconLeft="user"
             loading={sendRequestMutation.isPending}
             onClick={() => sendRequestMutation.mutate(userId)}
         >

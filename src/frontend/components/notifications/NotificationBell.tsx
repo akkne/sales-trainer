@@ -33,7 +33,7 @@ export function NotificationBell() {
                 aria-label="Уведомления"
                 aria-expanded={isPanelOpen}
             >
-                <Icon name="notifications" size="md" className="text-on-surface-variant" />
+                <Icon name="bell" size="md" className="text-on-surface-variant" />
                 {unreadCount > 0 && (
                     <span
                         aria-label={`${unreadCount} непрочитанных`}

@@ -7,10 +7,10 @@ import { useSkillTree } from "@/lib/hooks/useSkillTree";
 import { useAuthStore } from "@/lib/store/authStore";
 
 const NAV_ITEMS = [
-    { href: "/tree", icon: "school", label: "Мастерство" },
+    { href: "/tree", icon: "target", label: "Мастерство" },
     { href: "/league", icon: "trophy", label: "Лиги" },
-    { href: "/guidebook", icon: "menu_book", label: "Библиотека" },
-    { href: "/dialog", icon: "forum", label: "Диалоги" },
+    { href: "/guidebook", icon: "book", label: "Библиотека" },
+    { href: "/dialog", icon: "message", label: "Диалоги" },
     { href: "/profile", icon: "settings", label: "Настройки" },
 ] as const;
 
@@ -68,7 +68,6 @@ export function Sidebar() {
                         >
                             <Icon
                                 name={item.icon}
-                                variant={isActive ? "filled" : "outlined"}
                                 size="md"
                             />
                             <span className="text-sm">{item.label}</span>
@@ -91,7 +90,7 @@ export function Sidebar() {
                         className="mt-3 w-full py-2 bg-primary text-on-primary text-sm font-semibold rounded-full hover:bg-primary-dim tonal-transition flex items-center justify-center gap-1"
                     >
                         Продолжить
-                        <Icon name="arrow_forward" size="sm" />
+                        <Icon name="arrow-right" size="sm" />
                     </Link>
                 </div>
             )}

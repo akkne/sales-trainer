@@ -44,7 +44,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                         className="p-1 rounded-full hover:bg-surface-container tonal-transition"
                         aria-label="Назад"
                     >
-                        <Icon name="arrow_back" size="md" className="text-on-surface" />
+                        <Icon name="arrow-left" size="md" className="text-on-surface" />
                     </button>
                 )}
 

@@ -355,9 +355,6 @@ export default function OnboardingPage() {
                                                         <div style={{ fontSize: 14, fontWeight: 500, color: sel ? "var(--rust-ink)" : "var(--ink)" }}>
                                                             {skill.title}
                                                         </div>
-                                                        <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)", marginTop: 2 }}>
-                                                            {skill.totalLessonCount ?? "—"} уроков
-                                                        </div>
                                                     </div>
                                                     <div
                                                         style={{
@@ -401,7 +398,7 @@ export default function OnboardingPage() {
                     background: "var(--surface)",
                 }}
             >
-                <Button variant="ghost" onClick={back} iconLeftName="chevron-left" disabled={step === 0}>
+                <Button variant="ghost" onClick={back} iconLeft="chevron-left" disabled={step === 0}>
                     Назад
                 </Button>
                 <Button

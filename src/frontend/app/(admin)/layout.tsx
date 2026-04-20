@@ -5,16 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store/authStore";
 import { clientLogger } from "@/lib/clientLogger";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 
-const NAV_ICONS: Record<string, string> = {
-    "/admin/skills": "psychology",
-    "/admin/topics": "folder_open",
-    "/admin/lessons": "menu_book",
-    "/admin/reference": "library_books",
-    "/admin/dialog": "forum",
-    "/admin/open-question": "quiz",
-    "/admin/users": "group",
+const NAV_ICONS: Record<string, IconName> = {
+    "/admin/skills": "target",
+    "/admin/topics": "folder",
+    "/admin/lessons": "book",
+    "/admin/reference": "layers",
+    "/admin/dialog": "message",
+    "/admin/open-question": "sparkle",
+    "/admin/users": "users",
 };
 
 export default function AdminLayout({
@@ -119,9 +119,8 @@ export default function AdminLayout({
                                 }`}
                             >
                                 <Icon
-                                    name={NAV_ICONS[item.href] ?? "circle"}
+                                    name={NAV_ICONS[item.href] ?? "folder"}
                                     size="sm"
-                                    variant={isActive ? "filled" : "outlined"}
                                 />
                                 {item.label}
                             </Link>
@@ -133,7 +132,7 @@ export default function AdminLayout({
                         href="/tree"
                         className="flex items-center gap-2 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                     >
-                        <Icon name="arrow_back" size="sm" />
+                        <Icon name="arrow-left" size="sm" />
                         Back to app
                     </Link>
                 </div>

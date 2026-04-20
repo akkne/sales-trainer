@@ -37,7 +37,7 @@ export function InputWrapper({
             )}
             {error && (
                 <p className="text-xs text-error flex items-center gap-1">
-                    <Icon name="error" size="sm" />
+                    <Icon name="warning" size="sm" />
                     {error}
                 </p>
             )}
@@ -285,7 +285,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                     {children}
                 </select>
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
-                    <Icon name="expand_more" size="md" />
+                    <Icon name="chevron-down" size="md" />
                 </span>
             </div>
         );

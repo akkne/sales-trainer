@@ -1,13 +1,13 @@
 "use client";
 
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 import { useFriendActivity } from "@/lib/hooks/useFriends";
 
-const ACTIVITY_CONFIG: Record<string, { icon: string; color: string }> = {
-    earned_achievement: { icon: "emoji_events", color: "text-tertiary" },
+const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {
+    earned_achievement: { icon: "trophy", color: "text-tertiary" },
     earned_xp: { icon: "bolt", color: "text-primary" },
-    completed_lesson: { icon: "check_circle", color: "text-primary" },
-    streak_milestone: { icon: "local_fire_department", color: "text-error" },
+    completed_lesson: { icon: "check", color: "text-primary" },
+    streak_milestone: { icon: "flame", color: "text-error" },
 };
 
 function formatRelativeTime(dateString: string): string {

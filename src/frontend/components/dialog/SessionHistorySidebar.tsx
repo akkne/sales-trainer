@@ -82,7 +82,7 @@ export function SessionHistorySidebar({
                         onClick={onNewChat}
                         className="flex-1 py-2.5 px-4 bg-primary text-on-primary font-semibold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
                     >
-                        <Icon name="add" size="sm" />
+                        <Icon name="plus" size="sm" />
                         <span>Новый диалог</span>
                     </button>
                 </div>
@@ -91,7 +91,7 @@ export function SessionHistorySidebar({
                     {sessions.length === 0 ? (
                         <div className="p-4 text-center">
                             <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-3">
-                                <Icon name="forum" size="lg" className="text-on-surface-variant" />
+                                <Icon name="message" size="lg" className="text-on-surface-variant" />
                             </div>
                             <p className="text-sm text-on-surface-variant">Нет истории диалогов</p>
                         </div>
@@ -133,7 +133,7 @@ export function SessionHistorySidebar({
                                                     </span>
                                                     <span className="text-xs text-outline">•</span>
                                                     <span className="text-xs text-on-surface-variant flex items-center gap-0.5">
-                                                        <Icon name="chat_bubble" size="sm" />
+                                                        <Icon name="message" size="sm" />
                                                         {session.messageCount}
                                                     </span>
                                                 </div>
@@ -158,7 +158,7 @@ export function SessionHistorySidebar({
                         href="/dialog"
                         className="flex items-center justify-center gap-2 text-sm text-on-surface-variant hover:text-primary tonal-transition py-2"
                     >
-                        <Icon name="arrow_back" size="sm" />
+                        <Icon name="arrow-left" size="sm" />
                         К выбору навыка
                     </Link>
                 </div>

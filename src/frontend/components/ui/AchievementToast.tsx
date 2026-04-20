@@ -86,7 +86,7 @@ export function AchievementToast({ achievement, onDismiss }: AchievementToastPro
                         fontFamily: "var(--f-mono)",
                     }}
                 >
-                    <Icon name="emoji_events" size="xs" />
+                    <Icon name="trophy" size="xs" />
                     Достижение разблокировано!
                 </div>
                 <p

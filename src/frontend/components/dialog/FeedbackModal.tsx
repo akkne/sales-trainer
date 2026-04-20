@@ -30,7 +30,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                 <div className="p-6 border-b border-outline-variant flex items-center justify-between">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
-                            <Icon name="assignment" size="md" className="text-primary" />
+                            <Icon name="book" size="md" className="text-primary" />
                             <h2 className="text-xl font-headline font-bold text-on-surface">
                                 Обратная связь
                             </h2>
@@ -65,7 +65,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                             className="mt-4 flex items-center gap-2 text-primary hover:text-primary-dim font-medium tonal-transition"
                         >
                             <span>Подробнее</span>
-                            <Icon name="expand_more" size="sm" />
+                            <Icon name="chevron-down" size="sm" />
                         </button>
                     )}
 
@@ -81,7 +81,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                                 className="mt-4 flex items-center gap-2 text-on-surface-variant hover:text-on-surface font-medium tonal-transition"
                             >
                                 <span>Свернуть</span>
-                                <Icon name="expand_less" size="sm" />
+                                <Icon name="chevron-up" size="sm" />
                             </button>
                         </>
                     )}
@@ -93,7 +93,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                         onClick={onClose}
                         className="w-full py-3 bg-primary text-on-primary font-bold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
                     >
-                        <Icon name="add" size="sm" />
+                        <Icon name="plus" size="sm" />
                         Новый диалог
                     </button>
                 </div>

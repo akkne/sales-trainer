@@ -21,7 +21,7 @@ export default function RegisterPage() {
         <div className="w-full max-w-sm px-4">
             {/* Brand header */}
             <div className="flex items-center justify-center gap-2 mb-8">
-                <Icon name="psychology" size="xl" className="text-primary" />
+                <Icon name="sparkle" size="xl" className="text-primary" />
                 <span className="font-headline font-bold text-2xl text-primary">Sellevate</span>
             </div>
 

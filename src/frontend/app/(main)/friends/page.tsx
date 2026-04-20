@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 import { useFriends, useFriendRequests } from "@/lib/hooks/useFriends";
 import { useCreateConversation } from "@/lib/hooks/useChat";
 import { FriendCard } from "@/components/friends/FriendCard";
@@ -15,7 +15,7 @@ import { ChatsPane } from "@/components/friends/ChatsPane";
 
 type TabKey = "friends" | "requests" | "leaderboard" | "chats";
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
+const TABS: { key: TabKey; label: string; icon: IconName }[] = [
     { key: "friends", label: "Друзья", icon: "users" },
     { key: "requests", label: "Запросы", icon: "user" },
     { key: "leaderboard", label: "Рейтинг", icon: "trophy" },
@@ -203,7 +203,7 @@ function FriendsPageContent() {
                                 style={{ boxShadow: "var(--sh-1)" }}
                             >
                                 <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mx-auto mb-3">
-                                    <Icon name="mail" size="lg" className="text-ink-4" />
+                                    <Icon name="send" size="lg" className="text-ink-4" />
                                 </div>
                                 <p className="text-sm font-medium text-ink-3">
                                     Нет запросов в друзья

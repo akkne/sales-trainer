@@ -38,7 +38,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                 href="/tree"
                 className="text-on-surface-variant hover:text-primary text-sm mb-6 inline-flex items-center gap-1 tonal-transition"
             >
-                <Icon name="arrow_back" size="sm" />
+                <Icon name="arrow-left" size="sm" />
                 Назад к навыкам
             </Link>
 
@@ -76,7 +76,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                     {/* Stats text */}
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <Icon name="call" size="md" className="text-primary" />
+                            <Icon name="phone" size="md" className="text-primary" />
                             <h1 className="text-xl font-headline font-bold text-on-surface">
                                 {skill?.title ?? skillSlug}
                             </h1>
@@ -125,7 +125,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                 }`}
                             >
                                 {isCompleted ? (
-                                    <Icon name="check" size="sm" variant="filled" />
+                                    <Icon name="check" size="sm" />
                                 ) : isLocked ? (
                                     <Icon name="lock" size="sm" />
                                 ) : (
@@ -196,7 +196,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                 {lessons.length === 0 && (
                     <div className="text-center text-on-surface-variant py-12">
                         <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4">
-                            <Icon name="inbox" size="xl" className="text-on-surface-variant" />
+                            <Icon name="folder" size="xl" className="text-on-surface-variant" />
                         </div>
                         <p className="font-semibold">Уроки ещё не добавлены</p>
                     </div>

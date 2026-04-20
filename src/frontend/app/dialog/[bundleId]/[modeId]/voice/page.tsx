@@ -160,7 +160,7 @@ export default function VoiceOnlyPage() {
     const getStatusInfo = (): { text: string; icon: string; color: string } => {
         switch (voiceState) {
             case "idle":
-                return { text: "Tap to start", icon: "mic_off", color: "text-on-surface-variant" };
+                return { text: "Tap to start", icon: "mic", color: "text-on-surface-variant" };
             case "initializing":
                 return { text: "Starting...", icon: "mic", color: "text-primary" };
             case "listening":
@@ -168,11 +168,11 @@ export default function VoiceOnlyPage() {
             case "speaking":
                 return { text: "Listening...", icon: "mic", color: "text-primary" };
             case "processing":
-                return { text: "Processing...", icon: "sync", color: "text-secondary" };
+                return { text: "Processing...", icon: "clock", color: "text-secondary" };
             case "playing":
-                return { text: "AI speaking...", icon: "volume_up", color: "text-tertiary" };
+                return { text: "AI speaking...", icon: "bell", color: "text-tertiary" };
             case "error":
-                return { text: "Error", icon: "error", color: "text-error" };
+                return { text: "Error", icon: "warning", color: "text-error" };
             default:
                 return { text: "", icon: "mic", color: "text-on-surface-variant" };
         }
@@ -187,7 +187,7 @@ export default function VoiceOnlyPage() {
                 <header className="flex items-center justify-between px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
-                            <Icon name="psychology" size="md" className="text-secondary" />
+                            <Icon name="sparkle" size="md" className="text-secondary" />
                         </div>
                         <div>
                             <h1 className="font-semibold text-on-surface text-sm">
@@ -208,7 +208,7 @@ export default function VoiceOnlyPage() {
 
                 <div className="flex-1 flex flex-col items-center justify-center p-8">
                     <div className="w-24 h-24 rounded-full bg-error-container flex items-center justify-center mb-6">
-                        <Icon name="mic_off" size="xl" className="text-error" />
+                        <Icon name="mic" size="xl" className="text-error" />
                     </div>
                     <p className="text-lg font-semibold text-on-surface mb-2">Voice not available</p>
                     <p className="text-sm text-on-surface-variant text-center max-w-xs">
@@ -231,7 +231,7 @@ export default function VoiceOnlyPage() {
             <header className="flex items-center justify-between px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
-                        <Icon name="psychology" size="md" className="text-secondary" />
+                        <Icon name="sparkle" size="md" className="text-secondary" />
                     </div>
                     <div>
                         <h1 className="font-semibold text-on-surface text-sm">
@@ -247,7 +247,7 @@ export default function VoiceOnlyPage() {
                     {/* Timer */}
                     {sessionId && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant">
-                            <Icon name="timer" size="sm" />
+                            <Icon name="clock" size="sm" />
                             <span className="text-sm font-mono font-medium tabular-nums">
                                 {formatTime(sessionTimer)}
                             </span>
@@ -260,7 +260,7 @@ export default function VoiceOnlyPage() {
                             onClick={handleEndSession}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error-container text-error text-sm font-medium hover:opacity-90 tonal-transition"
                         >
-                            <Icon name="stop_circle" size="sm" />
+                            <Icon name="close" size="sm" />
                             End
                         </button>
                     )}
@@ -280,7 +280,7 @@ export default function VoiceOnlyPage() {
                 {/* Error message */}
                 {error && (
                     <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-error-container text-error text-sm px-4 py-2 rounded-full flex items-center gap-2">
-                        <Icon name="error" size="sm" />
+                        <Icon name="warning" size="sm" />
                         {error}
                     </div>
                 )}
@@ -339,13 +339,12 @@ export default function VoiceOnlyPage() {
                         <div className={`w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin ${isActive ? "text-on-primary" : "text-on-surface-variant"}`} />
                     ) : isPlaying ? (
                         <Icon
-                            name="volume_up"
+                            name="bell"
                             className={`text-6xl ${isActive ? "text-on-primary" : "text-on-surface-variant"}`}
                         />
                     ) : (
                         <Icon
-                            name={isActive ? "mic" : "mic_off"}
-                            variant={isActive ? "filled" : "outlined"}
+                            name="mic"
                             className={`text-6xl ${isActive ? "text-on-primary" : "text-on-surface-variant"}`}
                         />
                     )}

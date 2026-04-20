@@ -6,7 +6,7 @@ import { useAchievements } from "@/lib/hooks/useAchievements";
 import { useLogout } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkills, useUpdateEnrolledSkills } from "@/lib/hooks/useSkillTree";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
@@ -177,7 +177,7 @@ export default function ProfilePage() {
                             style={{ boxShadow: "var(--sh-1)" }}
                         >
                             <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mx-auto mb-3">
-                                <Icon name="school" size="lg" className="text-ink-4" />
+                                <Icon name="book" size="lg" className="text-ink-4" />
                             </div>
                             <p className="text-sm font-medium text-ink-3">Навыки ещё не добавлены</p>
                             <p className="text-xs text-ink-4 mt-1">
@@ -243,7 +243,7 @@ export default function ProfilePage() {
                                 <p className="font-medium text-ink text-sm">Панель администратора</p>
                                 <p className="text-xs text-ink-4">Управление контентом</p>
                             </div>
-                            <Icon name="chevron_right" size="sm" className="text-ink-4" />
+                            <Icon name="chevron-right" size="sm" className="text-ink-4" />
                         </Link>
                     )}
 
@@ -254,7 +254,7 @@ export default function ProfilePage() {
                         style={{ boxShadow: "var(--sh-1)" }}
                     >
                         <div className="w-10 h-10 rounded-xl bg-bad-soft flex items-center justify-center text-bad">
-                            <Icon name="logout" size="md" />
+                            <Icon name="arrow-left" size="md" />
                         </div>
                         <div className="flex-1">
                             <p className="font-medium text-ink text-sm">Выйти из аккаунта</p>
@@ -274,7 +274,7 @@ function StatTile({
     unit,
     tone = "neutral"
 }: {
-    icon: string;
+    icon: IconName;
     label: string;
     value: string | number;
     unit?: string;

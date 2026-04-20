@@ -105,7 +105,7 @@ export default function LeaguePage() {
                             }`}
                         >
                             <Icon
-                                name={leagueData.previousWeekOutcome === "promoted" ? "trending_up" : "trending_down"}
+                                name={leagueData.previousWeekOutcome === "promoted" ? "arrow-up" : "chevron-down"}
                                 size="md"
                             />
                         </div>
@@ -279,7 +279,7 @@ export default function LeaguePage() {
                         className="shrink-0 bg-indigo text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
                     >
                         Учиться
-                        <Icon name="arrow_forward" size="sm" />
+                        <Icon name="arrow-right" size="sm" />
                     </Link>
                 </div>
             </div>

@@ -52,7 +52,7 @@ export default function PublicProfilePage() {
                 onClick={() => router.back()}
                 className="flex items-center gap-1 text-on-surface-variant hover:text-on-surface tonal-transition mb-6"
             >
-                <Icon name="arrow_back" size="md" />
+                <Icon name="arrow-left" size="md" />
                 <span className="text-sm font-medium">Назад</span>
             </button>
 
@@ -64,7 +64,7 @@ export default function PublicProfilePage() {
                     </h1>
                     {profile.persona && (
                         <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full bg-primary-container text-primary text-xs font-semibold">
-                            <Icon name="badge" size="sm" />
+                            <Icon name="star" size="sm" />
                             {PERSONA_LABELS[profile.persona] ?? profile.persona}
                         </span>
                     )}
@@ -78,7 +78,7 @@ export default function PublicProfilePage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
                     <div className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center mb-2">
-                        <Icon name="local_fire_department" size="md" className="text-error" />
+                        <Icon name="flame" size="md" className="text-error" />
                     </div>
                     <span className="font-headline font-bold text-2xl text-on-surface">
                         {profile.currentStreakDayCount}
@@ -102,7 +102,7 @@ export default function PublicProfilePage() {
 
                 <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
                     <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center mb-2">
-                        <Icon name="emoji_events" size="md" className="text-secondary" />
+                        <Icon name="trophy" size="md" className="text-secondary" />
                     </div>
                     <span className="font-headline font-bold text-2xl text-on-surface">
                         {profile.achievementCount}
@@ -136,7 +136,7 @@ export default function PublicProfilePage() {
                     <Button
                         variant="secondary"
                         fullWidth
-                        iconLeft="chat"
+                        iconLeft="message"
                         loading={createConversationMutation.isPending}
                         onClick={handleChatClick}
                     >

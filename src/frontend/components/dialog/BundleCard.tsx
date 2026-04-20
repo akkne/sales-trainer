@@ -1,28 +1,28 @@
 import { DialogBundle } from "@/lib/hooks/useDialog";
 import Link from "next/link";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, IconName } from "@/components/ui/Icon";
 
 interface BundleCardProps {
     bundle: DialogBundle;
 }
 
 // Map bundle titles/slugs to icons
-const BUNDLE_ICONS: Record<string, string> = {
-    "cold-calling": "call",
-    "negotiation": "handshake",
-    "objection": "verified_user",
-    "discovery": "psychology",
-    "closing": "assignment_turned_in",
-    "follow-up": "schedule_send",
+const BUNDLE_ICONS: Record<string, IconName> = {
+    "cold-calling": "phone",
+    "negotiation": "users",
+    "objection": "check",
+    "discovery": "search",
+    "closing": "target",
+    "follow-up": "clock",
 };
 
-function getBundleIcon(bundle: DialogBundle): string {
+function getBundleIcon(bundle: DialogBundle): IconName {
     // Try to match by id or title
     const slug = bundle.id.toLowerCase();
     for (const [key, icon] of Object.entries(BUNDLE_ICONS)) {
         if (slug.includes(key)) return icon;
     }
-    return "forum"; // default
+    return "message"; // default
 }
 
 export function BundleCard({ bundle }: BundleCardProps) {
@@ -46,7 +46,7 @@ export function BundleCard({ bundle }: BundleCardProps) {
             <div className="flex-1 min-w-0">
                 {/* Status pill - always show as Unlocked for now */}
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-secondary bg-secondary-container px-2 py-0.5 rounded-full mb-1">
-                    <Icon name="lock_open" size="sm" />
+                    <Icon name="check" size="sm" />
                     Доступно
                 </span>
 
@@ -69,7 +69,7 @@ export function BundleCard({ bundle }: BundleCardProps) {
             {/* CTA arrow */}
             <div className="shrink-0 self-center">
                 <Icon
-                    name="arrow_forward"
+                    name="arrow-right"
                     size="md"
                     className="text-on-surface-variant group-hover:text-primary tonal-transition"
                 />

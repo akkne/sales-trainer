@@ -117,10 +117,7 @@ export default function DialogPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                    <div style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "var(--f-mono)" }}>
-                                        {bundle.modesCount ?? "—"} режимов
-                                    </div>
+                                <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
                                     <Icon name="arrow-right" size="sm" color="var(--indigo)" />
                                 </div>
                             </div>

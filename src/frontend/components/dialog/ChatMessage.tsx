@@ -12,7 +12,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <div className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}>
             {isAssistant && (
                 <div className="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center mr-2 shrink-0 mt-1">
-                    <Icon name="psychology" size="sm" className="text-secondary" />
+                    <Icon name="sparkle" size="sm" className="text-secondary" />
                 </div>
             )}
             <div
@@ -26,7 +26,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             </div>
             {!isAssistant && (
                 <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center ml-2 shrink-0 mt-1">
-                    <Icon name="person" size="sm" className="text-primary" />
+                    <Icon name="user" size="sm" className="text-primary" />
                 </div>
             )}
         </div>

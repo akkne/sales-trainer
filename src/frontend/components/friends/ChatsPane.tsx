@@ -32,7 +32,7 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                 ) : isEmpty ? (
                     <div className="bg-surface-container rounded-2xl px-5 py-8 text-center">
                         <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mx-auto mb-3">
-                            <Icon name="chat_bubble" size="lg" className="text-on-surface-variant" />
+                            <Icon name="message" size="lg" className="text-on-surface-variant" />
                         </div>
                         <p className="text-sm font-semibold text-on-surface-variant">
                             Нет сообщений
@@ -69,7 +69,7 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                 ) : (
                     <div className="hidden md:flex flex-col items-center justify-center text-center p-8">
                         <div className="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-3">
-                            <Icon name="chat" size="lg" className="text-on-surface-variant" />
+                            <Icon name="message" size="lg" className="text-on-surface-variant" />
                         </div>
                         <p className="text-sm font-semibold text-on-surface">
                             Выбери чат слева

@@ -1,34 +1,35 @@
 import type { NotificationTypeKey } from "@/lib/hooks/useNotifications";
+import type { IconName } from "@/components/ui/Icon";
 
 export interface NotificationVisualMeta {
-    iconName: string;
+    iconName: IconName;
     iconColorClassName: string;
 }
 
 const DEFAULT_VISUAL_META: NotificationVisualMeta = {
-    iconName: "notifications",
+    iconName: "bell",
     iconColorClassName: "text-on-surface-variant",
 };
 
 const VISUAL_META_BY_TYPE: Record<NotificationTypeKey, NotificationVisualMeta> = {
     FriendRequestReceived: {
-        iconName: "person_add",
+        iconName: "user",
         iconColorClassName: "text-primary",
     },
     FriendRequestAccepted: {
-        iconName: "group",
+        iconName: "users",
         iconColorClassName: "text-primary",
     },
     ChatMessageReceived: {
-        iconName: "chat_bubble",
+        iconName: "message",
         iconColorClassName: "text-primary",
     },
     AchievementUnlocked: {
-        iconName: "emoji_events",
+        iconName: "trophy",
         iconColorClassName: "text-amber-500",
     },
     StreakMilestone: {
-        iconName: "local_fire_department",
+        iconName: "flame",
         iconColorClassName: "text-error-container",
     },
 };
