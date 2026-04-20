@@ -1016,3 +1016,21 @@
 - [x] Test all pages in dark theme
 - [x] Fix any contrast or readability issues
 - [x] Add theme toggle to profile settings
+
+---
+
+## Phase 34 — Full April Redesign Implementation
+
+> Complete redesign implementation based on `.design/redesign/` assets.
+> Desktop-first approach, remove mobile bottom nav, use top nav with mobile hamburger menu.
+
+### Phase 34.1 — Remove bottom navigation, desktop-first layout [x]
+- [x] Remove BottomNav import from `(main)/layout.tsx`
+- [x] Update TopAppBar to always show (not hidden on mobile)
+- [x] Add mobile hamburger menu to TopAppBar
+- [x] Update mobile layout padding (no bottom nav space needed)
+
+### Phase 34.2 — Remaining pages to align with redesign [ ]
+- [ ] Session page: update header/footer per `session.jsx`
+- [ ] Completion screen: confetti, stat tiles grid
+- [ ] Voice mode page: full-screen mic per `screens.jsx` VoiceMic

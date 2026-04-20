@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 
 interface SkillRowProps {
     skill: {
-        skillId: number;
+        skillId: string;
         slug: string;
         title: string;
         iconName: string;
@@ -458,12 +458,26 @@ export default function SkillTreePage() {
             </div>
 
             {/* Mobile layout */}
-            <div className="md:hidden" style={{ padding: "16px", paddingBottom: 100 }}>
-                {selectedSkill ? (
-                    <SkillLessonView skillSlug={selectedSkill.slug} skillTitle={selectedSkill.title} />
-                ) : (
-                    <div style={{ padding: 16 }}>
-                        <SkillSidebar />
+            <div className="md:hidden" style={{ padding: "0" }}>
+                <div style={{ padding: "16px", paddingBottom: 32 }}>
+                    <div
+                        style={{
+                            fontSize: 11,
+                            color: "var(--ink-3)",
+                            letterSpacing: 1.5,
+                            textTransform: "uppercase",
+                            fontWeight: 500,
+                            marginBottom: 12,
+                            fontFamily: "var(--f-mono)",
+                        }}
+                    >
+                        НАВЫКИ
+                    </div>
+                    <SkillSidebar />
+                </div>
+                {selectedSkill && (
+                    <div style={{ padding: "0 16px 32px" }}>
+                        <SkillLessonView skillSlug={selectedSkill.slug} skillTitle={selectedSkill.title} />
                     </div>
                 )}
             </div>

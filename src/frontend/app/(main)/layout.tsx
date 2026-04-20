@@ -1,4 +1,3 @@
-import { BottomNav } from "@/components/layout/BottomNav";
 import { TopAppBar } from "@/components/layout/TopAppBar";
 
 export default function MainLayout({
@@ -8,16 +7,13 @@ export default function MainLayout({
 }) {
     return (
         <div className="min-h-screen bg-surface">
-            {/* Desktop top navigation */}
+            {/* Top navigation (desktop always visible, mobile shows hamburger menu) */}
             <TopAppBar />
 
             {/* Main content area */}
-            <main className="pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+            <main>
                 {children}
             </main>
-
-            {/* Mobile bottom navigation */}
-            <BottomNav />
         </div>
     );
 }
