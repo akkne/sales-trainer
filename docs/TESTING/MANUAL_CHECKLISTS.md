@@ -126,6 +126,14 @@ Consolidated manual testing checklists for major features.
 - [ ] Skip works for all types
 - [ ] Mobile responsive
 
+### Result Banner — AI-evaluated exercises (Free Text, Rewrite, Spot Mistake, Rate Call, AI Dialog)
+- [ ] Banner expands when `aiFeedback` is present
+- [ ] Rating badge shows `N/10` in the accent color
+- [ ] Title colors switch: pass → good, 40–79 score → warn ("Почти"), below 40 → bad ("Не совсем")
+- [ ] Long feedback scrolls within the card; bottom fade appears only when overflow
+- [ ] Exercise content has enough bottom padding and isn't obscured by the taller banner
+- [ ] Compact banner (no `aiFeedback`) still shows explanation or fallback text on one line
+
 ---
 
 ## Seeder & Import Testing

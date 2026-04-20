@@ -303,7 +303,14 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
             {/* Exercise content */}
             <div
                 key={currentQueued.queueKey}
-                style={{ flex: 1, overflowY: "auto", padding: "48px 24px 180px", display: "flex", alignItems: "flex-start", justifyContent: "center" }}
+                style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    padding: lastSubmissionResult?.aiFeedback ? "48px 24px 320px" : "48px 24px 180px",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "center",
+                }}
             >
                 <div style={{ maxWidth: 820, width: "100%" }}>
                     {currentExercise.type === ExerciseTypes.ChooseOption && (
