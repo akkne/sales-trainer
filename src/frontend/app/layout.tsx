@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
@@ -25,7 +26,7 @@ export default function RootLayout({
             className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
         >
             <head />
-            <body>
+            <body className={GeistSans.className}>
                 <AppProviders>{children}</AppProviders>
             </body>
         </html>

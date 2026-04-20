@@ -67,7 +67,7 @@
   --s-10: 72px;
 
   /* Type */
-  --f-sans: var(--font-geist), 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --f-sans: var(--font-geist-sans), 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --f-mono: var(--font-geist-mono), 'JetBrains Mono', ui-monospace, monospace;
 
   --t-xs:   12px;
