@@ -13,6 +13,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
+| [Handbook Redesign](HANDBOOK_REDESIGN.md) | Draft proposal — migrate ReferenceMaterial → Technique with per-user mastery, structured dialog/case/coach blocks |
 
 ## Feature Documentation
 

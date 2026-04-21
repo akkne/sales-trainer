@@ -24,6 +24,7 @@ using SalesTrainer.Api.Features.Onboarding;
 using SalesTrainer.Api.Features.Profile;
 using SalesTrainer.Api.Features.Reference;
 using SalesTrainer.Api.Features.SkillTree;
+using SalesTrainer.Api.Features.Techniques;
 using SalesTrainer.Api.Features.Transcription;
 using SalesTrainer.Api.Features.Voice;
 using StackExchange.Redis;
@@ -112,6 +113,7 @@ builder.Services
     .AddProfileFeatureServices()
     .AddReferenceFeatureServices()
     .AddSkillTreeFeatureServices()
+    .AddTechniqueFeatureServices()
     .AddTranscriptionFeatureServices()
     .AddVoiceFeatureServices();
 

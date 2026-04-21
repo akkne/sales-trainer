@@ -11,6 +11,7 @@ using SalesTrainer.Api.Features.Notifications.Models;
 using SalesTrainer.Api.Features.Onboarding.Models;
 using SalesTrainer.Api.Features.Reference.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
+using SalesTrainer.Api.Features.Techniques.Models;
 
 namespace SalesTrainer.Api.Infrastructure.Data;
 
@@ -39,6 +40,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Technique> Techniques => Set<Technique>();
+    public DbSet<TechniqueCategory> TechniqueCategories => Set<TechniqueCategory>();
+    public DbSet<TechniqueSkill> TechniqueSkills => Set<TechniqueSkill>();
+    public DbSet<TechniqueDialogTurn> TechniqueDialogTurns => Set<TechniqueDialogTurn>();
+    public DbSet<TechniqueCase> TechniqueCases => Set<TechniqueCase>();
+    public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();
+    public DbSet<UserTechniqueProgress> UserTechniqueProgressRecords => Set<UserTechniqueProgress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
