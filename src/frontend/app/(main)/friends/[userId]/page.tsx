@@ -3,6 +3,9 @@
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
+import { StatTile } from "@/components/ui/StatTile";
 import { usePublicProfile } from "@/lib/hooks/useFriends";
 import { useCreateConversation } from "@/lib/hooks/useChat";
 import { FriendshipButton } from "@/components/friends/FriendshipButton";
@@ -32,7 +35,10 @@ export default function PublicProfilePage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[50vh]">
-                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                <div
+                    className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin"
+                    style={{ borderColor: "var(--ink)", borderTopColor: "transparent" }}
+                />
             </div>
         );
     }
@@ -40,109 +46,101 @@ export default function PublicProfilePage() {
     if (!profile) {
         return (
             <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-                <p className="text-on-surface-variant">Пользователь не найден</p>
+                <p className="text-ink-4">Пользователь не найден</p>
             </div>
         );
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
-            {/* Back button */}
-            <button
-                onClick={() => router.back()}
-                className="flex items-center gap-1 text-on-surface-variant hover:text-on-surface tonal-transition mb-6"
-            >
-                <Icon name="arrow-left" size="md" />
-                <span className="text-sm font-medium">Назад</span>
-            </button>
+        <div className="min-h-screen bg-bg pb-20">
+            {/* Header band */}
+            <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
+                <div className="max-w-2xl mx-auto">
+                    <button
+                        onClick={() => router.back()}
+                        className="flex items-center gap-1 text-ink-4 hover:text-ink transition-colors mb-4"
+                    >
+                        <Icon name="arrow-left" size="md" />
+                        <span className="text-sm font-medium">Назад</span>
+                    </button>
 
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="font-headline font-bold text-2xl text-on-surface">
-                        {profile.displayName}
-                    </h1>
-                    {profile.persona && (
-                        <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full bg-primary-container text-primary text-xs font-semibold">
-                            <Icon name="star" size="sm" />
-                            {PERSONA_LABELS[profile.persona] ?? profile.persona}
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] font-mono tracking-[2px] uppercase text-indigo">
+                            ПРОФИЛЬ
                         </span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <GeoAvatar seed={profile.displayName} size={64} />
+                        <div className="min-w-0 flex-1">
+                            <h1 className="text-2xl font-medium tracking-tight text-ink truncate">
+                                {profile.displayName}
+                            </h1>
+                            {profile.persona && (
+                                <div className="mt-2">
+                                    <Chip tone="indigo" icon={<Icon name="star" size="xs" />}>
+                                        {PERSONA_LABELS[profile.persona] ?? profile.persona}
+                                    </Chip>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
+                {/* Stats grid */}
+                <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
+                    Показатели
+                </h3>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <StatTile
+                        label="Стрик"
+                        value={profile.currentStreakDayCount}
+                        unit="дн"
+                        tone="rust"
+                        icon={<Icon name="flame" size="xs" />}
+                    />
+                    <StatTile
+                        label="Всего XP"
+                        value={profile.totalXpAmount}
+                        tone="indigo"
+                        icon={<Icon name="bolt" size="xs" />}
+                    />
+                    <StatTile
+                        label="Достижения"
+                        value={profile.achievementCount}
+                        tone="olive"
+                        icon={<Icon name="trophy" size="xs" />}
+                    />
+                    <StatTile
+                        label="Средний балл"
+                        value={profile.averageExerciseScore}
+                        unit="%"
+                        tone="neutral"
+                        icon={<Icon name="target" size="xs" />}
+                    />
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col gap-3">
+                    <FriendshipButton
+                        userId={profile.userId}
+                        friendshipStatus={profile.friendshipStatus}
+                    />
+
+                    {profile.friendshipStatus === "friends" && (
+                        <Button
+                            variant="secondary"
+                            fullWidth
+                            iconLeft="message"
+                            loading={createConversationMutation.isPending}
+                            onClick={handleChatClick}
+                        >
+                            Написать
+                        </Button>
                     )}
                 </div>
-                <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-2xl ring-4 ring-primary-container">
-                    {profile.displayName[0]?.toUpperCase()}
-                </div>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center mb-2">
-                        <Icon name="flame" size="md" className="text-error" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-on-surface">
-                        {profile.currentStreakDayCount}
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">
-                        Стрик
-                    </span>
-                </div>
-
-                <div className="bg-primary-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center mb-2">
-                        <Icon name="bolt" size="md" className="text-on-primary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-primary">
-                        {profile.totalXpAmount}
-                    </span>
-                    <span className="text-xs text-on-primary-container uppercase tracking-wider">
-                        Всего XP
-                    </span>
-                </div>
-
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center mb-2">
-                        <Icon name="trophy" size="md" className="text-secondary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-on-surface">
-                        {profile.achievementCount}
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">
-                        Достижения
-                    </span>
-                </div>
-
-                <div className="bg-surface-container rounded-2xl p-5 flex flex-col items-center">
-                    <div className="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center mb-2">
-                        <Icon name="target" size="md" className="text-tertiary" />
-                    </div>
-                    <span className="font-headline font-bold text-2xl text-tertiary">
-                        {profile.averageExerciseScore}%
-                    </span>
-                    <span className="text-xs text-on-surface-variant uppercase tracking-wider">
-                        Средний балл
-                    </span>
-                </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col gap-3">
-                <FriendshipButton
-                    userId={profile.userId}
-                    friendshipStatus={profile.friendshipStatus}
-                />
-
-                {profile.friendshipStatus === "friends" && (
-                    <Button
-                        variant="secondary"
-                        fullWidth
-                        iconLeft="message"
-                        loading={createConversationMutation.isPending}
-                        onClick={handleChatClick}
-                    >
-                        Написать
-                    </Button>
-                )}
             </div>
         </div>
     );
