@@ -482,6 +482,136 @@ export function useImportLessons() {
     });
 }
 
+// --- Techniques ---
+
+export interface AdminTechniqueCoach {
+    avatarSeed: string;
+    name: string;
+    role: string;
+    quote: string;
+    challenges: unknown;
+}
+
+export interface AdminTechnique {
+    id: string;
+    slug: string;
+    name: string;
+    summary: string;
+    body: string;
+    tags: string[];
+    primarySkillId: string | null;
+    primarySkillIconicName: string | null;
+    primarySkillTitle: string | null;
+    additionalSkillIds: string[];
+    difficulty: number;
+    difficultyName: string;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+    dialog: unknown;
+    case: unknown;
+    coach: AdminTechniqueCoach | null;
+}
+
+export interface AdminTechniqueWriteBody {
+    slug: string;
+    name: string;
+    summary: string;
+    body: string;
+    tags: string[];
+    primarySkillId: string | null;
+    additionalSkillIds: string[];
+    difficulty: number;
+    sortOrder: number;
+    dialog: unknown;
+    case: unknown;
+    coach: AdminTechniqueCoach | null;
+}
+
+export interface AdminTechniqueImportResult {
+    createdCount: number;
+    updatedCount: number;
+    failedCount: number;
+    errors: string[];
+}
+
+export function useAdminTechniques(filters?: { skill?: string; search?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.skill) params.set("skill", filters.skill);
+    if (filters?.search) params.set("search", filters.search);
+    const qs = params.toString();
+    return useQuery({
+        queryKey: ["admin", "techniques", filters],
+        queryFn: () =>
+            apiClient.get<AdminTechnique[]>(
+                `/admin/techniques${qs ? `?${qs}` : ""}`
+            ),
+    });
+}
+
+export function useCreateTechnique() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: AdminTechniqueWriteBody) =>
+            apiClient.post<AdminTechnique>("/admin/techniques", body),
+        onSuccess: (data) => {
+            clientLogger.info("Technique created", { techniqueId: data.id, slug: data.slug });
+            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to create technique", { slug: variables.slug, error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateTechnique(id: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (body: AdminTechniqueWriteBody) =>
+            apiClient.put<AdminTechnique>(`/admin/techniques/${id}`, body),
+        onSuccess: (data) => {
+            clientLogger.info("Technique updated", { techniqueId: data.id, slug: data.slug });
+            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update technique", { techniqueId: id, error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteTechnique() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete<void>(`/admin/techniques/${id}`),
+        onSuccess: (_, id) => {
+            clientLogger.warn("Technique deleted", { techniqueId: id });
+            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+        },
+        onError: (error, id) => {
+            clientLogger.error("Failed to delete technique", { techniqueId: id, error: (error as Error).message });
+        },
+    });
+}
+
+export function useImportTechniques() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (items: AdminTechniqueWriteBody[]) =>
+            apiClient.post<AdminTechniqueImportResult>("/admin/techniques/import", items),
+        onSuccess: (data) => {
+            clientLogger.info("Techniques import complete", {
+                created: data.createdCount,
+                updated: data.updatedCount,
+                failed: data.failedCount,
+            });
+            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Techniques import failed", { error: (error as Error).message });
+        },
+    });
+}
+
 // --- Users ---
 
 export function useAdminUsers() {
