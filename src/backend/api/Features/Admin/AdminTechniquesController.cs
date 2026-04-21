@@ -1,31 +1,21 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Techniques;
 using SalesTrainer.Api.Features.Techniques.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
-
-public sealed record AdminTechniqueDialogTurnDto(
-    int OrderIndex,
-    string Side,
-    string Text,
-    string? AnnotationsJson);
-
-public sealed record AdminTechniqueCaseDto(
-    int OrderIndex,
-    string Title,
-    string Body,
-    string? MetricsJson);
 
 public sealed record AdminTechniqueCoachDto(
     string AvatarSeed,
     string Name,
     string Role,
     string Quote,
-    string? ChallengesJson);
+    JsonNode? Challenges);
 
 public sealed record AdminTechniqueDto(
     Guid Id,
@@ -33,15 +23,18 @@ public sealed record AdminTechniqueDto(
     string Name,
     string Summary,
     string Body,
-    string CategorySlug,
     string[] Tags,
     Guid? PrimarySkillId,
+    string? PrimarySkillIconicName,
+    string? PrimarySkillTitle,
     Guid[] AdditionalSkillIds,
+    int Difficulty,
+    string DifficultyName,
     int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    AdminTechniqueDialogTurnDto[] DialogTurns,
-    AdminTechniqueCaseDto[] Cases,
+    JsonNode? Dialog,
+    JsonNode? Case,
     AdminTechniqueCoachDto? Coach);
 
 public sealed record AdminTechniqueWriteRequestDto(
@@ -49,14 +42,20 @@ public sealed record AdminTechniqueWriteRequestDto(
     string Name,
     string Summary,
     string Body,
-    string CategorySlug,
-    string[] Tags,
+    string[]? Tags,
     Guid? PrimarySkillId,
-    Guid[] AdditionalSkillIds,
+    Guid[]? AdditionalSkillIds,
+    int Difficulty,
     int SortOrder,
-    AdminTechniqueDialogTurnDto[] DialogTurns,
-    AdminTechniqueCaseDto[] Cases,
+    JsonNode? Dialog,
+    JsonNode? Case,
     AdminTechniqueCoachDto? Coach);
+
+public sealed record AdminTechniqueImportResultDto(
+    int CreatedCount,
+    int UpdatedCount,
+    int FailedCount,
+    string[] Errors);
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
@@ -66,14 +65,24 @@ public sealed class AdminTechniquesController(
 {
     [HttpGet("admin/techniques")]
     public async Task<ActionResult<List<AdminTechniqueDto>>> GetAll(
-        [FromQuery] string? category,
+        [FromQuery] string? skill,
         [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
         var query = databaseContext.Techniques.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(category))
-            query = query.Where(technique => technique.CategorySlug == category);
+        if (!string.IsNullOrWhiteSpace(skill))
+        {
+            var matchingSkillId = await databaseContext.Skills.AsNoTracking()
+                .Where(candidate => candidate.IconicName == skill)
+                .Select(candidate => (Guid?)candidate.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (matchingSkillId is null)
+                return Ok(new List<AdminTechniqueDto>());
+
+            query = query.Where(technique => technique.PrimarySkillId == matchingSkillId);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -85,27 +94,15 @@ public sealed class AdminTechniquesController(
         }
 
         var techniques = await query
-            .Include(technique => technique.DialogTurns)
-            .Include(technique => technique.Cases)
             .Include(technique => technique.Coach)
             .Include(technique => technique.AdditionalSkills)
             .OrderBy(technique => technique.SortOrder)
             .ThenBy(technique => technique.Name)
             .ToListAsync(cancellationToken);
 
-        return Ok(techniques.Select(MapToDto).ToList());
-    }
+        var skillLookup = await LoadSkillLookupAsync(techniques, cancellationToken);
 
-    [HttpGet("admin/technique-categories")]
-    public async Task<ActionResult<List<TechniqueCategoryDto>>> GetCategories(
-        CancellationToken cancellationToken)
-    {
-        var categories = await databaseContext.TechniqueCategories.AsNoTracking()
-            .OrderBy(category => category.SortOrder)
-            .Select(category => new TechniqueCategoryDto(
-                category.Slug, category.Label, category.Color, category.SortOrder))
-            .ToListAsync(cancellationToken);
-        return Ok(categories);
+        return Ok(techniques.Select(technique => MapToDto(technique, skillLookup)).ToList());
     }
 
     [HttpGet("admin/techniques/{id:guid}")]
@@ -114,7 +111,9 @@ public sealed class AdminTechniquesController(
     {
         var technique = await LoadTechniqueAsync(id, cancellationToken);
         if (technique is null) return NotFound();
-        return Ok(MapToDto(technique));
+
+        var skillLookup = await LoadSkillLookupAsync(new[] { technique }, cancellationToken);
+        return Ok(MapToDto(technique, skillLookup));
     }
 
     [HttpPost("admin/techniques")]
@@ -122,34 +121,17 @@ public sealed class AdminTechniquesController(
         [FromBody] AdminTechniqueWriteRequestDto payload,
         CancellationToken cancellationToken)
     {
-        if (await databaseContext.Techniques.AnyAsync(
-                candidate => candidate.Slug == payload.Slug, cancellationToken))
-        {
-            return Conflict(new { error = "Slug already exists." });
-        }
-
-        if (!await databaseContext.TechniqueCategories.AnyAsync(
-                category => category.Slug == payload.CategorySlug, cancellationToken))
-        {
-            return BadRequest(new { error = "Unknown category slug." });
-        }
+        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: null, cancellationToken);
+        if (validationError is not null) return validationError;
 
         var technique = new Technique
         {
             Id = Guid.NewGuid(),
-            Slug = payload.Slug,
-            Name = payload.Name,
-            Summary = payload.Summary,
-            Body = payload.Body,
-            CategorySlug = payload.CategorySlug,
-            Tags = payload.Tags,
-            PrimarySkillId = payload.PrimarySkillId,
-            SortOrder = payload.SortOrder,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
 
-        ApplyNestedFromPayload(technique, payload);
+        ApplyPayload(technique, payload);
 
         databaseContext.Techniques.Add(technique);
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -158,7 +140,9 @@ public sealed class AdminTechniquesController(
             "Technique created TechniqueId={TechniqueId} Slug={Slug} by ActorId={ActorId}",
             technique.Id, technique.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(MapToDto(technique));
+        var refreshed = await LoadTechniqueAsync(technique.Id, cancellationToken);
+        var skillLookup = await LoadSkillLookupAsync(new[] { refreshed! }, cancellationToken);
+        return Ok(MapToDto(refreshed!, skillLookup));
     }
 
     [HttpPut("admin/techniques/{id:guid}")]
@@ -170,41 +154,18 @@ public sealed class AdminTechniquesController(
         var technique = await LoadTechniqueAsync(id, cancellationToken);
         if (technique is null) return NotFound();
 
-        if (technique.Slug != payload.Slug &&
-            await databaseContext.Techniques.AnyAsync(
-                candidate => candidate.Slug == payload.Slug, cancellationToken))
-        {
-            return Conflict(new { error = "Slug already exists." });
-        }
+        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: id, cancellationToken);
+        if (validationError is not null) return validationError;
 
-        if (!await databaseContext.TechniqueCategories.AnyAsync(
-                category => category.Slug == payload.CategorySlug, cancellationToken))
-        {
-            return BadRequest(new { error = "Unknown category slug." });
-        }
-
-        technique.Slug = payload.Slug;
-        technique.Name = payload.Name;
-        technique.Summary = payload.Summary;
-        technique.Body = payload.Body;
-        technique.CategorySlug = payload.CategorySlug;
-        technique.Tags = payload.Tags;
-        technique.PrimarySkillId = payload.PrimarySkillId;
-        technique.SortOrder = payload.SortOrder;
-        technique.UpdatedAt = DateTime.UtcNow;
-
-        databaseContext.TechniqueDialogTurns.RemoveRange(technique.DialogTurns);
-        databaseContext.TechniqueCases.RemoveRange(technique.Cases);
         databaseContext.TechniqueSkills.RemoveRange(technique.AdditionalSkills);
         if (technique.Coach is not null)
             databaseContext.TechniqueCoaches.Remove(technique.Coach);
 
-        technique.DialogTurns = new List<TechniqueDialogTurn>();
-        technique.Cases = new List<TechniqueCase>();
         technique.AdditionalSkills = new List<TechniqueSkill>();
         technique.Coach = null;
+        technique.UpdatedAt = DateTime.UtcNow;
 
-        ApplyNestedFromPayload(technique, payload);
+        ApplyPayload(technique, payload);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
@@ -213,7 +174,8 @@ public sealed class AdminTechniquesController(
             technique.Id, technique.Slug, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
         var refreshed = await LoadTechniqueAsync(id, cancellationToken);
-        return Ok(MapToDto(refreshed!));
+        var skillLookup = await LoadSkillLookupAsync(new[] { refreshed! }, cancellationToken);
+        return Ok(MapToDto(refreshed!, skillLookup));
     }
 
     [HttpDelete("admin/techniques/{id:guid}")]
@@ -232,43 +194,153 @@ public sealed class AdminTechniquesController(
         return NoContent();
     }
 
+    [HttpPost("admin/techniques/import")]
+    public async Task<ActionResult<AdminTechniqueImportResultDto>> Import(
+        [FromBody] AdminTechniqueWriteRequestDto[] payload,
+        CancellationToken cancellationToken)
+    {
+        var createdCount = 0;
+        var updatedCount = 0;
+        var failedCount = 0;
+        var errors = new List<string>();
+
+        foreach (var item in payload)
+        {
+            try
+            {
+                var existing = await databaseContext.Techniques
+                    .Include(technique => technique.Coach)
+                    .Include(technique => technique.AdditionalSkills)
+                    .FirstOrDefaultAsync(technique => technique.Slug == item.Slug, cancellationToken);
+
+                var isNewRecord = existing is null;
+                var validationError = await ValidatePayloadAsync(
+                    item,
+                    existingTechniqueId: existing?.Id,
+                    cancellationToken);
+                if (validationError is not null)
+                {
+                    failedCount++;
+                    errors.Add($"{item.Slug}: validation failed.");
+                    continue;
+                }
+
+                if (isNewRecord)
+                {
+                    existing = new Technique
+                    {
+                        Id = Guid.NewGuid(),
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                    };
+                    ApplyPayload(existing, item);
+                    databaseContext.Techniques.Add(existing);
+                    createdCount++;
+                }
+                else
+                {
+                    databaseContext.TechniqueSkills.RemoveRange(existing!.AdditionalSkills);
+                    if (existing.Coach is not null)
+                        databaseContext.TechniqueCoaches.Remove(existing.Coach);
+
+                    existing.AdditionalSkills = new List<TechniqueSkill>();
+                    existing.Coach = null;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    ApplyPayload(existing, item);
+                    updatedCount++;
+                }
+
+                await databaseContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failedCount++;
+                errors.Add($"{item.Slug}: {exception.Message}");
+                logger.LogError(exception,
+                    "Technique import row failed Slug={Slug}", item.Slug);
+            }
+        }
+
+        logger.LogInformation(
+            "Technique import finished Created={Created} Updated={Updated} Failed={Failed} by ActorId={ActorId}",
+            createdCount, updatedCount, failedCount, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new AdminTechniqueImportResultDto(
+            createdCount, updatedCount, failedCount, errors.ToArray()));
+    }
+
     private Task<Technique?> LoadTechniqueAsync(Guid id, CancellationToken cancellationToken)
     {
         return databaseContext.Techniques
-            .Include(technique => technique.DialogTurns)
-            .Include(technique => technique.Cases)
             .Include(technique => technique.Coach)
             .Include(technique => technique.AdditionalSkills)
             .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
     }
 
-    private static void ApplyNestedFromPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
+    private async Task<IReadOnlyDictionary<Guid, SkillProjection>> LoadSkillLookupAsync(
+        IReadOnlyCollection<Technique> techniques,
+        CancellationToken cancellationToken)
     {
-        foreach (var turn in payload.DialogTurns ?? Array.Empty<AdminTechniqueDialogTurnDto>())
+        var skillIds = techniques
+            .SelectMany(technique => new[] { technique.PrimarySkillId }
+                .Concat(technique.AdditionalSkills.Select(link => (Guid?)link.SkillId)))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToArray();
+
+        if (skillIds.Length == 0)
+            return new Dictionary<Guid, SkillProjection>();
+
+        return await databaseContext.Skills.AsNoTracking()
+            .Where(skill => skillIds.Contains(skill.Id))
+            .Select(skill => new SkillProjection(skill.Id, skill.IconicName, skill.Title))
+            .ToDictionaryAsync(projection => projection.Id, cancellationToken);
+    }
+
+    private async Task<ActionResult?> ValidatePayloadAsync(
+        AdminTechniqueWriteRequestDto payload,
+        Guid? existingTechniqueId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(payload.Slug) || string.IsNullOrWhiteSpace(payload.Name))
+            return BadRequest(new { error = "Slug and Name are required." });
+
+        if (payload.Difficulty is < TechniqueLevels.Novice or > TechniqueLevels.Master)
+            return BadRequest(new { error = "Difficulty must be between 1 and 4." });
+
+        var slugClashExists = await databaseContext.Techniques.AnyAsync(
+            candidate => candidate.Slug == payload.Slug
+                         && (existingTechniqueId == null || candidate.Id != existingTechniqueId),
+            cancellationToken);
+
+        if (slugClashExists)
+            return Conflict(new { error = "Slug already exists." });
+
+        if (payload.PrimarySkillId.HasValue)
         {
-            technique.DialogTurns.Add(new TechniqueDialogTurn
-            {
-                Id = Guid.NewGuid(),
-                TechniqueId = technique.Id,
-                OrderIndex = turn.OrderIndex,
-                Side = turn.Side,
-                Text = turn.Text,
-                AnnotationsJson = NormalizeJson(turn.AnnotationsJson),
-            });
+            var primarySkillExists = await databaseContext.Skills.AnyAsync(
+                skill => skill.Id == payload.PrimarySkillId, cancellationToken);
+            if (!primarySkillExists)
+                return BadRequest(new { error = "Unknown PrimarySkillId." });
         }
 
-        foreach (var techniqueCase in payload.Cases ?? Array.Empty<AdminTechniqueCaseDto>())
-        {
-            technique.Cases.Add(new TechniqueCase
-            {
-                Id = Guid.NewGuid(),
-                TechniqueId = technique.Id,
-                OrderIndex = techniqueCase.OrderIndex,
-                Title = techniqueCase.Title,
-                Body = techniqueCase.Body,
-                MetricsJson = NormalizeJson(techniqueCase.MetricsJson),
-            });
-        }
+        return null;
+    }
+
+    private static void ApplyPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
+    {
+        technique.Slug = payload.Slug;
+        technique.Name = payload.Name;
+        technique.Summary = payload.Summary ?? string.Empty;
+        technique.Body = payload.Body ?? string.Empty;
+        technique.Tags = payload.Tags ?? Array.Empty<string>();
+        technique.PrimarySkillId = payload.PrimarySkillId;
+        technique.Difficulty = payload.Difficulty;
+        technique.SortOrder = payload.SortOrder;
+        technique.DialogJson = SerializeNullable(payload.Dialog);
+        technique.CaseJson = SerializeNullable(payload.Case);
 
         foreach (var skillId in (payload.AdditionalSkillIds ?? Array.Empty<Guid>()).Distinct())
         {
@@ -289,55 +361,45 @@ public sealed class AdminTechniquesController(
                 Name = payload.Coach.Name,
                 Role = payload.Coach.Role,
                 Quote = payload.Coach.Quote,
-                ChallengesJson = NormalizeJson(payload.Coach.ChallengesJson),
+                ChallengesJson = SerializeNullable(payload.Coach.Challenges),
             };
         }
     }
 
-    private static string? NormalizeJson(string? raw)
+    private static string? SerializeNullable(JsonNode? node)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-
-        try
-        {
-            using var parsed = JsonDocument.Parse(raw);
-            return parsed.RootElement.GetRawText();
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return node is null ? null : node.ToJsonString(CompactJsonOptions);
     }
 
-    private static AdminTechniqueDto MapToDto(Technique technique)
+    private static AdminTechniqueDto MapToDto(
+        Technique technique,
+        IReadOnlyDictionary<Guid, SkillProjection> skillLookup)
     {
+        SkillProjection? primarySkill = null;
+        if (technique.PrimarySkillId.HasValue &&
+            skillLookup.TryGetValue(technique.PrimarySkillId.Value, out var resolved))
+        {
+            primarySkill = resolved;
+        }
+
         return new AdminTechniqueDto(
             technique.Id,
             technique.Slug,
             technique.Name,
             technique.Summary,
             technique.Body,
-            technique.CategorySlug,
             technique.Tags,
             technique.PrimarySkillId,
+            primarySkill?.IconicName,
+            primarySkill?.Title,
             technique.AdditionalSkills.Select(link => link.SkillId).ToArray(),
+            technique.Difficulty,
+            TechniqueLevels.ResolveDifficultyName(technique.Difficulty),
             technique.SortOrder,
             technique.CreatedAt,
             technique.UpdatedAt,
-            technique.DialogTurns
-                .OrderBy(turn => turn.OrderIndex)
-                .Select(turn => new AdminTechniqueDialogTurnDto(
-                    turn.OrderIndex, turn.Side, turn.Text, turn.AnnotationsJson))
-                .ToArray(),
-            technique.Cases
-                .OrderBy(techniqueCase => techniqueCase.OrderIndex)
-                .Select(techniqueCase => new AdminTechniqueCaseDto(
-                    techniqueCase.OrderIndex,
-                    techniqueCase.Title,
-                    techniqueCase.Body,
-                    techniqueCase.MetricsJson))
-                .ToArray(),
+            ParseNullable(technique.DialogJson),
+            ParseNullable(technique.CaseJson),
             technique.Coach is null
                 ? null
                 : new AdminTechniqueCoachDto(
@@ -345,6 +407,24 @@ public sealed class AdminTechniquesController(
                     technique.Coach.Name,
                     technique.Coach.Role,
                     technique.Coach.Quote,
-                    technique.Coach.ChallengesJson));
+                    ParseNullable(technique.Coach.ChallengesJson)));
     }
+
+    private static JsonNode? ParseNullable(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        try
+        {
+            return JsonNode.Parse(raw);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static readonly JsonSerializerOptions CompactJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private sealed record SkillProjection(Guid Id, string IconicName, string Title);
 }

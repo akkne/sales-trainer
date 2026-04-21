@@ -12,15 +12,26 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
 {
     public async Task<IReadOnlyList<TechniqueCardDto>> GetTechniqueCardsAsync(
         Guid? currentUserId,
-        string? categorySlug,
+        string? skillIconicName,
         string? searchTerm,
         string? tag,
         CancellationToken cancellationToken = default)
     {
         var techniquesQuery = databaseContext.Techniques.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(categorySlug))
-            techniquesQuery = techniquesQuery.Where(technique => technique.CategorySlug == categorySlug);
+        if (!string.IsNullOrWhiteSpace(skillIconicName))
+        {
+            var matchingSkillId = await databaseContext.Skills.AsNoTracking()
+                .Where(skill => skill.IconicName == skillIconicName)
+                .Select(skill => (Guid?)skill.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (matchingSkillId is null)
+                return Array.Empty<TechniqueCardDto>();
+
+            techniquesQuery = techniquesQuery.Where(technique =>
+                technique.PrimarySkillId == matchingSkillId);
+        }
 
         if (!string.IsNullOrWhiteSpace(tag))
             techniquesQuery = techniquesQuery.Where(technique => technique.Tags.Contains(tag!));
@@ -35,14 +46,12 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         }
 
         var techniques = await techniquesQuery
+            .Include(technique => technique.Coach)
             .OrderBy(technique => technique.SortOrder)
             .ThenBy(technique => technique.Name)
             .ToListAsync(cancellationToken);
 
-        var categories = await databaseContext.TechniqueCategories.AsNoTracking()
-            .ToDictionaryAsync(category => category.Slug, cancellationToken);
-
-        var skillNameById = await LoadSkillIconicNamesAsync(
+        var skillLookup = await LoadSkillLookupAsync(
             techniques.Where(technique => technique.PrimarySkillId.HasValue)
                 .Select(technique => technique.PrimarySkillId!.Value)
                 .Distinct()
@@ -56,8 +65,7 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
 
         return techniques.Select(technique => BuildCardDto(
             technique,
-            categories,
-            skillNameById,
+            skillLookup,
             progressByTechniqueId)).ToList();
     }
 
@@ -67,8 +75,6 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         CancellationToken cancellationToken = default)
     {
         var technique = await databaseContext.Techniques.AsNoTracking()
-            .Include(loadedTechnique => loadedTechnique.DialogTurns)
-            .Include(loadedTechnique => loadedTechnique.Cases)
             .Include(loadedTechnique => loadedTechnique.Coach)
             .Include(loadedTechnique => loadedTechnique.AdditionalSkills)
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
@@ -76,24 +82,21 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         if (technique is null)
             return null;
 
-        var categories = await databaseContext.TechniqueCategories.AsNoTracking()
-            .ToDictionaryAsync(category => category.Slug, cancellationToken);
-
         var skillIds = technique.AdditionalSkills.Select(link => link.SkillId).ToList();
         if (technique.PrimarySkillId.HasValue)
             skillIds.Add(technique.PrimarySkillId.Value);
 
-        var skillNameById = await LoadSkillIconicNamesAsync(skillIds.Distinct().ToArray(), cancellationToken);
+        var skillLookup = await LoadSkillLookupAsync(skillIds.Distinct().ToArray(), cancellationToken);
 
         var progressByTechniqueId = await LoadProgressAsync(
             currentUserId,
             new[] { technique.Id },
             cancellationToken);
 
-        var card = BuildCardDto(technique, categories, skillNameById, progressByTechniqueId);
+        var card = BuildCardDto(technique, skillLookup, progressByTechniqueId);
 
         var skillIconicNames = skillIds
-            .Select(skillId => skillNameById.GetValueOrDefault(skillId))
+            .Select(skillId => skillLookup.GetValueOrDefault(skillId)?.IconicName)
             .Where(name => !string.IsNullOrEmpty(name))
             .Select(name => name!)
             .Distinct()
@@ -103,22 +106,8 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
             card,
             technique.Body,
             skillIconicNames,
-            technique.DialogTurns
-                .OrderBy(turn => turn.OrderIndex)
-                .Select(turn => new TechniqueDialogTurnDto(
-                    turn.OrderIndex,
-                    turn.Side,
-                    turn.Text,
-                    DeserializeAnnotations(turn.AnnotationsJson)))
-                .ToArray(),
-            technique.Cases
-                .OrderBy(techniqueCase => techniqueCase.OrderIndex)
-                .Select(techniqueCase => new TechniqueCaseDto(
-                    techniqueCase.OrderIndex,
-                    techniqueCase.Title,
-                    techniqueCase.Body,
-                    DeserializeJsonObject(techniqueCase.MetricsJson)))
-                .ToArray(),
+            DeserializeDialogTurns(technique.DialogJson),
+            DeserializeCase(technique.CaseJson),
             technique.Coach is null
                 ? null
                 : new TechniqueCoachDto(
@@ -133,14 +122,27 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var categories = await databaseContext.TechniqueCategories.AsNoTracking()
-            .OrderBy(category => category.SortOrder)
-            .Select(category => new TechniqueCategoryDto(
-                category.Slug,
-                category.Label,
-                category.Color,
-                category.SortOrder))
-            .ToArrayAsync(cancellationToken);
+        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking()
+            .Where(technique => technique.PrimarySkillId != null)
+            .GroupBy(technique => technique.PrimarySkillId!.Value)
+            .Select(group => new { SkillId = group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+
+        var skillIdsWithTechniques = techniqueCountsBySkill
+            .Select(row => row.SkillId)
+            .ToArray();
+
+        var skills = await databaseContext.Skills.AsNoTracking()
+            .Where(skill => skillIdsWithTechniques.Contains(skill.Id))
+            .OrderBy(skill => skill.OrderInTree)
+            .ToListAsync(cancellationToken);
+
+        var countById = techniqueCountsBySkill.ToDictionary(row => row.SkillId, row => row.Count);
+        var skillFacets = skills.Select(skill => new TechniqueSkillFacetDto(
+                skill.IconicName,
+                skill.Title,
+                countById.GetValueOrDefault(skill.Id)))
+            .ToArray();
 
         var totalCount = await databaseContext.Techniques.CountAsync(cancellationToken);
 
@@ -160,7 +162,7 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
             userCounts = new TechniqueUserCountsDto(masteredCount, masterCount, unseenCount);
         }
 
-        return new TechniqueMetaDto(categories, totalCount, userCounts);
+        return new TechniqueMetaDto(skillFacets, totalCount, userCounts);
     }
 
     public async Task MarkTechniqueSeenAsync(
@@ -187,7 +189,7 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
             Id = Guid.NewGuid(),
             UserId = currentUserId,
             TechniqueId = technique.Id,
-            Level = TechniqueLevels.Novice,
+            Level = 0,
             MasteryPercent = 0,
             PracticeCount = 0,
             FirstSeenAt = DateTime.UtcNow,
@@ -196,16 +198,16 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<IReadOnlyDictionary<Guid, string>> LoadSkillIconicNamesAsync(
+    private async Task<IReadOnlyDictionary<Guid, Skill>> LoadSkillLookupAsync(
         IReadOnlyCollection<Guid> skillIds,
         CancellationToken cancellationToken)
     {
         if (skillIds.Count == 0)
-            return new Dictionary<Guid, string>();
+            return new Dictionary<Guid, Skill>();
 
         return await databaseContext.Skills.AsNoTracking()
             .Where(skill => skillIds.Contains(skill.Id))
-            .ToDictionaryAsync(skill => skill.Id, skill => skill.IconicName, cancellationToken);
+            .ToDictionaryAsync(skill => skill.Id, cancellationToken);
     }
 
     private async Task<IReadOnlyDictionary<Guid, UserTechniqueProgress>> LoadProgressAsync(
@@ -224,31 +226,21 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
 
     private static TechniqueCardDto BuildCardDto(
         Technique technique,
-        IReadOnlyDictionary<string, TechniqueCategory> categories,
-        IReadOnlyDictionary<Guid, string> skillNameById,
+        IReadOnlyDictionary<Guid, Skill> skillLookup,
         IReadOnlyDictionary<Guid, UserTechniqueProgress> progressByTechniqueId)
     {
-        var categoryLabel = technique.CategorySlug;
-        var categoryColor = "var(--ink-3)";
-        if (categories.TryGetValue(technique.CategorySlug, out var category))
-        {
-            categoryLabel = category.Label;
-            categoryColor = category.Color;
-        }
-
         string? primarySkillIconicName = null;
+        string? primarySkillTitle = null;
         if (technique.PrimarySkillId.HasValue &&
-            skillNameById.TryGetValue(technique.PrimarySkillId.Value, out var iconicName))
+            skillLookup.TryGetValue(technique.PrimarySkillId.Value, out var primarySkill))
         {
-            primarySkillIconicName = iconicName;
+            primarySkillIconicName = primarySkill.IconicName;
+            primarySkillTitle = primarySkill.Title;
         }
 
         var progress = progressByTechniqueId.GetValueOrDefault(technique.Id);
-        var level = progress?.Level ?? 0;
+        var masteryLevel = progress?.Level ?? 0;
         var masteryPercent = progress?.MasteryPercent ?? 0;
-        var levelName = level == 0
-            ? "Novice"
-            : TechniqueLevels.ResolveLevelName(level, masteryPercent);
         var isNew = progress is null;
 
         return new TechniqueCardDto(
@@ -256,31 +248,48 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
             technique.Slug,
             technique.Name,
             technique.Summary,
-            technique.CategorySlug,
-            categoryLabel,
-            categoryColor,
             technique.Tags,
             primarySkillIconicName,
+            primarySkillTitle,
+            technique.Difficulty,
+            TechniqueLevels.ResolveDifficultyName(technique.Difficulty),
             technique.SortOrder,
-            level,
-            levelName,
+            masteryLevel,
             masteryPercent,
-            isNew);
+            HasDialog: !string.IsNullOrWhiteSpace(technique.DialogJson),
+            HasCase: !string.IsNullOrWhiteSpace(technique.CaseJson),
+            HasCoach: technique.Coach is not null,
+            IsNew: isNew);
     }
 
-    private static TechniqueDialogAnnotationDto[] DeserializeAnnotations(string? json)
+    private static TechniqueDialogTurnDto[] DeserializeDialogTurns(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
-            return Array.Empty<TechniqueDialogAnnotationDto>();
+            return Array.Empty<TechniqueDialogTurnDto>();
 
         try
         {
-            return JsonSerializer.Deserialize<TechniqueDialogAnnotationDto[]>(json, DefaultJsonOptions)
-                   ?? Array.Empty<TechniqueDialogAnnotationDto>();
+            var turns = JsonSerializer.Deserialize<TechniqueDialogTurnDto[]>(json, DefaultJsonOptions);
+            return turns ?? Array.Empty<TechniqueDialogTurnDto>();
         }
         catch (JsonException)
         {
-            return Array.Empty<TechniqueDialogAnnotationDto>();
+            return Array.Empty<TechniqueDialogTurnDto>();
+        }
+    }
+
+    private static TechniqueCaseDto? DeserializeCase(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<TechniqueCaseDto>(json, DefaultJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -297,21 +306,6 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         catch (JsonException)
         {
             return Array.Empty<TechniqueCoachChallengeDto>();
-        }
-    }
-
-    private static JsonObject? DeserializeJsonObject(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-
-        try
-        {
-            return JsonNode.Parse(json) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            return null;
         }
     }
 

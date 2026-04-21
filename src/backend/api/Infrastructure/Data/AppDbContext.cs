@@ -41,10 +41,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Technique> Techniques => Set<Technique>();
-    public DbSet<TechniqueCategory> TechniqueCategories => Set<TechniqueCategory>();
     public DbSet<TechniqueSkill> TechniqueSkills => Set<TechniqueSkill>();
-    public DbSet<TechniqueDialogTurn> TechniqueDialogTurns => Set<TechniqueDialogTurn>();
-    public DbSet<TechniqueCase> TechniqueCases => Set<TechniqueCase>();
     public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();
     public DbSet<UserTechniqueProgress> UserTechniqueProgressRecords => Set<UserTechniqueProgress>();
 

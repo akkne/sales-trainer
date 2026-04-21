@@ -9,5 +9,5 @@ public sealed record TechniqueDialogTurnDto(
 
 public sealed record TechniqueDialogAnnotationDto(
     string Label,
-    string Tone
+    string? Tone
 );

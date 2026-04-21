@@ -5,6 +5,6 @@ public sealed record TechniqueDetailDto(
     string Body,
     string[] SkillIconicNames,
     TechniqueDialogTurnDto[] DialogTurns,
-    TechniqueCaseDto[] Cases,
+    TechniqueCaseDto? Case,
     TechniqueCoachDto? Coach
 );

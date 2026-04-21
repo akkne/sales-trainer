@@ -31,15 +31,20 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
             .IsRequired()
             .HasColumnType("text");
 
-        builder.Property(technique => technique.CategorySlug)
-            .IsRequired()
-            .HasMaxLength(64);
-
         builder.Property(technique => technique.Tags)
             .HasColumnType("text[]")
             .IsRequired();
 
         builder.Property(technique => technique.PrimarySkillId);
+
+        builder.Property(technique => technique.Difficulty)
+            .IsRequired();
+
+        builder.Property(technique => technique.DialogJson)
+            .HasColumnType("jsonb");
+
+        builder.Property(technique => technique.CaseJson)
+            .HasColumnType("jsonb");
 
         builder.Property(technique => technique.SortOrder)
             .IsRequired();
@@ -55,22 +60,12 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
             .HasForeignKey(techniqueSkill => techniqueSkill.TechniqueId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(technique => technique.DialogTurns)
-            .WithOne()
-            .HasForeignKey(dialogTurn => dialogTurn.TechniqueId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(technique => technique.Cases)
-            .WithOne()
-            .HasForeignKey(techniqueCase => techniqueCase.TechniqueId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         builder.HasOne(technique => technique.Coach)
             .WithOne()
             .HasForeignKey<TechniqueCoach>(coach => coach.TechniqueId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(technique => technique.CategorySlug);
+        builder.HasIndex(technique => technique.PrimarySkillId);
         builder.HasIndex(technique => technique.SortOrder);
     }
 }

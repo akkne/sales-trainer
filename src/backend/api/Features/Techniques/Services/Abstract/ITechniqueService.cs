@@ -6,7 +6,7 @@ public interface ITechniqueService
 {
     Task<IReadOnlyList<TechniqueCardDto>> GetTechniqueCardsAsync(
         Guid? currentUserId,
-        string? categorySlug,
+        string? skillIconicName,
         string? searchTerm,
         string? tag,
         CancellationToken cancellationToken = default);

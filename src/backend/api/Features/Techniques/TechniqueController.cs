@@ -12,14 +12,14 @@ public sealed class TechniqueController(ITechniqueService techniqueService) : Co
 {
     [HttpGet("techniques")]
     public async Task<ActionResult<IReadOnlyList<TechniqueCardDto>>> GetTechniques(
-        [FromQuery] string? category,
+        [FromQuery] string? skill,
         [FromQuery] string? search,
         [FromQuery] string? tag,
         CancellationToken cancellationToken)
     {
         var currentUserId = TryGetCurrentUserId();
         var cards = await techniqueService.GetTechniqueCardsAsync(
-            currentUserId, category, search, tag, cancellationToken);
+            currentUserId, skill, search, tag, cancellationToken);
         return Ok(cards);
     }
 

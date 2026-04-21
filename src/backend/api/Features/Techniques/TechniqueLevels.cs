@@ -10,14 +10,14 @@ public static class TechniqueLevels
     public const int MasteredThresholdLevel = Practitioner;
     public const int MasterThresholdLevel = Master;
 
-    public static string ResolveLevelName(int level, int masteryPercent)
+    public static string ResolveDifficultyName(int difficulty)
     {
-        return level switch
+        return difficulty switch
         {
             Master => "Master",
-            Expert => masteryPercent >= 95 ? "Expert+" : "Expert",
-            Practitioner => masteryPercent >= 85 ? "Practitioner+" : "Practitioner",
-            _ => masteryPercent >= 50 ? "Novice+" : "Novice",
+            Expert => "Expert",
+            Practitioner => "Practitioner",
+            _ => "Novice",
         };
     }
 }
