@@ -14,7 +14,7 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
         Guid? currentUserId,
         string? skillIconicName,
         string? searchTerm,
-        string? tag,
+        IReadOnlyCollection<string>? tags,
         CancellationToken cancellationToken = default)
     {
         var techniquesQuery = databaseContext.Techniques.AsNoTracking().AsQueryable();
@@ -33,16 +33,16 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
                 technique.PrimarySkillId == matchingSkillId);
         }
 
-        if (!string.IsNullOrWhiteSpace(tag))
-            techniquesQuery = techniquesQuery.Where(technique => technique.Tags.Contains(tag!));
-
-        if (!string.IsNullOrWhiteSpace(searchTerm))
+        if (tags is { Count: > 0 })
         {
-            var searchLower = searchTerm.ToLower();
-            techniquesQuery = techniquesQuery.Where(technique =>
-                technique.Name.ToLower().Contains(searchLower) ||
-                technique.Summary.ToLower().Contains(searchLower) ||
-                technique.Body.ToLower().Contains(searchLower));
+            foreach (var tagValue in tags)
+            {
+                if (string.IsNullOrWhiteSpace(tagValue))
+                    continue;
+
+                var capturedTag = tagValue;
+                techniquesQuery = techniquesQuery.Where(technique => technique.Tags.Contains(capturedTag));
+            }
         }
 
         var techniques = await techniquesQuery
@@ -50,6 +50,17 @@ internal sealed class TechniqueService(AppDbContext databaseContext) : ITechniqu
             .OrderBy(technique => technique.SortOrder)
             .ThenBy(technique => technique.Name)
             .ToListAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var searchLower = searchTerm.Trim().ToLowerInvariant();
+            techniques = techniques.Where(technique =>
+                technique.Name.ToLowerInvariant().Contains(searchLower) ||
+                technique.Summary.ToLowerInvariant().Contains(searchLower) ||
+                technique.Body.ToLowerInvariant().Contains(searchLower) ||
+                technique.Tags.Any(existingTag => existingTag.ToLowerInvariant().Contains(searchLower)))
+                .ToList();
+        }
 
         var skillLookup = await LoadSkillLookupAsync(
             techniques.Where(technique => technique.PrimarySkillId.HasValue)

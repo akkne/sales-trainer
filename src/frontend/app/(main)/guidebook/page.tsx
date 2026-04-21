@@ -31,7 +31,7 @@ function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; m
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke="var(--rust)"
+                    stroke="var(--indigo)"
                     strokeWidth={4}
                     strokeDasharray={circumference}
                     strokeDashoffset={circumference * (1 - fraction)}
@@ -48,7 +48,7 @@ function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; m
                     fontFamily: "var(--f-mono)",
                     fontSize: 12,
                     fontWeight: 500,
-                    color: "var(--rust)",
+                    color: "var(--indigo)",
                 }}
             >
                 {display}
@@ -106,7 +106,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-function TagChip({ tag, onClick }: { tag: string; onClick: (tag: string) => void }) {
+function TagChip({
+    tag,
+    onClick,
+    isActive = false,
+}: {
+    tag: string;
+    onClick: (tag: string) => void;
+    isActive?: boolean;
+}) {
     return (
         <button
             onClick={(event) => {
@@ -122,13 +130,55 @@ function TagChip({ tag, onClick }: { tag: string; onClick: (tag: string) => void
                 fontSize: 11,
                 fontWeight: 500,
                 fontFamily: "var(--f-sans)",
-                background: "transparent",
-                color: "var(--ink-3)",
-                border: "1px solid var(--line)",
+                background: isActive ? "var(--indigo-soft)" : "transparent",
+                color: isActive ? "var(--indigo)" : "var(--ink-3)",
+                border: `1px solid ${isActive ? "var(--indigo)" : "var(--line)"}`,
                 cursor: "pointer",
             }}
         >
             #{tag}
+        </button>
+    );
+}
+
+function ActiveTagPill({ tag, onRemove }: { tag: string; onRemove: (tag: string) => void }) {
+    return (
+        <button
+            onClick={() => onRemove(tag)}
+            style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 10px 6px 12px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 500,
+                fontFamily: "var(--f-sans)",
+                background: "var(--indigo-soft)",
+                color: "var(--indigo)",
+                border: "1px solid var(--indigo)",
+                cursor: "pointer",
+                height: 42,
+            }}
+            aria-label={`Убрать фильтр по тегу ${tag}`}
+        >
+            #{tag}
+            <span
+                style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    background: "var(--indigo)",
+                    color: "white",
+                    fontSize: 10,
+                    lineHeight: 1,
+                }}
+            >
+                ×
+            </span>
         </button>
     );
 }
@@ -157,7 +207,7 @@ function Bubble({
         >
             {children}
             {annotation && (
-                <span style={{ marginLeft: 6, color: side === "me" ? "white" : "var(--rust)", opacity: 0.8 }}>
+                <span style={{ marginLeft: 6, color: side === "me" ? "white" : "var(--indigo)", opacity: 0.8 }}>
                     [{annotation}]
                 </span>
             )}
@@ -168,6 +218,7 @@ function Bubble({
 export default function GuidebookPage() {
     const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
+    const [activeTags, setActiveTags] = useState<string[]>([]);
     const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
     const deferredSearch = useDeferredValue(searchInput);
@@ -176,6 +227,7 @@ export default function GuidebookPage() {
     const { data: cards = [], isLoading } = useTechniques({
         skill: selectedSkill ?? undefined,
         search: deferredSearch || undefined,
+        tags: activeTags,
     });
 
     const { data: expandedDetail } = useTechnique(expandedSlug);
@@ -197,13 +249,14 @@ export default function GuidebookPage() {
     const totalCount = meta?.totalCount ?? 0;
     const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: 0 };
 
-    function addTagToSearch(tag: string) {
-        setSearchInput((current) => {
-            const trimmed = current.trim();
-            if (trimmed === tag) return current;
-            if (trimmed.split(/\s+/).includes(tag)) return current;
-            return trimmed ? `${trimmed} ${tag}` : tag;
-        });
+    function toggleActiveTag(tag: string) {
+        setActiveTags((current) =>
+            current.includes(tag) ? current.filter((existing) => existing !== tag) : [...current, tag]
+        );
+    }
+
+    function removeActiveTag(tag: string) {
+        setActiveTags((current) => current.filter((existing) => existing !== tag));
     }
 
     return (
@@ -229,7 +282,7 @@ export default function GuidebookPage() {
                         <div
                             style={{
                                 fontSize: 12,
-                                color: "var(--rust)",
+                                color: "var(--indigo)",
                                 letterSpacing: 2,
                                 textTransform: "uppercase",
                                 fontWeight: 500,
@@ -260,7 +313,7 @@ export default function GuidebookPage() {
                             label="Мастер"
                             value={`${userCounts.master}`}
                             icon={<Icon name="trophy" size="xs" />}
-                            tone="rust"
+                            tone="indigo"
                         />
                         <StatTile
                             big
@@ -317,6 +370,28 @@ export default function GuidebookPage() {
                             </button>
                         )}
                     </div>
+
+                    {activeTags.length > 0 && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            {activeTags.map((tag) => (
+                                <ActiveTagPill key={tag} tag={tag} onRemove={removeActiveTag} />
+                            ))}
+                            <button
+                                onClick={() => setActiveTags([])}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "var(--ink-3)",
+                                    fontSize: 12,
+                                    cursor: "pointer",
+                                    fontFamily: "var(--f-mono)",
+                                    textDecoration: "underline",
+                                }}
+                            >
+                                очистить
+                            </button>
+                        </div>
+                    )}
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <SkillPill
@@ -379,7 +454,8 @@ export default function GuidebookPage() {
                                 isExpanded={expandedSlug === card.slug}
                                 detail={expandedSlug === card.slug ? expandedDetail ?? null : null}
                                 onToggle={() => toggleExpand(card.slug)}
-                                onTagClick={addTagToSearch}
+                                onTagClick={toggleActiveTag}
+                                activeTags={activeTags}
                             />
                         ))}
                     </div>
@@ -440,12 +516,14 @@ function TechniqueCardView({
     detail,
     onToggle,
     onTagClick,
+    activeTags,
 }: {
     card: TechniqueCardData;
     isExpanded: boolean;
     detail: TechniqueDetail | null;
     onToggle: () => void;
     onTagClick: (tag: string) => void;
+    activeTags: string[];
 }) {
     return (
         <div
@@ -491,7 +569,7 @@ function TechniqueCardView({
                             </Chip>
                         )}
                         {card.tags.slice(0, 2).map((tag) => (
-                            <TagChip key={tag} tag={tag} onClick={onTagClick} />
+                            <TagChip key={tag} tag={tag} onClick={onTagClick} isActive={activeTags.includes(tag)} />
                         ))}
                         {card.isNew && (
                             <Chip tone="indigo" size="sm">
@@ -516,7 +594,7 @@ function TechniqueCardView({
                     >
                         УРОВЕНЬ
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>{card.difficultyName}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--indigo)" }}>{card.difficultyName}</div>
                     <Icon name={isExpanded ? "chevron-up" : "chevron-down"} size="sm" color="var(--ink-3)" />
                 </div>
             </div>

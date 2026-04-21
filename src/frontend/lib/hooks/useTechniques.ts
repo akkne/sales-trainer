@@ -80,16 +80,19 @@ export interface TechniqueMeta {
 export function useTechniques(params: {
     skill?: string;
     search?: string;
-    tag?: string;
+    tags?: string[];
 }) {
-    const { skill, search, tag } = params;
+    const { skill, search, tags } = params;
+    const normalisedTags = (tags ?? []).filter(Boolean);
     return useQuery({
-        queryKey: ["techniques", skill ?? "", search ?? "", tag ?? ""],
+        queryKey: ["techniques", skill ?? "", search ?? "", normalisedTags.join(",")],
         queryFn: () => {
             const query = new URLSearchParams();
             if (skill) query.set("skill", skill);
             if (search) query.set("search", search);
-            if (tag) query.set("tag", tag);
+            for (const tagValue of normalisedTags) {
+                query.append("tag", tagValue);
+            }
             const tail = query.toString();
             return apiClient.get<TechniqueCard[]>(
                 `/techniques${tail ? `?${tail}` : ""}`

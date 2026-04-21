@@ -119,12 +119,12 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 
 | Method | Path | Query / Body | Response |
 |---|---|---|---|
-| GET | /techniques | `?skill=&search=&tag=` | `TechniqueCardDto[]` |
+| GET | /techniques | `?skill=&search=&tag=` (repeatable) | `TechniqueCardDto[]` |
 | GET | /techniques/meta | — | `TechniqueMetaDto` |
 | GET | /techniques/:slug | — | `TechniqueDetailDto` |
 | POST | /techniques/:slug/seen | `{}` | 204 (sets `FirstSeenAt`, clears `isNew`) |
 
-`skill` filter matches `Skills.IconicName` (not id) so URLs stay human-readable.
+`skill` filter matches `Skills.IconicName` (not id) so URLs stay human-readable. `tag` can be repeated (`?tag=objection&tag=discovery`) — AND semantics. `search` matches (case-insensitive) on `Name`, `Summary`, `Body`, and `Tags`.
 
 `TechniqueCardDto`: `{id, slug, name, summary, tags: string[], primarySkillIconicName?, primarySkillTitle?, difficulty, difficultyName, sortOrder, masteryLevel, masteryPercent, hasDialog, hasCase, hasCoach, isNew}`
 

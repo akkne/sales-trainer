@@ -14,7 +14,7 @@ public sealed class TechniqueController(ITechniqueService techniqueService) : Co
     public async Task<ActionResult<IReadOnlyList<TechniqueCardDto>>> GetTechniques(
         [FromQuery] string? skill,
         [FromQuery] string? search,
-        [FromQuery] string? tag,
+        [FromQuery(Name = "tag")] string[]? tag,
         CancellationToken cancellationToken)
     {
         var currentUserId = TryGetCurrentUserId();

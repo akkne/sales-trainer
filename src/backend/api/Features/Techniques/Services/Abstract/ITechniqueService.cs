@@ -8,7 +8,7 @@ public interface ITechniqueService
         Guid? currentUserId,
         string? skillIconicName,
         string? searchTerm,
-        string? tag,
+        IReadOnlyCollection<string>? tags,
         CancellationToken cancellationToken = default);
 
     Task<TechniqueDetailDto?> GetTechniqueBySlugAsync(
