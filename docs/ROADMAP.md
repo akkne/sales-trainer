@@ -1034,3 +1034,38 @@
 - [ ] Session page: update header/footer per `session.jsx`
 - [ ] Completion screen: confetti, stat tiles grid
 - [ ] Voice mode page: full-screen mic per `screens.jsx` VoiceMic
+
+---
+
+## Phase 35 — Friends Tab April Redesign (Completion)
+
+> Phase 33.8 migrated only the outer `/friends` page shell. Inner components and the
+> public profile page still use Material Design 3 tokens (`bg-primary-container`,
+> `text-on-surface-variant`, `text-tertiary`, `bg-surface-container*`,
+> `border-outline-variant`, `font-headline`, `tonal-transition`). This phase finishes the
+> migration to the earthy April palette and shared UI primitives (`StatTile`, `GeoAvatar`,
+> `Chip`). Routes, hooks, and the 4-tab structure stay as-is.
+
+### [ ] Public profile `/friends/[userId]`
+- [ ] Header: `GeoAvatar` + name + persona `Chip`, back link styled with ink palette
+- [ ] Stats grid: 4× `StatTile` (rust streak / indigo XP / olive achievements / neutral avg score)
+- [ ] Drop `font-headline`, `bg-*-container`, `text-on-*`, `ring-primary-container`
+
+### [ ] Chat stack
+- [ ] `ChatsPane`: skeleton + empty state on `bg-surface` / `bg-bg-2`, copy on `text-ink-*`
+- [ ] `ChatWindow`: `border-line`, header avatar → `GeoAvatar`, `transition-colors`
+- [ ] `ConversationCard`: avatar → `GeoAvatar`, active row `bg-ink text-bg`, timestamps `font-mono`
+- [ ] `ChatInput`, `ChatBubble`: spot-check (already on April palette)
+
+### [ ] Activity feed + list cards
+- [ ] `FriendActivityFeed`: icon tones rust/indigo/olive/clay, copy on `text-ink-*`, timestamp `font-mono`
+- [ ] `FriendCard`: letter avatar → `GeoAvatar`
+- [ ] `FriendRequestCard`: letter avatar → `GeoAvatar`; accept/decline via shared `<Button>`
+- [ ] `UserSearchBar`: dropdown avatars → `GeoAvatar`
+
+### [ ] Dark theme & docs
+- [ ] Verify dark theme parity on every Friends screen (list, requests, leaderboard, chats, public profile)
+- [ ] Update `docs/TESTING/FRIENDS.md` with visual-parity checklist
+- [ ] `grep` sweep: no MD3 tokens (`on-surface`, `primary-container`, `outline-variant`,
+      `tonal-transition`, `font-headline`, `bg-surface-container*`, `*-container`) in
+      `src/frontend/app/(main)/friends` or `src/frontend/components/friends`
