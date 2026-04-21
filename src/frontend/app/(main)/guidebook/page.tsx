@@ -1,50 +1,39 @@
 "use client";
 
-import { useState, useDeferredValue } from "react";
+import { useEffect, useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { useHandbook, useHandbookCategories } from "@/lib/hooks/useReference";
+import {
+    useTechniques,
+    useTechniquesMeta,
+    useTechnique,
+    useMarkTechniqueSeen,
+    type TechniqueCard as TechniqueCardData,
+    type TechniqueDetail,
+} from "@/lib/hooks/useTechniques";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
 
-const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
-    all: { label: "Все", color: "var(--ink)" },
-    objections: { label: "Возражения", color: "var(--rust)" },
-    "cold-calls": { label: "Холодные звонки", color: "var(--indigo)" },
-    closing: { label: "Закрытие", color: "var(--olive)" },
-    discovery: { label: "Квалификация", color: "var(--clay)" },
-    rapport: { label: "Rapport", color: "var(--sage)" },
-    negotiation: { label: "Переговоры", color: "var(--ink-2)" },
-};
-
-function categoryLabel(cat: string): string {
-    return CATEGORY_CONFIG[cat]?.label ?? cat;
-}
-
-function categoryColor(cat: string | null): string {
-    return cat ? (CATEGORY_CONFIG[cat]?.color ?? "var(--ink-3)") : "var(--ink-3)";
-}
-
-function MasteryRing({ level, mastered }: { level: number; mastered: number }) {
+function MasteryRing({ level, masteryPercent }: { level: number; masteryPercent: number }) {
     const size = 56;
-    const r = 24;
-    const circ = 2 * Math.PI * r;
-    const pct = mastered / 100;
+    const radius = 24;
+    const circumference = 2 * Math.PI * radius;
+    const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
     return (
         <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
             <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-2)" strokeWidth={4} />
+                <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--bg-2)" strokeWidth={4} />
                 <circle
                     cx={size / 2}
                     cy={size / 2}
-                    r={r}
+                    r={radius}
                     fill="none"
                     stroke="var(--rust)"
                     strokeWidth={4}
-                    strokeDasharray={circ}
-                    strokeDashoffset={circ * (1 - pct)}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - fraction)}
                     strokeLinecap="round"
                 />
             </svg>
@@ -61,23 +50,23 @@ function MasteryRing({ level, mastered }: { level: number; mastered: number }) {
                     color: "var(--rust)",
                 }}
             >
-                L{level}
+                L{level === 0 ? 1 : level}
             </div>
         </div>
     );
 }
 
 function Chip({ children, tone = "neutral", size = "sm" }: { children: React.ReactNode; tone?: string; size?: string }) {
-    const toneStyles: Record<string, { bg: string; color: string }> = {
-        neutral: { bg: "var(--bg-2)", color: "var(--ink-2)" },
-        ghost: { bg: "transparent", color: "var(--ink-3)" },
-        rust: { bg: "var(--rust-soft)", color: "var(--rust)" },
-        olive: { bg: "var(--olive-soft)", color: "var(--olive)" },
-        indigo: { bg: "var(--indigo-soft)", color: "var(--indigo)" },
-        good: { bg: "var(--good-soft)", color: "var(--good)" },
-        warn: { bg: "var(--warn-soft)", color: "var(--warn)" },
+    const toneStyles: Record<string, { background: string; color: string }> = {
+        neutral: { background: "var(--bg-2)", color: "var(--ink-2)" },
+        ghost: { background: "transparent", color: "var(--ink-3)" },
+        rust: { background: "var(--rust-soft)", color: "var(--rust)" },
+        olive: { background: "var(--olive-soft)", color: "var(--olive)" },
+        indigo: { background: "var(--indigo-soft)", color: "var(--indigo)" },
+        good: { background: "var(--good-soft)", color: "var(--good)" },
+        warn: { background: "var(--warn-soft)", color: "var(--warn)" },
     };
-    const t = toneStyles[tone] ?? toneStyles.neutral;
+    const style = toneStyles[tone] ?? toneStyles.neutral;
     return (
         <span
             style={{
@@ -88,8 +77,8 @@ function Chip({ children, tone = "neutral", size = "sm" }: { children: React.Rea
                 borderRadius: 999,
                 fontSize: size === "sm" ? 11 : 13,
                 fontWeight: 500,
-                background: t.bg,
-                color: t.color,
+                background: style.background,
+                color: style.color,
                 border: tone === "ghost" ? "1px solid var(--line)" : "none",
             }}
         >
@@ -98,7 +87,15 @@ function Chip({ children, tone = "neutral", size = "sm" }: { children: React.Rea
     );
 }
 
-function Bubble({ side, children }: { side: "me" | "them"; children: React.ReactNode }) {
+function Bubble({
+    side,
+    children,
+    annotation,
+}: {
+    side: "me" | "them";
+    children: React.ReactNode;
+    annotation?: string;
+}) {
     return (
         <div
             style={{
@@ -113,6 +110,28 @@ function Bubble({ side, children }: { side: "me" | "them"; children: React.React
             }}
         >
             {children}
+            {annotation && (
+                <span style={{ marginLeft: 6, color: side === "me" ? "white" : "var(--rust)", opacity: 0.8 }}>
+                    [{annotation}]
+                </span>
+            )}
+        </div>
+    );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <div
+            style={{
+                fontSize: 11,
+                color: "var(--ink-3)",
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                fontWeight: 500,
+                marginBottom: 10,
+            }}
+        >
+            {children}
         </div>
     );
 }
@@ -120,25 +139,37 @@ function Bubble({ side, children }: { side: "me" | "them"; children: React.React
 export default function GuidebookPage() {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
-    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
     const deferredSearch = useDeferredValue(searchInput);
 
-    const { data: categories = [] } = useHandbookCategories();
-    const { data: materials = [], isLoading } = useHandbook(
-        selectedCategory ?? undefined,
-        deferredSearch || undefined
-    );
+    const { data: meta } = useTechniquesMeta();
+    const { data: cards = [], isLoading } = useTechniques({
+        category: selectedCategory ?? undefined,
+        search: deferredSearch || undefined,
+    });
 
-    function toggleExpand(id: string) {
-        setExpandedId((prev) => (prev === id ? null : id));
+    const { data: expandedDetail } = useTechnique(expandedSlug);
+    const markSeen = useMarkTechniqueSeen();
+
+    useEffect(() => {
+        if (!expandedSlug) return;
+        const expandedCard = cards.find((card) => card.slug === expandedSlug);
+        if (expandedCard?.isNew) {
+            markSeen.mutate(expandedSlug);
+        }
+    }, [expandedSlug, cards, markSeen]);
+
+    function toggleExpand(slug: string) {
+        setExpandedSlug((previous) => (previous === slug ? null : slug));
     }
 
-    const allCategories = ["all", ...categories];
+    const categories = meta?.categories ?? [];
+    const totalCount = meta?.totalCount ?? cards.length;
+    const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: totalCount };
 
     return (
         <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-            {/* Hero header */}
             <div
                 style={{
                     padding: "40px 60px 32px",
@@ -146,7 +177,16 @@ export default function GuidebookPage() {
                     background: "var(--surface-2)",
                 }}
             >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 32, maxWidth: 1200, margin: "0 auto" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-end",
+                        gap: 32,
+                        maxWidth: 1200,
+                        margin: "0 auto",
+                    }}
+                >
                     <div>
                         <div
                             style={{
@@ -159,7 +199,7 @@ export default function GuidebookPage() {
                                 fontFamily: "var(--f-mono)",
                             }}
                         >
-                            СПРАВОЧНИК · {materials.length} ТЕХНИК
+                            СПРАВОЧНИК · {totalCount} ТЕХНИК
                         </div>
                         <h1 style={{ margin: 0, fontSize: 48, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1 }}>
                             Коллекция.
@@ -169,17 +209,34 @@ export default function GuidebookPage() {
                         </p>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                        <StatTile big label="Освоено" value="—" icon={<Icon name="check" size="xs" />} tone="olive" />
-                        <StatTile big label="Мастер" value="—" icon={<Icon name="trophy" size="xs" />} tone="rust" />
-                        <StatTile big label="Новых" value={String(materials.length)} icon={<Icon name="sparkle" size="xs" />} tone="indigo" />
+                        <StatTile
+                            big
+                            label="Освоено"
+                            value={`${userCounts.mastered}`}
+                            unit={`/ ${totalCount}`}
+                            icon={<Icon name="check" size="xs" />}
+                            tone="olive"
+                        />
+                        <StatTile
+                            big
+                            label="Мастер"
+                            value={`${userCounts.master}`}
+                            icon={<Icon name="trophy" size="xs" />}
+                            tone="rust"
+                        />
+                        <StatTile
+                            big
+                            label="Новых"
+                            value={`${userCounts.unseen}`}
+                            icon={<Icon name="sparkle" size="xs" />}
+                            tone="indigo"
+                        />
                     </div>
                 </div>
             </div>
 
-            {/* Search + category filter */}
             <div style={{ padding: "24px 60px 0", maxWidth: 1200, margin: "0 auto" }}>
                 <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                    {/* Search */}
                     <div
                         style={{
                             flex: "0 1 360px",
@@ -197,7 +254,7 @@ export default function GuidebookPage() {
                         <input
                             placeholder="Техника, тег, навык…"
                             value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
+                            onChange={(event) => setSearchInput(event.target.value)}
                             style={{
                                 flex: 1,
                                 border: "none",
@@ -211,54 +268,38 @@ export default function GuidebookPage() {
                         {searchInput && (
                             <button
                                 onClick={() => setSearchInput("")}
-                                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--ink-3)" }}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    color: "var(--ink-3)",
+                                }}
                             >
                                 <Icon name="close" size="sm" />
                             </button>
                         )}
                     </div>
 
-                    {/* Category chips */}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {allCategories.map((cat) => {
-                            const isSelected = cat === "all" ? selectedCategory === null : selectedCategory === cat;
-                            const color = categoryColor(cat);
-                            return (
-                                <button
-                                    key={cat}
-                                    onClick={() => setSelectedCategory(cat === "all" ? null : cat)}
-                                    style={{
-                                        padding: "8px 14px",
-                                        borderRadius: 999,
-                                        cursor: "pointer",
-                                        background: isSelected ? "var(--ink)" : "var(--surface)",
-                                        color: isSelected ? "var(--bg)" : "var(--ink-2)",
-                                        border: `1px solid ${isSelected ? "var(--ink)" : "var(--line)"}`,
-                                        fontSize: 13,
-                                        fontWeight: 500,
-                                        fontFamily: "var(--f-sans)",
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 6,
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            width: 6,
-                                            height: 6,
-                                            borderRadius: 2,
-                                            background: color,
-                                        }}
-                                    />
-                                    {categoryLabel(cat)}
-                                </button>
-                            );
-                        })}
+                        <CategoryPill
+                            label="Все"
+                            color="var(--ink)"
+                            isSelected={selectedCategory === null}
+                            onSelect={() => setSelectedCategory(null)}
+                        />
+                        {categories.map((category) => (
+                            <CategoryPill
+                                key={category.slug}
+                                label={category.label}
+                                color={category.color}
+                                isSelected={selectedCategory === category.slug}
+                                onSelect={() => setSelectedCategory(category.slug)}
+                            />
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Content */}
             <div style={{ padding: "24px 60px 80px", maxWidth: 1200, margin: "0 auto" }}>
                 {isLoading ? (
                     <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
@@ -273,7 +314,7 @@ export default function GuidebookPage() {
                             }}
                         />
                     </div>
-                ) : materials.length === 0 ? (
+                ) : cards.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "64px 0" }}>
                         <div
                             style={{
@@ -294,176 +335,279 @@ export default function GuidebookPage() {
                     </div>
                 ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
-                        {materials.map((material) => {
-                            const isExpanded = expandedId === material.materialId;
-                            const excerpt = material.markdownContent.replace(/[#*_`]/g, "").slice(0, 150);
-                            const color = categoryColor(material.category);
-
-                            return (
-                                <div
-                                    key={material.materialId}
-                                    style={{
-                                        background: "var(--surface)",
-                                        border: "1px solid var(--line)",
-                                        borderRadius: 20,
-                                        overflow: "hidden",
-                                        transition: "all 0.2s",
-                                        gridColumn: isExpanded ? "span 2" : "span 1",
-                                        boxShadow: isExpanded ? "var(--sh-3)" : "var(--sh-1)",
-                                    }}
-                                >
-                                    {/* Card header */}
-                                    <button
-                                        onClick={() => toggleExpand(material.materialId)}
-                                        style={{
-                                            width: "100%",
-                                            padding: 24,
-                                            textAlign: "left",
-                                            background: "transparent",
-                                            border: "none",
-                                            cursor: "pointer",
-                                            fontFamily: "var(--f-sans)",
-                                            display: "flex",
-                                            gap: 20,
-                                            alignItems: "flex-start",
-                                        }}
-                                    >
-                                        {/* Mastery ring placeholder */}
-                                        <MasteryRing level={1} mastered={Math.random() * 100} />
-
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                                                {material.category && (
-                                                    <Chip tone="neutral" size="sm">
-                                                        {categoryLabel(material.category)}
-                                                    </Chip>
-                                                )}
-                                                {material.tags.slice(0, 2).map((tag) => (
-                                                    <Chip key={tag} tone="ghost" size="sm">
-                                                        #{tag}
-                                                    </Chip>
-                                                ))}
-                                            </div>
-                                            <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.4, marginBottom: 4 }}>
-                                                {material.title}
-                                            </div>
-                                            {!isExpanded && (
-                                                <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
-                                                    {excerpt}
-                                                    {excerpt.length >= 150 ? "…" : ""}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                                            <div style={{ fontSize: 11, fontFamily: "var(--f-mono)", color: "var(--ink-3)", letterSpacing: 0.5 }}>
-                                                УРОВЕНЬ
-                                            </div>
-                                            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>Novice</div>
-                                            <Icon name={isExpanded ? "chevron-up" : "chevron-down"} size="sm" color="var(--ink-3)" />
-                                        </div>
-                                    </button>
-
-                                    {/* Expanded content */}
-                                    {isExpanded && (
-                                        <div
-                                            style={{
-                                                borderTop: "1px solid var(--line)",
-                                                padding: 24,
-                                                display: "grid",
-                                                gridTemplateColumns: "1fr 300px",
-                                                gap: 32,
-                                            }}
-                                        >
-                                            <div>
-                                                {/* Content */}
-                                                <div
-                                                    style={{
-                                                        fontSize: 14,
-                                                        color: "var(--ink-2)",
-                                                        lineHeight: 1.6,
-                                                        marginBottom: 24,
-                                                    }}
-                                                >
-                                                    <ReactMarkdown>{material.markdownContent}</ReactMarkdown>
-                                                </div>
-
-                                                {/* Sample dialog placeholder */}
-                                                <div style={{ marginBottom: 24 }}>
-                                                    <div
-                                                        style={{
-                                                            fontSize: 11,
-                                                            color: "var(--ink-3)",
-                                                            letterSpacing: 1.5,
-                                                            textTransform: "uppercase",
-                                                            fontWeight: 500,
-                                                            marginBottom: 10,
-                                                        }}
-                                                    >
-                                                        Пример диалога
-                                                    </div>
-                                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                                        <Bubble side="them">У нас всё хорошо с текущим решением. Спасибо.</Bubble>
-                                                        <Bubble side="me">
-                                                            Понимаю. Что для вас сейчас сработало лучше всего?
-                                                        </Bubble>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                                    <Button variant="accent" size="md" iconRightName="arrow-right">
-                                                        Практиковать сейчас
-                                                    </Button>
-                                                    {material.skillSlug && (
-                                                        <Link href={`/skill/${material.skillSlug}`}>
-                                                            <Button variant="ghost" size="md">
-                                                                Связанный навык →
-                                                            </Button>
-                                                        </Link>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Coach sidecar */}
-                                            <div
-                                                style={{
-                                                    background: "var(--ink)",
-                                                    color: "var(--bg)",
-                                                    borderRadius: 16,
-                                                    padding: 20,
-                                                    alignSelf: "flex-start",
-                                                }}
-                                            >
-                                                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
-                                                    <GeoAvatar seed="sergey" size={44} />
-                                                    <div>
-                                                        <div style={{ fontSize: 13, fontWeight: 500 }}>Skeptic Sergey</div>
-                                                        <div
-                                                            style={{
-                                                                fontSize: 10,
-                                                                color: "var(--ink-4)",
-                                                                fontFamily: "var(--f-mono)",
-                                                                textTransform: "uppercase",
-                                                                letterSpacing: 1,
-                                                            }}
-                                                        >
-                                                            Коуч · возражения
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-                                                    «Эта техника работает, пока ты не начинаешь задавать вопросы ради вопросов.
-                                                    Каждый вопрос должен двигать разговор вперёд.»
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {cards.map((card) => (
+                            <TechniqueCardView
+                                key={card.id}
+                                card={card}
+                                isExpanded={expandedSlug === card.slug}
+                                detail={expandedSlug === card.slug ? expandedDetail ?? null : null}
+                                onToggle={() => toggleExpand(card.slug)}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+function CategoryPill({
+    label,
+    color,
+    isSelected,
+    onSelect,
+}: {
+    label: string;
+    color: string;
+    isSelected: boolean;
+    onSelect: () => void;
+}) {
+    return (
+        <button
+            onClick={onSelect}
+            style={{
+                padding: "8px 14px",
+                borderRadius: 999,
+                cursor: "pointer",
+                background: isSelected ? "var(--ink)" : "var(--surface)",
+                color: isSelected ? "var(--bg)" : "var(--ink-2)",
+                border: `1px solid ${isSelected ? "var(--ink)" : "var(--line)"}`,
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: "var(--f-sans)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+            }}
+        >
+            <span style={{ width: 6, height: 6, borderRadius: 2, background: color }} />
+            {label}
+        </button>
+    );
+}
+
+function TechniqueCardView({
+    card,
+    isExpanded,
+    detail,
+    onToggle,
+}: {
+    card: TechniqueCardData;
+    isExpanded: boolean;
+    detail: TechniqueDetail | null;
+    onToggle: () => void;
+}) {
+    return (
+        <div
+            style={{
+                background: "var(--surface)",
+                border: "1px solid var(--line)",
+                borderRadius: 20,
+                overflow: "hidden",
+                transition: "all 0.2s",
+                gridColumn: isExpanded ? "span 2" : "span 1",
+                boxShadow: isExpanded ? "var(--sh-3)" : "var(--sh-1)",
+            }}
+        >
+            <button
+                onClick={onToggle}
+                style={{
+                    width: "100%",
+                    padding: 24,
+                    textAlign: "left",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: "var(--f-sans)",
+                    display: "flex",
+                    gap: 20,
+                    alignItems: "flex-start",
+                }}
+            >
+                <MasteryRing level={card.level} masteryPercent={card.masteryPercent} />
+
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                        <Chip tone="neutral" size="sm">
+                            {card.categoryLabel}
+                        </Chip>
+                        {card.tags.slice(0, 2).map((tag) => (
+                            <Chip key={tag} tone="ghost" size="sm">
+                                #{tag}
+                            </Chip>
+                        ))}
+                        {card.isNew && (
+                            <Chip tone="indigo" size="sm">
+                                Новое
+                            </Chip>
+                        )}
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.4, marginBottom: 4 }}>
+                        {card.name}
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>{card.summary}</div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <div
+                        style={{
+                            fontSize: 11,
+                            fontFamily: "var(--f-mono)",
+                            color: "var(--ink-3)",
+                            letterSpacing: 0.5,
+                        }}
+                    >
+                        УРОВЕНЬ
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>{card.levelName}</div>
+                    <Icon name={isExpanded ? "chevron-up" : "chevron-down"} size="sm" color="var(--ink-3)" />
+                </div>
+            </button>
+
+            {isExpanded && (
+                <div
+                    style={{
+                        borderTop: "1px solid var(--line)",
+                        padding: 24,
+                        display: "grid",
+                        gridTemplateColumns: "1fr 300px",
+                        gap: 32,
+                    }}
+                >
+                    <div>
+                        {detail?.body && (
+                            <div
+                                style={{
+                                    fontSize: 14,
+                                    color: "var(--ink-2)",
+                                    lineHeight: 1.6,
+                                    marginBottom: 24,
+                                }}
+                            >
+                                <ReactMarkdown>{detail.body}</ReactMarkdown>
+                            </div>
+                        )}
+
+                        {detail && detail.dialogTurns.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                                <SectionLabel>Пример диалога</SectionLabel>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    {detail.dialogTurns.map((turn) => (
+                                        <Bubble
+                                            key={turn.orderIndex}
+                                            side={turn.side === "me" ? "me" : "them"}
+                                            annotation={turn.annotations.map((annotation) => annotation.label).join(" · ") || undefined}
+                                        >
+                                            {turn.text}
+                                        </Bubble>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {detail && detail.cases.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                                <SectionLabel>Кейс</SectionLabel>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                    {detail.cases.map((techniqueCase) => (
+                                        <div
+                                            key={techniqueCase.orderIndex}
+                                            style={{
+                                                padding: 18,
+                                                background: "var(--bg-2)",
+                                                borderRadius: 12,
+                                                fontSize: 14,
+                                                color: "var(--ink-2)",
+                                                lineHeight: 1.55,
+                                            }}
+                                        >
+                                            <b>{techniqueCase.title}</b> · {techniqueCase.body}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            <Button variant="accent" size="md" iconRightName="arrow-right">
+                                Практиковать сейчас
+                            </Button>
+                            {card.primarySkillIconicName && (
+                                <Link href={`/skill/${card.primarySkillIconicName}`}>
+                                    <Button variant="ghost" size="md">
+                                        Связанный навык →
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+
+                    {detail?.coach && (
+                        <div
+                            style={{
+                                background: "var(--ink)",
+                                color: "var(--bg)",
+                                borderRadius: 16,
+                                padding: 20,
+                                alignSelf: "flex-start",
+                            }}
+                        >
+                            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+                                <GeoAvatar seed={detail.coach.avatarSeed} size={44} />
+                                <div>
+                                    <div style={{ fontSize: 13, fontWeight: 500 }}>{detail.coach.name}</div>
+                                    <div
+                                        style={{
+                                            fontSize: 10,
+                                            color: "var(--ink-4)",
+                                            fontFamily: "var(--f-mono)",
+                                            textTransform: "uppercase",
+                                            letterSpacing: 1,
+                                        }}
+                                    >
+                                        {detail.coach.role}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>{detail.coach.quote}</div>
+                            {detail.coach.challenges.length > 0 && (
+                                <>
+                                    <div
+                                        style={{
+                                            marginTop: 14,
+                                            paddingTop: 14,
+                                            borderTop: "1px solid var(--ink-2)",
+                                            fontSize: 11,
+                                            fontFamily: "var(--f-mono)",
+                                            color: "var(--ink-4)",
+                                        }}
+                                    >
+                                        Практика · {detail.coach.challenges.length} микро-{detail.coach.challenges.length === 1 ? "вызов" : "вызова"}:
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                                        {detail.coach.challenges.map((challenge, index) => (
+                                            <div
+                                                key={index}
+                                                style={{
+                                                    textAlign: "left",
+                                                    padding: "8px 12px",
+                                                    borderRadius: 8,
+                                                    background: "var(--ink-2)",
+                                                    color: "var(--bg)",
+                                                    fontSize: 12,
+                                                    fontFamily: "var(--f-mono)",
+                                                }}
+                                            >
+                                                {challenge.label}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
