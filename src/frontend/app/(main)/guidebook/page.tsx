@@ -130,9 +130,9 @@ function TagChip({
                 fontSize: 11,
                 fontWeight: 500,
                 fontFamily: "var(--f-sans)",
-                background: isActive ? "var(--indigo-soft)" : "transparent",
-                color: isActive ? "var(--indigo)" : "var(--ink-3)",
-                border: `1px solid ${isActive ? "var(--indigo)" : "var(--line)"}`,
+                background: isActive ? "var(--bg-2)" : "transparent",
+                color: isActive ? "var(--ink)" : "var(--ink-3)",
+                border: `1px solid ${isActive ? "var(--line-2)" : "var(--line)"}`,
                 cursor: "pointer",
             }}
         >
@@ -148,33 +148,43 @@ function ActiveTagPill({ tag, onRemove }: { tag: string; onRemove: (tag: string)
             style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 6,
-                padding: "6px 10px 6px 12px",
+                gap: 8,
+                padding: "0 10px 0 14px",
                 borderRadius: 999,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 500,
                 fontFamily: "var(--f-sans)",
-                background: "var(--indigo-soft)",
-                color: "var(--indigo)",
-                border: "1px solid var(--indigo)",
+                background: "var(--bg-2)",
+                color: "var(--ink-2)",
+                border: "1px solid var(--line)",
                 cursor: "pointer",
-                height: 42,
+                height: 34,
             }}
             aria-label={`Убрать фильтр по тегу ${tag}`}
         >
-            #{tag}
+            <span style={{ color: "var(--ink-4)", marginRight: -4 }}>#</span>
+            {tag}
             <span
+                aria-hidden
                 style={{
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: 16,
-                    height: 16,
+                    width: 18,
+                    height: 18,
                     borderRadius: "50%",
-                    background: "var(--indigo)",
-                    color: "white",
-                    fontSize: 10,
+                    color: "var(--ink-3)",
+                    fontSize: 14,
                     lineHeight: 1,
+                    transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={(event) => {
+                    event.currentTarget.style.background = "var(--line)";
+                    event.currentTarget.style.color = "var(--ink)";
+                }}
+                onMouseLeave={(event) => {
+                    event.currentTarget.style.background = "transparent";
+                    event.currentTarget.style.color = "var(--ink-3)";
                 }}
             >
                 ×
@@ -382,13 +392,16 @@ export default function GuidebookPage() {
                                     background: "transparent",
                                     border: "none",
                                     color: "var(--ink-3)",
-                                    fontSize: 12,
+                                    fontSize: 11,
+                                    letterSpacing: 1.5,
                                     cursor: "pointer",
                                     fontFamily: "var(--f-mono)",
-                                    textDecoration: "underline",
+                                    textTransform: "uppercase",
+                                    marginLeft: 16,
+                                    padding: 0,
                                 }}
                             >
-                                очистить
+                                Очистить
                             </button>
                         </div>
                     )}
