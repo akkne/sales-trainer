@@ -64,3 +64,21 @@
 - [ ] "Друзья" link visible in TopAppBar (desktop)
 - [ ] Pending request badge appears on desktop nav
 - [ ] Tab routing works: /friends, /friends/{userId}, /friends/chat, /friends/chat/{id}
+
+### Visual Parity (April redesign — Phase 35)
+- [ ] Palette: no Material Design 3 tokens anywhere under `/friends`
+      (no `on-surface`, `primary-container`, `outline-variant`, `tonal-transition`,
+      `font-headline`, `bg-surface-container*`, `*-container`)
+- [ ] Typography: all headings + body use Geist (`var(--f-sans)`), numbers/timestamps
+      use `font-mono` (`var(--f-mono)`)
+- [ ] Avatars: every user avatar in friends list, requests, search, chat header,
+      conversation rows, and public profile renders via `GeoAvatar` (not a letter in
+      a colored square/circle)
+- [ ] Public profile stats: 4× `StatTile` in rust (streak) / indigo (XP) / olive
+      (achievements) / neutral (avg score); persona shown as `Chip`
+- [ ] Active conversation row: dark `bg-ink` with `text-bg` text (same pattern as
+      the active tab in the Friends hub)
+- [ ] Shadows: cards use `var(--sh-1)`; elevated/active states use `var(--sh-2)`
+- [ ] Dark theme: toggle theme in profile settings, then walk every Friends screen
+      (friends / requests / leaderboard / chats / public profile). No white
+      fragments, all text legible, no hard-coded hex colors visible
