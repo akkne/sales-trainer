@@ -6,21 +6,23 @@ export interface TechniqueCard {
     slug: string;
     name: string;
     summary: string;
-    categorySlug: string;
-    categoryLabel: string;
-    categoryColor: string;
     tags: string[];
     primarySkillIconicName: string | null;
+    primarySkillTitle: string | null;
+    difficulty: number;
+    difficultyName: string;
     sortOrder: number;
-    level: number;
-    levelName: string;
+    masteryLevel: number;
     masteryPercent: number;
+    hasDialog: boolean;
+    hasCase: boolean;
+    hasCoach: boolean;
     isNew: boolean;
 }
 
 export interface TechniqueDialogAnnotation {
     label: string;
-    tone: string;
+    tone: string | null;
 }
 
 export interface TechniqueDialogTurn {
@@ -31,7 +33,6 @@ export interface TechniqueDialogTurn {
 }
 
 export interface TechniqueCase {
-    orderIndex: number;
     title: string;
     body: string;
     metrics: Record<string, unknown> | null;
@@ -56,19 +57,18 @@ export interface TechniqueDetail {
     body: string;
     skillIconicNames: string[];
     dialogTurns: TechniqueDialogTurn[];
-    cases: TechniqueCase[];
+    case: TechniqueCase | null;
     coach: TechniqueCoach | null;
 }
 
-export interface TechniqueCategory {
-    slug: string;
-    label: string;
-    color: string;
-    sortOrder: number;
+export interface TechniqueSkillFacet {
+    iconicName: string;
+    title: string;
+    techniqueCount: number;
 }
 
 export interface TechniqueMeta {
-    categories: TechniqueCategory[];
+    skills: TechniqueSkillFacet[];
     totalCount: number;
     userCounts: {
         mastered: number;
@@ -78,16 +78,16 @@ export interface TechniqueMeta {
 }
 
 export function useTechniques(params: {
-    category?: string;
+    skill?: string;
     search?: string;
     tag?: string;
 }) {
-    const { category, search, tag } = params;
+    const { skill, search, tag } = params;
     return useQuery({
-        queryKey: ["techniques", category ?? "", search ?? "", tag ?? ""],
+        queryKey: ["techniques", skill ?? "", search ?? "", tag ?? ""],
         queryFn: () => {
             const query = new URLSearchParams();
-            if (category) query.set("category", category);
+            if (skill) query.set("skill", skill);
             if (search) query.set("search", search);
             if (tag) query.set("tag", tag);
             const tail = query.toString();

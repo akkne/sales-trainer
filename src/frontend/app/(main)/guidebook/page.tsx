@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useDeferredValue } from "react";
+import { useEffect, useMemo, useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
@@ -16,11 +16,14 @@ import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
 
-function MasteryRing({ level, masteryPercent }: { level: number; masteryPercent: number }) {
+type ExpandedTab = "dialog" | "case";
+
+function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
     const size = 56;
     const radius = 24;
     const circumference = 2 * Math.PI * radius;
     const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
+    const display = masteryLevel === 0 ? "—" : `L${masteryLevel}`;
     return (
         <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
             <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
@@ -50,7 +53,7 @@ function MasteryRing({ level, masteryPercent }: { level: number; masteryPercent:
                     color: "var(--rust)",
                 }}
             >
-                L{level === 0 ? 1 : level}
+                {display}
             </div>
         </div>
     );
@@ -119,25 +122,8 @@ function Bubble({
     );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <div
-            style={{
-                fontSize: 11,
-                color: "var(--ink-3)",
-                letterSpacing: 1.5,
-                textTransform: "uppercase",
-                fontWeight: 500,
-                marginBottom: 10,
-            }}
-        >
-            {children}
-        </div>
-    );
-}
-
 export default function GuidebookPage() {
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
     const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
@@ -145,7 +131,7 @@ export default function GuidebookPage() {
 
     const { data: meta } = useTechniquesMeta();
     const { data: cards = [], isLoading } = useTechniques({
-        category: selectedCategory ?? undefined,
+        skill: selectedSkill ?? undefined,
         search: deferredSearch || undefined,
     });
 
@@ -164,7 +150,7 @@ export default function GuidebookPage() {
         setExpandedSlug((previous) => (previous === slug ? null : slug));
     }
 
-    const categories = meta?.categories ?? [];
+    const skills = meta?.skills ?? [];
     const totalCount = meta?.totalCount ?? cards.length;
     const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: totalCount };
 
@@ -281,19 +267,18 @@ export default function GuidebookPage() {
                     </div>
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <CategoryPill
+                        <SkillPill
                             label="Все"
-                            color="var(--ink)"
-                            isSelected={selectedCategory === null}
-                            onSelect={() => setSelectedCategory(null)}
+                            isSelected={selectedSkill === null}
+                            onSelect={() => setSelectedSkill(null)}
                         />
-                        {categories.map((category) => (
-                            <CategoryPill
-                                key={category.slug}
-                                label={category.label}
-                                color={category.color}
-                                isSelected={selectedCategory === category.slug}
-                                onSelect={() => setSelectedCategory(category.slug)}
+                        {skills.map((skill) => (
+                            <SkillPill
+                                key={skill.iconicName}
+                                label={skill.title}
+                                count={skill.techniqueCount}
+                                isSelected={selectedSkill === skill.iconicName}
+                                onSelect={() => setSelectedSkill(skill.iconicName)}
                             />
                         ))}
                     </div>
@@ -331,7 +316,7 @@ export default function GuidebookPage() {
                             <Icon name="search" size="lg" color="var(--ink-3)" />
                         </div>
                         <p style={{ fontWeight: 600, marginBottom: 4 }}>Ничего не найдено</p>
-                        <p style={{ fontSize: 14, color: "var(--ink-3)" }}>Попробуй другой запрос или категорию</p>
+                        <p style={{ fontSize: 14, color: "var(--ink-3)" }}>Попробуй другой запрос или навык</p>
                     </div>
                 ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
@@ -351,14 +336,14 @@ export default function GuidebookPage() {
     );
 }
 
-function CategoryPill({
+function SkillPill({
     label,
-    color,
+    count,
     isSelected,
     onSelect,
 }: {
     label: string;
-    color: string;
+    count?: number;
     isSelected: boolean;
     onSelect: () => void;
 }) {
@@ -380,8 +365,18 @@ function CategoryPill({
                 gap: 6,
             }}
         >
-            <span style={{ width: 6, height: 6, borderRadius: 2, background: color }} />
             {label}
+            {typeof count === "number" && (
+                <span
+                    style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: 11,
+                        opacity: 0.6,
+                    }}
+                >
+                    {count}
+                </span>
+            )}
         </button>
     );
 }
@@ -397,6 +392,18 @@ function TechniqueCardView({
     detail: TechniqueDetail | null;
     onToggle: () => void;
 }) {
+    const availableTabs = useMemo<ExpandedTab[]>(() => {
+        const tabs: ExpandedTab[] = [];
+        if (card.hasDialog) tabs.push("dialog");
+        if (card.hasCase) tabs.push("case");
+        return tabs;
+    }, [card.hasDialog, card.hasCase]);
+
+    const [activeTab, setActiveTab] = useState<ExpandedTab | null>(null);
+    const effectiveTab = activeTab && availableTabs.includes(activeTab)
+        ? activeTab
+        : availableTabs[0] ?? null;
+
     return (
         <div
             style={{
@@ -424,13 +431,15 @@ function TechniqueCardView({
                     alignItems: "flex-start",
                 }}
             >
-                <MasteryRing level={card.level} masteryPercent={card.masteryPercent} />
+                <MasteryRing masteryLevel={card.masteryLevel} masteryPercent={card.masteryPercent} />
 
                 <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                        <Chip tone="neutral" size="sm">
-                            {card.categoryLabel}
-                        </Chip>
+                        {card.primarySkillTitle && (
+                            <Chip tone="neutral" size="sm">
+                                {card.primarySkillTitle}
+                            </Chip>
+                        )}
                         {card.tags.slice(0, 2).map((tag) => (
                             <Chip key={tag} tone="ghost" size="sm">
                                 #{tag}
@@ -459,7 +468,7 @@ function TechniqueCardView({
                     >
                         УРОВЕНЬ
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>{card.levelName}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>{card.difficultyName}</div>
                     <Icon name={isExpanded ? "chevron-up" : "chevron-down"} size="sm" color="var(--ink-3)" />
                 </div>
             </button>
@@ -470,7 +479,7 @@ function TechniqueCardView({
                         borderTop: "1px solid var(--line)",
                         padding: 24,
                         display: "grid",
-                        gridTemplateColumns: "1fr 300px",
+                        gridTemplateColumns: card.hasCoach ? "1fr 300px" : "1fr",
                         gap: 32,
                     }}
                 >
@@ -488,43 +497,79 @@ function TechniqueCardView({
                             </div>
                         )}
 
-                        {detail && detail.dialogTurns.length > 0 && (
+                        {availableTabs.length > 0 && (
                             <div style={{ marginBottom: 24 }}>
-                                <SectionLabel>Пример диалога</SectionLabel>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {detail.dialogTurns.map((turn) => (
-                                        <Bubble
-                                            key={turn.orderIndex}
-                                            side={turn.side === "me" ? "me" : "them"}
-                                            annotation={turn.annotations.map((annotation) => annotation.label).join(" · ") || undefined}
-                                        >
-                                            {turn.text}
-                                        </Bubble>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {detail && detail.cases.length > 0 && (
-                            <div style={{ marginBottom: 24 }}>
-                                <SectionLabel>Кейс</SectionLabel>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                    {detail.cases.map((techniqueCase) => (
-                                        <div
-                                            key={techniqueCase.orderIndex}
+                                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                                    {availableTabs.map((tab) => (
+                                        <button
+                                            key={tab}
+                                            onClick={() => setActiveTab(tab)}
                                             style={{
-                                                padding: 18,
-                                                background: "var(--bg-2)",
-                                                borderRadius: 12,
-                                                fontSize: 14,
-                                                color: "var(--ink-2)",
-                                                lineHeight: 1.55,
+                                                padding: "6px 14px",
+                                                borderRadius: 999,
+                                                cursor: "pointer",
+                                                background: effectiveTab === tab ? "var(--ink)" : "transparent",
+                                                color: effectiveTab === tab ? "var(--bg)" : "var(--ink-2)",
+                                                border: `1px solid ${effectiveTab === tab ? "var(--ink)" : "var(--line)"}`,
+                                                fontSize: 12,
+                                                fontWeight: 500,
+                                                fontFamily: "var(--f-sans)",
                                             }}
                                         >
-                                            <b>{techniqueCase.title}</b> · {techniqueCase.body}
-                                        </div>
+                                            {tab === "dialog" ? "Пример диалога" : "Кейс"}
+                                        </button>
                                     ))}
                                 </div>
+
+                                {effectiveTab === "dialog" && detail && detail.dialogTurns.length > 0 && (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {detail.dialogTurns.map((turn) => (
+                                            <Bubble
+                                                key={turn.orderIndex}
+                                                side={turn.side === "me" ? "me" : "them"}
+                                                annotation={
+                                                    turn.annotations.map((annotation) => annotation.label).join(" · ") || undefined
+                                                }
+                                            >
+                                                {turn.text}
+                                            </Bubble>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {effectiveTab === "case" && detail?.case && (
+                                    <div
+                                        style={{
+                                            padding: 18,
+                                            background: "var(--bg-2)",
+                                            borderRadius: 12,
+                                            fontSize: 14,
+                                            color: "var(--ink-2)",
+                                            lineHeight: 1.55,
+                                        }}
+                                    >
+                                        <b>{detail.case.title}</b> · {detail.case.body}
+                                        {detail.case.metrics && (
+                                            <div
+                                                style={{
+                                                    marginTop: 10,
+                                                    display: "flex",
+                                                    gap: 10,
+                                                    flexWrap: "wrap",
+                                                    fontFamily: "var(--f-mono)",
+                                                    fontSize: 12,
+                                                    color: "var(--ink-3)",
+                                                }}
+                                            >
+                                                {Object.entries(detail.case.metrics).map(([key, value]) => (
+                                                    <span key={key}>
+                                                        {key}: {String(value)}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -582,7 +627,8 @@ function TechniqueCardView({
                                             color: "var(--ink-4)",
                                         }}
                                     >
-                                        Практика · {detail.coach.challenges.length} микро-{detail.coach.challenges.length === 1 ? "вызов" : "вызова"}:
+                                        Практика · {detail.coach.challenges.length} микро-
+                                        {detail.coach.challenges.length === 1 ? "вызов" : "вызова"}:
                                     </div>
                                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
                                         {detail.coach.challenges.map((challenge, index) => (
