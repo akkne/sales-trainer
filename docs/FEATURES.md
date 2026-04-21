@@ -13,7 +13,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
-| [Handbook Redesign](HANDBOOK_REDESIGN.md) | Draft proposal — migrate ReferenceMaterial → Technique with per-user mastery, structured dialog/case/coach blocks |
+| [Handbook Redesign](HANDBOOK_REDESIGN.md) | Implemented 2026-04-21 — Technique domain with per-user mastery + structured dialog/case/coach blocks |
 
 ## Feature Documentation
 
@@ -78,9 +78,9 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Weekly closure job
 
 ### Reference & Handbook
-- Sales technique reference materials
-- Category filtering, full-text search
-- Markdown content with skill links
+- **Techniques** ("Коллекция") — first-class entities with per-user mastery ring (Unseen/Novice/Practitioner/Expert/Master), category + tag filtering, sample dialog with annotations, case study, and optional coach sidecar
+- Legacy **ReferenceMaterials** markdown glossary kept for skill-detail pages (`GET /skills/:slug/reference`)
+- Admin CRUD under `/admin/techniques*`
 
 ### AI Dialog
 - Bundle/mode structure linked to skills

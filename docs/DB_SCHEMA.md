@@ -1,6 +1,6 @@
 # DB Schema
 
-Last updated: 2026-04-14
+Last updated: 2026-04-21
 
 ## Databases overview
 
@@ -174,6 +174,8 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 
 ### `ReferenceMaterials`
 
+Legacy markdown glossary, kept to serve old skill-detail pages. Superseded for the "Коллекция" redesign by the `Techniques` cluster below — see [HANDBOOK_REDESIGN.md](HANDBOOK_REDESIGN.md).
+
 | Column            | Type      | Nullable | Notes              |
 |-------------------|-----------|----------|--------------------|
 | `Id`              | `uuid`    | NOT NULL | PK                 |
@@ -183,6 +185,120 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 | `SortOrder`       | `integer` | NOT NULL |                    |
 | `Category`        | `text`    | NULL     |                    |
 | `Tags`            | `text`    | NULL     | Comma-separated    |
+
+---
+
+### `TechniqueCategories`
+
+| Column      | Type      | Nullable | Notes                     |
+|-------------|-----------|----------|---------------------------|
+| `Slug`      | `text`    | NOT NULL | PK (e.g. `discovery`)     |
+| `Label`     | `text`    | NOT NULL | Display name              |
+| `Color`     | `text`    | NOT NULL | CSS token (e.g. `--rust`) |
+| `SortOrder` | `integer` | NOT NULL |                           |
+
+Seeded: `discovery`, `qualification`, `objections`, `closing`, `negotiation`, `psychology`.
+
+---
+
+### `Techniques`
+
+| Column           | Type                       | Nullable | Notes                                      |
+|------------------|----------------------------|----------|--------------------------------------------|
+| `Id`             | `uuid`                     | NOT NULL | PK                                         |
+| `Slug`           | `text`                     | NOT NULL | UNIQUE                                     |
+| `Name`           | `text`                     | NOT NULL |                                            |
+| `Summary`        | `text`                     | NOT NULL | Short excerpt shown on card                |
+| `Body`           | `text`                     | NOT NULL | Markdown body for expanded view            |
+| `CategorySlug`   | `text`                     | NOT NULL | FK → `TechniqueCategories.Slug`            |
+| `Tags`           | `text[]`                   | NOT NULL | Free tags for search/filter                |
+| `PrimarySkillId` | `uuid`                     | NULL     | FK → `Skills.Id` ON DELETE SET NULL        |
+| `SortOrder`      | `integer`                  | NOT NULL |                                            |
+| `CreatedAt`      | `timestamp with time zone` | NOT NULL |                                            |
+| `UpdatedAt`      | `timestamp with time zone` | NOT NULL |                                            |
+
+Indexes: `IX_Techniques_Slug` (unique), `IX_Techniques_CategorySlug`, `IX_Techniques_PrimarySkillId`.
+
+---
+
+### `TechniqueSkills`
+
+M:N link table — a technique can span multiple skills (e.g. SPIN covers Discovery + Qualification).
+
+| Column        | Type   | Nullable | Notes                                   |
+|---------------|--------|----------|-----------------------------------------|
+| `TechniqueId` | `uuid` | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE  |
+| `SkillId`     | `uuid` | NOT NULL | FK → `Skills.Id` ON DELETE CASCADE      |
+
+Composite PK: (`TechniqueId`, `SkillId`).
+
+---
+
+### `TechniqueDialogTurns`
+
+Ordered list of sample-dialog turns for the expanded card view.
+
+| Column            | Type      | Nullable | Notes                                     |
+|-------------------|-----------|----------|-------------------------------------------|
+| `Id`              | `uuid`    | NOT NULL | PK                                        |
+| `TechniqueId`     | `uuid`    | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE    |
+| `OrderIndex`      | `integer` | NOT NULL |                                           |
+| `Side`            | `text`    | NOT NULL | `me` \| `them`                            |
+| `Text`            | `text`    | NOT NULL |                                           |
+| `AnnotationsJson` | `jsonb`   | NULL     | `[{ label, tone }]` — SPIN-like badges    |
+
+Indexes: `IX_TechniqueDialogTurns_TechniqueId`.
+
+---
+
+### `TechniqueCases`
+
+Real-world case blocks shown under the dialog sample.
+
+| Column        | Type      | Nullable | Notes                                     |
+|---------------|-----------|----------|-------------------------------------------|
+| `Id`          | `uuid`    | NOT NULL | PK                                        |
+| `TechniqueId` | `uuid`    | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE    |
+| `OrderIndex`  | `integer` | NOT NULL |                                           |
+| `Title`       | `text`    | NOT NULL |                                           |
+| `Body`        | `text`    | NOT NULL |                                           |
+| `MetricsJson` | `jsonb`   | NULL     | Optional metrics (`deal`, `cycleDays`, …) |
+
+Indexes: `IX_TechniqueCases_TechniqueId`.
+
+---
+
+### `TechniqueCoaches`
+
+Optional NPC-coach sidecar (quote + practice challenges). At most one per technique.
+
+| Column            | Type    | Nullable | Notes                                     |
+|-------------------|---------|----------|-------------------------------------------|
+| `Id`              | `uuid`  | NOT NULL | PK                                        |
+| `TechniqueId`     | `uuid`  | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE, UNIQUE |
+| `AvatarSeed`      | `text`  | NOT NULL | Seed for `GeoAvatar` procedural portrait  |
+| `Name`            | `text`  | NOT NULL |                                           |
+| `Role`            | `text`  | NOT NULL |                                           |
+| `Quote`           | `text`  | NOT NULL |                                           |
+| `ChallengesJson`  | `jsonb` | NULL     | `[{ label, kind, targetSlug }]`           |
+
+---
+
+### `UserTechniqueProgressRecords`
+
+Per-user mastery tracking for techniques (drives the `MasteryRing` + `isNew` chip).
+
+| Column           | Type                       | Nullable | Notes                                              |
+|------------------|----------------------------|----------|----------------------------------------------------|
+| `Id`             | `uuid`                     | NOT NULL | PK                                                 |
+| `UserId`         | `uuid`                     | NOT NULL | FK → `Users.Id` ON DELETE CASCADE                  |
+| `TechniqueId`    | `uuid`                     | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE             |
+| `Level`          | `integer`                  | NOT NULL | 0=Unseen, 1=Novice, 2=Practitioner, 3=Expert, 4=Master |
+| `MasteryPercent` | `integer`                  | NOT NULL | 0–100                                              |
+| `FirstSeenAt`    | `timestamp with time zone` | NULL     | Set by POST `/techniques/{slug}/seen`              |
+| `UpdatedAt`      | `timestamp with time zone` | NOT NULL |                                                    |
+
+Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`TechniqueId`).
 
 ---
 
@@ -378,3 +494,5 @@ Skills
 | `AddIconicNameToSkillsAndTopics`      | 2026-04-14 | Add IconicName (unique) to Skills and Topics |
 | `AddFriendships`                      | 2026-04-18 | `Friendships` table with unique composite index |
 | `AddNotifications`                    | 2026-04-18 | `Notifications` table with recipient+read and recipient+createdAt indexes |
+| `AlignExerciseTypePromptKeys`         | 2026-04-21 | Aligns `ExerciseTypePrompts` keys with `ExerciseTypes` constants |
+| `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |

@@ -172,3 +172,43 @@ Consolidated manual testing checklists for major features.
 - [ ] Auto-dismisses after 4s
 - [ ] Queue drains correctly
 - [ ] Click dismisses early
+
+---
+
+## Handbook ("Коллекция") Testing
+
+### Prerequisites
+- Backend running with `AddTechniques` migration applied
+- Logged-in user
+
+### List view
+- [ ] Navigate to `/guidebook`
+- [ ] Header counter shows `СПРАВОЧНИК · N ТЕХНИК` matching seed count (≥4)
+- [ ] StatTiles `Освоено / Мастер / Новых` sum to total
+- [ ] Category pills render with correct colors from `/techniques/meta`
+- [ ] "Все" is selected by default
+- [ ] Clicking a category filters the grid
+- [ ] Search box filters by name/tag/body
+- [ ] Empty result state renders when nothing matches
+
+### Mastery + "Новое" chip
+- [ ] Card ring shows `L1` and 0% stroke for freshly-seeded user
+- [ ] `Новое` chip appears on cards with `isNew: true`
+- [ ] After expanding a new card, calling `/techniques/:slug/seen` removes the chip on next fetch
+- [ ] `userCounts.unseen` decreases after mark-seen
+
+### Expanded detail
+- [ ] Body markdown renders
+- [ ] Dialog turns render with correct side bubbles (me=right/indigo, them=left/grey)
+- [ ] Annotations (e.g. `[S]`, `[P → I]`) appear inline on turns that have them
+- [ ] Case blocks render `title · body`
+- [ ] Coach sidecar renders when present (GeoAvatar, name, role, quote, challenges)
+- [ ] "Связанный навык →" links to `/skill/:iconicName` only when `primarySkillIconicName` is set
+- [ ] Re-clicking the card collapses it
+
+### Admin CRUD (role=Admin or SuperAdmin)
+- [ ] `GET /admin/techniques` returns the full list
+- [ ] `POST /admin/techniques` with duplicate slug → 409
+- [ ] `POST` with unknown `categorySlug` → 400
+- [ ] `PUT` replaces nested dialog/cases/coach atomically
+- [ ] `DELETE` cascades to dialog/cases/coach/skills rows

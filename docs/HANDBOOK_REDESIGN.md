@@ -1,6 +1,6 @@
 # Handbook ("Справочник") — Architecture Redesign Proposal
 
-Status: **draft / not implemented**
+Status: **implemented** (backend + frontend + migration, 2026-04-21)
 Last updated: 2026-04-21
 Related: [`src/frontend/app/(main)/guidebook/page.tsx`](../src/frontend/app/(main)/guidebook/page.tsx), [`src/backend/api/Features/Reference`](../src/backend/api/Features/Reference), [DB_SCHEMA](DB_SCHEMA.md#referencematerials), [API_CONTRACTS](API_CONTRACTS.md#reference), [`.design/redesign/components/screens.jsx`](../.design/redesign/components/screens.jsx) (`Handbook`, `TechniqueCard`, `MasteryRing`).
 

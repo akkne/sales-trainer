@@ -113,6 +113,31 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 
 ---
 
+## Techniques (Handbook / "Коллекция")
+
+All routes require auth. Card response includes per-user mastery state; `/meta` aggregates per-user counts. See [HANDBOOK_REDESIGN.md](HANDBOOK_REDESIGN.md).
+
+| Method | Path | Query / Body | Response |
+|---|---|---|---|
+| GET | /techniques | `?category=&search=&tag=` | `TechniqueCardDto[]` |
+| GET | /techniques/meta | — | `TechniqueMetaDto` |
+| GET | /techniques/:slug | — | `TechniqueDetailDto` |
+| POST | /techniques/:slug/seen | `{}` | 204 (sets `FirstSeenAt`, clears `isNew`) |
+
+`TechniqueCardDto`: `{id, slug, name, summary, categorySlug, categoryLabel, categoryColor, tags: string[], primarySkillIconicName?, sortOrder, level, levelName, masteryPercent, isNew}`
+
+`level`: 0=Unseen, 1=Novice, 2=Practitioner, 3=Expert, 4=Master. `levelName` is the display form (`Novice`, `Novice+`, etc.) derived server-side from `level` + `masteryPercent`.
+
+`TechniqueDetailDto`: `{card: TechniqueCardDto, body, skillIconicNames: string[], dialogTurns: TechniqueDialogTurnDto[], cases: TechniqueCaseDto[], coach?: TechniqueCoachDto}`
+
+`TechniqueDialogTurnDto`: `{orderIndex, side: "me"|"them", text, annotations: [{label, tone}]}`
+`TechniqueCaseDto`: `{orderIndex, title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`).
+`TechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges: [{label, kind?, targetSlug?}]}`
+
+`TechniqueMetaDto`: `{categories: [{slug, label, color, sortOrder}], totalCount, userCounts: {mastered, master, unseen}}`
+
+---
+
 ## Profile
 
 | Method | Path | Response |
@@ -223,6 +248,20 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | DELETE | /admin/reference/:id | — | 204 |
 
 `AdminReferenceMaterialDto`: `{id, skillId, skillTitle, skillSlug, title, markdownContent, sortOrder, category, tags: string[]}`
+
+### Techniques
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/techniques | — (`?category=&search=`) | `AdminTechniqueDto[]` |
+| GET | /admin/technique-categories | — | `TechniqueCategoryDto[]` |
+| GET | /admin/techniques/:id | — | `AdminTechniqueDto` |
+| POST | /admin/techniques | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (409 on slug conflict, 400 on unknown `categorySlug`) |
+| PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (replaces nested dialog/cases/coach/skills) |
+| DELETE | /admin/techniques/:id | — | 204 |
+
+`AdminTechniqueDto`: `{id, slug, name, summary, body, categorySlug, tags: string[], primarySkillId?, additionalSkillIds: Guid[], sortOrder, createdAt, updatedAt, dialogTurns, cases, coach?}`
+
+`AdminTechniqueWriteRequestDto`: same shape minus `id`/timestamps. Nested `dialogTurns`, `cases`, and `coach` use raw JSON strings (`annotationsJson`, `metricsJson`, `challengesJson`) that the server validates via `JsonDocument.Parse` before persisting.
 
 ### Users (requires `RequireSuperAdmin` for role change)
 | Method | Path | Body | Response |
