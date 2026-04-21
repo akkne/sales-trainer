@@ -26,18 +26,21 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                 {isLoading ? (
                     <div className="flex flex-col gap-2">
                         {[1, 2, 3].map((index) => (
-                            <div key={index} className="h-16 rounded-2xl bg-surface-container animate-pulse" />
+                            <div key={index} className="h-16 rounded-2xl bg-surface animate-pulse" />
                         ))}
                     </div>
                 ) : isEmpty ? (
-                    <div className="bg-surface-container rounded-2xl px-5 py-8 text-center">
-                        <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mx-auto mb-3">
-                            <Icon name="message" size="lg" className="text-on-surface-variant" />
+                    <div
+                        className="bg-surface border border-line rounded-2xl px-5 py-8 text-center"
+                        style={{ boxShadow: "var(--sh-1)" }}
+                    >
+                        <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mx-auto mb-3">
+                            <Icon name="message" size="lg" className="text-ink-4" />
                         </div>
-                        <p className="text-sm font-semibold text-on-surface-variant">
+                        <p className="text-sm font-medium text-ink-3">
                             Нет сообщений
                         </p>
-                        <p className="text-xs text-on-surface-variant mt-1">
+                        <p className="text-xs text-ink-4 mt-1">
                             Начни общение с другом!
                         </p>
                     </div>
@@ -68,13 +71,13 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                     />
                 ) : (
                     <div className="hidden md:flex flex-col items-center justify-center text-center p-8">
-                        <div className="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-3">
-                            <Icon name="message" size="lg" className="text-on-surface-variant" />
+                        <div className="w-14 h-14 rounded-2xl bg-bg-2 flex items-center justify-center mb-3">
+                            <Icon name="message" size="lg" className="text-ink-4" />
                         </div>
-                        <p className="text-sm font-semibold text-on-surface">
+                        <p className="text-sm font-medium text-ink">
                             Выбери чат слева
                         </p>
-                        <p className="text-xs text-on-surface-variant mt-1">
+                        <p className="text-xs text-ink-4 mt-1">
                             Или начни новый, нажав на иконку чата у друга
                         </p>
                     </div>

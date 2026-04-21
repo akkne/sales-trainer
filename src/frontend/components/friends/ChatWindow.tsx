@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import {
     useChatMessages,
     useSendChatMessage,
@@ -35,24 +36,28 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
     }
 
     return (
-        <div className="flex flex-col h-full min-h-0 bg-surface rounded-2xl overflow-hidden border border-outline-variant">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant bg-surface-container-low shrink-0">
+        <div
+            className="flex flex-col h-full min-h-0 bg-surface rounded-2xl overflow-hidden border border-line"
+            style={{ boxShadow: "var(--sh-1)" }}
+        >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-line bg-surface shrink-0">
                 {onBack && (
                     <button
                         type="button"
                         onClick={onBack}
-                        className="p-1 rounded-full hover:bg-surface-container tonal-transition"
+                        className="p-1 rounded-full hover:bg-bg-2 transition-colors"
                         aria-label="Назад"
                     >
-                        <Icon name="arrow-left" size="md" className="text-on-surface" />
+                        <Icon name="arrow-left" size="md" className="text-ink" />
                     </button>
                 )}
 
-                <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-sm shrink-0">
-                    {currentConversation?.friendDisplayName?.[0]?.toUpperCase() ?? "?"}
-                </div>
+                <GeoAvatar
+                    seed={currentConversation?.friendDisplayName ?? "?"}
+                    size={36}
+                />
 
-                <h2 className="font-semibold text-on-surface truncate">
+                <h2 className="font-medium text-ink truncate">
                     {currentConversation?.friendDisplayName ?? "Чат"}
                 </h2>
             </div>
@@ -60,7 +65,10 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-2">
                 {messagesLoading ? (
                     <div className="flex items-center justify-center flex-1">
-                        <div className="w-8 h-8 rounded-full border-3 border-primary border-t-transparent animate-spin" />
+                        <div
+                            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                            style={{ borderColor: "var(--ink)", borderTopColor: "transparent" }}
+                        />
                     </div>
                 ) : messages && messages.length > 0 ? (
                     <>
@@ -71,7 +79,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                     </>
                 ) : (
                     <div className="flex items-center justify-center flex-1">
-                        <p className="text-sm text-on-surface-variant">
+                        <p className="text-sm text-ink-4">
                             Напишите первое сообщение!
                         </p>
                     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import type { ChatConversationSummary } from "@/lib/hooks/useChat";
 
 interface ConversationCardProps {
@@ -25,40 +26,46 @@ function formatConversationTime(dateString: string | null): string {
 
 export function ConversationCard({ conversation, isActive, onSelect }: ConversationCardProps) {
     const activeClasses = isActive
-        ? "bg-primary-container text-on-primary-container"
-        : "bg-surface-container hover:bg-surface-container-high";
+        ? "bg-ink text-bg border-ink"
+        : "bg-surface border border-line hover:bg-bg-2";
+
+    const nameClass = isActive ? "text-bg" : "text-ink";
+    const previewClass = isActive ? "text-bg opacity-70" : "text-ink-4";
+    const timeClass = isActive ? "text-bg opacity-70" : "text-ink-4";
 
     const content = (
         <>
-            <div className="w-11 h-11 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-sm shrink-0">
-                {conversation.friendDisplayName[0]?.toUpperCase()}
-            </div>
+            <GeoAvatar seed={conversation.friendDisplayName} size={44} />
 
             <div className="flex-1 min-w-0 text-left">
-                <p className="font-semibold text-sm truncate">
+                <p className={`font-medium text-sm truncate ${nameClass}`}>
                     {conversation.friendDisplayName}
                 </p>
                 {conversation.lastMessagePreview && (
-                    <p className="text-xs text-on-surface-variant truncate mt-0.5">
+                    <p className={`text-xs truncate mt-0.5 ${previewClass}`}>
                         {conversation.lastMessagePreview}
                     </p>
                 )}
             </div>
 
             {conversation.lastMessageAt && (
-                <span className="text-[10px] text-on-surface-variant shrink-0">
+                <span className={`text-[10px] font-mono shrink-0 ${timeClass}`}>
                     {formatConversationTime(conversation.lastMessageAt)}
                 </span>
             )}
         </>
     );
 
+    const shared = `w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors border ${activeClasses}`;
+    const shadow = isActive ? { boxShadow: "var(--sh-2)" } : { boxShadow: "var(--sh-1)" };
+
     if (onSelect) {
         return (
             <button
                 type="button"
                 onClick={() => onSelect(conversation.conversationId)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl tonal-transition ${activeClasses}`}
+                className={shared}
+                style={shadow}
             >
                 {content}
             </button>
@@ -68,7 +75,8 @@ export function ConversationCard({ conversation, isActive, onSelect }: Conversat
     return (
         <Link
             href={`/friends/chat/${conversation.conversationId}`}
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl tonal-transition ${activeClasses}`}
+            className={shared}
+            style={shadow}
         >
             {content}
         </Link>
