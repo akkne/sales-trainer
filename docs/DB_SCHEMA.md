@@ -188,42 +188,33 @@ Legacy markdown glossary, kept to serve old skill-detail pages. Superseded for t
 
 ---
 
-### `TechniqueCategories`
-
-| Column      | Type      | Nullable | Notes                     |
-|-------------|-----------|----------|---------------------------|
-| `Slug`      | `text`    | NOT NULL | PK (e.g. `discovery`)     |
-| `Label`     | `text`    | NOT NULL | Display name              |
-| `Color`     | `text`    | NOT NULL | CSS token (e.g. `--rust`) |
-| `SortOrder` | `integer` | NOT NULL |                           |
-
-Seeded: `discovery`, `qualification`, `objections`, `closing`, `negotiation`, `psychology`.
-
----
-
 ### `Techniques`
 
-| Column           | Type                       | Nullable | Notes                                      |
-|------------------|----------------------------|----------|--------------------------------------------|
-| `Id`             | `uuid`                     | NOT NULL | PK                                         |
-| `Slug`           | `text`                     | NOT NULL | UNIQUE                                     |
-| `Name`           | `text`                     | NOT NULL |                                            |
-| `Summary`        | `text`                     | NOT NULL | Short excerpt shown on card                |
-| `Body`           | `text`                     | NOT NULL | Markdown body for expanded view            |
-| `CategorySlug`   | `text`                     | NOT NULL | FK → `TechniqueCategories.Slug`            |
-| `Tags`           | `text[]`                   | NOT NULL | Free tags for search/filter                |
-| `PrimarySkillId` | `uuid`                     | NULL     | FK → `Skills.Id` ON DELETE SET NULL        |
-| `SortOrder`      | `integer`                  | NOT NULL |                                            |
-| `CreatedAt`      | `timestamp with time zone` | NOT NULL |                                            |
-| `UpdatedAt`      | `timestamp with time zone` | NOT NULL |                                            |
+Techniques replace `ReferenceMaterials` as the handbook's primary entity. Dialog samples and case studies now live in single `jsonb` columns on this table (not separate sub-tables) — the admin writes the JSON directly.
 
-Indexes: `IX_Techniques_Slug` (unique), `IX_Techniques_CategorySlug`, `IX_Techniques_PrimarySkillId`.
+| Column           | Type                       | Nullable | Notes                                                                            |
+|------------------|----------------------------|----------|----------------------------------------------------------------------------------|
+| `Id`             | `uuid`                     | NOT NULL | PK                                                                               |
+| `Slug`           | `text`                     | NOT NULL | UNIQUE                                                                           |
+| `Name`           | `text`                     | NOT NULL |                                                                                  |
+| `Summary`        | `text`                     | NOT NULL | Short excerpt shown on card                                                      |
+| `Body`           | `text`                     | NOT NULL | Markdown body for expanded view                                                  |
+| `Tags`           | `text[]`                   | NOT NULL | Free tags for search/filter                                                      |
+| `PrimarySkillId` | `uuid`                     | NULL     | FK → `Skills.Id` ON DELETE SET NULL; drives the skill filter pill                |
+| `Difficulty`     | `integer`                  | NOT NULL | 1=Novice, 2=Practitioner, 3=Expert, 4=Master (`TechniqueLevels`)                 |
+| `DialogJson`     | `jsonb`                    | NULL     | Ordered array of `{ orderIndex, side, text, annotations }` — null if no sample   |
+| `CaseJson`       | `jsonb`                    | NULL     | Single case object `{ title, body, metrics? }` — null if no case                 |
+| `SortOrder`      | `integer`                  | NOT NULL |                                                                                  |
+| `CreatedAt`      | `timestamp with time zone` | NOT NULL |                                                                                  |
+| `UpdatedAt`      | `timestamp with time zone` | NOT NULL |                                                                                  |
+
+Indexes: `IX_Techniques_Slug` (unique), `IX_Techniques_PrimarySkillId`.
 
 ---
 
 ### `TechniqueSkills`
 
-M:N link table — a technique can span multiple skills (e.g. SPIN covers Discovery + Qualification).
+M:N link table — a technique can additionally span multiple skills (the primary skill lives on `Techniques.PrimarySkillId`).
 
 | Column        | Type   | Nullable | Notes                                   |
 |---------------|--------|----------|-----------------------------------------|
@@ -231,40 +222,6 @@ M:N link table — a technique can span multiple skills (e.g. SPIN covers Discov
 | `SkillId`     | `uuid` | NOT NULL | FK → `Skills.Id` ON DELETE CASCADE      |
 
 Composite PK: (`TechniqueId`, `SkillId`).
-
----
-
-### `TechniqueDialogTurns`
-
-Ordered list of sample-dialog turns for the expanded card view.
-
-| Column            | Type      | Nullable | Notes                                     |
-|-------------------|-----------|----------|-------------------------------------------|
-| `Id`              | `uuid`    | NOT NULL | PK                                        |
-| `TechniqueId`     | `uuid`    | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE    |
-| `OrderIndex`      | `integer` | NOT NULL |                                           |
-| `Side`            | `text`    | NOT NULL | `me` \| `them`                            |
-| `Text`            | `text`    | NOT NULL |                                           |
-| `AnnotationsJson` | `jsonb`   | NULL     | `[{ label, tone }]` — SPIN-like badges    |
-
-Indexes: `IX_TechniqueDialogTurns_TechniqueId`.
-
----
-
-### `TechniqueCases`
-
-Real-world case blocks shown under the dialog sample.
-
-| Column        | Type      | Nullable | Notes                                     |
-|---------------|-----------|----------|-------------------------------------------|
-| `Id`          | `uuid`    | NOT NULL | PK                                        |
-| `TechniqueId` | `uuid`    | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE    |
-| `OrderIndex`  | `integer` | NOT NULL |                                           |
-| `Title`       | `text`    | NOT NULL |                                           |
-| `Body`        | `text`    | NOT NULL |                                           |
-| `MetricsJson` | `jsonb`   | NULL     | Optional metrics (`deal`, `cycleDays`, …) |
-
-Indexes: `IX_TechniqueCases_TechniqueId`.
 
 ---
 

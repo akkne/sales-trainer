@@ -119,22 +119,24 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 
 | Method | Path | Query / Body | Response |
 |---|---|---|---|
-| GET | /techniques | `?category=&search=&tag=` | `TechniqueCardDto[]` |
+| GET | /techniques | `?skill=&search=&tag=` | `TechniqueCardDto[]` |
 | GET | /techniques/meta | — | `TechniqueMetaDto` |
 | GET | /techniques/:slug | — | `TechniqueDetailDto` |
 | POST | /techniques/:slug/seen | `{}` | 204 (sets `FirstSeenAt`, clears `isNew`) |
 
-`TechniqueCardDto`: `{id, slug, name, summary, categorySlug, categoryLabel, categoryColor, tags: string[], primarySkillIconicName?, sortOrder, level, levelName, masteryPercent, isNew}`
+`skill` filter matches `Skills.IconicName` (not id) so URLs stay human-readable.
 
-`level`: 0=Unseen, 1=Novice, 2=Practitioner, 3=Expert, 4=Master. `levelName` is the display form (`Novice`, `Novice+`, etc.) derived server-side from `level` + `masteryPercent`.
+`TechniqueCardDto`: `{id, slug, name, summary, tags: string[], primarySkillIconicName?, primarySkillTitle?, difficulty, difficultyName, sortOrder, masteryLevel, masteryPercent, hasDialog, hasCase, hasCoach, isNew}`
 
-`TechniqueDetailDto`: `{card: TechniqueCardDto, body, skillIconicNames: string[], dialogTurns: TechniqueDialogTurnDto[], cases: TechniqueCaseDto[], coach?: TechniqueCoachDto}`
+`difficulty`: 1=Novice, 2=Practitioner, 3=Expert, 4=Master — static per-technique property. `difficultyName` is its display form. `masteryLevel` / `masteryPercent` are per-user. `hasDialog` / `hasCase` / `hasCoach` let the card show the right tabs without the detail round-trip.
 
-`TechniqueDialogTurnDto`: `{orderIndex, side: "me"|"them", text, annotations: [{label, tone}]}`
-`TechniqueCaseDto`: `{orderIndex, title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`).
+`TechniqueDetailDto`: `{card: TechniqueCardDto, body, skillIconicNames: string[], dialogTurns: TechniqueDialogTurnDto[], case?: TechniqueCaseDto, coach?: TechniqueCoachDto}`
+
+`TechniqueDialogTurnDto`: `{orderIndex, side: "me"|"them", text, annotations: [{label, tone?}]}`
+`TechniqueCaseDto`: `{title, body, metrics?}` — `metrics` is a free JSON object (e.g. `{deal: "$124k", cycleDays: 41}`). At most one case per technique.
 `TechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges: [{label, kind?, targetSlug?}]}`
 
-`TechniqueMetaDto`: `{categories: [{slug, label, color, sortOrder}], totalCount, userCounts: {mastered, master, unseen}}`
+`TechniqueMetaDto`: `{skills: [{iconicName, title, techniqueCount}], totalCount, userCounts: {mastered, master, unseen}}`. Only skills that have at least one technique appear in `skills`.
 
 ---
 
@@ -252,16 +254,22 @@ All routes prefixed `/admin`. Unauthorized → 403.
 ### Techniques
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /admin/techniques | — (`?category=&search=`) | `AdminTechniqueDto[]` |
-| GET | /admin/technique-categories | — | `TechniqueCategoryDto[]` |
+| GET | /admin/techniques | — (`?skill=&search=`) | `AdminTechniqueDto[]` |
 | GET | /admin/techniques/:id | — | `AdminTechniqueDto` |
-| POST | /admin/techniques | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (409 on slug conflict, 400 on unknown `categorySlug`) |
-| PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (replaces nested dialog/cases/coach/skills) |
+| POST | /admin/techniques | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (409 on slug conflict, 400 on unknown `primarySkillId` or out-of-range `difficulty`) |
+| PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (replaces additional skills + coach) |
 | DELETE | /admin/techniques/:id | — | 204 |
+| POST | /admin/techniques/import | `AdminTechniqueWriteRequestDto[]` | `AdminTechniqueImportResultDto` — upserts by `slug` |
 
-`AdminTechniqueDto`: `{id, slug, name, summary, body, categorySlug, tags: string[], primarySkillId?, additionalSkillIds: Guid[], sortOrder, createdAt, updatedAt, dialogTurns, cases, coach?}`
+`skill` query param filters by `Skills.IconicName` (same convention as the public route).
 
-`AdminTechniqueWriteRequestDto`: same shape minus `id`/timestamps. Nested `dialogTurns`, `cases`, and `coach` use raw JSON strings (`annotationsJson`, `metricsJson`, `challengesJson`) that the server validates via `JsonDocument.Parse` before persisting.
+`AdminTechniqueDto`: `{id, slug, name, summary, body, tags: string[], primarySkillId?, primarySkillIconicName?, primarySkillTitle?, additionalSkillIds: Guid[], difficulty, difficultyName, sortOrder, createdAt, updatedAt, dialog?: JsonNode, case?: JsonNode, coach?: AdminTechniqueCoachDto}`
+
+`AdminTechniqueCoachDto`: `{avatarSeed, name, role, quote, challenges?: JsonNode}`
+
+`AdminTechniqueWriteRequestDto`: same shape minus `id`/timestamps and server-derived fields. `dialog`, `case`, and `coach.challenges` accept any JSON value — the server persists them to the `DialogJson` / `CaseJson` / `ChallengesJson` columns verbatim. `difficulty` must be 1..4.
+
+`AdminTechniqueImportResultDto`: `{createdCount, updatedCount, failedCount, errors: string[]}` — import upserts each entry by `slug`, validates it, and rolls through the list, returning per-slug errors instead of aborting the whole batch.
 
 ### Users (requires `RequireSuperAdmin` for role change)
 | Method | Path | Body | Response |
