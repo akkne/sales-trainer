@@ -2,7 +2,8 @@
 
 import { useState, useDeferredValue } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { useUserSearch, useSendFriendRequest } from "@/lib/hooks/useFriends";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
+import { useUserSearch } from "@/lib/hooks/useFriends";
 import { FriendshipButton } from "./FriendshipButton";
 
 export function UserSearchBar() {
@@ -42,14 +43,9 @@ export function UserSearchBar() {
                             {searchResults.map((result) => (
                                 <div
                                     key={result.userId}
-                                    className="flex items-center gap-3 px-4 py-3"
+                                    className="flex items-center gap-3 px-4 py-3 hover:bg-bg-2 transition-colors"
                                 >
-                                    <div
-                                        className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0"
-                                        style={{ background: "var(--clay)", color: "white" }}
-                                    >
-                                        {result.displayName[0]?.toUpperCase()}
-                                    </div>
+                                    <GeoAvatar seed={result.displayName} size={36} />
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-ink text-sm truncate">
                                             {result.displayName}

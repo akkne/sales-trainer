@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import type { Friend } from "@/lib/hooks/useFriends";
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -23,12 +24,8 @@ export function FriendCard({ friend, onChatClick }: FriendCardProps) {
             className="bg-surface border border-line rounded-2xl p-4 flex items-center gap-4 transition-all hover:border-line-2"
             style={{ boxShadow: "var(--sh-1)" }}
         >
-            <Link
-                href={`/friends/${friend.userId}`}
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-medium text-lg shrink-0"
-                style={{ background: "var(--indigo)" }}
-            >
-                {friend.displayName[0]?.toUpperCase()}
+            <Link href={`/friends/${friend.userId}`} className="shrink-0" aria-label={friend.displayName}>
+                <GeoAvatar seed={friend.displayName} size={48} />
             </Link>
 
             <Link href={`/friends/${friend.userId}`} className="flex-1 min-w-0">

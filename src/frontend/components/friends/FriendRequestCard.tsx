@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import {
     useAcceptFriendRequest,
     useDeclineFriendRequest,
@@ -33,10 +34,10 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
         >
             <Link
                 href={`/friends/${request.userId}`}
-                className="w-10 h-10 rounded-xl flex items-center justify-center font-medium text-sm shrink-0"
-                style={{ background: "var(--clay)", color: "white" }}
+                className="shrink-0"
+                aria-label={request.displayName}
             >
-                {request.displayName[0]?.toUpperCase()}
+                <GeoAvatar seed={request.displayName} size={40} />
             </Link>
 
             <div className="flex-1 min-w-0">
@@ -55,21 +56,22 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
 
             {isIncoming ? (
                 <div className="flex items-center gap-2 shrink-0">
-                    <button
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        loading={acceptMutation.isPending}
                         onClick={() => acceptMutation.mutate(request.friendshipId)}
-                        disabled={acceptMutation.isPending}
-                        className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                        style={{ background: "var(--olive)", boxShadow: "var(--sh-1)" }}
                     >
                         Принять
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={declineMutation.isPending}
                         onClick={() => declineMutation.mutate(request.friendshipId)}
-                        disabled={declineMutation.isPending}
-                        className="px-4 py-2 rounded-xl text-sm font-medium text-ink-3 transition-colors hover:text-ink hover:bg-bg-2 disabled:opacity-50"
                     >
                         Отклонить
-                    </button>
+                    </Button>
                 </div>
             ) : (
                 <span

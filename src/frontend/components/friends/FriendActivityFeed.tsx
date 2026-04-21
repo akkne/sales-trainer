@@ -4,10 +4,10 @@ import { Icon, IconName } from "@/components/ui/Icon";
 import { useFriendActivity } from "@/lib/hooks/useFriends";
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {
-    earned_achievement: { icon: "trophy", color: "text-tertiary" },
-    earned_xp: { icon: "bolt", color: "text-primary" },
-    completed_lesson: { icon: "check", color: "text-primary" },
-    streak_milestone: { icon: "flame", color: "text-error" },
+    earned_achievement: { icon: "trophy", color: "text-olive" },
+    earned_xp: { icon: "bolt", color: "text-indigo" },
+    completed_lesson: { icon: "check", color: "text-indigo" },
+    streak_milestone: { icon: "flame", color: "text-rust" },
 };
 
 function formatRelativeTime(dateString: string): string {
@@ -32,7 +32,7 @@ export function FriendActivityFeed() {
         return (
             <div className="flex flex-col gap-2">
                 {[1, 2, 3].map((index) => (
-                    <div key={index} className="h-12 rounded-xl bg-surface-container animate-pulse" />
+                    <div key={index} className="h-12 rounded-xl bg-surface animate-pulse" />
                 ))}
             </div>
         );
@@ -44,13 +44,13 @@ export function FriendActivityFeed() {
 
     return (
         <div className="flex flex-col gap-1">
-            <h3 className="font-semibold text-on-surface text-sm mb-2">
+            <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-2">
                 Активность друзей
             </h3>
             {activities.slice(0, 10).map((activity, index) => {
                 const config = ACTIVITY_CONFIG[activity.activityType] ?? {
                     icon: "info",
-                    color: "text-on-surface-variant",
+                    color: "text-ink-3",
                 };
 
                 return (
@@ -58,16 +58,16 @@ export function FriendActivityFeed() {
                         key={`${activity.userId}-${activity.occurredAt}-${index}`}
                         className="flex items-center gap-3 px-3 py-2 rounded-xl"
                     >
-                        <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-xl bg-bg-2 flex items-center justify-center shrink-0">
                             <Icon name={config.icon} size="sm" className={config.color} />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs text-on-surface">
-                                <span className="font-semibold">{activity.displayName}</span>{" "}
+                            <p className="text-xs text-ink-3">
+                                <span className="font-medium text-ink">{activity.displayName}</span>{" "}
                                 {activity.description}
                             </p>
                         </div>
-                        <span className="text-[10px] text-on-surface-variant shrink-0">
+                        <span className="text-[10px] text-ink-4 font-mono shrink-0">
                             {formatRelativeTime(activity.occurredAt)}
                         </span>
                     </div>
