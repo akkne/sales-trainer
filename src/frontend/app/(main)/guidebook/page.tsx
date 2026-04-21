@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useDeferredValue } from "react";
+import { useEffect, useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
@@ -15,8 +15,6 @@ import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
-
-type ExpandedTab = "dialog" | "case";
 
 function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
     const size = 56;
@@ -90,6 +88,51 @@ function Chip({ children, tone = "neutral", size = "sm" }: { children: React.Rea
     );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <div
+            style={{
+                fontSize: 11,
+                color: "var(--ink-3)",
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                fontWeight: 500,
+                fontFamily: "var(--f-mono)",
+                marginBottom: 10,
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function TagChip({ tag, onClick }: { tag: string; onClick: (tag: string) => void }) {
+    return (
+        <button
+            onClick={(event) => {
+                event.stopPropagation();
+                onClick(tag);
+            }}
+            style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "4px 10px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 500,
+                fontFamily: "var(--f-sans)",
+                background: "transparent",
+                color: "var(--ink-3)",
+                border: "1px solid var(--line)",
+                cursor: "pointer",
+            }}
+        >
+            #{tag}
+        </button>
+    );
+}
+
 function Bubble({
     side,
     children,
@@ -151,8 +194,17 @@ export default function GuidebookPage() {
     }
 
     const skills = meta?.skills ?? [];
-    const totalCount = meta?.totalCount ?? cards.length;
-    const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: totalCount };
+    const totalCount = meta?.totalCount ?? 0;
+    const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: 0 };
+
+    function addTagToSearch(tag: string) {
+        setSearchInput((current) => {
+            const trimmed = current.trim();
+            if (trimmed === tag) return current;
+            if (trimmed.split(/\s+/).includes(tag)) return current;
+            return trimmed ? `${trimmed} ${tag}` : tag;
+        });
+    }
 
     return (
         <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -327,6 +379,7 @@ export default function GuidebookPage() {
                                 isExpanded={expandedSlug === card.slug}
                                 detail={expandedSlug === card.slug ? expandedDetail ?? null : null}
                                 onToggle={() => toggleExpand(card.slug)}
+                                onTagClick={addTagToSearch}
                             />
                         ))}
                     </div>
@@ -386,24 +439,14 @@ function TechniqueCardView({
     isExpanded,
     detail,
     onToggle,
+    onTagClick,
 }: {
     card: TechniqueCardData;
     isExpanded: boolean;
     detail: TechniqueDetail | null;
     onToggle: () => void;
+    onTagClick: (tag: string) => void;
 }) {
-    const availableTabs = useMemo<ExpandedTab[]>(() => {
-        const tabs: ExpandedTab[] = [];
-        if (card.hasDialog) tabs.push("dialog");
-        if (card.hasCase) tabs.push("case");
-        return tabs;
-    }, [card.hasDialog, card.hasCase]);
-
-    const [activeTab, setActiveTab] = useState<ExpandedTab | null>(null);
-    const effectiveTab = activeTab && availableTabs.includes(activeTab)
-        ? activeTab
-        : availableTabs[0] ?? null;
-
     return (
         <div
             style={{
@@ -416,14 +459,21 @@ function TechniqueCardView({
                 boxShadow: isExpanded ? "var(--sh-3)" : "var(--sh-1)",
             }}
         >
-            <button
+            <div
+                role="button"
+                tabIndex={0}
                 onClick={onToggle}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onToggle();
+                    }
+                }}
                 style={{
                     width: "100%",
                     padding: 24,
                     textAlign: "left",
                     background: "transparent",
-                    border: "none",
                     cursor: "pointer",
                     fontFamily: "var(--f-sans)",
                     display: "flex",
@@ -441,9 +491,7 @@ function TechniqueCardView({
                             </Chip>
                         )}
                         {card.tags.slice(0, 2).map((tag) => (
-                            <Chip key={tag} tone="ghost" size="sm">
-                                #{tag}
-                            </Chip>
+                            <TagChip key={tag} tag={tag} onClick={onTagClick} />
                         ))}
                         {card.isNew && (
                             <Chip tone="indigo" size="sm">
@@ -471,7 +519,7 @@ function TechniqueCardView({
                     <div style={{ fontSize: 14, fontWeight: 500, color: "var(--rust)" }}>{card.difficultyName}</div>
                     <Icon name={isExpanded ? "chevron-up" : "chevron-down"} size="sm" color="var(--ink-3)" />
                 </div>
-            </button>
+            </div>
 
             {isExpanded && (
                 <div
@@ -497,94 +545,71 @@ function TechniqueCardView({
                             </div>
                         )}
 
-                        {availableTabs.length > 0 && (
+                        {detail && detail.dialogTurns.length > 0 && (
                             <div style={{ marginBottom: 24 }}>
-                                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                                    {availableTabs.map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setActiveTab(tab)}
-                                            style={{
-                                                padding: "6px 14px",
-                                                borderRadius: 999,
-                                                cursor: "pointer",
-                                                background: effectiveTab === tab ? "var(--ink)" : "transparent",
-                                                color: effectiveTab === tab ? "var(--bg)" : "var(--ink-2)",
-                                                border: `1px solid ${effectiveTab === tab ? "var(--ink)" : "var(--line)"}`,
-                                                fontSize: 12,
-                                                fontWeight: 500,
-                                                fontFamily: "var(--f-sans)",
-                                            }}
+                                <SectionLabel>Пример диалога</SectionLabel>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    {detail.dialogTurns.map((turn) => (
+                                        <Bubble
+                                            key={turn.orderIndex}
+                                            side={turn.side === "me" ? "me" : "them"}
+                                            annotation={
+                                                turn.annotations.map((annotation) => annotation.label).join(" · ") || undefined
+                                            }
                                         >
-                                            {tab === "dialog" ? "Пример диалога" : "Кейс"}
-                                        </button>
+                                            {turn.text}
+                                        </Bubble>
                                     ))}
                                 </div>
-
-                                {effectiveTab === "dialog" && detail && detail.dialogTurns.length > 0 && (
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                        {detail.dialogTurns.map((turn) => (
-                                            <Bubble
-                                                key={turn.orderIndex}
-                                                side={turn.side === "me" ? "me" : "them"}
-                                                annotation={
-                                                    turn.annotations.map((annotation) => annotation.label).join(" · ") || undefined
-                                                }
-                                            >
-                                                {turn.text}
-                                            </Bubble>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {effectiveTab === "case" && detail?.case && (
-                                    <div
-                                        style={{
-                                            padding: 18,
-                                            background: "var(--bg-2)",
-                                            borderRadius: 12,
-                                            fontSize: 14,
-                                            color: "var(--ink-2)",
-                                            lineHeight: 1.55,
-                                        }}
-                                    >
-                                        <b>{detail.case.title}</b> · {detail.case.body}
-                                        {detail.case.metrics && (
-                                            <div
-                                                style={{
-                                                    marginTop: 10,
-                                                    display: "flex",
-                                                    gap: 10,
-                                                    flexWrap: "wrap",
-                                                    fontFamily: "var(--f-mono)",
-                                                    fontSize: 12,
-                                                    color: "var(--ink-3)",
-                                                }}
-                                            >
-                                                {Object.entries(detail.case.metrics).map(([key, value]) => (
-                                                    <span key={key}>
-                                                        {key}: {String(value)}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
                         )}
 
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                            <Button variant="accent" size="md" iconRightName="arrow-right">
-                                Практиковать сейчас
-                            </Button>
-                            {card.primarySkillIconicName && (
+                        {detail?.case && (
+                            <div style={{ marginBottom: 24 }}>
+                                <SectionLabel>Кейс</SectionLabel>
+                                <div
+                                    style={{
+                                        padding: 18,
+                                        background: "var(--bg-2)",
+                                        borderRadius: 12,
+                                        fontSize: 14,
+                                        color: "var(--ink-2)",
+                                        lineHeight: 1.55,
+                                    }}
+                                >
+                                    <b>{detail.case.title}</b> · {detail.case.body}
+                                    {detail.case.metrics && (
+                                        <div
+                                            style={{
+                                                marginTop: 10,
+                                                display: "flex",
+                                                gap: 10,
+                                                flexWrap: "wrap",
+                                                fontFamily: "var(--f-mono)",
+                                                fontSize: 12,
+                                                color: "var(--ink-3)",
+                                            }}
+                                        >
+                                            {Object.entries(detail.case.metrics).map(([key, value]) => (
+                                                <span key={key}>
+                                                    {key}: {String(value)}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {card.primarySkillIconicName && (
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                                 <Link href={`/skill/${card.primarySkillIconicName}`}>
                                     <Button variant="ghost" size="md">
                                         Связанный навык →
                                     </Button>
                                 </Link>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     {detail?.coach && (
