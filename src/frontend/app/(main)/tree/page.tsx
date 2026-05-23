@@ -10,6 +10,7 @@ import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
 import { Icon } from "@/components/ui/Icon";
 import { Progress } from "@/components/ui/Progress";
 import { Button } from "@/components/ui/Button";
+import { SKILL_STAGES, getStageMeta } from "@/lib/skillStages";
 
 // ── Skill row in sidebar ─────────────────────────────────────────────────────
 
@@ -252,6 +253,139 @@ function SkillLessonView({
 
 // ── Left sidebar ──────────────────────────────────────────────────────────────
 
+// ── Stage group ───────────────────────────────────────────────────────────────
+
+interface StageGroupProps {
+    stageKey: string;
+    skills: NonNullable<ReturnType<typeof useSkills>["data"]>;
+    selectedSlug: string | undefined;
+    onSelect: (skill: { slug: string; title: string; iconName: string }) => void;
+    defaultOpen: boolean;
+}
+
+function StageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen }: StageGroupProps) {
+    const meta = getStageMeta(stageKey);
+    const [open, setOpen] = useState(defaultOpen);
+    useEffect(() => {
+        if (defaultOpen) setOpen(true);
+    }, [defaultOpen]);
+
+    const totalLessons = skills.reduce((sum, s) => sum + s.totalLessonCount, 0);
+    const completedLessons = skills.reduce((sum, s) => sum + s.completedLessonCount, 0);
+    const skillsDone = skills.filter((s) => s.status === "completed").length;
+    const pct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    return (
+        <div style={{ marginBottom: 10 }}>
+            <button
+                onClick={() => setOpen((v) => !v)}
+                style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 8px 8px 6px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontFamily: "var(--f-sans)",
+                }}
+                aria-expanded={open}
+            >
+                <span
+                    style={{
+                        width: 14,
+                        height: 14,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--ink-3)",
+                        transition: "transform 0.18s",
+                        transform: open ? "rotate(90deg)" : "rotate(0deg)",
+                    }}
+                >
+                    <Icon name="chevron-right" size="xs" />
+                </span>
+                <span
+                    style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        background: meta.accent,
+                        flexShrink: 0,
+                    }}
+                />
+                <span
+                    style={{
+                        flex: 1,
+                        fontSize: 11,
+                        color: "var(--ink-2)",
+                        letterSpacing: 1.2,
+                        textTransform: "uppercase",
+                        fontWeight: 600,
+                        fontFamily: "var(--f-mono)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                    }}
+                >
+                    {meta.label}
+                </span>
+                <span
+                    style={{
+                        fontSize: 10,
+                        color: "var(--ink-3)",
+                        fontFamily: "var(--f-mono)",
+                        fontVariantNumeric: "tabular-nums",
+                    }}
+                >
+                    {skillsDone}/{skills.length}
+                </span>
+            </button>
+
+            <div style={{ paddingLeft: 18, paddingRight: 2, marginTop: 2, marginBottom: open ? 6 : 0 }}>
+                <div
+                    style={{
+                        height: 2,
+                        background: "var(--line)",
+                        borderRadius: 2,
+                        overflow: "hidden",
+                    }}
+                >
+                    <div
+                        style={{
+                            height: "100%",
+                            width: `${pct}%`,
+                            background: meta.accent,
+                            transition: "width 0.25s",
+                        }}
+                    />
+                </div>
+            </div>
+
+            {open && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+                    {skills.map((skill) => (
+                        <SkillRow
+                            key={skill.skillId}
+                            skill={skill}
+                            selected={selectedSlug === skill.slug}
+                            onClick={() =>
+                                onSelect({
+                                    slug: skill.slug,
+                                    title: skill.title,
+                                    iconName: skill.iconName,
+                                })
+                            }
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function SkillSidebar() {
     const { data: allSkills, isLoading } = useSkills();
     const { selectedSkill, setSelectedSkill } = useSelectedSkillStore();
@@ -301,22 +435,36 @@ function SkillSidebar() {
         );
     }
 
+    // Group by stage. Known stages first (in fixed order), then any unknown stages alphabetically.
+    const byStage = new Map<string, typeof enrolledSkills>();
+    for (const skill of enrolledSkills) {
+        const key = skill.stage || "general";
+        const bucket = byStage.get(key) ?? [];
+        bucket.push(skill);
+        byStage.set(key, bucket);
+    }
+    const knownOrder = SKILL_STAGES.map((s) => s.key);
+    const orderedStages: string[] = [
+        ...knownOrder.filter((k) => byStage.has(k)),
+        ...Array.from(byStage.keys()).filter((k) => !knownOrder.includes(k)).sort(),
+    ];
+
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {enrolledSkills.map((skill) => (
-                <SkillRow
-                    key={skill.skillId}
-                    skill={skill}
-                    selected={selectedSkill?.slug === skill.slug}
-                    onClick={() =>
-                        setSelectedSkill({
-                            slug: skill.slug,
-                            title: skill.title,
-                            iconName: skill.iconName,
-                        })
-                    }
-                />
-            ))}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+            {orderedStages.map((stageKey) => {
+                const stageSkills = (byStage.get(stageKey) ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+                const containsSelected = stageSkills.some((s) => s.slug === selectedSkill?.slug);
+                return (
+                    <StageGroup
+                        key={stageKey}
+                        stageKey={stageKey}
+                        skills={stageSkills}
+                        selectedSlug={selectedSkill?.slug}
+                        onSelect={setSelectedSkill}
+                        defaultOpen={containsSelected}
+                    />
+                );
+            })}
         </div>
     );
 }
@@ -387,20 +535,6 @@ export default function SkillTreePage() {
                         НАВЫКИ
                     </div>
                     <SkillSidebar />
-
-                    <div
-                        style={{
-                            marginTop: 24,
-                            padding: "16px 14px",
-                            border: "1px dashed var(--line-2)",
-                            borderRadius: 12,
-                            color: "var(--ink-3)",
-                            fontSize: 12,
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        Навыки открыты с первого дня. Порядок — на ваше усмотрение.
-                    </div>
                 </aside>
 
                 {/* CENTER — Lesson path */}

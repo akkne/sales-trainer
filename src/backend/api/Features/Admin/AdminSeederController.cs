@@ -54,7 +54,10 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
                         ? descProp.GetString()?.Trim()
                         : null;
                     var orderInTree = el.GetProperty("orderInTree").GetInt32();
-                    UpsertSkill(iconicName, title, description, orderInTree, existingSkills, state);
+                    var stage = el.TryGetProperty("stage", out var stageProp) && stageProp.ValueKind == JsonValueKind.String
+                        ? stageProp.GetString()?.Trim()
+                        : null;
+                    UpsertSkill(iconicName, title, description, orderInTree, stage, existingSkills, state);
                 }
                 catch (Exception ex) { state.Errors.Add($"Item {index}: {ex.Message}"); }
             }
@@ -71,7 +74,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
         return Ok(new SkillsImportResultDto(state.SkillsCreated, state.SkillsUpdated, state.Errors));
     }
 
-    private void UpsertSkill(string iconicName, string title, string? description, int orderInTree,
+    private void UpsertSkill(string iconicName, string title, string? description, int orderInTree, string? stage,
         Dictionary<string, Skill> existingSkills, SkillsImportState state)
     {
         if (string.IsNullOrWhiteSpace(iconicName)) throw new InvalidOperationException("iconicName is empty.");
@@ -82,6 +85,7 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
             found.Title = title;
             found.Description = description;
             found.OrderInTree = orderInTree;
+            if (!string.IsNullOrWhiteSpace(stage)) found.Stage = stage;
             if (state.UpdatedIconicNames.Add(iconicName)) state.SkillsUpdated++;
         }
         else
@@ -92,7 +96,8 @@ public class AdminSeederController(AppDbContext db, ILogger<AdminSeederControlle
                 IconicName = iconicName,
                 Title = title,
                 Description = description,
-                OrderInTree = orderInTree
+                OrderInTree = orderInTree,
+                Stage = string.IsNullOrWhiteSpace(stage) ? "general" : stage
             };
             db.Skills.Add(skill);
             existingSkills[iconicName] = skill;

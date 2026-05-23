@@ -24,7 +24,8 @@ internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTre
             "available",
             0,
             0,
-            false))
+            false,
+            skill.Stage))
             .ToList();
     }
 
@@ -91,7 +92,8 @@ internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTre
                 status,
                 completedLessons,
                 totalLessons,
-                false);
+                false,
+                skill.Stage);
         }).ToList();
     }
 

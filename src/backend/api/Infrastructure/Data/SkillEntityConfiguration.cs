@@ -12,8 +12,10 @@ public class SkillEntityConfiguration : IEntityTypeConfiguration<Skill>
         builder.HasKey(s => s.Id);
         builder.Property(s => s.IconicName).IsRequired();
         builder.Property(s => s.Title).IsRequired();
+        builder.Property(s => s.Stage).IsRequired().HasDefaultValue("general");
 
         builder.HasIndex(s => s.IconicName).IsUnique();
+        builder.HasIndex(s => s.Stage);
     }
 }
 

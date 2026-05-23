@@ -642,6 +642,12 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.Property<int>("OrderInTree")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("general");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
@@ -650,6 +656,8 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("IconicName")
                         .IsUnique();
+
+                    b.HasIndex("Stage");
 
                     b.ToTable("Skills", (string)null);
                 });

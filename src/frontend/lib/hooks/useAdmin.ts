@@ -12,6 +12,7 @@ export interface AdminSkill {
     title: string;
     description: string | null;
     orderInTree: number;
+    stage: string;
 }
 
 export interface AdminTopic {

@@ -11,6 +11,7 @@ import {
     useDeleteTopic,
     type AdminSkill,
 } from "@/lib/hooks/useAdmin";
+import { SKILL_STAGES, getStageMeta } from "@/lib/skillStages";
 
 export default function AdminSkillDetailPage({
     params,
@@ -45,6 +46,7 @@ export default function AdminSkillDetailPage({
             title: skill.title,
             description: skill.description,
             orderInTree: skill.orderInTree,
+            stage: skill.stage,
         });
         setEditMode(true);
     }
@@ -120,7 +122,20 @@ export default function AdminSkillDetailPage({
                                     }
                                 />
                             </label>
-                            <div />
+                            <label className="block">
+                                <span className="text-xs text-on-surface-variant">Stage</span>
+                                <select
+                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                    value={form.stage}
+                                    onChange={(e) => setForm({ ...form, stage: e.target.value })}
+                                >
+                                    {SKILL_STAGES.map((s) => (
+                                        <option key={s.key} value={s.key}>
+                                            {s.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
                             <label className="block col-span-2">
                                 <span className="text-xs text-on-surface-variant">Description</span>
                                 <textarea
@@ -156,6 +171,10 @@ export default function AdminSkillDetailPage({
                         <div>
                             <dt className="text-xs text-on-surface-variant">Order</dt>
                             <dd className="text-on-surface">{skill.orderInTree}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-xs text-on-surface-variant">Stage</dt>
+                            <dd className="text-on-surface">{getStageMeta(skill.stage).label}</dd>
                         </div>
                         <div className="col-span-2">
                             <dt className="text-xs text-on-surface-variant">Description</dt>

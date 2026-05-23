@@ -41,8 +41,8 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/skills | — | `AdminSkillDto[]` |
-| POST | /admin/skills | `{title, slug, iconName, sortOrder, applicableSalesTypes[]}` | `AdminSkillDto` |
-| PUT | /admin/skills/:id | same fields | `AdminSkillDto` |
+| POST | /admin/skills | `{iconicName, title, description?, orderInTree, stage?}` | `AdminSkillDto` |
+| PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?, stage?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
 ### Lessons

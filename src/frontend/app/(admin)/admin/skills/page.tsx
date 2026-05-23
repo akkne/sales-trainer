@@ -10,12 +10,14 @@ import {
     type AdminSkill,
     type SkillsImportResult,
 } from "@/lib/hooks/useAdmin";
+import { SKILL_STAGES, getStageMeta } from "@/lib/skillStages";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",
     title: "",
     description: null,
     orderInTree: 0,
+    stage: SKILL_STAGES[0].key,
 });
 
 const SKILLS_TEMPLATE = JSON.stringify([
@@ -23,7 +25,8 @@ const SKILLS_TEMPLATE = JSON.stringify([
         iconicName: "example-skill",
         title: "Example Skill",
         description: "Description of the skill",
-        orderInTree: 1
+        orderInTree: 1,
+        stage: "preparation"
     }
 ], null, 2);
 
@@ -168,7 +171,20 @@ export default function AdminSkillsPage() {
                                 }
                             />
                         </label>
-                        <div />
+                        <label className="block">
+                            <span className="text-xs text-on-surface-variant">Stage</span>
+                            <select
+                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                value={form.stage}
+                                onChange={(e) => setForm({ ...form, stage: e.target.value })}
+                            >
+                                {SKILL_STAGES.map((s) => (
+                                    <option key={s.key} value={s.key}>
+                                        {s.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                         <label className="block col-span-2">
                             <span className="text-xs text-on-surface-variant">Description</span>
                             <textarea
@@ -212,6 +228,9 @@ export default function AdminSkillsPage() {
                                 Description
                             </th>
                             <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                Stage
+                            </th>
+                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
                                 Order
                             </th>
                             <th className="py-2 px-3" />
@@ -236,6 +255,9 @@ export default function AdminSkillsPage() {
                                 </td>
                                 <td className="py-2.5 px-3 text-on-surface-variant">
                                     {skill.description || "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-on-surface-variant text-xs">
+                                    {getStageMeta(skill.stage).label}
                                 </td>
                                 <td className="py-2.5 px-3 text-on-surface-variant">{skill.orderInTree}</td>
                                 <td className="py-2.5 px-3 text-right">

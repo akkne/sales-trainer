@@ -28,14 +28,16 @@ cold-calling,Cold Calling,phone,1,b2b_saas|b2c
 ```json
 [
   {
-    "slug": "cold-calling",
+    "iconicName": "cold-calling",
     "title": "Cold Calling",
-    "iconName": "phone",
-    "sortOrder": 1,
-    "salesTypes": ["b2b_saas", "b2c"]
+    "description": null,
+    "orderInTree": 1,
+    "stage": "preparation"
   }
 ]
 ```
+
+`stage` is optional. Known values: `preparation`, `discovery`, `engagement`, `closing`, `retention`. Defaults to `general` when omitted on create; preserved when omitted on update.
 
 ### API endpoint
 

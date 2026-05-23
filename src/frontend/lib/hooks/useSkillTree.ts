@@ -11,6 +11,7 @@ export interface SkillTreeNode {
     completedLessonCount: number;
     totalLessonCount: number;
     isLocked: boolean;
+    stage: string;
 }
 
 export interface SkillTreeData {

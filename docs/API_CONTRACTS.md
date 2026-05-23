@@ -48,7 +48,7 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 `sales-basics` is always kept enrolled.
 
 `SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount}`  
-`SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked}`
+`SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).
 
 ---
 
@@ -190,11 +190,11 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/skills | — | `AdminSkillDto[]` |
-| POST | /admin/skills | `{iconicName, title, description?, orderInTree}` | `AdminSkillDto` |
-| PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?}` | `AdminSkillDto` |
+| POST | /admin/skills | `{iconicName, title, description?, orderInTree, stage?}` | `AdminSkillDto` |
+| PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?, stage?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
-`AdminSkillDto`: `{id, iconicName, title, description, orderInTree}`
+`AdminSkillDto`: `{id, iconicName, title, description, orderInTree, stage}`. `stage` is one of `preparation`, `discovery`, `engagement`, `closing`, `retention`, `general` (default). Drives the grouped sidebar on `/tree`.
 
 ### Topics
 | Method | Path | Body | Response |

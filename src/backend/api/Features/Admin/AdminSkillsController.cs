@@ -12,21 +12,24 @@ public record AdminSkillDto(
     string IconicName,
     string Title,
     string? Description,
-    int OrderInTree
+    int OrderInTree,
+    string Stage
 );
 
 public record CreateSkillRequestDto(
     string IconicName,
     string Title,
     string? Description,
-    int OrderInTree
+    int OrderInTree,
+    string? Stage
 );
 
 public record UpdateSkillRequestDto(
     string? IconicName,
     string? Title,
     string? Description,
-    int? OrderInTree
+    int? OrderInTree,
+    string? Stage
 );
 
 [ApiController]
@@ -39,7 +42,7 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
     {
         var skills = await db.Skills
             .OrderBy(s => s.OrderInTree)
-            .Select(s => new AdminSkillDto(s.Id, s.IconicName, s.Title, s.Description, s.OrderInTree))
+            .Select(s => new AdminSkillDto(s.Id, s.IconicName, s.Title, s.Description, s.OrderInTree, s.Stage))
             .ToListAsync();
 
         return Ok(skills);
@@ -58,7 +61,8 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
             IconicName = dto.IconicName,
             Title = dto.Title,
             Description = dto.Description,
-            OrderInTree = dto.OrderInTree
+            OrderInTree = dto.OrderInTree,
+            Stage = string.IsNullOrWhiteSpace(dto.Stage) ? "general" : dto.Stage.Trim()
         };
 
         db.Skills.Add(skill);
@@ -67,7 +71,7 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         logger.LogInformation("Skill created SkillId={SkillId} IconicName={IconicName} by ActorId={ActorId}",
             skill.Id, skill.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree));
+        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree, skill.Stage));
     }
 
     [HttpPut("{id:guid}")]
@@ -88,13 +92,14 @@ public class AdminSkillsController(AppDbContext db, ILogger<AdminSkillsControlle
         if (dto.Title is not null) skill.Title = dto.Title;
         if (dto.Description is not null) skill.Description = dto.Description;
         if (dto.OrderInTree.HasValue) skill.OrderInTree = dto.OrderInTree.Value;
+        if (!string.IsNullOrWhiteSpace(dto.Stage)) skill.Stage = dto.Stage.Trim();
 
         await db.SaveChangesAsync();
 
         logger.LogInformation("Skill updated SkillId={SkillId} IconicName={IconicName} by ActorId={ActorId}",
             skill.Id, skill.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree));
+        return Ok(new AdminSkillDto(skill.Id, skill.IconicName, skill.Title, skill.Description, skill.OrderInTree, skill.Stage));
     }
 
     [HttpDelete("{id:guid}")]

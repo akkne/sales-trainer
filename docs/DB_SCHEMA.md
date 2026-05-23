@@ -69,6 +69,9 @@ Indexes: `IX_RefreshTokens_UserId`
 | `OrderInTree` | `integer` | NOT NULL | Display order in tree          |
 | `Title`       | `text`    | NOT NULL | Localized display name         |
 | `Description` | `text`    | NULL     |                                |
+| `Stage`       | `text`    | NOT NULL | Funnel stage bucket (DEFAULT `general`). Known values: `preparation`, `discovery`, `engagement`, `closing`, `retention`. |
+
+Indexes: `IX_Skills_IconicName` (unique), `IX_Skills_Stage`.
 
 ---
 

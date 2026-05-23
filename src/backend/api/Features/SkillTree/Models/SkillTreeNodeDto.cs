@@ -9,5 +9,6 @@ public record SkillTreeNodeDto(
     string Status,
     int CompletedLessonCount,
     int TotalLessonCount,
-    bool IsLocked
+    bool IsLocked,
+    string Stage
 );
