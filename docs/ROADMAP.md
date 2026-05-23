@@ -1069,3 +1069,57 @@
 - [ ] `grep` sweep: no MD3 tokens (`on-surface`, `primary-container`, `outline-variant`,
       `tonal-transition`, `font-headline`, `bg-surface-container*`, `*-container`) in
       `src/frontend/app/(main)/friends` or `src/frontend/components/friends`
+
+---
+
+## Phase 36 — Telephone-Call Voice Dialog
+
+> Превратить голосовой режим из «чат с микрофоном» в полноценный имитатор
+> телефонного звонка: full-screen UI, continuous VAD, streaming GPT → streaming
+> TTS, barge-in, лимиты по минутам. Ключи покупаются через рублёвые шлюзы (см.
+> [AI_DIALOG.md](AI_DIALOG.md#buying-api-access-from-russia-rub-friendly-proxy-gateways)
+> и [VOICE_ROLEPLAY.md](VOICE_ROLEPLAY.md#buying-voice-api-access-from-russia)).
+
+### Phase 36.1 — Stage A: cleanup & RUB-friendly providers
+- [x] `Voice:TtsProvider` config switch (voicer | google), default voicer
+- [x] Document RUB-friendly OpenAI / TTS / STT proxy gateways
+- [ ] Drop `IGoogleTtsService` if final decision is single-provider (post-test)
+- [ ] Unit tests for `VoicerTtsService` (mocked HTTP)
+- [ ] Integration test for `POST /dialog/sessions/{id}/voice`
+
+### Phase 36.2 — Stage B: full-screen "Call" UX
+- [ ] New route `/dialog/[bundleId]/[modeId]/call` outside `(main)` layout
+- [ ] Layout: large `GeoAvatar`, persona name, scene mood chip
+- [ ] Call states: `dialing → connected → speaking → listening → ended`
+- [ ] Call timer (mm:ss), pulsing ring while собеседник говорит
+- [ ] Red "Положить трубку" button → `/sessions/{id}/complete` + feedback modal
+- [ ] Sound effects: ringing tone, hangup beep (mp3 in `public/sounds/`)
+- [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
+- [ ] Continuous VAD (no push-to-talk); mic button becomes activity indicator
+- [ ] Add "🎙️ Позвонить" CTA on `/dialog/[bundleId]/[modeId]` next to text mode
+
+### Phase 36.3 — Stage B: streaming LLM → streaming TTS
+- [ ] `IOpenAiChatService.StreamChatAsync` — SSE consumer for `stream: true`
+- [ ] Sentence-buffer: emit chunks at `. ! ? \n` boundaries
+- [ ] New endpoint `POST /dialog/sessions/{id}/voice/stream` returning
+      `audio/mpeg; chunked` — pipes TTS chunks as soon as each sentence is ready
+- [ ] Frontend `audioPlayer.ts`: queue incoming chunks via MSE / decodeAudioData
+- [ ] Target metric: first-audio-byte ≤ 700ms after user stops speaking
+
+### Phase 36.4 — Stage B: barge-in
+- [ ] VAD detects user speech while `audioPlayer` is playing → stop playback,
+      truncate last AI message in MongoDB, send new transcript
+- [ ] Indicator UI: AI bubble fades when interrupted
+
+### Phase 36.5 — Stage C: usage limits & billing
+- [ ] Track session duration in `DialogSession.DurationSeconds`
+- [ ] Enforce `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes` per user
+      → return 429 with `retryAfter`
+- [ ] `/profile` shows minutes used / limit
+- [ ] Admin page `/admin/voice/usage` — table of users + minute spend
+
+### Phase 36.6 — Docs & tests
+- [ ] Update `docs/VOICE_ROLEPLAY.md` with the call-mode flow + diagram
+- [ ] `docs/TESTING/VOICE_CALL.md` — manual checklist (connect, barge-in,
+      hangup, limits, fallback to web speech)
+- [ ] Update `docs/API_CONTRACTS.md` with `/voice/stream` and usage endpoints
