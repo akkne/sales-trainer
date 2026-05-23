@@ -15,6 +15,7 @@ public class VoiceDialogService : IVoiceDialogService
     private readonly IOpenAiChatService _openAiService;
     private readonly IVoicerTtsService _voicerTtsService;
     private readonly IGoogleTtsService _googleTtsService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
@@ -23,6 +24,7 @@ public class VoiceDialogService : IVoiceDialogService
         IOpenAiChatService openAiService,
         IVoicerTtsService voicerTtsService,
         IGoogleTtsService googleTtsService,
+        IConfiguration configuration,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
@@ -30,6 +32,7 @@ public class VoiceDialogService : IVoiceDialogService
         _openAiService = openAiService;
         _voicerTtsService = voicerTtsService;
         _googleTtsService = googleTtsService;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -101,22 +104,21 @@ public class VoiceDialogService : IVoiceDialogService
             "Voice message processed for session {SessionId}, user message: {UserLen} chars, AI response: {AiLen} chars",
             sessionId, transcript.Length, chatResult.Content.Length);
 
-        // Generate TTS audio - prefer Google TTS, fallback to VoicerTTS
-        Stream audioStream;
-        if (_googleTtsService.IsConfigured)
+        // Pick TTS provider from config: Voice:TtsProvider = "voicer" (default, RUB-friendly) | "google"
+        var provider = (_configuration["Voice:TtsProvider"] ?? "voicer").Trim().ToLowerInvariant();
+        Stream audioStream = provider switch
         {
-            var voiceName = mode.VoiceId; // Can be used for Google voice name
-            audioStream = await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceName, ct);
-        }
-        else if (_voicerTtsService.IsConfigured)
-        {
-            var voiceId = mode.VoiceId;
-            audioStream = await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, voiceId, ct);
-        }
-        else
-        {
-            throw new InvalidOperationException("No TTS service is configured");
-        }
+            "google" when _googleTtsService.IsConfigured =>
+                await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
+            "voicer" when _voicerTtsService.IsConfigured =>
+                await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
+            _ when _voicerTtsService.IsConfigured =>
+                await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
+            _ when _googleTtsService.IsConfigured =>
+                await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
+            _ => throw new InvalidOperationException(
+                $"TTS provider '{provider}' is not configured. Set Voice:TtsProvider and the matching API key.")
+        };
 
         return audioStream;
     }
