@@ -120,30 +120,32 @@ export default function BundleModesPage() {
                 ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
                         {modes.map((mode) => (
-                            <Link
+                            <div
                                 key={mode.id}
-                                href={`/dialog/${bundleId}/${mode.id}`}
-                                style={{ textDecoration: "none" }}
+                                style={{
+                                    background: "var(--surface)",
+                                    border: "1px solid var(--line)",
+                                    borderRadius: 16,
+                                    padding: 20,
+                                    transition: "all 0.2s",
+                                    boxShadow: "var(--sh-1)",
+                                    height: "100%",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 16,
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.boxShadow = "var(--sh-2)";
+                                    e.currentTarget.style.borderColor = "var(--indigo)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.boxShadow = "var(--sh-1)";
+                                    e.currentTarget.style.borderColor = "var(--line)";
+                                }}
                             >
-                                <div
-                                    style={{
-                                        background: "var(--surface)",
-                                        border: "1px solid var(--line)",
-                                        borderRadius: 16,
-                                        padding: 20,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s",
-                                        boxShadow: "var(--sh-1)",
-                                        height: "100%",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.boxShadow = "var(--sh-2)";
-                                        e.currentTarget.style.borderColor = "var(--indigo)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.boxShadow = "var(--sh-1)";
-                                        e.currentTarget.style.borderColor = "var(--line)";
-                                    }}
+                                <Link
+                                    href={`/dialog/${bundleId}/${mode.id}`}
+                                    style={{ textDecoration: "none", color: "inherit", flex: 1 }}
                                 >
                                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                                         <div>
@@ -154,28 +156,51 @@ export default function BundleModesPage() {
                                         </div>
                                         <Icon name="arrow-right" size="sm" color="var(--indigo)" style={{ flexShrink: 0, marginTop: 4 }} />
                                     </div>
+                                </Link>
 
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                                    <Link
+                                        href={`/dialog/${bundleId}/${mode.id}`}
+                                        style={{
+                                            textDecoration: "none",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 6,
+                                            padding: "8px 14px",
+                                            borderRadius: 999,
+                                            background: "var(--surface-2)",
+                                            color: "var(--ink)",
+                                            border: "1px solid var(--line)",
+                                            fontSize: 13,
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        <Icon name="message" size="xs" />
+                                        Чат
+                                    </Link>
                                     {mode.voiceEnabled && (
-                                        <div
+                                        <Link
+                                            href={`/dialog/${bundleId}/${mode.id}/voice`}
                                             style={{
-                                                marginTop: 12,
+                                                textDecoration: "none",
                                                 display: "inline-flex",
                                                 alignItems: "center",
                                                 gap: 6,
-                                                padding: "4px 10px",
+                                                padding: "8px 14px",
                                                 borderRadius: 999,
-                                                background: "var(--rust-soft)",
-                                                color: "var(--rust)",
-                                                fontSize: 11,
-                                                fontWeight: 500,
+                                                background: "var(--olive)",
+                                                color: "var(--bg)",
+                                                fontSize: 13,
+                                                fontWeight: 600,
+                                                boxShadow: "var(--sh-1)",
                                             }}
                                         >
-                                            <Icon name="mic" size="xs" />
-                                            Voice
-                                        </div>
+                                            <Icon name="phone" size="xs" />
+                                            Позвонить
+                                        </Link>
                                     )}
                                 </div>
-                            </Link>
+                            </div>
                         ))}
                     </div>
                 )}

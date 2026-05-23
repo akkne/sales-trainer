@@ -10,8 +10,8 @@ import {
     DialogFeedback,
 } from "@/lib/hooks/useDialog";
 import { useVoice, VoicePipelineState } from "@/lib/hooks/useVoice";
-import { apiClient } from "@/lib/api/apiClient";
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
+import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import { Icon } from "@/components/ui/Icon";
 
 function formatTime(seconds: number): string {
@@ -20,7 +20,87 @@ function formatTime(seconds: number): string {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
-export default function VoiceOnlyPage() {
+type CallStatus = "idle" | "dialing" | "connected" | "ended";
+
+interface StateInfo {
+    label: string;
+    hint: string;
+    ringColor: string;
+    pulse: boolean;
+}
+
+function describePipeline(state: VoicePipelineState, callStatus: CallStatus): StateInfo {
+    if (callStatus === "idle") {
+        return {
+            label: "Готов к звонку",
+            hint: "Нажмите «Позвонить», чтобы соединиться с собеседником",
+            ringColor: "var(--line)",
+            pulse: false,
+        };
+    }
+    if (callStatus === "dialing" || state === "initializing") {
+        return {
+            label: "Соединение...",
+            hint: "Гудки. Собеседник вот-вот возьмёт трубку",
+            ringColor: "var(--indigo)",
+            pulse: true,
+        };
+    }
+    if (callStatus === "ended") {
+        return {
+            label: "Звонок завершён",
+            hint: "Готовим разбор разговора",
+            ringColor: "var(--ink-3)",
+            pulse: false,
+        };
+    }
+    switch (state) {
+        case "listening":
+            return {
+                label: "На связи · слушаю вас",
+                hint: "Говорите свободно — я отвечу, как только сделаете паузу",
+                ringColor: "var(--olive)",
+                pulse: false,
+            };
+        case "speaking":
+            return {
+                label: "Слышу вас",
+                hint: "Продолжайте — фиксирую реплику",
+                ringColor: "var(--olive)",
+                pulse: true,
+            };
+        case "processing":
+            return {
+                label: "Думаю над ответом...",
+                hint: "Готовлю реплику собеседника",
+                ringColor: "var(--clay)",
+                pulse: true,
+            };
+        case "playing":
+            return {
+                label: "Собеседник говорит",
+                hint: "Прерывайте, когда захотите ответить",
+                ringColor: "var(--rust)",
+                pulse: true,
+            };
+        case "error":
+            return {
+                label: "Помехи на линии",
+                hint: "Попробуйте позвонить ещё раз",
+                ringColor: "var(--bad)",
+                pulse: false,
+            };
+        default:
+            return {
+                label: "На линии",
+                hint: "",
+                ringColor: "var(--indigo)",
+                pulse: false,
+            };
+    }
+}
+
+export default function VoiceCallPage() {
     const params = useParams();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -34,7 +114,7 @@ export default function VoiceOnlyPage() {
     const currentMode = modes?.find((mode) => mode.id === modeId);
 
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [isEnded, setIsEnded] = useState(false);
+    const [callStatus, setCallStatus] = useState<CallStatus>("idle");
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
     const [isCompleting, setIsCompleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -42,31 +122,21 @@ export default function VoiceOnlyPage() {
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Session timer
     useEffect(() => {
-        if (sessionId && !isEnded && !feedback) {
+        if (callStatus === "connected") {
             timerRef.current = setInterval(() => {
                 setSessionTimer((prev) => prev + 1);
             }, 1000);
-        } else {
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-                timerRef.current = null;
-            }
+        } else if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
         }
         return () => {
             if (timerRef.current) {
                 clearInterval(timerRef.current);
             }
         };
-    }, [sessionId, isEnded, feedback]);
-
-    // Reset timer on new session
-    useEffect(() => {
-        if (sessionId) {
-            setSessionTimer(0);
-        }
-    }, [sessionId]);
+    }, [callStatus]);
 
     const handleVoiceError = useCallback((err: Error) => {
         setError(err.message);
@@ -75,18 +145,10 @@ export default function VoiceOnlyPage() {
 
     const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
         setSessionId(newSessionId);
+        setCallStatus("connected");
     }, []);
 
-    const handleAiResponse = useCallback((content: string, isStopSignal: boolean) => {
-        if (isStopSignal && sessionId) {
-            setIsEnded(true);
-            // Auto-complete session
-            completeSession(sessionId);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sessionId]);
-
-    const completeSession = async (sid: string) => {
+    const completeSession = useCallback(async (sid: string) => {
         if (isCompleting) return;
         setIsCompleting(true);
         try {
@@ -94,11 +156,18 @@ export default function VoiceOnlyPage() {
             setFeedback(sessionFeedback);
             queryClient.invalidateQueries({ queryKey: ["profile"] });
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Error completing session");
+            setError(err instanceof Error ? err.message : "Не удалось завершить звонок");
         } finally {
             setIsCompleting(false);
         }
-    };
+    }, [isCompleting, queryClient]);
+
+    const handleAiResponse = useCallback((_content: string, isStopSignal: boolean) => {
+        if (isStopSignal && sessionId) {
+            setCallStatus("ended");
+            completeSession(sessionId);
+        }
+    }, [sessionId, completeSession]);
 
     const {
         state: voiceState,
@@ -115,110 +184,64 @@ export default function VoiceOnlyPage() {
         onError: handleVoiceError,
     });
 
-    const handleClose = () => {
-        router.push("/dialog");
-    };
+    const handlePickUp = useCallback(async () => {
+        if (callStatus !== "idle" && callStatus !== "ended") return;
+        setCallStatus("dialing");
+        setError(null);
+        setSessionTimer(0);
+        setFeedback(null);
+        if (callStatus === "ended") {
+            setSessionId(null);
+        }
+        try {
+            await startVoice();
+        } catch {
+            setCallStatus("idle");
+        }
+    }, [callStatus, startVoice]);
 
-    const handleEndSession = () => {
-        if (sessionId && !isEnded) {
-            setIsEnded(true);
-            stopVoice();
+    const handleHangUp = useCallback(() => {
+        if (callStatus !== "connected" && callStatus !== "dialing") return;
+        setCallStatus("ended");
+        stopVoice();
+        if (sessionId) {
             completeSession(sessionId);
         }
-    };
+    }, [callStatus, stopVoice, sessionId, completeSession]);
 
-    const handleCloseFeedback = () => {
+    const handleClose = useCallback(() => {
+        stopVoice();
+        router.push(`/dialog/${bundleId}`);
+    }, [stopVoice, router, bundleId]);
+
+    const handleCloseFeedback = useCallback(() => {
         setFeedback(null);
         setSessionId(null);
-        setIsEnded(false);
         setSessionTimer(0);
-    };
+        setCallStatus("idle");
+    }, []);
 
-    const handleStartNewSession = () => {
-        setSessionId(null);
-        setIsEnded(false);
-        setFeedback(null);
-        setSessionTimer(0);
-    };
+    const info = describePipeline(voiceState, callStatus);
+    const personaSeed = `${currentMode?.id ?? "persona"}-${currentMode?.title ?? ""}`;
+    const isCallActive = callStatus === "connected" || callStatus === "dialing";
 
-    const isActive = voiceState !== "idle" && voiceState !== "error";
-    const isSpeaking = voiceState === "speaking";
-    const isProcessing = voiceState === "processing";
-    const isPlaying = voiceState === "playing";
-    const isListening = voiceState === "listening";
-    const isInitializing = voiceState === "initializing";
-
-    const handleMicClick = () => {
-        if (isActive) {
-            stopVoice();
-        } else {
-            startVoice();
-        }
-    };
-
-    // Status text and icon
-    const getStatusInfo = (): { text: string; icon: string; color: string } => {
-        switch (voiceState) {
-            case "idle":
-                return { text: "Tap to start", icon: "mic", color: "text-on-surface-variant" };
-            case "initializing":
-                return { text: "Starting...", icon: "mic", color: "text-primary" };
-            case "listening":
-                return { text: "Listening...", icon: "mic", color: "text-primary" };
-            case "speaking":
-                return { text: "Listening...", icon: "mic", color: "text-primary" };
-            case "processing":
-                return { text: "Processing...", icon: "clock", color: "text-secondary" };
-            case "playing":
-                return { text: "AI speaking...", icon: "bell", color: "text-tertiary" };
-            case "error":
-                return { text: "Error", icon: "warning", color: "text-error" };
-            default:
-                return { text: "", icon: "mic", color: "text-on-surface-variant" };
-        }
-    };
-
-    const statusInfo = getStatusInfo();
-
-    // Voice not available
     if (!isVoiceAvailable && currentMode) {
         return (
-            <div className="flex flex-col h-screen bg-surface">
-                <header className="flex items-center justify-between px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
-                            <Icon name="sparkle" size="md" className="text-secondary" />
-                        </div>
-                        <div>
-                            <h1 className="font-semibold text-on-surface text-sm">
-                                {currentMode?.title || "Voice Practice"}
-                            </h1>
-                            <p className="text-xs text-on-surface-variant">
-                                {currentBundle?.title}
-                            </p>
-                        </div>
+            <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+                <div style={{ maxWidth: 460, width: "100%", textAlign: "center", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 24, padding: 40, boxShadow: "var(--sh-1)" }}>
+                    <div style={{ width: 72, height: 72, borderRadius: 18, background: "var(--bad-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                        <Icon name="mic" size="lg" color="var(--bad)" />
                     </div>
-                    <button
-                        onClick={handleClose}
-                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
-                    >
-                        <Icon name="close" size="md" className="text-on-surface-variant" />
-                    </button>
-                </header>
-
-                <div className="flex-1 flex flex-col items-center justify-center p-8">
-                    <div className="w-24 h-24 rounded-full bg-error-container flex items-center justify-center mb-6">
-                        <Icon name="mic" size="xl" className="text-error" />
-                    </div>
-                    <p className="text-lg font-semibold text-on-surface mb-2">Voice not available</p>
-                    <p className="text-sm text-on-surface-variant text-center max-w-xs">
-                        Voice mode is not enabled for this exercise or your browser doesn't support it.
+                    <h1 style={{ fontSize: 24, fontWeight: 500, marginBottom: 8 }}>Голосовой режим недоступен</h1>
+                    <p style={{ fontSize: 14, color: "var(--ink-3)", marginBottom: 24 }}>
+                        Этот сценарий не поддерживает звонки, либо браузер не умеет распознавать речь.
+                        Попробуйте Chrome или Edge на десктопе.
                     </p>
                     <button
                         onClick={handleClose}
-                        className="mt-8 px-6 py-3 bg-primary text-on-primary font-semibold rounded-full"
+                        style={{ padding: "12px 24px", borderRadius: 12, background: "var(--ink)", color: "var(--bg)", border: "none", cursor: "pointer", fontWeight: 500 }}
                     >
-                        Go Back
+                        Назад
                     </button>
                 </div>
             </div>
@@ -226,154 +249,283 @@ export default function VoiceOnlyPage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-surface">
-            {/* Header */}
-            <header className="flex items-center justify-between px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center">
-                        <Icon name="sparkle" size="md" className="text-secondary" />
-                    </div>
-                    <div>
-                        <h1 className="font-semibold text-on-surface text-sm">
-                            {currentMode?.title || "Voice Practice"}
-                        </h1>
-                        <p className="text-xs text-on-surface-variant">
-                            {currentBundle?.title}
-                        </p>
-                    </div>
+        <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+            {/* Top bar */}
+            <header
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "20px 32px",
+                    borderBottom: "1px solid var(--line)",
+                    background: "var(--surface-2)",
+                }}
+            >
+                <button
+                    onClick={handleClose}
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "var(--ink-3)",
+                        fontSize: 13,
+                        padding: 0,
+                    }}
+                >
+                    <Icon name="chevron-left" size="sm" />
+                    К сценариям
+                </button>
+
+                <div
+                    style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: 13,
+                        color: callStatus === "connected" ? "var(--olive)" : "var(--ink-3)",
+                        letterSpacing: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                    }}
+                >
+                    <span
+                        style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: callStatus === "connected" ? "var(--olive)" : "var(--ink-3)",
+                            display: "inline-block",
+                            animation: callStatus === "connected" ? "pulse 1.4s ease-in-out infinite" : "none",
+                        }}
+                    />
+                    {callStatus === "idle" && "ОЖИДАНИЕ"}
+                    {callStatus === "dialing" && "ВЫЗОВ"}
+                    {callStatus === "connected" && formatTime(sessionTimer)}
+                    {callStatus === "ended" && "ЗАВЕРШЁН"}
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Timer */}
-                    {sessionId && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant">
-                            <Icon name="clock" size="sm" />
-                            <span className="text-sm font-mono font-medium tabular-nums">
-                                {formatTime(sessionTimer)}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* End session button */}
-                    {sessionId && !isEnded && !feedback && (
-                        <button
-                            onClick={handleEndSession}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error-container text-error text-sm font-medium hover:opacity-90 tonal-transition"
-                        >
-                            <Icon name="close" size="sm" />
-                            End
-                        </button>
-                    )}
-
-                    {/* Close button */}
-                    <button
-                        onClick={handleClose}
-                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
-                    >
-                        <Icon name="close" size="md" className="text-on-surface-variant" />
-                    </button>
-                </div>
+                <div style={{ width: 100 }} />
             </header>
 
-            {/* Main content - big microphone button */}
-            <div className="flex-1 flex flex-col items-center justify-center p-8">
-                {/* Error message */}
+            {/* Call body */}
+            <main
+                style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "40px 24px 60px",
+                    gap: 28,
+                    position: "relative",
+                }}
+            >
+                {/* Persona block */}
+                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {info.pulse && (
+                        <div
+                            style={{
+                                position: "absolute",
+                                inset: -24,
+                                borderRadius: "50%",
+                                border: `2px solid ${info.ringColor}`,
+                                opacity: 0.5,
+                                animation: "ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite",
+                            }}
+                        />
+                    )}
+                    <div
+                        style={{
+                            padding: 8,
+                            borderRadius: "50%",
+                            background: "var(--surface)",
+                            border: `3px solid ${info.ringColor}`,
+                            boxShadow: "var(--sh-2)",
+                            transition: "border-color 0.3s ease",
+                        }}
+                    >
+                        <GeoAvatar seed={personaSeed} size={168} style={{ borderRadius: "50%" }} />
+                    </div>
+                </div>
+
+                <div style={{ textAlign: "center", maxWidth: 480 }}>
+                    <div style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, fontFamily: "var(--f-mono)" }}>
+                        {currentBundle?.title ?? "СЦЕНАРИЙ"}
+                    </div>
+                    <h1 style={{ fontSize: 32, letterSpacing: -1, fontWeight: 500, lineHeight: 1.1, margin: 0 }}>
+                        {currentMode?.title ?? "Собеседник"}
+                    </h1>
+                    {currentMode?.description && (
+                        <p style={{ fontSize: 14, color: "var(--ink-3)", marginTop: 10, lineHeight: 1.5 }}>
+                            {currentMode.description}
+                        </p>
+                    )}
+                </div>
+
+                {/* State pill */}
+                <div
+                    style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "10px 18px",
+                        borderRadius: 999,
+                        background: "var(--surface)",
+                        border: "1px solid var(--line)",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--ink)",
+                    }}
+                >
+                    <span
+                        style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: info.ringColor,
+                            animation: info.pulse ? "pulse 1.2s ease-in-out infinite" : "none",
+                        }}
+                    />
+                    {info.label}
+                </div>
+                <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", maxWidth: 380, margin: 0, minHeight: 38 }}>
+                    {info.hint}
+                </p>
+
                 {error && (
-                    <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-error-container text-error text-sm px-4 py-2 rounded-full flex items-center gap-2">
+                    <div
+                        style={{
+                            background: "var(--bad-soft)",
+                            color: "var(--bad)",
+                            padding: "10px 16px",
+                            borderRadius: 12,
+                            fontSize: 13,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                        }}
+                    >
                         <Icon name="warning" size="sm" />
                         {error}
                     </div>
                 )}
 
-                {/* Completing indicator */}
                 {isCompleting && (
-                    <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-surface-container text-on-surface-variant text-sm px-4 py-2 rounded-full flex items-center gap-2">
-                        <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        Generating feedback...
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-3)", fontSize: 13 }}>
+                        <span
+                            style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: "50%",
+                                border: "2px solid var(--indigo)",
+                                borderTopColor: "transparent",
+                                animation: "spin 0.8s linear infinite",
+                            }}
+                        />
+                        Готовим разбор...
                     </div>
                 )}
+            </main>
 
-                {/* Status text above button */}
-                <p className={`text-lg font-medium mb-8 ${statusInfo.color}`}>
-                    {statusInfo.text}
-                </p>
-
-                {/* Big microphone button */}
-                <button
-                    onClick={handleMicClick}
-                    disabled={isProcessing || isPlaying || isEnded || !!feedback}
-                    className={`
-                        relative w-40 h-40 rounded-full flex items-center justify-center
-                        transition-all duration-300 shadow-xl
-                        ${isActive
-                            ? "bg-primary shadow-[0_8px_0_var(--color-primary-dim)]"
-                            : "bg-surface-container-high hover:bg-surface-container-highest shadow-[0_8px_0_var(--color-outline-variant)]"
-                        }
-                        ${(isProcessing || isPlaying || isEnded || !!feedback) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                        active:translate-y-2 active:shadow-none
-                    `}
-                >
-                    {/* Outer ring animation when speaking */}
-                    {isSpeaking && (
-                        <>
-                            <div className="absolute inset-0 rounded-full animate-ping bg-primary opacity-20" />
-                            <div className="absolute inset-[-8px] rounded-full border-4 border-primary animate-pulse opacity-50" />
-                        </>
-                    )}
-
-                    {/* Listening pulse */}
-                    {isListening && (
-                        <div className="absolute inset-[-4px] rounded-full border-2 border-primary animate-pulse opacity-40" />
-                    )}
-
-                    {/* Playing waves */}
-                    {isPlaying && (
-                        <>
-                            <div className="absolute inset-[-8px] rounded-full border-2 border-tertiary animate-pulse opacity-40" />
-                            <div className="absolute inset-[-16px] rounded-full border border-tertiary animate-pulse opacity-20" style={{ animationDelay: "0.2s" }} />
-                        </>
-                    )}
-
-                    {/* Icon */}
-                    {isProcessing || isInitializing ? (
-                        <div className={`w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin ${isActive ? "text-on-primary" : "text-on-surface-variant"}`} />
-                    ) : isPlaying ? (
-                        <Icon
-                            name="bell"
-                            className={`text-6xl ${isActive ? "text-on-primary" : "text-on-surface-variant"}`}
-                        />
-                    ) : (
-                        <Icon
-                            name="mic"
-                            className={`text-6xl ${isActive ? "text-on-primary" : "text-on-surface-variant"}`}
-                        />
-                    )}
-                </button>
-
-                {/* Instructions */}
-                <p className="text-sm text-on-surface-variant mt-8 text-center max-w-xs">
-                    {!sessionId && !isActive && "Tap the microphone to start your conversation"}
-                    {isListening && "Speak naturally. AI will respond when you pause."}
-                    {isSpeaking && "Go ahead, I'm listening..."}
-                    {isPlaying && "Listen to the AI response"}
-                    {isEnded && !feedback && "Session ended. Generating feedback..."}
-                </p>
-
-                {/* Start new session button after completion */}
-                {feedback && (
+            {/* Call controls */}
+            <footer
+                style={{
+                    padding: "24px 32px 40px",
+                    borderTop: "1px solid var(--line)",
+                    background: "var(--surface-2)",
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: 24,
+                }}
+            >
+                {!isCallActive && !feedback && (
                     <button
-                        onClick={handleStartNewSession}
-                        className="mt-8 px-6 py-3 bg-primary text-on-primary font-bold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition"
+                        onClick={handlePickUp}
+                        disabled={isCompleting}
+                        aria-label="Позвонить"
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "16px 36px",
+                            borderRadius: 999,
+                            background: "var(--olive)",
+                            color: "var(--bg)",
+                            border: "none",
+                            cursor: isCompleting ? "not-allowed" : "pointer",
+                            fontSize: 16,
+                            fontWeight: 600,
+                            boxShadow: "var(--sh-2)",
+                            opacity: isCompleting ? 0.5 : 1,
+                            transition: "transform 0.15s ease",
+                        }}
                     >
-                        Start New Session
+                        <Icon name="phone" size="md" />
+                        {callStatus === "ended" ? "Позвонить ещё раз" : "Позвонить"}
                     </button>
                 )}
-            </div>
 
-            {/* Feedback modal */}
-            {feedback && (
-                <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />
-            )}
+                {isCallActive && (
+                    <button
+                        onClick={handleHangUp}
+                        aria-label="Положить трубку"
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "16px 36px",
+                            borderRadius: 999,
+                            background: "var(--bad)",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: 16,
+                            fontWeight: 600,
+                            boxShadow: "var(--sh-2)",
+                        }}
+                    >
+                        <Icon name="phone" size="md" style={{ transform: "rotate(135deg)" }} />
+                        Положить трубку
+                    </button>
+                )}
+
+                {feedback && (
+                    <button
+                        onClick={handleCloseFeedback}
+                        style={{
+                            padding: "16px 36px",
+                            borderRadius: 999,
+                            background: "var(--indigo)",
+                            color: "var(--bg)",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: 16,
+                            fontWeight: 600,
+                            boxShadow: "var(--sh-2)",
+                        }}
+                    >
+                        Закрыть разбор
+                    </button>
+                )}
+            </footer>
+
+            {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />}
+
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.55; transform: scale(0.85); }
+                }
+                @keyframes ping {
+                    0% { transform: scale(1); opacity: 0.7; }
+                    80%, 100% { transform: scale(1.4); opacity: 0; }
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     );
 }
