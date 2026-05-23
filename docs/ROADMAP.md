@@ -1088,15 +1088,15 @@
 - [ ] Integration test for `POST /dialog/sessions/{id}/voice`
 
 ### Phase 36.2 — Stage B: full-screen "Call" UX
-- [ ] New route `/dialog/[bundleId]/[modeId]/call` outside `(main)` layout
-- [ ] Layout: large `GeoAvatar`, persona name, scene mood chip
-- [ ] Call states: `dialing → connected → speaking → listening → ended`
-- [ ] Call timer (mm:ss), pulsing ring while собеседник говорит
-- [ ] Red "Положить трубку" button → `/sessions/{id}/complete` + feedback modal
+- [x] Full-screen route `/dialog/[bundleId]/[modeId]/voice` (reused existing path)
+- [x] Layout: large `GeoAvatar`, persona name, scenario subtitle
+- [x] Call states: `dialing → connected → ended` mapped onto VAD pipeline states
+- [x] Call timer (mm:ss in mono), pulsing ring tied to current pipeline state
+- [x] Red "Положить трубку" button → `/sessions/{id}/complete` + feedback modal
+- [x] Continuous VAD (no push-to-talk); state pill becomes activity indicator
+- [x] "Позвонить" CTA on `/dialog/[bundleId]` mode card next to "Чат"
 - [ ] Sound effects: ringing tone, hangup beep (mp3 in `public/sounds/`)
 - [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
-- [ ] Continuous VAD (no push-to-talk); mic button becomes activity indicator
-- [ ] Add "🎙️ Позвонить" CTA on `/dialog/[bundleId]/[modeId]` next to text mode
 
 ### Phase 36.3 — Stage B: streaming LLM → streaming TTS
 - [ ] `IOpenAiChatService.StreamChatAsync` — SSE consumer for `stream: true`
