@@ -66,20 +66,36 @@ Side effect: saves messages to session, calls GPT
     "SmartFormat": true,
     "Punctuate": true
   },
-  "ElevenLabs": {
-    "ApiKey": "REPLACE_WITH_ELEVENLABS_API_KEY",
+  "VoicerTts": {
+    "ApiKey": "REPLACE_WITH_VOICER_API_KEY",
     "BaseUrl": "https://voiceapi.csv666.ru",
-    "VoiceId": "REPLACE_WITH_VOICE_ID",
-    "Model": "eleven_flash_v2_5",
-    "OutputFormat": "mp3_44100_128"
+    "VoiceId": "21m00Tcm4TlvDq8ikWAM",
+    "Model": "eleven_multilingual_v2"
   },
   "Voice": {
     "Enabled": true,
+    "TtsProvider": "voicer",
     "VadSilenceMs": 600,
-    "MaxRecordingSeconds": 60
+    "MaxRecordingSeconds": 60,
+    "DailyLimitMinutes": 30,
+    "MonthlyLimitMinutes": 300
   }
 }
 ```
+
+### Buying voice API access from Russia
+
+| Layer | Provider | Where to buy (RUB-friendly) | Config keys |
+|-------|----------|------------------------------|-------------|
+| **STT** | Deepgram | Через ProxyAPI / VseGPT (есть deepgram-compatible бридж) или напрямую с зарубежной картой | `Deepgram:ApiKey` |
+| **STT (fallback)** | Web Speech API (браузер) | Бесплатно, не требует ключа | — |
+| **TTS** | Voicer (прокси к ElevenLabs) | Личный кабинет `voiceapi.csv666.ru`, оплата СБП | `VoicerTts:ApiKey`, `Voice:TtsProvider=voicer` |
+| **TTS (alt)** | Google Cloud TTS | Google Cloud, иностранная карта | `GoogleTts:ApiKey`, `Voice:TtsProvider=google` |
+| **TTS (alt)** | SaluteSpeech (Сбер) | СБП | планируется |
+| **LLM** | См. [AI_DIALOG.md](AI_DIALOG.md#buying-api-access-from-russia-rub-friendly-proxy-gateways) | — | `OpenAI:BaseUrl` |
+
+`Voice:TtsProvider` явно выбирает провайдер; если выбранный не сконфигурирован,
+сервис фолбэчится на любой доступный.
 
 ## Database Changes
 

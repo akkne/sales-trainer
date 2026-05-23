@@ -119,6 +119,8 @@ CREATE TABLE "DialogModes" (
 {
   "OpenAI": {
     "ApiKey": "sk-...",
+    "BaseUrl": "https://api.openai.com",
+    "ChatCompletionsPath": "/v1/chat/completions",
     "ChatModel": "gpt-4.1-mini",
     "FeedbackModel": "gpt-4.1",
     "MaxTokensChat": 500,
@@ -126,6 +128,26 @@ CREATE TABLE "DialogModes" (
   }
 }
 ```
+
+### Buying API access from Russia (RUB-friendly proxy gateways)
+
+`OpenAI:BaseUrl` can be pointed at an OpenAI-compatible reseller that accepts
+СБП / Russian cards instead of `api.openai.com`. The wire format is identical, so
+no code changes are needed — only the config.
+
+Tested / supported gateways:
+
+| Gateway | `BaseUrl` | `ChatCompletionsPath` | Notes |
+|---------|-----------|-----------------------|-------|
+| **ProxyAPI** | `https://api.proxyapi.ru/openai` | `/v1/chat/completions` | СБП, карты МИР, оплата криптой |
+| **VseGPT** | `https://api.vsegpt.ru` | `/v1/chat/completions` | Поддерживает GPT-4.1 + Claude + LLaMA из одной точки |
+| **BotHub** | `https://bothub.chat/api/v2/openai` | `/v1/chat/completions` | Подписочная модель + оплата за токены |
+| **GPTunnel** | `https://gptunnel.ru/v1` | `/chat/completions` | Самый дешёвый по гпт-4.1-mini на текущий момент |
+| `f5ai.*` | (auth via `X-Auth-Token` — обработано в коде) | — | Legacy, оставлен для совместимости |
+| Original OpenAI | `https://api.openai.com` | `/v1/chat/completions` | Только иностранные карты |
+
+После смены `BaseUrl` ключ покупается в личном кабинете шлюза, вставляется в
+`OpenAI:ApiKey` — рестарт backend, готово.
 
 ### System Prompts (stored in PostgreSQL, editable via admin)
 
