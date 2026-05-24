@@ -3,8 +3,9 @@
 import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Icon, IconName } from "@/components/ui/Icon";
+import { StatTile } from "@/components/ui/StatTile";
 import { useFriends, useFriendRequests } from "@/lib/hooks/useFriends";
-import { useCreateConversation } from "@/lib/hooks/useChat";
+import { useConversations, useCreateConversation } from "@/lib/hooks/useChat";
 import { FriendCard } from "@/components/friends/FriendCard";
 import { FriendRequestCard } from "@/components/friends/FriendRequestCard";
 import { FriendLeaderboard } from "@/components/friends/FriendLeaderboard";
@@ -46,10 +47,13 @@ function FriendsPageContent() {
 
     const { data: friends, isLoading: friendsLoading } = useFriends();
     const { data: requests } = useFriendRequests();
+    const { data: conversations } = useConversations();
     const createConversationMutation = useCreateConversation();
 
+    const friendsCount = friends?.length ?? 0;
     const incomingRequestCount =
         requests?.filter((request) => request.direction === "incoming").length ?? 0;
+    const conversationsCount = conversations?.length ?? 0;
 
     const updateSearchParams = useCallback(
         (updates: { tab?: TabKey; conv?: string | null }) => {
@@ -91,23 +95,76 @@ function FriendsPageContent() {
     const outgoingRequests = requests?.filter((request) => request.direction === "outgoing") ?? [];
 
     return (
-        <div className="min-h-screen bg-bg pb-20">
-            {/* Header */}
-            <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
-                <div className={`${activeTab === "chats" ? "max-w-5xl" : "max-w-2xl"} mx-auto`}>
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-mono tracking-[2px] uppercase text-indigo">
-                            СООБЩЕСТВО
-                        </span>
+        <div style={{ minHeight: "100vh", background: "var(--bg)" }} className="pb-20">
+            {/* Hero band — handbook style */}
+            <div
+                style={{
+                    padding: "40px 60px 32px",
+                    borderBottom: "1px solid var(--line)",
+                    background: "var(--surface-2)",
+                }}
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-end",
+                        gap: 32,
+                        maxWidth: 1200,
+                        margin: "0 auto",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <div style={{ minWidth: 0 }}>
+                        <div
+                            style={{
+                                fontSize: 12,
+                                color: "var(--indigo)",
+                                letterSpacing: 2,
+                                textTransform: "uppercase",
+                                fontWeight: 500,
+                                marginBottom: 10,
+                                fontFamily: "var(--f-mono)",
+                            }}
+                        >
+                            СООБЩЕСТВО · {friendsCount} ДРУЗ{plural(friendsCount)}
+                        </div>
+                        <h1 style={{ margin: 0, fontSize: 48, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1, color: "var(--ink)" }}>
+                            Друзья.
+                        </h1>
+                        <p style={{ fontSize: 16, color: "var(--ink-3)", marginTop: 10, maxWidth: 520 }}>
+                            Твоё боевое окружение. Добавляй напарников, отслеживай активность
+                            и соревнуйся за верхнюю строку в своём рейтинге.
+                        </p>
                     </div>
-                    <h1 className="text-3xl font-medium tracking-tight text-ink">
-                        Друзья
-                    </h1>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <StatTile
+                            big
+                            label="Друзей"
+                            value={friendsCount}
+                            icon={<Icon name="users" size="xs" />}
+                            tone="olive"
+                        />
+                        <StatTile
+                            big
+                            label="Запросов"
+                            value={incomingRequestCount}
+                            icon={<Icon name="user" size="xs" />}
+                            tone="rust"
+                        />
+                        <StatTile
+                            big
+                            label="Чатов"
+                            value={conversationsCount}
+                            icon={<Icon name="message" size="xs" />}
+                            tone="indigo"
+                        />
+                    </div>
                 </div>
             </div>
 
-            <div className={`${activeTab === "chats" ? "max-w-5xl" : "max-w-2xl"} mx-auto px-4 md:px-6 py-6`}>
-                {/* Tab bar */}
+            {/* Tab bar + content */}
+            <div style={{ padding: "24px 60px 0", maxWidth: 1200, margin: "0 auto" }}>
                 <div className="flex gap-2 mb-6 flex-wrap">
                     {TABS.map((tab) => (
                         <button
@@ -136,41 +193,44 @@ function FriendsPageContent() {
 
                 {/* Friends tab */}
                 {activeTab === "friends" && (
-                    <div className="flex flex-col gap-5">
-                        <div ref={searchInputRef}>
-                            <UserSearchBar />
+                    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                        <div className="flex flex-col gap-5 min-w-0">
+                            <div ref={searchInputRef}>
+                                <UserSearchBar />
+                            </div>
+
+                            {friendsLoading ? (
+                                <div className="flex flex-col gap-3">
+                                    {[1, 2, 3].map((index) => (
+                                        <div key={index} className="h-20 rounded-2xl bg-surface animate-pulse" />
+                                    ))}
+                                </div>
+                            ) : friends && friends.length > 0 ? (
+                                <div className="flex flex-col gap-2">
+                                    <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-2">
+                                        Мои друзья ({friends.length})
+                                    </h3>
+                                    {friends.map((friend) => (
+                                        <FriendCard
+                                            key={friend.userId}
+                                            friend={friend}
+                                            onChatClick={handleChatClick}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <EmptyFriendsState onSearchFocus={handleSearchFocus} />
+                            )}
                         </div>
-
-                        <FriendActivityFeed />
-
-                        {friendsLoading ? (
-                            <div className="flex flex-col gap-3">
-                                {[1, 2, 3].map((index) => (
-                                    <div key={index} className="h-20 rounded-2xl bg-surface animate-pulse" />
-                                ))}
-                            </div>
-                        ) : friends && friends.length > 0 ? (
-                            <div className="flex flex-col gap-2">
-                                <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-2">
-                                    Мои друзья ({friends.length})
-                                </h3>
-                                {friends.map((friend) => (
-                                    <FriendCard
-                                        key={friend.userId}
-                                        friend={friend}
-                                        onChatClick={handleChatClick}
-                                    />
-                                ))}
-                            </div>
-                        ) : (
-                            <EmptyFriendsState onSearchFocus={handleSearchFocus} />
-                        )}
+                        <aside className="min-w-0">
+                            <FriendActivityFeed />
+                        </aside>
                     </div>
                 )}
 
                 {/* Requests tab */}
                 {activeTab === "requests" && (
-                    <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-5 max-w-2xl">
                         {incomingRequests.length > 0 && (
                             <div>
                                 <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
@@ -199,13 +259,13 @@ function FriendsPageContent() {
 
                         {incomingRequests.length === 0 && outgoingRequests.length === 0 && (
                             <div
-                                className="bg-surface border border-line rounded-2xl px-5 py-8 text-center"
+                                className="bg-surface border border-line rounded-2xl px-5 py-8 text-left"
                                 style={{ boxShadow: "var(--sh-1)" }}
                             >
-                                <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mx-auto mb-3">
+                                <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mb-3">
                                     <Icon name="send" size="lg" className="text-ink-4" />
                                 </div>
-                                <p className="text-sm font-medium text-ink-3">
+                                <p className="text-sm font-medium text-ink">
                                     Нет запросов в друзья
                                 </p>
                                 <p className="text-xs text-ink-4 mt-1">
@@ -217,7 +277,11 @@ function FriendsPageContent() {
                 )}
 
                 {/* Leaderboard tab */}
-                {activeTab === "leaderboard" && <FriendLeaderboard />}
+                {activeTab === "leaderboard" && (
+                    <div className="max-w-2xl">
+                        <FriendLeaderboard />
+                    </div>
+                )}
 
                 {/* Chats tab */}
                 {activeTab === "chats" && (
@@ -229,4 +293,12 @@ function FriendsPageContent() {
             </div>
         </div>
     );
+}
+
+function plural(count: number): string {
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return "Ь";
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "Я";
+    return "ЕЙ";
 }
