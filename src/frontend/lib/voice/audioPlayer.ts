@@ -11,6 +11,9 @@ export class AudioPlayer {
     private sourceNode: AudioBufferSourceNode | null = null;
     private state: AudioPlayerState = "idle";
     private options: AudioPlayerOptions;
+    private queue: AudioBuffer[] = [];
+    private playingFromQueue = false;
+    private queueEnded = false;
 
     constructor(options: AudioPlayerOptions = {}) {
         this.options = options;
@@ -95,6 +98,73 @@ export class AudioPlayer {
         }
     }
 
+    /**
+     * Begin streaming playback: subsequent enqueue() calls add MP3 chunks to
+     * the queue. Playback starts on the first chunk and chains buffers
+     * back-to-back. Call markQueueComplete() once all chunks are enqueued so
+     * the player knows when to fire onPlaybackEnd.
+     */
+    beginQueue(): void {
+        this.stop();
+        this.queue = [];
+        this.playingFromQueue = false;
+        this.queueEnded = false;
+        this.setState("loading");
+    }
+
+    async enqueue(arrayBuffer: ArrayBuffer): Promise<void> {
+        if (arrayBuffer.byteLength === 0) return;
+        try {
+            const audioContext = this.getAudioContext();
+            if (audioContext.state === "suspended") {
+                await audioContext.resume();
+            }
+            const buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+            this.queue.push(buffer);
+            if (!this.playingFromQueue) {
+                this.playNextFromQueue();
+            }
+        } catch (error) {
+            this.options.onError?.(error instanceof Error ? error : new Error("Decode failed"));
+        }
+    }
+
+    markQueueComplete(): void {
+        this.queueEnded = true;
+        if (!this.playingFromQueue && this.queue.length === 0) {
+            this.setState("ended");
+            this.options.onPlaybackEnd?.();
+        }
+    }
+
+    private playNextFromQueue(): void {
+        const next = this.queue.shift();
+        if (!next) {
+            this.playingFromQueue = false;
+            if (this.queueEnded) {
+                this.setState("ended");
+                this.options.onPlaybackEnd?.();
+            }
+            return;
+        }
+
+        this.playingFromQueue = true;
+        const audioContext = this.getAudioContext();
+        const source = audioContext.createBufferSource();
+        source.buffer = next;
+        source.connect(audioContext.destination);
+        source.onended = () => {
+            source.disconnect();
+            if (this.sourceNode === source) {
+                this.sourceNode = null;
+            }
+            this.playNextFromQueue();
+        };
+        this.sourceNode = source;
+        source.start();
+        this.setState("playing");
+    }
+
     stop(): void {
         if (this.sourceNode) {
             try {
@@ -105,6 +175,9 @@ export class AudioPlayer {
             this.sourceNode.disconnect();
             this.sourceNode = null;
         }
+        this.queue = [];
+        this.playingFromQueue = false;
+        this.queueEnded = false;
         this.setState("idle");
     }
 

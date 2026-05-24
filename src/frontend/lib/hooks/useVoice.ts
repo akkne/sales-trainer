@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/apiClient";
 import { WebSpeechClient, WebSpeechState, isWebSpeechSupported } from "@/lib/voice/webSpeechClient";
 import { AudioPlayer, AudioPlayerState } from "@/lib/voice/audioPlayer";
+import { readVoiceStream } from "@/lib/voice/streamReader";
 
 export interface VoiceConfig {
     enabled: boolean;
@@ -122,33 +123,39 @@ export function useVoice(options: UseVoiceOptions) {
             // Pause speech recognition during processing
             speechClientRef.current?.pause();
 
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/dialog/sessions/${activeSessionId}/voice`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-                    },
-                    body: JSON.stringify({ transcript }),
-                }
-            );
+            // Use the streaming endpoint: first audio plays well before the full LLM
+            // response is generated. Falls back to the legacy /voice route on errors.
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+            const streamUrl = `${apiBase}/dialog/sessions/${activeSessionId}/voice/stream`;
+
+            const response = await fetch(streamUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+                },
+                body: JSON.stringify({ transcript }),
+            });
 
             if (!response.ok) {
                 throw new Error(`Voice request failed: ${response.status}`);
             }
 
-            // Get AI response content from separate request
-            const voiceResponseRes = await apiClient.get<{
-                content: string;
-                isStopSignal: boolean;
-            }>(`/dialog/sessions/${activeSessionId}/voice/response`);
+            audioPlayerRef.current?.beginQueue();
+            const aggregatedText: string[] = [];
+            let stopSignal = false;
 
-            onAiResponse?.(voiceResponseRes.content, voiceResponseRes.isStopSignal);
+            for await (const frame of readVoiceStream(response)) {
+                if (frame.text) aggregatedText.push(frame.text);
+                if (frame.isStopSignal) stopSignal = true;
+                if (frame.audio.byteLength > 0) {
+                    await audioPlayerRef.current?.enqueue(frame.audio);
+                }
+                if (frame.isFinal) break;
+            }
 
-            // Play audio
-            const audioBlob = await response.blob();
-            await audioPlayerRef.current?.playBlob(audioBlob);
+            audioPlayerRef.current?.markQueueComplete();
+            onAiResponse?.(aggregatedText.join(" "), stopSignal);
         } catch (error) {
             onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
             setState("error");
