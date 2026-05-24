@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -122,6 +123,109 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             Content = cleanedContent,
             IsStopSignal = isStopSignal
         };
+    }
+
+    public async IAsyncEnumerable<string> StreamChatMessageAsync(
+        string systemPrompt,
+        List<DialogMessage> conversationHistory,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            throw new InvalidOperationException("OpenAI API is not configured");
+        }
+
+        var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
+        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
+        var enhancedSystemPrompt = systemPrompt + StopSignalInstruction;
+
+        var apiKey = _configuration["OpenAI:ApiKey"]!;
+        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
+
+        var httpClient = _httpClientFactory.CreateClient("OpenAI");
+        httpClient.DefaultRequestHeaders.Remove("Authorization");
+        httpClient.DefaultRequestHeaders.Remove("X-Auth-Token");
+        if (baseUrl.Contains("f5ai"))
+            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", apiKey);
+        else
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        var messages = new List<object>
+        {
+            new { role = "system", content = enhancedSystemPrompt }
+        };
+        foreach (var message in conversationHistory)
+        {
+            messages.Add(new { role = message.Role, content = message.Content });
+        }
+
+        var requestBody = new
+        {
+            model = chatModel,
+            messages,
+            max_tokens = maximumTokenCount,
+            temperature = 0.7,
+            stream = true
+        };
+
+        var jsonContent = JsonSerializer.Serialize(requestBody);
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, apiUrl)
+        {
+            Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
+        };
+
+        _logger.LogInformation("Streaming OpenAI completion with model {Model}", chatModel);
+
+        using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, errorBody);
+            throw new HttpRequestException($"OpenAI stream returned {response.StatusCode}: {errorBody}");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
+        {
+            if (cancellationToken.IsCancellationRequested) yield break;
+
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+
+            var payload = line["data:".Length..].Trim();
+            if (payload == "[DONE]") yield break;
+
+            string? delta = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(payload);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                {
+                    var first = choices[0];
+                    if (first.TryGetProperty("delta", out var deltaElement) &&
+                        deltaElement.TryGetProperty("content", out var contentElement))
+                    {
+                        delta = contentElement.GetString();
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                _logger.LogDebug("Skipping non-JSON SSE payload: {Payload}", payload);
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(delta))
+            {
+                yield return delta;
+            }
+        }
     }
 
     public async Task<FeedbackResult> GenerateFeedbackAsync(

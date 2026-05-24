@@ -11,6 +11,11 @@ public interface IOpenAiChatService
         List<DialogMessage> conversationHistory,
         CancellationToken cancellationToken = default);
 
+    IAsyncEnumerable<string> StreamChatMessageAsync(
+        string systemPrompt,
+        List<DialogMessage> conversationHistory,
+        CancellationToken cancellationToken = default);
+
     Task<FeedbackResult> GenerateFeedbackAsync(
         string feedbackPrompt,
         List<DialogMessage> conversationHistory,
