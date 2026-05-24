@@ -55,6 +55,7 @@ export function useVoice(options: UseVoiceOptions) {
     const currentSessionIdRef = useRef<string | null>(sessionId);
     const isProcessingRef = useRef(false);
     const stateRef = useRef<VoicePipelineState>("idle");
+    const streamAbortRef = useRef<AbortController | null>(null);
 
     // Keep sessionId ref in sync
     useEffect(() => {
@@ -119,12 +120,16 @@ export function useVoice(options: UseVoiceOptions) {
         setState("processing");
         onTranscript?.(transcript);
 
+        // Allow barge-in to cancel the in-flight stream.
+        const controller = new AbortController();
+        streamAbortRef.current = controller;
+
         try {
-            // Pause speech recognition during processing
+            // Keep speech recognition LIVE during playback so the user can interrupt.
+            // Pause only for the brief processing window (before first audio chunk
+            // arrives) to avoid the recognizer picking up its own playback echo.
             speechClientRef.current?.pause();
 
-            // Use the streaming endpoint: first audio plays well before the full LLM
-            // response is generated. Falls back to the legacy /voice route on errors.
             const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
             const streamUrl = `${apiBase}/dialog/sessions/${activeSessionId}/voice/stream`;
 
@@ -135,6 +140,7 @@ export function useVoice(options: UseVoiceOptions) {
                     Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
                 },
                 body: JSON.stringify({ transcript }),
+                signal: controller.signal,
             });
 
             if (!response.ok) {
@@ -144,24 +150,40 @@ export function useVoice(options: UseVoiceOptions) {
             audioPlayerRef.current?.beginQueue();
             const aggregatedText: string[] = [];
             let stopSignal = false;
+            let firstAudioPlayed = false;
 
-            for await (const frame of readVoiceStream(response)) {
+            for await (const frame of readVoiceStream(response, controller.signal)) {
+                if (controller.signal.aborted) break;
                 if (frame.text) aggregatedText.push(frame.text);
                 if (frame.isStopSignal) stopSignal = true;
                 if (frame.audio.byteLength > 0) {
                     await audioPlayerRef.current?.enqueue(frame.audio);
+                    // Once audio starts arriving, resume recognition so barge-in works.
+                    if (!firstAudioPlayed) {
+                        firstAudioPlayed = true;
+                        speechClientRef.current?.resume();
+                    }
                 }
                 if (frame.isFinal) break;
             }
 
-            audioPlayerRef.current?.markQueueComplete();
-            onAiResponse?.(aggregatedText.join(" "), stopSignal);
+            if (!controller.signal.aborted) {
+                audioPlayerRef.current?.markQueueComplete();
+                onAiResponse?.(aggregatedText.join(" "), stopSignal);
+            }
         } catch (error) {
-            onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
-            setState("error");
+            if ((error as Error).name === "AbortError" || controller.signal.aborted) {
+                // Barge-in / user cancellation — not an error from the user's POV.
+            } else {
+                onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
+                setState("error");
+            }
             speechClientRef.current?.resume();
         } finally {
             isProcessingRef.current = false;
+            if (streamAbortRef.current === controller) {
+                streamAbortRef.current = null;
+            }
         }
 
         // Clear transcript buffer
@@ -240,6 +262,14 @@ export function useVoice(options: UseVoiceOptions) {
                     }
                 },
                 onSpeechStart: () => {
+                    // Barge-in: user started talking while AI was playing →
+                    // cut the audio and abort the active stream so we can
+                    // pick up the new transcript.
+                    if (stateRef.current === "playing") {
+                        audioPlayerRef.current?.stop();
+                        streamAbortRef.current?.abort();
+                        streamAbortRef.current = null;
+                    }
                     setState("speaking");
                 },
                 onSpeechEnd: () => {
@@ -261,6 +291,9 @@ export function useVoice(options: UseVoiceOptions) {
             clearTimeout(silenceTimeoutRef.current);
             silenceTimeoutRef.current = null;
         }
+
+        streamAbortRef.current?.abort();
+        streamAbortRef.current = null;
 
         speechClientRef.current?.stop();
         audioPlayerRef.current?.stop();
