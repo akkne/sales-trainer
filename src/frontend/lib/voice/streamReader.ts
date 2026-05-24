@@ -86,7 +86,7 @@ export async function* readVoiceStream(
         yield {
             text: decoder.decode(textBytes),
             // ArrayBuffer copy — the underlying buffer is a slab we keep mutating.
-            audio: audioBytes.buffer.slice(audioBytes.byteOffset, audioBytes.byteOffset + audioBytes.byteLength),
+            audio: (() => { const ab = new ArrayBuffer(audioBytes.byteLength); new Uint8Array(ab).set(audioBytes); return ab; })(),
             isFinal: (flags & 1) !== 0,
             isStopSignal: (flags & 2) !== 0,
         };
