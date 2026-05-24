@@ -21,6 +21,24 @@ export function useVoiceConfig() {
     });
 }
 
+export interface VoiceUsage {
+    dailyUsedSeconds: number;
+    dailyLimitSeconds: number;
+    monthlyUsedSeconds: number;
+    monthlyLimitSeconds: number;
+    dailyExceeded: boolean;
+    monthlyExceeded: boolean;
+}
+
+export function useVoiceUsage(enabled = true) {
+    return useQuery({
+        queryKey: ["voice", "usage"],
+        queryFn: () => apiClient.get<VoiceUsage>("/dialog/voice/usage"),
+        staleTime: 30 * 1000,
+        enabled,
+    });
+}
+
 export type VoicePipelineState =
     | "idle"
     | "initializing"
@@ -143,6 +161,16 @@ export function useVoice(options: UseVoiceOptions) {
                 signal: controller.signal,
             });
 
+            if (response.status === 429) {
+                const body = await response.json().catch(() => ({} as Record<string, unknown>));
+                const period = (body.period as string) ?? "daily";
+                const limit = Math.round(((body.limitSeconds as number) ?? 0) / 60);
+                throw new Error(
+                    period === "monthly"
+                        ? `Месячный лимит звонков (${limit} мин) исчерпан`
+                        : `Дневной лимит звонков (${limit} мин) исчерпан`,
+                );
+            }
             if (!response.ok) {
                 throw new Error(`Voice request failed: ${response.status}`);
             }

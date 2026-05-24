@@ -10,6 +10,7 @@ public static class VoiceServiceCollectionExtensions
         services.AddScoped<IVoicerTtsService, VoicerTtsService>();
         services.AddScoped<IGoogleTtsService, GoogleTtsService>();
         services.AddScoped<IVoiceDialogService, VoiceDialogService>();
+        services.AddScoped<IVoiceUsageService, VoiceUsageService>();
         return services;
     }
 }

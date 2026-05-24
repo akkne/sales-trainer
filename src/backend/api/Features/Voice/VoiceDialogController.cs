@@ -16,6 +16,7 @@ public class VoiceDialogController : ControllerBase
 {
     private readonly IVoiceDialogService _voiceDialogService;
     private readonly IVoicerTtsService _voicerTtsService;
+    private readonly IVoiceUsageService _voiceUsageService;
     private readonly IConfiguration _configuration;
     private readonly MongoDbContext _mongoContext;
     private readonly ILogger<VoiceDialogController> _logger;
@@ -23,15 +24,29 @@ public class VoiceDialogController : ControllerBase
     public VoiceDialogController(
         IVoiceDialogService voiceDialogService,
         IVoicerTtsService voicerTtsService,
+        IVoiceUsageService voiceUsageService,
         IConfiguration configuration,
         MongoDbContext mongoContext,
         ILogger<VoiceDialogController> logger)
     {
         _voiceDialogService = voiceDialogService;
         _voicerTtsService = voicerTtsService;
+        _voiceUsageService = voiceUsageService;
         _configuration = configuration;
         _mongoContext = mongoContext;
         _logger = logger;
+    }
+
+    [HttpGet("/dialog/voice/usage")]
+    public async Task<IActionResult> GetVoiceUsage(CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized();
+        }
+        var usage = await _voiceUsageService.GetUsageAsync(userId, cancellationToken);
+        return Ok(usage);
     }
 
     [HttpPost("{sessionId}/voice")]
@@ -58,9 +73,31 @@ public class VoiceDialogController : ControllerBase
 
         try
         {
+            await _voiceUsageService.EnsureWithinLimitsAsync(userId, cancellationToken);
+        }
+        catch (VoiceUsageLimitException exception)
+        {
+            _logger.LogInformation("Voice request blocked for user {UserId}: {Period} limit reached", userId, exception.Period);
+            return StatusCode(429, new
+            {
+                error = $"Voice {exception.Period} limit reached",
+                period = exception.Period,
+                usedSeconds = exception.UsedSeconds,
+                limitSeconds = exception.LimitSeconds,
+            });
+        }
+
+        var startedAt = DateTime.UtcNow;
+        try
+        {
             var audioStream = await _voiceDialogService.ProcessVoiceMessageAsync(
                 sessionId, userId, request.Transcript, cancellationToken);
 
+            var elapsed = (int)Math.Ceiling((DateTime.UtcNow - startedAt).TotalSeconds);
+            if (elapsed > 0)
+            {
+                await _voiceUsageService.RecordSessionSecondsAsync(sessionId, userId, elapsed, CancellationToken.None);
+            }
             return File(audioStream, "audio/mpeg");
         }
         catch (VoicerTtsAuthenticationException exception)
@@ -122,6 +159,24 @@ public class VoiceDialogController : ControllerBase
             return;
         }
 
+        try
+        {
+            await _voiceUsageService.EnsureWithinLimitsAsync(userId, cancellationToken);
+        }
+        catch (VoiceUsageLimitException exception)
+        {
+            _logger.LogInformation("Voice stream blocked for user {UserId}: {Period} limit reached", userId, exception.Period);
+            Response.StatusCode = 429;
+            await Response.WriteAsJsonAsync(new
+            {
+                error = $"Voice {exception.Period} limit reached",
+                period = exception.Period,
+                usedSeconds = exception.UsedSeconds,
+                limitSeconds = exception.LimitSeconds,
+            }, cancellationToken);
+            return;
+        }
+
         Response.StatusCode = 200;
         Response.ContentType = "application/octet-stream";
         Response.Headers["Cache-Control"] = "no-cache";
@@ -133,6 +188,7 @@ public class VoiceDialogController : ControllerBase
         //   text (utf-8)
         //   uint32 audio byte length, big-endian
         //   audio (mp3)
+        var streamStartedAt = DateTime.UtcNow;
         try
         {
             await foreach (var chunk in _voiceDialogService.StreamVoiceMessageAsync(sessionId, userId, request.Transcript, cancellationToken))
@@ -158,6 +214,17 @@ public class VoiceDialogController : ControllerBase
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Voice stream cancelled by client for session {SessionId}", sessionId);
+        }
+        finally
+        {
+            // Record wall-clock duration of the stream so daily/monthly caps reflect
+            // real usage (LLM thinking + TTS + playback download time). Includes
+            // barge-in turns — that's intentional, the user still consumed compute.
+            var elapsed = (int)Math.Ceiling((DateTime.UtcNow - streamStartedAt).TotalSeconds);
+            if (elapsed > 0)
+            {
+                await _voiceUsageService.RecordSessionSecondsAsync(sessionId, userId, elapsed, CancellationToken.None);
+            }
         }
     }
 

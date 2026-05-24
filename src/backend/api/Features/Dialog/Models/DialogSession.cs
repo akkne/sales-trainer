@@ -33,6 +33,9 @@ public sealed class DialogSession
     [BsonElement("xpEarned")]
     public int XpEarned { get; set; }
 
+    [BsonElement("voiceSeconds")]
+    public int VoiceSeconds { get; set; }
+
     [BsonElement("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

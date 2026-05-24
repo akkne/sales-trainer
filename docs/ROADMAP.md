@@ -1099,22 +1099,28 @@
 - [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
 
 ### Phase 36.3 — Stage B: streaming LLM → streaming TTS
-- [ ] `IOpenAiChatService.StreamChatAsync` — SSE consumer for `stream: true`
-- [ ] Sentence-buffer: emit chunks at `. ! ? \n` boundaries
-- [ ] New endpoint `POST /dialog/sessions/{id}/voice/stream` returning
-      `audio/mpeg; chunked` — pipes TTS chunks as soon as each sentence is ready
-- [ ] Frontend `audioPlayer.ts`: queue incoming chunks via MSE / decodeAudioData
-- [ ] Target metric: first-audio-byte ≤ 700ms after user stops speaking
+- [x] `IOpenAiChatService.StreamChatMessageAsync` — SSE consumer for `stream: true`
+- [x] Sentence-buffer: emit chunks at `. ! ? \n` boundaries (min 20 chars)
+- [x] New endpoint `POST /dialog/sessions/{id}/voice/stream` — length-prefixed
+      framed chunks `[u32 flags][u32 textLen][text][u32 audioLen][mp3]`
+- [x] Frontend `audioPlayer.ts`: queue API (beginQueue / enqueue / markQueueComplete)
+      decodes each MP3 immediately and chains via `source.onended`
+- [x] `streamReader.ts` helper to decode the framed binary stream on the client
+- [ ] Measure: first-audio-byte after user stops speaking (target ≤ 700ms)
 
 ### Phase 36.4 — Stage B: barge-in
-- [ ] VAD detects user speech while `audioPlayer` is playing → stop playback,
-      truncate last AI message in MongoDB, send new transcript
-- [ ] Indicator UI: AI bubble fades when interrupted
+- [x] VAD detects user speech while `audioPlayer` is playing → stop playback,
+      abort the active /voice/stream fetch, recognizer picks up new transcript
+- [x] Backend cancellation drops the partial assistant message (clean turn)
+- [ ] Indicator UI: AI bubble fades when interrupted (no chat panel on call screen yet)
 
 ### Phase 36.5 — Stage C: usage limits & billing
-- [ ] Track session duration in `DialogSession.DurationSeconds`
-- [ ] Enforce `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes` per user
-      → return 429 with `retryAfter`
+- [x] Track per-stream wall-clock seconds in `DialogSession.VoiceSeconds`
+- [x] `IVoiceUsageService` — aggregates daily / monthly usage from MongoDB
+- [x] Enforce `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes` per user
+      → return 429 with `{period, usedSeconds, limitSeconds}`
+- [x] `GET /dialog/voice/usage` endpoint + `useVoiceUsage()` hook
+- [x] Call screen header shows X/Y MIN СЕГОДНЯ; refetches on hangup
 - [ ] `/profile` shows minutes used / limit
 - [ ] Admin page `/admin/voice/usage` — table of users + minute spend
 

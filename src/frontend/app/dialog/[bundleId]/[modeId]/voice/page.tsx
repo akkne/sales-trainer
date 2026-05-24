@@ -9,7 +9,7 @@ import {
     completeDialogSession,
     DialogFeedback,
 } from "@/lib/hooks/useDialog";
-import { useVoice, VoicePipelineState } from "@/lib/hooks/useVoice";
+import { useVoice, useVoiceUsage, VoicePipelineState } from "@/lib/hooks/useVoice";
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import { Icon } from "@/components/ui/Icon";
@@ -109,6 +109,7 @@ export default function VoiceCallPage() {
 
     const { data: bundles } = useDialogBundles();
     const { data: modes } = useDialogModes(bundleId);
+    const { data: usage, refetch: refetchUsage } = useVoiceUsage();
 
     const currentBundle = bundles?.find((bundle) => bundle.id === bundleId);
     const currentMode = modes?.find((mode) => mode.id === modeId);
@@ -204,10 +205,11 @@ export default function VoiceCallPage() {
         if (callStatus !== "connected" && callStatus !== "dialing") return;
         setCallStatus("ended");
         stopVoice();
+        refetchUsage();
         if (sessionId) {
             completeSession(sessionId);
         }
-    }, [callStatus, stopVoice, sessionId, completeSession]);
+    }, [callStatus, stopVoice, refetchUsage, sessionId, completeSession]);
 
     const handleClose = useCallback(() => {
         stopVoice();
@@ -306,7 +308,25 @@ export default function VoiceCallPage() {
                     {callStatus === "ended" && "ЗАВЕРШЁН"}
                 </div>
 
-                <div style={{ width: 100 }} />
+                <div style={{ minWidth: 100, display: "flex", justifyContent: "flex-end" }}>
+                    {usage && usage.dailyLimitSeconds > 0 && (
+                        <div
+                            style={{
+                                fontFamily: "var(--f-mono)",
+                                fontSize: 11,
+                                color: usage.dailyExceeded ? "var(--bad)" : "var(--ink-3)",
+                                letterSpacing: 1,
+                                textAlign: "right",
+                                lineHeight: 1.3,
+                            }}
+                            title={`Сегодня: ${Math.round(usage.dailyUsedSeconds / 60)} / ${Math.round(usage.dailyLimitSeconds / 60)} мин · В месяце: ${Math.round(usage.monthlyUsedSeconds / 60)} / ${Math.round(usage.monthlyLimitSeconds / 60)} мин`}
+                        >
+                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН
+                            <br />
+                            <span style={{ opacity: 0.6 }}>СЕГОДНЯ</span>
+                        </div>
+                    )}
+                </div>
             </header>
 
             {/* Call body */}
