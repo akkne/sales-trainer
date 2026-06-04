@@ -13,7 +13,6 @@ internal sealed class VoicerTtsService : IVoicerTtsService
     private readonly ILogger<VoicerTtsService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_VOICER_API_KEY";
-    private const int MinimumTextLength = 500;
 
     public VoicerTtsService(
         IHttpClientFactory httpClientFactory,
@@ -55,15 +54,13 @@ internal sealed class VoicerTtsService : IVoicerTtsService
         var maximumPollAttempts = int.TryParse(_configuration["VoicerTts:MaxPollAttempts"], out var maxAttempts) ? maxAttempts : 120;
 
         var effectiveVoiceId = voiceId ?? defaultVoiceId;
-        var paddedText = PadTextToMinimumLength(text);
 
         var httpClient = _httpClientFactory.CreateClient("VoicerTts");
         httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
 
-        var taskId = await CreateTaskAsync(httpClient, baseUrl, paddedText, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, cancellationToken);
-        _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters (padded from {OriginalLength})",
-            taskId, paddedText.Length, text.Length);
+        var taskId = await CreateTaskAsync(httpClient, baseUrl, text, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, cancellationToken);
+        _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters", taskId, text.Length);
 
         var status = await PollForCompletionAsync(httpClient, baseUrl, taskId, pollIntervalMilliseconds, maximumPollAttempts, cancellationToken);
         if (status != "ending")
@@ -75,22 +72,6 @@ internal sealed class VoicerTtsService : IVoicerTtsService
         _logger.LogInformation("VoicerTts audio downloaded for task {TaskId}", taskId);
 
         return audioStream;
-    }
-
-    private static string PadTextToMinimumLength(string text)
-    {
-        if (text.Length >= MinimumTextLength)
-        {
-            return text;
-        }
-
-        var stringBuilder = new StringBuilder(text);
-        while (stringBuilder.Length < MinimumTextLength)
-        {
-            stringBuilder.Append("... ");
-            stringBuilder.Append(text);
-        }
-        return stringBuilder.ToString();
     }
 
     private async Task<int> CreateTaskAsync(

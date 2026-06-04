@@ -90,9 +90,11 @@ public class VoicerTtsApiTests
     }
 
     [Test]
-    public async Task CreateTask_WithTextUnder500Chars_Returns422()
+    public async Task CreateTask_WithTextUnder500Chars_IsAccepted()
     {
-        // Arrange - intentionally short text
+        // The API used to reject texts under 500 characters with 422 (which is
+        // why the service once padded short texts). That minimum has been
+        // lifted — short sentences must synthesize as-is for streaming TTS.
         var text = "Short text";
 
         var request = new
@@ -122,11 +124,12 @@ public class VoicerTtsApiTests
         var response = await _httpClient.PostAsync($"{_baseUrl}/tasks", content);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-        var responseBody = await response.Content.ReadAsStringAsync();
-        responseBody.Should().Contain("500");
+        response.StatusCode.Should().Be(HttpStatusCode.OK,
+            because: await response.Content.ReadAsStringAsync());
 
-        TestContext.WriteLine($"Response: {responseBody}");
+        var responseBody = await response.Content.ReadFromJsonAsync<JsonElement>();
+        responseBody.TryGetProperty("task_id", out var taskIdProperty).Should().BeTrue();
+        taskIdProperty.GetInt32().Should().BeGreaterThan(0);
     }
 
     [Test]
