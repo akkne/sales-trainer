@@ -20,7 +20,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+                <div className="w-10 h-10 rounded-full border-4 border-ink border-t-transparent animate-spin" />
             </div>
         );
     }
@@ -29,17 +29,17 @@ export default function ReferencePage({ params }: ReferencePageProps) {
         <div className="max-w-2xl mx-auto px-4 py-8">
             <button
                 onClick={() => router.back()}
-                className="text-gray-400 hover:text-gray-600 text-sm mb-6 inline-block"
+                className="text-ink-4 hover:text-ink text-sm mb-6 inline-block"
             >
                 ← Назад
             </button>
 
-            <h1 className="font-[var(--font-space-grotesk)] text-2xl font-bold text-gray-900 mb-6">
+            <h1 className="text-2xl font-bold text-ink mb-6">
                 Техники
             </h1>
 
             {!referenceMaterials?.length && (
-                <p className="text-gray-400">Материалы пока не добавлены</p>
+                <p className="text-ink-4">Материалы пока не добавлены</p>
             )}
 
             <div className="flex flex-col gap-3">
@@ -49,7 +49,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                     return (
                         <div
                             key={referenceMaterial.materialId}
-                            className="rounded-2xl bg-[#F7F7F7] overflow-hidden"
+                            className="rounded-2xl bg-surface border border-line overflow-hidden"
                         >
                             <button
                                 onClick={() =>
@@ -59,11 +59,11 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                                 }
                                 className="w-full flex items-center justify-between px-5 py-4 text-left"
                             >
-                                <span className="font-semibold text-gray-900">
+                                <span className="font-semibold text-ink">
                                     {referenceMaterial.title}
                                 </span>
                                 <span
-                                    className={`text-gray-400 transition-transform duration-200 ${
+                                    className={`text-ink-4 transition-transform duration-200 ${
                                         isExpanded ? "rotate-180" : ""
                                     }`}
                                 >
@@ -72,7 +72,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                             </button>
 
                             {isExpanded && (
-                                <div className="px-5 pb-5 prose prose-sm max-w-none text-gray-700">
+                                <div className="px-5 pb-5 prose prose-sm max-w-none text-ink-2">
                                     <ReactMarkdown>{referenceMaterial.markdownContent}</ReactMarkdown>
                                 </div>
                             )}

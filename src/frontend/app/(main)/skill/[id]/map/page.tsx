@@ -20,7 +20,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                <div className="w-10 h-10 rounded-full border-4 border-ink border-t-transparent animate-spin" />
             </div>
         );
     }
@@ -36,14 +36,14 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
             {/* Back link */}
             <Link
                 href="/tree"
-                className="text-on-surface-variant hover:text-primary text-sm mb-6 inline-flex items-center gap-1 tonal-transition"
+                className="text-ink-3 hover:text-indigo-ink text-sm mb-6 inline-flex items-center gap-1 transition-colors"
             >
                 <Icon name="arrow-left" size="sm" />
                 Назад к навыкам
             </Link>
 
             {/* Header card with circular progress */}
-            <div className="bg-primary-container rounded-2xl p-6 mb-8">
+            <div className="bg-indigo-soft rounded-2xl p-6 mb-8">
                 <div className="flex items-center gap-5">
                     {/* Circular progress indicator */}
                     <div className="relative w-20 h-20 shrink-0">
@@ -53,7 +53,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                 cy="40"
                                 r="32"
                                 fill="none"
-                                stroke="var(--color-on-primary)"
+                                stroke="var(--line)"
                                 strokeOpacity="0.3"
                                 strokeWidth="8"
                             />
@@ -62,13 +62,13 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                 cy="40"
                                 r="32"
                                 fill="none"
-                                stroke="var(--color-primary)"
+                                stroke="var(--indigo)"
                                 strokeWidth="8"
                                 strokeLinecap="round"
                                 strokeDasharray={`${(completionPercent / 100) * 201} 201`}
                             />
                         </svg>
-                        <span className="absolute inset-0 flex items-center justify-center text-primary font-headline font-bold text-lg">
+                        <span className="absolute inset-0 flex items-center justify-center text-indigo-ink font-bold text-lg">
                             {completionPercent}%
                         </span>
                     </div>
@@ -76,12 +76,12 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                     {/* Stats text */}
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <Icon name="phone" size="md" className="text-primary" />
-                            <h1 className="text-xl font-headline font-bold text-on-surface">
+                            <Icon name="phone" size="md" className="text-indigo-ink" />
+                            <h1 className="text-xl font-bold text-ink">
                                 {skill?.title ?? skillSlug}
                             </h1>
                         </div>
-                        <p className="text-sm text-on-surface-variant mb-2">
+                        <p className="text-sm text-ink-3 mb-2">
                             {completedCount} из {totalCount} уроков пройдено
                         </p>
                     </div>
@@ -89,7 +89,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
             </div>
 
             {/* Learning Journey section */}
-            <h2 className="text-lg font-semibold text-on-surface mb-4">Путь обучения</h2>
+            <h2 className="text-lg font-semibold text-ink mb-4">Путь обучения</h2>
 
             {/* Lesson list */}
             <div className="flex flex-col gap-4">
@@ -102,26 +102,26 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                     return (
                         <div
                             key={lesson.lessonId}
-                            className={`flex items-start gap-4 rounded-2xl p-4 tonal-transition ${
+                            className={`flex items-start gap-4 rounded-2xl p-4 transition-colors ${
                                 isUpNext
-                                    ? "bg-secondary-container ring-2 ring-secondary"
+                                    ? "bg-olive-soft ring-2 ring-olive"
                                     : isCompleted
-                                    ? "bg-surface-container"
+                                    ? "bg-surface"
                                     : isLocked
-                                    ? "bg-surface-container-low opacity-60"
-                                    : "bg-surface-container"
+                                    ? "bg-surface opacity-60"
+                                    : "bg-surface"
                             }`}
                         >
                             {/* Step badge */}
                             <div
                                 className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-bold text-sm ${
                                     isCompleted
-                                        ? "bg-primary text-on-primary"
+                                        ? "bg-ink text-bg"
                                         : isUpNext
-                                        ? "bg-secondary text-on-secondary"
+                                        ? "bg-olive text-white"
                                         : isLocked
-                                        ? "bg-surface-variant text-outline"
-                                        : "bg-primary text-on-primary"
+                                        ? "bg-bg-2 text-ink-4"
+                                        : "bg-ink text-bg"
                                 }`}
                             >
                                 {isCompleted ? (
@@ -137,11 +137,11 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             <div className="flex-1 min-w-0">
                                 {/* Meta row */}
                                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                                    <span className="text-xs font-medium text-on-surface-variant">
+                                    <span className="text-xs font-medium text-ink-3">
                                         Урок {index + 1}
                                     </span>
                                     {isUpNext && (
-                                        <span className="text-xs font-bold text-secondary bg-on-secondary px-2 py-0.5 rounded-full">
+                                        <span className="text-xs font-bold text-olive bg-olive-soft px-2 py-0.5 rounded-full">
                                             Далее
                                         </span>
                                     )}
@@ -149,14 +149,14 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
 
                                 <h3
                                     className={`font-semibold text-base leading-snug ${
-                                        isLocked ? "text-on-surface-variant" : "text-on-surface"
+                                        isLocked ? "text-ink-3" : "text-ink"
                                     }`}
                                 >
                                     {lesson.title}
                                 </h3>
 
                                 {isLocked && (
-                                    <p className="flex items-center gap-1 text-xs text-outline mt-2">
+                                    <p className="flex items-center gap-1 text-xs text-ink-4 mt-2">
                                         <Icon name="info" size="sm" />
                                         Пройди предыдущий урок
                                     </p>
@@ -167,7 +167,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {isCompleted && (
                                 <Link
                                     href={`/session/${lesson.lessonId}`}
-                                    className="shrink-0 self-center px-4 py-2 rounded-full border border-outline text-sm font-medium text-on-surface hover:bg-surface-container-high tonal-transition"
+                                    className="shrink-0 self-center px-4 py-2 rounded-full border border-line-2 text-sm font-medium text-ink hover:bg-surface-2 transition-colors"
                                 >
                                     Повторить
                                 </Link>
@@ -175,7 +175,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {isUpNext && (
                                 <Link
                                     href={`/session/${lesson.lessonId}`}
-                                    className="shrink-0 self-center flex items-center gap-1 px-4 py-2 rounded-full bg-secondary text-on-secondary text-sm font-semibold hover:opacity-90 tonal-transition"
+                                    className="shrink-0 self-center flex items-center gap-1 px-4 py-2 rounded-full bg-olive text-white text-sm font-semibold hover:opacity-90 transition-colors"
                                 >
                                     Начать
                                     <Icon name="bolt" size="sm" />
@@ -184,7 +184,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {isActive && !isUpNext && (
                                 <Link
                                     href={`/session/${lesson.lessonId}`}
-                                    className="shrink-0 self-center px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:opacity-90 tonal-transition"
+                                    className="shrink-0 self-center px-4 py-2 rounded-full bg-ink text-bg text-sm font-semibold hover:opacity-90 transition-colors"
                                 >
                                     Продолжить
                                 </Link>
@@ -194,9 +194,9 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                 })}
 
                 {lessons.length === 0 && (
-                    <div className="text-center text-on-surface-variant py-12">
-                        <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4">
-                            <Icon name="folder" size="xl" className="text-on-surface-variant" />
+                    <div className="text-center text-ink-3 py-12">
+                        <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center mx-auto mb-4">
+                            <Icon name="folder" size="xl" className="text-ink-3" />
                         </div>
                         <p className="font-semibold">Уроки ещё не добавлены</p>
                     </div>

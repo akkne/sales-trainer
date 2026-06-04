@@ -16,7 +16,7 @@ export default function SkillPage({ params }: SkillPageProps) {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="w-10 h-10 rounded-full border-4 border-[#58CC02] border-t-transparent animate-spin" />
+                <div className="w-10 h-10 rounded-full border-4 border-ink border-t-transparent animate-spin" />
             </div>
         );
     }
@@ -28,29 +28,29 @@ export default function SkillPage({ params }: SkillPageProps) {
         <div className="max-w-2xl mx-auto px-4 py-8">
             <Link
                 href="/tree"
-                className="text-[#AFAFAF] hover:text-gray-600 text-sm mb-6 inline-flex items-center gap-1"
+                className="text-ink-4 hover:text-ink text-sm mb-6 inline-flex items-center gap-1"
             >
                 ← Назад
             </Link>
 
-            <div className="bg-[#F7F7F7] rounded-2xl px-5 py-4 mb-8">
+            <div className="bg-surface border border-line rounded-2xl px-5 py-4 mb-8">
                 <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-gray-700 text-sm">Уроки</span>
+                    <span className="font-semibold text-ink-2 text-sm">Уроки</span>
                     <div className="flex items-center gap-3">
                         <Link
                             href={`/skill/${skillSlug}/map`}
-                            className="text-xs text-[#58CC02] font-semibold hover:underline"
+                            className="text-xs text-olive font-semibold hover:underline"
                         >
                             Карта курса →
                         </Link>
-                        <span className="text-sm font-bold text-[#58CC02]">
+                        <span className="text-sm font-bold text-olive">
                             {completedCount}/{lessons.length}
                         </span>
                     </div>
                 </div>
-                <div className="h-2 bg-[#E5E5E5] rounded-full overflow-hidden">
+                <div className="h-2 bg-line rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-[#58CC02] rounded-full transition-all duration-500"
+                        className="h-full bg-olive rounded-full transition-all duration-500"
                         style={{
                             width: `${lessons.length > 0 ? (completedCount / lessons.length) * 100 : 0}%`,
                         }}

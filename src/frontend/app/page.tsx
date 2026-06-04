@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/lib/store/authStore";
 import { apiClient } from "@/lib/api/apiClient";
+import { Wordmark } from "@/components/ui/Wordmark";
 
 const FEATURE_LIST = [
     {
@@ -58,14 +59,12 @@ export default function LandingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-bg text-ink">
             <header className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
-                <span className="font-[var(--font-space-grotesk)] font-bold text-xl text-gray-900">
-                    Sellevate
-                </span>
+                <Wordmark size={22} />
                 <Link
                     href="/login"
-                    className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    className="text-sm font-semibold text-ink-3 hover:text-ink transition-colors"
                 >
                     Войти
                 </Link>
@@ -74,12 +73,12 @@ export default function LandingPage() {
             <main className="max-w-4xl mx-auto px-4">
                 <div className="text-center py-16">
                     <div className="text-6xl mb-6">🚀</div>
-                    <h1 className="font-[var(--font-space-grotesk)] text-4xl font-bold text-gray-900 mb-4 leading-tight">
+                    <h1 className="text-4xl font-bold text-ink mb-4 leading-tight tracking-tight">
                         Прокачай продажи
                         <br />
-                        <span className="text-[#58CC02]">за 5 минут в день</span>
+                        <span className="text-rust">за 5 минут в день</span>
                     </h1>
-                    <p className="text-lg text-gray-500 mb-10 max-w-md mx-auto">
+                    <p className="text-lg text-ink-3 mb-10 max-w-md mx-auto">
                         Тренажёр навыков в стиле Duolingo. Реальные сценарии,
                         AI-фидбек и соревнования с коллегами.
                     </p>
@@ -87,13 +86,15 @@ export default function LandingPage() {
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
                             href="/register"
-                            className="px-8 py-4 rounded-2xl bg-[#58CC02] text-white font-bold text-lg shadow-[0_4px_0_#4CAD00] active:shadow-none active:translate-y-1 transition-transform"
+                            className="px-8 py-4 rounded-2xl bg-ink text-bg font-bold text-lg active:translate-y-px transition-transform"
+                            style={{ boxShadow: "var(--sh-2)" }}
                         >
                             Начать бесплатно
                         </Link>
                         <button
                             onClick={startDemoSession}
-                            className="px-8 py-4 rounded-2xl bg-[#F7F7F7] text-gray-700 font-bold text-lg hover:bg-[#E8F9D6] transition-colors"
+                            className="px-8 py-4 rounded-2xl bg-surface border border-line text-ink-2 font-bold text-lg hover:bg-bg-2 transition-colors"
+                            style={{ boxShadow: "var(--sh-1)" }}
                         >
                             Попробовать без регистрации
                         </button>
@@ -104,13 +105,14 @@ export default function LandingPage() {
                     {FEATURE_LIST.map((featureItem) => (
                         <div
                             key={featureItem.title}
-                            className="bg-[#F7F7F7] rounded-2xl p-6"
+                            className="bg-surface border border-line rounded-2xl p-6"
+                            style={{ boxShadow: "var(--sh-1)" }}
                         >
                             <span className="text-3xl mb-3 block">{featureItem.emoji}</span>
-                            <h3 className="font-[var(--font-space-grotesk)] font-bold text-gray-900 mb-2">
+                            <h3 className="font-bold text-ink mb-2">
                                 {featureItem.title}
                             </h3>
-                            <p className="text-sm text-gray-500">{featureItem.description}</p>
+                            <p className="text-sm text-ink-3">{featureItem.description}</p>
                         </div>
                     ))}
                 </div>
