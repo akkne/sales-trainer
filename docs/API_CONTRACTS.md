@@ -390,6 +390,33 @@ Errors:
 | GET | /dialog/voice/usage | — | `{dailyUsedSeconds, dailyLimitSeconds, dailyExceeded, monthlyUsedSeconds, monthlyLimitSeconds, monthlyExceeded}` |
 | POST | /dialog/sessions/{sessionId}/voice/stream | `{transcript}` | `application/octet-stream` — length-prefixed frames (see below) |
 
+### Admin endpoints
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (RequireAdmin) |
+
+```jsonc
+// AdminVoiceUsageDto
+{
+  "dailyLimitSeconds": 600,
+  "monthlyLimitSeconds": 7200,
+  "users": [
+    {
+      "userId": "guid",
+      "email": "user@example.com",
+      "displayName": "User",
+      "dailyUsedSeconds": 120,
+      "monthlyUsedSeconds": 1800,
+      "totalSeconds": 5400,
+      "sessionCount": 12,
+      "lastCallAt": "2026-06-05T10:00:00Z"
+    }
+  ]
+}
+// Sorted by monthlyUsedSeconds desc. Aggregated from MongoDB dialog sessions (voiceSeconds > 0).
+```
+
 **Voice stream frame format** (big-endian):
 ```
 uint32 flags        // bit 0 = isFinal (sentinel, end of stream), bit 1 = isStopSignal (endCall)

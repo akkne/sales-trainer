@@ -1,8 +1,10 @@
+using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
@@ -10,12 +12,14 @@ namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 public class VoiceUsageService : IVoiceUsageService
 {
     private readonly MongoDbContext _mongo;
+    private readonly AppDbContext _db;
     private readonly IConfiguration _config;
     private readonly ILogger<VoiceUsageService> _logger;
 
-    public VoiceUsageService(MongoDbContext mongo, IConfiguration config, ILogger<VoiceUsageService> logger)
+    public VoiceUsageService(MongoDbContext mongo, AppDbContext db, IConfiguration config, ILogger<VoiceUsageService> logger)
     {
         _mongo = mongo;
+        _db = db;
         _config = config;
         _logger = logger;
     }
@@ -65,6 +69,84 @@ public class VoiceUsageService : IVoiceUsageService
         {
             _logger.LogWarning("Voice usage record skipped — session {SessionId} not found for user {UserId}", sessionId, userId);
         }
+    }
+
+    public async Task<AdminVoiceUsageDto> GetAllUsersUsageAsync(CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var pipeline = new[]
+        {
+            new BsonDocument("$match", new BsonDocument
+            {
+                { "voiceSeconds", new BsonDocument("$gt", 0) },
+            }),
+            new BsonDocument("$group", new BsonDocument
+            {
+                { "_id", "$userId" },
+                { "total", new BsonDocument("$sum", "$voiceSeconds") },
+                { "sessionCount", new BsonDocument("$sum", 1) },
+                { "lastCallAt", new BsonDocument("$max", "$createdAt") },
+                { "daily", new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray
+                    {
+                        new BsonDocument("$gte", new BsonArray { "$createdAt", dayStart }),
+                        "$voiceSeconds",
+                        0,
+                    })) },
+                { "monthly", new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray
+                    {
+                        new BsonDocument("$gte", new BsonArray { "$createdAt", monthStart }),
+                        "$voiceSeconds",
+                        0,
+                    })) },
+            }),
+            new BsonDocument("$sort", new BsonDocument("monthly", -1)),
+        };
+
+        using var cursor = await _mongo.DialogSessions.AggregateAsync<BsonDocument>(pipeline, cancellationToken: ct);
+        var docs = await cursor.ToListAsync(ct);
+
+        var entries = new List<AdminVoiceUsageEntryDto>();
+        foreach (var doc in docs)
+        {
+            if (!Guid.TryParse(doc["_id"].AsString, out var userId)) continue;
+            entries.Add(new AdminVoiceUsageEntryDto
+            {
+                UserId = userId,
+                TotalSeconds = doc["total"].ToInt32(),
+                SessionCount = doc["sessionCount"].ToInt32(),
+                LastCallAt = doc["lastCallAt"].ToUniversalTime(),
+                DailyUsedSeconds = doc["daily"].ToInt32(),
+                MonthlyUsedSeconds = doc["monthly"].ToInt32(),
+            });
+        }
+
+        // Attach email/display name from PostgreSQL.
+        var userIds = entries.Select(e => e.UserId).ToList();
+        var users = await _db.Users
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Email, u.DisplayName })
+            .ToDictionaryAsync(u => u.Id, ct);
+        foreach (var entry in entries)
+        {
+            if (users.TryGetValue(entry.UserId, out var user))
+            {
+                entry.Email = user.Email;
+                entry.DisplayName = user.DisplayName;
+            }
+        }
+
+        var dailyLimitMinutes = int.TryParse(_config["Voice:DailyLimitMinutes"], out var dl2) ? dl2 : 0;
+        var monthlyLimitMinutes = int.TryParse(_config["Voice:MonthlyLimitMinutes"], out var ml2) ? ml2 : 0;
+
+        return new AdminVoiceUsageDto
+        {
+            DailyLimitSeconds = dailyLimitMinutes * 60,
+            MonthlyLimitSeconds = monthlyLimitMinutes * 60,
+            Users = entries,
+        };
     }
 
     private async Task<int> SumSecondsAsync(Guid userId, DateTime since, CancellationToken ct)

@@ -6,6 +6,7 @@ import { useAchievements } from "@/lib/hooks/useAchievements";
 import { useLogout } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useSkills, useUpdateEnrolledSkills } from "@/lib/hooks/useSkillTree";
+import { useVoiceUsage } from "@/lib/hooks/useVoice";
 import { Icon, IconName } from "@/components/ui/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
@@ -25,6 +26,7 @@ export default function ProfilePage() {
     const { data: allSkills, isLoading: skillsLoading } = useSkills();
     const logoutMutation = useLogout();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
+    const { data: voiceUsage } = useVoiceUsage();
     const { authenticatedUser } = useAuthStore();
     const isAdmin =
         authenticatedUser?.role === "Admin" || authenticatedUser?.role === "SuperAdmin";
@@ -140,6 +142,37 @@ export default function ProfilePage() {
                         />
                     </div>
                 </div>
+
+                {/* Voice minutes */}
+                {voiceUsage && (voiceUsage.dailyLimitSeconds > 0 || voiceUsage.monthlyLimitSeconds > 0) && (
+                    <div
+                        className="bg-surface border border-line rounded-2xl p-5 mb-6"
+                        style={{ boxShadow: "var(--sh-1)" }}
+                    >
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-xl bg-rust-soft flex items-center justify-center text-rust">
+                                <Icon name="mic" size="sm" />
+                            </div>
+                            <span className="text-sm font-medium text-ink">Голосовые звонки</span>
+                        </div>
+                        <div className="space-y-4">
+                            {voiceUsage.dailyLimitSeconds > 0 && (
+                                <VoiceQuotaBar
+                                    label="Сегодня"
+                                    usedSeconds={voiceUsage.dailyUsedSeconds}
+                                    limitSeconds={voiceUsage.dailyLimitSeconds}
+                                />
+                            )}
+                            {voiceUsage.monthlyLimitSeconds > 0 && (
+                                <VoiceQuotaBar
+                                    label="В этом месяце"
+                                    usedSeconds={voiceUsage.monthlyUsedSeconds}
+                                    limitSeconds={voiceUsage.monthlyLimitSeconds}
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Achievements */}
                 {achievements && achievements.length > 0 && (
@@ -263,6 +296,45 @@ export default function ProfilePage() {
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function VoiceQuotaBar({
+    label,
+    usedSeconds,
+    limitSeconds,
+}: {
+    label: string;
+    usedSeconds: number;
+    limitSeconds: number;
+}) {
+    const usedMinutes = Math.round(usedSeconds / 60);
+    const limitMinutes = Math.round(limitSeconds / 60);
+    const percent = Math.min(100, Math.round((usedSeconds / limitSeconds) * 100));
+    const isNearLimit = percent >= 80;
+    const isExceeded = usedSeconds >= limitSeconds;
+    const barColor = isExceeded ? "var(--bad)" : isNearLimit ? "var(--warn)" : "var(--olive)";
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-ink-3">{label}</span>
+                <span className={`font-mono text-xs ${isExceeded ? "text-bad" : "text-ink-2"}`}>
+                    {usedMinutes} / {limitMinutes} мин
+                </span>
+            </div>
+            <div className="h-2 bg-bg-2 rounded-full overflow-hidden">
+                <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${percent}%`, background: barColor }}
+                />
+            </div>
+            {isExceeded && (
+                <p className="text-[11px] text-bad mt-1.5">
+                    Лимит исчерпан — звонки откроются {label === "Сегодня" ? "завтра" : "в следующем месяце"}
+                </p>
+            )}
         </div>
     );
 }

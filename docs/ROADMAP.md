@@ -1103,8 +1103,8 @@
 - [x] Red "Положить трубку" button → `/sessions/{id}/complete` + feedback modal
 - [x] Continuous VAD (no push-to-talk); state pill becomes activity indicator
 - [x] "Позвонить" CTA on `/dialog/[bundleId]` mode card next to "Чат"
-- [ ] Sound effects: ringing tone, hangup beep (mp3 in `public/sounds/`)
-- [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
+- [x] Sound effects: ringing tone + hangup beep (Web Audio synthesis, no mp3 assets)
+- [x] Vibration on "connected" (mobile, `navigator.vibrate`)
 
 ### Phase 36.3 — Stage B: streaming LLM → streaming TTS
 - [x] `IOpenAiChatService.StreamChatMessageAsync` — SSE consumer for `stream: true`
@@ -1120,7 +1120,7 @@
 - [x] VAD detects user speech while `audioPlayer` is playing → stop playback,
       abort the active /voice/stream fetch, recognizer picks up new transcript
 - [x] Backend cancellation drops the partial assistant message (clean turn)
-- [ ] Indicator UI: AI bubble fades when interrupted (no chat panel on call screen yet)
+- [x] Indicator UI: interrupted AI subtitle fades + «прервано» label
 
 ### Phase 36.5 — Stage C: usage limits & billing
 - [x] Track per-stream wall-clock seconds in `DialogSession.VoiceSeconds`
@@ -1129,8 +1129,8 @@
       → return 429 with `{period, usedSeconds, limitSeconds}`
 - [x] `GET /dialog/voice/usage` endpoint + `useVoiceUsage()` hook
 - [x] Call screen header shows X/Y MIN СЕГОДНЯ; refetches on hangup
-- [ ] `/profile` shows minutes used / limit
-- [ ] Admin page `/admin/voice/usage` — table of users + minute spend
+- [x] `/profile` shows minutes used / limit
+- [x] Admin page `/admin/voice/usage` — table of users + minute spend
 
 ### Phase 36.6 — Docs & tests
 - [ ] Update `docs/VOICE_ROLEPLAY.md` with the call-mode flow + diagram
@@ -1149,32 +1149,32 @@
 > MD3 classes (`bg-surface-container*`, `text-on-surface*`, `border-outline-variant`,
 > `font-headline`, `tonal-transition`) are NOT defined in the April `@theme` block —
 > they silently render as nothing, visibly broken in dark theme.
-- [ ] `VoiceMicButton.tsx` → April palette
-- [ ] `SessionHistorySidebar.tsx` → April palette
-- [ ] `DeleteConfirmModal.tsx` → April palette
-- [ ] `ChatMessage.tsx`, `ChatInput.tsx`, `BundleCard.tsx` → April palette
-- [ ] Chat page `/dialog/[bundleId]/[modeId]/page.tsx` → April palette
+- [x] `VoiceMicButton.tsx` → April palette
+- [x] `SessionHistorySidebar.tsx` → April palette
+- [x] `DeleteConfirmModal.tsx` → April palette
+- [x] `ChatMessage.tsx`, `ChatInput.tsx`, `BundleCard.tsx` → April palette
+- [x] Chat page `/dialog/[bundleId]/[modeId]/page.tsx` → April palette
 
 ### Phase 37.2 — Auth pages April migration
-- [ ] `/login` and `/register` pages → April palette + shared UI primitives
+- [x] `/login` and `/register` pages → April palette + shared UI primitives
 
 ### Phase 37.3 — Legacy green palette migration
-- [ ] Landing `/` page: `#58CC02`/`btn-3d` → April rust/olive tokens
-- [ ] `/skill/[id]` page green tokens → April palette
-- [ ] `/skill/[id]/map` MD3 + green tokens → April palette
-- [ ] `/reference/[id]` spinner color → April palette
-- [ ] `SkillNode.tsx`, `ModeCard.tsx` green leftovers → April palette
+- [x] Landing `/` page: `#58CC02`/`btn-3d` → April rust/olive tokens
+- [x] `/skill/[id]` page green tokens → April palette
+- [x] `/skill/[id]/map` MD3 + green tokens → April palette
+- [x] `/reference/[id]` spinner color → April palette
+- [x] `SkillNode.tsx`, `ModeCard.tsx` — removed (dead code, no imports)
 
 ### Phase 37.4 — Voice call polish (Phase 36.2 leftovers)
-- [ ] Sound effects: ringing tone + hangup beep (generated WAV in `public/sounds/`)
-- [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
-- [ ] Barge-in indicator: visual cue when user interrupts AI playback
+- [x] Sound effects: ringback + hangup beeps synthesized via Web Audio (`lib/voice/callSounds.ts`)
+- [x] Vibration on "connected" (mobile, `navigator.vibrate`)
+- [x] Barge-in indicator: visual cue when user interrupts AI playback
 
 ### Phase 37.5 — Voice usage surfacing (Phase 36.5 leftovers)
-- [ ] `/profile` shows голосовые минуты: использовано/лимит (день + месяц)
-- [ ] Backend `GET /admin/voice/usage` — per-user minute spend (Admin policy)
-- [ ] Admin page `/admin/voice/usage` — table of users + daily/monthly minutes
-- [ ] Update API_CONTRACTS.md
+- [x] `/profile` shows голосовые минуты: использовано/лимит (день + месяц)
+- [x] Backend `GET /admin/voice/usage` — per-user minute spend (Admin policy)
+- [x] Admin page `/admin/voice/usage` — table of users + daily/monthly minutes
+- [x] Update API_CONTRACTS.md
 
 ### Phase 37.6 — Loading skeletons & error/empty states
 - [ ] Shared `Skeleton` UI primitive (pulse shimmer on `bg-surface-2`)

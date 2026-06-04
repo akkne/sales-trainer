@@ -13,6 +13,9 @@ public interface IVoiceUsageService
     Task EnsureWithinLimitsAsync(Guid userId, CancellationToken ct = default);
 
     Task RecordSessionSecondsAsync(string sessionId, Guid userId, int seconds, CancellationToken ct = default);
+
+    /// <summary>Per-user aggregated voice spend (admin reporting).</summary>
+    Task<AdminVoiceUsageDto> GetAllUsersUsageAsync(CancellationToken ct = default);
 }
 
 public sealed class VoiceUsageLimitException : Exception
