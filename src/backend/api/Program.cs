@@ -175,6 +175,9 @@ using (var serviceScope = application.Services.CreateScope())
 
     var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
     await achievementSeeder.SeedAsync();
+
+    var dialogSeeder = serviceScope.ServiceProvider.GetRequiredService<DialogSeeder>();
+    await dialogSeeder.SeedAsync();
 }
 
 application.Run();
