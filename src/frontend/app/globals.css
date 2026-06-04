@@ -179,7 +179,11 @@ body {
   flex-direction: column;
 }
 
-button { font: inherit; color: inherit; }
+/* Inside @layer base so Tailwind utility classes (text-*, etc.) can override it.
+   Unlayered rules would beat @layer utilities regardless of order/specificity. */
+@layer base {
+  button { font: inherit; color: inherit; }
+}
 
 ::selection { background: var(--indigo); color: white; }
 
