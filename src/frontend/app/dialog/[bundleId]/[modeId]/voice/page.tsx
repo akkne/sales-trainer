@@ -213,8 +213,13 @@ export default function VoiceCallPage() {
 
     const handleClose = useCallback(() => {
         stopVoice();
+        // Leaving mid-call: end the session cleanly so usage and history
+        // are recorded (fire-and-forget — the request outlives navigation).
+        if ((callStatus === "connected" || callStatus === "dialing") && sessionId) {
+            completeDialogSession(sessionId).catch(() => {});
+        }
         router.push(`/dialog/${bundleId}`);
-    }, [stopVoice, router, bundleId]);
+    }, [stopVoice, callStatus, sessionId, router, bundleId]);
 
     const handleCloseFeedback = useCallback(() => {
         setFeedback(null);
