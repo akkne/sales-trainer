@@ -31,16 +31,17 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
                 onChange={(changeEvent) => setInputValue(changeEvent.target.value)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="flex-1 px-4 py-3 bg-surface-container-low text-on-surface placeholder-on-surface-variant rounded-full border-2 border-transparent focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed tonal-transition"
+                className="flex-1 px-4 py-3 bg-surface text-ink placeholder:text-ink-4 rounded-full border border-line focus:border-indigo focus:outline-none focus:ring-2 focus:ring-indigo/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             />
             <button
                 type="submit"
                 disabled={!canSend}
-                className={`w-12 h-12 rounded-full flex items-center justify-center tonal-transition ${
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
                     canSend
-                        ? "bg-primary text-on-primary shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1"
-                        : "bg-surface-container-high text-on-surface-variant cursor-not-allowed"
+                        ? "bg-ink text-bg active:translate-y-px"
+                        : "bg-surface-2 text-ink-4 cursor-not-allowed"
                 }`}
+                style={canSend ? { boxShadow: "var(--sh-2)" } : undefined}
             >
                 <Icon name="send" size="md" />
             </button>

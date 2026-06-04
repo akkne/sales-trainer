@@ -69,18 +69,19 @@ export function SessionHistorySidebar({
 
     return (
         <>
-            <aside className="w-64 bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full">
-                <div className="p-3 border-b border-outline-variant flex gap-2">
+            <aside className="w-64 bg-surface border-r border-line flex flex-col h-full">
+                <div className="p-3 border-b border-line flex gap-2">
                     <button
                         onClick={onClose}
-                        className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-xl tonal-transition"
+                        className="p-2 text-ink-3 hover:text-ink hover:bg-bg-2 rounded-xl transition-colors"
                         aria-label="Закрыть"
                     >
                         <Icon name="close" size="md" />
                     </button>
                     <button
                         onClick={onNewChat}
-                        className="flex-1 py-2.5 px-4 bg-primary text-on-primary font-semibold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
+                        className="flex-1 py-2.5 px-4 bg-ink text-bg font-semibold rounded-full active:translate-y-px transition-colors flex items-center justify-center gap-2"
+                        style={{ boxShadow: "var(--sh-2)" }}
                     >
                         <Icon name="plus" size="sm" />
                         <span>Новый диалог</span>
@@ -90,25 +91,25 @@ export function SessionHistorySidebar({
                 <div className="flex-1 overflow-y-auto">
                     {sessions.length === 0 ? (
                         <div className="p-4 text-center">
-                            <div className="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-3">
-                                <Icon name="message" size="lg" className="text-on-surface-variant" />
+                            <div className="w-12 h-12 rounded-full bg-bg-2 flex items-center justify-center mx-auto mb-3">
+                                <Icon name="message" size="lg" className="text-ink-4" />
                             </div>
-                            <p className="text-sm text-on-surface-variant">Нет истории диалогов</p>
+                            <p className="text-sm text-ink-3">Нет истории диалогов</p>
                         </div>
                     ) : (
                         Array.from(groupedSessions.entries()).map(([dateLabel, dateSessions]) => (
                             <div key={dateLabel} className="py-2">
-                                <div className="px-4 py-1 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+                                <div className="px-4 py-1 text-xs font-semibold text-ink-4 uppercase tracking-wider">
                                     {dateLabel}
                                 </div>
                                 {dateSessions.map((session) => (
                                     <button
                                         key={session.id}
                                         onClick={() => onSessionClick(session.id)}
-                                        className={`w-full px-3 py-2.5 text-left tonal-transition group ${
+                                        className={`w-full px-3 py-2.5 text-left transition-colors group ${
                                             currentSessionId === session.id
-                                                ? "bg-primary-container"
-                                                : "hover:bg-surface-container"
+                                                ? "bg-indigo-soft"
+                                                : "hover:bg-bg-2"
                                         }`}
                                     >
                                         <div className="flex items-start gap-2">
@@ -116,23 +117,23 @@ export function SessionHistorySidebar({
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-sm font-medium truncate ${
                                                         currentSessionId === session.id
-                                                            ? "text-primary"
-                                                            : "text-on-surface"
+                                                            ? "text-indigo-ink"
+                                                            : "text-ink"
                                                     }`}>
                                                         {session.modeTitle}
                                                     </span>
                                                     {session.status === "completed" && session.xpEarned > 0 && (
-                                                        <span className="text-xs text-primary font-semibold flex-shrink-0 bg-primary-container px-1.5 py-0.5 rounded">
+                                                        <span className="text-xs text-indigo-ink font-semibold flex-shrink-0 bg-indigo-soft px-1.5 py-0.5 rounded font-mono">
                                                             +{session.xpEarned}
                                                         </span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-xs text-on-surface-variant truncate">
+                                                    <span className="text-xs text-ink-3 truncate">
                                                         {session.bundleTitle}
                                                     </span>
-                                                    <span className="text-xs text-outline">•</span>
-                                                    <span className="text-xs text-on-surface-variant flex items-center gap-0.5">
+                                                    <span className="text-xs text-ink-4">•</span>
+                                                    <span className="text-xs text-ink-3 flex items-center gap-0.5">
                                                         <Icon name="message" size="sm" />
                                                         {session.messageCount}
                                                     </span>
@@ -140,7 +141,7 @@ export function SessionHistorySidebar({
                                             </div>
                                             <button
                                                 onClick={(e) => handleDeleteClick(e, session.id)}
-                                                className="text-on-surface-variant hover:text-error opacity-0 group-hover:opacity-100 tonal-transition self-center flex-shrink-0 p-1 rounded hover:bg-error-container"
+                                                className="text-ink-3 hover:text-bad opacity-0 group-hover:opacity-100 transition-colors self-center flex-shrink-0 p-1 rounded hover:bg-bad-soft"
                                                 aria-label="Удалить чат"
                                             >
                                                 <Icon name="delete" size="sm" />
@@ -153,10 +154,10 @@ export function SessionHistorySidebar({
                     )}
                 </div>
 
-                <div className="p-3 border-t border-outline-variant">
+                <div className="p-3 border-t border-line">
                     <Link
                         href="/dialog"
-                        className="flex items-center justify-center gap-2 text-sm text-on-surface-variant hover:text-primary tonal-transition py-2"
+                        className="flex items-center justify-center gap-2 text-sm text-ink-3 hover:text-ink transition-colors py-2"
                     >
                         <Icon name="arrow-left" size="sm" />
                         К выбору навыка

@@ -358,14 +358,14 @@ export default function ChatPage() {
                     />
                 )}
                 <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
+                    <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface">
                         <button
                             onClick={() => setShowSidebar(!showSidebar)}
-                            className="text-on-surface-variant hover:text-on-surface tonal-transition md:hidden"
+                            className="text-ink-3 hover:text-ink transition-colors md:hidden"
                         >
                             <Icon name="grid" size="md" />
                         </button>
-                        <h1 className="font-headline font-bold text-on-surface">Загрузка...</h1>
+                        <h1 className="font-bold text-ink">Загрузка...</h1>
                     </header>
                     <div className="flex-1 flex items-center justify-center">
                         <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
@@ -390,17 +390,17 @@ export default function ChatPage() {
                     />
                 )}
                 <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest">
-                        <h1 className="font-headline font-bold text-on-surface">Ошибка</h1>
+                    <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface">
+                        <h1 className="font-bold text-ink">Ошибка</h1>
                     </header>
                     <div className="flex-1 flex flex-col items-center justify-center p-4">
-                        <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-4">
-                            <Icon name="warning" size="xl" className="text-error" />
+                        <div className="w-16 h-16 rounded-full bg-bad-soft flex items-center justify-center mb-4">
+                            <Icon name="warning" size="xl" className="text-bad" />
                         </div>
-                        <p className="text-error text-center mb-6 font-medium">{error}</p>
+                        <p className="text-bad text-center mb-6 font-medium">{error}</p>
                         <button
                             onClick={handleClose}
-                            className="px-6 py-3 bg-surface-container text-on-surface font-semibold rounded-full hover:bg-surface-container-high tonal-transition"
+                            className="px-6 py-3 bg-bg-2 text-ink font-semibold rounded-full hover:bg-surface-2 transition-colors"
                         >
                             Вернуться
                         </button>
@@ -425,24 +425,24 @@ export default function ChatPage() {
 
             <div className="flex-1 flex flex-col">
                 {/* Header */}
-                <header className="flex items-center gap-4 px-4 py-3 border-b border-outline-variant bg-surface-container-lowest flex-shrink-0">
+                <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface flex-shrink-0">
                     <button
                         onClick={() => setShowSidebar(!showSidebar)}
-                        className="text-on-surface-variant hover:text-on-surface tonal-transition"
+                        className="text-ink-3 hover:text-ink transition-colors"
                     >
                         <Icon name="grid" size="md" />
                     </button>
 
                     {/* Persona card */}
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
-                            <Icon name="sparkle" size="md" className="text-secondary" />
+                        <div className="w-10 h-10 rounded-full bg-indigo-soft flex items-center justify-center shrink-0">
+                            <Icon name="sparkle" size="md" className="text-indigo" />
                         </div>
                         <div className="min-w-0">
-                            <h1 className="font-semibold text-on-surface truncate text-sm">
+                            <h1 className="font-semibold text-ink truncate text-sm">
                                 {currentMode?.title || "AI Собеседник"}
                             </h1>
-                            <p className="text-xs text-on-surface-variant truncate">
+                            <p className="text-xs text-ink-3 truncate">
                                 {currentBundle?.title || "Тренировка диалога"}
                             </p>
                         </div>
@@ -450,7 +450,7 @@ export default function ChatPage() {
 
                     {/* Timer */}
                     {sessionId && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-2 text-ink-3">
                             <Icon name="clock" size="sm" />
                             <span className="text-sm font-mono font-medium tabular-nums">
                                 {formatTime(sessionTimer)}
@@ -462,7 +462,7 @@ export default function ChatPage() {
                     {sessionId && !isEnded && !feedback && (
                         <button
                             onClick={handleEndSession}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error-container text-error text-sm font-medium hover:opacity-90 tonal-transition"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bad-soft text-bad text-sm font-medium hover:opacity-90 transition-colors"
                         >
                             <Icon name="close" size="sm" />
                             Завершить
@@ -472,16 +472,16 @@ export default function ChatPage() {
                     {/* Close button */}
                     <button
                         onClick={handleClose}
-                        className="p-2 rounded-full hover:bg-surface-container tonal-transition"
+                        className="p-2 rounded-full hover:bg-bg-2 transition-colors"
                     >
-                        <Icon name="close" size="md" className="text-on-surface-variant" />
+                        <Icon name="close" size="md" className="text-ink-3" />
                     </button>
                 </header>
 
                 {/* Status bar */}
                 {(isSending || isCompleting || voiceState !== "idle") && (
-                    <div className="px-4 py-2 bg-surface-container-low border-b border-outline-variant">
-                        <p className="text-sm text-on-surface-variant text-center flex items-center justify-center gap-2">
+                    <div className="px-4 py-2 bg-bg-2 border-b border-line">
+                        <p className="text-sm text-ink-3 text-center flex items-center justify-center gap-2">
                             {isCompleting && (
                                 <>
                                     <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -507,11 +507,11 @@ export default function ChatPage() {
                     {!sessionId && messages.length === 0 && (
                         <div className="flex-1 flex items-center justify-center h-full">
                             <div className="text-center max-w-sm">
-                                <div className="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center mx-auto mb-4">
-                                    <Icon name="phone" size="xl" className="text-primary" />
+                                <div className="w-16 h-16 rounded-full bg-indigo-soft flex items-center justify-center mx-auto mb-4">
+                                    <Icon name="phone" size="xl" className="text-indigo" />
                                 </div>
-                                <p className="font-semibold text-on-surface mb-2">Начните разговор</p>
-                                <p className="text-sm text-on-surface-variant">
+                                <p className="font-semibold text-ink mb-2">Начните разговор</p>
+                                <p className="text-sm text-ink-3">
                                     Представьтесь и скажите свой опеннер — вы звоните клиенту первым
                                 </p>
                             </div>
@@ -524,14 +524,14 @@ export default function ChatPage() {
 
                     {isSending && (
                         <div className="flex justify-start">
-                            <div className="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center mr-2">
-                                <Icon name="sparkle" size="sm" className="text-secondary" />
+                            <div className="w-8 h-8 rounded-full bg-indigo-soft flex items-center justify-center mr-2">
+                                <Icon name="sparkle" size="sm" className="text-indigo" />
                             </div>
-                            <div className="bg-surface-container px-4 py-3 rounded-2xl rounded-tl-sm">
+                            <div className="bg-bg-2 px-4 py-3 rounded-2xl rounded-tl-sm">
                                 <div className="flex gap-1">
-                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce" />
-                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce [animation-delay:0.1s]" />
-                                    <span className="w-2 h-2 bg-on-surface-variant rounded-full animate-bounce [animation-delay:0.2s]" />
+                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce" />
+                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce [animation-delay:0.1s]" />
+                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce [animation-delay:0.2s]" />
                                 </div>
                             </div>
                         </div>
@@ -539,7 +539,7 @@ export default function ChatPage() {
 
                     {error && sessionId && (
                         <div className="flex justify-center">
-                            <div className="bg-error-container text-error text-sm px-4 py-2 rounded-full flex items-center gap-2">
+                            <div className="bg-bad-soft text-bad text-sm px-4 py-2 rounded-full flex items-center gap-2">
                                 <Icon name="warning" size="sm" />
                                 {error}
                             </div>
@@ -550,16 +550,16 @@ export default function ChatPage() {
                 </div>
 
                 {/* Input area */}
-                <div className="flex-shrink-0 p-4 border-t border-outline-variant bg-surface-container-lowest pb-[env(safe-area-inset-bottom)]">
+                <div className="flex-shrink-0 p-4 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
                     {voiceError && (
-                        <div className="text-center text-error text-sm mb-3 flex items-center justify-center gap-2">
+                        <div className="text-center text-bad text-sm mb-3 flex items-center justify-center gap-2">
                             <Icon name="warning" size="sm" />
                             {voiceError}
                         </div>
                     )}
 
                     {currentTranscript && (
-                        <div className="text-center text-on-surface-variant text-sm mb-3 italic bg-surface-container rounded-full px-4 py-2">
+                        <div className="text-center text-ink-3 text-sm mb-3 italic bg-bg-2 rounded-full px-4 py-2">
                             "{currentTranscript}"
                         </div>
                     )}
@@ -567,7 +567,7 @@ export default function ChatPage() {
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
                         <button
                             onClick={handleShowFeedback}
-                            className="w-full py-3 mb-3 bg-primary text-on-primary font-bold rounded-full shadow-[0_4px_0_var(--color-primary-dim)] active:shadow-none active:translate-y-1 tonal-transition flex items-center justify-center gap-2"
+                            className="w-full py-3 mb-3 bg-ink text-bg font-bold rounded-full active:shadow-none active:translate-y-1 transition-colors flex items-center justify-center gap-2"
                         >
                             <Icon name="book" size="sm" />
                             Показать обратную связь

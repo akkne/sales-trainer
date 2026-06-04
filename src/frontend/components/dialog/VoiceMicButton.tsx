@@ -47,45 +47,38 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
                 disabled={isProcessing || isPlaying}
                 className={`
                     relative w-20 h-20 rounded-full flex items-center justify-center
-                    transition-all duration-200 shadow-lg
+                    transition-all duration-200 border
                     ${isActive
-                        ? "bg-primary shadow-[0_4px_0_var(--color-primary-dim)]"
-                        : "bg-surface-container-high hover:bg-surface-container-highest shadow-[0_4px_0_var(--color-outline-variant)]"
+                        ? "bg-rust border-rust text-white"
+                        : "bg-surface border-line hover:bg-bg-2 text-ink-2"
                     }
                     ${(isProcessing || isPlaying) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                    active:translate-y-1 active:shadow-none
+                    active:translate-y-px
                 `}
+                style={{ boxShadow: "var(--sh-2)" }}
             >
                 {/* Outer ring animation when speaking */}
                 {isSpeaking && (
-                    <div className="absolute inset-0 rounded-full animate-ping bg-primary opacity-30" />
+                    <div className="absolute inset-0 rounded-full animate-ping bg-rust opacity-30" />
                 )}
 
                 {/* Listening pulse */}
                 {isListening && (
-                    <div className="absolute inset-0 rounded-full animate-pulse bg-primary opacity-20" />
+                    <div className="absolute inset-0 rounded-full animate-pulse bg-rust opacity-20" />
                 )}
 
                 {/* Icon */}
                 {isProcessing ? (
-                    <div className={`w-7 h-7 border-3 border-current border-t-transparent rounded-full animate-spin ${isActive ? "text-on-primary" : "text-on-surface-variant"}`} />
+                    <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : isPlaying ? (
-                    <Icon
-                        name="bell"
-                        size="xl"
-                        className={isActive ? "text-on-primary" : "text-on-surface-variant"}
-                    />
+                    <Icon name="bell" size="xl" />
                 ) : (
-                    <Icon
-                        name="mic"
-                        size="xl"
-                        className={isActive ? "text-on-primary" : "text-on-surface-variant"}
-                    />
+                    <Icon name="mic" size="xl" />
                 )}
             </button>
 
             {/* Status text */}
-            <span className={`text-sm font-medium ${isActive ? "text-primary" : "text-on-surface-variant"}`}>
+            <span className={`text-sm font-medium ${isActive ? "text-rust" : "text-ink-3"}`}>
                 {statusText[state]}
             </span>
         </div>

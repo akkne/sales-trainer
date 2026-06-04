@@ -31,34 +31,35 @@ export function BundleCard({ bundle }: BundleCardProps) {
     return (
         <Link
             href={`/dialog/${bundle.id}`}
-            className="group flex items-start gap-4 p-5 rounded-2xl bg-surface-container-lowest hover:bg-surface-container tonal-transition"
+            className="group flex items-start gap-4 p-5 rounded-2xl bg-surface border border-line hover:bg-bg-2 transition-colors"
+            style={{ boxShadow: "var(--sh-1)" }}
         >
             {/* Icon badge */}
-            <div className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-on-primary tonal-transition">
+            <div className="w-12 h-12 rounded-full bg-indigo-soft flex items-center justify-center shrink-0 group-hover:bg-indigo group-hover:text-white transition-colors">
                 {bundle.iconEmoji ? (
                     <span className="text-2xl">{bundle.iconEmoji}</span>
                 ) : (
-                    <Icon name={iconName} size="md" className="text-on-primary-container group-hover:text-on-primary" />
+                    <Icon name={iconName} size="md" className="text-indigo-ink group-hover:text-white" />
                 )}
             </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-                {/* Status pill - always show as Unlocked for now */}
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-secondary bg-secondary-container px-2 py-0.5 rounded-full mb-1">
+                {/* Status pill */}
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-olive bg-olive-soft px-2 py-0.5 rounded-full mb-1">
                     <Icon name="check" size="sm" />
                     Доступно
                 </span>
 
-                <h3 className="font-semibold text-base text-on-surface mb-1 truncate">
+                <h3 className="font-semibold text-base text-ink mb-1 truncate">
                     {bundle.title}
                 </h3>
-                <p className="text-sm text-on-surface-variant line-clamp-2 mb-2">
+                <p className="text-sm text-ink-3 line-clamp-2 mb-2">
                     {bundle.description}
                 </p>
 
                 {/* Meta info */}
-                <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+                <div className="flex items-center gap-3 text-xs text-ink-4">
                     <span className="flex items-center gap-1">
                         <Icon name="layers" size="sm" />
                         Сценарии
@@ -71,7 +72,7 @@ export function BundleCard({ bundle }: BundleCardProps) {
                 <Icon
                     name="arrow-right"
                     size="md"
-                    className="text-on-surface-variant group-hover:text-primary tonal-transition"
+                    className="text-ink-4 group-hover:text-ink transition-colors"
                 />
             </div>
         </Link>
