@@ -804,7 +804,7 @@
 
 ### [x] Testing
 - [x] Create `docs/TESTING/NEW_EXERCISE_TYPES.md` — manual checklist
-- [ ] Unit tests for non-AI evaluation strategies
+- [x] Unit tests for non-AI evaluation strategies (reorder, categorize; match_pairs already covered)
 - [ ] Unit tests for AI strategies (mocked HTTP)
 - [ ] Integration tests for chat endpoint
 
@@ -1092,7 +1092,7 @@
 - [x] `Voice:TtsProvider` config switch (voicer | google), default voicer
 - [x] Document RUB-friendly OpenAI / TTS / STT proxy gateways
 - [ ] Drop `IGoogleTtsService` if final decision is single-provider (post-test)
-- [ ] Unit tests for `VoicerTtsService` (mocked HTTP)
+- [x] Unit tests for `VoicerTtsService` (mocked HTTP)
 - [ ] Integration test for `POST /dialog/sessions/{id}/voice`
 
 ### Phase 36.2 — Stage B: full-screen "Call" UX
