@@ -71,7 +71,12 @@ export class WebSpeechClient {
     private recognition: SpeechRecognition | null = null;
     private options: WebSpeechClientOptions;
     private state: WebSpeechState = "idle";
+    // Desired lifecycle flag: while true, the recognizer is restarted from
+    // `onend` whenever the browser stops it (silence timeout, pause/resume
+    // races, etc.). The native recognizer stops asynchronously, so `onend`
+    // is the only reliable place to decide whether to keep listening.
     private shouldRestart = false;
+    private isStarted = false;
 
     constructor(options: WebSpeechClientOptions) {
         this.options = options;
@@ -93,77 +98,15 @@ export class WebSpeechClient {
             return;
         }
 
-        const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognitionClass) {
+        const recognition = this.createRecognition();
+        if (!recognition) {
             this.setState("error");
             this.options.onError?.(new Error("Web Speech API не поддерживается"));
             return;
         }
 
-        this.recognition = new SpeechRecognitionClass();
-        this.recognition.continuous = this.options.continuous ?? true;
-        this.recognition.interimResults = this.options.interimResults ?? true;
-        this.recognition.lang = this.options.language ?? "ru-RU";
-        this.recognition.maxAlternatives = 1;
-
+        this.recognition = recognition;
         this.shouldRestart = true;
-
-        this.recognition.onstart = () => {
-            this.setState("listening");
-        };
-
-        this.recognition.onresult = (event: SpeechRecognitionEvent) => {
-            let interimTranscript = "";
-            let finalTranscript = "";
-
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                const transcript = result[0].transcript;
-
-                if (result.isFinal) {
-                    finalTranscript += transcript;
-                } else {
-                    interimTranscript += transcript;
-                }
-            }
-
-            if (finalTranscript) {
-                this.options.onResult(finalTranscript.trim(), true);
-            } else if (interimTranscript) {
-                this.options.onResult(interimTranscript.trim(), false);
-            }
-        };
-
-        this.recognition.onspeechstart = () => {
-            this.options.onSpeechStart?.();
-        };
-
-        this.recognition.onspeechend = () => {
-            this.options.onSpeechEnd?.();
-        };
-
-        this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            // "no-speech" and "aborted" are not real errors
-            if (event.error === "no-speech" || event.error === "aborted") {
-                return;
-            }
-
-            this.setState("error");
-            this.options.onError?.(new Error(`Ошибка распознавания: ${event.error}`));
-        };
-
-        this.recognition.onend = () => {
-            // Auto-restart if should continue
-            if (this.shouldRestart && this.state === "listening") {
-                try {
-                    this.recognition?.start();
-                } catch {
-                    // Ignore if already started
-                }
-            } else {
-                this.setState("idle");
-            }
-        };
 
         try {
             this.recognition.start();
@@ -176,9 +119,11 @@ export class WebSpeechClient {
     stop(): void {
         this.shouldRestart = false;
         if (this.recognition) {
+            this.recognition.onend = null;
             this.recognition.stop();
             this.recognition = null;
         }
+        this.isStarted = false;
         this.setState("idle");
     }
 
@@ -195,42 +140,47 @@ export class WebSpeechClient {
     }
 
     resume(): void {
-        if (this.state !== "idle") {
+        if (!this.recognition) {
             return;
         }
 
         this.shouldRestart = true;
 
-        // If recognition exists but may have stopped, recreate it
-        if (!this.recognition) {
-            const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognitionClass) {
-                return;
-            }
-            this.recognition = new SpeechRecognitionClass();
-            this.setupRecognition();
+        if (this.isStarted) {
+            // The recognizer is still shutting down after pause(); `onend`
+            // will fire shortly and restart it because shouldRestart is true.
+            return;
         }
 
         try {
             this.recognition.start();
         } catch {
-            // If start fails (already running), let onend handler restart
+            // Already starting/running — onend will keep it alive.
         }
     }
 
-    private setupRecognition(): void {
-        if (!this.recognition) return;
+    getState(): WebSpeechState {
+        return this.state;
+    }
 
-        this.recognition.continuous = this.options.continuous ?? true;
-        this.recognition.interimResults = this.options.interimResults ?? true;
-        this.recognition.lang = this.options.language ?? "ru-RU";
-        this.recognition.maxAlternatives = 1;
+    private createRecognition(): SpeechRecognition | null {
+        const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognitionClass) {
+            return null;
+        }
 
-        this.recognition.onstart = () => {
+        const recognition = new SpeechRecognitionClass();
+        recognition.continuous = this.options.continuous ?? true;
+        recognition.interimResults = this.options.interimResults ?? true;
+        recognition.lang = this.options.language ?? "ru-RU";
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            this.isStarted = true;
             this.setState("listening");
         };
 
-        this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
             let interimTranscript = "";
             let finalTranscript = "";
 
@@ -252,15 +202,16 @@ export class WebSpeechClient {
             }
         };
 
-        this.recognition.onspeechstart = () => {
+        recognition.onspeechstart = () => {
             this.options.onSpeechStart?.();
         };
 
-        this.recognition.onspeechend = () => {
+        recognition.onspeechend = () => {
             this.options.onSpeechEnd?.();
         };
 
-        this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            // "no-speech" and "aborted" are not real errors
             if (event.error === "no-speech" || event.error === "aborted") {
                 return;
             }
@@ -269,21 +220,24 @@ export class WebSpeechClient {
             this.options.onError?.(new Error(`Ошибка распознавания: ${event.error}`));
         };
 
-        this.recognition.onend = () => {
-            if (this.shouldRestart && this.state === "listening") {
+        recognition.onend = () => {
+            this.isStarted = false;
+            // Restart purely on the desired-state flag. Checking `state`
+            // here is racy: pause()/resume() flip state synchronously while
+            // the native recognizer stops asynchronously, which used to leave
+            // the mic permanently dead after the first AI reply.
+            if (this.shouldRestart && this.state !== "error") {
                 try {
                     this.recognition?.start();
                 } catch {
                     // Ignore if already started
                 }
-            } else {
+            } else if (this.state !== "error") {
                 this.setState("idle");
             }
         };
-    }
 
-    getState(): WebSpeechState {
-        return this.state;
+        return recognition;
     }
 
     private setState(state: WebSpeechState): void {
