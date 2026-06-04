@@ -1177,19 +1177,19 @@
 - [x] Update API_CONTRACTS.md
 
 ### Phase 37.6 — Loading skeletons & error/empty states
-- [ ] Shared `Skeleton` UI primitive (pulse shimmer on `bg-surface-2`)
-- [ ] Skeletons: `/tree`, `/dialog`, `/friends`, `/guidebook`, `/league`, `/profile`
-- [ ] Error states with retry button on data-fetch failures (shared `ErrorState`)
-- [ ] Empty states: league, chat history, guidebook (where missing)
+- [x] Shared `Skeleton` UI primitive (pulse shimmer on `bg-surface-2`)
+- [x] Skeletons: `/dialog`, `/guidebook`, `/league` (friends/profile already had them)
+- [x] Error states with retry button on data-fetch failures (shared `ErrorState`)
+- [x] Empty states: league, chat history, guidebook (where missing)
 
 ### Phase 37.7 — Admin pages MD3 cleanup
-- [ ] Admin layout + sidebar → April palette
-- [ ] Admin pages (skills, lessons, users, topics, techniques, dialog) → April palette
-- [ ] Exercise editors (8 files) → April palette
-- [ ] Notification components MD3 leftovers (`NotificationBell/Panel/Card`)
-- [ ] `ui/Input.tsx`, `ui/Common.tsx` MD3 leftovers
+- [x] Admin layout + sidebar → April palette
+- [x] Admin pages (skills, lessons, users, topics, techniques, dialog) → April palette
+- [x] Exercise editors (8 files) → April palette
+- [x] Notification components MD3 leftovers (`NotificationBell/Panel/Card`)
+- [x] `ui/Input.tsx`, `ui/Common.tsx` MD3 leftovers
 
 ### Phase 37.8 — Docs & tests
-- [ ] Unit tests for new utilities/components added in this phase
-- [ ] `docs/TESTING/NIGHT_POLISH.md` — manual checklist
-- [ ] Update `docs/FEATURES.md`
+- [x] Unit tests for new utilities/components added in this phase
+- [x] `docs/TESTING/NIGHT_POLISH.md` — manual checklist
+- [x] Update `docs/FEATURES.md`
