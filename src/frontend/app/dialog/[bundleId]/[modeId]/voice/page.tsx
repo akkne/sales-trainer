@@ -22,6 +22,11 @@ function formatTime(seconds: number): string {
 
 type CallStatus = "idle" | "dialing" | "connected" | "ended";
 
+interface SubtitleEntry {
+    role: "user" | "assistant";
+    text: string;
+}
+
 interface StateInfo {
     label: string;
     hint: string;
@@ -120,8 +125,13 @@ export default function VoiceCallPage() {
     const [isCompleting, setIsCompleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sessionTimer, setSessionTimer] = useState(0);
+    const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    // True while the AI's current reply is still streaming — new chunks are
+    // appended to the last assistant entry instead of opening a new one.
+    const assistantReplyOpenRef = useRef(false);
+    const subtitleScrollRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (callStatus === "connected") {
@@ -168,7 +178,27 @@ export default function VoiceCallPage() {
         }
     }, [isCompleting, queryClient]);
 
+    const handleTranscript = useCallback((transcript: string) => {
+        assistantReplyOpenRef.current = false;
+        setSubtitles((previous) => [...previous, { role: "user", text: transcript }]);
+    }, []);
+
+    const handleAiText = useCallback((textChunk: string) => {
+        setSubtitles((previous) => {
+            const last = previous[previous.length - 1];
+            if (assistantReplyOpenRef.current && last?.role === "assistant") {
+                return [
+                    ...previous.slice(0, -1),
+                    { role: "assistant" as const, text: `${last.text} ${textChunk}`.trim() },
+                ];
+            }
+            assistantReplyOpenRef.current = true;
+            return [...previous, { role: "assistant", text: textChunk }];
+        });
+    }, []);
+
     const handleAiResponse = useCallback((_content: string, isStopSignal: boolean) => {
+        assistantReplyOpenRef.current = false;
         if (isStopSignal && sessionId) {
             setCallStatus("ended");
             completeSession(sessionId);
@@ -177,6 +207,7 @@ export default function VoiceCallPage() {
 
     const {
         state: voiceState,
+        currentTranscript,
         isVoiceAvailable,
         startVoice,
         stopVoice,
@@ -186,9 +217,19 @@ export default function VoiceCallPage() {
         bundleId,
         modeId,
         onSessionCreated: handleVoiceSessionCreated,
+        onTranscript: handleTranscript,
+        onAiText: handleAiText,
         onAiResponse: handleAiResponse,
         onError: handleVoiceError,
     });
+
+    // Keep the newest subtitle line in view.
+    useEffect(() => {
+        const container = subtitleScrollRef.current;
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, [subtitles, currentTranscript]);
 
     const handlePickUp = useCallback(async () => {
         if (callStatus !== "idle" && callStatus !== "ended") return;
@@ -196,6 +237,8 @@ export default function VoiceCallPage() {
         setError(null);
         setSessionTimer(0);
         setFeedback(null);
+        setSubtitles([]);
+        assistantReplyOpenRef.current = false;
         if (callStatus === "ended") {
             setSessionId(null);
         }
@@ -393,6 +436,81 @@ export default function VoiceCallPage() {
                         </p>
                     )}
                 </div>
+
+                {/* Live subtitles */}
+                {(subtitles.length > 0 || (isCallActive && currentTranscript)) && (
+                    <div
+                        ref={subtitleScrollRef}
+                        style={{
+                            width: "100%",
+                            maxWidth: 560,
+                            maxHeight: "26vh",
+                            overflowY: "auto",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 10,
+                            padding: "4px 8px",
+                        }}
+                    >
+                        {subtitles.map((entry, index) => (
+                            <div
+                                key={index}
+                                style={{
+                                    alignSelf: entry.role === "user" ? "flex-end" : "flex-start",
+                                    maxWidth: "85%",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: 10,
+                                        fontFamily: "var(--f-mono)",
+                                        letterSpacing: 1,
+                                        textTransform: "uppercase",
+                                        color: "var(--ink-3)",
+                                        marginBottom: 2,
+                                        textAlign: entry.role === "user" ? "right" : "left",
+                                    }}
+                                >
+                                    {entry.role === "user" ? "Вы" : currentMode?.title ?? "Собеседник"}
+                                </div>
+                                <div
+                                    style={{
+                                        background: entry.role === "user" ? "var(--surface-2)" : "var(--surface)",
+                                        border: "1px solid var(--line)",
+                                        borderRadius: 12,
+                                        padding: "8px 12px",
+                                        fontSize: 14,
+                                        lineHeight: 1.45,
+                                        color: "var(--ink)",
+                                    }}
+                                >
+                                    {entry.text}
+                                </div>
+                            </div>
+                        ))}
+                        {/* Interim line: what the recognizer hears right now, before the phrase is committed */}
+                        {isCallActive &&
+                            currentTranscript &&
+                            (voiceState === "speaking" || voiceState === "listening") && (
+                                <div style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
+                                    <div
+                                        style={{
+                                            background: "var(--surface-2)",
+                                            border: "1px dashed var(--line)",
+                                            borderRadius: 12,
+                                            padding: "8px 12px",
+                                            fontSize: 14,
+                                            lineHeight: 1.45,
+                                            color: "var(--ink-3)",
+                                            fontStyle: "italic",
+                                        }}
+                                    >
+                                        {currentTranscript}
+                                    </div>
+                                </div>
+                            )}
+                    </div>
+                )}
 
                 {/* State pill */}
                 <div

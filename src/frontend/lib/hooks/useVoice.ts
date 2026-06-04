@@ -55,12 +55,14 @@ export interface UseVoiceOptions {
     modeId?: string;
     onSessionCreated?: (sessionId: string) => void;
     onTranscript?: (transcript: string) => void;
+    /** Fires for every streamed AI text chunk as it arrives — drives live subtitles. */
+    onAiText?: (textChunk: string) => void;
     onAiResponse?: (content: string, isStopSignal: boolean) => void;
     onError?: (error: Error) => void;
 }
 
 export function useVoice(options: UseVoiceOptions) {
-    const { sessionId, modeVoiceEnabled, bundleId, modeId, onSessionCreated, onTranscript, onAiResponse, onError } = options;
+    const { sessionId, modeVoiceEnabled, bundleId, modeId, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
 
     const [state, setState] = useState<VoicePipelineState>("idle");
     const [currentTranscript, setCurrentTranscript] = useState("");
@@ -182,7 +184,10 @@ export function useVoice(options: UseVoiceOptions) {
 
             for await (const frame of readVoiceStream(response, controller.signal)) {
                 if (controller.signal.aborted) break;
-                if (frame.text) aggregatedText.push(frame.text);
+                if (frame.text) {
+                    aggregatedText.push(frame.text);
+                    onAiText?.(frame.text);
+                }
                 if (frame.isStopSignal) stopSignal = true;
                 if (frame.audio.byteLength > 0) {
                     await audioPlayerRef.current?.enqueue(frame.audio);
@@ -217,7 +222,7 @@ export function useVoice(options: UseVoiceOptions) {
         // Clear transcript buffer
         transcriptBufferRef.current = "";
         setCurrentTranscript("");
-    }, [onTranscript, onAiResponse, onError]);
+    }, [onTranscript, onAiText, onAiResponse, onError]);
 
     const startVoice = useCallback(async () => {
         if (!isVoiceAvailable) {
