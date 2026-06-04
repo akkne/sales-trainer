@@ -24,23 +24,23 @@ export function AiDialogEditor({ content, onChange }: Props) {
                     placeholder="You are calling a potential B2B client about your SaaS product..." />
             </label>
 
-            <div className="p-3 bg-surface-container-low rounded-md">
+            <div className="p-3 bg-surface rounded-md">
                 <span className={labelCls + " block mb-2"}>AI Persona</span>
                 <div className="grid grid-cols-3 gap-2">
                     <label className="block">
-                        <span className="text-[10px] text-on-surface-variant">Name</span>
+                        <span className="text-[10px] text-ink-3">Name</span>
                         <input className={inputCls} value={content.persona.name}
                             onChange={(e) => updatePersona("name", e.target.value)}
                             placeholder="Sarah" />
                     </label>
                     <label className="block">
-                        <span className="text-[10px] text-on-surface-variant">Role</span>
+                        <span className="text-[10px] text-ink-3">Role</span>
                         <input className={inputCls} value={content.persona.role}
                             onChange={(e) => updatePersona("role", e.target.value)}
                             placeholder="IT Manager" />
                     </label>
                     <label className="block">
-                        <span className="text-[10px] text-on-surface-variant">Personality</span>
+                        <span className="text-[10px] text-ink-3">Personality</span>
                         <input className={inputCls} value={content.persona.personality}
                             onChange={(e) => updatePersona("personality", e.target.value)}
                             placeholder="Skeptical but fair" />
@@ -65,7 +65,7 @@ export function AiDialogEditor({ content, onChange }: Props) {
                     min={1}
                     max={20}
                 />
-                <span className="text-[10px] text-on-surface-variant ml-2">
+                <span className="text-[10px] text-ink-3 ml-2">
                     Minimum conversation turns before completion is possible
                 </span>
             </label>

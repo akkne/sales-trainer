@@ -65,14 +65,14 @@ export function OrderingEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addItem}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add item
                     </button>
                 </div>
                 {content.items.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-on-surface-variant w-4">{i + 1}.</span>
+                        <span className="text-xs text-ink-3 w-4">{i + 1}.</span>
                         <input
                             className={inputCls}
                             value={item}
@@ -83,7 +83,7 @@ export function OrderingEditor({ content, onChange }: Props) {
                             <button
                                 type="button"
                                 onClick={() => removeItem(i)}
-                                className="text-xs text-error hover:text-error/80"
+                                className="text-xs text-bad hover:text-bad/80"
                             >
                                 ×
                             </button>
@@ -98,21 +98,21 @@ export function OrderingEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={syncCorrectOrder}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         Reset to items order
                     </button>
                 </div>
                 {content.correctOrder.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2 mt-1 bg-surface-container-low p-2 rounded">
-                        <span className="text-xs text-on-surface-variant w-4">{i + 1}.</span>
-                        <span className="flex-1 text-sm text-on-surface">{item || "(empty)"}</span>
+                    <div key={i} className="flex items-center gap-2 mt-1 bg-surface p-2 rounded">
+                        <span className="text-xs text-ink-3 w-4">{i + 1}.</span>
+                        <span className="flex-1 text-sm text-ink">{item || "(empty)"}</span>
                         <div className="flex gap-1">
                             <button
                                 type="button"
                                 onClick={() => moveUp(i)}
                                 disabled={i === 0}
-                                className="text-xs text-on-surface-variant hover:text-on-surface disabled:opacity-30"
+                                className="text-xs text-ink-3 hover:text-ink disabled:opacity-30"
                             >
                                 ↑
                             </button>
@@ -120,7 +120,7 @@ export function OrderingEditor({ content, onChange }: Props) {
                                 type="button"
                                 onClick={() => moveDown(i)}
                                 disabled={i === content.correctOrder.length - 1}
-                                className="text-xs text-on-surface-variant hover:text-on-surface disabled:opacity-30"
+                                className="text-xs text-ink-3 hover:text-ink disabled:opacity-30"
                             >
                                 ↓
                             </button>

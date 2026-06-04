@@ -54,7 +54,7 @@ import { RateCallEditor } from "@/components/admin/exercise-editors/RateCallEdit
 import { WrittenAnswerEditor } from "@/components/admin/exercise-editors/WrittenAnswerEditor";
 
 function typeBadgeColor(): string {
-    return "bg-surface-container text-on-surface-variant border border-outline-variant";
+    return "bg-bg-2 text-ink-3 border border-line";
 }
 
 function moveExercise(exercises: ExerciseRow[], from: number, to: number): ExerciseRow[] {
@@ -183,7 +183,7 @@ export default function AdminTopicLessonExercisesPage({
     }
 
     const [editingId, setEditingId] = useState<string | null>(null);
-    const cardCls = "bg-surface-container-lowest border border-outline-variant rounded-2xl p-4";
+    const cardCls = "bg-surface border border-line rounded-2xl p-4";
 
     async function saveExercise(row: ExerciseRow) {
         if (row.id) {
@@ -238,27 +238,27 @@ export default function AdminTopicLessonExercisesPage({
             <div className="mb-6">
                 <Link
                     href={`/admin/skills/${skillId}/topics/${topicId}`}
-                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                    className="text-xs text-ink-3 hover:text-ink transition-colors"
                 >
                     ← Back to topic
                 </Link>
             </div>
 
             <div className="flex items-center justify-between mb-4">
-                <h1 className="text-lg font-semibold text-on-surface">Edit Exercises</h1>
+                <h1 className="text-lg font-semibold text-ink">Edit Exercises</h1>
                 <button
                     onClick={addExercise}
-                    className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
+                    className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
                 >
                     + Add exercise
                 </button>
             </div>
 
             {rows.length === 0 && !isLoading && (
-                <p className="text-sm text-on-surface-variant">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>
+                <p className="text-sm text-ink-3">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>
             )}
 
-            {isLoading && <p className="text-sm text-on-surface-variant">Loading...</p>}
+            {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
 
             <div className="space-y-4">
                 {rows.map((row, index) => {
@@ -272,7 +272,7 @@ export default function AdminTopicLessonExercisesPage({
                                         <button
                                             disabled={index === 0}
                                             onClick={() => setRows(moveExercise(rows, index, index - 1))}
-                                            className="text-on-surface-variant hover:text-on-surface disabled:opacity-30 text-xs leading-none"
+                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
                                             title="Move up"
                                         >
                                             ▲
@@ -280,7 +280,7 @@ export default function AdminTopicLessonExercisesPage({
                                         <button
                                             disabled={index === rows.length - 1}
                                             onClick={() => setRows(moveExercise(rows, index, index + 1))}
-                                            className="text-on-surface-variant hover:text-on-surface disabled:opacity-30 text-xs leading-none"
+                                            className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
                                             title="Move down"
                                         >
                                             ▼
@@ -289,9 +289,9 @@ export default function AdminTopicLessonExercisesPage({
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
                                         {TYPE_LABELS[row.type] ?? row.type}
                                     </span>
-                                    <span className="text-xs text-on-surface-variant">#{row.sortOrder}</span>
+                                    <span className="text-xs text-ink-3">#{row.sortOrder}</span>
                                     {row.customAiPrompt && (
-                                        <span className="text-xs px-1.5 py-0.5 bg-primary-container text-primary rounded">
+                                        <span className="text-xs px-1.5 py-0.5 bg-indigo-soft text-indigo rounded">
                                             AI
                                         </span>
                                     )}
@@ -300,14 +300,14 @@ export default function AdminTopicLessonExercisesPage({
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => setEditingId(row.id ?? "__new__")}
-                                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                                            className="text-xs text-ink-3 hover:text-ink transition-colors"
                                         >
                                             Edit
                                         </button>
                                         {row.id && (
                                             <button
                                                 onClick={() => deleteRow(row.id)}
-                                                className="text-xs text-error hover:text-error transition-colors"
+                                                className="text-xs text-bad hover:text-bad transition-colors"
                                             >
                                                 Delete
                                             </button>
@@ -358,7 +358,7 @@ export default function AdminTopicLessonExercisesPage({
                                                 }}
                                                 placeholder="Additional evaluation criteria specific to this exercise..."
                                             />
-                                            <span className="text-[10px] text-on-surface-variant mt-1 block">
+                                            <span className="text-[10px] text-ink-3 mt-1 block">
                                                 This prompt is appended to the global type prompt for AI evaluation
                                             </span>
                                         </label>
@@ -368,7 +368,7 @@ export default function AdminTopicLessonExercisesPage({
                                         <button
                                             onClick={async () => await saveExercise(row)}
                                             disabled={isLoadingMut}
-                                            className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                                            className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                                         >
                                             {isLoadingMut ? "Saving..." : (row.id ? "Save changes" : "Create")}
                                         </button>
@@ -390,14 +390,14 @@ export default function AdminTopicLessonExercisesPage({
                                                     }
                                                     setEditingId(null);
                                                 }}
-                                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                                                className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
                                             >
                                                 Cancel
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={() => setRows(rows.filter((r) => r.id !== null))}
-                                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                                                className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
                                             >
                                                 Remove
                                             </button>
@@ -405,7 +405,7 @@ export default function AdminTopicLessonExercisesPage({
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-xs text-on-surface-variant font-mono">
+                                <p className="text-xs text-ink-3 font-mono">
                                     {renderContentPreview(row)}
                                 </p>
                             )}

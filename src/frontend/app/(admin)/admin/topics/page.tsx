@@ -160,17 +160,17 @@ export default function AdminTopicsPage() {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-xl font-semibold text-on-surface">Topics</h1>
+                <h1 className="text-xl font-semibold text-ink">Topics</h1>
                 <div className="flex gap-2">
                     <button
                         onClick={() => { setShowImport(v => !v); setImportResult(null); }}
-                        className="px-4 py-2 text-sm border border-outline-variant text-on-surface-variant rounded-md hover:bg-surface-container transition-colors"
+                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
                     >
                         {showImport ? "Close Import" : "Import JSON"}
                     </button>
                     <button
                         onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
-                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
                     >
                         {showForm ? "Cancel" : "+ New topic"}
                     </button>
@@ -179,41 +179,41 @@ export default function AdminTopicsPage() {
 
             {/* Import Section */}
             {showImport && (
-                <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-6">
+                <div className="bg-surface border border-line rounded-2xl p-5 mb-6">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-medium text-on-surface">Import Topics from JSON</h2>
+                        <h2 className="text-sm font-medium text-ink">Import Topics from JSON</h2>
                         <button
                             onClick={downloadTopicsTemplate}
-                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors underline"
+                            className="text-xs text-ink-3 hover:text-ink transition-colors underline"
                         >
                             Download template
                         </button>
                     </div>
-                    <p className="text-xs text-on-surface-variant mb-3">
-                        JSON array with objects: <code className="bg-surface-container px-1 rounded">{"{ skillIconicName, iconicName, title, orderInSkill }"}</code>
+                    <p className="text-xs text-ink-3 mb-3">
+                        JSON array with objects: <code className="bg-bg-2 px-1 rounded">{"{ skillIconicName, iconicName, title, orderInSkill }"}</code>
                     </p>
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept=".json"
                         onChange={handleImport}
-                        className="block w-full text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-outline-variant file:text-sm file:bg-surface-container file:text-on-surface hover:file:bg-surface-container-high cursor-pointer"
+                        className="block w-full text-sm text-ink-3 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-line file:text-sm file:bg-bg-2 file:text-ink hover:file:bg-surface-2 cursor-pointer"
                     />
                     {importTopics.isPending && (
-                        <p className="mt-3 text-xs text-on-surface-variant">Importing...</p>
+                        <p className="mt-3 text-xs text-ink-3">Importing...</p>
                     )}
                     {importTopics.isError && (
-                        <p className="mt-3 text-xs text-error">{(importTopics.error as Error).message}</p>
+                        <p className="mt-3 text-xs text-bad">{(importTopics.error as Error).message}</p>
                     )}
                     {importResult && (
-                        <div className="mt-3 p-3 bg-surface-container rounded-md">
-                            <p className="text-xs text-on-surface">
+                        <div className="mt-3 p-3 bg-bg-2 rounded-md">
+                            <p className="text-xs text-ink">
                                 Created: <span className="font-medium">{importResult.topicsCreated}</span> | Updated: <span className="font-medium">{importResult.topicsUpdated}</span>
                             </p>
                             {importResult.errors.length > 0 && (
                                 <div className="mt-2">
-                                    <p className="text-xs text-error font-medium">{importResult.errors.length} error(s):</p>
-                                    <ul className="mt-1 text-xs text-error font-mono">
+                                    <p className="text-xs text-bad font-medium">{importResult.errors.length} error(s):</p>
+                                    <ul className="mt-1 text-xs text-bad font-mono">
                                         {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                                     </ul>
                                 </div>
@@ -225,13 +225,13 @@ export default function AdminTopicsPage() {
 
             {/* Create Form */}
             {showForm && (
-                <div className="bg-surface-container-lowest rounded-2xl p-5 mb-6">
-                    <h2 className="text-sm font-medium text-on-surface mb-4">New topic</h2>
+                <div className="bg-surface rounded-2xl p-5 mb-6">
+                    <h2 className="text-sm font-medium text-ink mb-4">New topic</h2>
                     <div className="grid grid-cols-4 gap-4">
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Skill</span>
+                            <span className="text-xs text-ink-3">Skill</span>
                             <select
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={formSkillIconicName}
                                 onChange={(e) => setFormSkillIconicName(e.target.value)}
                             >
@@ -242,27 +242,27 @@ export default function AdminTopicsPage() {
                             </select>
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                            <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                             <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={formIconicName}
                                 onChange={(e) => setFormIconicName(e.target.value)}
                                 placeholder="e.g. introduction-to-sales"
                             />
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Title (Display Name)</span>
+                            <span className="text-xs text-ink-3">Title (Display Name)</span>
                             <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={formTitle}
                                 onChange={(e) => setFormTitle(e.target.value)}
                             />
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Order in skill</span>
+                            <span className="text-xs text-ink-3">Order in skill</span>
                             <input
                                 type="number"
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={formOrder}
                                 onChange={(e) => setFormOrder(Number(e.target.value))}
                             />
@@ -271,12 +271,12 @@ export default function AdminTopicsPage() {
                     <button
                         onClick={handleCreate}
                         disabled={createTopicForSkill.isPending || !formIconicName || !formTitle || !formSkillIconicName}
-                        className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                        className="mt-4 px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                     >
                         {createTopicForSkill.isPending ? "Saving..." : "Create"}
                     </button>
                     {createTopicForSkill.isError && (
-                        <p className="mt-2 text-xs text-error">
+                        <p className="mt-2 text-xs text-bad">
                             {(createTopicForSkill.error as Error).message}
                         </p>
                     )}
@@ -286,9 +286,9 @@ export default function AdminTopicsPage() {
             {/* Filters */}
             <div className="flex gap-4 mb-4">
                 <label className="block flex-1 max-w-xs">
-                    <span className="text-xs text-on-surface-variant">Filter by skill</span>
+                    <span className="text-xs text-ink-3">Filter by skill</span>
                     <select
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={filterSkillId}
                         onChange={(e) => setFilterSkillId(e.target.value)}
                     >
@@ -299,9 +299,9 @@ export default function AdminTopicsPage() {
                     </select>
                 </label>
                 <label className="block flex-1 max-w-xs">
-                    <span className="text-xs text-on-surface-variant">Search</span>
+                    <span className="text-xs text-ink-3">Search</span>
                     <input
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         placeholder="Search topics..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -311,31 +311,31 @@ export default function AdminTopicsPage() {
 
             {/* Topics List */}
             {isLoading ? (
-                <p className="text-sm text-on-surface-variant">Loading...</p>
+                <p className="text-sm text-ink-3">Loading...</p>
             ) : filteredTopics.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">No topics found.</p>
+                <p className="text-sm text-ink-3">No topics found.</p>
             ) : (
                 <div className="space-y-6">
                     {groupedTopics.map(group => (
                         <div key={group.skill.id}>
-                            <h3 className="text-sm font-medium text-on-surface-variant mb-2 flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-primary-container text-primary rounded text-xs">
+                            <h3 className="text-sm font-medium text-ink-3 mb-2 flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-indigo-soft text-indigo rounded text-xs">
                                     {group.skill.title}
                                 </span>
-                                <span className="text-xs text-on-surface-variant">
+                                <span className="text-xs text-ink-3">
                                     {group.topics.length} topic{group.topics.length !== 1 ? 's' : ''}
                                 </span>
                             </h3>
                             <table className="w-full text-sm border-collapse">
                                 <thead>
-                                    <tr className="border-b border-outline-variant">
-                                        <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                    <tr className="border-b border-line">
+                                        <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                             Iconic Name
                                         </th>
-                                        <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                                        <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                             Title
                                         </th>
-                                        <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium w-24">
+                                        <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium w-24">
                                             Order
                                         </th>
                                         <th className="py-2 px-3 w-40" />
@@ -345,20 +345,20 @@ export default function AdminTopicsPage() {
                                     {group.topics.map(topic => (
                                         <tr
                                             key={topic.id}
-                                            className="border-b border-surface-container hover:bg-surface-container-low"
+                                            className="border-b border-line hover:bg-bg-2"
                                         >
                                             {editingId === topic.id ? (
                                                 <>
                                                     <td className="py-2.5 px-3">
                                                         <input
-                                                            className="w-full border border-outline-variant rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                                            className="w-full border border-line rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                                             value={formIconicName}
                                                             onChange={(e) => setFormIconicName(e.target.value)}
                                                         />
                                                     </td>
                                                     <td className="py-2.5 px-3">
                                                         <input
-                                                            className="w-full border border-outline-variant rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                                            className="w-full border border-line rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                                             value={formTitle}
                                                             onChange={(e) => setFormTitle(e.target.value)}
                                                         />
@@ -366,7 +366,7 @@ export default function AdminTopicsPage() {
                                                     <td className="py-2.5 px-3">
                                                         <input
                                                             type="number"
-                                                            className="w-full border border-outline-variant rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                                            className="w-full border border-line rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                                             value={formOrder}
                                                             onChange={(e) => setFormOrder(Number(e.target.value))}
                                                         />
@@ -376,13 +376,13 @@ export default function AdminTopicsPage() {
                                                             <button
                                                                 onClick={handleUpdate}
                                                                 disabled={updateTopic.isPending}
-                                                                className="text-xs text-primary hover:underline"
+                                                                className="text-xs text-indigo hover:underline"
                                                             >
                                                                 {updateTopic.isPending ? "Saving..." : "Save"}
                                                             </button>
                                                             <button
                                                                 onClick={() => setEditingId(null)}
-                                                                className="text-xs text-on-surface-variant hover:underline"
+                                                                className="text-xs text-ink-3 hover:underline"
                                                             >
                                                                 Cancel
                                                             </button>
@@ -391,7 +391,7 @@ export default function AdminTopicsPage() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <td className="py-2.5 px-3 font-mono text-xs text-on-surface">
+                                                    <td className="py-2.5 px-3 font-mono text-xs text-ink">
                                                         <Link
                                                             href={`/admin/skills/${topic.skillId}/topics/${topic.id}`}
                                                             className="hover:underline"
@@ -399,10 +399,10 @@ export default function AdminTopicsPage() {
                                                             {topic.iconicName}
                                                         </Link>
                                                     </td>
-                                                    <td className="py-2.5 px-3 font-medium text-on-surface">
+                                                    <td className="py-2.5 px-3 font-medium text-ink">
                                                         {topic.title}
                                                     </td>
-                                                    <td className="py-2.5 px-3 text-on-surface-variant">
+                                                    <td className="py-2.5 px-3 text-ink-3">
                                                         {topic.orderInSkill}
                                                     </td>
                                                     <td className="py-2.5 px-3 text-right">
@@ -410,13 +410,13 @@ export default function AdminTopicsPage() {
                                                             <span className="inline-flex gap-2">
                                                                 <button
                                                                     onClick={() => handleDelete(topic.id)}
-                                                                    className="text-xs text-error hover:underline"
+                                                                    className="text-xs text-bad hover:underline"
                                                                 >
                                                                     Confirm
                                                                 </button>
                                                                 <button
                                                                     onClick={() => setConfirmDeleteId(null)}
-                                                                    className="text-xs text-on-surface-variant hover:underline"
+                                                                    className="text-xs text-ink-3 hover:underline"
                                                                 >
                                                                     Cancel
                                                                 </button>
@@ -425,13 +425,13 @@ export default function AdminTopicsPage() {
                                                             <span className="inline-flex gap-3">
                                                                 <button
                                                                     onClick={() => startEdit(topic)}
-                                                                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                                                                    className="text-xs text-ink-3 hover:text-ink transition-colors"
                                                                 >
                                                                     Edit
                                                                 </button>
                                                                 <button
                                                                     onClick={() => setConfirmDeleteId(topic.id)}
-                                                                    className="text-xs text-on-surface-variant hover:text-error transition-colors"
+                                                                    className="text-xs text-ink-3 hover:text-bad transition-colors"
                                                                 >
                                                                     Delete
                                                                 </button>

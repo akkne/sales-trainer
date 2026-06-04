@@ -194,9 +194,9 @@ export function emptyFreeText(): FreeTextContent {
 }
 
 // Shared styling classes
-export const inputCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-surface";
-export const labelCls = "text-xs text-on-surface-variant";
-export const textareaCls = "mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono bg-surface";
+export const inputCls = "mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface";
+export const labelCls = "text-xs text-ink-3";
+export const textareaCls = "mt-1 w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 font-mono bg-surface";
 
 // Legacy aliases for backward compatibility during migration
 export type MultipleChoiceContent = ChooseOptionContent;

@@ -28,25 +28,25 @@ export function Sidebar() {
     )?.title;
 
     return (
-        <aside className="hidden md:flex flex-col w-64 min-h-screen bg-surface-container-low border-r border-outline-variant p-4 gap-6">
+        <aside className="hidden md:flex flex-col w-64 min-h-screen bg-surface border-r border-line p-4 gap-6">
             {/* User profile block */}
-            <div className="flex flex-col items-center gap-2 py-4 px-3 bg-surface-container rounded-2xl">
+            <div className="flex flex-col items-center gap-2 py-4 px-3 bg-bg-2 rounded-2xl">
                 <div className="relative">
-                    <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xl ring-4 ring-primary-container">
+                    <div className="w-16 h-16 rounded-full bg-ink flex items-center justify-center text-bg font-bold text-xl ring-4 ring-indigo-soft">
                         {firstLetter}
                     </div>
                     {/* Level badge */}
                     {skillTreeData && (
-                        <span className="absolute -bottom-1 -right-1 bg-primary text-on-primary text-xs font-semibold px-2 py-0.5 rounded-full">
+                        <span className="absolute -bottom-1 -right-1 bg-ink text-bg text-xs font-semibold px-2 py-0.5 rounded-full">
                             Ур. {Math.floor((skillTreeData.totalXpAmount ?? 0) / 1000) + 1}
                         </span>
                     )}
                 </div>
-                <p className="text-sm font-semibold text-on-surface truncate max-w-full">
+                <p className="text-sm font-semibold text-ink truncate max-w-full">
                     {displayName}
                 </p>
                 {skillTreeData && (
-                    <p className="text-xs text-on-surface-variant">
+                    <p className="text-xs text-ink-3">
                         {skillTreeData.totalXpAmount ?? 0} XP
                     </p>
                 )}
@@ -60,10 +60,10 @@ export function Sidebar() {
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl tonal-transition ${
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
                                 isActive
-                                    ? "bg-primary-container text-primary font-semibold"
-                                    : "text-on-surface-variant hover:bg-surface-container"
+                                    ? "bg-indigo-soft text-indigo font-semibold"
+                                    : "text-ink-3 hover:bg-bg-2"
                             }`}
                         >
                             <Icon
@@ -78,16 +78,16 @@ export function Sidebar() {
 
             {/* Current path widget */}
             {currentSkillName && (
-                <div className="mt-auto p-4 bg-surface-container rounded-2xl">
-                    <p className="text-xs text-on-surface-variant font-medium mb-1">
+                <div className="mt-auto p-4 bg-bg-2 rounded-2xl">
+                    <p className="text-xs text-ink-3 font-medium mb-1">
                         Текущий навык
                     </p>
-                    <p className="font-semibold text-sm text-on-surface truncate">
+                    <p className="font-semibold text-sm text-ink truncate">
                         {currentSkillName}
                     </p>
                     <Link
                         href="/tree"
-                        className="mt-3 w-full py-2 bg-primary text-on-primary text-sm font-semibold rounded-full hover:bg-primary-dim tonal-transition flex items-center justify-center gap-1"
+                        className="mt-3 w-full py-2 bg-ink text-bg text-sm font-semibold rounded-full hover:opacity-90 transition-colors flex items-center justify-center gap-1"
                     >
                         Продолжить
                         <Icon name="arrow-right" size="sm" />
@@ -96,7 +96,7 @@ export function Sidebar() {
             )}
 
             {/* App branding footer */}
-            <div className="text-center text-xs text-outline font-semibold tracking-widest uppercase">
+            <div className="text-center text-xs text-ink-4 font-semibold tracking-widest uppercase">
                 Sellevate
             </div>
         </aside>

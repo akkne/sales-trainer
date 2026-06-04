@@ -84,7 +84,7 @@ export function FindErrorEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addLine}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add line
                     </button>
@@ -94,21 +94,21 @@ export function FindErrorEditor({ content, onChange }: Props) {
                         key={line.id}
                         className={`mt-2 p-2 rounded border cursor-pointer transition-colors ${
                             content.errorLineId === line.id
-                                ? "border-error bg-error-container"
-                                : "border-outline-variant bg-surface-container-low hover:border-outline"
+                                ? "border-bad bg-bad-soft"
+                                : "border-line bg-surface hover:border-line-2"
                         }`}
                         onClick={() => setErrorLine(line.id)}
                     >
                         <div className="flex items-center gap-2">
                             <input
-                                className="w-24 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                className="w-24 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                                 value={line.speaker}
                                 onChange={(e) => { e.stopPropagation(); updateLine(i, "speaker", e.target.value); }}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="Speaker"
                             />
                             <input
-                                className="flex-1 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                                 value={line.text}
                                 onChange={(e) => { e.stopPropagation(); updateLine(i, "text", e.target.value); }}
                                 onClick={(e) => e.stopPropagation()}
@@ -118,14 +118,14 @@ export function FindErrorEditor({ content, onChange }: Props) {
                                 <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); removeLine(i); }}
-                                    className="text-xs text-error hover:text-error/80"
+                                    className="text-xs text-bad hover:text-bad/80"
                                 >
                                     ×
                                 </button>
                             )}
                         </div>
                         {content.errorLineId === line.id && (
-                            <span className="text-xs text-error mt-1 block">← This is the error</span>
+                            <span className="text-xs text-bad mt-1 block">← This is the error</span>
                         )}
                     </div>
                 ))}
@@ -146,7 +146,7 @@ export function FindErrorEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addFix}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add fix
                     </button>
@@ -168,13 +168,13 @@ export function FindErrorEditor({ content, onChange }: Props) {
                         <button
                             type="button"
                             onClick={() => removeFix(i)}
-                            className="text-xs text-error hover:text-error/80"
+                            className="text-xs text-bad hover:text-bad/80"
                         >
                             ×
                         </button>
                     </div>
                 ))}
-                <span className="text-[10px] text-on-surface-variant mt-1 block">
+                <span className="text-[10px] text-ink-3 mt-1 block">
                     Checkbox marks correct fixes
                 </span>
             </div>

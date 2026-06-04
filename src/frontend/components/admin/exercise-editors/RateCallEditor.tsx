@@ -59,7 +59,7 @@ export function RateCallEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addTranscriptLine}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add line
                     </button>
@@ -67,13 +67,13 @@ export function RateCallEditor({ content, onChange }: Props) {
                 {content.transcript.map((line, i) => (
                     <div key={i} className="flex items-center gap-2 mt-1">
                         <input
-                            className="w-24 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                            className="w-24 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                             value={line.speaker}
                             onChange={(e) => updateTranscriptLine(i, "speaker", e.target.value)}
                             placeholder="Speaker"
                         />
                         <input
-                            className="flex-1 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                            className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                             value={line.text}
                             onChange={(e) => updateTranscriptLine(i, "text", e.target.value)}
                             placeholder="What they said..."
@@ -82,7 +82,7 @@ export function RateCallEditor({ content, onChange }: Props) {
                             <button
                                 type="button"
                                 onClick={() => removeTranscriptLine(i)}
-                                className="text-xs text-error hover:text-error/80"
+                                className="text-xs text-bad hover:text-bad/80"
                             >
                                 ×
                             </button>
@@ -97,22 +97,22 @@ export function RateCallEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addCriteria}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add criterion
                     </button>
                 </div>
                 {content.criteria.map((criterion, i) => (
-                    <div key={criterion.id} className="mt-2 p-2 bg-surface-container-low rounded">
+                    <div key={criterion.id} className="mt-2 p-2 bg-surface rounded">
                         <div className="flex items-center gap-2">
                             <input
-                                className="w-32 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                className="w-32 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                                 value={criterion.name}
                                 onChange={(e) => updateCriteria(i, "name", e.target.value)}
                                 placeholder="Criterion name"
                             />
                             <input
-                                className="flex-1 border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary bg-surface"
+                                className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
                                 value={criterion.description}
                                 onChange={(e) => updateCriteria(i, "description", e.target.value)}
                                 placeholder="Description of what to evaluate"
@@ -121,7 +121,7 @@ export function RateCallEditor({ content, onChange }: Props) {
                                 <button
                                     type="button"
                                     onClick={() => removeCriteria(i)}
-                                    className="text-xs text-error hover:text-error/80"
+                                    className="text-xs text-bad hover:text-bad/80"
                                 >
                                     ×
                                 </button>

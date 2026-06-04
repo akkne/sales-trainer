@@ -222,21 +222,6 @@ button { font: inherit; color: inherit; }
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Tonal transition for smooth changes */
-.tonal-transition {
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-/* 3-D button shadow */
-.btn-3d {
-  box-shadow: 0 4px 0 var(--rust-ink);
-  transition: box-shadow 80ms, transform 80ms;
-}
-.btn-3d:active {
-  box-shadow: none;
-  transform: translateY(4px);
-}
-
 /* ── Animations ── */
 
 @keyframes pulse {

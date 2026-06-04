@@ -6,9 +6,9 @@ import { useAuthStore } from "@/lib/store/authStore";
 const ROLES = ["User", "Admin", "SuperAdmin"];
 
 const roleBadgeClass: Record<string, string> = {
-    User: "bg-surface-container text-on-surface-variant",
-    Admin: "bg-tertiary-container text-tertiary",
-    SuperAdmin: "bg-secondary-container text-secondary",
+    User: "bg-bg-2 text-ink-3",
+    Admin: "bg-accent-soft text-accent",
+    SuperAdmin: "bg-olive-soft text-olive",
 };
 
 export default function AdminUsersPage() {
@@ -19,8 +19,8 @@ export default function AdminUsersPage() {
     if (authenticatedUser?.role !== "SuperAdmin") {
         return (
             <div>
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-4">Users</h1>
-                <p className="text-sm text-on-surface-variant">
+                <h1 className="text-xl font-bold text-ink mb-4">Users</h1>
+                <p className="text-sm text-ink-3">
                     Only SuperAdmins can access this page.
                 </p>
             </div>
@@ -29,24 +29,24 @@ export default function AdminUsersPage() {
 
     return (
         <div>
-            <h1 className="font-headline text-xl font-bold text-on-surface mb-6">Users</h1>
+            <h1 className="text-xl font-bold text-ink mb-6">Users</h1>
 
             {isLoading ? (
-                <p className="text-sm text-on-surface-variant">Loading...</p>
+                <p className="text-sm text-ink-3">Loading...</p>
             ) : (
                 <table className="w-full text-sm border-collapse">
                     <thead>
-                        <tr className="border-b border-outline-variant">
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                        <tr className="border-b border-line">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Email
                             </th>
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Display name
                             </th>
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Role
                             </th>
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Registered
                             </th>
                             <th className="py-2 px-3" />
@@ -58,13 +58,13 @@ export default function AdminUsersPage() {
                             return (
                                 <tr
                                     key={user.id}
-                                    className="border-b border-surface-container hover:bg-surface-container-low"
+                                    className="border-b border-line hover:bg-bg-2"
                                 >
-                                    <td className="py-2.5 px-3 text-on-surface">{user.email}</td>
-                                    <td className="py-2.5 px-3 text-on-surface-variant">
+                                    <td className="py-2.5 px-3 text-ink">{user.email}</td>
+                                    <td className="py-2.5 px-3 text-ink-3">
                                         {user.displayName}
                                         {isSelf && (
-                                            <span className="ml-1 text-xs text-outline-variant">
+                                            <span className="ml-1 text-xs text-ink-4">
                                                 (you)
                                             </span>
                                         )}
@@ -73,13 +73,13 @@ export default function AdminUsersPage() {
                                         <span
                                             className={`inline-block px-2 py-0.5 text-xs rounded-full ${
                                                 roleBadgeClass[user.role] ??
-                                                "bg-surface-container text-on-surface-variant"
+                                                "bg-bg-2 text-ink-3"
                                             }`}
                                         >
                                             {user.role}
                                         </span>
                                     </td>
-                                    <td className="py-2.5 px-3 text-on-surface-variant text-xs">
+                                    <td className="py-2.5 px-3 text-ink-3 text-xs">
                                         {new Date(user.createdAt).toLocaleDateString()}
                                     </td>
                                     <td className="py-2.5 px-3 text-right">
@@ -93,7 +93,7 @@ export default function AdminUsersPage() {
                                                         role: e.target.value,
                                                     })
                                                 }
-                                                className="text-xs border border-outline-variant rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                                                className="text-xs border border-line rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo/30 disabled:opacity-50"
                                             >
                                                 {ROLES.map((r) => (
                                                     <option key={r} value={r}>

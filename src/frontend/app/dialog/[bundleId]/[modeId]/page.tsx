@@ -368,7 +368,7 @@ export default function ChatPage() {
                         <h1 className="font-bold text-ink">Загрузка...</h1>
                     </header>
                     <div className="flex-1 flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                        <div className="w-10 h-10 rounded-full border-4 border-indigo border-t-transparent animate-spin" />
                     </div>
                 </div>
             </div>
@@ -484,13 +484,13 @@ export default function ChatPage() {
                         <p className="text-sm text-ink-3 text-center flex items-center justify-center gap-2">
                             {isCompleting && (
                                 <>
-                                    <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    <span className="w-4 h-4 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
                                     Формируем обратную связь...
                                 </>
                             )}
                             {isSending && !isCompleting && (
                                 <>
-                                    <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                    <span className="w-4 h-4 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
                                     AI думает...
                                 </>
                             )}

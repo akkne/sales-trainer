@@ -79,7 +79,7 @@ export function MatchingEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addPair}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add pair
                     </button>
@@ -92,7 +92,7 @@ export function MatchingEditor({ content, onChange }: Props) {
                             onChange={(e) => updateLeft(i, e.target.value)}
                             placeholder={`Left ${i + 1}`}
                         />
-                        <span className="text-on-surface-variant">→</span>
+                        <span className="text-ink-3">→</span>
                         <input
                             className={inputCls}
                             value={content.rightItems[i]}
@@ -103,7 +103,7 @@ export function MatchingEditor({ content, onChange }: Props) {
                             <button
                                 type="button"
                                 onClick={() => removePair(i)}
-                                className="text-xs text-error hover:text-error/80"
+                                className="text-xs text-bad hover:text-bad/80"
                             >
                                 ×
                             </button>
@@ -117,8 +117,8 @@ export function MatchingEditor({ content, onChange }: Props) {
                 <div className="mt-2 grid gap-2">
                     {content.leftItems.filter(l => l).map(left => (
                         <div key={left} className="flex items-center gap-2">
-                            <span className="text-sm text-on-surface w-32 truncate">{left}</span>
-                            <span className="text-on-surface-variant">→</span>
+                            <span className="text-sm text-ink w-32 truncate">{left}</span>
+                            <span className="text-ink-3">→</span>
                             <div className="flex gap-1 flex-wrap">
                                 {content.rightItems.filter(r => r).map(right => (
                                     <button
@@ -127,8 +127,8 @@ export function MatchingEditor({ content, onChange }: Props) {
                                         onClick={() => togglePair(left, right)}
                                         className={`px-2 py-1 text-xs rounded border transition-colors ${
                                             getPairForLeft(left) === right
-                                                ? "bg-primary text-on-primary border-primary"
-                                                : "border-outline-variant text-on-surface-variant hover:bg-surface-container"
+                                                ? "bg-ink text-bg border-indigo"
+                                                : "border-line text-ink-3 hover:bg-bg-2"
                                         }`}
                                     >
                                         {right}

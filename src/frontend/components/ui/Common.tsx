@@ -27,12 +27,12 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-    primary: "bg-primary text-on-primary",
-    secondary: "bg-secondary-container text-on-secondary-container",
-    tertiary: "bg-tertiary-container text-on-tertiary-container",
-    error: "bg-error-container text-on-error-container",
-    neutral: "bg-surface-container-high text-on-surface",
-    success: "bg-primary-container text-on-primary-container",
+    primary: "bg-ink text-bg",
+    secondary: "bg-olive-soft text-olive",
+    tertiary: "bg-accent-soft text-accent-ink",
+    error: "bg-bad-soft text-bad",
+    neutral: "bg-surface-2 text-ink",
+    success: "bg-indigo-soft text-indigo-ink",
 };
 
 const SIZE_CLASSES: Record<BadgeSize, string> = {
@@ -127,8 +127,8 @@ export function NotificationDot({
     if (!show) return null;
 
     const variantColors = {
-        primary: "bg-primary",
-        error: "bg-error",
+        primary: "bg-ink",
+        error: "bg-bad",
         warning: "bg-gold",
     };
 
@@ -142,7 +142,7 @@ export function NotificationDot({
     return (
         <span
             className={`
-                absolute w-2.5 h-2.5 rounded-full ring-2 ring-surface
+                absolute w-2.5 h-2.5 rounded-full ring-2 ring-line
                 ${variantColors[variant]}
                 ${positionClasses[position]}
                 ${className}
@@ -177,9 +177,9 @@ const AVATAR_SIZE_CLASSES = {
 };
 
 const RING_CLASSES = {
-    primary: "ring-4 ring-primary-container",
-    secondary: "ring-4 ring-secondary-container",
-    surface: "ring-4 ring-surface-container",
+    primary: "ring-4 ring-indigo-soft",
+    secondary: "ring-4 ring-olive-soft",
+    surface: "ring-4 ring-line",
 };
 
 export function Avatar({
@@ -198,7 +198,7 @@ export function Avatar({
         <div
             className={`
                 relative rounded-full flex items-center justify-center font-bold
-                bg-primary text-on-primary overflow-hidden
+                bg-ink text-bg overflow-hidden
                 ${AVATAR_SIZE_CLASSES[size]}
                 ${ring ? RING_CLASSES[ringVariant] : ""}
                 ${className}
@@ -248,15 +248,15 @@ export function AvatarGroup({
                     key={index}
                     {...avatar}
                     size={size}
-                    className="ring-2 ring-surface"
+                    className="ring-2 ring-line"
                 />
             ))}
             {remaining > 0 && (
                 <div
                     className={`
                         flex items-center justify-center rounded-full
-                        bg-surface-container-high text-on-surface font-semibold
-                        ring-2 ring-surface
+                        bg-surface-2 text-ink font-semibold
+                        ring-2 ring-line
                         ${AVATAR_SIZE_CLASSES[size]}
                     `}
                 >
@@ -284,7 +284,7 @@ export function Divider({
     return (
         <div
             className={`
-                bg-surface-variant
+                bg-bg-2
                 ${orientation === "horizontal" ? "h-px w-full" : "w-px h-full"}
                 ${className}
             `}
@@ -321,11 +321,11 @@ export function Chip({
             disabled={disabled}
             className={`
                 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
-                text-sm font-medium tonal-transition
+                text-sm font-medium transition-colors
                 disabled:opacity-60 disabled:cursor-not-allowed
                 ${selected
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+                    ? "bg-ink text-bg"
+                    : "bg-bg-2 text-ink-3 hover:bg-surface-2"
                 }
                 ${className}
             `}

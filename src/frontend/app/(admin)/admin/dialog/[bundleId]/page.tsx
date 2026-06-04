@@ -108,11 +108,11 @@ export default function AdminBundleModesPage() {
     if (isLoading) {
         return (
             <div className="p-6">
-                <Link href="/admin/dialog" className="text-primary hover:underline mb-4 inline-block">
+                <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
                     ← Back to Bundles
                 </Link>
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">Modes</h1>
-                <p className="text-on-surface-variant">Loading...</p>
+                <h1 className="text-xl font-bold text-ink mb-6">Modes</h1>
+                <p className="text-ink-3">Loading...</p>
             </div>
         );
     }
@@ -120,77 +120,77 @@ export default function AdminBundleModesPage() {
     if (error) {
         return (
             <div className="p-6">
-                <Link href="/admin/dialog" className="text-primary hover:underline mb-4 inline-block">
+                <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
                     ← Back to Bundles
                 </Link>
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">Modes</h1>
-                <p className="text-error">Error: {error.message}</p>
+                <h1 className="text-xl font-bold text-ink mb-6">Modes</h1>
+                <p className="text-bad">Error: {error.message}</p>
             </div>
         );
     }
 
     return (
         <div className="p-6">
-            <Link href="/admin/dialog" className="text-primary hover:underline mb-4 inline-block">
+            <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
                 ← Back to Bundles
             </Link>
 
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="font-headline text-xl font-bold text-on-surface flex items-center gap-2">
+                    <h1 className="text-xl font-bold text-ink flex items-center gap-2">
                         {currentBundle?.iconEmoji} {currentBundle?.title || "Bundle"} — Modes
                     </h1>
-                    <p className="text-on-surface-variant text-sm mt-1">
+                    <p className="text-ink-3 text-sm mt-1">
                         Skill: {currentBundle?.skillTitle} ({currentBundle?.skillSlug})
                     </p>
                 </div>
                 <button
                     onClick={startCreating}
-                    className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-primary-dim"
+                    className="px-4 py-2 bg-ink text-bg rounded-lg hover:opacity-90"
                 >
                     + New Mode
                 </button>
             </div>
 
             {(isCreating || editingModeId) && (
-                <div className="mb-6 p-4 border border-outline-variant rounded-2xl bg-surface-container-lowest">
-                    <h2 className="font-headline text-lg font-semibold text-on-surface mb-4">
+                <div className="mb-6 p-4 border border-line rounded-2xl bg-surface">
+                    <h2 className="text-lg font-semibold text-ink mb-4">
                         {isCreating ? "Create Mode" : "Edit Mode"}
                     </h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Key
                             </label>
                             <input
                                 type="text"
                                 value={formData.key}
                                 onChange={(changeEvent) => setFormData({ ...formData, key: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 placeholder="secretary-bypass"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Title
                             </label>
                             <input
                                 type="text"
                                 value={formData.title}
                                 onChange={(changeEvent) => setFormData({ ...formData, title: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 placeholder="Обход секретаря"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Sort Order
                             </label>
                             <input
                                 type="number"
                                 value={formData.sortOrder}
                                 onChange={(changeEvent) => setFormData({ ...formData, sortOrder: parseInt(changeEvent.target.value) || 0 })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                             />
                         </div>
                         <div className="flex items-end">
@@ -200,7 +200,7 @@ export default function AdminBundleModesPage() {
                                     checked={formData.isActive}
                                     onChange={(changeEvent) => setFormData({ ...formData, isActive: changeEvent.target.checked })}
                                 />
-                                <span className="text-sm text-on-surface">Active</span>
+                                <span className="text-sm text-ink">Active</span>
                             </label>
                         </div>
                         <div className="flex items-end">
@@ -210,61 +210,61 @@ export default function AdminBundleModesPage() {
                                     checked={formData.voiceEnabled}
                                     onChange={(changeEvent) => setFormData({ ...formData, voiceEnabled: changeEvent.target.checked })}
                                 />
-                                <span className="text-sm text-on-surface">Voice Enabled</span>
+                                <span className="text-sm text-ink">Voice Enabled</span>
                             </label>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Voice ID (ElevenLabs)
                             </label>
                             <input
                                 type="text"
                                 value={formData.voiceId || ""}
                                 onChange={(changeEvent) => setFormData({ ...formData, voiceId: changeEvent.target.value || null })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 placeholder="Leave empty for default"
                                 disabled={!formData.voiceEnabled}
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Description
                             </label>
                             <textarea
                                 value={formData.description}
                                 onChange={(changeEvent) => setFormData({ ...formData, description: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 rows={2}
                                 placeholder="Описание режима..."
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Chat System Prompt (AI role for conversation)
                             </label>
                             <textarea
                                 value={formData.chatSystemPrompt}
                                 onChange={(changeEvent) => setFormData({ ...formData, chatSystemPrompt: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30 font-mono text-sm"
                                 rows={10}
                                 placeholder="Ты — секретарь крупной компании..."
                             />
-                            <p className="text-xs text-on-surface-variant mt-1">
+                            <p className="text-xs text-ink-3 mt-1">
                                 AI will add [DIALOG_END] when conversation should end.
                             </p>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-on-surface mb-1">
+                            <label className="block text-sm font-medium text-ink mb-1">
                                 Feedback System Prompt (AI evaluation instructions)
                             </label>
                             <textarea
                                 value={formData.feedbackSystemPrompt}
                                 onChange={(changeEvent) => setFormData({ ...formData, feedbackSystemPrompt: changeEvent.target.value })}
-                                className="w-full px-3 py-2 border border-outline-variant rounded-xl bg-surface-container-low text-on-surface focus:outline-none focus:ring-1 focus:ring-primary font-mono text-sm"
+                                className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30 font-mono text-sm"
                                 rows={8}
                                 placeholder="Проанализируй диалог менеджера..."
                             />
-                            <p className="text-xs text-on-surface-variant mt-1">
+                            <p className="text-xs text-ink-3 mt-1">
                                 AI will add [XP:number] at the end (0-100 based on performance).
                             </p>
                         </div>
@@ -273,13 +273,13 @@ export default function AdminBundleModesPage() {
                         <button
                             onClick={isCreating ? handleCreate : handleUpdate}
                             disabled={createModeMutation.isPending || updateModeMutation.isPending}
-                            className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-primary-dim disabled:opacity-40"
+                            className="px-4 py-2 bg-ink text-bg rounded-lg hover:opacity-90 disabled:opacity-40"
                         >
                             {isCreating ? "Create" : "Save"}
                         </button>
                         <button
                             onClick={resetForm}
-                            className="px-4 py-2 bg-surface-container text-on-surface-variant rounded-lg hover:bg-surface-container-high"
+                            className="px-4 py-2 bg-bg-2 text-ink-3 rounded-lg hover:bg-surface-2"
                         >
                             Cancel
                         </button>
@@ -287,30 +287,30 @@ export default function AdminBundleModesPage() {
                 </div>
             )}
 
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden">
+            <div className="bg-surface rounded-2xl border border-line overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-surface-container-low">
+                    <thead className="bg-surface">
                         <tr>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Title</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Key</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Order</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Status</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Voice</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-on-surface-variant">Actions</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Title</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Key</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Order</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Voice</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-outline-variant">
+                    <tbody className="divide-y divide-line">
                         {modes?.map((mode) => (
-                            <tr key={mode.id} className="hover:bg-surface-container-low">
+                            <tr key={mode.id} className="hover:bg-bg-2">
                                 <td className="px-4 py-3 font-medium">{mode.title}</td>
-                                <td className="px-4 py-3 text-on-surface-variant text-sm">{mode.key}</td>
-                                <td className="px-4 py-3 text-on-surface-variant">{mode.sortOrder}</td>
+                                <td className="px-4 py-3 text-ink-3 text-sm">{mode.key}</td>
+                                <td className="px-4 py-3 text-ink-3">{mode.sortOrder}</td>
                                 <td className="px-4 py-3">
                                     <span
                                         className={`px-2 py-1 text-xs rounded-full ${
                                             mode.isActive
-                                                ? "bg-primary-container text-primary"
-                                                : "bg-surface-container text-on-surface-variant"
+                                                ? "bg-indigo-soft text-indigo"
+                                                : "bg-bg-2 text-ink-3"
                                         }`}
                                     >
                                         {mode.isActive ? "Active" : "Inactive"}
@@ -318,24 +318,24 @@ export default function AdminBundleModesPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                     {mode.voiceEnabled ? (
-                                        <span className="px-2 py-1 text-xs rounded-full bg-tertiary-container text-tertiary">
+                                        <span className="px-2 py-1 text-xs rounded-full bg-accent-soft text-accent">
                                             🎤 Voice
                                         </span>
                                     ) : (
-                                        <span className="text-on-surface-variant text-xs">—</span>
+                                        <span className="text-ink-3 text-xs">—</span>
                                     )}
                                 </td>
                                 <td className="px-4 py-3">
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => startEditing(mode)}
-                                            className="text-primary hover:underline text-sm"
+                                            className="text-indigo hover:underline text-sm"
                                         >
                                             Edit
                                         </button>
                                         <button
                                             onClick={() => setDeletingModeId(mode.id)}
-                                            className="text-error hover:underline text-sm"
+                                            className="text-bad hover:underline text-sm"
                                         >
                                             Delete
                                         </button>
@@ -345,7 +345,7 @@ export default function AdminBundleModesPage() {
                         ))}
                         {(!modes || modes.length === 0) && (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-on-surface-variant">
+                                <td colSpan={6} className="px-4 py-8 text-center text-ink-3">
                                     No modes yet. Create one to get started.
                                 </td>
                             </tr>
@@ -356,22 +356,22 @@ export default function AdminBundleModesPage() {
 
             {deletingModeId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-surface-container-lowest rounded-2xl p-6 max-w-sm">
-                        <h3 className="font-headline text-lg font-semibold text-on-surface mb-2">Delete Mode?</h3>
-                        <p className="text-on-surface-variant mb-4">
+                    <div className="bg-surface rounded-2xl p-6 max-w-sm">
+                        <h3 className="text-lg font-semibold text-ink mb-2">Delete Mode?</h3>
+                        <p className="text-ink-3 mb-4">
                             This action cannot be undone.
                         </p>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => handleDelete(deletingModeId)}
                                 disabled={deleteModeMutation.isPending}
-                                className="px-4 py-2 bg-error text-on-error rounded-lg hover:bg-error/90 disabled:opacity-40"
+                                className="px-4 py-2 bg-bad text-white rounded-lg hover:bg-bad/90 disabled:opacity-40"
                             >
                                 Delete
                             </button>
                             <button
                                 onClick={() => setDeletingModeId(null)}
-                                className="px-4 py-2 bg-surface-container text-on-surface-variant rounded-lg hover:bg-surface-container-high"
+                                className="px-4 py-2 bg-bg-2 text-ink-3 rounded-lg hover:bg-surface-2"
                             >
                                 Cancel
                             </button>

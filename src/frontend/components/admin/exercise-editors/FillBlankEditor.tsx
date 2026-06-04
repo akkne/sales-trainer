@@ -40,7 +40,7 @@ export function FillBlankEditor({ content, onChange }: Props) {
                         />
                     </div>
                 ))}
-                <span className="text-[10px] text-on-surface-variant mt-1 block">
+                <span className="text-[10px] text-ink-3 mt-1 block">
                     Radio button marks the correct answer
                 </span>
             </div>

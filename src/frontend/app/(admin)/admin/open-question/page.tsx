@@ -77,8 +77,8 @@ export default function AdminOpenQuestionPage() {
     if (isLoading) {
         return (
             <div className="p-6">
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">AI Prompts Management</h1>
-                <p className="text-on-surface-variant">Loading...</p>
+                <h1 className="text-xl font-bold text-ink mb-6">AI Prompts Management</h1>
+                <p className="text-ink-3">Loading...</p>
             </div>
         );
     }
@@ -86,8 +86,8 @@ export default function AdminOpenQuestionPage() {
     if (error) {
         return (
             <div className="p-6">
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-6">AI Prompts Management</h1>
-                <p className="text-error">Error: {(error as Error).message}</p>
+                <h1 className="text-xl font-bold text-ink mb-6">AI Prompts Management</h1>
+                <p className="text-bad">Error: {(error as Error).message}</p>
             </div>
         );
     }
@@ -95,24 +95,24 @@ export default function AdminOpenQuestionPage() {
     return (
         <div className="p-6 space-y-8">
             <div>
-                <h1 className="font-headline text-xl font-bold text-on-surface mb-2">AI Prompts Management</h1>
-                <p className="text-sm text-on-surface-variant">
+                <h1 className="text-xl font-bold text-ink mb-2">AI Prompts Management</h1>
+                <p className="text-sm text-ink-3">
                     Manage global AI prompts for exercise evaluation and open question context.
                 </p>
             </div>
 
             {/* Exercise Type Prompts Section */}
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5">
-                <h2 className="text-lg font-semibold text-on-surface mb-2">Exercise Type Prompts</h2>
-                <p className="text-sm text-on-surface-variant mb-4">
+            <div className="bg-surface border border-line rounded-2xl p-5">
+                <h2 className="text-lg font-semibold text-ink mb-2">Exercise Type Prompts</h2>
+                <p className="text-sm text-ink-3 mb-4">
                     These are the global system prompts for AI-powered exercise types. Each exercise type uses this base prompt plus any per-exercise custom prompt.
                 </p>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <label className="block">
-                        <span className="text-sm font-medium text-on-surface">Exercise Type</span>
+                        <span className="text-sm font-medium text-ink">Exercise Type</span>
                         <select
-                            className="mt-1 w-full border border-outline-variant rounded-xl bg-surface-container-low text-on-surface px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                            className="mt-1 w-full border border-line rounded-xl bg-surface text-ink px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo/30"
                             value={selectedType}
                             onChange={(e) => setSelectedType(e.target.value)}
                         >
@@ -126,7 +126,7 @@ export default function AdminOpenQuestionPage() {
                     </label>
                     <div className="flex items-end">
                         {selectedType && (
-                            <span className="text-xs text-on-surface-variant">
+                            <span className="text-xs text-ink-3">
                                 {typePrompts.find((p) => p.exerciseType === selectedType)
                                     ? `Last updated: ${new Date(typePrompts.find((p) => p.exerciseType === selectedType)!.updatedAt).toLocaleDateString()}`
                                     : "No prompt saved yet"}
@@ -138,7 +138,7 @@ export default function AdminOpenQuestionPage() {
                 {selectedType && (
                     <>
                         <label className="block">
-                            <span className="text-sm font-medium text-on-surface">
+                            <span className="text-sm font-medium text-ink">
                                 System Prompt for {AI_EXERCISE_TYPES.find((t) => t.key === selectedType)?.label}
                             </span>
                             <textarea
@@ -146,7 +146,7 @@ export default function AdminOpenQuestionPage() {
                                 onChange={(e) => setPromptText(e.target.value)}
                                 rows={10}
                                 wrap="soft"
-                                className="mt-2 w-full border border-outline-variant rounded-xl bg-surface-container-low text-on-surface px-4 py-2 text-sm font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                                className="mt-2 w-full border border-line rounded-xl bg-surface text-ink px-4 py-2 text-sm font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-indigo/30 resize-y"
                                 placeholder="Enter the system prompt for this exercise type..."
                             />
                         </label>
@@ -155,32 +155,32 @@ export default function AdminOpenQuestionPage() {
                             <button
                                 onClick={handleSaveTypePrompt}
                                 disabled={updatePromptMutation.isPending}
-                                className="px-4 py-2 text-sm bg-primary text-on-primary rounded-xl hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 text-sm bg-ink text-bg rounded-xl hover:opacity-90 disabled:opacity-50 transition-colors"
                             >
                                 {updatePromptMutation.isPending ? "Saving..." : "Save Prompt"}
                             </button>
                             {updatePromptMutation.isSuccess && (
-                                <span className="text-sm text-primary flex items-center">Saved!</span>
+                                <span className="text-sm text-indigo flex items-center">Saved!</span>
                             )}
                         </div>
                     </>
                 )}
 
                 {promptsLoading && (
-                    <p className="text-sm text-on-surface-variant mt-4">Loading prompts...</p>
+                    <p className="text-sm text-ink-3 mt-4">Loading prompts...</p>
                 )}
             </div>
 
             {/* Open Question Global Context Section */}
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5">
-                <h2 className="text-lg font-semibold text-on-surface mb-2">Open Question — Global AI Context</h2>
-                <p className="text-sm text-on-surface-variant mb-4">
+            <div className="bg-surface border border-line rounded-2xl p-5">
+                <h2 className="text-lg font-semibold text-ink mb-2">Open Question — Global AI Context</h2>
+                <p className="text-sm text-ink-3 mb-4">
                     This is the shared AI prompt that applies to ALL open question evaluations (legacy).
                     Describe the AI role, response guidelines, and general evaluation criteria here.
                 </p>
 
                 <label className="block">
-                    <span className="text-sm font-medium text-on-surface">
+                    <span className="text-sm font-medium text-ink">
                         Global AI Context (applies to every open question)
                     </span>
                     <textarea
@@ -188,7 +188,7 @@ export default function AdminOpenQuestionPage() {
                         onChange={(e) => setText(e.target.value)}
                         rows={10}
                         wrap="soft"
-                        className="mt-2 w-full border border-outline-variant rounded-xl bg-surface-container-low text-on-surface px-4 py-2 text-sm font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-primary resize-y"
+                        className="mt-2 w-full border border-line rounded-xl bg-surface text-ink px-4 py-2 text-sm font-mono whitespace-pre-wrap focus:outline-none focus:ring-2 focus:ring-indigo/30 resize-y"
                         placeholder="You are a strict sales expert evaluator..."
                     />
                 </label>
@@ -199,7 +199,7 @@ export default function AdminOpenQuestionPage() {
                             await updateMutation.mutateAsync(text);
                         }}
                         disabled={updateMutation.isPending}
-                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-xl hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-xl hover:opacity-90 disabled:opacity-50 transition-colors"
                     >
                         {updateMutation.isPending ? "Saving..." : "Save"}
                     </button>

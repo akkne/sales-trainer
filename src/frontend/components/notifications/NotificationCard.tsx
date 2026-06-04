@@ -17,34 +17,34 @@ export function NotificationCard({ notification, onActivate }: NotificationCardP
         <button
             type="button"
             onClick={() => onActivate(notification)}
-            className={`w-full text-left px-4 py-3 flex items-start gap-3 tonal-transition ${
+            className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors ${
                 isUnread
-                    ? "bg-primary-container/40 hover:bg-primary-container/60"
-                    : "bg-surface hover:bg-surface-container"
-            } border-b border-outline-variant`}
+                    ? "bg-indigo-soft/40 hover:bg-indigo-soft/60"
+                    : "bg-surface hover:bg-bg-2"
+            } border-b border-line`}
         >
             <span
-                className={`flex-shrink-0 w-9 h-9 rounded-full bg-surface-container flex items-center justify-center ${visualMeta.iconColorClassName}`}
+                className={`flex-shrink-0 w-9 h-9 rounded-full bg-bg-2 flex items-center justify-center ${visualMeta.iconColorClassName}`}
             >
                 <Icon name={visualMeta.iconName} size="md" />
             </span>
             <span className="flex-1 min-w-0">
                 <span className="flex items-center justify-between gap-2">
-                    <span className={`text-sm ${isUnread ? "font-semibold text-on-surface" : "text-on-surface-variant"}`}>
+                    <span className={`text-sm ${isUnread ? "font-semibold text-ink" : "text-ink-3"}`}>
                         {notification.title}
                     </span>
-                    <span className="text-[11px] text-on-surface-variant whitespace-nowrap">
+                    <span className="text-[11px] text-ink-3 whitespace-nowrap">
                         {formatRelativeTimestamp(notification.createdAt)}
                     </span>
                 </span>
-                <span className="block text-xs text-on-surface-variant mt-0.5 line-clamp-2">
+                <span className="block text-xs text-ink-3 mt-0.5 line-clamp-2">
                     {notification.body}
                 </span>
             </span>
             {isUnread && (
                 <span
                     aria-hidden
-                    className="flex-shrink-0 mt-1.5 w-2 h-2 rounded-full bg-primary"
+                    className="flex-shrink-0 mt-1.5 w-2 h-2 rounded-full bg-ink"
                 />
             )}
         </button>

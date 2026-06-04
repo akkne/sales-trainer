@@ -120,7 +120,7 @@ export default function AdminTechniquesPage() {
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-xl font-semibold text-on-surface">Techniques</h1>
+                <h1 className="text-xl font-semibold text-ink">Techniques</h1>
                 <div className="flex gap-2">
                     <input
                         ref={importInputRef}
@@ -132,13 +132,13 @@ export default function AdminTechniquesPage() {
                     <button
                         onClick={() => importInputRef.current?.click()}
                         disabled={importTechniques.isPending}
-                        className="px-4 py-2 text-sm bg-surface-container text-on-surface rounded-md hover:bg-surface-container-high disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 text-sm bg-bg-2 text-ink rounded-md hover:bg-surface-2 disabled:opacity-50 transition-colors"
                     >
                         {importTechniques.isPending ? "Importing..." : "Import JSON"}
                     </button>
                     <button
                         onClick={() => setShowCreateForm((v) => !v)}
-                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
                     >
                         {showCreateForm ? "Cancel" : "+ New technique"}
                     </button>
@@ -146,12 +146,12 @@ export default function AdminTechniquesPage() {
             </div>
 
             {importError && (
-                <div className="bg-error-container text-error rounded-lg px-4 py-3 mb-4 text-sm">
+                <div className="bg-bad-soft text-bad rounded-lg px-4 py-3 mb-4 text-sm">
                     Import failed: {importError}
                 </div>
             )}
             {importResult && (
-                <div className="bg-tertiary-container text-tertiary rounded-lg px-4 py-3 mb-4 text-sm">
+                <div className="bg-accent-soft text-accent rounded-lg px-4 py-3 mb-4 text-sm">
                     Import finished — created {importResult.createdCount}, updated {importResult.updatedCount}, failed {importResult.failedCount}
                     {importResult.errors.length > 0 && (
                         <ul className="mt-2 list-disc list-inside text-xs">
@@ -164,13 +164,13 @@ export default function AdminTechniquesPage() {
             )}
 
             {showCreateForm && (
-                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5 mb-6 space-y-4">
-                    <h2 className="text-sm font-semibold text-on-surface">Create technique</h2>
+                <div className="bg-surface rounded-2xl border border-line p-5 mb-6 space-y-4">
+                    <h2 className="text-sm font-semibold text-ink">Create technique</h2>
                     <TechniqueFormFields form={createForm} onChange={setCreateForm} skillOptions={skillOptions} />
                     <button
                         onClick={handleCreate}
                         disabled={createTechnique.isPending || !createForm.slug || !createForm.name}
-                        className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                     >
                         {createTechnique.isPending ? "Saving..." : "Create"}
                     </button>
@@ -183,12 +183,12 @@ export default function AdminTechniquesPage() {
                     placeholder="Search name, summary or body..."
                     value={rawSearch}
                     onChange={(e) => setRawSearch(e.target.value)}
-                    className="border border-outline-variant rounded-md px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="border border-line rounded-md px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-indigo/30"
                 />
                 <select
                     value={selectedSkill}
                     onChange={(e) => setSelectedSkill(e.target.value)}
-                    className="border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                 >
                     <option value="">All skills</option>
                     {skillOptions.map((option) => (
@@ -200,13 +200,13 @@ export default function AdminTechniquesPage() {
             </div>
 
             {isLoading ? (
-                <p className="text-sm text-on-surface-variant">Loading...</p>
+                <p className="text-sm text-ink-3">Loading...</p>
             ) : techniques.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">No techniques found.</p>
+                <p className="text-sm text-ink-3">No techniques found.</p>
             ) : (
                 <div className="space-y-4">
                     {techniques.map((technique) => (
-                        <div key={technique.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-5">
+                        <div key={technique.id} className="bg-surface rounded-2xl border border-line p-5">
                             {editingId === technique.id ? (
                                 <div className="space-y-4">
                                     <TechniqueFormFields form={editForm} onChange={setEditForm} skillOptions={skillOptions} />
@@ -214,13 +214,13 @@ export default function AdminTechniquesPage() {
                                         <button
                                             onClick={handleSave}
                                             disabled={updateTechnique.isPending}
-                                            className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                                            className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                                         >
                                             {updateTechnique.isPending ? "Saving..." : "Save"}
                                         </button>
                                         <button
                                             onClick={() => setEditingId(null)}
-                                            className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                                            className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -230,40 +230,40 @@ export default function AdminTechniquesPage() {
                                 <div>
                                     <div className="flex items-start justify-between mb-2">
                                         <div>
-                                            <h3 className="font-medium text-on-surface">
+                                            <h3 className="font-medium text-ink">
                                                 {technique.name}{" "}
-                                                <span className="text-xs text-on-surface-variant font-mono">({technique.slug})</span>
+                                                <span className="text-xs text-ink-3 font-mono">({technique.slug})</span>
                                             </h3>
                                             <div className="flex flex-wrap gap-2 mt-1">
-                                                <span className="text-xs bg-primary-container text-primary rounded px-2 py-0.5">
+                                                <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">
                                                     {technique.difficultyName}
                                                 </span>
                                                 {technique.primarySkillTitle && (
-                                                    <span className="text-xs bg-surface-container text-on-surface-variant rounded px-2 py-0.5">
+                                                    <span className="text-xs bg-bg-2 text-ink-3 rounded px-2 py-0.5">
                                                         {technique.primarySkillTitle}
                                                     </span>
                                                 )}
                                                 {technique.tags.map((tag) => (
-                                                    <span key={tag} className="text-xs bg-tertiary-container text-tertiary rounded px-2 py-0.5">
+                                                    <span key={tag} className="text-xs bg-accent-soft text-accent rounded px-2 py-0.5">
                                                         {tag}
                                                     </span>
                                                 ))}
-                                                <span className="text-xs text-on-surface-variant">order: {technique.sortOrder}</span>
+                                                <span className="text-xs text-ink-3">order: {technique.sortOrder}</span>
                                                 {technique.dialog ? (
-                                                    <span className="text-xs bg-primary-container text-primary rounded px-2 py-0.5">dialog</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">dialog</span>
                                                 ) : null}
                                                 {technique.case ? (
-                                                    <span className="text-xs bg-primary-container text-primary rounded px-2 py-0.5">case</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">case</span>
                                                 ) : null}
                                                 {technique.coach && (
-                                                    <span className="text-xs bg-primary-container text-primary rounded px-2 py-0.5">coach</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">coach</span>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="flex gap-3 shrink-0 ml-4">
                                             <button
                                                 onClick={() => startEdit(technique)}
-                                                className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                                                className="text-sm text-ink-3 hover:text-ink transition-colors"
                                             >
                                                 Edit
                                             </button>
@@ -274,13 +274,13 @@ export default function AdminTechniquesPage() {
                                                             deleteTechnique.mutate(technique.id);
                                                             setConfirmDeleteId(null);
                                                         }}
-                                                        className="text-sm text-error hover:underline"
+                                                        className="text-sm text-bad hover:underline"
                                                     >
                                                         Confirm
                                                     </button>
                                                     <button
                                                         onClick={() => setConfirmDeleteId(null)}
-                                                        className="text-sm text-on-surface-variant hover:underline"
+                                                        className="text-sm text-ink-3 hover:underline"
                                                     >
                                                         Cancel
                                                     </button>
@@ -288,14 +288,14 @@ export default function AdminTechniquesPage() {
                                             ) : (
                                                 <button
                                                     onClick={() => setConfirmDeleteId(technique.id)}
-                                                    className="text-sm text-on-surface-variant hover:text-error transition-colors"
+                                                    className="text-sm text-ink-3 hover:text-bad transition-colors"
                                                 >
                                                     Delete
                                                 </button>
                                             )}
                                         </div>
                                     </div>
-                                    <p className="text-sm text-on-surface-variant mt-2">{technique.summary}</p>
+                                    <p className="text-sm text-ink-3 mt-2">{technique.summary}</p>
                                 </div>
                             )}
                         </div>
@@ -410,17 +410,17 @@ function TechniqueFormFields({
         <>
             <div className="flex gap-3">
                 <label className="block flex-1">
-                    <span className="text-xs text-on-surface-variant">Slug *</span>
+                    <span className="text-xs text-ink-3">Slug *</span>
                     <input
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={form.slug}
                         onChange={(e) => onChange({ ...form, slug: e.target.value })}
                     />
                 </label>
                 <label className="block flex-1">
-                    <span className="text-xs text-on-surface-variant">Name *</span>
+                    <span className="text-xs text-ink-3">Name *</span>
                     <input
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={form.name}
                         onChange={(e) => onChange({ ...form, name: e.target.value })}
                     />
@@ -428,9 +428,9 @@ function TechniqueFormFields({
             </div>
 
             <label className="block">
-                <span className="text-xs text-on-surface-variant">Summary</span>
+                <span className="text-xs text-ink-3">Summary</span>
                 <input
-                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                     value={form.summary}
                     onChange={(e) => onChange({ ...form, summary: e.target.value })}
                 />
@@ -438,9 +438,9 @@ function TechniqueFormFields({
 
             <div className="flex gap-3">
                 <label className="block flex-1">
-                    <span className="text-xs text-on-surface-variant">Primary skill</span>
+                    <span className="text-xs text-ink-3">Primary skill</span>
                     <select
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={form.primarySkillId ?? ""}
                         onChange={(e) => onChange({ ...form, primarySkillId: e.target.value || null })}
                     >
@@ -453,9 +453,9 @@ function TechniqueFormFields({
                     </select>
                 </label>
                 <label className="block w-40">
-                    <span className="text-xs text-on-surface-variant">Difficulty</span>
+                    <span className="text-xs text-ink-3">Difficulty</span>
                     <select
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={form.difficulty}
                         onChange={(e) => onChange({ ...form, difficulty: Number(e.target.value) })}
                     >
@@ -467,10 +467,10 @@ function TechniqueFormFields({
                     </select>
                 </label>
                 <label className="block w-28">
-                    <span className="text-xs text-on-surface-variant">Sort order</span>
+                    <span className="text-xs text-ink-3">Sort order</span>
                     <input
                         type="number"
-                        className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         value={form.sortOrder}
                         onChange={(e) => onChange({ ...form, sortOrder: Number(e.target.value) })}
                     />
@@ -478,9 +478,9 @@ function TechniqueFormFields({
             </div>
 
             <label className="block">
-                <span className="text-xs text-on-surface-variant">Tags (comma-separated)</span>
+                <span className="text-xs text-ink-3">Tags (comma-separated)</span>
                 <input
-                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                     placeholder="discovery, objection-handling"
                     value={tagsText}
                     onChange={(e) => updateTags(e.target.value)}
@@ -488,42 +488,42 @@ function TechniqueFormFields({
             </label>
 
             <label className="block">
-                <span className="text-xs text-on-surface-variant">Body (Markdown)</span>
+                <span className="text-xs text-ink-3">Body (Markdown)</span>
                 <textarea
                     rows={6}
-                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
                     value={form.body}
                     onChange={(e) => onChange({ ...form, body: e.target.value })}
                 />
             </label>
 
             <label className="block">
-                <span className="text-xs text-on-surface-variant">
+                <span className="text-xs text-ink-3">
                     Dialog JSON (optional) — array of turns with {"{ orderIndex, side, text, annotations }"}
                 </span>
                 <textarea
                     rows={6}
-                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
                     value={dialogText}
                     onChange={(e) => updateDialog(e.target.value)}
                 />
-                {dialogError && <span className="text-xs text-error">{dialogError}</span>}
+                {dialogError && <span className="text-xs text-bad">{dialogError}</span>}
             </label>
 
             <label className="block">
-                <span className="text-xs text-on-surface-variant">
+                <span className="text-xs text-ink-3">
                     Case JSON (optional) — object with {"{ title, body, metrics? }"}
                 </span>
                 <textarea
                     rows={5}
-                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
                     value={caseText}
                     onChange={(e) => updateCase(e.target.value)}
                 />
-                {caseError && <span className="text-xs text-error">{caseError}</span>}
+                {caseError && <span className="text-xs text-bad">{caseError}</span>}
             </label>
 
-            <div className="border border-outline-variant rounded-xl p-4 space-y-3">
+            <div className="border border-line rounded-xl p-4 space-y-3">
                 <label className="flex items-center gap-2 text-sm">
                     <input
                         type="checkbox"
@@ -536,49 +536,49 @@ function TechniqueFormFields({
                     <>
                         <div className="flex gap-3">
                             <label className="block flex-1">
-                                <span className="text-xs text-on-surface-variant">Avatar seed</span>
+                                <span className="text-xs text-ink-3">Avatar seed</span>
                                 <input
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.coach.avatarSeed}
                                     onChange={(e) => updateCoach({ avatarSeed: e.target.value })}
                                 />
                             </label>
                             <label className="block flex-1">
-                                <span className="text-xs text-on-surface-variant">Name</span>
+                                <span className="text-xs text-ink-3">Name</span>
                                 <input
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.coach.name}
                                     onChange={(e) => updateCoach({ name: e.target.value })}
                                 />
                             </label>
                             <label className="block flex-1">
-                                <span className="text-xs text-on-surface-variant">Role</span>
+                                <span className="text-xs text-ink-3">Role</span>
                                 <input
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.coach.role}
                                     onChange={(e) => updateCoach({ role: e.target.value })}
                                 />
                             </label>
                         </div>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Quote</span>
+                            <span className="text-xs text-ink-3">Quote</span>
                             <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={form.coach.quote}
                                 onChange={(e) => updateCoach({ quote: e.target.value })}
                             />
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">
+                            <span className="text-xs text-ink-3">
                                 Challenges JSON — array of {"{ label, kind?, targetSlug? }"}
                             </span>
                             <textarea
                                 rows={4}
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={challengesText}
                                 onChange={(e) => updateChallenges(e.target.value)}
                             />
-                            {challengesError && <span className="text-xs text-error">{challengesError}</span>}
+                            {challengesError && <span className="text-xs text-bad">{challengesError}</span>}
                         </label>
                     </>
                 )}

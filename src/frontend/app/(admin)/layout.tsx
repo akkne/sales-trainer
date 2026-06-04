@@ -72,7 +72,7 @@ export default function AdminLayout({
 
     if (accessToken && !authenticatedUser) {
         return (
-            <div className="min-h-screen flex items-center justify-center text-on-surface-variant text-sm bg-surface">
+            <div className="min-h-screen flex items-center justify-center text-ink-3 text-sm bg-surface">
                 Loading...
             </div>
         );
@@ -102,10 +102,10 @@ export default function AdminLayout({
 
     return (
         <div className="min-h-screen flex bg-surface">
-            <aside className="w-56 shrink-0 bg-surface-container-lowest flex flex-col">
+            <aside className="w-56 shrink-0 bg-surface flex flex-col">
                 <div className="px-5 py-4">
-                    <span className="font-headline font-bold text-on-surface text-sm">Admin Panel</span>
-                    <span className="block text-xs text-on-surface-variant mt-0.5">
+                    <span className="font-bold text-ink text-sm">Admin Panel</span>
+                    <span className="block text-xs text-ink-3 mt-0.5">
                         {authenticatedUser.role}
                     </span>
                 </div>
@@ -118,8 +118,8 @@ export default function AdminLayout({
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-colors ${
                                     isActive
-                                        ? "bg-primary-container text-primary font-medium"
-                                        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+                                        ? "bg-indigo-soft text-indigo font-medium"
+                                        : "text-ink-3 hover:text-ink hover:bg-bg-2"
                                 }`}
                             >
                                 <Icon
@@ -134,7 +134,7 @@ export default function AdminLayout({
                 <div className="px-5 py-4">
                     <Link
                         href="/tree"
-                        className="flex items-center gap-2 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                        className="flex items-center gap-2 text-xs text-ink-3 hover:text-ink transition-colors"
                     >
                         <Icon name="arrow-left" size="sm" />
                         Back to app

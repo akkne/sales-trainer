@@ -86,7 +86,7 @@ export function CategorizingEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addCategory}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add category
                     </button>
@@ -103,7 +103,7 @@ export function CategorizingEditor({ content, onChange }: Props) {
                             <button
                                 type="button"
                                 onClick={() => removeCategory(i)}
-                                className="text-xs text-error hover:text-error/80"
+                                className="text-xs text-bad hover:text-bad/80"
                             >
                                 ×
                             </button>
@@ -118,13 +118,13 @@ export function CategorizingEditor({ content, onChange }: Props) {
                     <button
                         type="button"
                         onClick={addItem}
-                        className="text-xs text-on-surface-variant hover:text-on-surface"
+                        className="text-xs text-ink-3 hover:text-ink"
                     >
                         + Add item
                     </button>
                 </div>
                 {content.items.map((item, i) => (
-                    <div key={item.id} className="mt-2 p-2 bg-surface-container-low rounded">
+                    <div key={item.id} className="mt-2 p-2 bg-surface rounded">
                         <div className="flex items-center gap-2">
                             <input
                                 className={inputCls}
@@ -136,7 +136,7 @@ export function CategorizingEditor({ content, onChange }: Props) {
                                 <button
                                     type="button"
                                     onClick={() => removeItem(i)}
-                                    className="text-xs text-error hover:text-error/80"
+                                    className="text-xs text-bad hover:text-bad/80"
                                 >
                                     ×
                                 </button>
@@ -150,8 +150,8 @@ export function CategorizingEditor({ content, onChange }: Props) {
                                     onClick={() => assignCategory(item.id, cat)}
                                     className={`px-2 py-1 text-xs rounded border transition-colors ${
                                         content.correctMapping[item.id] === cat
-                                            ? "bg-primary text-on-primary border-primary"
-                                            : "border-outline-variant text-on-surface-variant hover:bg-surface-container"
+                                            ? "bg-ink text-bg border-indigo"
+                                            : "border-line text-ink-3 hover:bg-bg-2"
                                     }`}
                                 >
                                     {cat}

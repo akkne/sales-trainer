@@ -111,7 +111,7 @@ export default function AdminTopicDetailPage({
     }
 
     if (!topic) {
-        return <p className="text-sm text-on-surface-variant">Loading topic...</p>;
+        return <p className="text-sm text-ink-3">Loading topic...</p>;
     }
 
     return (
@@ -119,20 +119,20 @@ export default function AdminTopicDetailPage({
             <div className="mb-6">
                 <Link
                     href={`/admin/skills/${skillId}`}
-                    className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                    className="text-xs text-ink-3 hover:text-ink transition-colors"
                 >
                     ← Back to skill
                 </Link>
             </div>
 
             {/* Topic card */}
-            <div className="bg-surface-container-lowest rounded-2xl p-5 mb-8">
+            <div className="bg-surface rounded-2xl p-5 mb-8">
                 <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-lg font-semibold text-on-surface">{topic.title}</h1>
+                    <h1 className="text-lg font-semibold text-ink">{topic.title}</h1>
                     {!editMode && (
                         <button
                             onClick={startEdit}
-                            className="text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                            className="text-sm text-ink-3 hover:text-ink transition-colors"
                         >
                             Edit
                         </button>
@@ -143,26 +143,26 @@ export default function AdminTopicDetailPage({
                     <div>
                         <div className="grid grid-cols-3 gap-4">
                             <label className="block">
-                                <span className="text-xs text-on-surface-variant">Iconic Name (English ID)</span>
+                                <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                                 <input
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.iconicName}
                                     onChange={(e) => setForm({ ...form, iconicName: e.target.value })}
                                 />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-on-surface-variant">Title</span>
+                                <span className="text-xs text-ink-3">Title</span>
                                 <input
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.title}
                                     onChange={(e) => setForm({ ...form, title: e.target.value })}
                                 />
                             </label>
                             <label className="block">
-                                <span className="text-xs text-on-surface-variant">Order in skill</span>
+                                <span className="text-xs text-ink-3">Order in skill</span>
                                 <input
                                     type="number"
-                                    className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                     value={form.orderInSkill}
                                     onChange={(e) =>
                                         setForm({ ...form, orderInSkill: Number(e.target.value) })
@@ -174,13 +174,13 @@ export default function AdminTopicDetailPage({
                             <button
                                 onClick={handleSaveTopic}
                                 disabled={updateTopic.isPending}
-                                className="px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                             >
                                 {updateTopic.isPending ? "Saving..." : "Save"}
                             </button>
                             <button
                                 onClick={() => setEditMode(false)}
-                                className="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                                className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
                             >
                                 Cancel
                             </button>
@@ -189,16 +189,16 @@ export default function AdminTopicDetailPage({
                 ) : (
                     <dl className="grid grid-cols-3 gap-3 text-sm">
                         <div>
-                            <dt className="text-xs text-on-surface-variant">Iconic Name</dt>
-                            <dd className="text-on-surface font-mono text-xs">{topic.iconicName}</dd>
+                            <dt className="text-xs text-ink-3">Iconic Name</dt>
+                            <dd className="text-ink font-mono text-xs">{topic.iconicName}</dd>
                         </div>
                         <div>
-                            <dt className="text-xs text-on-surface-variant">Title</dt>
-                            <dd className="text-on-surface">{topic.title}</dd>
+                            <dt className="text-xs text-ink-3">Title</dt>
+                            <dd className="text-ink">{topic.title}</dd>
                         </div>
                         <div>
-                            <dt className="text-xs text-on-surface-variant">Order in skill</dt>
-                            <dd className="text-on-surface">{topic.orderInSkill}</dd>
+                            <dt className="text-xs text-ink-3">Order in skill</dt>
+                            <dd className="text-ink">{topic.orderInSkill}</dd>
                         </div>
                     </dl>
                 )}
@@ -206,35 +206,35 @@ export default function AdminTopicDetailPage({
 
             {/* Import Section */}
             {showImport && (
-                <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 mb-6">
+                <div className="bg-surface border border-line rounded-2xl p-5 mb-6">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-medium text-on-surface">Import Lessons from JSON</h2>
+                        <h2 className="text-sm font-medium text-ink">Import Lessons from JSON</h2>
                         <button
                             onClick={downloadLessonsTemplate}
-                            className="text-xs text-on-surface-variant hover:text-on-surface transition-colors underline"
+                            className="text-xs text-ink-3 hover:text-ink transition-colors underline"
                         >
                             Download template
                         </button>
                     </div>
-                    <p className="text-xs text-on-surface-variant mb-3">
-                        JSON array with: <code className="bg-surface-container px-1 rounded">{"{ topicIconicName, title, orderInTopic, exercises[] }"}</code>
+                    <p className="text-xs text-ink-3 mb-3">
+                        JSON array with: <code className="bg-bg-2 px-1 rounded">{"{ topicIconicName, title, orderInTopic, exercises[] }"}</code>
                     </p>
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept=".json"
                         onChange={handleImport}
-                        className="block w-full text-sm text-on-surface-variant file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-outline-variant file:text-sm file:bg-surface-container file:text-on-surface hover:file:bg-surface-container-high cursor-pointer"
+                        className="block w-full text-sm text-ink-3 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-line file:text-sm file:bg-bg-2 file:text-ink hover:file:bg-surface-2 cursor-pointer"
                     />
                     {importLessons.isPending && (
-                        <p className="mt-3 text-xs text-on-surface-variant">Importing...</p>
+                        <p className="mt-3 text-xs text-ink-3">Importing...</p>
                     )}
                     {importLessons.isError && (
-                        <p className="mt-3 text-xs text-error">{(importLessons.error as Error).message}</p>
+                        <p className="mt-3 text-xs text-bad">{(importLessons.error as Error).message}</p>
                     )}
                     {importResult && (
-                        <div className="mt-3 p-3 bg-surface-container rounded-md">
-                            <p className="text-xs text-on-surface">
+                        <div className="mt-3 p-3 bg-bg-2 rounded-md">
+                            <p className="text-xs text-ink">
                                 Lessons created: <span className="font-medium">{importResult.lessonsCreated}</span> |
                                 Updated: <span className="font-medium">{importResult.lessonsUpdated}</span> |
                                 Exercises created: <span className="font-medium">{importResult.exercisesCreated}</span> |
@@ -242,8 +242,8 @@ export default function AdminTopicDetailPage({
                             </p>
                             {importResult.errors.length > 0 && (
                                 <div className="mt-2">
-                                    <p className="text-xs text-error font-medium">{importResult.errors.length} error(s):</p>
-                                    <ul className="mt-1 text-xs text-error font-mono max-h-32 overflow-y-auto">
+                                    <p className="text-xs text-bad font-medium">{importResult.errors.length} error(s):</p>
+                                    <ul className="mt-1 text-xs text-bad font-mono max-h-32 overflow-y-auto">
                                         {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                                     </ul>
                                 </div>
@@ -255,17 +255,17 @@ export default function AdminTopicDetailPage({
 
             {/* Lessons */}
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-on-surface">Lessons</h2>
+                <h2 className="text-base font-semibold text-ink">Lessons</h2>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => { setShowImport(v => !v); setImportResult(null); }}
-                        className="px-3 py-1.5 text-sm border border-outline-variant text-on-surface-variant rounded-md hover:bg-surface-container transition-colors"
+                        className="px-3 py-1.5 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
                     >
                         {showImport ? "Close Import" : "Import JSON"}
                     </button>
                     <button
                         onClick={() => setShowLessonForm((v) => !v)}
-                        className="px-3 py-1.5 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim transition-colors"
+                        className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
                     >
                         {showLessonForm ? "Cancel" : "+ New lesson"}
                     </button>
@@ -273,12 +273,12 @@ export default function AdminTopicDetailPage({
             </div>
 
             {showLessonForm && (
-                <div className="bg-surface-container-lowest rounded-2xl p-5 mb-4">
+                <div className="bg-surface rounded-2xl p-5 mb-4">
                     <div className="grid grid-cols-2 gap-4">
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Title</span>
+                            <span className="text-xs text-ink-3">Title</span>
                             <input
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={lessonForm.title}
                                 onChange={(e) =>
                                     setLessonForm({ ...lessonForm, title: e.target.value })
@@ -286,10 +286,10 @@ export default function AdminTopicDetailPage({
                             />
                         </label>
                         <label className="block">
-                            <span className="text-xs text-on-surface-variant">Order in topic</span>
+                            <span className="text-xs text-ink-3">Order in topic</span>
                             <input
                                 type="number"
-                                className="mt-1 w-full border border-outline-variant rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 value={lessonForm.orderInTopic}
                                 onChange={(e) =>
                                     setLessonForm({
@@ -303,7 +303,7 @@ export default function AdminTopicDetailPage({
                     <button
                         onClick={handleCreateLesson}
                         disabled={createLesson.isPending || !lessonForm.title}
-                        className="mt-4 px-4 py-2 text-sm bg-primary text-on-primary rounded-md hover:bg-primary-dim disabled:opacity-50 transition-colors"
+                        className="mt-4 px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
                     >
                         {createLesson.isPending ? "Saving..." : "Create lesson"}
                     </button>
@@ -311,17 +311,17 @@ export default function AdminTopicDetailPage({
             )}
 
             {lessonsLoading ? (
-                <p className="text-sm text-on-surface-variant">Loading...</p>
+                <p className="text-sm text-ink-3">Loading...</p>
             ) : lessons.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">No lessons yet.</p>
+                <p className="text-sm text-ink-3">No lessons yet.</p>
             ) : (
                 <table className="w-full text-sm border-collapse">
                     <thead>
-                        <tr className="border-b border-outline-variant">
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                        <tr className="border-b border-line">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Title
                             </th>
-                            <th className="text-left py-2 px-3 text-xs text-on-surface-variant font-medium">
+                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
                                 Order
                             </th>
                             <th className="py-2 px-3" />
@@ -331,9 +331,9 @@ export default function AdminTopicDetailPage({
                         {lessons.map((lesson) => (
                             <tr
                                 key={lesson.id}
-                                className="border-b border-surface-container hover:bg-surface-container-low"
+                                className="border-b border-line hover:bg-bg-2"
                             >
-                                <td className="py-2.5 px-3 font-medium text-on-surface">
+                                <td className="py-2.5 px-3 font-medium text-ink">
                                     <Link
                                         href={`/admin/skills/${skillId}/topics/${topicId}/lessons/${lesson.id}`}
                                         className="hover:underline"
@@ -341,7 +341,7 @@ export default function AdminTopicDetailPage({
                                         {lesson.title}
                                     </Link>
                                 </td>
-                                <td className="py-2.5 px-3 text-on-surface-variant">
+                                <td className="py-2.5 px-3 text-ink-3">
                                     {lesson.orderInTopic}
                                 </td>
                                 <td className="py-2.5 px-3 text-right">
@@ -352,13 +352,13 @@ export default function AdminTopicDetailPage({
                                                     deleteLesson.mutate(lesson.id);
                                                     setConfirmDeleteLessonId(null);
                                                 }}
-                                                className="text-xs text-error hover:underline"
+                                                className="text-xs text-bad hover:underline"
                                             >
                                                 Confirm
                                             </button>
                                             <button
                                                 onClick={() => setConfirmDeleteLessonId(null)}
-                                                className="text-xs text-on-surface-variant hover:underline"
+                                                className="text-xs text-ink-3 hover:underline"
                                             >
                                                 Cancel
                                             </button>
@@ -367,13 +367,13 @@ export default function AdminTopicDetailPage({
                                         <span className="inline-flex gap-3">
                                             <Link
                                                 href={`/admin/skills/${skillId}/topics/${topicId}/lessons/${lesson.id}/exercises`}
-                                                className="text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                                                className="text-xs text-ink-3 hover:text-ink transition-colors"
                                             >
                                                 Exercises →
                                             </Link>
                                             <button
                                                 onClick={() => setConfirmDeleteLessonId(lesson.id)}
-                                                className="text-xs text-on-surface-variant hover:text-error transition-colors"
+                                                className="text-xs text-ink-3 hover:text-bad transition-colors"
                                             >
                                                 Delete
                                             </button>

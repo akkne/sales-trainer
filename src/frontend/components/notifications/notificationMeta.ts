@@ -8,21 +8,21 @@ export interface NotificationVisualMeta {
 
 const DEFAULT_VISUAL_META: NotificationVisualMeta = {
     iconName: "bell",
-    iconColorClassName: "text-on-surface-variant",
+    iconColorClassName: "text-ink-3",
 };
 
 const VISUAL_META_BY_TYPE: Record<NotificationTypeKey, NotificationVisualMeta> = {
     FriendRequestReceived: {
         iconName: "user",
-        iconColorClassName: "text-primary",
+        iconColorClassName: "text-indigo",
     },
     FriendRequestAccepted: {
         iconName: "users",
-        iconColorClassName: "text-primary",
+        iconColorClassName: "text-indigo",
     },
     ChatMessageReceived: {
         iconName: "message",
-        iconColorClassName: "text-primary",
+        iconColorClassName: "text-indigo",
     },
     AchievementUnlocked: {
         iconName: "trophy",
@@ -30,7 +30,7 @@ const VISUAL_META_BY_TYPE: Record<NotificationTypeKey, NotificationVisualMeta> =
     },
     StreakMilestone: {
         iconName: "flame",
-        iconColorClassName: "text-error-container",
+        iconColorClassName: "text-bad",
     },
 };
 

@@ -29,15 +29,15 @@ export function NotificationBell() {
             <button
                 type="button"
                 onClick={() => setIsPanelOpen((previouslyOpen) => !previouslyOpen)}
-                className="relative p-2 rounded-full hover:bg-surface-container tonal-transition"
+                className="relative p-2 rounded-full hover:bg-bg-2 transition-colors"
                 aria-label="Уведомления"
                 aria-expanded={isPanelOpen}
             >
-                <Icon name="bell" size="md" className="text-on-surface-variant" />
+                <Icon name="bell" size="md" className="text-ink-3" />
                 {unreadCount > 0 && (
                     <span
                         aria-label={`${unreadCount} непрочитанных`}
-                        className="absolute -top-0.5 -right-0.5 min-w-4 h-4 flex items-center justify-center rounded-full bg-error text-on-error text-[10px] font-bold px-1"
+                        className="absolute -top-0.5 -right-0.5 min-w-4 h-4 flex items-center justify-center rounded-full bg-bad text-white text-[10px] font-bold px-1"
                     >
                         {unreadCount > 9 ? "9+" : unreadCount}
                     </span>

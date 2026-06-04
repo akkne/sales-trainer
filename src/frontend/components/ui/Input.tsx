@@ -26,17 +26,17 @@ export function InputWrapper({
     return (
         <div className={`flex flex-col gap-1.5 ${className}`}>
             {label && (
-                <label className="text-sm font-medium text-on-surface">
+                <label className="text-sm font-medium text-ink">
                     {label}
-                    {required && <span className="text-error ml-0.5">*</span>}
+                    {required && <span className="text-bad ml-0.5">*</span>}
                 </label>
             )}
             {children}
             {hint && !error && (
-                <p className="text-xs text-on-surface-variant">{hint}</p>
+                <p className="text-xs text-ink-3">{hint}</p>
             )}
             {error && (
-                <p className="text-xs text-error flex items-center gap-1">
+                <p className="text-xs text-bad flex items-center gap-1">
                     <Icon name="warning" size="sm" />
                     {error}
                 </p>
@@ -91,7 +91,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
         const input = (
             <div className="relative">
                 {iconLeft && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3">
                         <Icon name={iconLeft} size="md" />
                     </span>
                 )}
@@ -99,22 +99,22 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
                     ref={ref}
                     required={required}
                     className={`
-                        w-full rounded-xl bg-surface-container-low text-on-surface
-                        placeholder-on-surface-variant
+                        w-full rounded-xl bg-surface text-ink
+                        placeholder:text-ink-4
                         border-2 border-transparent
-                        focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
+                        focus:outline-none focus:border-indigo focus:ring-2 focus:ring-indigo/30/20
                         disabled:opacity-60 disabled:cursor-not-allowed
-                        tonal-transition
+                        transition-colors
                         ${INPUT_SIZE_CLASSES[inputSize]}
                         ${paddingLeft}
                         ${paddingRight}
-                        ${hasError ? "border-error focus:border-error focus:ring-error/20" : ""}
+                        ${hasError ? "border-bad focus:border-bad focus:ring-bad/30/20" : ""}
                         ${className}
                     `.trim()}
                     {...props}
                 />
                 {iconRight && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3">
                         <Icon name={iconRight} size="md" />
                     </span>
                 )}
@@ -159,7 +159,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
                     <button
                         type="button"
                         onClick={onClear}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-container tonal-transition text-on-surface-variant"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-bg-2 transition-colors text-ink-3"
                     >
                         <Icon name="close" size="sm" />
                     </button>
@@ -205,14 +205,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
                 ref={ref}
                 required={required}
                 className={`
-                    w-full rounded-xl bg-surface-container-low text-on-surface
-                    placeholder-on-surface-variant
+                    w-full rounded-xl bg-surface text-ink
+                    placeholder:text-ink-4
                     border-2 border-transparent
-                    focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
+                    focus:outline-none focus:border-indigo focus:ring-2 focus:ring-indigo/30/20
                     disabled:opacity-60 disabled:cursor-not-allowed
-                    tonal-transition resize-y min-h-[100px]
+                    transition-colors resize-y min-h-[100px]
                     ${INPUT_SIZE_CLASSES[inputSize]}
-                    ${hasError ? "border-error focus:border-error focus:ring-error/20" : ""}
+                    ${hasError ? "border-bad focus:border-bad focus:ring-bad/30/20" : ""}
                     ${className}
                 `.trim()}
                 {...props}
@@ -271,20 +271,20 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                     ref={ref}
                     required={required}
                     className={`
-                        w-full rounded-xl bg-surface-container-low text-on-surface
+                        w-full rounded-xl bg-surface text-ink
                         border-2 border-transparent appearance-none
-                        focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
+                        focus:outline-none focus:border-indigo focus:ring-2 focus:ring-indigo/30/20
                         disabled:opacity-60 disabled:cursor-not-allowed
-                        tonal-transition pr-10
+                        transition-colors pr-10
                         ${INPUT_SIZE_CLASSES[inputSize]}
-                        ${hasError ? "border-error focus:border-error focus:ring-error/20" : ""}
+                        ${hasError ? "border-bad focus:border-bad focus:ring-bad/30/20" : ""}
                         ${className}
                     `.trim()}
                     {...props}
                 >
                     {children}
                 </select>
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-ink-3">
                     <Icon name="chevron-down" size="md" />
                 </span>
             </div>
@@ -325,16 +325,16 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
                         className="peer sr-only"
                         {...props}
                     />
-                    <div className="w-11 h-6 bg-surface-container-highest rounded-full peer-checked:bg-primary tonal-transition" />
-                    <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-transform peer-checked:translate-x-5 peer-checked:bg-on-primary" />
+                    <div className="w-11 h-6 bg-surface-2 rounded-full peer-checked:bg-ink transition-colors" />
+                    <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform peer-checked:translate-x-5 peer-checked:bg-bg" />
                 </div>
                 {(label || description) && (
                     <div className="flex flex-col">
                         {label && (
-                            <span className="text-sm font-medium text-on-surface">{label}</span>
+                            <span className="text-sm font-medium text-ink">{label}</span>
                         )}
                         {description && (
-                            <span className="text-xs text-on-surface-variant">{description}</span>
+                            <span className="text-xs text-ink-3">{description}</span>
                         )}
                     </div>
                 )}
@@ -364,16 +364,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
                         className="peer sr-only"
                         {...props}
                     />
-                    <div className="w-5 h-5 rounded-md bg-surface-container-highest border-2 border-outline-variant peer-checked:bg-primary peer-checked:border-primary tonal-transition flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-md bg-surface-2 border-2 border-line peer-checked:bg-ink peer-checked:border-indigo transition-colors flex items-center justify-center">
                         <Icon
                             name="check"
                             size="sm"
-                            className="text-on-primary opacity-0 peer-checked:opacity-100"
+                            className="text-bg opacity-0 peer-checked:opacity-100"
                         />
                     </div>
                 </div>
                 {label && (
-                    <span className="text-sm text-on-surface">{label}</span>
+                    <span className="text-sm text-ink">{label}</span>
                 )}
             </label>
         );
