@@ -1034,10 +1034,11 @@
 - [x] Add mobile hamburger menu to TopAppBar
 - [x] Update mobile layout padding (no bottom nav space needed)
 
-### Phase 34.2 — Remaining pages to align with redesign [ ]
-- [ ] Session page: update header/footer per `session.jsx`
-- [ ] Completion screen: confetti, stat tiles grid
-- [ ] Voice mode page: full-screen mic per `screens.jsx` VoiceMic
+### Phase 34.2 — Remaining pages to align with redesign [x]
+- [x] Session page: update header/footer per `session.jsx` (done in Phase 33.1)
+- [x] Completion screen: confetti, stat tiles grid (done in Phase 33.1)
+- [x] Voice mode page: full-screen mic — superseded by the telephone-call
+      screen `/dialog/[bundleId]/[modeId]/voice` (Phase 36.2)
 
 ---
 
