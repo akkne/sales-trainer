@@ -3,6 +3,8 @@
 import { useCurrentLeague } from "@/lib/hooks/useLeague";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import Link from "next/link";
 
 function useCountdown(weekEndDate: string) {
@@ -41,19 +43,47 @@ const PROMOTION_ZONE_SIZE = 10;
 const DEMOTION_ZONE_SIZE = 5;
 
 export default function LeaguePage() {
-    const { data: leagueData, isLoading } = useCurrentLeague();
+    const { data: leagueData, isLoading, isError, refetch } = useCurrentLeague();
     const [bannerDismissed, setBannerDismissed] = useState(false);
     const countdown = useCountdown(leagueData?.weekEndDate ?? "");
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-bg">
-                <div className="w-12 h-12 rounded-full border-3 border-line-2 border-t-indigo animate-spin" />
+            <div className="min-h-screen bg-bg">
+                <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
+                    <div className="max-w-2xl mx-auto space-y-3">
+                        <div className="h-3 w-32 rounded bg-surface-2 animate-pulse" />
+                        <div className="h-8 w-56 rounded-xl bg-surface-2 animate-pulse" />
+                    </div>
+                </div>
+                <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
+                    <SkeletonList count={8} rowHeight={56} gap={8} />
+                </div>
             </div>
         );
     }
 
-    if (!leagueData) return null;
+    if (isError) {
+        return (
+            <div className="min-h-screen bg-bg flex items-center justify-center">
+                <ErrorState title="Не удалось загрузить лигу" onRetry={() => refetch()} />
+            </div>
+        );
+    }
+
+    if (!leagueData) {
+        return (
+            <div className="min-h-screen bg-bg flex flex-col items-center justify-center text-center px-6">
+                <div className="w-14 h-14 rounded-2xl bg-bg-2 flex items-center justify-center mb-4">
+                    <Icon name="trophy" size="lg" className="text-ink-4" />
+                </div>
+                <h3 className="font-medium text-ink mb-1">Лига ещё не сформирована</h3>
+                <p className="text-sm text-ink-3 max-w-sm">
+                    Заработай первые XP — и попадёшь в еженедельный рейтинг.
+                </p>
+            </div>
+        );
+    }
 
     const tierInfo = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
     const totalParticipantCount = leagueData.participantsByRank.length;

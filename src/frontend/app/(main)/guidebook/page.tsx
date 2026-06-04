@@ -12,6 +12,7 @@ import {
     type TechniqueDetail,
 } from "@/lib/hooks/useTechniques";
 import { Icon } from "@/components/ui/Icon";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
@@ -427,17 +428,10 @@ export default function GuidebookPage() {
 
             <div style={{ padding: "24px 60px 80px", maxWidth: 1200, margin: "0 auto" }}>
                 {isLoading ? (
-                    <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
-                        <div
-                            style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: "50%",
-                                border: "4px solid var(--indigo)",
-                                borderTopColor: "transparent",
-                                animation: "spin 0.8s linear infinite",
-                            }}
-                        />
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <Skeleton key={i} height={150} rounded={20} />
+                        ))}
                     </div>
                 ) : cards.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "64px 0" }}>

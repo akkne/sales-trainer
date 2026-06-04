@@ -1,34 +1,46 @@
 "use client";
 
 import { useDialogBundles } from "@/lib/hooks/useDialog";
-import { BundleCard } from "@/components/dialog/BundleCard";
 import { Icon } from "@/components/ui/Icon";
 import { StatTile } from "@/components/ui/StatTile";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
 import Link from "next/link";
 
 export default function DialogPage() {
-    const { data: bundles, isLoading, error } = useDialogBundles();
+    const { data: bundles, isLoading, error, refetch } = useDialogBundles();
 
     if (isLoading) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--indigo)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+                <div style={{ padding: "40px 60px 32px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
+                    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+                        <Skeleton width={220} height={14} />
+                        <Skeleton width={420} height={44} style={{ marginTop: 14 }} />
+                        <Skeleton width={360} height={16} style={{ marginTop: 12 }} />
+                    </div>
+                </div>
+                <div style={{ padding: "32px 60px", maxWidth: 1200, margin: "0 auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                        {[1, 2, 3, 4].map((i) => (
+                            <Skeleton key={i} height={140} rounded={20} />
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "80px 60px" }}>
-                <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
-                    <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--bad-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-                        <Icon name="close" size="lg" color="var(--bad)" />
-                    </div>
-                    <h1 style={{ fontSize: 28, fontWeight: 500, marginBottom: 8 }}>Ошибка загрузки</h1>
-                    <p style={{ color: "var(--ink-3)" }}>{error.message}</p>
-                </div>
+            <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "60px 24px" }}>
+                <ErrorState
+                    title="Ошибка загрузки"
+                    message={error.message}
+                    onRetry={() => refetch()}
+                />
             </div>
         );
     }

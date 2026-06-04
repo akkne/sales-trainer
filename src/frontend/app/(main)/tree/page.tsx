@@ -8,6 +8,7 @@ import { useSkillTree, useSkills } from "@/lib/hooks/useSkillTree";
 import { useLessonsForSkill } from "@/lib/hooks/useLesson";
 import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
 import { Icon } from "@/components/ui/Icon";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Progress } from "@/components/ui/Progress";
 import { Button } from "@/components/ui/Button";
 import { SKILL_STAGES, getStageMeta } from "@/lib/skillStages";
@@ -472,7 +473,7 @@ function SkillSidebar() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SkillTreePage() {
-    const { data: skillTreeData, isLoading, isError } = useSkillTree();
+    const { data: skillTreeData, isLoading, isError, refetch } = useSkillTree();
     const { selectedSkill } = useSelectedSkillStore();
 
     if (isLoading) {
@@ -494,8 +495,11 @@ export default function SkillTreePage() {
 
     if (isError || !skillTreeData) {
         return (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ink-3)" }}>
-                Не удалось загрузить дерево навыков
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+                <ErrorState
+                    title="Не удалось загрузить дерево навыков"
+                    onRetry={() => refetch()}
+                />
             </div>
         );
     }

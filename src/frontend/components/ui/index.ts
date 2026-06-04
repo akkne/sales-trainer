@@ -38,6 +38,10 @@ export type { StatTileTone } from "./StatTile";
 // GeoAvatar
 export { GeoAvatar } from "./GeoAvatar";
 
+// Skeleton & ErrorState
+export { Skeleton, SkeletonList } from "./Skeleton";
+export { ErrorState } from "./ErrorState";
+
 // Wordmark
 export { Wordmark } from "./Wordmark";
 
