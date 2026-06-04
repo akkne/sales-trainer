@@ -1041,7 +1041,11 @@
 
 ---
 
-## Phase 35 — Friends Tab April Redesign (Completion)
+## Phase 35 — Friends Tab April Redesign (Completion) [x]
+
+> Verified 2026-06-05: grep sweep over `src/frontend/app/(main)/friends` and
+> `src/frontend/components/friends` finds zero MD3 tokens — the migration was
+> already completed as part of Phase 33.8 follow-ups. Marking phase done.
 
 > Phase 33.8 migrated only the outer `/friends` page shell. Inner components and the
 > public profile page still use Material Design 3 tokens (`bg-primary-container`,
@@ -1133,3 +1137,59 @@
 - [ ] `docs/TESTING/VOICE_CALL.md` — manual checklist (connect, barge-in,
       hangup, limits, fallback to web speech)
 - [ ] Update `docs/API_CONTRACTS.md` with `/voice/stream` and usage endpoints
+---
+
+## Phase 37 — Night Polish Pass (gap analysis 2026-06-05)
+
+> Autonomous overnight pass. Source: full gap analysis of `.design/redesign/` vs
+> implemented frontend. Focus: broken legacy styling, unfinished voice roadmap
+> items, missing UX states, voice usage surfacing.
+
+### Phase 37.1 — Dialog components: MD3 token cleanup (broken styling)
+> MD3 classes (`bg-surface-container*`, `text-on-surface*`, `border-outline-variant`,
+> `font-headline`, `tonal-transition`) are NOT defined in the April `@theme` block —
+> they silently render as nothing, visibly broken in dark theme.
+- [ ] `VoiceMicButton.tsx` → April palette
+- [ ] `SessionHistorySidebar.tsx` → April palette
+- [ ] `DeleteConfirmModal.tsx` → April palette
+- [ ] `ChatMessage.tsx`, `ChatInput.tsx`, `BundleCard.tsx` → April palette
+- [ ] Chat page `/dialog/[bundleId]/[modeId]/page.tsx` → April palette
+
+### Phase 37.2 — Auth pages April migration
+- [ ] `/login` and `/register` pages → April palette + shared UI primitives
+
+### Phase 37.3 — Legacy green palette migration
+- [ ] Landing `/` page: `#58CC02`/`btn-3d` → April rust/olive tokens
+- [ ] `/skill/[id]` page green tokens → April palette
+- [ ] `/skill/[id]/map` MD3 + green tokens → April palette
+- [ ] `/reference/[id]` spinner color → April palette
+- [ ] `SkillNode.tsx`, `ModeCard.tsx` green leftovers → April palette
+
+### Phase 37.4 — Voice call polish (Phase 36.2 leftovers)
+- [ ] Sound effects: ringing tone + hangup beep (generated WAV in `public/sounds/`)
+- [ ] Vibration on "connected" (mobile, `navigator.vibrate`)
+- [ ] Barge-in indicator: visual cue when user interrupts AI playback
+
+### Phase 37.5 — Voice usage surfacing (Phase 36.5 leftovers)
+- [ ] `/profile` shows голосовые минуты: использовано/лимит (день + месяц)
+- [ ] Backend `GET /admin/voice/usage` — per-user minute spend (Admin policy)
+- [ ] Admin page `/admin/voice/usage` — table of users + daily/monthly minutes
+- [ ] Update API_CONTRACTS.md
+
+### Phase 37.6 — Loading skeletons & error/empty states
+- [ ] Shared `Skeleton` UI primitive (pulse shimmer on `bg-surface-2`)
+- [ ] Skeletons: `/tree`, `/dialog`, `/friends`, `/guidebook`, `/league`, `/profile`
+- [ ] Error states with retry button on data-fetch failures (shared `ErrorState`)
+- [ ] Empty states: league, chat history, guidebook (where missing)
+
+### Phase 37.7 — Admin pages MD3 cleanup
+- [ ] Admin layout + sidebar → April palette
+- [ ] Admin pages (skills, lessons, users, topics, techniques, dialog) → April palette
+- [ ] Exercise editors (8 files) → April palette
+- [ ] Notification components MD3 leftovers (`NotificationBell/Panel/Card`)
+- [ ] `ui/Input.tsx`, `ui/Common.tsx` MD3 leftovers
+
+### Phase 37.8 — Docs & tests
+- [ ] Unit tests for new utilities/components added in this phase
+- [ ] `docs/TESTING/NIGHT_POLISH.md` — manual checklist
+- [ ] Update `docs/FEATURES.md`
