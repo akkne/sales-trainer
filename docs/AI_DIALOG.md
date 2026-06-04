@@ -225,10 +225,27 @@ Features/Dialog/
   DialogService.cs                — business logic
   DialogController.cs             — public endpoints
   AdminDialogController.cs        — admin CRUD
-  DialogSeeder.cs                 — seed test data
+  DialogSeeder.cs                 — seed default bundles/modes (runs on startup)
 Infrastructure/Mongo/
   MongoDbContext.cs               — DialogSessions collection
 ```
+
+### Seeded content (DialogSeeder)
+
+Runs on every startup, idempotent (skips when any bundle already exists).
+Registered in `DialogServiceCollectionExtensions` and invoked from `Program.cs`
+after `AchievementSeeder`. If the target skill `iconicName` is missing, a
+lightweight fallback Skill is created so the seed never blocks startup.
+
+| Bundle | Skill iconicName | Modes (all `voiceEnabled=true`) |
+|--------|------------------|--------------------------------|
+| 📞 Холодные звонки | `cold-calls` | Обход секретаря; Опеннер на ЛПР |
+| 🛡️ Работа с возражениями | `objection-handling` | Возражение «Дорого» |
+
+> Troubleshooting: if `/dialog` shows «Практика диалогов пока недоступна»,
+> either `OpenAI:ApiKey` is not configured (bundles endpoint intentionally
+> returns `[]`) or the seeder hasn't run yet — check backend startup logs for
+> `Dialog seed:` lines.
 
 ### Frontend
 ```

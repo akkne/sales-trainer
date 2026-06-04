@@ -637,8 +637,12 @@
 - [x] `PUT/DELETE /admin/dialog/modes/{id}` (edit prompts)
 
 ### [x] Backend — Seed test data
-- [x] `DialogSeeder` — seed "Холодные звонки" bundle (linked to skill) + "Обход секретаря" mode
-- [x] Run seeder on startup (idempotent)
+- [x] `DialogSeeder` — seeds 2 bundles: "Холодные звонки" (обход секретаря, опеннер на ЛПР)
+      + "Работа с возражениями" («дорого»), all with `voiceEnabled=true`
+- [x] Run seeder on startup (idempotent — skips when any bundle exists)
+- [x] Creates a fallback `Skill` if target `iconicName` is missing
+      (was: seeder existed in docs but was never wired into `Program.cs` —
+      fresh DB showed "Практика диалогов пока недоступна"; fixed 2026-05)
 
 ### [x] Frontend — Dialog tab in BottomNav
 - [x] Add "💬 Диалог" item to `NAV_ITEMS` (before Profile)
