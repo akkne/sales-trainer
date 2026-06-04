@@ -35,25 +35,35 @@ Voice-based sales conversation practice in the existing Dialog tab. Stack:
 ### Frontend Voice Pipeline
 
 ```
-Microphone → VAD (detects speech) → Deepgram WS (streaming STT)
+Microphone → Web Speech API (browser STT, ru-RU, interim results → live subtitles)
                                           ↓
-                            Transcript ready on speech end
+                       Silence timeout commits the phrase
                                           ↓
-                            POST /dialog/sessions/:id/voice
+                  POST /dialog/sessions/:id/voice/stream  { transcript }
                                           ↓
-                            GPT response + ElevenLabs TTS
+        LLM streams {"reply", "endCall"} → reply split into sentences → TTS per sentence
                                           ↓
-                            Audio stream → Web Audio playback
+   Length-prefixed frames (text + mp3) → Web Audio queued playback + streamed AI subtitles
 ```
+
+Barge-in: if the user starts talking during playback, audio stops and the
+in-flight stream is aborted.
 
 ### Backend Voice Endpoint
 
 ```
-POST /dialog/sessions/{sessionId}/voice
+POST /dialog/sessions/{sessionId}/voice/stream
 Body: { transcript: string }
-Response: audio/mpeg stream (ElevenLabs)
-Side effect: saves messages to session, calls GPT
+Response: application/octet-stream — length-prefixed frames
+          (uint32 flags | uint32 textLen | text | uint32 audioLen | mp3),
+          flag bit 0 = isFinal sentinel, bit 1 = isStopSignal (endCall)
+Side effect: saves user + assistant messages to the session
 ```
+
+The chat model answers with structured JSON `{"reply": string, "endCall": bool}`;
+`StreamingChatReplyParser` extracts the reply incrementally so TTS starts before
+generation finishes. Short sentences are sent to Voicer TTS as-is (the legacy
+500-character padding hack is removed — the API no longer enforces a minimum).
 
 ### Configuration (appsettings.json)
 
@@ -116,8 +126,11 @@ Add to `DialogModes` table:
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| POST | /dialog/sessions/{sessionId}/voice | `{transcript}` | `audio/mpeg` stream |
-| GET | /dialog/voice/config | — | `{enabled, vadSilenceMs}` |
+| POST | /dialog/sessions/{sessionId}/voice/stream | `{transcript}` | length-prefixed text+mp3 frames (see Architecture) |
+| GET | /dialog/voice/config | — | `{enabled, vadSilenceMs, ...}` |
+| GET | /dialog/voice/usage | — | daily/monthly usage and limits |
+
+> Legacy non-streaming endpoints (`POST .../voice`, `GET .../voice/response`) were removed.
 
 ### Admin Endpoints
 

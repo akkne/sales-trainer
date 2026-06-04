@@ -328,7 +328,7 @@ Errors:
 | POST | /dialog/sessions | `{bundleId, modeId}` | `DialogSessionDto` |
 | GET | /dialog/sessions/:sessionId | — | `DialogSessionDto` |
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
-| POST | /dialog/sessions/:sessionId/complete | — | `{content, generatedAt, xpEarned}` |
+| POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
 
 **DTOs:**
 - `DialogBundleDto`: `{id, skillId, skillSlug, skillTitle, title, description, iconEmoji, sortOrder, isActive}`
@@ -387,9 +387,22 @@ Errors:
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | /dialog/voice/config | — | `VoiceConfigDto` |
-| GET | /dialog/voice/deepgram-key | — | `{apiKey}` |
-| POST | /dialog/sessions/{sessionId}/voice | `{transcript}` | `audio/mpeg` stream |
-| GET | /dialog/sessions/{sessionId}/voice/response | — | `VoiceResponseDto` |
+| GET | /dialog/voice/usage | — | `{dailyUsedSeconds, dailyLimitSeconds, dailyExceeded, monthlyUsedSeconds, monthlyLimitSeconds, monthlyExceeded}` |
+| POST | /dialog/sessions/{sessionId}/voice/stream | `{transcript}` | `application/octet-stream` — length-prefixed frames (see below) |
+
+**Voice stream frame format** (big-endian):
+```
+uint32 flags        // bit 0 = isFinal (sentinel, end of stream), bit 1 = isStopSignal (endCall)
+uint32 textLength
+byte[] text         // utf-8 sentence of the AI reply
+uint32 audioLength
+byte[] audio        // mp3 for that sentence
+```
+The final sentinel frame has empty text/audio and carries the `isStopSignal` flag.
+`429` with `{period, usedSeconds, limitSeconds}` when the daily/monthly voice limit is exceeded.
+
+> Removed (legacy, unused by frontend): `POST /dialog/sessions/{sessionId}/voice`,
+> `GET /dialog/sessions/{sessionId}/voice/response`, Deepgram endpoints.
 
 **VoiceConfigDto:**
 ```json

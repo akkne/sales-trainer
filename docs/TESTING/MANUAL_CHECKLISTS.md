@@ -40,31 +40,35 @@ Consolidated manual testing checklists for major features.
 ## Voice Roleplay Testing
 
 ### Prerequisites
-- Deepgram + ElevenLabs API keys configured
+- OpenAI-compatible key (`OpenAI:ApiKey`) + Voicer TTS key configured
 - Voice enabled on mode in admin
+- Chrome/Edge desktop (Web Speech API)
 
 ### Configuration
 - [ ] `/dialog/voice/config` returns correct enabled status
-- [ ] Voice button hidden when mode doesn't support voice
+- [ ] Voice page shows "недоступен" screen when mode doesn't support voice
 
 ### Voice Pipeline
-- [ ] Mic button requests permission
-- [ ] Green ring while speaking
-- [ ] Transcript shown on speech end
-- [ ] AI audio plays automatically
-- [ ] Mic re-enabled after playback
+- [ ] «Позвонить» requests mic permission, status goes Соединение → На связи
+- [ ] Live subtitles: own words appear while speaking (dashed interim line),
+      become a committed entry on pause
+- [ ] AI reply streams into subtitles chunk by chunk and audio plays once
+      (phrase NOT repeated several times)
+- [ ] Mic works again after AI playback — second phrase is recognized
+      (regression: pause/resume race used to kill the mic after turn 1)
+- [ ] Barge-in: talking over the AI stops playback and processes the new phrase
 
-### Button States
-- Idle → gray mic
-- Listening → green pulsing
-- Processing → spinner
-- Playing → speaker icon
-- Error → red text, recovers
+### Call Termination (endCall)
+- [ ] Swearing / rudeness → persona says a closing line and hangs up,
+      feedback modal opens automatically
+- [ ] Feedback cites actual quotes from the call, low XP for a failed call
+- [ ] Pick up and hang up without saying anything → NO feedback modal,
+      no XP, session marked `abandoned` (backend returns 204)
 
 ### Error Handling
-- [ ] Denied mic → toast, text still works
-- [ ] Connection lost → reconnect attempt
-- [ ] Network timeout → error shown, transcript preserved
+- [ ] Denied mic → error message shown
+- [ ] Daily/monthly limit exceeded → 429 message with limit minutes
+- [ ] Leaving the page mid-call completes the session
 
 ---
 

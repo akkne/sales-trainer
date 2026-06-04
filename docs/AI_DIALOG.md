@@ -96,7 +96,7 @@ CREATE TABLE "DialogModes" (
 | POST | `/dialog/sessions` | Start new session (body: `{bundleId, modeId}`) |
 | GET | `/dialog/sessions/{sessionId}` | Get session with messages |
 | POST | `/dialog/sessions/{sessionId}/messages` | Send user message, get AI response |
-| POST | `/dialog/sessions/{sessionId}/complete` | End session, generate feedback, award XP |
+| POST | `/dialog/sessions/{sessionId}/complete` | End session, generate feedback, award XP. Returns `204` (session abandoned, no feedback) when the user never sent a message |
 
 ### Admin CRUD
 
@@ -151,31 +151,47 @@ Tested / supported gateways:
 
 ### System Prompts (stored in PostgreSQL, editable via admin)
 
-**ChatSystemPrompt** — AI role for the conversation. Backend appends:
-```
-ВАЖНО: Когда разговор подошёл к логическому завершению, добавь в КОНЕЦ тег:
-[DIALOG_END]
+**ChatSystemPrompt** — AI role for the conversation. Backend appends a structured-output
+instruction: the model must answer ONLY with a JSON object
+
+```json
+{"reply": "<реплика персонажа>", "endCall": true|false}
 ```
 
-**FeedbackSystemPrompt** — AI evaluation instructions. Backend appends:
-```
-В КОНЦЕ ответа укажи количество XP в формате: [XP:число]
-Критерии (0-100): уверенность (30), работа с возражениями (30), результат (40).
-```
+enforced via `response_format` (json_schema; flat OpenRouter shape for the f5ai proxy,
+nested `json_schema` shape for OpenAI). `reply` always comes first so the voice pipeline
+can stream it to TTS while the model is still generating
+(`StreamingChatReplyParser` extracts it incrementally and tolerates plain-text fallback).
 
-### Stop Detection
+**FeedbackSystemPrompt** — AI evaluation instructions. Backend appends honest-evaluation
+rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block format
+and the `[XP:число]` tag requirement (see XP Rewards below).
 
-AI explicitly signals stop via `[DIALOG_END]` tag in response.
-- Tag is parsed and removed from displayed content
-- `isStopSignal: true` set on message
-- "Завершить диалог" button shown to user
+### Call Termination (endCall)
+
+The persona model returns `endCall: true` when it hangs up:
+- Immediately on critical user mistakes — swearing, rudeness, rambling nonsense,
+  begging, weak openers without specifics, repeating a rejected argument, lying.
+- Normally when the conversation reached its logical end.
+
+`endCall` maps to `isStopSignal` on the stored message, the stream frame flags and the
+chat DTOs (wire/storage names unchanged). The frontend ends the call and requests feedback.
 
 ### XP Rewards
 
-AI generates XP (0-100) based on:
-- Confidence and professionalism: up to 30 XP
-- Objection handling: up to 30 XP
-- Achieving goal (passed secretary, scheduled meeting): up to 40 XP
+AI generates XP (sum 0-100), each criterion counted only if it actually occurred:
+- Confidence and tone: up to 25 XP
+- Argument structure and substance: up to 25 XP
+- Objection handling (if there were objections): up to 25 XP
+- Achieving the call goal (passed secretary, scheduled meeting): up to 25 XP
+
+Calibration: 0-20 fail (client hung up due to user mistakes), 21-45 weak,
+46-70 normal, 71-85 good, 86-100 exceptional (rare).
+
+Hard rules enforced in code:
+- A response without an `[XP:N]` tag awards **0 XP** (no silent defaults).
+- A session with **no user messages** is marked `abandoned` without calling the
+  feedback model at all — `/complete` returns `204 No Content`, no XP, no feedback modal.
 
 XP is saved to `UserXpRecords` with source `"dialog"`.
 
