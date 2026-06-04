@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Dialog.Services.Implementation;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Mongo;
@@ -36,93 +37,6 @@ public class VoiceDialogService : IVoiceDialogService
         _googleTtsService = googleTtsService;
         _configuration = configuration;
         _logger = logger;
-    }
-
-    public async Task<Stream> ProcessVoiceMessageAsync(
-        string sessionId,
-        Guid userId,
-        string transcript,
-        CancellationToken ct = default)
-    {
-        // Get session
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
-        );
-        var session = await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(ct);
-
-        if (session == null)
-        {
-            throw new InvalidOperationException($"Session {sessionId} not found for user {userId}");
-        }
-
-        if (session.Status != DialogSessionStatus.Active)
-        {
-            throw new InvalidOperationException($"Session {sessionId} is not active");
-        }
-
-        // Get mode for system prompt and voice settings
-        var mode = await _dbContext.DialogModes
-            .Include(m => m.Bundle)
-            .FirstOrDefaultAsync(m => m.Id == session.ModeId, ct);
-
-        if (mode == null)
-        {
-            throw new InvalidOperationException($"Mode {session.ModeId} not found");
-        }
-
-        if (!mode.VoiceEnabled)
-        {
-            throw new InvalidOperationException($"Voice is not enabled for mode {session.ModeId}");
-        }
-
-        // Add user message
-        var userMessage = new DialogMessage
-        {
-            Role = "user",
-            Content = transcript,
-            Timestamp = DateTime.UtcNow,
-            IsStopSignal = false
-        };
-        session.Messages.Add(userMessage);
-
-        // Generate AI response
-        var chatResult = await _openAiService.SendChatMessageAsync(mode.ChatSystemPrompt, session.Messages);
-
-        var aiMessage = new DialogMessage
-        {
-            Role = "assistant",
-            Content = chatResult.Content,
-            Timestamp = DateTime.UtcNow,
-            IsStopSignal = chatResult.IsStopSignal
-        };
-        session.Messages.Add(aiMessage);
-
-        // Save messages to MongoDB
-        var updateDefinition = Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages);
-        await _mongoContext.DialogSessions.UpdateOneAsync(filter, updateDefinition, cancellationToken: ct);
-
-        _logger.LogInformation(
-            "Voice message processed for session {SessionId}, user message: {UserLen} chars, AI response: {AiLen} chars",
-            sessionId, transcript.Length, chatResult.Content.Length);
-
-        // Pick TTS provider from config: Voice:TtsProvider = "voicer" (default, RUB-friendly) | "google"
-        var provider = (_configuration["Voice:TtsProvider"] ?? "voicer").Trim().ToLowerInvariant();
-        Stream audioStream = provider switch
-        {
-            "google" when _googleTtsService.IsConfigured =>
-                await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
-            "voicer" when _voicerTtsService.IsConfigured =>
-                await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
-            _ when _voicerTtsService.IsConfigured =>
-                await _voicerTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
-            _ when _googleTtsService.IsConfigured =>
-                await _googleTtsService.SynthesizeSpeechAsync(chatResult.Content, mode.VoiceId, ct),
-            _ => throw new InvalidOperationException(
-                $"TTS provider '{provider}' is not configured. Set Voice:TtsProvider and the matching API key.")
-        };
-
-        return audioStream;
     }
 
     public async IAsyncEnumerable<VoiceStreamChunk> StreamVoiceMessageAsync(
@@ -164,20 +78,23 @@ public class VoiceDialogService : IVoiceDialogService
             Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages),
             cancellationToken: ct);
 
-        var fullResponseBuilder = new StringBuilder();
+        // The model answers with {"reply": "...", "endCall": bool}; the parser
+        // extracts the spoken reply incrementally so TTS can start while the
+        // model is still generating, and resolves endCall once the stream ends.
+        var replyParser = new StreamingChatReplyParser();
         var sentenceBuffer = new StringBuilder();
-        var hasStopSignal = false;
 
         await foreach (var delta in _openAiService.StreamChatMessageAsync(mode.ChatSystemPrompt, session.Messages, ct))
         {
-            fullResponseBuilder.Append(delta);
-            sentenceBuffer.Append(delta);
+            var replyText = replyParser.Push(delta);
+            if (replyText.Length == 0) continue;
+
+            sentenceBuffer.Append(replyText);
 
             // Flush at sentence boundaries to start TTS as early as possible.
             while (TryExtractSentence(sentenceBuffer, out var sentence))
             {
-                var cleaned = sentence.Replace("[DIALOG_END]", "").Trim();
-                if (sentence.Contains("[DIALOG_END]")) hasStopSignal = true;
+                var cleaned = sentence.Trim();
                 if (string.IsNullOrWhiteSpace(cleaned)) continue;
 
                 var audio = await SynthesizeAsync(cleaned, mode.VoiceId, ct);
@@ -185,25 +102,32 @@ public class VoiceDialogService : IVoiceDialogService
             }
         }
 
+        var parseResult = replyParser.Complete();
+        if (parseResult.UsedFallback)
+        {
+            _logger.LogWarning(
+                "Chat model ignored the JSON reply contract for session {SessionId}; recovered plain-text reply ({Length} chars)",
+                sessionId, parseResult.Reply.Length);
+            // Nothing was emitted incrementally — speak the recovered reply.
+            sentenceBuffer.Clear();
+            sentenceBuffer.Append(parseResult.Reply);
+        }
+
         // Flush remaining buffer (no terminal punctuation).
-        var tail = sentenceBuffer.ToString();
-        if (tail.Contains("[DIALOG_END]")) hasStopSignal = true;
-        var tailCleaned = tail.Replace("[DIALOG_END]", "").Trim();
+        var tailCleaned = sentenceBuffer.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(tailCleaned))
         {
             var audio = await SynthesizeAsync(tailCleaned, mode.VoiceId, ct);
-            yield return new VoiceStreamChunk(tailCleaned, audio, IsStopSignal: hasStopSignal, IsFinal: false);
+            yield return new VoiceStreamChunk(tailCleaned, audio, IsStopSignal: parseResult.EndCall, IsFinal: false);
         }
 
         // Persist the assembled AI message after the stream completes successfully.
-        var fullText = fullResponseBuilder.ToString();
-        var finalText = fullText.Replace("[DIALOG_END]", "").Trim();
         session.Messages.Add(new DialogMessage
         {
             Role = "assistant",
-            Content = finalText,
+            Content = parseResult.Reply,
             Timestamp = DateTime.UtcNow,
-            IsStopSignal = hasStopSignal
+            IsStopSignal = parseResult.EndCall
         });
         await _mongoContext.DialogSessions.UpdateOneAsync(
             filter,
@@ -211,11 +135,11 @@ public class VoiceDialogService : IVoiceDialogService
             cancellationToken: ct);
 
         _logger.LogInformation(
-            "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, stop={Stop}",
-            sessionId, transcript.Length, finalText.Length, hasStopSignal);
+            "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}",
+            sessionId, transcript.Length, parseResult.Reply.Length, parseResult.EndCall);
 
         // Sentinel chunk with no audio, signaling end of stream + stop flag.
-        yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: hasStopSignal, IsFinal: true);
+        yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: true);
     }
 
     private static bool TryExtractSentence(StringBuilder buffer, out string sentence)

@@ -2,12 +2,6 @@ namespace SalesTrainer.Api.Features.Voice.Services.Abstract;
 
 public interface IVoiceDialogService
 {
-    Task<Stream> ProcessVoiceMessageAsync(
-        string sessionId,
-        Guid userId,
-        string transcript,
-        CancellationToken ct = default);
-
     /// <summary>
     /// Streams the AI response sentence-by-sentence: each yielded byte[] is a
     /// self-contained MP3 produced by the configured TTS provider for a single

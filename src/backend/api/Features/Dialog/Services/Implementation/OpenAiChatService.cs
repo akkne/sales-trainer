@@ -16,29 +16,33 @@ internal sealed class OpenAiChatService : IOpenAiChatService
 
     private const string PlaceholderApiKey = "REPLACE_WITH_OPENAI_API_KEY";
 
-    private const string StopSignalInstruction = @"
+    private const string StructuredReplyInstruction = @"
 
-ВАЖНО — ПРАВИЛА ЗАВЕРШЕНИЯ ДИАЛОГА:
+ФОРМАТ ОТВЕТА (строго):
+Отвечай ТОЛЬКО валидным JSON-объектом без пояснений и без markdown:
+{""reply"": ""<текст реплики персонажа>"", ""endCall"": true|false}
+Поле ""reply"" всегда идёт первым. НЕ добавляй имя персонажа в начало реплики (""Анна:"", ""Занятая Анна:"" и т.п.) — только текст реплики.
+
+ПОЛЕ endCall — ЗАВЕРШЕНИЕ ЗВОНКА:
+endCall: true означает, что твой персонаж кладёт трубку. В reply при этом — его финальная фраза.
 
 1. НЕМЕДЛЕННОЕ ЗАВЕРШЕНИЕ (критические ошибки пользователя):
-Если пользователь допустил одну из критических ошибок — немедленно заверши разговор в рамках роли и добавь [DIALOG_END]:
-- Мат, оскорбления, агрессия — сразу кладёшь трубку: ""Такое общение неприемлемо. Всего хорошего."" [DIALOG_END]
-- Грубость, раздражение в голосе — ""Мне не нравится ваш тон. До свидания."" [DIALOG_END]
-- Потеря уверенности: оправдания, мычание, ""ну... как бы... в общем..."" — ты занятой человек, не будешь ждать
+Если пользователь допустил одну из критических ошибок — немедленно заверши разговор в рамках роли и поставь endCall: true:
+- Мат, оскорбления, агрессия — сразу кладёшь трубку: reply ""Такое общение неприемлемо. Всего хорошего."", endCall: true
+- Грубость, раздражение в голосе — reply ""Мне не нравится ваш тон. До свидания."", endCall: true
+- Бессвязная речь, чушь, разговор не по делу — уточни один раз, если продолжается — прощайся, endCall: true
+- Потеря уверенности: оправдания, мычание, ""ну... как бы... в общем..."" — ты занятой человек, не будешь ждать, прощайся
 - Попытка давить или умолять: ""пожалуйста"", ""ну хотя бы"", ""я прошу вас"" — слабость, прощайся
 - Слабый бессодержательный опеннер без конкретики (""хочу предложить сотрудничество"") — ""Что конкретно? У меня мало времени"", если не уточняет — прощайся
-- Повтор одного и того же аргумента после отказа без новой ценности — ""Я уже сказал нет"" [DIALOG_END]
-- Ложь или манипуляция — сразу заканчивай разговор
+- Повтор одного и того же аргумента после отказа без новой ценности — ""Я уже сказал нет"", endCall: true
+- Ложь или манипуляция — сразу заканчивай разговор, endCall: true
 
 Будь строгим, как настоящий занятой человек. Не церемонься. Если звонок не интересен — клади трубку.
 
 2. ШТАТНОЕ ЗАВЕРШЕНИЕ:
-Когда разговор подошёл к логическому концу (соединил/не соединил, согласился/отказался окончательно), добавь [DIALOG_END].
+Когда разговор подошёл к логическому концу (соединил/не соединил, согласился/отказался окончательно) — endCall: true.
 
-Тег [DIALOG_END] ставится на отдельной строке в конце сообщения.
-
-ФОРМАТ ОТВЕТА:
-Отвечай ТОЛЬКО текст реплики персонажа. НЕ добавляй имя персонажа в начале (""Анна:"", ""Занятая Анна:"" и т.п.). Просто текст ответа.";
+Во всех остальных случаях — endCall: false.";
 
     private const string ExperiencePointsInstructionSuffix = @"
 
@@ -111,17 +115,29 @@ internal sealed class OpenAiChatService : IOpenAiChatService
         var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
         var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
 
-        var enhancedSystemPrompt = systemPrompt + StopSignalInstruction;
+        var enhancedSystemPrompt = systemPrompt + StructuredReplyInstruction;
 
-        var response = await CallOpenAiAsync(enhancedSystemPrompt, conversationHistory, chatModel, maximumTokenCount, cancellationToken);
+        var response = await CallOpenAiAsync(
+            enhancedSystemPrompt,
+            conversationHistory,
+            chatModel,
+            maximumTokenCount,
+            BuildChatReplyResponseFormat(),
+            cancellationToken);
 
-        var isStopSignal = response.Contains("[DIALOG_END]");
-        var cleanedContent = response.Replace("[DIALOG_END]", "").Trim();
+        var replyParser = new StreamingChatReplyParser();
+        replyParser.Push(response);
+        var parseResult = replyParser.Complete();
+
+        if (parseResult.UsedFallback)
+        {
+            _logger.LogWarning("Chat model ignored the JSON reply contract; recovered plain-text reply ({Length} chars)", parseResult.Reply.Length);
+        }
 
         return new ChatMessageResult
         {
-            Content = cleanedContent,
-            IsStopSignal = isStopSignal
+            Content = parseResult.Reply,
+            IsStopSignal = parseResult.EndCall
         };
     }
 
@@ -137,7 +153,7 @@ internal sealed class OpenAiChatService : IOpenAiChatService
 
         var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
         var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
-        var enhancedSystemPrompt = systemPrompt + StopSignalInstruction;
+        var enhancedSystemPrompt = systemPrompt + StructuredReplyInstruction;
 
         var apiKey = _configuration["OpenAI:ApiKey"]!;
         var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
@@ -161,13 +177,14 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             messages.Add(new { role = message.Role, content = message.Content });
         }
 
-        var requestBody = new
+        var requestBody = new Dictionary<string, object>
         {
-            model = chatModel,
-            messages,
-            max_tokens = maximumTokenCount,
-            temperature = 0.7,
-            stream = true
+            ["model"] = chatModel,
+            ["messages"] = messages,
+            ["max_tokens"] = maximumTokenCount,
+            ["temperature"] = 0.7,
+            ["stream"] = true,
+            ["response_format"] = BuildChatReplyResponseFormat()
         };
 
         var jsonContent = JsonSerializer.Serialize(requestBody);
@@ -184,6 +201,23 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, errorBody);
             throw new HttpRequestException($"OpenAI stream returned {response.StatusCode}: {errorBody}");
+        }
+
+        // Some OpenAI-compatible providers (e.g. the f5ai proxy) ignore
+        // "stream": true and answer with a single JSON body instead of SSE.
+        // Without this fallback the SSE reader below would yield nothing and
+        // the persona would stay silent for the whole call.
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        if (!string.Equals(contentType, "text/event-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            var fullBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogInformation("Provider returned non-SSE chat completion ({ContentType}); yielding it as a single delta", contentType);
+            var fullContent = ExtractContentFromCompletionResponse(fullBody, _logger);
+            if (!string.IsNullOrEmpty(fullContent))
+            {
+                yield return fullContent;
+            }
+            yield break;
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -244,7 +278,7 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             new() { Role = "user", Content = fullPrompt, Timestamp = DateTime.UtcNow }
         };
 
-        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maximumTokenCount, cancellationToken);
+        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maximumTokenCount, responseFormat: null, cancellationToken);
 
         _logger.LogDebug("Feedback response from AI: {Response}", response);
 
@@ -300,11 +334,41 @@ internal sealed class OpenAiChatService : IOpenAiChatService
         return 25;
     }
 
+    /// <summary>
+    /// Builds the response_format payload that forces the chat model to answer
+    /// with {"reply": string, "endCall": boolean}. The f5ai proxy expects the
+    /// flat OpenRouter shape, while OpenAI expects the nested json_schema shape.
+    /// </summary>
+    private object BuildChatReplyResponseFormat()
+    {
+        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+
+        var replySchema = new
+        {
+            type = "object",
+            properties = new
+            {
+                reply = new { type = "string", description = "Реплика персонажа без имени в начале" },
+                endCall = new { type = "boolean", description = "true, если персонаж кладёт трубку" }
+            },
+            required = new[] { "reply", "endCall" },
+            additionalProperties = false
+        };
+
+        if (baseUrl.Contains("f5ai"))
+        {
+            return new { type = "json_schema", name = "chat_reply", strict = true, schema = replySchema };
+        }
+
+        return new { type = "json_schema", json_schema = new { name = "chat_reply", strict = true, schema = replySchema } };
+    }
+
     private async Task<string> CallOpenAiAsync(
         string systemPrompt,
         List<DialogMessage> conversationHistory,
         string model,
         int maximumTokenCount,
+        object? responseFormat,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
@@ -336,13 +400,17 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             messages.Add(new { role = message.Role, content = message.Content });
         }
 
-        var requestBody = new
+        var requestBody = new Dictionary<string, object>
         {
-            model,
-            messages,
-            max_tokens = maximumTokenCount,
-            temperature = 0.7
+            ["model"] = model,
+            ["messages"] = messages,
+            ["max_tokens"] = maximumTokenCount,
+            ["temperature"] = 0.7
         };
+        if (responseFormat != null)
+        {
+            requestBody["response_format"] = responseFormat;
+        }
 
         var jsonContent = JsonSerializer.Serialize(requestBody);
         var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -376,7 +444,12 @@ internal sealed class OpenAiChatService : IOpenAiChatService
 
         _logger.LogDebug("OpenAI API response: {Response}", responseContent);
 
-        var responseJson = JsonDocument.Parse(responseContent);
+        return ExtractContentFromCompletionResponse(responseContent, _logger);
+    }
+
+    private static string ExtractContentFromCompletionResponse(string responseContent, ILogger logger)
+    {
+        using var responseJson = JsonDocument.Parse(responseContent);
         var root = responseJson.RootElement;
 
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
@@ -417,7 +490,7 @@ internal sealed class OpenAiChatService : IOpenAiChatService
             }
         }
 
-        _logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
+        logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
         throw new InvalidOperationException($"Unexpected API response format: {responseContent}");
     }
 
