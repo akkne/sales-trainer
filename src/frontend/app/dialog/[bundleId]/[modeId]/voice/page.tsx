@@ -154,8 +154,13 @@ export default function VoiceCallPage() {
         setIsCompleting(true);
         try {
             const sessionFeedback = await completeDialogSession(sid);
-            setFeedback(sessionFeedback);
-            queryClient.invalidateQueries({ queryKey: ["profile"] });
+            if (sessionFeedback) {
+                setFeedback(sessionFeedback);
+                queryClient.invalidateQueries({ queryKey: ["profile"] });
+            } else {
+                // Empty call — nothing was evaluated, no feedback modal.
+                setSessionId(null);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Не удалось завершить звонок");
         } finally {

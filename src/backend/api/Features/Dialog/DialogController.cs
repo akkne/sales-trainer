@@ -205,6 +205,12 @@ public sealed class DialogController : ControllerBase
         {
             var result = await _dialogService.CompleteSessionAsync(sessionId, userId.Value, cancellationToken);
 
+            if (result == null)
+            {
+                // Empty call — session abandoned, no feedback to show, no XP.
+                return NoContent();
+            }
+
             if (result.XpEarned > 0)
             {
                 var userXp = new UserXp

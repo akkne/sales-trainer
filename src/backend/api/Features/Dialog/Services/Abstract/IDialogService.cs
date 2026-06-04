@@ -46,7 +46,12 @@ public interface IDialogService
         string userMessageContent,
         CancellationToken cancellationToken = default);
 
-    Task<DialogFeedbackResult> CompleteSessionAsync(
+    /// <summary>
+    /// Completes the session and generates AI feedback. Returns null when the
+    /// session contains no user messages — such sessions are marked abandoned
+    /// without invoking the feedback model (nothing to evaluate).
+    /// </summary>
+    Task<DialogFeedbackResult?> CompleteSessionAsync(
         string sessionId,
         Guid userId,
         CancellationToken cancellationToken = default);

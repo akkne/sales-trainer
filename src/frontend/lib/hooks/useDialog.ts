@@ -101,8 +101,14 @@ export async function sendDialogMessage(sessionId: string, content: string): Pro
     return apiClient.post<DialogMessage>(`/dialog/sessions/${sessionId}/messages`, { content });
 }
 
-export async function completeDialogSession(sessionId: string): Promise<DialogFeedback> {
-    return apiClient.post<DialogFeedback>(`/dialog/sessions/${sessionId}/complete`, {});
+/**
+ * Completes the session and returns AI feedback. Returns null when the call
+ * had no user messages (backend responds 204) — nothing was evaluated and
+ * no feedback should be shown.
+ */
+export async function completeDialogSession(sessionId: string): Promise<DialogFeedback | null> {
+    const feedback = await apiClient.post<DialogFeedback | undefined>(`/dialog/sessions/${sessionId}/complete`, {});
+    return feedback ?? null;
 }
 
 export async function deleteDialogSession(sessionId: string): Promise<void> {

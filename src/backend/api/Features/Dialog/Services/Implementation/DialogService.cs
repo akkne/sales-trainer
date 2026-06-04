@@ -178,7 +178,7 @@ internal sealed class DialogService : IDialogService
         return aiMessage;
     }
 
-    public async Task<DialogFeedbackResult> CompleteSessionAsync(
+    public async Task<DialogFeedbackResult?> CompleteSessionAsync(
         string sessionId,
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -192,6 +192,23 @@ internal sealed class DialogService : IDialogService
         if (session.Status != DialogSessionStatus.Active)
         {
             throw new InvalidOperationException($"Session {sessionId} is not active");
+        }
+
+        // A call where the user never said anything cannot be evaluated — asking
+        // the feedback model to grade an empty transcript produces fabricated
+        // praise. Mark the session abandoned, award nothing, generate nothing.
+        if (!session.Messages.Any(message => message.Role == "user" && !string.IsNullOrWhiteSpace(message.Content)))
+        {
+            await _mongoContext.DialogSessions.UpdateOneAsync(
+                Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
+                Builders<DialogSession>.Update
+                    .Set(sessionRecord => sessionRecord.Status, DialogSessionStatus.Abandoned)
+                    .Set(sessionRecord => sessionRecord.XpEarned, 0)
+                    .Set(sessionRecord => sessionRecord.CompletedAt, DateTime.UtcNow),
+                cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Abandoned empty session {SessionId} for user {UserId} — no user messages to evaluate", sessionId, userId);
+            return null;
         }
 
         var mode = await GetModeByIdAsync(session.ModeId, cancellationToken);
