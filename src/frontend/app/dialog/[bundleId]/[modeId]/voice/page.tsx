@@ -13,6 +13,12 @@ import { useVoice, useVoiceUsage, VoicePipelineState } from "@/lib/hooks/useVoic
 import { FeedbackModal } from "@/components/dialog/FeedbackModal";
 import { GeoAvatar } from "@/components/ui/GeoAvatar";
 import { Icon } from "@/components/ui/Icon";
+import {
+    startRingingTone,
+    stopRingingTone,
+    playHangupBeep,
+    vibrateOnConnect,
+} from "@/lib/voice/callSounds";
 
 function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -25,6 +31,8 @@ type CallStatus = "idle" | "dialing" | "connected" | "ended";
 interface SubtitleEntry {
     role: "user" | "assistant";
     text: string;
+    /** True when the user barged in and cut this AI reply short. */
+    interrupted?: boolean;
 }
 
 interface StateInfo {
@@ -128,6 +136,8 @@ export default function VoiceCallPage() {
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const previousCallStatusRef = useRef<CallStatus>("idle");
+    const previousVoiceStateRef = useRef<VoicePipelineState>("idle");
     // True while the AI's current reply is still streaming — new chunks are
     // appended to the last assistant entry instead of opening a new one.
     const assistantReplyOpenRef = useRef(false);
@@ -148,6 +158,27 @@ export default function VoiceCallPage() {
             }
         };
     }, [callStatus]);
+
+    // Call sound effects + vibration tied to call status transitions.
+    useEffect(() => {
+        const previous = previousCallStatusRef.current;
+        previousCallStatusRef.current = callStatus;
+
+        if (callStatus === "dialing") {
+            startRingingTone();
+        } else {
+            stopRingingTone();
+        }
+        if (callStatus === "connected" && previous === "dialing") {
+            vibrateOnConnect();
+        }
+        if (callStatus === "ended" && (previous === "connected" || previous === "dialing")) {
+            playHangupBeep();
+        }
+    }, [callStatus]);
+
+    // Stop any looping tones when leaving the page.
+    useEffect(() => stopRingingTone, []);
 
     const handleVoiceError = useCallback((err: Error) => {
         setError(err.message);
@@ -222,6 +253,22 @@ export default function VoiceCallPage() {
         onAiResponse: handleAiResponse,
         onError: handleVoiceError,
     });
+
+    // Barge-in indicator: when the user starts speaking while the AI reply is
+    // still playing, mark the last assistant subtitle as interrupted.
+    useEffect(() => {
+        const previous = previousVoiceStateRef.current;
+        previousVoiceStateRef.current = voiceState;
+
+        if (previous === "playing" && voiceState === "speaking") {
+            assistantReplyOpenRef.current = false;
+            setSubtitles((entries) => {
+                const last = entries[entries.length - 1];
+                if (last?.role !== "assistant" || last.interrupted) return entries;
+                return [...entries.slice(0, -1), { ...last, interrupted: true }];
+            });
+        }
+    }, [voiceState]);
 
     // Keep the newest subtitle line in view.
     useEffect(() => {
@@ -472,16 +519,21 @@ export default function VoiceCallPage() {
                                     }}
                                 >
                                     {entry.role === "user" ? "Вы" : currentMode?.title ?? "Собеседник"}
+                                    {entry.interrupted && (
+                                        <span style={{ color: "var(--clay)", marginLeft: 6 }}>· прервано</span>
+                                    )}
                                 </div>
                                 <div
                                     style={{
                                         background: entry.role === "user" ? "var(--surface-2)" : "var(--surface)",
-                                        border: "1px solid var(--line)",
+                                        border: entry.interrupted ? "1px dashed var(--line-2)" : "1px solid var(--line)",
                                         borderRadius: 12,
                                         padding: "8px 12px",
                                         fontSize: 14,
                                         lineHeight: 1.45,
                                         color: "var(--ink)",
+                                        opacity: entry.interrupted ? 0.6 : 1,
+                                        transition: "opacity 0.3s ease",
                                     }}
                                 >
                                     {entry.text}

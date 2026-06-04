@@ -44,7 +44,7 @@ describe("LessonPath", () => {
             makeLesson({ lessonId: "l1", title: "Урок 1", status: "available" }),
         ];
         render(<LessonPath lessons={lessons} />);
-        expect(screen.queryByText("Приступить к прохождению")).toBeNull();
+        expect(screen.queryByText("Продолжить")).toBeNull();
     });
 
     it("clicking an active node shows popover", () => {
@@ -55,7 +55,7 @@ describe("LessonPath", () => {
         // Click the node circle (role=button)
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        expect(screen.getByText("Приступить к прохождению")).toBeTruthy();
+        expect(screen.getByText("Продолжить")).toBeTruthy();
     });
 
     it("popover contains link to /session/[lessonId]", () => {
@@ -65,7 +65,7 @@ describe("LessonPath", () => {
         render(<LessonPath lessons={lessons} />);
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        const link = screen.getByText("Приступить к прохождению").closest("a");
+        const link = screen.getByText("Продолжить").closest("a");
         expect(link?.getAttribute("href")).toBe("/session/abc123");
     });
 
@@ -76,9 +76,9 @@ describe("LessonPath", () => {
         render(<LessonPath lessons={lessons} />);
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        expect(screen.getByText("Приступить к прохождению")).toBeTruthy();
+        expect(screen.getByText("Продолжить")).toBeTruthy();
         fireEvent.click(nodeBtn);
-        expect(screen.queryByText("Приступить к прохождению")).toBeNull();
+        expect(screen.queryByText("Продолжить")).toBeNull();
     });
 
     it("locked nodes do not show popover on click", () => {
@@ -86,10 +86,11 @@ describe("LessonPath", () => {
             makeLesson({ lessonId: "l1", status: "locked" }),
         ];
         render(<LessonPath lessons={lessons} />);
-        // There should be no button role on a locked node
-        const btns = screen.queryAllByRole("button");
-        expect(btns.length).toBe(0);
-        expect(screen.queryByText("Приступить к прохождению")).toBeNull();
+        // Locked node renders a disabled button — clicking it must not open a popover
+        const btns = screen.getAllByRole("button");
+        expect(btns[0]).toHaveProperty("disabled", true);
+        fireEvent.click(btns[0]);
+        expect(screen.queryByText("Продолжить")).toBeNull();
     });
 
     it("only one popover open at a time", () => {
@@ -100,9 +101,9 @@ describe("LessonPath", () => {
         render(<LessonPath lessons={lessons} />);
         const btns = screen.getAllByRole("button");
         fireEvent.click(btns[0]);
-        expect(screen.queryAllByText("Приступить к прохождению")).toHaveLength(1);
+        expect(screen.queryAllByText("Продолжить")).toHaveLength(1);
         fireEvent.click(btns[1]);
         // First closes, second opens — still only 1
-        expect(screen.queryAllByText("Приступить к прохождению")).toHaveLength(1);
+        expect(screen.queryAllByText("Продолжить")).toHaveLength(1);
     });
 });
