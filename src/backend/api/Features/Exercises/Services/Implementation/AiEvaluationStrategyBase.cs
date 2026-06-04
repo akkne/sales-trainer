@@ -89,17 +89,24 @@ internal abstract class AiEvaluationStrategyBase(
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        // Handle f5ai error format: {"error": {"message": "Something went wrong: {...}"}}
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseBody}");
+        }
+
+        // Handle f5ai error format on a 200 response: {"error": {"message": "..."}} or {"error": "..."}
         if (responseBody.Contains("\"error\""))
         {
             try
             {
-                var errorDoc = JsonDocument.Parse(responseBody);
-                if (errorDoc.RootElement.TryGetProperty("error", out var errorEl))
+                using var errorDocument = JsonDocument.Parse(responseBody);
+                if (errorDocument.RootElement.ValueKind == JsonValueKind.Object &&
+                    errorDocument.RootElement.TryGetProperty("error", out var errorElement))
                 {
-                    var errorMessage = errorEl.TryGetProperty("message", out var msgEl)
-                        ? msgEl.GetString()
-                        : responseBody;
+                    var errorMessage = errorElement.ValueKind == JsonValueKind.Object &&
+                                       errorElement.TryGetProperty("message", out var messageElement)
+                        ? messageElement.ToString()
+                        : errorElement.ToString();
                     throw new HttpRequestException($"OpenAI API error: {errorMessage}. Full response: {responseBody}");
                 }
             }
@@ -107,11 +114,6 @@ internal abstract class AiEvaluationStrategyBase(
             {
                 // Fall through to normal processing
             }
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseBody}");
         }
         var responseJson = JsonDocument.Parse(responseBody);
 

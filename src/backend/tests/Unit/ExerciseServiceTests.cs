@@ -1,9 +1,11 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Achievements.Services.Abstract;
+using SalesTrainer.Api.Features.Notifications.Services.Abstract;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
 using SalesTrainer.Api.Features.Exercises.Services.Implementation;
@@ -31,7 +33,10 @@ public class ExerciseServiceTests
         ]);
         var achievementService = Substitute.For<IAchievementService>();
         var openAiChatService = Substitute.For<IOpenAiChatService>();
-        _service = new ExerciseService(_db, factory, achievementService, openAiChatService);
+        var notificationService = Substitute.For<INotificationService>();
+        // ExerciseService is internal, so NSubstitute cannot proxy ILogger<ExerciseService> — use the null logger.
+        var logger = NullLogger<ExerciseService>.Instance;
+        _service = new ExerciseService(_db, factory, achievementService, openAiChatService, notificationService, logger);
     }
 
     [TearDown]
