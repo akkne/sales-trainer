@@ -1133,10 +1133,10 @@
 - [x] Admin page `/admin/voice/usage` — table of users + minute spend
 
 ### Phase 36.6 — Docs & tests
-- [ ] Update `docs/VOICE_ROLEPLAY.md` with the call-mode flow + diagram
-- [ ] `docs/TESTING/VOICE_CALL.md` — manual checklist (connect, barge-in,
+- [x] Update `docs/VOICE_ROLEPLAY.md` with the call-mode flow + diagram
+- [x] `docs/TESTING/VOICE_CALL.md` — manual checklist (connect, barge-in,
       hangup, limits, fallback to web speech)
-- [ ] Update `docs/API_CONTRACTS.md` with `/voice/stream` and usage endpoints
+- [x] Update `docs/API_CONTRACTS.md` with `/voice/stream` and usage endpoints
 ---
 
 ## Phase 37 — Night Polish Pass (gap analysis 2026-06-05)

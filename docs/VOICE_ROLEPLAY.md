@@ -23,6 +23,37 @@ Voice-based sales conversation practice in the existing Dialog tab. Stack:
         └── Mic indicator shows green ring while speaking
 ```
 
+## Telephone Call Mode (Phase 36)
+
+Full-screen call simulator at `/dialog/[bundleId]/[modeId]/voice` («Позвонить»
+CTA on the mode card). Continuous VAD — no push-to-talk.
+
+### Call state machine
+
+```
+ idle ──«Позвонить»──▶ dialing ──first AI reply──▶ connected ──hangup/endCall──▶ ended
+  ▲                       │ ringback tone 425Hz        │ call timer, live          │ busy beeps,
+  └──«Позвонить ещё раз»──┘ (1s on / 4s off)           │ subtitles, barge-in       ▼ feedback modal
+                                                       │ vibrate on connect     /complete
+```
+
+- **Sounds** (`lib/voice/callSounds.ts`): ringback while `dialing`, triple busy
+  beep on `ended` — synthesized with Web Audio oscillators, no binary assets.
+- **Vibration**: `navigator.vibrate(80)` on `dialing → connected` (mobile).
+- **Barge-in**: user speech during playback stops audio, aborts the in-flight
+  `/voice/stream` fetch; the cut-off AI subtitle fades to 60% opacity with a
+  «· прервано» label and dashed border.
+- **Live subtitles**: interim recognizer text shown italic/dashed; committed
+  phrases become user bubbles; AI reply streams chunk-by-chunk into one bubble.
+- **Usage limits**: header shows `X/Y МИН СЕГОДНЯ` (from `GET /dialog/voice/usage`);
+  backend returns 429 when `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes`
+  exceeded. Per-user spend report for admins: `GET /admin/voice/usage` +
+  `/admin/voice/usage` page. Quota bars also shown on `/profile`.
+- Leaving the page mid-call completes the session (fire-and-forget) so minutes
+  and history are recorded; all tones stop on unmount.
+
+Manual checklist: [TESTING/VOICE_CALL.md](TESTING/VOICE_CALL.md)
+
 ## UI Design (Duolingo-style)
 
 - Round microphone button (centered or bottom)

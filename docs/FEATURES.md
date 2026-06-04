@@ -37,6 +37,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
 | [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |
 | [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and achievement button cleanup |
+| [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
 | [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
 | Feature checklists | Manual test checklists for each feature |
 
