@@ -683,7 +683,7 @@
 - [x] Update `docs/API_CONTRACTS.md` with dialog endpoints
 - [x] Update `docs/AI_DIALOG.md` with final architecture
 - [x] Create `docs/TESTING/AI_DIALOG.md` — manual checklist
-- [ ] Unit tests for `OpenAiChatService` (mocked HTTP)
+- [x] Unit tests for `OpenAiChatService` (mocked HTTP) — `tests/Unit/OpenAiChatServiceTests.cs`
 - [ ] Integration tests for dialog endpoints
 
 ---
@@ -749,7 +749,7 @@
 - [x] Update `docs/API_CONTRACTS.md` with voice endpoints
 - [x] Update `docs/VOICE_ROLEPLAY.md` with final architecture
 - [x] Create `docs/TESTING/VOICE_ROLEPLAY.md` — manual checklist
-- [ ] Frontend component tests for VoiceMicButton
+- [x] Frontend component tests for VoiceMicButton — `__tests__/VoiceMicButton.test.tsx`
 
 ---
 
@@ -805,7 +805,7 @@
 ### [x] Testing
 - [x] Create `docs/TESTING/NEW_EXERCISE_TYPES.md` — manual checklist
 - [x] Unit tests for non-AI evaluation strategies (reorder, categorize; match_pairs already covered)
-- [ ] Unit tests for AI strategies (mocked HTTP)
+- [x] Unit tests for AI strategies (mocked HTTP) — Rewrite, AiDialogue, FreeText in `tests/Unit/EvaluationStrategies/`
 - [ ] Integration tests for chat endpoint
 
 ---
