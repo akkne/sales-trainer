@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { AchievementToast, AchievementToastQueue } from "../components/ui/AchievementToast";
+import { AchievementToast, AchievementToastQueue } from "@/shared/components/achievement-toast";
 
 const ACHIEVEMENT = {
     key: "first_blood",

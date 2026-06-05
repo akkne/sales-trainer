@@ -1,11 +1,11 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { Icon } from "@/components/ui/Icon";
-import { Button } from "@/components/ui/Button";
-import { usePublicProfile } from "@/lib/hooks/useFriends";
-import { useCreateConversation } from "@/lib/hooks/useChat";
-import { FriendshipButton } from "@/components/friends/FriendshipButton";
+import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { usePublicProfile } from "@/features/friends/hooks/use-friends";
+import { useCreateConversation } from "@/features/friends/hooks/use-chat";
+import { FriendshipButton } from "@/features/friends/components/friendship-button";
 
 const PERSONA_LABELS: Record<string, string> = {
     sdr: "SDR",

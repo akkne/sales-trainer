@@ -11,7 +11,7 @@ import {
     useImportLessons,
     type AdminLessonWithTopic,
     type LessonsImportResult,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";

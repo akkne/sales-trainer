@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { logger } from "@/shared/utils/logger";
 
 interface BrowserLogEntry {
   level: number;

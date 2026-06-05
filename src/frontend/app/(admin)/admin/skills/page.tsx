@@ -9,7 +9,7 @@ import {
     useImportSkills,
     type AdminSkill,
     type SkillsImportResult,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",

@@ -1,15 +1,17 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 
 internal sealed class VoicerTtsService : IVoicerTtsService
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<VoicerTtsConfiguration> _voicerTtsOptions;
     private readonly ILogger<VoicerTtsService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_VOICER_API_KEY";
@@ -17,11 +19,11 @@ internal sealed class VoicerTtsService : IVoicerTtsService
 
     public VoicerTtsService(
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
+        IOptions<VoicerTtsConfiguration> voicerTtsOptions,
         ILogger<VoicerTtsService> logger)
     {
         _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
+        _voicerTtsOptions = voicerTtsOptions;
         _logger = logger;
     }
 
@@ -29,7 +31,7 @@ internal sealed class VoicerTtsService : IVoicerTtsService
     {
         get
         {
-            var apiKey = _configuration["VoicerTts:ApiKey"];
+            var apiKey = _voicerTtsOptions.Value.ApiKey;
             return !string.IsNullOrWhiteSpace(apiKey) &&
                    apiKey != PlaceholderApiKey &&
                    !apiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
@@ -39,39 +41,27 @@ internal sealed class VoicerTtsService : IVoicerTtsService
     public async Task<Stream> SynthesizeSpeechAsync(string text, string? voiceId = null, CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
-        {
             throw new InvalidOperationException("VoicerTts API is not configured");
-        }
 
-        var apiKey = _configuration["VoicerTts:ApiKey"]!;
-        var baseUrl = _configuration["VoicerTts:BaseUrl"] ?? "https://voiceapi.csv666.ru";
-        var defaultVoiceId = _configuration["VoicerTts:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
-        var publicOwnerId = _configuration["VoicerTts:PublicOwnerId"] ?? "default";
-        var model = _configuration["VoicerTts:Model"] ?? "eleven_multilingual_v2";
-        var stability = double.TryParse(_configuration["VoicerTts:Stability"], out var stabilityValue) ? stabilityValue : 0.5;
-        var similarityBoost = double.TryParse(_configuration["VoicerTts:SimilarityBoost"], out var similarityBoostValue) ? similarityBoostValue : 0.75;
-        var speed = double.TryParse(_configuration["VoicerTts:Speed"], out var speedValue) ? speedValue : 1.0;
-        var pollIntervalMilliseconds = int.TryParse(_configuration["VoicerTts:PollIntervalMs"], out var pollInterval) ? pollInterval : 500;
-        var maximumPollAttempts = int.TryParse(_configuration["VoicerTts:MaxPollAttempts"], out var maxAttempts) ? maxAttempts : 120;
-
-        var effectiveVoiceId = voiceId ?? defaultVoiceId;
+        var configuration = _voicerTtsOptions.Value;
+        var effectiveVoiceId = voiceId ?? configuration.VoiceId;
         var paddedText = PadTextToMinimumLength(text);
 
         var httpClient = _httpClientFactory.CreateClient("VoicerTts");
         httpClient.DefaultRequestHeaders.Clear();
-        httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        httpClient.DefaultRequestHeaders.Add("X-API-Key", configuration.ApiKey);
 
-        var taskId = await CreateTaskAsync(httpClient, baseUrl, paddedText, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, cancellationToken);
+        var taskId = await CreateTaskAsync(httpClient, configuration.BaseUrl, paddedText, effectiveVoiceId, configuration.PublicOwnerId, configuration.Model, configuration.Stability, configuration.SimilarityBoost, configuration.Speed, cancellationToken);
         _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters (padded from {OriginalLength})",
             taskId, paddedText.Length, text.Length);
 
-        var status = await PollForCompletionAsync(httpClient, baseUrl, taskId, pollIntervalMilliseconds, maximumPollAttempts, cancellationToken);
+        var status = await PollForCompletionAsync(httpClient, configuration.BaseUrl, taskId, configuration.PollIntervalMilliseconds, configuration.MaximumPollAttemptCount, cancellationToken);
         if (status != "ending")
         {
             throw new VoicerTtsException($"Task {taskId} ended with unexpected status: {status}");
         }
 
-        var audioStream = await DownloadResultAsync(httpClient, baseUrl, taskId, cancellationToken);
+        var audioStream = await DownloadResultAsync(httpClient, configuration.BaseUrl, taskId, cancellationToken);
         _logger.LogInformation("VoicerTts audio downloaded for task {TaskId}", taskId);
 
         return audioStream;

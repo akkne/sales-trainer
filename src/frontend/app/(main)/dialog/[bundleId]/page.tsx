@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useDialogBundles, useDialogModes } from "@/lib/hooks/useDialog";
-import { ModeCard } from "@/components/dialog/ModeCard";
+import { useDialogBundles, useDialogModes } from "@/features/dialog/hooks/use-dialog";
+import { ModeCard } from "@/features/dialog/components/mode-card";
 
 export default function BundleModesPage() {
     const params = useParams();

@@ -3,7 +3,7 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { useReferenceMaterials } from "@/lib/hooks/useReference";
+import { useReferenceMaterials } from "@/features/skills/hooks/use-reference";
 
 interface ReferencePageProps {
     params: Promise<{ id: string }>;

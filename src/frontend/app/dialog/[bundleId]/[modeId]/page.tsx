@@ -13,15 +13,15 @@ import {
     sendDialogMessage,
     completeDialogSession,
     deleteDialogSession,
-} from "@/lib/hooks/useDialog";
-import { useVoice } from "@/lib/hooks/useVoice";
-import { apiClient } from "@/lib/api/apiClient";
-import { ChatMessage } from "@/components/dialog/ChatMessage";
-import { ChatInput } from "@/components/dialog/ChatInput";
-import { FeedbackModal } from "@/components/dialog/FeedbackModal";
-import { SessionHistorySidebar } from "@/components/dialog/SessionHistorySidebar";
-import { VoiceMicButton } from "@/components/dialog/VoiceMicButton";
-import { Icon } from "@/components/ui/Icon";
+} from "@/features/dialog/hooks/use-dialog";
+import { useVoice } from "@/features/voice/hooks/use-voice";
+import { apiClient } from "@/shared/api/api-client";
+import { ChatMessage } from "@/features/dialog/components/chat-message";
+import { ChatInput } from "@/features/dialog/components/chat-input";
+import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
+import { SessionHistorySidebar } from "@/features/dialog/components/session-history-sidebar";
+import { VoiceMicButton } from "@/features/voice/components/voice-mic-button";
+import { Icon } from "@/shared/components/icon";
 
 function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);

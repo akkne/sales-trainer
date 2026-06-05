@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { LessonPath } from "@/components/ui/LessonPath";
-import type { LessonSummary } from "@/lib/hooks/useLesson";
+import { LessonPath } from "@/shared/components/lesson-path";
+import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
 
 // Next.js Link mock
 vi.mock("next/link", () => ({

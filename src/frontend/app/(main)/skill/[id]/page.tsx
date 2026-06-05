@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { use } from "react";
-import { useLessonsForSkill } from "@/lib/hooks/useLesson";
-import { LessonPath } from "@/components/ui/LessonPath";
+import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
+import { LessonPath } from "@/shared/components/lesson-path";
 
 interface SkillPageProps {
     params: Promise<{ id: string }>;

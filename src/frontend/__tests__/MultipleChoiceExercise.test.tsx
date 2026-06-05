@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MultipleChoiceExercise } from "@/components/exercise/MultipleChoiceExercise";
+import { MultipleChoiceExercise } from "@/features/exercise/components/multiple-choice-exercise";
 
 const CONTENT = {
     situation: "Клиент говорит: «Слишком дорого»",

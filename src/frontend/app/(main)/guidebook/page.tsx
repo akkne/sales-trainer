@@ -3,8 +3,8 @@
 import { useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { useHandbook, useHandbookCategories } from "@/lib/hooks/useReference";
-import { Icon } from "@/components/ui/Icon";
+import { useHandbook, useHandbookCategories } from "@/features/skills/hooks/use-reference";
+import { Icon } from "@/shared/components/icon";
 
 const CATEGORY_LABELS: Record<string, string> = {
     "objections": "Возражения",

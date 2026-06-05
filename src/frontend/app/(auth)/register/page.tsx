@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRegister } from "@/lib/hooks/useAuth";
-import { GoogleLoginButton } from "@/components/ui/GoogleLoginButton";
-import { Icon } from "@/components/ui/Icon";
+import { useRegister } from "@/features/auth/hooks/use-auth";
+import { GoogleLoginButton } from "@/shared/components/google-login-button";
+import { Icon } from "@/shared/components/icon";
 
 export default function RegisterPage() {
     const [displayName, setDisplayName] = useState("");

@@ -2,8 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { useCompleteOnboarding, useSkillsForOnboarding } from "@/lib/hooks/useOnboarding";
-import { Icon } from "@/components/ui/Icon";
+import { useCompleteOnboarding, useSkillsForOnboarding } from "@/features/auth/hooks/use-onboarding";
+import { Icon } from "@/shared/components/icon";
 
 const PERSONA_OPTIONS = [
     { value: "sdr", label: "SDR", description: "Разведчик продаж — ищу и квалифицирую лиды", icon: "call" },

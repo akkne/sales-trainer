@@ -8,9 +8,9 @@ import {
     useCreateExercise,
     useDeleteExercise,
     AdminExercise,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/apiClient";
+import { apiClient } from "@/shared/api/api-client";
 
 import {
     EXERCISE_TYPES,
@@ -39,19 +39,19 @@ import {
     emptyFreeText,
     inputCls,
     labelCls,
-} from "@/components/admin/exercise-editors";
+} from "@/features/admin/components/exercise-editors";
 
-import { MultipleChoiceEditor } from "@/components/admin/exercise-editors/MultipleChoiceEditor";
-import { FillBlankEditor } from "@/components/admin/exercise-editors/FillBlankEditor";
-import { OpenQuestionEditor } from "@/components/admin/exercise-editors/OpenQuestionEditor";
-import { OrderingEditor } from "@/components/admin/exercise-editors/OrderingEditor";
-import { MatchingEditor } from "@/components/admin/exercise-editors/MatchingEditor";
-import { CategorizingEditor } from "@/components/admin/exercise-editors/CategorizingEditor";
-import { FindErrorEditor } from "@/components/admin/exercise-editors/FindErrorEditor";
-import { RewriteBetterEditor } from "@/components/admin/exercise-editors/RewriteBetterEditor";
-import { AiDialogEditor } from "@/components/admin/exercise-editors/AiDialogEditor";
-import { RateCallEditor } from "@/components/admin/exercise-editors/RateCallEditor";
-import { WrittenAnswerEditor } from "@/components/admin/exercise-editors/WrittenAnswerEditor";
+import { MultipleChoiceEditor } from "@/features/admin/components/exercise-editors/MultipleChoiceEditor";
+import { FillBlankEditor } from "@/features/admin/components/exercise-editors/FillBlankEditor";
+import { OpenQuestionEditor } from "@/features/admin/components/exercise-editors/OpenQuestionEditor";
+import { OrderingEditor } from "@/features/admin/components/exercise-editors/OrderingEditor";
+import { MatchingEditor } from "@/features/admin/components/exercise-editors/MatchingEditor";
+import { CategorizingEditor } from "@/features/admin/components/exercise-editors/CategorizingEditor";
+import { FindErrorEditor } from "@/features/admin/components/exercise-editors/FindErrorEditor";
+import { RewriteBetterEditor } from "@/features/admin/components/exercise-editors/RewriteBetterEditor";
+import { AiDialogEditor } from "@/features/admin/components/exercise-editors/AiDialogEditor";
+import { RateCallEditor } from "@/features/admin/components/exercise-editors/RateCallEditor";
+import { WrittenAnswerEditor } from "@/features/admin/components/exercise-editors/WrittenAnswerEditor";
 
 function typeBadgeColor(): string {
     return "bg-surface-container text-on-surface-variant border border-outline-variant";

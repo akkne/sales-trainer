@@ -111,7 +111,7 @@ builder.Services
     .AddReferenceFeatureServices()
     .AddSkillTreeFeatureServices()
     .AddTranscriptionFeatureServices()
-    .AddVoiceFeatureServices();
+    .AddVoiceFeatureServices(builder.Configuration);
 
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>

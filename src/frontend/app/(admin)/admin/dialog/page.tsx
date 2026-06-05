@@ -10,7 +10,7 @@ import {
     useDeleteBundle,
     AdminDialogBundle,
     CreateBundleRequest,
-} from "@/lib/hooks/useAdminDialog";
+} from "@/features/dialog/hooks/use-admin-dialog";
 
 export default function AdminDialogPage() {
     const { data: bundles, isLoading, error } = useAdminDialogBundles();

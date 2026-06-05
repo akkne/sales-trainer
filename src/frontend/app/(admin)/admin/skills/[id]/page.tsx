@@ -10,7 +10,7 @@ import {
     useCreateTopic,
     useDeleteTopic,
     type AdminSkill,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 export default function AdminSkillDetailPage({
     params,

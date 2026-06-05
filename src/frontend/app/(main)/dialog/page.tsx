@@ -1,8 +1,8 @@
 "use client";
 
-import { useDialogBundles } from "@/lib/hooks/useDialog";
-import { BundleCard } from "@/components/dialog/BundleCard";
-import { Icon } from "@/components/ui/Icon";
+import { useDialogBundles } from "@/features/dialog/hooks/use-dialog";
+import { BundleCard } from "@/features/dialog/components/bundle-card";
+import { Icon } from "@/shared/components/icon";
 import Link from "next/link";
 
 export default function DialogPage() {

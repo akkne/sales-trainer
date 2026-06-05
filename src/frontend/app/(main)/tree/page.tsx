@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { LessonPath } from "@/components/ui/LessonPath";
-import { StatsWidget } from "@/components/layout/StatsWidget";
-import { useSkillTree, useSkills } from "@/lib/hooks/useSkillTree";
-import { useLessonsForSkill } from "@/lib/hooks/useLesson";
-import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
-import { Icon } from "@/components/ui/Icon";
+import { LessonPath } from "@/shared/components/lesson-path";
+import { StatsWidget } from "@/features/layout/components/stats-widget";
+import { useSkillTree, useSkills } from "@/features/skills/hooks/use-skill-tree";
+import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
+import { useSelectedSkillStore } from "@/stores/selected-skill-store";
+import { Icon } from "@/shared/components/icon";
 
 // ── Skill lesson view ─────────────────────────────────────────────────────────
 

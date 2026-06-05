@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/apiClient";
+import { apiClient } from "@/shared/api/api-client";
 import {
     useExerciseTypePrompts,
     useUpdateExerciseTypePrompt,
     type ExerciseTypePrompt,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 interface GlobalContextData {
     contextText: string;

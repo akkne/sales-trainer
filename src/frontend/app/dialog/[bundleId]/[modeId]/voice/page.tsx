@@ -8,11 +8,11 @@ import {
     useDialogModes,
     completeDialogSession,
     DialogFeedback,
-} from "@/lib/hooks/useDialog";
-import { useVoice, VoicePipelineState } from "@/lib/hooks/useVoice";
-import { apiClient } from "@/lib/api/apiClient";
-import { FeedbackModal } from "@/components/dialog/FeedbackModal";
-import { Icon } from "@/components/ui/Icon";
+} from "@/features/dialog/hooks/use-dialog";
+import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
+import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
+import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
+import { Icon } from "@/shared/components/icon";
 
 function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -41,8 +41,9 @@ export default function VoiceOnlyPage() {
     const [sessionTimer, setSessionTimer] = useState(0);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const callSoundsPlayerRef = useRef<CallSoundsPlayer>(new CallSoundsPlayer());
 
-    // Session timer
+    useEffect(() => () => callSoundsPlayerRef.current.stopRinging(), []);
     useEffect(() => {
         if (sessionId && !isEnded && !feedback) {
             timerRef.current = setInterval(() => {
@@ -61,7 +62,6 @@ export default function VoiceOnlyPage() {
         };
     }, [sessionId, isEnded, feedback]);
 
-    // Reset timer on new session
     useEffect(() => {
         if (sessionId) {
             setSessionTimer(0);
@@ -80,10 +80,8 @@ export default function VoiceOnlyPage() {
     const handleAiResponse = useCallback((content: string, isStopSignal: boolean) => {
         if (isStopSignal && sessionId) {
             setIsEnded(true);
-            // Auto-complete session
             completeSession(sessionId);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId]);
 
     const completeSession = async (sid: string) => {
@@ -156,7 +154,6 @@ export default function VoiceOnlyPage() {
         }
     };
 
-    // Status text and icon
     const getStatusInfo = (): { text: string; icon: string; color: string } => {
         switch (voiceState) {
             case "idle":
@@ -180,7 +177,6 @@ export default function VoiceOnlyPage() {
 
     const statusInfo = getStatusInfo();
 
-    // Voice not available
     if (!isVoiceAvailable && currentMode) {
         return (
             <div className="flex flex-col h-screen bg-surface">

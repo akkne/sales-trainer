@@ -1,5 +1,5 @@
-import { BottomNav } from "@/components/layout/BottomNav";
-import { TopAppBar } from "@/components/layout/TopAppBar";
+import { BottomNav } from "@/features/layout/components/bottom-nav";
+import { TopAppBar } from "@/features/layout/components/top-app-bar";
 
 export default function MainLayout({
     children,
