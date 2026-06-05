@@ -11,14 +11,14 @@ namespace SalesTrainer.Api.Features.Voice;
 public class VoiceConfigController : ControllerBase
 {
     private readonly IConfiguration _configuration;
-    private readonly IVoicerTtsService _voicerTtsService;
+    private readonly ITtsRouter _ttsRouter;
 
     public VoiceConfigController(
         IConfiguration configuration,
-        IVoicerTtsService voicerTtsService)
+        ITtsRouter ttsRouter)
     {
         _configuration = configuration;
-        _voicerTtsService = voicerTtsService;
+        _ttsRouter = ttsRouter;
     }
 
     [HttpGet("config")]
@@ -31,7 +31,7 @@ public class VoiceConfigController : ControllerBase
         var monthlyLimitMinutes = _configuration.GetValue("Voice:MonthlyLimitMinutes", 300);
 
         // Voice is enabled if TTS is configured (STT uses browser's Web Speech API)
-        var isEnabled = voiceEnabled && _voicerTtsService.IsConfigured;
+        var isEnabled = voiceEnabled && _ttsRouter.IsConfigured;
 
         return Ok(new VoiceConfigDto
         {

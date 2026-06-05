@@ -9,6 +9,8 @@ public static class VoiceServiceCollectionExtensions
     {
         services.AddScoped<IVoicerTtsService, VoicerTtsService>();
         services.AddScoped<IGoogleTtsService, GoogleTtsService>();
+        services.AddScoped<IYandexTtsService, YandexTtsService>();
+        services.AddScoped<ITtsRouter, TtsRouter>();
         services.AddScoped<IVoiceDialogService, VoiceDialogService>();
         services.AddScoped<IVoiceUsageService, VoiceUsageService>();
         return services;

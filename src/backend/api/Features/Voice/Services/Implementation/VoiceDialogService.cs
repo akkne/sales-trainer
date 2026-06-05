@@ -16,26 +16,20 @@ public class VoiceDialogService : IVoiceDialogService
     private readonly AppDbContext _dbContext;
     private readonly MongoDbContext _mongoContext;
     private readonly IOpenAiChatService _openAiService;
-    private readonly IVoicerTtsService _voicerTtsService;
-    private readonly IGoogleTtsService _googleTtsService;
-    private readonly IConfiguration _configuration;
+    private readonly ITtsRouter _ttsRouter;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
         AppDbContext dbContext,
         MongoDbContext mongoContext,
         IOpenAiChatService openAiService,
-        IVoicerTtsService voicerTtsService,
-        IGoogleTtsService googleTtsService,
-        IConfiguration configuration,
+        ITtsRouter ttsRouter,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
         _mongoContext = mongoContext;
         _openAiService = openAiService;
-        _voicerTtsService = voicerTtsService;
-        _googleTtsService = googleTtsService;
-        _configuration = configuration;
+        _ttsRouter = ttsRouter;
         _logger = logger;
     }
 
@@ -80,10 +74,14 @@ public class VoiceDialogService : IVoiceDialogService
 
         // The model answers with {"reply": "...", "endCall": bool}; the parser
         // extracts the spoken reply incrementally. Text chunks are pushed to the
-        // client immediately (live subtitles); audio is synthesized afterwards in
-        // a single TTS request — Voicer is a queue-based service (~10-30s per task
-        // regardless of text length), so per-sentence synthesis would multiply
-        // both latency and cost (each task bills a 500-char minimum).
+        // client immediately (live subtitles). Audio strategy depends on the
+        // active TTS provider:
+        //  - realtime providers (Yandex/Google, <1s round-trip): synthesize per
+        //    sentence right behind its text frame, so speech starts almost at once;
+        //  - queue-based providers (Voicer, ~10-30s per task regardless of length):
+        //    batch the whole reply into a single task — per-sentence would multiply
+        //    both latency and cost (each Voicer task bills a 500-char minimum).
+        var realtimeTts = _ttsRouter.IsRealtime;
         var replyParser = new StreamingChatReplyParser();
         var sentenceBuffer = new StringBuilder();
         var spokenSentences = new List<string>();
@@ -103,6 +101,13 @@ public class VoiceDialogService : IVoiceDialogService
 
                 spokenSentences.Add(cleaned);
                 yield return new VoiceStreamChunk(cleaned, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
+
+                if (realtimeTts)
+                {
+                    var sentenceAudio = await TrySynthesizeAsync(cleaned, mode.VoiceId, sessionId, ct);
+                    if (sentenceAudio is { Length: > 0 })
+                        yield return new VoiceStreamChunk(string.Empty, sentenceAudio, IsStopSignal: false, IsFinal: false);
+                }
             }
         }
 
@@ -124,17 +129,27 @@ public class VoiceDialogService : IVoiceDialogService
         {
             spokenSentences.Add(tailCleaned);
             yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
+
+            if (realtimeTts)
+            {
+                var tailAudio = await TrySynthesizeAsync(tailCleaned, mode.VoiceId, sessionId, ct);
+                if (tailAudio is { Length: > 0 })
+                    yield return new VoiceStreamChunk(string.Empty, tailAudio, IsStopSignal: false, IsFinal: false);
+            }
         }
 
-        // Synthesize the whole reply at once. A TTS failure must not kill the
-        // stream — the user has already received the text above.
-        var speechText = string.Join(" ", spokenSentences);
-        if (!string.IsNullOrWhiteSpace(speechText))
+        // Queue-based provider: synthesize the whole reply in one task. A TTS
+        // failure must not kill the stream — the user already has the text above.
+        if (!realtimeTts)
         {
-            var audio = await TrySynthesizeAsync(speechText, mode.VoiceId, sessionId, ct);
-            if (audio is { Length: > 0 })
+            var speechText = string.Join(" ", spokenSentences);
+            if (!string.IsNullOrWhiteSpace(speechText))
             {
-                yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
+                var audio = await TrySynthesizeAsync(speechText, mode.VoiceId, sessionId, ct);
+                if (audio is { Length: > 0 })
+                {
+                    yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
+                }
             }
         }
 
@@ -212,21 +227,7 @@ public class VoiceDialogService : IVoiceDialogService
 
     private async Task<byte[]> SynthesizeAsync(string text, string? voiceId, CancellationToken ct)
     {
-        var provider = (_configuration["Voice:TtsProvider"] ?? "voicer").Trim().ToLowerInvariant();
-        Stream stream = provider switch
-        {
-            "google" when _googleTtsService.IsConfigured =>
-                await _googleTtsService.SynthesizeSpeechAsync(text, voiceId, ct),
-            "voicer" when _voicerTtsService.IsConfigured =>
-                await _voicerTtsService.SynthesizeSpeechAsync(text, voiceId, ct),
-            _ when _voicerTtsService.IsConfigured =>
-                await _voicerTtsService.SynthesizeSpeechAsync(text, voiceId, ct),
-            _ when _googleTtsService.IsConfigured =>
-                await _googleTtsService.SynthesizeSpeechAsync(text, voiceId, ct),
-            _ => throw new InvalidOperationException(
-                $"TTS provider '{provider}' is not configured. Set Voice:TtsProvider and the matching API key.")
-        };
-
+        var stream = await _ttsRouter.SynthesizeSpeechAsync(text, voiceId, ct);
         await using (stream)
         {
             using var ms = new MemoryStream();

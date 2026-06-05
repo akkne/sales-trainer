@@ -126,6 +126,9 @@ builder.Services.AddHttpClient("VoicerTts")
 builder.Services.AddHttpClient("GoogleTts")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient("YandexTts")
+    .ConfigureHttpClient(client =>
+        client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient();
 
 builder.Services.AddControllers();

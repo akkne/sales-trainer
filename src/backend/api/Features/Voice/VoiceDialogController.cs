@@ -12,18 +12,18 @@ namespace SalesTrainer.Api.Features.Voice;
 public class VoiceDialogController : ControllerBase
 {
     private readonly IVoiceDialogService _voiceDialogService;
-    private readonly IVoicerTtsService _voicerTtsService;
+    private readonly ITtsRouter _ttsRouter;
     private readonly IVoiceUsageService _voiceUsageService;
     private readonly ILogger<VoiceDialogController> _logger;
 
     public VoiceDialogController(
         IVoiceDialogService voiceDialogService,
-        IVoicerTtsService voicerTtsService,
+        ITtsRouter ttsRouter,
         IVoiceUsageService voiceUsageService,
         ILogger<VoiceDialogController> logger)
     {
         _voiceDialogService = voiceDialogService;
-        _voicerTtsService = voicerTtsService;
+        _ttsRouter = ttsRouter;
         _voiceUsageService = voiceUsageService;
         _logger = logger;
     }
@@ -46,7 +46,7 @@ public class VoiceDialogController : ControllerBase
         [FromBody] VoiceMessageRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!_voicerTtsService.IsConfigured)
+        if (!_ttsRouter.IsConfigured)
         {
             Response.StatusCode = 503;
             await Response.WriteAsJsonAsync(new { error = "Voice service is not configured" }, cancellationToken);

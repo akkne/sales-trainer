@@ -95,13 +95,22 @@ Side effect: saves user + assistant messages to the session
 
 The chat model answers with structured JSON `{"reply": string, "endCall": bool}`;
 `StreamingChatReplyParser` extracts the reply incrementally. **Text frames are
-yielded immediately** (audio length 0) so live subtitles appear within seconds,
-then the **entire reply is synthesized in one Voicer TTS task** and delivered as
-a single audio-only frame. Voicer is a queue-based service: a task takes
-~10-35 s *regardless of text length* and bills a 500-character minimum, so
-per-sentence synthesis would multiply both latency and cost. A TTS failure is
-logged and swallowed — the user still gets the reply as text, and the stream
-finishes normally with the final sentinel.
+yielded immediately** (audio length 0) so live subtitles appear within seconds.
+The audio strategy is provider-dependent (`TtsRouter.IsRealtime`):
+
+- **Realtime providers (Yandex SpeechKit, Google)** — synchronous APIs answering
+  in well under a second: each sentence is synthesized right behind its text
+  frame, so speech starts almost immediately and flows sentence-by-sentence.
+- **Queue-based providers (Voicer)** — a task takes ~10-35 s *regardless of text
+  length* and bills a 500-character minimum, so the **entire reply is batched
+  into one TTS task** and delivered as a single audio-only frame.
+
+`TtsRouter` is the single source of truth for provider selection
+(`Voice:TtsProvider`, fallback order yandex → google → voicer) and for the
+"is voice configured" checks in both controllers. Yandex synthesizes raw LPCM
+which the service wraps in a WAV header (v1 REST API has no mp3; OggOpus is not
+decodable in Safari). A TTS failure is logged and swallowed — the user still
+gets the reply as text, and the stream finishes normally with the final sentinel.
 
 ### Configuration (appsettings.json)
 
@@ -120,9 +129,16 @@ finishes normally with the final sentinel.
     "VoiceId": "21m00Tcm4TlvDq8ikWAM",
     "Model": "eleven_multilingual_v2"
   },
+  "YandexTts": {
+    "ApiKey": "REPLACE_WITH_YANDEX_API_KEY",
+    "BaseUrl": "https://tts.api.cloud.yandex.net",
+    "Voice": "marina",
+    "Lang": "ru-RU",
+    "Speed": "1.0"
+  },
   "Voice": {
     "Enabled": true,
-    "TtsProvider": "voicer",
+    "TtsProvider": "yandex",
     "VadSilenceMs": 600,
     "MaxRecordingSeconds": 60,
     "DailyLimitMinutes": 30,
@@ -137,13 +153,26 @@ finishes normally with the final sentinel.
 |-------|----------|------------------------------|-------------|
 | **STT** | Deepgram | Через ProxyAPI / VseGPT (есть deepgram-compatible бридж) или напрямую с зарубежной картой | `Deepgram:ApiKey` |
 | **STT (fallback)** | Web Speech API (браузер) | Бесплатно, не требует ключа | — |
-| **TTS** | Voicer (прокси к ElevenLabs) | Личный кабинет `voiceapi.csv666.ru`, оплата СБП | `VoicerTts:ApiKey`, `Voice:TtsProvider=voicer` |
+| **TTS (основной)** | Yandex SpeechKit v1 | Yandex Cloud, рубли (карта/счёт). Latency <1 c — реалистичный звонок | `YandexTts:ApiKey`, `Voice:TtsProvider=yandex` |
+| **TTS (fallback)** | Voicer (прокси к ElevenLabs) | Личный кабинет `voiceapi.csv666.ru`, оплата СБП. Очередь ~10-35 с/задача | `VoicerTts:ApiKey`, `Voice:TtsProvider=voicer` |
 | **TTS (alt)** | Google Cloud TTS | Google Cloud, иностранная карта | `GoogleTts:ApiKey`, `Voice:TtsProvider=google` |
-| **TTS (alt)** | SaluteSpeech (Сбер) | СБП | планируется |
+| **TTS (alt)** | SaluteSpeech (Сбер) | СБП, но минимум 15 000 ₽/мес для юрлиц | отклонено |
 | **LLM** | См. [AI_DIALOG.md](AI_DIALOG.md#buying-api-access-from-russia-rub-friendly-proxy-gateways) | — | `OpenAI:BaseUrl` |
 
 `Voice:TtsProvider` явно выбирает провайдер; если выбранный не сконфигурирован,
-сервис фолбэчится на любой доступный.
+`TtsRouter` фолбэчится в порядке yandex → google → voicer.
+
+#### Как получить ключ Yandex SpeechKit
+
+1. Зарегистрироваться / войти в [Yandex Cloud](https://console.yandex.cloud), создать платёжный аккаунт (карта РФ).
+2. Создать каталог (folder), в нём — **сервисный аккаунт** с ролью `ai.speechkit-tts.user`.
+3. У сервисного аккаунта создать **API-ключ** (не IAM-токен — API-ключ бессрочный).
+4. Вставить ключ в `appsettings.Development.json` → `YandexTts:ApiKey` и перезапустить backend.
+   `folderId` при авторизации API-ключом сервисного аккаунта не нужен.
+
+Цены (2026): ~1 300 ₽/млн символов, новым аккаунтам даётся стартовый грант.
+Голоса: `marina` (по умолчанию), `alexander`, `lera`, `masha`, `dasha`, `julia`,
+`alena`, `filipp` — меняются через `YandexTts:Voice` без пересборки.
 
 ## Database Changes
 
