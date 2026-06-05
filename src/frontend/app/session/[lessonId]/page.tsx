@@ -7,24 +7,21 @@ import {
     useSubmitExercise,
     type ExerciseSubmissionResult,
     type ExerciseData,
-} from "@/lib/hooks/useLesson";
-import { useAchievements } from "@/lib/hooks/useAchievements";
-import { ExerciseTypes } from "@/lib/exerciseTypes";
-import { ChooseOptionExercise } from "@/components/exercise/ChooseOptionExercise";
-import { FillBlankExercise } from "@/components/exercise/FillBlankExercise";
-import { ReorderExercise } from "@/components/exercise/ReorderExercise";
-import { MatchPairsExercise } from "@/components/exercise/MatchPairsExercise";
-import { CategorizeExercise } from "@/components/exercise/CategorizeExercise";
-import { SpotMistakeExercise } from "@/components/exercise/SpotMistakeExercise";
-import { RewriteExercise } from "@/components/exercise/RewriteExercise";
-import { AiDialogueExercise } from "@/components/exercise/AiDialogueExercise";
-import { EvaluateCallExercise } from "@/components/exercise/EvaluateCallExercise";
-import { FreeTextExercise } from "@/components/exercise/FreeTextExercise";
-import { AchievementToastQueue, type AchievementToastData } from "@/components/ui/AchievementToast";
-import { Icon } from "@/components/ui/Icon";
-import { Button } from "@/components/ui/Button";
-import { StatTile } from "@/components/ui/StatTile";
-import { Progress } from "@/components/ui/Progress";
+} from "@/features/exercise/hooks/use-lesson";
+import { useAchievements } from "@/features/achievements/hooks/use-achievements";
+import { ExerciseTypes } from "@/features/exercise/types/exercise-types";
+import { ChooseOptionExercise } from "@/features/exercise/components/choose-option-exercise";
+import { FillBlankExercise } from "@/features/exercise/components/fill-blank-exercise";
+import { ReorderExercise } from "@/features/exercise/components/reorder-exercise";
+import { MatchPairsExercise } from "@/features/exercise/components/match-pairs-exercise";
+import { CategorizeExercise } from "@/features/exercise/components/categorize-exercise";
+import { SpotMistakeExercise } from "@/features/exercise/components/spot-mistake-exercise";
+import { RewriteExercise } from "@/features/exercise/components/rewrite-exercise";
+import { AiDialogueExercise } from "@/features/exercise/components/ai-dialogue-exercise";
+import { EvaluateCallExercise } from "@/features/exercise/components/evaluate-call-exercise";
+import { FreeTextExercise } from "@/features/exercise/components/free-text-exercise";
+import { AchievementToastQueue, type AchievementToastData } from "@/shared/components/achievement-toast";
+import { Icon } from "@/shared/components/icon";
 
 const PASSING_SCORE_THRESHOLD = 7;
 const MAX_RETRY_ATTEMPTS = 2;

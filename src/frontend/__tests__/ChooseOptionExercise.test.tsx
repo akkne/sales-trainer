@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ChooseOptionExercise } from "@/components/exercise/ChooseOptionExercise";
-import type { ExerciseSubmissionResult } from "@/lib/hooks/useLesson";
+import { ChooseOptionExercise } from "@/features/exercise/components/choose-option-exercise";
+import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 
 const CONTENT = {
     situation: "Клиент говорит: «Слишком дорого»",

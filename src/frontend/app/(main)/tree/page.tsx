@@ -1,121 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { LessonPath } from "@/components/ui/LessonPath";
-import { StatsWidget } from "@/components/layout/StatsWidget";
-import { useSkillTree, useSkills } from "@/lib/hooks/useSkillTree";
-import { useLessonsForSkill } from "@/lib/hooks/useLesson";
-import { useSelectedSkillStore } from "@/lib/store/selectedSkillStore";
-import { Icon } from "@/components/ui/Icon";
-import { ErrorState } from "@/components/ui/ErrorState";
-import { Progress } from "@/components/ui/Progress";
-import { Button } from "@/components/ui/Button";
-import { SKILL_STAGES, getStageMeta } from "@/lib/skillStages";
-
-// ── Skill row in sidebar ─────────────────────────────────────────────────────
-
-interface SkillRowProps {
-    skill: {
-        skillId: string;
-        slug: string;
-        title: string;
-        iconName: string;
-        status: string;
-        completedLessonCount: number;
-        totalLessonCount: number;
-    };
-    selected: boolean;
-    onClick: () => void;
-}
-
-function SkillRow({ skill, selected, onClick }: SkillRowProps) {
-    const pct = skill.totalLessonCount > 0
-        ? Math.round((skill.completedLessonCount / skill.totalLessonCount) * 100)
-        : 0;
-    const isDone = skill.status === "completed";
-    const toneColor = "var(--indigo)";
-
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px",
-                borderRadius: 12,
-                background: selected ? "var(--surface)" : "transparent",
-                border: selected ? "1px solid var(--line-2)" : "1px solid transparent",
-                boxShadow: selected ? "var(--sh-1)" : "none",
-                cursor: "pointer",
-                textAlign: "left",
-                fontFamily: "var(--f-sans)",
-                transition: "background 0.15s",
-                width: "100%",
-            }}
-        >
-            <div
-                style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: isDone ? toneColor : `color-mix(in oklch, ${toneColor} 14%, var(--bg))`,
-                    color: isDone ? "white" : toneColor,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                }}
-            >
-                <Icon name={isDone ? "check" : "compass"} size="sm" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                    style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: "var(--ink)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                    }}
-                >
-                    {skill.title}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-                    <div
-                        style={{
-                            flex: 1,
-                            height: 3,
-                            background: "var(--line)",
-                            borderRadius: 2,
-                            overflow: "hidden",
-                        }}
-                    >
-                        <div
-                            style={{
-                                height: "100%",
-                                width: `${pct}%`,
-                                background: toneColor,
-                            }}
-                        />
-                    </div>
-                    <div
-                        style={{
-                            fontSize: 10,
-                            color: "var(--ink-3)",
-                            fontFamily: "var(--f-mono)",
-                            fontVariantNumeric: "tabular-nums",
-                        }}
-                    >
-                        {skill.completedLessonCount}/{skill.totalLessonCount}
-                    </div>
-                </div>
-            </div>
-        </button>
-    );
-}
+import { useEffect } from "react";
+import { LessonPath } from "@/shared/components/lesson-path";
+import { StatsWidget } from "@/features/layout/components/stats-widget";
+import { useSkillTree, useSkills } from "@/features/skills/hooks/use-skill-tree";
+import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
+import { useSelectedSkillStore } from "@/stores/selected-skill-store";
+import { Icon } from "@/shared/components/icon";
 
 // ── Skill lesson view ─────────────────────────────────────────────────────────
 

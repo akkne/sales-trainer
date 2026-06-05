@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import {
-    startRingingTone,
-    stopRingingTone,
-    playHangupBeep,
-    vibrateOnConnect,
-} from "@/lib/voice/callSounds";
+import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
 
 class FakeGainParam {
     value = 0;
@@ -46,54 +41,56 @@ class FakeAudioContext {
     resume = vi.fn();
 }
 
-// The module caches its AudioContext across calls, so all tests share one fake.
 const fakeContext = new FakeAudioContext();
 vi.stubGlobal(
     "AudioContext",
     vi.fn(() => fakeContext)
 );
 
-describe("callSounds", () => {
+describe("CallSoundsPlayer", () => {
+    let player: CallSoundsPlayer;
+
     beforeEach(() => {
         vi.useFakeTimers();
         fakeContext.createdOscillators = [];
+        player = new CallSoundsPlayer();
     });
 
     afterEach(() => {
-        stopRingingTone();
+        player.stopRinging();
         vi.useRealTimers();
     });
 
-    it("startRingingTone creates and starts an oscillator", () => {
-        startRingingTone();
+    it("startRinging creates and starts an oscillator", () => {
+        player.startRinging();
         expect(fakeContext.createdOscillators).toHaveLength(1);
         expect(fakeContext.createdOscillators[0].start).toHaveBeenCalled();
         expect(fakeContext.createdOscillators[0].frequency.value).toBe(425);
     });
 
-    it("startRingingTone is idempotent while ringing", () => {
-        startRingingTone();
-        startRingingTone();
+    it("startRinging is idempotent while ringing", () => {
+        player.startRinging();
+        player.startRinging();
         expect(fakeContext.createdOscillators).toHaveLength(1);
     });
 
-    it("stopRingingTone stops and disconnects the oscillator", () => {
-        startRingingTone();
+    it("stopRinging stops and disconnects the oscillator", () => {
+        player.startRinging();
         const oscillator = fakeContext.createdOscillators[0];
-        stopRingingTone();
+        player.stopRinging();
         expect(oscillator.stop).toHaveBeenCalled();
         expect(oscillator.disconnect).toHaveBeenCalled();
     });
 
     it("ringing can be restarted after stop", () => {
-        startRingingTone();
-        stopRingingTone();
-        startRingingTone();
+        player.startRinging();
+        player.stopRinging();
+        player.startRinging();
         expect(fakeContext.createdOscillators).toHaveLength(2);
     });
 
     it("playHangupBeep schedules a finite tone", () => {
-        playHangupBeep();
+        player.playHangupBeep();
         const oscillator = fakeContext.createdOscillators[0];
         expect(oscillator.start).toHaveBeenCalled();
         expect(oscillator.stop).toHaveBeenCalled();
@@ -102,12 +99,12 @@ describe("callSounds", () => {
     it("vibrateOnConnect calls navigator.vibrate when available", () => {
         const vibrate = vi.fn();
         vi.stubGlobal("navigator", { vibrate });
-        vibrateOnConnect();
+        player.vibrateOnConnect();
         expect(vibrate).toHaveBeenCalledWith(80);
     });
 
     it("vibrateOnConnect is a no-op without vibration support", () => {
         vi.stubGlobal("navigator", {});
-        expect(() => vibrateOnConnect()).not.toThrow();
+        expect(() => player.vibrateOnConnect()).not.toThrow();
     });
 });

@@ -3,19 +3,8 @@
 import { useEffect, useState, useDeferredValue } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import {
-    useTechniques,
-    useTechniquesMeta,
-    useTechnique,
-    useMarkTechniqueSeen,
-    type TechniqueCard as TechniqueCardData,
-    type TechniqueDetail,
-} from "@/lib/hooks/useTechniques";
-import { Icon } from "@/components/ui/Icon";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { Button } from "@/components/ui/Button";
-import { StatTile } from "@/components/ui/StatTile";
-import { GeoAvatar } from "@/components/ui/GeoAvatar";
+import { useHandbook, useHandbookCategories } from "@/features/skills/hooks/use-reference";
+import { Icon } from "@/shared/components/icon";
 
 function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
     const size = 56;

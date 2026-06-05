@@ -10,11 +10,10 @@ namespace SalesTrainer.Api.Features.Admin;
 [Authorize(Policy = "RequireAdmin")]
 public class AdminVoiceUsageController(IVoiceUsageService voiceUsageService) : ControllerBase
 {
-    /// <summary>Per-user voice minute spend (daily / monthly / total), sorted by monthly usage.</summary>
     [HttpGet("usage")]
-    public async Task<ActionResult<AdminVoiceUsageDto>> GetUsage(CancellationToken ct)
+    public async Task<ActionResult<AdminVoiceUsageDto>> GetUsage(CancellationToken cancellationToken)
     {
-        var usage = await voiceUsageService.GetAllUsersUsageAsync(ct);
+        var usage = await voiceUsageService.GetAllUsersUsageAsync(cancellationToken);
         return Ok(usage);
     }
 }

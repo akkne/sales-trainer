@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { use } from "react";
-import { useLessonsForSkill } from "@/lib/hooks/useLesson";
-import { useSkills } from "@/lib/hooks/useSkillTree";
-import { Icon } from "@/components/ui/Icon";
+import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
+import { useSkills } from "@/features/skills/hooks/use-skill-tree";
+import { Icon } from "@/shared/components/icon";
 
 interface SkillMapPageProps {
     params: Promise<{ id: string }>;

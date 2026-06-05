@@ -11,7 +11,7 @@ import {
     useDeleteMode,
     AdminDialogMode,
     CreateModeRequest,
-} from "@/lib/hooks/useAdminDialog";
+} from "@/features/dialog/hooks/use-admin-dialog";
 
 export default function AdminBundleModesPage() {
     const params = useParams();

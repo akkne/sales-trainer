@@ -11,7 +11,7 @@ using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 
-public class VoiceDialogService : IVoiceDialogService
+internal sealed class VoiceDialogService : IVoiceDialogService
 {
     private readonly AppDbContext _dbContext;
     private readonly MongoDbContext _mongoContext;

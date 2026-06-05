@@ -12,7 +12,7 @@ import {
     useImportLessons,
     type AdminTopic,
     type LessonsImportResult,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 const LESSONS_TEMPLATE = JSON.stringify([
     {

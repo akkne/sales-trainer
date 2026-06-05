@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { VoiceMicButton } from "@/components/dialog/VoiceMicButton";
-import type { VoicePipelineState } from "@/lib/hooks/useVoice";
+import { VoiceMicButton } from "@/features/voice/components/voice-mic-button";
+import type { VoicePipelineState } from "@/features/voice/hooks/use-voice";
 
 function renderButton(state: VoicePipelineState, overrides: Partial<Parameters<typeof VoiceMicButton>[0]> = {}) {
     const onStart = vi.fn();

@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/lib/store/authStore";
-import { clientLogger } from "@/lib/clientLogger";
-import { Icon, IconName } from "@/components/ui/Icon";
+import { useAuthStore } from "@/stores/auth-store";
+import { clientLogger } from "@/shared/utils/client-logger";
+import { Icon } from "@/shared/components/icon";
 
 const NAV_ICONS: Record<string, IconName> = {
     "/admin/skills": "target",

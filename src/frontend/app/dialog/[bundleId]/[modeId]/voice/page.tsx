@@ -8,17 +8,11 @@ import {
     useDialogModes,
     completeDialogSession,
     DialogFeedback,
-} from "@/lib/hooks/useDialog";
-import { useVoice, useVoiceUsage, VoicePipelineState } from "@/lib/hooks/useVoice";
-import { FeedbackModal } from "@/components/dialog/FeedbackModal";
-import { GeoAvatar } from "@/components/ui/GeoAvatar";
-import { Icon } from "@/components/ui/Icon";
-import {
-    startRingingTone,
-    stopRingingTone,
-    playHangupBeep,
-    vibrateOnConnect,
-} from "@/lib/voice/callSounds";
+} from "@/features/dialog/hooks/use-dialog";
+import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
+import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
+import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
+import { Icon } from "@/shared/components/icon";
 
 function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -136,13 +130,9 @@ export default function VoiceCallPage() {
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const previousCallStatusRef = useRef<CallStatus>("idle");
-    const previousVoiceStateRef = useRef<VoicePipelineState>("idle");
-    // True while the AI's current reply is still streaming — new chunks are
-    // appended to the last assistant entry instead of opening a new one.
-    const assistantReplyOpenRef = useRef(false);
-    const subtitleScrollRef = useRef<HTMLDivElement | null>(null);
+    const callSoundsPlayerRef = useRef<CallSoundsPlayer>(new CallSoundsPlayer());
 
+    useEffect(() => () => callSoundsPlayerRef.current.stopRinging(), []);
     useEffect(() => {
         if (callStatus === "connected") {
             timerRef.current = setInterval(() => {
@@ -159,7 +149,6 @@ export default function VoiceCallPage() {
         };
     }, [callStatus]);
 
-    // Call sound effects + vibration tied to call status transitions.
     useEffect(() => {
         const previous = previousCallStatusRef.current;
         previousCallStatusRef.current = callStatus;
@@ -190,7 +179,14 @@ export default function VoiceCallPage() {
         setCallStatus("connected");
     }, []);
 
-    const completeSession = useCallback(async (sid: string) => {
+    const handleAiResponse = useCallback((content: string, isStopSignal: boolean) => {
+        if (isStopSignal && sessionId) {
+            setIsEnded(true);
+            completeSession(sessionId);
+        }
+    }, [sessionId]);
+
+    const completeSession = async (sid: string) => {
         if (isCompleting) return;
         setIsCompleting(true);
         try {
@@ -326,6 +322,44 @@ export default function VoiceCallPage() {
     const info = describePipeline(voiceState, callStatus);
     const personaSeed = `${currentMode?.id ?? "persona"}-${currentMode?.title ?? ""}`;
     const isCallActive = callStatus === "connected" || callStatus === "dialing";
+
+    const isActive = voiceState !== "idle" && voiceState !== "error";
+    const isSpeaking = voiceState === "speaking";
+    const isProcessing = voiceState === "processing";
+    const isPlaying = voiceState === "playing";
+    const isListening = voiceState === "listening";
+    const isInitializing = voiceState === "initializing";
+
+    const handleMicClick = () => {
+        if (isActive) {
+            stopVoice();
+        } else {
+            startVoice();
+        }
+    };
+
+    const getStatusInfo = (): { text: string; icon: string; color: string } => {
+        switch (voiceState) {
+            case "idle":
+                return { text: "Tap to start", icon: "mic_off", color: "text-on-surface-variant" };
+            case "initializing":
+                return { text: "Starting...", icon: "mic", color: "text-primary" };
+            case "listening":
+                return { text: "Listening...", icon: "mic", color: "text-primary" };
+            case "speaking":
+                return { text: "Listening...", icon: "mic", color: "text-primary" };
+            case "processing":
+                return { text: "Processing...", icon: "sync", color: "text-secondary" };
+            case "playing":
+                return { text: "AI speaking...", icon: "volume_up", color: "text-tertiary" };
+            case "error":
+                return { text: "Error", icon: "error", color: "text-error" };
+            default:
+                return { text: "", icon: "mic", color: "text-on-surface-variant" };
+        }
+    };
+
+    const statusInfo = getStatusInfo();
 
     if (!isVoiceAvailable && currentMode) {
         return (

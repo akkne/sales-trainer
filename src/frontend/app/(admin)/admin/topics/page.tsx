@@ -12,7 +12,7 @@ import {
     type AdminSkill,
     type AdminTopicWithSkill,
     type TopicsImportResult,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 const TOPICS_TEMPLATE = JSON.stringify([
     {

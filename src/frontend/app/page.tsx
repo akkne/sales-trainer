@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useAuthStore } from "@/lib/store/authStore";
-import { apiClient } from "@/lib/api/apiClient";
-import { Wordmark } from "@/components/ui/Wordmark";
+import { useAuthStore } from "@/stores/auth-store";
+import { apiClient } from "@/shared/api/api-client";
 
 const FEATURE_LIST = [
     {

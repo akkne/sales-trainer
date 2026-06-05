@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useProfile } from "@/lib/hooks/useProfile";
-import { useAchievements } from "@/lib/hooks/useAchievements";
-import { useLogout } from "@/lib/hooks/useAuth";
-import { useAuthStore } from "@/lib/store/authStore";
-import { useSkills, useUpdateEnrolledSkills } from "@/lib/hooks/useSkillTree";
-import { useVoiceUsage } from "@/lib/hooks/useVoice";
-import { Icon, IconName } from "@/components/ui/Icon";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useProfile } from "@/features/profile/hooks/use-profile";
+import { useAchievements } from "@/features/achievements/hooks/use-achievements";
+import { useLogout } from "@/features/auth/hooks/use-auth";
+import { useAuthStore } from "@/stores/auth-store";
+import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
+import { Icon } from "@/shared/components/icon";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 

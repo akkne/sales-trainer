@@ -2,17 +2,16 @@
 
 import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Icon, IconName } from "@/components/ui/Icon";
-import { StatTile } from "@/components/ui/StatTile";
-import { useFriends, useFriendRequests } from "@/lib/hooks/useFriends";
-import { useConversations, useCreateConversation } from "@/lib/hooks/useChat";
-import { FriendCard } from "@/components/friends/FriendCard";
-import { FriendRequestCard } from "@/components/friends/FriendRequestCard";
-import { FriendLeaderboard } from "@/components/friends/FriendLeaderboard";
-import { FriendActivityFeed } from "@/components/friends/FriendActivityFeed";
-import { UserSearchBar } from "@/components/friends/UserSearchBar";
-import { EmptyFriendsState } from "@/components/friends/EmptyFriendsState";
-import { ChatsPane } from "@/components/friends/ChatsPane";
+import { Icon } from "@/shared/components/icon";
+import { useFriends, useFriendRequests } from "@/features/friends/hooks/use-friends";
+import { useCreateConversation } from "@/features/friends/hooks/use-chat";
+import { FriendCard } from "@/features/friends/components/friend-card";
+import { FriendRequestCard } from "@/features/friends/components/friend-request-card";
+import { FriendLeaderboard } from "@/features/friends/components/friend-leaderboard";
+import { FriendActivityFeed } from "@/features/friends/components/friend-activity-feed";
+import { UserSearchBar } from "@/features/friends/components/user-search-bar";
+import { EmptyFriendsState } from "@/features/friends/components/empty-friends-state";
+import { ChatsPane } from "@/features/friends/components/chats-pane";
 
 type TabKey = "friends" | "requests" | "leaderboard" | "chats";
 

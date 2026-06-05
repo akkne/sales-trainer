@@ -10,7 +10,7 @@ import {
     useDeleteReference,
     type AdminReferenceMaterial,
     type CreateReferenceMaterialBody,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 export default function AdminReferencePageWrapper({
     params,

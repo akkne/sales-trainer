@@ -10,7 +10,7 @@ import {
     useCreateReference,
     type AdminReferenceMaterial,
     type CreateReferenceMaterialBody,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 const EMPTY_FORM: CreateReferenceMaterialBody = {
     title: "",

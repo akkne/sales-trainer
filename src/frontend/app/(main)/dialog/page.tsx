@@ -1,12 +1,8 @@
 "use client";
 
-import { useDialogBundles } from "@/lib/hooks/useDialog";
-import { Icon } from "@/components/ui/Icon";
-import { StatTile } from "@/components/ui/StatTile";
-import { GeoAvatar } from "@/components/ui/GeoAvatar";
-import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { ErrorState } from "@/components/ui/ErrorState";
+import { useDialogBundles } from "@/features/dialog/hooks/use-dialog";
+import { BundleCard } from "@/features/dialog/components/bundle-card";
+import { Icon } from "@/shared/components/icon";
 import Link from "next/link";
 
 export default function DialogPage() {

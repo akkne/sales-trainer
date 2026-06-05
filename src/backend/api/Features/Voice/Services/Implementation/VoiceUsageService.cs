@@ -1,69 +1,74 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 
-public class VoiceUsageService : IVoiceUsageService
+internal sealed class VoiceUsageService : IVoiceUsageService
 {
-    private readonly MongoDbContext _mongo;
-    private readonly AppDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly MongoDbContext _mongoContext;
+    private readonly AppDbContext _dbContext;
+    private readonly IOptions<VoiceUsageLimitsConfiguration> _voiceUsageLimitsOptions;
     private readonly ILogger<VoiceUsageService> _logger;
 
-    public VoiceUsageService(MongoDbContext mongo, AppDbContext db, IConfiguration config, ILogger<VoiceUsageService> logger)
+    public VoiceUsageService(
+        MongoDbContext mongoContext,
+        AppDbContext dbContext,
+        IOptions<VoiceUsageLimitsConfiguration> voiceUsageLimitsOptions,
+        ILogger<VoiceUsageService> logger)
     {
-        _mongo = mongo;
-        _db = db;
-        _config = config;
+        _mongoContext = mongoContext;
+        _dbContext = dbContext;
+        _voiceUsageLimitsOptions = voiceUsageLimitsOptions;
         _logger = logger;
     }
 
-    public async Task<VoiceUsageDto> GetUsageAsync(Guid userId, CancellationToken ct = default)
+    public async Task<VoiceUsageDto> GetUsageAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var dailyUsed = await SumSecondsAsync(userId, dayStart, ct);
-        var monthlyUsed = await SumSecondsAsync(userId, monthStart, ct);
+        var dailyUsedSeconds = await SumSecondsAsync(userId, dayStart, cancellationToken);
+        var monthlyUsedSeconds = await SumSecondsAsync(userId, monthStart, cancellationToken);
 
-        var dailyLimitMinutes = int.TryParse(_config["Voice:DailyLimitMinutes"], out var dl) ? dl : 0;
-        var monthlyLimitMinutes = int.TryParse(_config["Voice:MonthlyLimitMinutes"], out var ml) ? ml : 0;
+        var limits = _voiceUsageLimitsOptions.Value;
 
         return new VoiceUsageDto
         {
-            DailyUsedSeconds = dailyUsed,
-            DailyLimitSeconds = dailyLimitMinutes * 60,
-            MonthlyUsedSeconds = monthlyUsed,
-            MonthlyLimitSeconds = monthlyLimitMinutes * 60,
+            DailyUsedSeconds = dailyUsedSeconds,
+            DailyLimitSeconds = limits.DailyLimitMinutes * 60,
+            MonthlyUsedSeconds = monthlyUsedSeconds,
+            MonthlyLimitSeconds = limits.MonthlyLimitMinutes * 60,
         };
     }
 
-    public async Task EnsureWithinLimitsAsync(Guid userId, CancellationToken ct = default)
+    public async Task EnsureWithinLimitsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var usage = await GetUsageAsync(userId, ct);
+        var usage = await GetUsageAsync(userId, cancellationToken);
         if (usage.DailyExceeded)
             throw new VoiceUsageLimitException("daily", usage.DailyUsedSeconds, usage.DailyLimitSeconds);
         if (usage.MonthlyExceeded)
             throw new VoiceUsageLimitException("monthly", usage.MonthlyUsedSeconds, usage.MonthlyLimitSeconds);
     }
 
-    public async Task RecordSessionSecondsAsync(string sessionId, Guid userId, int seconds, CancellationToken ct = default)
+    public async Task RecordSessionSecondsAsync(string sessionId, Guid userId, int seconds, CancellationToken cancellationToken = default)
     {
         if (seconds <= 0) return;
 
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
+        var sessionFilter = Builders<DialogSession>.Filter.And(
+            Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
+            Builders<DialogSession>.Filter.Eq(session => session.UserId, userId)
         );
-        var update = Builders<DialogSession>.Update.Inc(s => s.VoiceSeconds, seconds);
-        var result = await _mongo.DialogSessions.UpdateOneAsync(filter, update, cancellationToken: ct);
+        var incrementUpdate = Builders<DialogSession>.Update.Inc(session => session.VoiceSeconds, seconds);
+        var result = await _mongoContext.DialogSessions.UpdateOneAsync(sessionFilter, incrementUpdate, cancellationToken: cancellationToken);
 
         if (result.MatchedCount == 0)
         {
@@ -71,13 +76,13 @@ public class VoiceUsageService : IVoiceUsageService
         }
     }
 
-    public async Task<AdminVoiceUsageDto> GetAllUsersUsageAsync(CancellationToken ct = default)
+    public async Task<AdminVoiceUsageDto> GetAllUsersUsageAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var pipeline = new[]
+        var aggregationPipeline = new[]
         {
             new BsonDocument("$match", new BsonDocument
             {
@@ -105,53 +110,52 @@ public class VoiceUsageService : IVoiceUsageService
             new BsonDocument("$sort", new BsonDocument("monthly", -1)),
         };
 
-        using var cursor = await _mongo.DialogSessions.AggregateAsync<BsonDocument>(pipeline, cancellationToken: ct);
-        var docs = await cursor.ToListAsync(ct);
+        using var cursor = await _mongoContext.DialogSessions.AggregateAsync<BsonDocument>(aggregationPipeline, cancellationToken: cancellationToken);
+        var documents = await cursor.ToListAsync(cancellationToken);
 
-        var entries = new List<AdminVoiceUsageEntryDto>();
-        foreach (var doc in docs)
+        var usageEntries = new List<AdminVoiceUsageEntryDto>();
+        foreach (var document in documents)
         {
-            if (!Guid.TryParse(doc["_id"].AsString, out var userId)) continue;
-            entries.Add(new AdminVoiceUsageEntryDto
+            if (!Guid.TryParse(document["_id"].AsString, out var documentUserId)) continue;
+            usageEntries.Add(new AdminVoiceUsageEntryDto
             {
-                UserId = userId,
-                TotalSeconds = doc["total"].ToInt32(),
-                SessionCount = doc["sessionCount"].ToInt32(),
-                LastCallAt = doc["lastCallAt"].ToUniversalTime(),
-                DailyUsedSeconds = doc["daily"].ToInt32(),
-                MonthlyUsedSeconds = doc["monthly"].ToInt32(),
+                UserId = documentUserId,
+                TotalSeconds = document["total"].ToInt32(),
+                SessionCount = document["sessionCount"].ToInt32(),
+                LastCallAt = document["lastCallAt"].ToUniversalTime(),
+                DailyUsedSeconds = document["daily"].ToInt32(),
+                MonthlyUsedSeconds = document["monthly"].ToInt32(),
             });
         }
 
-        // Attach email/display name from PostgreSQL.
-        var userIds = entries.Select(e => e.UserId).ToList();
-        var users = await _db.Users
-            .Where(u => userIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.Email, u.DisplayName })
-            .ToDictionaryAsync(u => u.Id, ct);
-        foreach (var entry in entries)
+        var userIdentifiers = usageEntries.Select(entry => entry.UserId).ToList();
+        var userProfiles = await _dbContext.Users
+            .Where(user => userIdentifiers.Contains(user.Id))
+            .Select(user => new { user.Id, user.Email, user.DisplayName })
+            .ToDictionaryAsync(user => user.Id, cancellationToken);
+
+        foreach (var entry in usageEntries)
         {
-            if (users.TryGetValue(entry.UserId, out var user))
+            if (userProfiles.TryGetValue(entry.UserId, out var userProfile))
             {
-                entry.Email = user.Email;
-                entry.DisplayName = user.DisplayName;
+                entry.Email = userProfile.Email;
+                entry.DisplayName = userProfile.DisplayName;
             }
         }
 
-        var dailyLimitMinutes = int.TryParse(_config["Voice:DailyLimitMinutes"], out var dl2) ? dl2 : 0;
-        var monthlyLimitMinutes = int.TryParse(_config["Voice:MonthlyLimitMinutes"], out var ml2) ? ml2 : 0;
+        var limits = _voiceUsageLimitsOptions.Value;
 
         return new AdminVoiceUsageDto
         {
-            DailyLimitSeconds = dailyLimitMinutes * 60,
-            MonthlyLimitSeconds = monthlyLimitMinutes * 60,
-            Users = entries,
+            DailyLimitSeconds = limits.DailyLimitMinutes * 60,
+            MonthlyLimitSeconds = limits.MonthlyLimitMinutes * 60,
+            Users = usageEntries,
         };
     }
 
-    private async Task<int> SumSecondsAsync(Guid userId, DateTime since, CancellationToken ct)
+    private async Task<int> SumSecondsAsync(Guid userId, DateTime since, CancellationToken cancellationToken)
     {
-        var pipeline = new[]
+        var sumPipeline = new[]
         {
             new BsonDocument("$match", new BsonDocument
             {
@@ -166,9 +170,9 @@ public class VoiceUsageService : IVoiceUsageService
             }),
         };
 
-        using var cursor = await _mongo.DialogSessions.AggregateAsync<BsonDocument>(pipeline, cancellationToken: ct);
-        var doc = await cursor.FirstOrDefaultAsync(ct);
-        if (doc == null) return 0;
-        return doc["total"].ToInt32();
+        using var cursor = await _mongoContext.DialogSessions.AggregateAsync<BsonDocument>(sumPipeline, cancellationToken: cancellationToken);
+        var document = await cursor.FirstOrDefaultAsync(cancellationToken);
+        if (document == null) return 0;
+        return document["total"].ToInt32();
     }
 }

@@ -1,24 +1,25 @@
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 
 internal sealed class YandexTtsService : IYandexTtsService
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<YandexTtsConfiguration> _yandexTtsOptions;
     private readonly ILogger<YandexTtsService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_YANDEX_API_KEY";
-    private const string DefaultBaseUrl = "https://tts.api.cloud.yandex.net";
 
     public YandexTtsService(
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
+        IOptions<YandexTtsConfiguration> yandexTtsOptions,
         ILogger<YandexTtsService> logger)
     {
         _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
+        _yandexTtsOptions = yandexTtsOptions;
         _logger = logger;
     }
 
@@ -26,7 +27,7 @@ internal sealed class YandexTtsService : IYandexTtsService
     {
         get
         {
-            var apiKey = _configuration["YandexTts:ApiKey"];
+            var apiKey = _yandexTtsOptions.Value.ApiKey;
             return !string.IsNullOrWhiteSpace(apiKey) &&
                    apiKey != PlaceholderApiKey &&
                    !apiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
@@ -38,32 +39,25 @@ internal sealed class YandexTtsService : IYandexTtsService
         if (!IsConfigured)
             throw new InvalidOperationException("Yandex TTS API is not configured");
 
-        var apiKey = _configuration["YandexTts:ApiKey"]!;
-        var baseUrl = _configuration["YandexTts:BaseUrl"] ?? DefaultBaseUrl;
-        var defaultVoice = _configuration["YandexTts:Voice"] ?? "marina";
-        var lang = _configuration["YandexTts:Lang"] ?? "ru-RU";
-        var role = _configuration["YandexTts:Role"];
-        var speed = _configuration["YandexTts:Speed"];
-        var folderId = _configuration["YandexTts:FolderId"];
-        var sampleRate = int.TryParse(_configuration["YandexTts:SampleRateHertz"], out var sr) ? sr : 48000;
+        var configuration = _yandexTtsOptions.Value;
 
         var form = new List<KeyValuePair<string, string>>
         {
             new("text", text),
-            new("lang", lang),
-            new("voice", voice ?? defaultVoice),
+            new("lang", configuration.Lang),
+            new("voice", voice ?? configuration.Voice),
             new("format", "lpcm"),
-            new("sampleRateHertz", sampleRate.ToString()),
+            new("sampleRateHertz", configuration.SampleRateHertz.ToString()),
         };
-        if (!string.IsNullOrWhiteSpace(speed)) form.Add(new("speed", speed));
-        if (!string.IsNullOrWhiteSpace(role)) form.Add(new("emotion", role));
-        if (!string.IsNullOrWhiteSpace(folderId)) form.Add(new("folderId", folderId));
+        if (!string.IsNullOrWhiteSpace(configuration.Speed)) form.Add(new("speed", configuration.Speed));
+        if (!string.IsNullOrWhiteSpace(configuration.Role)) form.Add(new("emotion", configuration.Role));
+        if (!string.IsNullOrWhiteSpace(configuration.FolderId)) form.Add(new("folderId", configuration.FolderId));
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/speech/v1/tts:synthesize")
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{configuration.BaseUrl.TrimEnd('/')}/speech/v1/tts:synthesize")
         {
             Content = new FormUrlEncodedContent(form),
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"Api-Key {apiKey}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Api-Key {configuration.ApiKey}");
 
         var response = await _httpClientFactory.CreateClient("YandexTts")
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -84,7 +78,7 @@ internal sealed class YandexTtsService : IYandexTtsService
 
         using var pcmStream = new MemoryStream();
         await response.Content.CopyToAsync(pcmStream, cancellationToken);
-        var wavBytes = WrapLpcmInWav(pcmStream.ToArray(), sampleRate);
+        var wavBytes = WrapLpcmInWav(pcmStream.ToArray(), configuration.SampleRateHertz);
 
         _logger.LogInformation("Yandex TTS synthesized {TextLength} chars to {AudioBytes} bytes", text.Length, wavBytes.Length);
         return new MemoryStream(wavBytes);
@@ -97,8 +91,8 @@ internal sealed class YandexTtsService : IYandexTtsService
         var byteRate = sampleRate * channels * bitsPerSample / 8;
         var blockAlign = (short)(channels * bitsPerSample / 8);
 
-        using var ms = new MemoryStream(44 + pcm.Length);
-        using var writer = new BinaryWriter(ms);
+        using var memoryStream = new MemoryStream(44 + pcm.Length);
+        using var writer = new BinaryWriter(memoryStream);
         writer.Write("RIFF"u8);
         writer.Write(36 + pcm.Length);
         writer.Write("WAVE"u8);
@@ -113,6 +107,6 @@ internal sealed class YandexTtsService : IYandexTtsService
         writer.Write("data"u8);
         writer.Write(pcm.Length);
         writer.Write(pcm);
-        return ms.ToArray();
+        return memoryStream.ToArray();
     }
 }
