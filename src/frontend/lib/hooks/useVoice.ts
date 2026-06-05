@@ -17,7 +17,7 @@ export function useVoiceConfig() {
     return useQuery({
         queryKey: ["voice", "config"],
         queryFn: () => apiClient.get<VoiceConfig>("/dialog/voice/config"),
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000,
     });
 }
 
@@ -55,7 +55,6 @@ export interface UseVoiceOptions {
     modeId?: string;
     onSessionCreated?: (sessionId: string) => void;
     onTranscript?: (transcript: string) => void;
-    /** Fires for every streamed AI text chunk as it arrives — drives live subtitles. */
     onAiText?: (textChunk: string) => void;
     onAiResponse?: (content: string, isStopSignal: boolean) => void;
     onError?: (error: Error) => void;
@@ -77,29 +76,21 @@ export function useVoice(options: UseVoiceOptions) {
     const stateRef = useRef<VoicePipelineState>("idle");
     const streamAbortRef = useRef<AbortController | null>(null);
 
-    // Keep sessionId ref in sync
     useEffect(() => {
         currentSessionIdRef.current = sessionId;
     }, [sessionId]);
 
-    // Keep state ref in sync
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
     const { data: voiceConfig } = useVoiceConfig();
 
-    // Check if voice is available
     useEffect(() => {
-        const available = !!(
-            voiceConfig?.enabled &&
-            modeVoiceEnabled &&
-            isWebSpeechSupported()
-        );
+        const available = !!(voiceConfig?.enabled && modeVoiceEnabled && isWebSpeechSupported());
         setIsVoiceAvailable(available);
     }, [voiceConfig, modeVoiceEnabled]);
 
-    // Initialize audio player
     useEffect(() => {
         audioPlayerRef.current = new AudioPlayer({
             onStateChange: (playerState: AudioPlayerState) => {
@@ -107,7 +98,6 @@ export function useVoice(options: UseVoiceOptions) {
                     setState("playing");
                 } else if (playerState === "ended") {
                     setState("listening");
-                    // Resume speech recognition after playback
                     speechClientRef.current?.resume();
                 } else if (playerState === "error") {
                     setState("error");
@@ -123,12 +113,8 @@ export function useVoice(options: UseVoiceOptions) {
         };
     }, [onError]);
 
-    // Process speech after silence
     const processSpeech = useCallback(async (transcript: string) => {
-        // Prevent concurrent processing
-        if (isProcessingRef.current) {
-            return;
-        }
+        if (isProcessingRef.current) return;
 
         const activeSessionId = currentSessionIdRef.current;
         if (!transcript.trim() || !activeSessionId) {
@@ -140,20 +126,14 @@ export function useVoice(options: UseVoiceOptions) {
         setState("processing");
         onTranscript?.(transcript);
 
-        // Allow barge-in to cancel the in-flight stream.
         const controller = new AbortController();
         streamAbortRef.current = controller;
 
         try {
-            // Keep speech recognition LIVE during playback so the user can interrupt.
-            // Pause only for the brief processing window (before first audio chunk
-            // arrives) to avoid the recognizer picking up its own playback echo.
             speechClientRef.current?.pause();
 
             const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-            const streamUrl = `${apiBase}/dialog/sessions/${activeSessionId}/voice/stream`;
-
-            const response = await fetch(streamUrl, {
+            const response = await fetch(`${apiBase}/dialog/sessions/${activeSessionId}/voice/stream`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -191,7 +171,6 @@ export function useVoice(options: UseVoiceOptions) {
                 if (frame.isStopSignal) stopSignal = true;
                 if (frame.audio.byteLength > 0) {
                     await audioPlayerRef.current?.enqueue(frame.audio);
-                    // Once audio starts arriving, resume recognition so barge-in works.
                     if (!firstAudioPlayed) {
                         firstAudioPlayed = true;
                         speechClientRef.current?.resume();
@@ -205,9 +184,7 @@ export function useVoice(options: UseVoiceOptions) {
                 onAiResponse?.(aggregatedText.join(" "), stopSignal);
             }
         } catch (error) {
-            if ((error as Error).name === "AbortError" || controller.signal.aborted) {
-                // Barge-in / user cancellation — not an error from the user's POV.
-            } else {
+            if ((error as Error).name !== "AbortError" && !controller.signal.aborted) {
                 onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
                 setState("error");
             }
@@ -219,26 +196,19 @@ export function useVoice(options: UseVoiceOptions) {
             }
         }
 
-        // Clear transcript buffer
         transcriptBufferRef.current = "";
         setCurrentTranscript("");
     }, [onTranscript, onAiText, onAiResponse, onError]);
 
     const startVoice = useCallback(async () => {
-        if (!isVoiceAvailable) {
-            return;
-        }
+        if (!isVoiceAvailable) return;
 
         setState("initializing");
 
-        // Create session if needed
         let activeSessionId = currentSessionIdRef.current;
         if (!activeSessionId && bundleId && modeId) {
             try {
-                const session = await apiClient.post<{ id: string }>("/dialog/sessions", {
-                    bundleId,
-                    modeId,
-                });
+                const session = await apiClient.post<{ id: string }>("/dialog/sessions", { bundleId, modeId });
                 activeSessionId = session.id;
                 currentSessionIdRef.current = activeSessionId;
                 onSessionCreated?.(activeSessionId);
@@ -261,7 +231,6 @@ export function useVoice(options: UseVoiceOptions) {
                 continuous: true,
                 interimResults: true,
                 onResult: (transcript: string, isFinal: boolean) => {
-                    // Clear silence timeout on new speech
                     if (silenceTimeoutRef.current) {
                         clearTimeout(silenceTimeoutRef.current);
                         silenceTimeoutRef.current = null;
@@ -271,7 +240,6 @@ export function useVoice(options: UseVoiceOptions) {
                         transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
                         setCurrentTranscript(transcriptBufferRef.current);
 
-                        // Set silence timeout to process after pause
                         const vadSilenceMs = voiceConfig?.vadSilenceMs ?? 600;
                         silenceTimeoutRef.current = setTimeout(() => {
                             const finalTranscript = transcriptBufferRef.current.trim();
@@ -288,16 +256,10 @@ export function useVoice(options: UseVoiceOptions) {
                     setState("error");
                 },
                 onStateChange: (speechState: WebSpeechState) => {
-                    if (speechState === "listening") {
-                        setState("listening");
-                    } else if (speechState === "error") {
-                        setState("error");
-                    }
+                    if (speechState === "listening") setState("listening");
+                    else if (speechState === "error") setState("error");
                 },
                 onSpeechStart: () => {
-                    // Barge-in: user started talking while AI was playing →
-                    // cut the audio and abort the active stream so we can
-                    // pick up the new transcript.
                     if (stateRef.current === "playing") {
                         audioPlayerRef.current?.stop();
                         streamAbortRef.current?.abort();
@@ -338,7 +300,6 @@ export function useVoice(options: UseVoiceOptions) {
         transcriptBufferRef.current = "";
     }, []);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (silenceTimeoutRef.current) {

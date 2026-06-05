@@ -59,7 +59,6 @@ public class VoiceDialogService : IVoiceDialogService
         if (!mode.VoiceEnabled)
             throw new InvalidOperationException($"Voice is not enabled for mode {session.ModeId}");
 
-        // Record user message immediately so it's persisted even if the stream is cancelled mid-flight.
         session.Messages.Add(new DialogMessage
         {
             Role = "user",
@@ -72,15 +71,6 @@ public class VoiceDialogService : IVoiceDialogService
             Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages),
             cancellationToken: ct);
 
-        // The model answers with {"reply": "...", "endCall": bool}; the parser
-        // extracts the spoken reply incrementally. Text chunks are pushed to the
-        // client immediately (live subtitles). Audio strategy depends on the
-        // active TTS provider:
-        //  - realtime providers (Yandex/Google, <1s round-trip): synthesize per
-        //    sentence right behind its text frame, so speech starts almost at once;
-        //  - queue-based providers (Voicer, ~10-30s per task regardless of length):
-        //    batch the whole reply into a single task — per-sentence would multiply
-        //    both latency and cost (each Voicer task bills a 500-char minimum).
         var realtimeTts = _ttsRouter.IsRealtime;
         var replyParser = new StreamingChatReplyParser();
         var sentenceBuffer = new StringBuilder();
@@ -93,7 +83,6 @@ public class VoiceDialogService : IVoiceDialogService
 
             sentenceBuffer.Append(replyText);
 
-            // Flush at sentence boundaries so subtitles appear as soon as possible.
             while (TryExtractSentence(sentenceBuffer, out var sentence))
             {
                 var cleaned = sentence.Trim();
@@ -117,13 +106,11 @@ public class VoiceDialogService : IVoiceDialogService
             _logger.LogWarning(
                 "Chat model ignored the JSON reply contract for session {SessionId}; recovered plain-text reply ({Length} chars)",
                 sessionId, parseResult.Reply.Length);
-            // Nothing was emitted incrementally — speak the recovered reply.
             sentenceBuffer.Clear();
             sentenceBuffer.Append(parseResult.Reply);
             spokenSentences.Clear();
         }
 
-        // Flush remaining buffer (no terminal punctuation).
         var tailCleaned = sentenceBuffer.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(tailCleaned))
         {
@@ -138,8 +125,6 @@ public class VoiceDialogService : IVoiceDialogService
             }
         }
 
-        // Queue-based provider: synthesize the whole reply in one task. A TTS
-        // failure must not kill the stream — the user already has the text above.
         if (!realtimeTts)
         {
             var speechText = string.Join(" ", spokenSentences);
@@ -147,13 +132,10 @@ public class VoiceDialogService : IVoiceDialogService
             {
                 var audio = await TrySynthesizeAsync(speechText, mode.VoiceId, sessionId, ct);
                 if (audio is { Length: > 0 })
-                {
                     yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
-                }
             }
         }
 
-        // Persist the assembled AI message after the stream completes successfully.
         session.Messages.Add(new DialogMessage
         {
             Role = "assistant",
@@ -170,15 +152,11 @@ public class VoiceDialogService : IVoiceDialogService
             "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}",
             sessionId, transcript.Length, parseResult.Reply.Length, parseResult.EndCall);
 
-        // Sentinel chunk with no audio, signaling end of stream + stop flag.
         yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: true);
     }
 
     private static bool TryExtractSentence(StringBuilder buffer, out string sentence)
     {
-        // Emit on . ! ? \n boundaries, but only after at least ~20 chars to avoid
-        // synthesizing single-word fragments. Skip abbreviations isn't perfect —
-        // good-enough heuristic for sales-dialog Russian.
         const int minLength = 20;
         var text = buffer.ToString();
         if (text.Length < minLength)
@@ -197,6 +175,7 @@ public class VoiceDialogService : IVoiceDialogService
                 break;
             }
         }
+
         if (idx < 0)
         {
             sentence = string.Empty;

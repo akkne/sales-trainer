@@ -128,15 +128,13 @@ endCall: true означает, что твой персонаж кладёт т
         CancellationToken cancellationToken = default)
     {
         var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
-        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
-
-        var enhancedSystemPrompt = systemPrompt + StructuredReplyInstruction;
+        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var t) ? t : 500;
 
         var response = await CallOpenAiAsync(
-            enhancedSystemPrompt,
+            systemPrompt + StructuredReplyInstruction,
             conversationHistory,
             chatModel,
-            maximumTokenCount,
+            maxTokens,
             BuildChatReplyResponseFormat(),
             cancellationToken);
 
@@ -145,9 +143,7 @@ endCall: true означает, что твой персонаж кладёт т
         var parseResult = replyParser.Complete();
 
         if (parseResult.UsedFallback)
-        {
             _logger.LogWarning("Chat model ignored the JSON reply contract; recovered plain-text reply ({Length} chars)", parseResult.Reply.Length);
-        }
 
         return new ChatMessageResult
         {
@@ -162,50 +158,27 @@ endCall: true означает, что твой персонаж кладёт т
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
-        {
             throw new InvalidOperationException("OpenAI API is not configured");
-        }
 
         var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
-        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var chatTokens) ? chatTokens : 500;
-        var enhancedSystemPrompt = systemPrompt + StructuredReplyInstruction;
+        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var t) ? t : 500;
 
-        var apiKey = _configuration["OpenAI:ApiKey"]!;
-        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
-        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
-        var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
+        var (httpClient, apiUrl) = CreateConfiguredClient();
 
-        var httpClient = _httpClientFactory.CreateClient("OpenAI");
-        httpClient.DefaultRequestHeaders.Remove("Authorization");
-        httpClient.DefaultRequestHeaders.Remove("X-Auth-Token");
-        if (baseUrl.Contains("f5ai"))
-            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", apiKey);
-        else
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        var messages = new List<object>
-        {
-            new { role = "system", content = enhancedSystemPrompt }
-        };
-        foreach (var message in conversationHistory)
-        {
-            messages.Add(new { role = message.Role, content = message.Content });
-        }
-
+        var messages = BuildMessages(systemPrompt + StructuredReplyInstruction, conversationHistory);
         var requestBody = new Dictionary<string, object>
         {
             ["model"] = chatModel,
             ["messages"] = messages,
-            ["max_tokens"] = maximumTokenCount,
+            ["max_tokens"] = maxTokens,
             ["temperature"] = 0.7,
             ["stream"] = true,
             ["response_format"] = BuildChatReplyResponseFormat()
         };
 
-        var jsonContent = JsonSerializer.Serialize(requestBody);
         using var requestMessage = new HttpRequestMessage(HttpMethod.Post, apiUrl)
         {
-            Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
         };
 
         _logger.LogInformation("Streaming OpenAI completion with model {Model}", chatModel);
@@ -218,10 +191,6 @@ endCall: true означает, что твой персонаж кладёт т
             throw new HttpRequestException($"OpenAI stream returned {response.StatusCode}: {errorBody}");
         }
 
-        // Some OpenAI-compatible providers (e.g. the f5ai proxy) ignore
-        // "stream": true and answer with a single JSON body instead of SSE.
-        // Without this fallback the SSE reader below would yield nothing and
-        // the persona would stay silent for the whole call.
         var contentType = response.Content.Headers.ContentType?.MediaType;
         if (!string.Equals(contentType, "text/event-stream", StringComparison.OrdinalIgnoreCase))
         {
@@ -229,9 +198,7 @@ endCall: true означает, что твой персонаж кладёт т
             _logger.LogInformation("Provider returned non-SSE chat completion ({ContentType}); yielding it as a single delta", contentType);
             var fullContent = ExtractContentFromCompletionResponse(fullBody, _logger);
             if (!string.IsNullOrEmpty(fullContent))
-            {
                 yield return fullContent;
-            }
             yield break;
         }
 
@@ -271,9 +238,7 @@ endCall: true означает, что твой персонаж кладёт т
             }
 
             if (!string.IsNullOrEmpty(delta))
-            {
                 yield return delta;
-            }
         }
     }
 
@@ -283,7 +248,7 @@ endCall: true означает, что твой персонаж кладёт т
         CancellationToken cancellationToken = default)
     {
         var feedbackModel = _configuration["OpenAI:FeedbackModel"] ?? "gpt-4.1";
-        var maximumTokenCount = int.TryParse(_configuration["OpenAI:MaxTokensFeedback"], out var feedbackTokens) ? feedbackTokens : 1500;
+        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensFeedback"], out var t) ? t : 1500;
 
         var conversationAsText = FormatConversationForFeedback(conversationHistory);
         var fullPrompt = $"{feedbackPrompt}{ExperiencePointsInstructionSuffix}\n\n--- Диалог ---\n{conversationAsText}";
@@ -293,13 +258,12 @@ endCall: true означает, что твой персонаж кладёт т
             new() { Role = "user", Content = fullPrompt, Timestamp = DateTime.UtcNow }
         };
 
-        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maximumTokenCount, responseFormat: null, cancellationToken);
+        var response = await CallOpenAiAsync("You are an expert sales coach providing detailed feedback in Russian.", emptyHistory, feedbackModel, maxTokens, responseFormat: null, cancellationToken);
 
         _logger.LogDebug("Feedback response from AI: {Response}", response);
 
-        var experiencePointsReward = ExtractExperiencePointsReward(response);
+        var xpReward = ExtractExperiencePointsReward(response);
         var cleanedContent = Regex.Replace(response, @"\[XP:\d+\]", "").Trim();
-
         var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
 
         _logger.LogInformation("Extracted feedback summary length: {SummaryLength}, content length: {ContentLength}", summary.Length, detailedContent.Length);
@@ -308,8 +272,35 @@ endCall: true означает, что твой персонаж кладёт т
         {
             Summary = summary,
             Content = detailedContent,
-            XpReward = experiencePointsReward
+            XpReward = xpReward
         };
+    }
+
+    private (HttpClient Client, string ApiUrl) CreateConfiguredClient()
+    {
+        var apiKey = _configuration["OpenAI:ApiKey"]!;
+        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
+
+        var client = _httpClientFactory.CreateClient("OpenAI");
+        client.DefaultRequestHeaders.Remove("Authorization");
+        client.DefaultRequestHeaders.Remove("X-Auth-Token");
+
+        if (baseUrl.Contains("f5ai"))
+            client.DefaultRequestHeaders.Add("X-Auth-Token", apiKey);
+        else
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        return (client, apiUrl);
+    }
+
+    private static List<object> BuildMessages(string systemPrompt, List<DialogMessage> history)
+    {
+        var messages = new List<object> { new { role = "system", content = systemPrompt } };
+        foreach (var message in history)
+            messages.Add(new { role = message.Role, content = message.Content });
+        return messages;
     }
 
     private static (string Summary, string Content) ExtractSummaryAndContent(string response)
@@ -342,21 +333,13 @@ endCall: true означает, что твой персонаж кладёт т
     private int ExtractExperiencePointsReward(string response)
     {
         var match = Regex.Match(response, @"\[XP:(\d+)\]");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var experiencePoints))
-        {
-            return Math.Clamp(experiencePoints, 0, 100);
-        }
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var xp))
+            return Math.Clamp(xp, 0, 100);
 
-        // No invented rewards: a feedback response without an [XP:N] tag earns nothing.
         _logger.LogWarning("Feedback response did not contain an [XP:N] tag; awarding 0 XP");
         return 0;
     }
 
-    /// <summary>
-    /// Builds the response_format payload that forces the chat model to answer
-    /// with {"reply": string, "endCall": boolean}. The f5ai proxy expects the
-    /// flat OpenRouter shape, while OpenAI expects the nested json_schema shape.
-    /// </summary>
     private object BuildChatReplyResponseFormat()
     {
         var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
@@ -374,9 +357,7 @@ endCall: true означает, что твой персонаж кладёт т
         };
 
         if (baseUrl.Contains("f5ai"))
-        {
             return new { type = "json_schema", name = "chat_reply", strict = true, schema = replySchema };
-        }
 
         return new { type = "json_schema", json_schema = new { name = "chat_reply", strict = true, schema = replySchema } };
     }
@@ -385,53 +366,26 @@ endCall: true означает, что твой персонаж кладёт т
         string systemPrompt,
         List<DialogMessage> conversationHistory,
         string model,
-        int maximumTokenCount,
+        int maxTokens,
         object? responseFormat,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
-        {
             throw new InvalidOperationException("OpenAI API is not configured");
-        }
 
-        var apiKey = _configuration["OpenAI:ApiKey"]!;
-        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
-        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
-        var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
-
-        var httpClient = _httpClientFactory.CreateClient("OpenAI");
-        httpClient.DefaultRequestHeaders.Remove("Authorization");
-        httpClient.DefaultRequestHeaders.Remove("X-Auth-Token");
-
-        if (baseUrl.Contains("f5ai"))
-            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", apiKey);
-        else
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-        var messages = new List<object>
-        {
-            new { role = "system", content = systemPrompt }
-        };
-
-        foreach (var message in conversationHistory)
-        {
-            messages.Add(new { role = message.Role, content = message.Content });
-        }
+        var (httpClient, apiUrl) = CreateConfiguredClient();
 
         var requestBody = new Dictionary<string, object>
         {
             ["model"] = model,
-            ["messages"] = messages,
-            ["max_tokens"] = maximumTokenCount,
+            ["messages"] = BuildMessages(systemPrompt, conversationHistory),
+            ["max_tokens"] = maxTokens,
             ["temperature"] = 0.7
         };
         if (responseFormat != null)
-        {
             requestBody["response_format"] = responseFormat;
-        }
 
-        var jsonContent = JsonSerializer.Serialize(requestBody);
-        var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+        var httpContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
         _logger.LogInformation("Calling OpenAI API with model {Model}", model);
 
@@ -443,19 +397,13 @@ endCall: true означает, что твой персонаж кладёт т
             _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, responseContent);
 
             if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
-            {
                 throw new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance.");
-            }
 
             if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            {
                 throw new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later.");
-            }
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
                 throw new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration.");
-            }
 
             throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
         }
@@ -487,25 +435,17 @@ endCall: true означает, что твой персонаж кладёт т
         }
 
         if (root.TryGetProperty("content", out var directContent))
-        {
             return directContent.GetString() ?? string.Empty;
-        }
 
         if (root.TryGetProperty("text", out var textContent))
-        {
             return textContent.GetString() ?? string.Empty;
-        }
 
         if (root.TryGetProperty("result", out var result))
         {
             if (result.TryGetProperty("content", out var resultContent))
-            {
                 return resultContent.GetString() ?? string.Empty;
-            }
             if (result.TryGetProperty("text", out var resultText))
-            {
                 return resultText.GetString() ?? string.Empty;
-            }
         }
 
         logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
@@ -514,12 +454,12 @@ endCall: true означает, что твой персонаж кладёт т
 
     private static string FormatConversationForFeedback(List<DialogMessage> messages)
     {
-        var stringBuilder = new StringBuilder();
+        var sb = new StringBuilder();
         foreach (var message in messages)
         {
             var roleLabel = message.Role == "assistant" ? "Клиент" : "Менеджер";
-            stringBuilder.AppendLine($"{roleLabel}: {message.Content}");
+            sb.AppendLine($"{roleLabel}: {message.Content}");
         }
-        return stringBuilder.ToString();
+        return sb.ToString();
     }
 }

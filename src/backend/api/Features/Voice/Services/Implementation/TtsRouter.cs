@@ -31,7 +31,6 @@ internal sealed class TtsRouter : ITtsRouter
                 "yandex" when _yandexTtsService.IsConfigured => "yandex",
                 "voicer" when _voicerTtsService.IsConfigured => "voicer",
                 "google" when _googleTtsService.IsConfigured => "google",
-                // Preferred provider lacks credentials — fall back in latency order.
                 _ when _yandexTtsService.IsConfigured => "yandex",
                 _ when _googleTtsService.IsConfigured => "google",
                 _ when _voicerTtsService.IsConfigured => "voicer",
@@ -48,13 +47,10 @@ internal sealed class TtsRouter : ITtsRouter
     {
         return ActiveProvider switch
         {
-            // Mode-level VoiceId values are ElevenLabs voice ids — meaningful only
-            // for Voicer/Google routing; Yandex voices come from YandexTts:Voice.
             "yandex" => _yandexTtsService.SynthesizeSpeechAsync(text, voice: null, cancellationToken),
             "voicer" => _voicerTtsService.SynthesizeSpeechAsync(text, modeVoiceId, cancellationToken),
             "google" => _googleTtsService.SynthesizeSpeechAsync(text, modeVoiceId, cancellationToken),
-            _ => throw new InvalidOperationException(
-                "No TTS provider is configured. Set Voice:TtsProvider and the matching API key."),
+            _ => throw new InvalidOperationException("No TTS provider is configured. Set Voice:TtsProvider and the matching API key."),
         };
     }
 }

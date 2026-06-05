@@ -71,10 +71,6 @@ export class WebSpeechClient {
     private recognition: SpeechRecognition | null = null;
     private options: WebSpeechClientOptions;
     private state: WebSpeechState = "idle";
-    // Desired lifecycle flag: while true, the recognizer is restarted from
-    // `onend` whenever the browser stops it (silence timeout, pause/resume
-    // races, etc.). The native recognizer stops asynchronously, so `onend`
-    // is the only reliable place to decide whether to keep listening.
     private shouldRestart = false;
     private isStarted = false;
 
@@ -89,7 +85,6 @@ export class WebSpeechClient {
             return;
         }
 
-        // Request microphone permission
         try {
             await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch {
@@ -133,29 +128,23 @@ export class WebSpeechClient {
             try {
                 this.recognition.stop();
             } catch {
-                // Ignore if not started
+                // noop
             }
         }
         this.setState("idle");
     }
 
     resume(): void {
-        if (!this.recognition) {
-            return;
-        }
+        if (!this.recognition) return;
 
         this.shouldRestart = true;
 
-        if (this.isStarted) {
-            // The recognizer is still shutting down after pause(); `onend`
-            // will fire shortly and restart it because shouldRestart is true.
-            return;
-        }
+        if (this.isStarted) return;
 
         try {
             this.recognition.start();
         } catch {
-            // Already starting/running — onend will keep it alive.
+            // noop
         }
     }
 
@@ -165,9 +154,7 @@ export class WebSpeechClient {
 
     private createRecognition(): SpeechRecognition | null {
         const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognitionClass) {
-            return null;
-        }
+        if (!SpeechRecognitionClass) return null;
 
         const recognition = new SpeechRecognitionClass();
         recognition.continuous = this.options.continuous ?? true;
@@ -211,10 +198,7 @@ export class WebSpeechClient {
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            // "no-speech" and "aborted" are not real errors
-            if (event.error === "no-speech" || event.error === "aborted") {
-                return;
-            }
+            if (event.error === "no-speech" || event.error === "aborted") return;
 
             this.setState("error");
             this.options.onError?.(new Error(`Ошибка распознавания: ${event.error}`));
@@ -222,15 +206,11 @@ export class WebSpeechClient {
 
         recognition.onend = () => {
             this.isStarted = false;
-            // Restart purely on the desired-state flag. Checking `state`
-            // here is racy: pause()/resume() flip state synchronously while
-            // the native recognizer stops asynchronously, which used to leave
-            // the mic permanently dead after the first AI reply.
             if (this.shouldRestart && this.state !== "error") {
                 try {
                     this.recognition?.start();
                 } catch {
-                    // Ignore if already started
+                    // noop
                 }
             } else if (this.state !== "error") {
                 this.setState("idle");

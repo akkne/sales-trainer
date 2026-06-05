@@ -38,35 +38,29 @@ internal sealed class VoicerTtsService : IVoicerTtsService
     public async Task<Stream> SynthesizeSpeechAsync(string text, string? voiceId = null, CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
-        {
             throw new InvalidOperationException("VoicerTts API is not configured");
-        }
 
         var apiKey = _configuration["VoicerTts:ApiKey"]!;
         var baseUrl = _configuration["VoicerTts:BaseUrl"] ?? "https://voiceapi.csv666.ru";
         var defaultVoiceId = _configuration["VoicerTts:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
         var publicOwnerId = _configuration["VoicerTts:PublicOwnerId"] ?? "default";
         var model = _configuration["VoicerTts:Model"] ?? "eleven_multilingual_v2";
-        var stability = double.TryParse(_configuration["VoicerTts:Stability"], out var stabilityValue) ? stabilityValue : 0.5;
-        var similarityBoost = double.TryParse(_configuration["VoicerTts:SimilarityBoost"], out var similarityBoostValue) ? similarityBoostValue : 0.75;
-        var speed = double.TryParse(_configuration["VoicerTts:Speed"], out var speedValue) ? speedValue : 1.0;
-        var pollIntervalMilliseconds = int.TryParse(_configuration["VoicerTts:PollIntervalMs"], out var pollInterval) ? pollInterval : 500;
-        var maximumPollAttempts = int.TryParse(_configuration["VoicerTts:MaxPollAttempts"], out var maxAttempts) ? maxAttempts : 120;
-
-        var effectiveVoiceId = voiceId ?? defaultVoiceId;
+        var stability = double.TryParse(_configuration["VoicerTts:Stability"], out var stab) ? stab : 0.5;
+        var similarityBoost = double.TryParse(_configuration["VoicerTts:SimilarityBoost"], out var sim) ? sim : 0.75;
+        var speed = double.TryParse(_configuration["VoicerTts:Speed"], out var spd) ? spd : 1.0;
+        var pollIntervalMs = int.TryParse(_configuration["VoicerTts:PollIntervalMs"], out var pi) ? pi : 500;
+        var maxPollAttempts = int.TryParse(_configuration["VoicerTts:MaxPollAttempts"], out var ma) ? ma : 120;
 
         var httpClient = _httpClientFactory.CreateClient("VoicerTts");
         httpClient.DefaultRequestHeaders.Clear();
         httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
 
-        var taskId = await CreateTaskAsync(httpClient, baseUrl, text, effectiveVoiceId, publicOwnerId, model, stability, similarityBoost, speed, cancellationToken);
+        var taskId = await CreateTaskAsync(httpClient, baseUrl, text, voiceId ?? defaultVoiceId, publicOwnerId, model, stability, similarityBoost, speed, cancellationToken);
         _logger.LogInformation("VoicerTts task created: {TaskId} for {TextLength} characters", taskId, text.Length);
 
-        var status = await PollForCompletionAsync(httpClient, baseUrl, taskId, pollIntervalMilliseconds, maximumPollAttempts, cancellationToken);
+        var status = await PollForCompletionAsync(httpClient, baseUrl, taskId, pollIntervalMs, maxPollAttempts, cancellationToken);
         if (status != "ending")
-        {
             throw new VoicerTtsException($"Task {taskId} ended with unexpected status: {status}");
-        }
 
         var audioStream = await DownloadResultAsync(httpClient, baseUrl, taskId, cancellationToken);
         _logger.LogInformation("VoicerTts audio downloaded for task {TaskId}", taskId);
@@ -104,9 +98,7 @@ internal sealed class VoicerTtsService : IVoicerTtsService
             }
         };
 
-        var jsonContent = JsonSerializer.Serialize(requestBody, JsonSerializerOptions);
-        var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
+        var httpContent = new StringContent(JsonSerializer.Serialize(requestBody, JsonSerializerOptions), Encoding.UTF8, "application/json");
         var response = await httpClient.PostAsync($"{baseUrl.TrimEnd('/')}/tasks", httpContent, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -115,19 +107,13 @@ internal sealed class VoicerTtsService : IVoicerTtsService
             _logger.LogError("VoicerTts create task error: {StatusCode} - {Content}", response.StatusCode, errorContent);
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
                 throw new VoicerTtsAuthenticationException("VoicerTts authentication failed. Please check API configuration.");
-            }
 
             if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
-            {
                 throw new VoicerTtsInsufficientFundsException("VoicerTts insufficient funds.");
-            }
 
             if ((int)response.StatusCode == 429)
-            {
                 throw new VoicerTtsRateLimitException("VoicerTts rate limit exceeded. Maximum 5 concurrent tasks.");
-            }
 
             throw new HttpRequestException($"VoicerTts API returned {response.StatusCode}: {errorContent}");
         }
@@ -136,9 +122,7 @@ internal sealed class VoicerTtsService : IVoicerTtsService
         var createResponse = JsonSerializer.Deserialize<VoicerCreateTaskResponse>(responseJson, JsonSerializerOptions);
 
         if (createResponse?.TaskId == null)
-        {
             throw new VoicerTtsException("Failed to parse task_id from VoicerTts response");
-        }
 
         return createResponse.TaskId.Value;
     }
@@ -147,11 +131,11 @@ internal sealed class VoicerTtsService : IVoicerTtsService
         HttpClient httpClient,
         string baseUrl,
         int taskId,
-        int pollIntervalMilliseconds,
-        int maximumAttempts,
+        int pollIntervalMs,
+        int maxAttempts,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < maximumAttempts; attempt++)
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -163,17 +147,15 @@ internal sealed class VoicerTtsService : IVoicerTtsService
                 _logger.LogWarning("VoicerTts status check error: {StatusCode} - {Content}", response.StatusCode, errorContent);
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                {
                     throw new VoicerTtsException($"Task {taskId} not found");
-                }
 
                 throw new HttpRequestException($"VoicerTts status API returned {response.StatusCode}: {errorContent}");
             }
 
             var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
             var statusResponse = JsonSerializer.Deserialize<VoicerTaskStatusResponse>(responseJson, JsonSerializerOptions);
-
             var status = statusResponse?.Status;
+
             _logger.LogDebug("VoicerTts task {TaskId} status: {Status}", taskId, status);
 
             switch (status)
@@ -186,26 +168,16 @@ internal sealed class VoicerTtsService : IVoicerTtsService
                 case "error_handled":
                     throw new VoicerTtsException($"Task {taskId} failed with error status: {statusResponse?.StatusLabel}");
 
-                case "waiting":
-                case "processing":
-                    await Task.Delay(pollIntervalMilliseconds, cancellationToken);
-                    break;
-
                 default:
-                    _logger.LogWarning("Unknown VoicerTts status: {Status}", status);
-                    await Task.Delay(pollIntervalMilliseconds, cancellationToken);
+                    await Task.Delay(pollIntervalMs, cancellationToken);
                     break;
             }
         }
 
-        throw new VoicerTtsTimeoutException($"Task {taskId} did not complete within {maximumAttempts * pollIntervalMilliseconds / 1000} seconds");
+        throw new VoicerTtsTimeoutException($"Task {taskId} did not complete within {maxAttempts * pollIntervalMs / 1000} seconds");
     }
 
-    private async Task<Stream> DownloadResultAsync(
-        HttpClient httpClient,
-        string baseUrl,
-        int taskId,
-        CancellationToken cancellationToken)
+    private async Task<Stream> DownloadResultAsync(HttpClient httpClient, string baseUrl, int taskId, CancellationToken cancellationToken)
     {
         var response = await httpClient.GetAsync($"{baseUrl.TrimEnd('/')}/tasks/{taskId}/result", cancellationToken);
 
@@ -215,14 +187,10 @@ internal sealed class VoicerTtsService : IVoicerTtsService
             _logger.LogError("VoicerTts download error: {StatusCode} - {Content}", response.StatusCode, errorContent);
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
                 throw new VoicerTtsException($"Result for task {taskId} not found");
-            }
 
             if (response.StatusCode == System.Net.HttpStatusCode.Gone)
-            {
                 throw new VoicerTtsException($"Result for task {taskId} is no longer available");
-            }
 
             throw new HttpRequestException($"VoicerTts result API returned {response.StatusCode}: {errorContent}");
         }

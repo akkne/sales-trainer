@@ -33,9 +33,8 @@ public class VoiceDialogController : ControllerBase
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-        {
             return Unauthorized();
-        }
+
         var usage = await _voiceUsageService.GetUsageAsync(userId, cancellationToken);
         return Ok(usage);
     }
@@ -90,12 +89,6 @@ public class VoiceDialogController : ControllerBase
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        // Frame format per chunk:
-        //   uint32 flags (bit 0 = isFinal, bit 1 = isStopSignal), big-endian
-        //   uint32 text byte length, big-endian
-        //   text (utf-8)
-        //   uint32 audio byte length, big-endian
-        //   audio (mp3)
         var streamStartedAt = DateTime.UtcNow;
         try
         {
@@ -117,7 +110,6 @@ public class VoiceDialogController : ControllerBase
         catch (InvalidOperationException exception)
         {
             _logger.LogWarning(exception, "Voice stream aborted for session {SessionId}", sessionId);
-            // Status headers may already be flushed — best-effort error chunk.
         }
         catch (OperationCanceledException)
         {
@@ -125,14 +117,9 @@ public class VoiceDialogController : ControllerBase
         }
         finally
         {
-            // Record wall-clock duration of the stream so daily/monthly caps reflect
-            // real usage (LLM thinking + TTS + playback download time). Includes
-            // barge-in turns — that's intentional, the user still consumed compute.
             var elapsed = (int)Math.Ceiling((DateTime.UtcNow - streamStartedAt).TotalSeconds);
             if (elapsed > 0)
-            {
                 await _voiceUsageService.RecordSessionSecondsAsync(sessionId, userId, elapsed, CancellationToken.None);
-            }
         }
     }
 
@@ -145,5 +132,4 @@ public class VoiceDialogController : ControllerBase
         buffer[3] = (byte)(value & 0xff);
         await stream.WriteAsync(buffer, ct);
     }
-
 }

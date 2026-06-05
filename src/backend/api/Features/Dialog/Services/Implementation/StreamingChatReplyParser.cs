@@ -5,25 +5,8 @@ using System.Text.RegularExpressions;
 
 namespace SalesTrainer.Api.Features.Dialog.Services.Implementation;
 
-/// <summary>
-/// Final parse result of a structured chat completion:
-/// the persona's spoken reply and whether the persona hangs up the call.
-/// </summary>
 internal sealed record ChatReplyParseResult(string Reply, bool EndCall, bool UsedFallback);
 
-/// <summary>
-/// Incrementally extracts the "reply" string value from a streamed JSON chat
-/// completion of the shape <c>{"reply": "...", "endCall": true|false}</c>.
-///
-/// The "reply" field is required to come first in the object (enforced by the
-/// system prompt and the response JSON schema), so its content can be fed to
-/// text-to-speech sentence by sentence while the model is still generating.
-/// The "endCall" flag is resolved once the full payload has arrived.
-///
-/// If the model ignores the JSON contract and answers with plain text, the
-/// whole raw text is returned as the reply from <see cref="Complete"/> so the
-/// conversation degrades gracefully instead of going silent.
-/// </summary>
 internal sealed class StreamingChatReplyParser
 {
     private enum ParserState
@@ -46,20 +29,12 @@ internal sealed class StreamingChatReplyParser
     private int _nextUnprocessedIndex;
 
     public bool ReplyStarted { get; private set; }
-
     public bool ReplyCompleted { get; private set; }
 
-    /// <summary>
-    /// Feeds the next raw delta from the model and returns the decoded reply
-    /// text contained in it (empty string when the delta carried no reply
-    /// characters — e.g. JSON syntax or the endCall tail).
-    /// </summary>
     public string Push(string delta)
     {
         if (string.IsNullOrEmpty(delta))
-        {
             return string.Empty;
-        }
 
         _rawResponse.Append(delta);
         var emittedReplyText = new StringBuilder();
@@ -69,9 +44,7 @@ internal sealed class StreamingChatReplyParser
             if (_state == ParserState.SeekingReplyKey)
             {
                 if (!TryLocateReplyKey())
-                {
                     break;
-                }
                 continue;
             }
 
@@ -82,15 +55,9 @@ internal sealed class StreamingChatReplyParser
                 case ParserState.SeekingColon:
                     _nextUnprocessedIndex++;
                     if (currentCharacter == ':')
-                    {
                         _state = ParserState.SeekingOpeningQuote;
-                    }
                     else if (!char.IsWhiteSpace(currentCharacter))
-                    {
-                        // Malformed payload — give up on incremental extraction;
-                        // Complete() will fall back to the raw text.
                         _state = ParserState.AfterReplyString;
-                    }
                     break;
 
                 case ParserState.SeekingOpeningQuote:
@@ -164,8 +131,6 @@ internal sealed class StreamingChatReplyParser
                     break;
 
                 case ParserState.AfterReplyString:
-                    // The remainder (",\s*"endCall": ... }") is consumed silently
-                    // and resolved in Complete().
                     _nextUnprocessedIndex = _rawResponse.Length;
                     break;
             }
@@ -174,9 +139,6 @@ internal sealed class StreamingChatReplyParser
         return emittedReplyText.ToString();
     }
 
-    /// <summary>
-    /// Finalizes parsing after the stream has ended.
-    /// </summary>
     public ChatReplyParseResult Complete()
     {
         var rawText = _rawResponse.ToString();
@@ -189,7 +151,6 @@ internal sealed class StreamingChatReplyParser
                 UsedFallback: false);
         }
 
-        // The model did not follow the JSON contract — recover what we can.
         var fallbackReply = ExtractFallbackReply(rawText);
         return new ChatReplyParseResult(
             Reply: fallbackReply,
@@ -208,8 +169,6 @@ internal sealed class StreamingChatReplyParser
             return true;
         }
 
-        // Keep the last few characters unconsumed so a key split across
-        // delta boundaries is still matched on the next Push.
         _nextUnprocessedIndex = Math.Max(_nextUnprocessedIndex, rawText.Length - (ReplyKeyToken.Length - 1));
         return false;
     }
@@ -226,10 +185,7 @@ internal sealed class StreamingChatReplyParser
                 return endCallElement.GetBoolean();
             }
         }
-        catch (JsonException)
-        {
-            // Truncated or malformed JSON — fall through to the lenient match.
-        }
+        catch (JsonException) { }
 
         var endCallMatch = Regex.Match(rawText, "\"endCall\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
         return endCallMatch.Success && bool.Parse(endCallMatch.Groups[1].Value.ToLowerInvariant());
@@ -254,10 +210,7 @@ internal sealed class StreamingChatReplyParser
                 }
             }
         }
-        catch (JsonException)
-        {
-            // Plain text response.
-        }
+        catch (JsonException) { }
 
         return withoutCodeFence
             .Replace("[DIALOG_END]", string.Empty, StringComparison.Ordinal)
@@ -268,15 +221,11 @@ internal sealed class StreamingChatReplyParser
     {
         var trimmedText = text.Trim();
         if (!trimmedText.StartsWith("```", StringComparison.Ordinal))
-        {
             return trimmedText;
-        }
 
         var firstLineBreakIndex = trimmedText.IndexOf('\n');
         if (firstLineBreakIndex < 0)
-        {
             return trimmedText;
-        }
 
         var withoutOpeningFence = trimmedText[(firstLineBreakIndex + 1)..];
         var closingFenceIndex = withoutOpeningFence.LastIndexOf("```", StringComparison.Ordinal);

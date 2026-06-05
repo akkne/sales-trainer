@@ -19,9 +19,7 @@ export class VadManager {
     }
 
     async start(): Promise<void> {
-        if (this.vad) {
-            return;
-        }
+        if (this.vad) return;
 
         const vadOptions: Partial<RealTimeVADOptions> = {
             onSpeechStart: () => {

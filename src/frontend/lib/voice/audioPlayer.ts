@@ -34,14 +34,12 @@ export class AudioPlayer {
             const reader = audioStream.getReader();
             const chunks: Uint8Array[] = [];
 
-            // Read all chunks
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 chunks.push(value);
             }
 
-            // Combine chunks into single buffer
             const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
             const combined = new Uint8Array(totalLength);
             let offset = 0;
@@ -74,7 +72,6 @@ export class AudioPlayer {
         try {
             const audioContext = this.getAudioContext();
 
-            // Resume context if suspended (browser autoplay policy)
             if (audioContext.state === "suspended") {
                 await audioContext.resume();
             }
@@ -98,12 +95,6 @@ export class AudioPlayer {
         }
     }
 
-    /**
-     * Begin streaming playback: subsequent enqueue() calls add MP3 chunks to
-     * the queue. Playback starts on the first chunk and chains buffers
-     * back-to-back. Call markQueueComplete() once all chunks are enqueued so
-     * the player knows when to fire onPlaybackEnd.
-     */
     beginQueue(): void {
         this.stop();
         this.queue = [];
@@ -170,7 +161,7 @@ export class AudioPlayer {
             try {
                 this.sourceNode.stop();
             } catch {
-                // Already stopped
+                // noop
             }
             this.sourceNode.disconnect();
             this.sourceNode = null;
