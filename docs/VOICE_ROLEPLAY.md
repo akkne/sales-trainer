@@ -72,9 +72,11 @@ Microphone → Web Speech API (browser STT, ru-RU, interim results → live subt
                                           ↓
                   POST /dialog/sessions/:id/voice/stream  { transcript }
                                           ↓
-        LLM streams {"reply", "endCall"} → reply split into sentences → TTS per sentence
+        LLM streams {"reply", "endCall"} → text frames pushed immediately (per sentence)
                                           ↓
-   Length-prefixed frames (text + mp3) → Web Audio queued playback + streamed AI subtitles
+              whole reply → single Voicer TTS task → one audio frame when ready
+                                          ↓
+   Length-prefixed frames (text / mp3) → Web Audio queued playback + streamed AI subtitles
 ```
 
 Barge-in: if the user starts talking during playback, audio stops and the
@@ -92,9 +94,14 @@ Side effect: saves user + assistant messages to the session
 ```
 
 The chat model answers with structured JSON `{"reply": string, "endCall": bool}`;
-`StreamingChatReplyParser` extracts the reply incrementally so TTS starts before
-generation finishes. Short sentences are sent to Voicer TTS as-is (the legacy
-500-character padding hack is removed — the API no longer enforces a minimum).
+`StreamingChatReplyParser` extracts the reply incrementally. **Text frames are
+yielded immediately** (audio length 0) so live subtitles appear within seconds,
+then the **entire reply is synthesized in one Voicer TTS task** and delivered as
+a single audio-only frame. Voicer is a queue-based service: a task takes
+~10-35 s *regardless of text length* and bills a 500-character minimum, so
+per-sentence synthesis would multiply both latency and cost. A TTS failure is
+logged and swallowed — the user still gets the reply as text, and the stream
+finishes normally with the final sentinel.
 
 ### Configuration (appsettings.json)
 

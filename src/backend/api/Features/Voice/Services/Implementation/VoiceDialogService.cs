@@ -79,10 +79,14 @@ public class VoiceDialogService : IVoiceDialogService
             cancellationToken: ct);
 
         // The model answers with {"reply": "...", "endCall": bool}; the parser
-        // extracts the spoken reply incrementally so TTS can start while the
-        // model is still generating, and resolves endCall once the stream ends.
+        // extracts the spoken reply incrementally. Text chunks are pushed to the
+        // client immediately (live subtitles); audio is synthesized afterwards in
+        // a single TTS request — Voicer is a queue-based service (~10-30s per task
+        // regardless of text length), so per-sentence synthesis would multiply
+        // both latency and cost (each task bills a 500-char minimum).
         var replyParser = new StreamingChatReplyParser();
         var sentenceBuffer = new StringBuilder();
+        var spokenSentences = new List<string>();
 
         await foreach (var delta in _openAiService.StreamChatMessageAsync(mode.ChatSystemPrompt, session.Messages, ct))
         {
@@ -91,14 +95,14 @@ public class VoiceDialogService : IVoiceDialogService
 
             sentenceBuffer.Append(replyText);
 
-            // Flush at sentence boundaries to start TTS as early as possible.
+            // Flush at sentence boundaries so subtitles appear as soon as possible.
             while (TryExtractSentence(sentenceBuffer, out var sentence))
             {
                 var cleaned = sentence.Trim();
                 if (string.IsNullOrWhiteSpace(cleaned)) continue;
 
-                var audio = await SynthesizeAsync(cleaned, mode.VoiceId, ct);
-                yield return new VoiceStreamChunk(cleaned, audio, IsStopSignal: false, IsFinal: false);
+                spokenSentences.Add(cleaned);
+                yield return new VoiceStreamChunk(cleaned, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
             }
         }
 
@@ -111,14 +115,27 @@ public class VoiceDialogService : IVoiceDialogService
             // Nothing was emitted incrementally — speak the recovered reply.
             sentenceBuffer.Clear();
             sentenceBuffer.Append(parseResult.Reply);
+            spokenSentences.Clear();
         }
 
         // Flush remaining buffer (no terminal punctuation).
         var tailCleaned = sentenceBuffer.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(tailCleaned))
         {
-            var audio = await SynthesizeAsync(tailCleaned, mode.VoiceId, ct);
-            yield return new VoiceStreamChunk(tailCleaned, audio, IsStopSignal: parseResult.EndCall, IsFinal: false);
+            spokenSentences.Add(tailCleaned);
+            yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
+        }
+
+        // Synthesize the whole reply at once. A TTS failure must not kill the
+        // stream — the user has already received the text above.
+        var speechText = string.Join(" ", spokenSentences);
+        if (!string.IsNullOrWhiteSpace(speechText))
+        {
+            var audio = await TrySynthesizeAsync(speechText, mode.VoiceId, sessionId, ct);
+            if (audio is { Length: > 0 })
+            {
+                yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
+            }
         }
 
         // Persist the assembled AI message after the stream completes successfully.
@@ -174,6 +191,23 @@ public class VoiceDialogService : IVoiceDialogService
         sentence = text[..(idx + 1)];
         buffer.Remove(0, idx + 1);
         return true;
+    }
+
+    private async Task<byte[]?> TrySynthesizeAsync(string text, string? voiceId, string sessionId, CancellationToken ct)
+    {
+        try
+        {
+            return await SynthesizeAsync(text, voiceId, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TTS synthesis failed for session {SessionId} ({TextLength} chars); reply delivered as text only", sessionId, text.Length);
+            return null;
+        }
     }
 
     private async Task<byte[]> SynthesizeAsync(string text, string? voiceId, CancellationToken ct)
