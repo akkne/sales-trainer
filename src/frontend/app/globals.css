@@ -680,6 +680,16 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 }
 .bottom-nav a.active { color: var(--primary); }
 
+/* unlayered .bottom-nav beats Tailwind's layered md:hidden — hide on desktop here */
+@media (min-width: 768px) {
+  .bottom-nav { display: none; }
+}
+
+/* reserve space for the fixed bottom nav on mobile */
+@media (max-width: 767px) {
+  .has-bottom-nav { padding-bottom: 76px; }
+}
+
 /* ── Layout helpers ── */
 .container { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
 
