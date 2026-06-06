@@ -80,6 +80,12 @@ export function useVoice(options: UseVoiceOptions) {
         setState("processing");
         onTranscript?.(transcript);
 
+        // The phrase is committed to the subtitle history now — clear the interim
+        // line immediately so it does not reappear as a duplicate once the
+        // pipeline returns to listening/speaking.
+        transcriptBufferRef.current = "";
+        setCurrentTranscript("");
+
         const controller = new AbortController();
         streamAbortRef.current = controller;
 
@@ -149,9 +155,6 @@ export function useVoice(options: UseVoiceOptions) {
                 streamAbortRef.current = null;
             }
         }
-
-        transcriptBufferRef.current = "";
-        setCurrentTranscript("");
     }, [onTranscript, onAiText, onAiResponse, onError]);
 
     const startVoice = useCallback(async () => {
