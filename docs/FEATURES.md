@@ -10,6 +10,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |

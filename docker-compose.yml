@@ -3,13 +3,12 @@ services:
     build:
       context: ./src/frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:5001
         - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-    pull_policy: build  
+    pull_policy: build
     ports:
       - "3000:3000"
-    environment:
-      - LOKI_URL=http://loki:3100
+    env_file:
+      - ./src/frontend/.env.production
     depends_on:
       - backend
       - loki
@@ -19,17 +18,22 @@ services:
     pull_policy: build
     ports:
       - "5001:8080"
+    env_file:
+      - ./src/backend/api/.env.docker
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=sallevate;Username=st;Password=st_secret
-      - ConnectionStrings__Mongo=mongodb://mongo:27017
-      - ConnectionStrings__Redis=redis:6379
-      - Jwt__Key=CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR_AT_LEAST_32_CHARS
-      - Jwt__Issuer=sallevate
-      - Jwt__Audience=sallevate
-      - Frontend__Url=http://localhost:3000
+      # Secrets interpolated from the root .env
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Jwt__Key=${JWT_KEY}
       - Google__ClientId=${GOOGLE_CLIENT_ID}
-      - Logging__Loki__Url=http://loki:3100
+      - OpenAI__ApiKey=${OPENAI_API_KEY}
+      - OpenAI__BaseUrl=${OPENAI_BASE_URL}
+      - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
+      - Deepgram__ApiKey=${DEEPGRAM_API_KEY}
+      - VoicerTts__ApiKey=${VOICER_API_KEY}
+      - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
+      - SuperAdmin__Email=${SUPERADMIN_EMAIL}
+      - SuperAdmin__Password=${SUPERADMIN_PASSWORD}
+      - SuperAdmin__DisplayName=${SUPERADMIN_DISPLAY_NAME}
     volumes:
       - ./src/backend/api/appsettings.Development.json:/app/appsettings.Development.json:ro
     depends_on:
@@ -45,15 +49,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: sallevate
-      POSTGRES_USER: st
-      POSTGRES_PASSWORD: st_secret
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U st -d sallevate"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -104,8 +108,8 @@ services:
       - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=false
     depends_on:
