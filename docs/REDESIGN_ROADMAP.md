@@ -84,3 +84,70 @@ From the earthy/sage palette (rust, olive, indigo, oklch) to an electric blue + 
 - /tree desktop+mobile, /session (choose-option + result), /league, /profile, /dialog, /guidebook — all render with new palette
 - vitest: 53/53 pass; tsc clean
 - Pre-existing console errors unrelated to redesign: Google OAuth origin 403, 404 lessons on empty skill, negative SVG circle radius in CircularProgress
+
+---
+
+# Stage 2 — Screen-level redesign (mockup `.design/new-design/js/*.jsx` + `css/screens.css`, `css/tree.css`)
+
+Stage 1 only ported tokens/fonts/base components. The mockup also defines full screen layouts
+that the app does not follow yet (screens still use old inline-style markup). Stage 2 ports them.
+
+## Phase S1 — Missing CSS [globals.css]
+Port from mockup css not yet in globals.css:
+- Typography: `.display .h1 .h2 .h3 .h4 .lead .body .small .muted .num`
+- Helpers: `.page .row .col .gap-* .wrap .grow .center .between .hr .itile.* .hero-head .hero-stats .back-link .field-wrap .nav`
+- Tree (tree.css): `.stat-2x2 .tree-grid-a .tree-center .lp-scroll .stage-head/.stage-dot/.stage-name/.stage-ratio/.stage-skills .skill-row/.skill-ic/.skill-name .skill-band .lesson-path .lp-* .lp-trophy .goal-card .tip-card .league-mini`
+- Session/complete (screens.css): `.session* .opt* .exercise .complete* .check-circle .confetti .cs`
+- Dialog: `.bundle-grid/.bundle-card .mentor-card/.mentor-tex .mode-grid/.mode-card`
+- Voice: `.voice* .transcript .tr-bubble .state-pill .vdot/.pdot`
+- Text chat: `.chat-screen .dc-*`
+- Modal/feedback: `.modal* .fb-* .more-btn`
+- League: `.league-grid .countdown .cd-* .cta-row .lb-* .rank-badge .you-tag`
+- Tabs/friends: `.tabbar .tab .friends-grid .friend-row .activity .chat-wrap .chat-* .msg`
+- Guidebook: `.gb-* .mastery-ring .dlg-example .dx .case-box .case-metrics`
+- Profile: `.profile-head .profile-stats .ach* .theme-* .logout-row .quota`
+- Landing/auth: `.landing .land-* .auth .auth-card .auth-or`
+- Responsive blocks (1000px/760px/560px)
+
+## Phase S2 — Skill Tree page → Variant A (3-column cards)
+- Container layout `.tree-grid-a`: sidebar card / center card / stats rail (not full-bleed grid)
+- Sidebar: `.stage-head` + `.stage-skills` + `.skill-row` (active = primary-soft)
+- Center: `.skill-band` header + `.lp-scroll.dotted` serpentine `.lesson-path` (lp-node 72px, lp-pulse, lp-meta, trophy)
+- Right: StatsWidget on `.stat-2x2` + goal/tip/league-mini cards
+- Mobile: stacked, same components
+
+## Phase S3 — Dialog list + Mode select
+- `/dialog`: HeroHead + `.bundle-grid` of `.bundle-card` (itile, chip, "Открыть →") + `.mentor-card`
+- `/dialog/[bundleId]`: `.back-link`, itile header, `.mode-grid` of `.mode-card` (Чат / Позвонить buttons)
+
+## Phase S4 — Text chat (AI dialog)
+- `.chat-screen` 2-col: `.dc-side` history sidebar + `.dc-main` (dc-head, dc-thread, dc-msg/dc-bubble, typing dots, dc-input)
+
+## Phase S5 — Voice roleplay
+- `.voice` layout: voice-top (back, status dot+timer, quota), voice-stage (voice-avatar + va-ring pulse, transcript tr-bubbles, state-pill, hint), voice-foot CTA
+- Feedback → `.modal` with `.fb-list good/bad`
+
+## Phase S6 — Guidebook
+- HeroHead + `.gb-tools` (search + chip filters) + `.gb-grid` of expandable `.gb-card` with `.mastery-ring`, `.dlg-example`/`.dx`, `.case-box`
+
+## Phase S7 — League / Friends / Profile / Session polish
+- League: `.league-grid` + `.countdown`/`.cd-*` + `.cta-row` + `.lb-card` rows with zones
+- Friends: `.tabbar` + `.friends-grid` + activity rail + `.chat-wrap` chats
+- Profile: `.profile-head`/`.profile-stats`/`.ach-grid`/`.theme-grid`/`.logout-row`
+- Session: switch inline styles to `.session*`/`.opt*` classes; complete screen → `.complete` + confetti
+
+## Phase S8 — Landing + Auth
+- Landing: `.land-top` wordmark, `.land-hero` display title with grad-text, `.land-features`
+- Auth: centered `.auth-card` with wordmark, fields, dark CTA, `.auth-or`, Google button
+
+## Status (Stage 2)
+- [ ] S1 CSS
+- [ ] S2 Tree
+- [ ] S3 Dialog list + mode
+- [ ] S4 Text chat
+- [ ] S5 Voice
+- [ ] S6 Guidebook
+- [ ] S7 League/Friends/Profile/Session
+- [ ] S8 Landing/Auth
+
+After each phase: rebuild `docker compose up --build -d frontend`, verify via Playwright MCP, commit.
