@@ -375,7 +375,7 @@ Errors:
 - Sessions: MongoDB (`dialog_sessions` collection)
 
 **AI models:**
-- Chat: `gpt-4.1-mini` (configurable via `OpenAI:ChatModel`)
+- Chat: `gpt-4.1-nano` (configurable via `OpenAI:ChatModel`)
 - Feedback: `gpt-4.1` (configurable via `OpenAI:FeedbackModel`)
 
 ---

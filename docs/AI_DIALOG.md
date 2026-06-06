@@ -121,7 +121,7 @@ CREATE TABLE "DialogModes" (
     "ApiKey": "sk-...",
     "BaseUrl": "https://api.openai.com",
     "ChatCompletionsPath": "/v1/chat/completions",
-    "ChatModel": "gpt-4.1-mini",
+    "ChatModel": "gpt-4.1-nano",
     "FeedbackModel": "gpt-4.1",
     "MaxTokensChat": 500,
     "MaxTokensFeedback": 1500
