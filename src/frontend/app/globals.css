@@ -760,17 +760,6 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   50% { height: 32px; }
 }
 
-/* ── Skill tree desktop grid (hidden on mobile; inline styles can't do this) ── */
-.tree-desktop-grid { display: none; }
-@media (min-width: 768px) {
-  .tree-desktop-grid {
-    display: grid;
-    grid-template-columns: 300px 1fr 320px;
-    gap: 0;
-    height: calc(100vh - 66px);
-  }
-}
-
 /* ════════════════════════════════════════════════════════════
    Stage 2 — screen-level redesign classes (.design/new-design)
    ════════════════════════════════════════════════════════════ */
@@ -847,7 +836,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .skill-row.active .skill-ic { background: var(--surface); color: var(--primary); }
 .skill-name { font-size: 14px; font-weight: 600; flex: 1; }
 
-.skill-band { display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+.skill-band { display: flex; align-items: center; justify-content: space-between; gap: 18px 32px; flex-wrap: wrap; }
 .skill-band.stacked { flex-direction: column; align-items: stretch; gap: 16px; }
 .skill-band-prog { min-width: 240px; flex: 1; max-width: 320px; }
 
