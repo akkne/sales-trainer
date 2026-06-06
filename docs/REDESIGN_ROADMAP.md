@@ -141,13 +141,13 @@ Port from mockup css not yet in globals.css:
 - Auth: centered `.auth-card` with wordmark, fields, dark CTA, `.auth-or`, Google button
 
 ## Status (Stage 2)
-- [ ] S1 CSS
-- [ ] S2 Tree
-- [ ] S3 Dialog list + mode
-- [ ] S4 Text chat
-- [ ] S5 Voice
-- [ ] S6 Guidebook
-- [ ] S7 League/Friends/Profile/Session
-- [ ] S8 Landing/Auth
+- [x] S1 CSS — all mockup screen classes ported to globals.css
+- [x] S2 Tree — variant A card layout, serpentine lesson path, verified in Playwright (desktop+mobile)
+- [x] S3 Dialog list + mode — HeroHead, bundle-grid, mentor-card, mode-grid; verified
+- [x] S4 Text chat — chat-screen/dc-* layout, history sidebar, bubbles, typing dots; verified
+- [x] S5 Voice — voice-stage, pulsing avatar ring, tr-bubbles, state-pill; verified
+- [~] S6 Guidebook — in progress
+- [~] S7 League/Friends/Profile/Session — in progress
+- [~] S8 Landing/Auth — in progress
 
 After each phase: rebuild `docker compose up --build -d frontend`, verify via Playwright MCP, commit.
