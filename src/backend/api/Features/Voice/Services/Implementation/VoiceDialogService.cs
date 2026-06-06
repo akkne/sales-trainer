@@ -71,10 +71,11 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages),
             cancellationToken: ct);
 
-        var realtimeTts = _ttsRouter.IsRealtime;
         var replyParser = new StreamingChatReplyParser();
         var sentenceBuffer = new StringBuilder();
-        var spokenSentences = new List<string>();
+        // TTS pipeline: synthesis of sentence N runs concurrently with LLM streaming of sentence N+1.
+        // Tasks are awaited in order, so audio chunks always arrive in reply order.
+        var pendingAudio = new Queue<Task<byte[]?>>();
 
         await foreach (var delta in _openAiService.StreamChatMessageAsync(mode.ChatSystemPrompt, session.Messages, ct))
         {
@@ -88,15 +89,16 @@ internal sealed class VoiceDialogService : IVoiceDialogService
                 var cleaned = sentence.Trim();
                 if (string.IsNullOrWhiteSpace(cleaned)) continue;
 
-                spokenSentences.Add(cleaned);
                 yield return new VoiceStreamChunk(cleaned, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
+                pendingAudio.Enqueue(TrySynthesizeAsync(cleaned, mode.VoiceId, sessionId, ct));
+            }
 
-                if (realtimeTts)
-                {
-                    var sentenceAudio = await TrySynthesizeAsync(cleaned, mode.VoiceId, sessionId, ct);
-                    if (sentenceAudio is { Length: > 0 })
-                        yield return new VoiceStreamChunk(string.Empty, sentenceAudio, IsStopSignal: false, IsFinal: false);
-                }
+            // Flush audio that is already synthesized without blocking the LLM stream.
+            while (pendingAudio.Count > 0 && pendingAudio.Peek().IsCompleted)
+            {
+                var readyAudio = await pendingAudio.Dequeue();
+                if (readyAudio is { Length: > 0 })
+                    yield return new VoiceStreamChunk(string.Empty, readyAudio, IsStopSignal: false, IsFinal: false);
             }
         }
 
@@ -108,32 +110,20 @@ internal sealed class VoiceDialogService : IVoiceDialogService
                 sessionId, parseResult.Reply.Length);
             sentenceBuffer.Clear();
             sentenceBuffer.Append(parseResult.Reply);
-            spokenSentences.Clear();
         }
 
         var tailCleaned = sentenceBuffer.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(tailCleaned))
         {
-            spokenSentences.Add(tailCleaned);
             yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
-
-            if (realtimeTts)
-            {
-                var tailAudio = await TrySynthesizeAsync(tailCleaned, mode.VoiceId, sessionId, ct);
-                if (tailAudio is { Length: > 0 })
-                    yield return new VoiceStreamChunk(string.Empty, tailAudio, IsStopSignal: false, IsFinal: false);
-            }
+            pendingAudio.Enqueue(TrySynthesizeAsync(tailCleaned, mode.VoiceId, sessionId, ct));
         }
 
-        if (!realtimeTts)
+        while (pendingAudio.Count > 0)
         {
-            var speechText = string.Join(" ", spokenSentences);
-            if (!string.IsNullOrWhiteSpace(speechText))
-            {
-                var audio = await TrySynthesizeAsync(speechText, mode.VoiceId, sessionId, ct);
-                if (audio is { Length: > 0 })
-                    yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
-            }
+            var audio = await pendingAudio.Dequeue();
+            if (audio is { Length: > 0 })
+                yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
         }
 
         session.Messages.Add(new DialogMessage

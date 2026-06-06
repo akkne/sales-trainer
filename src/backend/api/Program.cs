@@ -120,9 +120,6 @@ builder.Services
 builder.Services.AddHttpClient("OpenAI")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddHttpClient("VoicerTts")
-    .ConfigureHttpClient(client =>
-        client.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.AddHttpClient("GoogleTts")
     .ConfigureHttpClient(client =>
         client.Timeout = TimeSpan.FromSeconds(30));

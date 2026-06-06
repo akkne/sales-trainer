@@ -28,7 +28,6 @@ services:
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
       - Deepgram__ApiKey=${DEEPGRAM_API_KEY}
-      - VoicerTts__ApiKey=${VOICER_API_KEY}
       - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
       - SuperAdmin__Email=${SUPERADMIN_EMAIL}
       - SuperAdmin__Password=${SUPERADMIN_PASSWORD}

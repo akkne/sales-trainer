@@ -11,11 +11,9 @@ public static class VoiceServiceCollectionExtensions
         services.Configure<VoiceFeatureConfiguration>(configuration.GetSection(VoiceFeatureConfiguration.SectionName));
         services.Configure<TtsRouterConfiguration>(configuration.GetSection(TtsRouterConfiguration.SectionName));
         services.Configure<YandexTtsConfiguration>(configuration.GetSection(YandexTtsConfiguration.SectionName));
-        services.Configure<VoicerTtsConfiguration>(configuration.GetSection(VoicerTtsConfiguration.SectionName));
         services.Configure<GoogleTtsConfiguration>(configuration.GetSection(GoogleTtsConfiguration.SectionName));
         services.Configure<VoiceUsageLimitsConfiguration>(configuration.GetSection(VoiceUsageLimitsConfiguration.SectionName));
         services.AddScoped<IYandexTtsService, YandexTtsService>();
-        services.AddScoped<IVoicerTtsService, VoicerTtsService>();
         services.AddScoped<IGoogleTtsService, GoogleTtsService>();
         services.AddScoped<ITtsRouter, TtsRouter>();
         services.AddScoped<IVoiceDialogService, VoiceDialogService>();

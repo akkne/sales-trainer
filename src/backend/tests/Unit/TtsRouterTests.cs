@@ -13,14 +13,12 @@ namespace SalesTrainer.Tests.Unit;
 public class TtsRouterTests
 {
     private IYandexTtsService _yandex = null!;
-    private IVoicerTtsService _voicer = null!;
     private IGoogleTtsService _google = null!;
 
     [SetUp]
     public void SetUp()
     {
         _yandex = Substitute.For<IYandexTtsService>();
-        _voicer = Substitute.For<IVoicerTtsService>();
         _google = Substitute.For<IGoogleTtsService>();
     }
 
@@ -29,7 +27,7 @@ public class TtsRouterTests
         var options = Options.Create(preferredProvider == null
             ? new TtsRouterConfiguration()
             : new TtsRouterConfiguration { TtsProvider = preferredProvider });
-        return new TtsRouter(_yandex, _voicer, _google, options);
+        return new TtsRouter(_yandex, _google, options);
     }
 
     [Test]
@@ -42,13 +40,12 @@ public class TtsRouterTests
     [Test]
     public void PreferredProvider_UsedWhenConfigured()
     {
-        _voicer.IsConfigured.Returns(true);
+        _google.IsConfigured.Returns(true);
         _yandex.IsConfigured.Returns(true);
 
-        var router = CreateRouter("voicer");
+        var router = CreateRouter("google");
 
         router.IsConfigured.Should().BeTrue();
-        router.IsRealtime.Should().BeFalse();
     }
 
     [Test]
@@ -56,32 +53,30 @@ public class TtsRouterTests
     {
         _yandex.IsConfigured.Returns(true);
 
-        var router = CreateRouter("voicer");
+        var router = CreateRouter("google");
 
         router.IsConfigured.Should().BeTrue();
-        router.IsRealtime.Should().BeTrue();
     }
 
     [Test]
-    public void FallsBackToVoicer_WhenOnlyVoicerConfigured()
+    public void FallsBackToGoogle_WhenOnlyGoogleConfigured()
     {
-        _voicer.IsConfigured.Returns(true);
+        _google.IsConfigured.Returns(true);
 
         var router = CreateRouter("yandex");
 
         router.IsConfigured.Should().BeTrue();
-        router.IsRealtime.Should().BeFalse();
     }
 
     [Test]
     public void DefaultsToYandex_WhenNoProviderSpecified()
     {
         _yandex.IsConfigured.Returns(true);
-        _voicer.IsConfigured.Returns(true);
+        _google.IsConfigured.Returns(true);
 
         var router = CreateRouter(null);
 
-        router.IsRealtime.Should().BeTrue();
+        router.IsConfigured.Should().BeTrue();
     }
 
     [Test]
@@ -99,16 +94,16 @@ public class TtsRouterTests
     }
 
     [Test]
-    public async Task Synthesize_RoutesToVoicer_WithModeVoiceId()
+    public async Task Synthesize_RoutesToGoogle_WithModeVoiceId()
     {
-        _voicer.IsConfigured.Returns(true);
-        _voicer.SynthesizeSpeechAsync("Привет", "voice-1", Arg.Any<CancellationToken>())
+        _google.IsConfigured.Returns(true);
+        _google.SynthesizeSpeechAsync("Привет", "voice-1", Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<Stream>(new MemoryStream([1, 2, 3])));
 
-        var router = CreateRouter("voicer");
+        var router = CreateRouter("google");
         await using var stream = await router.SynthesizeSpeechAsync("Привет", "voice-1");
 
-        await _voicer.Received(1).SynthesizeSpeechAsync("Привет", "voice-1", Arg.Any<CancellationToken>());
+        await _google.Received(1).SynthesizeSpeechAsync("Привет", "voice-1", Arg.Any<CancellationToken>());
     }
 
     [Test]

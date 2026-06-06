@@ -7,18 +7,15 @@ namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 internal sealed class TtsRouter : ITtsRouter
 {
     private readonly IYandexTtsService _yandexTtsService;
-    private readonly IVoicerTtsService _voicerTtsService;
     private readonly IGoogleTtsService _googleTtsService;
     private readonly IOptions<TtsRouterConfiguration> _ttsRouterOptions;
 
     public TtsRouter(
         IYandexTtsService yandexTtsService,
-        IVoicerTtsService voicerTtsService,
         IGoogleTtsService googleTtsService,
         IOptions<TtsRouterConfiguration> ttsRouterOptions)
     {
         _yandexTtsService = yandexTtsService;
-        _voicerTtsService = voicerTtsService;
         _googleTtsService = googleTtsService;
         _ttsRouterOptions = ttsRouterOptions;
     }
@@ -31,11 +28,9 @@ internal sealed class TtsRouter : ITtsRouter
             return preferred switch
             {
                 "yandex" when _yandexTtsService.IsConfigured => "yandex",
-                "voicer" when _voicerTtsService.IsConfigured => "voicer",
                 "google" when _googleTtsService.IsConfigured => "google",
                 _ when _yandexTtsService.IsConfigured => "yandex",
                 _ when _googleTtsService.IsConfigured => "google",
-                _ when _voicerTtsService.IsConfigured => "voicer",
                 _ => "none",
             };
         }
@@ -43,14 +38,11 @@ internal sealed class TtsRouter : ITtsRouter
 
     public bool IsConfigured => ActiveProvider != "none";
 
-    public bool IsRealtime => ActiveProvider is "yandex" or "google";
-
     public Task<Stream> SynthesizeSpeechAsync(string text, string? modeVoiceId, CancellationToken cancellationToken = default)
     {
         return ActiveProvider switch
         {
             "yandex" => _yandexTtsService.SynthesizeSpeechAsync(text, voice: null, cancellationToken),
-            "voicer" => _voicerTtsService.SynthesizeSpeechAsync(text, modeVoiceId, cancellationToken),
             "google" => _googleTtsService.SynthesizeSpeechAsync(text, modeVoiceId, cancellationToken),
             _ => throw new InvalidOperationException("No TTS provider is configured. Set Voice:TtsProvider and the matching API key."),
         };

@@ -74,7 +74,7 @@ Microphone → Web Speech API (browser STT, ru-RU, interim results → live subt
                                           ↓
         LLM streams {"reply", "endCall"} → text frames pushed immediately (per sentence)
                                           ↓
-              whole reply → single Voicer TTS task → one audio frame when ready
+          each sentence → realtime TTS (pipelined with LLM stream) → audio frame
                                           ↓
    Length-prefixed frames (text / mp3) → Web Audio queued playback + streamed AI subtitles
 ```
@@ -96,17 +96,15 @@ Side effect: saves user + assistant messages to the session
 The chat model answers with structured JSON `{"reply": string, "endCall": bool}`;
 `StreamingChatReplyParser` extracts the reply incrementally. **Text frames are
 yielded immediately** (audio length 0) so live subtitles appear within seconds.
-The audio strategy is provider-dependent (`TtsRouter.IsRealtime`):
-
-- **Realtime providers (Yandex SpeechKit, Google)** — synchronous APIs answering
-  in well under a second: each sentence is synthesized right behind its text
-  frame, so speech starts almost immediately and flows sentence-by-sentence.
-- **Queue-based providers (Voicer)** — a task takes ~10-35 s *regardless of text
-  length* and bills a 500-character minimum, so the **entire reply is batched
-  into one TTS task** and delivered as a single audio-only frame.
+Both providers (Yandex SpeechKit, Google) are synchronous realtime APIs
+answering in well under a second. Synthesis is **pipelined with the LLM
+stream**: as soon as a sentence is extracted, its TTS request starts in the
+background while the next sentence is still streaming from the LLM; audio
+frames are flushed in reply order as they complete, so speech starts almost
+immediately and flows sentence-by-sentence with no stalls between sentences.
 
 `TtsRouter` is the single source of truth for provider selection
-(`Voice:TtsProvider`, fallback order yandex → google → voicer) and for the
+(`Voice:TtsProvider`, fallback order yandex → google) and for the
 "is voice configured" checks in both controllers. Yandex synthesizes raw LPCM
 which the service wraps in a WAV header (v1 REST API has no mp3; OggOpus is not
 decodable in Safari). A TTS failure is logged and swallowed — the user still
@@ -122,12 +120,6 @@ gets the reply as text, and the stream finishes normally with the final sentinel
     "Language": "ru",
     "SmartFormat": true,
     "Punctuate": true
-  },
-  "VoicerTts": {
-    "ApiKey": "REPLACE_WITH_VOICER_API_KEY",
-    "BaseUrl": "https://voiceapi.csv666.ru",
-    "VoiceId": "21m00Tcm4TlvDq8ikWAM",
-    "Model": "eleven_multilingual_v2"
   },
   "YandexTts": {
     "ApiKey": "REPLACE_WITH_YANDEX_API_KEY",
@@ -154,13 +146,12 @@ gets the reply as text, and the stream finishes normally with the final sentinel
 | **STT** | Deepgram | Через ProxyAPI / VseGPT (есть deepgram-compatible бридж) или напрямую с зарубежной картой | `Deepgram:ApiKey` |
 | **STT (fallback)** | Web Speech API (браузер) | Бесплатно, не требует ключа | — |
 | **TTS (основной)** | Yandex SpeechKit v1 | Yandex Cloud, рубли (карта/счёт). Latency <1 c — реалистичный звонок | `YandexTts:ApiKey`, `Voice:TtsProvider=yandex` |
-| **TTS (fallback)** | Voicer (прокси к ElevenLabs) | Личный кабинет `voiceapi.csv666.ru`, оплата СБП. Очередь ~10-35 с/задача | `VoicerTts:ApiKey`, `Voice:TtsProvider=voicer` |
 | **TTS (alt)** | Google Cloud TTS | Google Cloud, иностранная карта | `GoogleTts:ApiKey`, `Voice:TtsProvider=google` |
 | **TTS (alt)** | SaluteSpeech (Сбер) | СБП, но минимум 15 000 ₽/мес для юрлиц | отклонено |
 | **LLM** | См. [AI_DIALOG.md](AI_DIALOG.md#buying-api-access-from-russia-rub-friendly-proxy-gateways) | — | `OpenAI:BaseUrl` |
 
 `Voice:TtsProvider` явно выбирает провайдер; если выбранный не сконфигурирован,
-`TtsRouter` фолбэчится в порядке yandex → google → voicer.
+`TtsRouter` фолбэчится в порядке yandex → google.
 
 #### Как получить ключ Yandex SpeechKit
 
@@ -278,7 +269,8 @@ If any service is not configured:
 
 1. **Parallel STT**: Deepgram streams transcription while user speaks
 2. **Short VAD silence**: 600ms end-of-speech detection
-3. **Streaming TTS**: ElevenLabs starts audio before full response generated
+3. **Pipelined TTS**: sentence N is synthesized concurrently with LLM streaming
+   of sentence N+1; audio frames flush in reply order as soon as they are ready
 4. **WebSocket reuse**: Keep Deepgram connection open during session
 5. **Audio prefetch**: Start playback immediately on first chunk
 

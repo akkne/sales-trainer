@@ -40,7 +40,7 @@ Consolidated manual testing checklists for major features.
 ## Voice Roleplay Testing
 
 ### Prerequisites
-- OpenAI-compatible key (`OpenAI:ApiKey`) + Voicer TTS key configured
+- OpenAI-compatible key (`OpenAI:ApiKey`) + Yandex TTS key (`YandexTts:ApiKey`) configured
 - Voice enabled on mode in admin
 - Chrome/Edge desktop (Web Speech API)
 

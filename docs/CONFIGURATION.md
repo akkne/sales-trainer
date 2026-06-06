@@ -16,7 +16,7 @@ This keeps each service self-contained for a future microservice split.
 
 | File | Committed | Purpose |
 |------|-----------|---------|
-| `.env` | no | All secrets: DB credentials, JWT key, API keys (OpenAI, Deepgram, Voicer, Yandex TTS), Google client id, superadmin, Grafana admin |
+| `.env` | no | All secrets: DB credentials, JWT key, API keys (OpenAI, Deepgram, Yandex TTS), Google client id, superadmin, Grafana admin |
 | `.env.example` | yes | Template for `.env` with placeholders |
 | `src/backend/api/appsettings.json` | yes | All backend config: docker-network hostnames (mongo, redis, loki), models, voice settings, limits. Secrets = `INJECTED_FROM_ENV` |
 | `src/backend/api/appsettings.Development.json` | no (mounted by compose) | Dev-only overrides (provider base URLs, models) |
@@ -48,7 +48,6 @@ Double underscore maps to a section: `YandexTts__ApiKey` → `YandexTts:ApiKey`.
 | `SUPERADMIN_EMAIL/PASSWORD/DISPLAY_NAME` | backend | `SuperAdmin:*` |
 | `OPENAI_API_KEY/BASE_URL/CHAT_COMPLETIONS_PATH` | backend | `OpenAI:*` |
 | `DEEPGRAM_API_KEY` | backend | `Deepgram:ApiKey` |
-| `VOICER_API_KEY` | backend | `VoicerTts:ApiKey` |
 | `YANDEX_TTS_API_KEY` | backend | `YandexTts:ApiKey` |
 | `GRAFANA_ADMIN_USER/PASSWORD` | grafana | `GF_SECURITY_ADMIN_*` |
 
