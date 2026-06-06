@@ -7,25 +7,15 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
 
-public record AdminUserDto(
-    Guid Id,
-    string Email,
-    string DisplayName,
-    string Role,
-    DateTime CreatedAt
-);
-
-public record ChangeUserRoleRequestDto(string Role);
-
 [ApiController]
 [Route("admin/users")]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminUsersController(AppDbContext db, ILogger<AdminUsersController> logger) : ControllerBase
+public sealed class AdminUsersController(AppDbContext database, ILogger<AdminUsersController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<AdminUserDto>>> GetAll()
     {
-        var users = await db.Users
+        var users = await database.Users
             .OrderBy(u => u.CreatedAt)
             .Select(u => new AdminUserDto(
                 u.Id, u.Email, u.DisplayName, u.Role.ToString(), u.CreatedAt))
@@ -42,7 +32,7 @@ public class AdminUsersController(AppDbContext db, ILogger<AdminUsersController>
     public async Task<ActionResult<AdminUserDto>> ChangeRole(
         Guid id, [FromBody] ChangeUserRoleRequestDto dto)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await database.Users.FindAsync(id);
         if (user is null) return NotFound();
 
         if (!Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out var newRole))
@@ -50,7 +40,7 @@ public class AdminUsersController(AppDbContext db, ILogger<AdminUsersController>
 
         var previousRole = user.Role;
         user.Role = newRole;
-        await db.SaveChangesAsync();
+        await database.SaveChangesAsync();
 
         logger.LogInformation("User role changed TargetUserId={TargetUserId} Email={Email} {OldRole} → {NewRole} by ActorId={ActorId}",
             user.Id, user.Email, previousRole, newRole,

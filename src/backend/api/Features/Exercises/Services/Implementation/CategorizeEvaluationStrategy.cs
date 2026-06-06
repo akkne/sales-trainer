@@ -4,12 +4,6 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Evaluates categorize exercises where user sorts items into buckets.
-/// Content schema: { instruction, categories: ["A", "B"], items: [{ text, category }] }
-/// Supports partial credit: score = (correctItems / totalItems) * 100.
-/// IsCorrect only when all items in correct categories.
-/// </summary>
 internal sealed class CategorizeEvaluationStrategy : IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.Categorize;
@@ -19,7 +13,6 @@ internal sealed class CategorizeEvaluationStrategy : IExerciseEvaluationStrategy
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        // Build correct mapping from items array
         var correctMapping = new Dictionary<int, string>();
         var itemIndex = 0;
         foreach (var item in exerciseContent.GetProperty("items").EnumerateArray())
@@ -28,7 +21,6 @@ internal sealed class CategorizeEvaluationStrategy : IExerciseEvaluationStrategy
             itemIndex++;
         }
 
-        // User provides mapping as { itemIndex: category }
         var userMapping = userAnswer.GetProperty("mapping")
             .EnumerateObject()
             .ToDictionary(p => int.Parse(p.Name), p => p.Value.GetString() ?? "");

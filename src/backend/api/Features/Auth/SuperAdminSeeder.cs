@@ -1,23 +1,25 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth;
 
 public sealed class SuperAdminSeeder(
     AppDbContext databaseContext,
-    IConfiguration configuration,
+    IOptions<SuperAdminConfiguration> superAdminOptions,
     ILogger<SuperAdminSeeder> logger)
 {
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("SuperAdmin seeding started");
 
-        var email = configuration["SuperAdmin:Email"]
+        var email = superAdminOptions.Value.Email
             ?? throw new InvalidOperationException("SuperAdmin:Email is not configured.");
-        var password = configuration["SuperAdmin:Password"]
+        var password = superAdminOptions.Value.Password
             ?? throw new InvalidOperationException("SuperAdmin:Password is not configured.");
-        var displayName = configuration["SuperAdmin:DisplayName"]
+        var displayName = superAdminOptions.Value.DisplayName
             ?? throw new InvalidOperationException("SuperAdmin:DisplayName is not configured.");
 
         var normalizedEmail = email.ToLowerInvariant();

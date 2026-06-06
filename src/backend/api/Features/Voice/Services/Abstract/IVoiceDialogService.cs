@@ -8,5 +8,3 @@ public interface IVoiceDialogService
         string transcript,
         CancellationToken ct = default);
 }
-
-public sealed record VoiceStreamChunk(string Text, byte[] AudioMp3, bool IsStopSignal, bool IsFinal);

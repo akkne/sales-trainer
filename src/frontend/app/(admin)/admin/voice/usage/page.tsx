@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { Icon } from "@/shared/components/icon";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 interface AdminVoiceUsageEntry {
     userId: string;
@@ -25,7 +26,7 @@ function useAdminVoiceUsage() {
     return useQuery({
         queryKey: ["admin", "voice", "usage"],
         queryFn: () => apiClient.get<AdminVoiceUsage>("/admin/voice/usage"),
-        staleTime: 30 * 1000,
+        staleTime: TimingConstants.thirtySecondsMs,
     });
 }
 

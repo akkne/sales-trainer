@@ -10,6 +10,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
     private const int MaximumLeagueParticipantCount = 30;
     private const int PromotionZoneSize = 10;
     private const int DemotionZoneSize = 5;
+    private const int WeekLengthDays = 7;
+    private const int WeekEndOffsetDays = 6;
 
     private static readonly string[] TierOrder = ["bronze", "silver", "gold", "diamond"];
 
@@ -18,8 +20,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
         CancellationToken cancellationToken = default)
     {
         var weekStart = GetCurrentWeekStart();
-        var weekEnd = weekStart.AddDays(6);
-        var previousWeekStart = weekStart.AddDays(-7);
+        var weekEnd = weekStart.AddDays(WeekEndOffsetDays);
+        var previousWeekStart = weekStart.AddDays(-WeekLengthDays);
 
         var previousMembershipData = await databaseContext.LeagueMemberships
             .Join(
@@ -101,8 +103,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
     public async Task CloseCurrentLeagueAndCreateNextAsync(CancellationToken cancellationToken = default)
     {
         var weekStart = GetCurrentWeekStart();
-        var nextWeekStart = weekStart.AddDays(7);
-        var nextWeekEnd = nextWeekStart.AddDays(6);
+        var nextWeekStart = weekStart.AddDays(WeekLengthDays);
+        var nextWeekEnd = nextWeekStart.AddDays(WeekEndOffsetDays);
 
         var leaguesToClose = await databaseContext.Leagues
             .Where(league => league.WeekStartDate == weekStart)

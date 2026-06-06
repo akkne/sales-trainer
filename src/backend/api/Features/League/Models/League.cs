@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.League.Models;
 
-public class League
+public sealed class League
 {
     public Guid Id { get; set; }
     public string Tier { get; set; } = "bronze";

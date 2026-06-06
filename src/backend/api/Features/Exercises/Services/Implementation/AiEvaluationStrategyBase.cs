@@ -1,18 +1,16 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Exercises.Models;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Base class for AI-powered exercise evaluation strategies.
-/// Handles loading global type prompts and calling OpenAI API.
-/// </summary>
 internal abstract class AiEvaluationStrategyBase(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<OpenAiConfiguration> openAiOptions,
     AppDbContext databaseContext)
 {
     protected async Task<ExerciseEvaluationResult> EvaluateWithAiAsync(
@@ -21,19 +19,17 @@ internal abstract class AiEvaluationStrategyBase(
         string? perExercisePrompt,
         CancellationToken cancellationToken)
     {
-        var openAiApiKey = configuration["OpenAI:ApiKey"];
+        var openAiApiKey = openAiOptions.Value.ApiKey;
         if (string.IsNullOrEmpty(openAiApiKey) || openAiApiKey.StartsWith("REPLACE_"))
         {
             throw new InvalidOperationException("OpenAI API key is not configured");
         }
 
-        // Load global type prompt
         var globalPrompt = await databaseContext.ExerciseTypePrompts
             .Where(p => p.ExerciseType == exerciseType)
             .Select(p => p.SystemPrompt)
             .FirstOrDefaultAsync(cancellationToken) ?? "";
 
-        // Build system prompt
         var systemPromptBuilder = new StringBuilder();
         if (!string.IsNullOrEmpty(globalPrompt))
         {
@@ -47,11 +43,11 @@ internal abstract class AiEvaluationStrategyBase(
         }
 
         var httpClient = httpClientFactory.CreateClient("OpenAI");
-        var openAiBaseUrl = configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
-        var completionsPath = configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var openAiBaseUrl = openAiOptions.Value.BaseUrl;
+        var completionsPath = openAiOptions.Value.ChatCompletionsPath;
         var apiUrl = openAiBaseUrl.TrimEnd('/') + completionsPath;
-        var model = configuration["OpenAI:OpenQuestionModel"] ?? "gpt-4.1";
-        var maxTokens = int.TryParse(configuration["OpenAI:MaxTokensOpenQuestion"], out var t) ? t : 300;
+        var model = openAiOptions.Value.OpenQuestionModel;
+        var maxTokens = openAiOptions.Value.MaximumOpenQuestionTokenCount;
 
         var systemPromptWithFormat = systemPromptBuilder.ToString();
         if (string.IsNullOrEmpty(systemPromptWithFormat))
@@ -94,7 +90,6 @@ internal abstract class AiEvaluationStrategyBase(
             throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseBody}");
         }
 
-        // Handle f5ai error format on a 200 response: {"error": {"message": "..."}} or {"error": "..."}
         if (responseBody.Contains("\"error\""))
         {
             try
@@ -112,12 +107,10 @@ internal abstract class AiEvaluationStrategyBase(
             }
             catch (JsonException)
             {
-                // Fall through to normal processing
             }
         }
         var responseJson = JsonDocument.Parse(responseBody);
 
-        // f5ai returns "message" instead of "choices"
         string aiResponseText;
         if (responseJson.RootElement.TryGetProperty("message", out var messageEl) &&
             messageEl.TryGetProperty("content", out var contentEl))

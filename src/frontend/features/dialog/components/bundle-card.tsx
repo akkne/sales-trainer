@@ -7,7 +7,6 @@ interface BundleCardProps {
     bundle: DialogBundle;
 }
 
-// Map bundle titles/slugs to icons
 const BUNDLE_ICONS: Record<string, IconName> = {
     "cold-calling": "phone",
     "negotiation": "users",
@@ -18,12 +17,11 @@ const BUNDLE_ICONS: Record<string, IconName> = {
 };
 
 function getBundleIcon(bundle: DialogBundle): IconName {
-    // Try to match by id or title
     const slug = bundle.id.toLowerCase();
     for (const [key, icon] of Object.entries(BUNDLE_ICONS)) {
         if (slug.includes(key)) return icon;
     }
-    return "message"; // default
+    return "message";
 }
 
 export function BundleCard({ bundle }: BundleCardProps) {

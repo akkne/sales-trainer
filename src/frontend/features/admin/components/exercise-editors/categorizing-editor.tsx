@@ -21,7 +21,6 @@ export function CategorizingEditor({ content, onChange }: Props) {
         const removed = content.categories[index];
         const categories = content.categories.filter((_, i) => i !== index);
         const correctMapping = { ...content.correctMapping };
-        // Remove items assigned to this category
         for (const [key, val] of Object.entries(correctMapping)) {
             if (val === removed) delete correctMapping[key];
         }

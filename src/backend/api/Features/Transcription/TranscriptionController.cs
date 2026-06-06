@@ -1,20 +1,23 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using SalesTrainer.Api.Common.Constants;
 using SalesTrainer.Api.Features.Transcription.Models;
 using SalesTrainer.Api.Features.Transcription.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Transcription;
 
 [ApiController]
 [Route("transcription")]
 [Authorize]
-public class TranscriptionController(
+public sealed class TranscriptionController(
     ITranscriptionService transcriptionService,
-    IConfiguration configuration,
+    IOptions<WhisperConfiguration> whisperOptions,
     ILogger<TranscriptionController> logger) : ControllerBase
 {
     [HttpPost("transcribe")]
-    [RequestSizeLimit(50 * 1024 * 1024)] // 50 MB hard limit
+    [RequestSizeLimit(50 * 1024 * 1024)]
     public async Task<ActionResult<TranscriptionResponseDto>> Transcribe(
         IFormFile file,
         CancellationToken cancellationToken)
@@ -22,11 +25,11 @@ public class TranscriptionController(
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "Аудиофайл не передан или пустой." });
 
-        var maxFileSizeMb = configuration.GetValue<int>("Whisper:MaxFileSizeMb", 25);
-        var maxBytes = maxFileSizeMb * 1024 * 1024;
+        var maximumFileSizeMegabytes = whisperOptions.Value.MaximumFileSizeMegabytes;
+        var maxBytes = maximumFileSizeMegabytes * 1024 * 1024;
 
         if (file.Length > maxBytes)
-            return BadRequest(new { error = $"Размер файла превышает {maxFileSizeMb} МБ." });
+            return BadRequest(new { error = $"Размер файла превышает {maximumFileSizeMegabytes} МБ." });
 
         var allowed = new[] { ".mp3", ".mp4", ".m4a", ".mpeg", ".mpga", ".wav", ".webm", ".ogg" };
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -45,14 +48,12 @@ public class TranscriptionController(
         }
         catch (OperationCanceledException)
         {
-            return StatusCode(499, new { error = "Запрос отменён клиентом." });
+            return StatusCode(NonStandardHttpStatusCodes.ClientClosedRequest, new { error = "Запрос отменён клиентом." });
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "Whisper API call failed for file {FileName}", file.FileName);
-            return StatusCode(502, new { error = "Ошибка при обращении к Whisper API.", detail = ex.Message });
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Ошибка при обращении к Whisper API.", detail = ex.Message });
         }
     }
 }
-
-public record TranscriptionResponseDto(string Text, string? Language);

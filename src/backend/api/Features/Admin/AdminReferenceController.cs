@@ -7,28 +7,9 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
 
-public record AdminReferenceMaterialDto(
-    Guid Id,
-    Guid SkillId,
-    string SkillTitle,
-    string Title,
-    string MarkdownContent,
-    int SortOrder,
-    string? Category,
-    string[] Tags
-);
-
-public record CreateReferenceMaterialRequestDto(
-    string Title,
-    string MarkdownContent,
-    int SortOrder,
-    string? Category = null,
-    string? Tags = null
-);
-
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceController> logger) : ControllerBase
+public sealed class AdminReferenceController(AppDbContext database, ILogger<AdminReferenceController> logger) : ControllerBase
 {
     [HttpGet("admin/reference")]
     public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetAll(
@@ -36,8 +17,8 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         [FromQuery] string? category,
         [FromQuery] string? search)
     {
-        var query = from material in db.ReferenceMaterials
-                    join skill in db.Skills on material.SkillId equals skill.Id
+        var query = from material in database.ReferenceMaterials
+                    join skill in database.Skills on material.SkillId equals skill.Id
                     select new { material, skill };
 
         if (skillId.HasValue)
@@ -66,7 +47,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
     [HttpGet("admin/reference/categories")]
     public async Task<ActionResult<List<string>>> GetCategories()
     {
-        var categories = await db.ReferenceMaterials
+        var categories = await database.ReferenceMaterials
             .Where(m => m.Category != null)
             .Select(m => m.Category!)
             .Distinct()
@@ -79,10 +60,10 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
     [HttpGet("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetBySkill(Guid skillId)
     {
-        var skill = await db.Skills.FindAsync(skillId);
+        var skill = await database.Skills.FindAsync(skillId);
         if (skill is null) return NotFound();
 
-        var materials = await db.ReferenceMaterials
+        var materials = await database.ReferenceMaterials
             .Where(r => r.SkillId == skillId)
             .OrderBy(r => r.SortOrder)
             .ToListAsync();
@@ -94,7 +75,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
     public async Task<ActionResult<AdminReferenceMaterialDto>> Create(
         Guid skillId, [FromBody] CreateReferenceMaterialRequestDto dto)
     {
-        var skill = await db.Skills.FindAsync(skillId);
+        var skill = await database.Skills.FindAsync(skillId);
         if (skill is null) return NotFound();
 
         var material = new ReferenceMaterial
@@ -108,8 +89,8 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
             Tags = dto.Tags
         };
 
-        db.ReferenceMaterials.Add(material);
-        await db.SaveChangesAsync();
+        database.ReferenceMaterials.Add(material);
+        await database.SaveChangesAsync();
 
         logger.LogInformation("Reference material created MaterialId={MaterialId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
             material.Id, skillId, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -121,10 +102,10 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
     public async Task<ActionResult<AdminReferenceMaterialDto>> Update(
         Guid id, [FromBody] CreateReferenceMaterialRequestDto dto)
     {
-        var material = await db.ReferenceMaterials.FindAsync(id);
+        var material = await database.ReferenceMaterials.FindAsync(id);
         if (material is null) return NotFound();
 
-        var skill = await db.Skills.FindAsync(material.SkillId);
+        var skill = await database.Skills.FindAsync(material.SkillId);
         if (skill is null) return NotFound();
 
         material.Title = dto.Title;
@@ -133,7 +114,7 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
         material.Category = dto.Category;
         material.Tags = dto.Tags;
 
-        await db.SaveChangesAsync();
+        await database.SaveChangesAsync();
 
         logger.LogInformation("Reference material updated MaterialId={MaterialId} Title={Title} by ActorId={ActorId}",
             id, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -144,11 +125,11 @@ public class AdminReferenceController(AppDbContext db, ILogger<AdminReferenceCon
     [HttpDelete("admin/reference/{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var material = await db.ReferenceMaterials.FindAsync(id);
+        var material = await database.ReferenceMaterials.FindAsync(id);
         if (material is null) return NotFound();
 
-        db.ReferenceMaterials.Remove(material);
-        await db.SaveChangesAsync();
+        database.ReferenceMaterials.Remove(material);
+        await database.SaveChangesAsync();
 
         logger.LogWarning("Reference material deleted MaterialId={MaterialId} SkillId={SkillId} by ActorId={ActorId}",
             id, material.SkillId, User.FindFirstValue(ClaimTypes.NameIdentifier));

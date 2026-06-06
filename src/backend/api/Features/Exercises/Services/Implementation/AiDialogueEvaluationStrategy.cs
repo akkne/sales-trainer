@@ -1,21 +1,18 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Evaluates ai_dialogue exercises where user had multi-turn conversation with AI customer.
-/// Content schema: { persona, scenario, context, max_turns, success_criteria: [], ai_prompt }
-/// The full conversation history is submitted and AI evaluates the overall quality.
-/// </summary>
 internal sealed class AiDialogueEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<OpenAiConfiguration> openAiOptions,
     AppDbContext databaseContext)
-    : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, databaseContext), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.AiDialogue;
 
@@ -26,11 +23,10 @@ internal sealed class AiDialogueEvaluationStrategy(
     {
         var messages = userAnswer.GetProperty("messages").EnumerateArray().ToList();
 
-        // Check minimum turns (default 3)
         var maxTurns = exerciseContent.TryGetProperty("max_turns", out var maxEl)
             ? maxEl.GetInt32()
             : 6;
-        var minTurns = maxTurns / 2; // At least half the max turns
+        var minTurns = maxTurns / 2;
 
         var userMessageCount = messages.Count(m => m.GetProperty("role").GetString() == "user");
         if (userMessageCount < minTurns)
@@ -42,7 +38,6 @@ internal sealed class AiDialogueEvaluationStrategy(
                 AiFeedback: $"Диалог слишком короткий. Нужно минимум {minTurns} ваших реплик.");
         }
 
-        // Format conversation for evaluation
         var conversationBuilder = new StringBuilder();
         var persona = exerciseContent.TryGetProperty("persona", out var personaEl)
             ? personaEl.GetString() ?? "Клиент"
@@ -56,7 +51,6 @@ internal sealed class AiDialogueEvaluationStrategy(
             conversationBuilder.AppendLine($"{speaker}: {content}");
         }
 
-        // Get success criteria
         var criteria = new List<string>();
         if (exerciseContent.TryGetProperty("success_criteria", out var criteriaEl))
         {

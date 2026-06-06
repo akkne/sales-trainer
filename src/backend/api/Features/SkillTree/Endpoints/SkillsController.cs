@@ -9,28 +9,9 @@ using SalesTrainer.Api.Features.SkillTree.Services.Abstract;
 namespace SalesTrainer.Api.Features.SkillTree;
 
 [ApiController]
-[Route("skill-tree")]
-[Authorize]
-public class SkillTreeController(ISkillTreeService skillTreeService) : ControllerBase
-{
-    [HttpGet]
-    public async Task<ActionResult<SkillTreeResponseDto>> GetSkillTree()
-    {
-        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        if (!Guid.TryParse(rawUserId, out var userId))
-            return Unauthorized();
-
-        var skillTreeResponse = await skillTreeService.GetSkillTreeForUserAsync(userId);
-        return Ok(skillTreeResponse);
-    }
-}
-
-[ApiController]
 [Route("skills")]
 [Authorize]
-public class SkillsController(ISkillTreeService skillTreeService, IExerciseService exerciseService) : ControllerBase
+public sealed class SkillsController(ISkillTreeService skillTreeService, IExerciseService exerciseService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SkillTreeNodeDto>>> GetAllSkills()
@@ -40,7 +21,6 @@ public class SkillsController(ISkillTreeService skillTreeService, IExerciseServi
 
         if (!Guid.TryParse(rawUserId, out var userId))
         {
-            // Return skills without progress for unauthenticated (shouldn't happen with [Authorize])
             var skills = await skillTreeService.GetAllSkillsAsync();
             return Ok(skills);
         }

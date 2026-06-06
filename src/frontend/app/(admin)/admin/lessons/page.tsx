@@ -187,10 +187,10 @@ const LESSONS_TEMPLATE = JSON.stringify([
 function downloadLessonsTemplate() {
     const blob = new Blob([LESSONS_TEMPLATE], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "lessons_template.json";
-    a.click();
+    const anchorElement = document.createElement("a");
+    anchorElement.href = url;
+    anchorElement.download = "lessons_template.json";
+    anchorElement.click();
     URL.revokeObjectURL(url);
 }
 
@@ -228,7 +228,6 @@ export default function LessonsPage() {
         else { setSortKey(key); setSortDir("asc"); }
     }
 
-    // Get skill ID from topic
     const topicToSkillMap = useMemo(() => {
         const map: Record<string, string> = {};
         for (const topic of topics) {
@@ -237,7 +236,6 @@ export default function LessonsPage() {
         return map;
     }, [topics]);
 
-    // Filter topics by selected skill
     const filteredTopicsBySkill = useMemo(() => {
         if (!filterSkillId) return topics;
         return topics.filter(t => t.skillId === filterSkillId);
@@ -251,10 +249,10 @@ export default function LessonsPage() {
             items = items.filter(l => topicIdsInSkill.has(l.topicId));
         }
         if (search.trim()) {
-            const q = search.trim().toLowerCase();
+            const searchQuery = search.trim().toLowerCase();
             items = items.filter(l =>
-                l.title.toLowerCase().includes(q) ||
-                l.topicTitle.toLowerCase().includes(q)
+                l.title.toLowerCase().includes(searchQuery) ||
+                l.topicTitle.toLowerCase().includes(searchQuery)
             );
         }
         return [...items].sort((a, b) => {
@@ -267,7 +265,6 @@ export default function LessonsPage() {
         });
     }, [lessons, filterTopicId, filterSkillId, filteredTopicsBySkill, search, sortKey, sortDir]);
 
-    // Group by topic for better display
     const groupedByTopic = useMemo(() => {
         const groups: Record<string, { topicTitle: string; lessons: AdminLessonWithTopic[] }> = {};
         for (const lesson of filtered) {
@@ -276,7 +273,6 @@ export default function LessonsPage() {
             }
             groups[lesson.topicId].lessons.push(lesson);
         }
-        // Sort lessons within each group
         for (const group of Object.values(groups)) {
             group.lessons.sort((a, b) => a.orderInTopic - b.orderInTopic);
         }
@@ -321,7 +317,6 @@ export default function LessonsPage() {
             const result = await importLessons.mutateAsync(file);
             setImportResult(result);
         } catch {
-            // Error handled by hook
         }
         if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -348,7 +343,6 @@ export default function LessonsPage() {
                 </div>
             </div>
 
-            {/* Import Section */}
             {showImport && (
                 <div className="bg-surface border border-line rounded-2xl p-5 mb-5">
                     <div className="flex items-center justify-between mb-3">
@@ -397,7 +391,6 @@ export default function LessonsPage() {
                 </div>
             )}
 
-            {/* Filters */}
             <div className="bg-surface rounded-2xl p-4 mb-4 flex flex-wrap gap-3 items-end">
                 <div>
                     <label className="block text-xs text-ink-3 mb-1">Search</label>
@@ -445,7 +438,6 @@ export default function LessonsPage() {
                 <span className="text-xs text-ink-3 ml-auto pb-1.5">{filtered.length} shown</span>
             </div>
 
-            {/* Table */}
             {isLoading ? (
                 <p className="text-sm text-ink-3 py-8 text-center">Loading…</p>
             ) : filtered.length === 0 ? (
@@ -565,7 +557,6 @@ export default function LessonsPage() {
                 </div>
             )}
 
-            {/* Delete confirm modal */}
             {deleteConfirm && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
                     <div className="bg-surface rounded-2xl p-6 w-96 shadow-lg">

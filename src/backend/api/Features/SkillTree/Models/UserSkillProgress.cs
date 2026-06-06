@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.SkillTree.Models;
 
-public class UserSkillProgress
+public sealed class UserSkillProgress
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }

@@ -1,32 +1,30 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Transcription.Models;
 using SalesTrainer.Api.Features.Transcription.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Transcription.Services.Implementation;
 
-public class WhisperTranscriptionService(
+internal sealed class WhisperTranscriptionService(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<WhisperConfiguration> whisperOptions,
+    IOptions<OpenAiConfiguration> openAiOptions,
     ILogger<WhisperTranscriptionService> logger) : ITranscriptionService
 {
-    private const string DefaultWhisperApiUrl = "https://api.openai.com/v1/audio/transcriptions";
-
     public async Task<TranscriptionResult> TranscribeAsync(
         Stream audioStream,
         string fileName,
         CancellationToken cancellationToken = default)
     {
-        var apiKey = configuration["OpenAI:ApiKey"];
+        var apiKey = openAiOptions.Value.ApiKey;
         if (string.IsNullOrEmpty(apiKey) || apiKey.StartsWith("REPLACE_"))
         {
             logger.LogWarning("OpenAI API key is not configured. Returning stub transcription.");
             return new TranscriptionResult("Транскрипция недоступна — ключ OpenAI не настроен.", null);
         }
 
-        var model = configuration["Whisper:Model"] ?? "whisper-1";
-        var language = configuration["Whisper:Language"];
-        var whisperApiUrl = configuration["Whisper:ApiUrl"] ?? DefaultWhisperApiUrl;
-
+        var configuration = whisperOptions.Value;
         var httpClient = httpClientFactory.CreateClient("OpenAI");
         httpClient.DefaultRequestHeaders.Remove("Authorization");
         httpClient.DefaultRequestHeaders.Authorization =
@@ -38,15 +36,15 @@ public class WhisperTranscriptionService(
         fileContent.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue(GetMimeType(fileName));
         form.Add(fileContent, "file", fileName);
-        form.Add(new StringContent(model), "model");
+        form.Add(new StringContent(configuration.Model), "model");
         form.Add(new StringContent("verbose_json"), "response_format");
 
-        if (!string.IsNullOrEmpty(language))
-            form.Add(new StringContent(language), "language");
+        if (!string.IsNullOrEmpty(configuration.Language))
+            form.Add(new StringContent(configuration.Language), "language");
 
-        logger.LogInformation("Sending audio file {FileName} to Whisper API (model={Model})", fileName, model);
+        logger.LogInformation("Sending audio file {FileName} to Whisper API (model={Model})", fileName, configuration.Model);
 
-        using var response = await httpClient.PostAsync(whisperApiUrl, form, cancellationToken);
+        using var response = await httpClient.PostAsync(configuration.ApiUrl, form, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -59,15 +57,15 @@ public class WhisperTranscriptionService(
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         var json = JsonDocument.Parse(responseBody).RootElement;
 
-        var text = json.TryGetProperty("text", out var textEl)
-            ? textEl.GetString() ?? string.Empty
+        var text = json.TryGetProperty("text", out var textElement)
+            ? textElement.GetString() ?? string.Empty
             : string.Empty;
 
-        var detectedLanguage = json.TryGetProperty("language", out var langEl)
-            ? langEl.GetString()
+        var detectedLanguage = json.TryGetProperty("language", out var languageElement)
+            ? languageElement.GetString()
             : null;
 
-        logger.LogInformation("Whisper transcription succeeded. Language={Language}, Length={Len}",
+        logger.LogInformation("Whisper transcription succeeded. Language={Language}, Length={Length}",
             detectedLanguage, text.Length);
 
         return new TranscriptionResult(text, detectedLanguage);
@@ -75,8 +73,8 @@ public class WhisperTranscriptionService(
 
     private static string GetMimeType(string fileName)
     {
-        var ext = Path.GetExtension(fileName).ToLowerInvariant();
-        return ext switch
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
         {
             ".mp3"  => "audio/mpeg",
             ".mp4"  => "audio/mp4",

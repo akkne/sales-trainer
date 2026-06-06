@@ -1,21 +1,18 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Evaluates spot_mistake exercises where user identifies mistakes in dialog.
-/// Content schema: { dialogue: [{ speaker, text, is_mistake }], explanation, ai_prompt }
-/// Scoring: 50 points for correct line + 50 for AI-evaluated explanation.
-/// </summary>
 internal sealed class SpotMistakeEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<OpenAiConfiguration> openAiOptions,
     AppDbContext databaseContext)
-    : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, databaseContext), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.SpotMistake;
 
@@ -24,7 +21,6 @@ internal sealed class SpotMistakeEvaluationStrategy(
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        // Find the mistake line index
         var mistakeIndex = -1;
         var mistakeText = "";
         var lineIndex = 0;
@@ -49,7 +45,6 @@ internal sealed class SpotMistakeEvaluationStrategy(
             feedback.AppendLine("Неверная строка выбрана.");
         }
 
-        // Check if user provided explanation
         var userExplanation = userAnswer.TryGetProperty("explanation", out var expEl)
             ? expEl.GetString() ?? ""
             : "";
@@ -68,7 +63,6 @@ internal sealed class SpotMistakeEvaluationStrategy(
                 aiPrompt,
                 cancellationToken);
 
-            // AI contributes 50 points max
             var aiScore = (int)Math.Round(aiResult.Score / 100.0 * 50);
             score += aiScore;
 
@@ -76,7 +70,6 @@ internal sealed class SpotMistakeEvaluationStrategy(
                 feedback.AppendLine(aiResult.AiFeedback);
         }
 
-        // Get static explanation
         string? explanation = null;
         if (exerciseContent.TryGetProperty("explanation", out var explanationElement))
             explanation = explanationElement.GetString();

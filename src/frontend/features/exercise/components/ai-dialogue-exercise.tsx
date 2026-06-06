@@ -164,26 +164,26 @@ export function AiDialogueExercise({
                     borderRadius: 14,
                 }}
             >
-                {messages.map((msg, idx) => (
+                {messages.map((message, idx) => (
                     <div
                         key={idx}
                         style={{
                             display: "flex",
-                            justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                            justifyContent: message.role === "user" ? "flex-end" : "flex-start",
                         }}
                     >
                         <div
                             style={{
                                 maxWidth: "80%",
                                 padding: "10px 14px",
-                                borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
-                                background: msg.role === "user" ? "var(--indigo)" : "var(--bg-2)",
-                                color: msg.role === "user" ? "white" : "var(--ink)",
+                                borderRadius: message.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
+                                background: message.role === "user" ? "var(--indigo)" : "var(--bg-2)",
+                                color: message.role === "user" ? "white" : "var(--ink)",
                                 fontSize: 14,
                                 lineHeight: 1.4,
                             }}
                         >
-                            {msg.content}
+                            {message.content}
                         </div>
                     </div>
                 ))}

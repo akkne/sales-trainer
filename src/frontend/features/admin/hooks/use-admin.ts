@@ -86,13 +86,13 @@ export function useAdminSkills() {
 }
 
 export function useCreateSkill() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminSkill, "id">) =>
             apiClient.post<AdminSkill>("/admin/skills", body),
         onSuccess: (data) => {
             clientLogger.info("Skill created", { skillId: data.id, iconicName: data.iconicName });
-            qc.invalidateQueries({ queryKey: ["admin", "skills"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create skill", { iconicName: variables.iconicName, error: (error as Error).message });
@@ -101,13 +101,13 @@ export function useCreateSkill() {
 }
 
 export function useUpdateSkill(id: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Partial<Omit<AdminSkill, "id">>) =>
             apiClient.put<AdminSkill>(`/admin/skills/${id}`, body),
         onSuccess: (data) => {
             clientLogger.info("Skill updated", { skillId: data.id, iconicName: data.iconicName });
-            qc.invalidateQueries({ queryKey: ["admin", "skills"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update skill", { skillId: id, error: (error as Error).message });
@@ -116,12 +116,12 @@ export function useUpdateSkill(id: string) {
 }
 
 export function useDeleteSkill() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (id: string) => apiClient.delete<void>(`/admin/skills/${id}`),
         onSuccess: (_, id) => {
             clientLogger.warn("Skill deleted", { skillId: id });
-            qc.invalidateQueries({ queryKey: ["admin", "skills"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete skill", { skillId: id, error: (error as Error).message });
@@ -147,13 +147,13 @@ export function useAdminTopics(skillIconicName: string) {
 }
 
 export function useCreateTopic(skillIconicName: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminTopic, "id" | "skillId">) =>
             apiClient.post<AdminTopic>(`/admin/skills/${skillIconicName}/topics`, body),
         onSuccess: (data) => {
             clientLogger.info("Topic created", { topicId: data.id, skillIconicName, iconicName: data.iconicName });
-            qc.invalidateQueries({ queryKey: ["admin", "topics"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create topic", { skillIconicName, iconicName: variables.iconicName, error: (error as Error).message });
@@ -162,13 +162,13 @@ export function useCreateTopic(skillIconicName: string) {
 }
 
 export function useUpdateTopic(topicId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Partial<Omit<AdminTopic, "id" | "skillId">>) =>
             apiClient.put<AdminTopic>(`/admin/topics/${topicId}`, body),
         onSuccess: (data) => {
             clientLogger.info("Topic updated", { topicId: data.id, iconicName: data.iconicName });
-            qc.invalidateQueries({ queryKey: ["admin", "topics"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update topic", { topicId, error: (error as Error).message });
@@ -177,13 +177,13 @@ export function useUpdateTopic(topicId: string) {
 }
 
 export function useDeleteTopic(skillId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (topicId: string) =>
             apiClient.delete<void>(`/admin/topics/${topicId}`),
         onSuccess: (_, topicId) => {
             clientLogger.warn("Topic deleted", { topicId, skillId });
-            qc.invalidateQueries({ queryKey: ["admin", "topics"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error, topicId) => {
             clientLogger.error("Failed to delete topic", { topicId, skillId, error: (error as Error).message });
@@ -209,13 +209,13 @@ export function useAdminLessons(topicIconicName: string) {
 }
 
 export function useCreateLesson(topicIconicName: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminLesson, "id" | "topicId">) =>
             apiClient.post<AdminLesson>(`/admin/topics/${topicIconicName}/lessons`, body),
         onSuccess: (data) => {
             clientLogger.info("Lesson created", { lessonId: data.id, topicIconicName, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create lesson", { topicIconicName, title: variables.title, error: (error as Error).message });
@@ -224,13 +224,13 @@ export function useCreateLesson(topicIconicName: string) {
 }
 
 export function useUpdateLesson(lessonId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminLesson, "id" | "topicId">) =>
             apiClient.put<AdminLesson>(`/admin/lessons/${lessonId}`, body),
         onSuccess: (data) => {
             clientLogger.info("Lesson updated", { lessonId: data.id, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update lesson", { lessonId, error: (error as Error).message });
@@ -239,13 +239,13 @@ export function useUpdateLesson(lessonId: string) {
 }
 
 export function useDeleteLesson(topicId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (lessonId: string) =>
             apiClient.delete<void>(`/admin/lessons/${lessonId}`),
         onSuccess: (_, lessonId) => {
             clientLogger.warn("Lesson deleted", { lessonId, topicId });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error, lessonId) => {
             clientLogger.error("Failed to delete lesson", { lessonId, topicId, error: (error as Error).message });
@@ -265,13 +265,13 @@ export function useAdminExercises(lessonId: string) {
 }
 
 export function useCreateExercise(lessonId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminExercise, "id" | "lessonId">) =>
             apiClient.post<AdminExercise>(`/admin/lessons/${lessonId}/exercises`, body),
         onSuccess: (data) => {
             clientLogger.info("Exercise created", { exerciseId: data.id, lessonId, type: data.type });
-            qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create exercise", { lessonId, type: variables.type, error: (error as Error).message });
@@ -280,13 +280,13 @@ export function useCreateExercise(lessonId: string) {
 }
 
 export function useUpdateExercise(lessonId: string, exerciseId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: Omit<AdminExercise, "id" | "lessonId">) =>
             apiClient.put<AdminExercise>(`/admin/exercises/${exerciseId}`, body),
         onSuccess: (data) => {
             clientLogger.info("Exercise updated", { exerciseId: data.id, lessonId, type: data.type });
-            qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update exercise", { exerciseId, lessonId, error: (error as Error).message });
@@ -295,13 +295,13 @@ export function useUpdateExercise(lessonId: string, exerciseId: string) {
 }
 
 export function useDeleteExercise(lessonId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (exerciseId: string) =>
             apiClient.delete<void>(`/admin/exercises/${exerciseId}`),
         onSuccess: (_, exerciseId) => {
             clientLogger.warn("Exercise deleted", { exerciseId, lessonId });
-            qc.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
         },
         onError: (error, exerciseId) => {
             clientLogger.error("Failed to delete exercise", { exerciseId, lessonId, error: (error as Error).message });
@@ -345,7 +345,7 @@ export function useAdminReference(skillId: string) {
 }
 
 export function useCreateReference(skillId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: CreateReferenceMaterialBody) =>
             apiClient.post<AdminReferenceMaterial>(
@@ -354,7 +354,7 @@ export function useCreateReference(skillId: string) {
             ),
         onSuccess: (data) => {
             clientLogger.info("Reference material created", { materialId: data.id, skillId, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create reference material", { skillId, title: variables.title, error: (error as Error).message });
@@ -363,7 +363,7 @@ export function useCreateReference(skillId: string) {
 }
 
 export function useUpdateReference(materialId: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: CreateReferenceMaterialBody) =>
             apiClient.put<AdminReferenceMaterial>(
@@ -372,7 +372,7 @@ export function useUpdateReference(materialId: string) {
             ),
         onSuccess: (data) => {
             clientLogger.info("Reference material updated", { materialId: data.id, title: data.title });
-            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update reference material", { materialId, error: (error as Error).message });
@@ -381,13 +381,13 @@ export function useUpdateReference(materialId: string) {
 }
 
 export function useDeleteReference() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (materialId: string) =>
             apiClient.delete<void>(`/admin/reference/${materialId}`),
         onSuccess: (_, materialId) => {
             clientLogger.warn("Reference material deleted", { materialId });
-            qc.invalidateQueries({ queryKey: ["admin", "reference"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "reference"] });
         },
         onError: (error, materialId) => {
             clientLogger.error("Failed to delete reference material", { materialId, error: (error as Error).message });
@@ -418,7 +418,7 @@ export interface LessonsImportResult {
 }
 
 export function useImportSkills() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (file: File) => {
             const formData = new FormData();
@@ -431,7 +431,7 @@ export function useImportSkills() {
                 skillsUpdated: data.skillsUpdated,
                 errors: data.errors.length,
             });
-            qc.invalidateQueries({ queryKey: ["admin", "skills"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skills"] });
         },
         onError: (error) => {
             clientLogger.error("Skills seeder import failed", { error: (error as Error).message });
@@ -440,7 +440,7 @@ export function useImportSkills() {
 }
 
 export function useImportTopics() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (file: File) => {
             const formData = new FormData();
@@ -453,7 +453,7 @@ export function useImportTopics() {
                 topicsUpdated: data.topicsUpdated,
                 errors: data.errors.length,
             });
-            qc.invalidateQueries({ queryKey: ["admin", "topics"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "topics"] });
         },
         onError: (error) => {
             clientLogger.error("Topics seeder import failed", { error: (error as Error).message });
@@ -462,7 +462,7 @@ export function useImportTopics() {
 }
 
 export function useImportLessons() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (file: File) => {
             const formData = new FormData();
@@ -475,7 +475,7 @@ export function useImportLessons() {
                 exercisesCreated: data.exercisesCreated,
                 errors: data.errors.length,
             });
-            qc.invalidateQueries({ queryKey: ["admin", "lessons"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "lessons"] });
         },
         onError: (error) => {
             clientLogger.error("Lessons seeder import failed", { error: (error as Error).message });
@@ -551,13 +551,13 @@ export function useAdminTechniques(filters?: { skill?: string; search?: string }
 }
 
 export function useCreateTechnique() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: AdminTechniqueWriteBody) =>
             apiClient.post<AdminTechnique>("/admin/techniques", body),
         onSuccess: (data) => {
             clientLogger.info("Technique created", { techniqueId: data.id, slug: data.slug });
-            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "techniques"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to create technique", { slug: variables.slug, error: (error as Error).message });
@@ -566,13 +566,13 @@ export function useCreateTechnique() {
 }
 
 export function useUpdateTechnique(id: string) {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (body: AdminTechniqueWriteBody) =>
             apiClient.put<AdminTechnique>(`/admin/techniques/${id}`, body),
         onSuccess: (data) => {
             clientLogger.info("Technique updated", { techniqueId: data.id, slug: data.slug });
-            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "techniques"] });
         },
         onError: (error) => {
             clientLogger.error("Failed to update technique", { techniqueId: id, error: (error as Error).message });
@@ -581,12 +581,12 @@ export function useUpdateTechnique(id: string) {
 }
 
 export function useDeleteTechnique() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (id: string) => apiClient.delete<void>(`/admin/techniques/${id}`),
         onSuccess: (_, id) => {
             clientLogger.warn("Technique deleted", { techniqueId: id });
-            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "techniques"] });
         },
         onError: (error, id) => {
             clientLogger.error("Failed to delete technique", { techniqueId: id, error: (error as Error).message });
@@ -595,7 +595,7 @@ export function useDeleteTechnique() {
 }
 
 export function useImportTechniques() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (items: AdminTechniqueWriteBody[]) =>
             apiClient.post<AdminTechniqueImportResult>("/admin/techniques/import", items),
@@ -605,7 +605,7 @@ export function useImportTechniques() {
                 updated: data.updatedCount,
                 failed: data.failedCount,
             });
-            qc.invalidateQueries({ queryKey: ["admin", "techniques"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "techniques"] });
         },
         onError: (error) => {
             clientLogger.error("Techniques import failed", { error: (error as Error).message });
@@ -623,13 +623,13 @@ export function useAdminUsers() {
 }
 
 export function useChangeUserRole() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ id, role }: { id: string; role: string }) =>
             apiClient.put<AdminUser>(`/admin/users/${id}/role`, { role }),
         onSuccess: (data, variables) => {
             clientLogger.info("User role changed", { userId: variables.id, newRole: variables.role, email: data.email });
-            qc.invalidateQueries({ queryKey: ["admin", "users"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to change user role", { userId: variables.id, role: variables.role, error: (error as Error).message });
@@ -662,13 +662,13 @@ export function useExerciseTypePrompt(exerciseType: string) {
 }
 
 export function useUpdateExerciseTypePrompt() {
-    const qc = useQueryClient();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ exerciseType, systemPrompt }: { exerciseType: string; systemPrompt: string }) =>
             apiClient.put<ExerciseTypePrompt>(`/admin/exercise-type-prompts/${exerciseType}`, { systemPrompt }),
         onSuccess: (data) => {
             clientLogger.info("Exercise type prompt updated", { exerciseType: data.exerciseType });
-            qc.invalidateQueries({ queryKey: ["admin", "exercise-type-prompts"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercise-type-prompts"] });
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to update exercise type prompt", { exerciseType: variables.exerciseType, error: (error as Error).message });

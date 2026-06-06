@@ -22,7 +22,6 @@ export function Sidebar() {
     const displayName = authenticatedUser?.displayName ?? "Пользователь";
     const firstLetter = displayName[0]?.toUpperCase() ?? "?";
 
-    // Find current skill name from tree data
     const currentSkillName = skillTreeData?.skillNodes?.find(
         (s) => s.status !== "locked"
     )?.title;

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DialogSessionSummary } from "@/features/dialog/hooks/use-dialog";
 import { DeleteConfirmModal } from "./delete-confirm-modal";
 import { Icon } from "@/shared/components/icon";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 interface SessionHistorySidebarProps {
     sessions: DialogSessionSummary[];
@@ -18,7 +19,7 @@ interface SessionHistorySidebarProps {
 function formatSessionDate(dateString: string): string {
     const sessionDate = new Date(dateString);
     const now = new Date();
-    const diffDays = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.floor((now.getTime() - sessionDate.getTime()) / TimingConstants.oneDayMs);
 
     if (diffDays === 0) return "Сегодня";
     if (diffDays === 1) return "Вчера";

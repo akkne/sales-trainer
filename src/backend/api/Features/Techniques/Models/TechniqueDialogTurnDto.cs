@@ -6,8 +6,3 @@ public sealed record TechniqueDialogTurnDto(
     string Text,
     TechniqueDialogAnnotationDto[] Annotations
 );
-
-public sealed record TechniqueDialogAnnotationDto(
-    string Label,
-    string? Tone
-);

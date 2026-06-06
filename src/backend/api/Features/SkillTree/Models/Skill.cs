@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.SkillTree.Models;
 
-public class Skill
+public sealed class Skill
 {
     public Guid Id { get; set; }
     public string IconicName { get; set; } = "";

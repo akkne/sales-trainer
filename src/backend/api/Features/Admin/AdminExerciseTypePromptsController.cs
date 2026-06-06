@@ -7,25 +7,14 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
 
-public record ExerciseTypePromptDto(
-    Guid Id,
-    string ExerciseType,
-    string SystemPrompt,
-    DateTime UpdatedAt
-);
-
-public record UpdateExerciseTypePromptRequestDto(
-    string SystemPrompt
-);
-
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminExerciseTypePromptsController(AppDbContext db, ILogger<AdminExerciseTypePromptsController> logger) : ControllerBase
+public sealed class AdminExerciseTypePromptsController(AppDbContext database, ILogger<AdminExerciseTypePromptsController> logger) : ControllerBase
 {
     [HttpGet("admin/exercise-type-prompts")]
     public async Task<ActionResult<List<ExerciseTypePromptDto>>> GetAll()
     {
-        var prompts = await db.ExerciseTypePrompts
+        var prompts = await database.ExerciseTypePrompts
             .OrderBy(p => p.ExerciseType)
             .Select(p => new ExerciseTypePromptDto(p.Id, p.ExerciseType, p.SystemPrompt, p.UpdatedAt))
             .ToListAsync();
@@ -36,7 +25,7 @@ public class AdminExerciseTypePromptsController(AppDbContext db, ILogger<AdminEx
     [HttpGet("admin/exercise-type-prompts/{exerciseType}")]
     public async Task<ActionResult<ExerciseTypePromptDto>> GetByType(string exerciseType)
     {
-        var prompt = await db.ExerciseTypePrompts
+        var prompt = await database.ExerciseTypePrompts
             .FirstOrDefaultAsync(p => p.ExerciseType == exerciseType);
 
         if (prompt is null) return NotFound();
@@ -48,12 +37,11 @@ public class AdminExerciseTypePromptsController(AppDbContext db, ILogger<AdminEx
     public async Task<ActionResult<ExerciseTypePromptDto>> Update(
         string exerciseType, [FromBody] UpdateExerciseTypePromptRequestDto dto)
     {
-        var prompt = await db.ExerciseTypePrompts
+        var prompt = await database.ExerciseTypePrompts
             .FirstOrDefaultAsync(p => p.ExerciseType == exerciseType);
 
         if (prompt is null)
         {
-            // Create new if doesn't exist
             prompt = new ExerciseTypePrompt
             {
                 Id = Guid.NewGuid(),
@@ -61,7 +49,7 @@ public class AdminExerciseTypePromptsController(AppDbContext db, ILogger<AdminEx
                 SystemPrompt = dto.SystemPrompt,
                 UpdatedAt = DateTime.UtcNow
             };
-            db.ExerciseTypePrompts.Add(prompt);
+            database.ExerciseTypePrompts.Add(prompt);
         }
         else
         {
@@ -69,7 +57,7 @@ public class AdminExerciseTypePromptsController(AppDbContext db, ILogger<AdminEx
             prompt.UpdatedAt = DateTime.UtcNow;
         }
 
-        await db.SaveChangesAsync();
+        await database.SaveChangesAsync();
 
         logger.LogInformation("ExerciseTypePrompt updated ExerciseType={ExerciseType} by ActorId={ActorId}",
             exerciseType, User.FindFirstValue(ClaimTypes.NameIdentifier));

@@ -32,10 +32,10 @@ const TOPICS_TEMPLATE = JSON.stringify([
 function downloadTopicsTemplate() {
     const blob = new Blob([TOPICS_TEMPLATE], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "topics_template.json";
-    a.click();
+    const anchorElement = document.createElement("a");
+    anchorElement.href = url;
+    anchorElement.download = "topics_template.json";
+    anchorElement.click();
     URL.revokeObjectURL(url);
 }
 

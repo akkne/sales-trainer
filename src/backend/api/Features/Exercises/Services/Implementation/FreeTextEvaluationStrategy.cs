@@ -1,20 +1,17 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Evaluates free_text exercises where user writes free-form response to a prompt.
-/// Content schema: { situation, instruction, evaluation_criteria: [], ai_prompt }
-/// AI evaluates based on provided criteria.
-/// </summary>
 internal sealed class FreeTextEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<OpenAiConfiguration> openAiOptions,
     AppDbContext databaseContext)
-    : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, databaseContext), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.FreeText;
 
@@ -31,7 +28,6 @@ internal sealed class FreeTextEvaluationStrategy(
             : "";
         var userText = userAnswer.GetProperty("text").GetString() ?? "";
 
-        // Get evaluation criteria
         var criteria = new List<string>();
         if (exerciseContent.TryGetProperty("evaluation_criteria", out var criteriaEl))
         {

@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.Lessons.Models;
 
-public class Exercise
+public sealed class Exercise
 {
     public Guid Id { get; set; }
     public Guid LessonId { get; set; }

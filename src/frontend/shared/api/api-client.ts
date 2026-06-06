@@ -1,4 +1,6 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+import { EnvironmentConfiguration } from "@/config/environment";
+
+const API_BASE_URL = EnvironmentConfiguration.apiBaseUrl;
 
 async function fetchWithAuthToken<TResponseBody>(
     path: string,
@@ -83,7 +85,6 @@ export const apiClient = {
     postFile: <TResponseBody>(path: string, formData: FormData) =>
         fetchWithAuthToken<TResponseBody>(path, {
             method: "POST",
-            // Content-Type is NOT set — browser sets it with the correct boundary
             headers: {},
             body: formData,
         }),

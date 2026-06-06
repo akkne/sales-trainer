@@ -13,8 +13,8 @@ export function Wordmark({
     accentColor,
     variant = "full",
 }: WordmarkProps) {
-    const c = color || "var(--ink)";
-    const a = accentColor || "var(--indigo)";
+    const colorValue = color || "var(--ink)";
+    const accentColorValue = accentColor || "var(--indigo)";
     const sq = Math.round(size * 0.22);
 
     if (variant === "mark") {
@@ -24,7 +24,7 @@ export function Wordmark({
                     display: "inline-block",
                     width: size,
                     height: size,
-                    background: a,
+                    background: accentColorValue,
                     borderRadius: 4,
                     position: "relative",
                 }}
@@ -51,7 +51,7 @@ export function Wordmark({
                 fontWeight: 500,
                 fontSize: size,
                 letterSpacing: `-${size * 0.03}px`,
-                color: c,
+                color: colorValue,
                 lineHeight: 1,
             }}
         >
@@ -60,7 +60,7 @@ export function Wordmark({
                     display: "inline-block",
                     width: sq,
                     height: sq,
-                    background: a,
+                    background: accentColorValue,
                     borderRadius: 3,
                 }}
             />

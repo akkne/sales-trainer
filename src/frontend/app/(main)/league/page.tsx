@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/shared/components/icon";
 import { SkeletonList, ErrorState } from "@/shared/components";
 import Link from "next/link";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 function useCountdown(weekEndDate: string) {
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, mins: 0 });
@@ -24,7 +25,7 @@ function useCountdown(weekEndDate: string) {
             setTimeLeft({ days, hours, mins });
         }
         compute();
-        const id = setInterval(compute, 60_000);
+        const id = setInterval(compute, TimingConstants.oneMinuteMs);
         return () => clearInterval(id);
     }, [weekEndDate]);
 

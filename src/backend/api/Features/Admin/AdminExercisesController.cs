@@ -8,30 +8,14 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
 
-public record AdminExerciseDto(
-    Guid Id,
-    Guid LessonId,
-    string Type,
-    int OrderInLesson,
-    JsonElement Content,
-    string? CustomAiPrompt
-);
-
-public record CreateExerciseRequestDto(
-    string Type,
-    int OrderInLesson,
-    JsonElement Content,
-    string? CustomAiPrompt
-);
-
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesController> logger) : ControllerBase
+public sealed class AdminExercisesController(AppDbContext database, ILogger<AdminExercisesController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons/{lessonId:guid}/exercises")]
     public async Task<ActionResult<List<AdminExerciseDto>>> GetByLesson(Guid lessonId)
     {
-        var exercises = await db.Exercises
+        var exercises = await database.Exercises
             .Where(e => e.LessonId == lessonId)
             .OrderBy(e => e.OrderInLesson)
             .ToListAsync();
@@ -52,7 +36,7 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
     public async Task<ActionResult<AdminExerciseDto>> Create(
         Guid lessonId, [FromBody] CreateExerciseRequestDto dto)
     {
-        var lessonExists = await db.Lessons.AnyAsync(l => l.Id == lessonId);
+        var lessonExists = await database.Lessons.AnyAsync(l => l.Id == lessonId);
         if (!lessonExists) return NotFound();
 
         var now = DateTime.UtcNow;
@@ -68,8 +52,8 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
             UpdatedAt = now
         };
 
-        db.Exercises.Add(exercise);
-        await db.SaveChangesAsync();
+        database.Exercises.Add(exercise);
+        await database.SaveChangesAsync();
 
         logger.LogInformation("Exercise created ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
             exercise.Id, lessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -83,7 +67,7 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
     public async Task<ActionResult<AdminExerciseDto>> Update(
         Guid id, [FromBody] CreateExerciseRequestDto dto)
     {
-        var exercise = await db.Exercises.FindAsync(id);
+        var exercise = await database.Exercises.FindAsync(id);
         if (exercise is null) return NotFound();
 
         exercise.Type = dto.Type;
@@ -92,7 +76,7 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
         exercise.CustomAiPrompt = dto.CustomAiPrompt;
         exercise.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await database.SaveChangesAsync();
 
         logger.LogInformation("Exercise updated ExerciseId={ExerciseId} Type={Type} by ActorId={ActorId}",
             id, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -105,11 +89,11 @@ public class AdminExercisesController(AppDbContext db, ILogger<AdminExercisesCon
     [HttpDelete("admin/exercises/{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var exercise = await db.Exercises.FindAsync(id);
+        var exercise = await database.Exercises.FindAsync(id);
         if (exercise is null) return NotFound();
 
-        db.Exercises.Remove(exercise);
-        await db.SaveChangesAsync();
+        database.Exercises.Remove(exercise);
+        await database.SaveChangesAsync();
 
         logger.LogWarning("Exercise deleted ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
             id, exercise.LessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));

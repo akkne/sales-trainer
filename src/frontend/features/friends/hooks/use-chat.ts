@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { clientLogger } from "@/shared/utils/client-logger";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 export interface ChatConversationSummary {
     conversationId: string;
@@ -49,7 +50,7 @@ export function useChatMessages(conversationId: string) {
         queryKey: ["chatMessages", conversationId],
         queryFn: () => apiClient.get<ChatMessageData[]>(`/chat/conversations/${conversationId}/messages`),
         enabled: !!conversationId,
-        refetchInterval: 5000,
+        refetchInterval: TimingConstants.chatRefetchIntervalMs,
     });
 }
 

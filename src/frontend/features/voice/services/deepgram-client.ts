@@ -1,3 +1,5 @@
+import { TimingConstants } from "@/shared/constants/timing-constants";
+
 export interface DeepgramConfig {
     apiKey: string;
     model?: string;
@@ -116,7 +118,7 @@ export class DeepgramClient {
             if (this.webSocketConnection?.readyState === WebSocket.OPEN) {
                 this.webSocketConnection.send(JSON.stringify({ type: "KeepAlive" }));
             }
-        }, 10000);
+        }, TimingConstants.deepgramConnectionTimeoutMs);
     }
 
     private stopKeepAlive(): void {
@@ -129,7 +131,7 @@ export class DeepgramClient {
     private attemptReconnect(): void {
         if (this.currentReconnectAttemptCount < this.maximumReconnectAttemptCount) {
             this.currentReconnectAttemptCount++;
-            setTimeout(() => this.connect(), 1000 * this.currentReconnectAttemptCount);
+            setTimeout(() => this.connect(), TimingConstants.deepgramReconnectDelayMs * this.currentReconnectAttemptCount);
         } else {
             this.clientOptions.onError?.(new Error("Max reconnection attempts reached"));
         }

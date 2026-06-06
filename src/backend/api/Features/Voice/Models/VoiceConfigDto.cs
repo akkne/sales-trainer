@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.Voice.Models;
 
-public class VoiceConfigDto
+public sealed class VoiceConfigDto
 {
     public bool Enabled { get; set; }
     public int VadSilenceMs { get; set; }

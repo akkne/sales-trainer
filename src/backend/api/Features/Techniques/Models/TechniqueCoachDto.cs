@@ -7,9 +7,3 @@ public sealed record TechniqueCoachDto(
     string Quote,
     TechniqueCoachChallengeDto[] Challenges
 );
-
-public sealed record TechniqueCoachChallengeDto(
-    string Label,
-    string? Kind,
-    string? TargetSlug
-);
