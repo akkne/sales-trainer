@@ -77,6 +77,8 @@ From the earthy/sage palette (rust, olive, indigo, oklch) to an electric blue + 
 - [x] Phase 7: Skill Tree — inherits via aliases; fixed mobile bug (inline display:grid overrode `hidden`, now `.tree-desktop-grid` media query)
 - [x] Phase 8: Exercises — verified in Playwright: options, success states, result banner OK
 - [~] Phase 9: Other screens — League/Profile/Dialog/Guidebook verified visually; deeper polish optional
+- [x] Mobile BottomNav rendered in MainLayout; CSS layer conflicts fixed (unlayered component classes beat Tailwind layered `hidden` utilities — resolved via media queries in globals.css)
+- [x] Dark theme verified (data-theme="dark" tokens)
 
 ## Verification (Playwright, 2026-06-07)
 - /tree desktop+mobile, /session (choose-option + result), /league, /profile, /dialog, /guidebook — all render with new palette
