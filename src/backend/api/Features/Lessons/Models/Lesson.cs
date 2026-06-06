@@ -2,7 +2,7 @@ using SalesTrainer.Api.Features.SkillTree.Models;
 
 namespace SalesTrainer.Api.Features.Lessons.Models;
 
-public class Lesson
+public sealed class Lesson
 {
     public Guid Id { get; set; }
     public Guid TopicId { get; set; }

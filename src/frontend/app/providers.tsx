@@ -5,8 +5,8 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useState, useEffect } from "react";
 import { useInitAuth } from "@/features/auth/hooks/use-auth";
 import { useThemeStore } from "@/shared/stores/theme-store";
-
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+import { EnvironmentConfiguration } from "@/config/environment";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 
 function AuthInitializer() {
     useInitAuth();
@@ -36,13 +36,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         () =>
             new QueryClient({
                 defaultOptions: {
-                    queries: { staleTime: 60_000, retry: 1 },
+                    queries: { staleTime: TimingConstants.oneMinuteMs, retry: 1 },
                 },
             })
     );
 
     return (
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <GoogleOAuthProvider clientId={EnvironmentConfiguration.googleClientId}>
             <QueryClientProvider client={queryClient}>
                 <AuthInitializer />
                 <ThemeInitializer />

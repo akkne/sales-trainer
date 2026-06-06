@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.SkillTree.Models;
 
-public class Topic
+public sealed class Topic
 {
     public Guid Id { get; set; }
     public Guid SkillId { get; set; }

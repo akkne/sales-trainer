@@ -10,53 +10,6 @@ using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Admin;
 
-public sealed record AdminTechniqueCoachDto(
-    string AvatarSeed,
-    string Name,
-    string Role,
-    string Quote,
-    JsonNode? Challenges);
-
-public sealed record AdminTechniqueDto(
-    Guid Id,
-    string Slug,
-    string Name,
-    string Summary,
-    string Body,
-    string[] Tags,
-    Guid? PrimarySkillId,
-    string? PrimarySkillIconicName,
-    string? PrimarySkillTitle,
-    Guid[] AdditionalSkillIds,
-    int Difficulty,
-    string DifficultyName,
-    int SortOrder,
-    DateTime CreatedAt,
-    DateTime UpdatedAt,
-    JsonNode? Dialog,
-    JsonNode? Case,
-    AdminTechniqueCoachDto? Coach);
-
-public sealed record AdminTechniqueWriteRequestDto(
-    string Slug,
-    string Name,
-    string Summary,
-    string Body,
-    string[]? Tags,
-    Guid? PrimarySkillId,
-    Guid[]? AdditionalSkillIds,
-    int Difficulty,
-    int SortOrder,
-    JsonNode? Dialog,
-    JsonNode? Case,
-    AdminTechniqueCoachDto? Coach);
-
-public sealed record AdminTechniqueImportResultDto(
-    int CreatedCount,
-    int UpdatedCount,
-    int FailedCount,
-    string[] Errors);
-
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
 public sealed class AdminTechniquesController(

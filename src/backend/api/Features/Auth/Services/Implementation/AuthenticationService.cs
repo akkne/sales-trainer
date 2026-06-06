@@ -4,16 +4,19 @@ using System.Security.Cryptography;
 using System.Text;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Auth.Services.Implementation;
 
 internal sealed class AuthenticationService(
     AppDbContext databaseContext,
-    IConfiguration configuration,
+    IOptions<JwtConfiguration> jwtOptions,
+    IOptions<GoogleAuthConfiguration> googleOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
 {
     private const int AccessTokenLifetimeMinutes = 15;
@@ -82,7 +85,7 @@ internal sealed class AuthenticationService(
         string googleIdToken,
         CancellationToken cancellationToken = default)
     {
-        var googleClientId = configuration["Google:ClientId"]
+        var googleClientId = googleOptions.Value.ClientId
             ?? throw new InvalidOperationException("Google:ClientId not configured.");
 
         var validationSettings = new GoogleJsonWebSignature.ValidationSettings
@@ -202,7 +205,7 @@ internal sealed class AuthenticationService(
     private string BuildJwtAccessToken(User user)
     {
         var signingKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!));
+            Encoding.UTF8.GetBytes(jwtOptions.Value.Key));
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
@@ -214,8 +217,8 @@ internal sealed class AuthenticationService(
                 new Claim(ClaimTypes.Role, user.Role.ToString())
             ]),
             Expires = DateTime.UtcNow.AddMinutes(AccessTokenLifetimeMinutes),
-            Issuer = configuration["Jwt:Issuer"],
-            Audience = configuration["Jwt:Audience"],
+            Issuer = jwtOptions.Value.Issuer,
+            Audience = jwtOptions.Value.Audience,
             SigningCredentials = new SigningCredentials(
                 signingKey, SecurityAlgorithms.HmacSha256)
         };

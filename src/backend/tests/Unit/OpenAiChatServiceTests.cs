@@ -1,12 +1,13 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Tests.Unit;
 
@@ -15,18 +16,16 @@ public class OpenAiChatServiceTests
 {
     private static OpenAiChatService CreateService(HttpStatusCode statusCode, string responseContent)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["OpenAI:ApiKey"] = "test-api-key",
-                ["OpenAI:BaseUrl"] = "https://api.openai.com",
-            })
-            .Build();
+        var openAiOptions = Options.Create(new OpenAiConfiguration
+        {
+            ApiKey = "test-api-key",
+            BaseUrl = "https://api.openai.com"
+        });
 
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient("OpenAI").Returns(new HttpClient(new MockHttpMessageHandler(statusCode, responseContent)));
 
-        return new OpenAiChatService(httpClientFactory, configuration, NullLogger<OpenAiChatService>.Instance);
+        return new OpenAiChatService(httpClientFactory, openAiOptions, NullLogger<OpenAiChatService>.Instance);
     }
 
     private static string BuildCompletionResponse(string content)

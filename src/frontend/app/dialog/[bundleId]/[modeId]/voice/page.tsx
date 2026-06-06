@@ -11,6 +11,7 @@ import {
 } from "@/features/dialog/hooks/use-dialog";
 import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
 import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
 import { Icon } from "@/shared/components/icon";
@@ -143,7 +144,7 @@ export default function VoiceCallPage() {
         if (callStatus === "connected") {
             timerRef.current = setInterval(() => {
                 setSessionTimer((prev) => prev + 1);
-            }, 1000);
+            }, TimingConstants.oneSecondMs);
         } else if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
@@ -172,9 +173,9 @@ export default function VoiceCallPage() {
         }
     }, [callStatus]);
 
-    const handleVoiceError = useCallback((err: Error) => {
-        setError(err.message);
-        setTimeout(() => setError(null), 5000);
+    const handleVoiceError = useCallback((error: Error) => {
+        setError(error.message);
+        setTimeout(() => setError(null), TimingConstants.fiveSecondsMs);
     }, []);
 
     const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
@@ -193,8 +194,8 @@ export default function VoiceCallPage() {
             } else {
                 setSessionId(null);
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Не удалось завершить звонок");
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Не удалось завершить звонок");
         } finally {
             setIsCompleting(false);
         }
@@ -245,8 +246,6 @@ export default function VoiceCallPage() {
         onError: handleVoiceError,
     });
 
-    // Barge-in indicator: when the user starts speaking while the AI reply is
-    // still playing, mark the last assistant subtitle as interrupted.
     useEffect(() => {
         const previous = previousVoiceStateRef.current;
         previousVoiceStateRef.current = voiceState;
@@ -261,7 +260,6 @@ export default function VoiceCallPage() {
         }
     }, [voiceState]);
 
-    // Keep the newest subtitle line in view.
     useEffect(() => {
         const container = subtitleScrollRef.current;
         if (container) {
@@ -299,8 +297,6 @@ export default function VoiceCallPage() {
 
     const handleClose = useCallback(() => {
         stopVoice();
-        // Leaving mid-call: end the session cleanly so usage and history
-        // are recorded (fire-and-forget — the request outlives navigation).
         if ((callStatus === "connected" || callStatus === "dialing") && sessionId) {
             completeDialogSession(sessionId).catch(() => {});
         }

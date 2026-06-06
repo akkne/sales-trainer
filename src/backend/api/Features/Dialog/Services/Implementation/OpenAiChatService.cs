@@ -3,15 +3,17 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Dialog.Services.Implementation;
 
 internal sealed class OpenAiChatService : IOpenAiChatService
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<OpenAiConfiguration> _openAiOptions;
     private readonly ILogger<OpenAiChatService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_OPENAI_API_KEY";
@@ -103,11 +105,11 @@ endCall: true означает, что твой персонаж кладёт т
 
     public OpenAiChatService(
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
+        IOptions<OpenAiConfiguration> openAiOptions,
         ILogger<OpenAiChatService> logger)
     {
         _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
+        _openAiOptions = openAiOptions;
         _logger = logger;
     }
 
@@ -115,7 +117,7 @@ endCall: true означает, что твой персонаж кладёт т
     {
         get
         {
-            var apiKey = _configuration["OpenAI:ApiKey"];
+            var apiKey = _openAiOptions.Value.ApiKey;
             return !string.IsNullOrWhiteSpace(apiKey) &&
                    apiKey != PlaceholderApiKey &&
                    !apiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
@@ -127,8 +129,8 @@ endCall: true означает, что твой персонаж кладёт т
         List<DialogMessage> conversationHistory,
         CancellationToken cancellationToken = default)
     {
-        var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
-        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var t) ? t : 500;
+        var chatModel = _openAiOptions.Value.DialogModel;
+        var maxTokens = _openAiOptions.Value.MaximumDialogTokenCount;
 
         var response = await CallOpenAiAsync(
             systemPrompt + StructuredReplyInstruction,
@@ -160,8 +162,8 @@ endCall: true означает, что твой персонаж кладёт т
         if (!IsConfigured)
             throw new InvalidOperationException("OpenAI API is not configured");
 
-        var chatModel = _configuration["OpenAI:ChatModel"] ?? "gpt-4.1-mini";
-        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensChat"], out var t) ? t : 500;
+        var chatModel = _openAiOptions.Value.DialogModel;
+        var maxTokens = _openAiOptions.Value.MaximumDialogTokenCount;
 
         var (httpClient, apiUrl) = CreateConfiguredClient();
 
@@ -171,7 +173,7 @@ endCall: true означает, что твой персонаж кладёт т
             ["model"] = chatModel,
             ["messages"] = messages,
             ["max_tokens"] = maxTokens,
-            ["temperature"] = 0.7,
+            ["temperature"] = _openAiOptions.Value.DialogTemperature,
             ["stream"] = true,
             ["response_format"] = BuildChatReplyResponseFormat()
         };
@@ -247,8 +249,8 @@ endCall: true означает, что твой персонаж кладёт т
         List<DialogMessage> conversationHistory,
         CancellationToken cancellationToken = default)
     {
-        var feedbackModel = _configuration["OpenAI:FeedbackModel"] ?? "gpt-4.1";
-        var maxTokens = int.TryParse(_configuration["OpenAI:MaxTokensFeedback"], out var t) ? t : 1500;
+        var feedbackModel = _openAiOptions.Value.OpenQuestionModel;
+        var maxTokens = _openAiOptions.Value.MaximumFeedbackTokenCount;
 
         var conversationAsText = FormatConversationForFeedback(conversationHistory);
         var fullPrompt = $"{feedbackPrompt}{ExperiencePointsInstructionSuffix}\n\n--- Диалог ---\n{conversationAsText}";
@@ -278,9 +280,9 @@ endCall: true означает, что твой персонаж кладёт т
 
     private (HttpClient Client, string ApiUrl) CreateConfiguredClient()
     {
-        var apiKey = _configuration["OpenAI:ApiKey"]!;
-        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
-        var completionsPath = _configuration["OpenAI:ChatCompletionsPath"] ?? "/v1/chat/completions";
+        var apiKey = _openAiOptions.Value.ApiKey;
+        var baseUrl = _openAiOptions.Value.BaseUrl;
+        var completionsPath = _openAiOptions.Value.ChatCompletionsPath;
         var apiUrl = baseUrl.TrimEnd('/') + completionsPath;
 
         var client = _httpClientFactory.CreateClient("OpenAI");
@@ -342,7 +344,7 @@ endCall: true означает, что твой персонаж кладёт т
 
     private object BuildChatReplyResponseFormat()
     {
-        var baseUrl = _configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com";
+        var baseUrl = _openAiOptions.Value.BaseUrl;
 
         var replySchema = new
         {
@@ -380,7 +382,7 @@ endCall: true означает, что твой персонаж кладёт т
             ["model"] = model,
             ["messages"] = BuildMessages(systemPrompt, conversationHistory),
             ["max_tokens"] = maxTokens,
-            ["temperature"] = 0.7
+            ["temperature"] = _openAiOptions.Value.DialogTemperature
         };
         if (responseFormat != null)
             requestBody["response_format"] = responseFormat;

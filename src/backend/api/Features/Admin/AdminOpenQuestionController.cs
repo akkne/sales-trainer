@@ -7,12 +7,12 @@ namespace SalesTrainer.Api.Features.Admin;
 
 [ApiController]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminOpenQuestionController(AppDbContext db) : ControllerBase
+public sealed class AdminOpenQuestionController(AppDbContext database) : ControllerBase
 {
     [HttpGet("admin/open-question/global-context")]
     public async Task<ActionResult<OpenQuestionGlobalContextDto>> GetGlobalContext()
     {
-        var context = await db.OpenQuestionGlobalContexts.FirstOrDefaultAsync();
+        var context = await database.OpenQuestionGlobalContexts.FirstOrDefaultAsync();
         return Ok(new OpenQuestionGlobalContextDto(context?.ContextText ?? ""));
     }
 
@@ -20,23 +20,20 @@ public class AdminOpenQuestionController(AppDbContext db) : ControllerBase
     public async Task<ActionResult<OpenQuestionGlobalContextDto>> UpdateGlobalContext(
         [FromBody] UpdateGlobalContextRequestDto request)
     {
-        var context = await db.OpenQuestionGlobalContexts.FirstOrDefaultAsync();
+        var context = await database.OpenQuestionGlobalContexts.FirstOrDefaultAsync();
 
         if (context is null)
         {
             context = new OpenQuestionGlobalContext { ContextText = request.ContextText };
-            db.OpenQuestionGlobalContexts.Add(context);
+            database.OpenQuestionGlobalContexts.Add(context);
         }
         else
         {
             context.ContextText = request.ContextText;
         }
 
-        await db.SaveChangesAsync();
+        await database.SaveChangesAsync();
 
         return Ok(new OpenQuestionGlobalContextDto(context.ContextText));
     }
 }
-
-public record OpenQuestionGlobalContextDto(string ContextText);
-public record UpdateGlobalContextRequestDto(string ContextText);

@@ -2,7 +2,7 @@ using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-public class ExerciseEvaluationFactory(IEnumerable<IExerciseEvaluationStrategy> allEvaluationStrategies)
+internal sealed class ExerciseEvaluationFactory(IEnumerable<IExerciseEvaluationStrategy> allEvaluationStrategies)
 {
     private readonly Dictionary<string, IExerciseEvaluationStrategy> _strategyByExerciseType =
         allEvaluationStrategies.ToDictionary(strategy => strategy.SupportedExerciseType);

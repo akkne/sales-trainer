@@ -16,6 +16,7 @@ import {
 } from "@/features/dialog/hooks/use-dialog";
 import { useVoice } from "@/features/voice/hooks/use-voice";
 import { apiClient } from "@/shared/api/api-client";
+import { TimingConstants } from "@/shared/constants/timing-constants";
 import { ChatMessage } from "@/features/dialog/components/chat-message";
 import { ChatInput } from "@/features/dialog/components/chat-input";
 import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
@@ -36,7 +37,7 @@ export default function ChatPage() {
     const queryClient = useQueryClient();
     const bundleId = params.bundleId as string;
     const modeId = params.modeId as string;
-    const chatMode = searchParams.get("mode") || "text"; // "text" or "voice"
+    const chatMode = searchParams.get("mode") || "text";
 
     const { data: bundles } = useDialogBundles();
     const { data: modes } = useDialogModes(bundleId);
@@ -61,12 +62,11 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Session timer
     useEffect(() => {
         if (sessionId && !isEnded && !feedback) {
             timerRef.current = setInterval(() => {
                 setSessionTimer((prev) => prev + 1);
-            }, 1000);
+            }, TimingConstants.oneSecondMs);
         } else {
             if (timerRef.current) {
                 clearInterval(timerRef.current);
@@ -80,7 +80,6 @@ export default function ChatPage() {
         };
     }, [sessionId, isEnded, feedback]);
 
-    // Reset timer on new session
     useEffect(() => {
         if (sessionId) {
             setSessionTimer(0);
@@ -287,7 +286,6 @@ export default function ChatPage() {
         }
     };
 
-    // Voice handling
     const handleVoiceTranscript = useCallback((transcript: string) => {
         const userMessage: DialogMessage = {
             role: "user",
@@ -315,7 +313,7 @@ export default function ChatPage() {
 
     const handleVoiceError = useCallback((error: Error) => {
         setVoiceError(error.message);
-        setTimeout(() => setVoiceError(null), 5000);
+        setTimeout(() => setVoiceError(null), TimingConstants.fiveSecondsMs);
     }, []);
 
     const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
@@ -343,7 +341,6 @@ export default function ChatPage() {
 
     const isVoiceMode = chatMode === "voice" && currentMode?.voiceEnabled && isVoiceAvailable;
 
-    // Loading state
     if (isLoading && !sessionId && !isInitialized) {
         return (
             <div className="flex h-screen bg-surface">
@@ -375,7 +372,6 @@ export default function ChatPage() {
         );
     }
 
-    // Error state
     if (error && !sessionId) {
         return (
             <div className="flex h-screen bg-surface">

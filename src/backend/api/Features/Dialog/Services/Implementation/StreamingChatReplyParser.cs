@@ -5,8 +5,6 @@ using System.Text.RegularExpressions;
 
 namespace SalesTrainer.Api.Features.Dialog.Services.Implementation;
 
-internal sealed record ChatReplyParseResult(string Reply, bool EndCall, bool UsedFallback);
-
 internal sealed class StreamingChatReplyParser
 {
     private enum ParserState

@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.League.Models;
 
-public class LeagueMembership
+public sealed class LeagueMembership
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }

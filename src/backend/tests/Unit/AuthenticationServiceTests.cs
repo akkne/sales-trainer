@@ -1,9 +1,10 @@
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 
@@ -20,18 +21,21 @@ public class AuthenticationServiceTests
     {
         _db = InMemoryDbContextFactory.Create();
 
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Jwt:Key"] = "super-secret-test-key-that-is-at-least-32-chars-long!",
-                ["Jwt:Issuer"] = "test-issuer",
-                ["Jwt:Audience"] = "test-audience"
-            })
-            .Build();
+        var jwtOptions = Options.Create(new JwtConfiguration
+        {
+            Key = "super-secret-test-key-that-is-at-least-32-chars-long!",
+            Issuer = "test-issuer",
+            Audience = "test-audience"
+        });
+        var googleOptions = Options.Create(new GoogleAuthConfiguration
+        {
+            ClientId = "test-client-id"
+        });
 
         _service = new AuthenticationService(
             _db,
-            config,
+            jwtOptions,
+            googleOptions,
             NullLogger<AuthenticationService>.Instance);
     }
 

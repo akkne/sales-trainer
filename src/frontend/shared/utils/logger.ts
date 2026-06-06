@@ -1,7 +1,3 @@
-/**
- * Server-side logger: pino → Loki (direct push).
- * Import only in Server Components, API Routes, and middleware — never in Client Components.
- */
 import pino from "pino";
 
 function buildLogger() {

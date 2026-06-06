@@ -8,7 +8,7 @@ namespace SalesTrainer.Api.Features.Admin;
 [ApiController]
 [Route("admin/voice")]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminVoiceUsageController(IVoiceUsageService voiceUsageService) : ControllerBase
+public sealed class AdminVoiceUsageController(IVoiceUsageService voiceUsageService) : ControllerBase
 {
     [HttpGet("usage")]
     public async Task<ActionResult<AdminVoiceUsageDto>> GetUsage(CancellationToken cancellationToken)

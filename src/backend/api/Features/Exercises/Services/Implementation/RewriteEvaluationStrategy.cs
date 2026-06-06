@@ -1,20 +1,17 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
 
-/// <summary>
-/// Evaluates rewrite exercises where user improves a weak text.
-/// Content schema: { instruction, original, evaluation_criteria: [], ai_prompt }
-/// AI evaluates the improvement against the original.
-/// </summary>
 internal sealed class RewriteEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<OpenAiConfiguration> openAiOptions,
     AppDbContext databaseContext)
-    : AiEvaluationStrategyBase(httpClientFactory, configuration, databaseContext), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, databaseContext), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.Rewrite;
 
@@ -29,7 +26,6 @@ internal sealed class RewriteEvaluationStrategy(
         var originalText = exerciseContent.GetProperty("original").GetString() ?? "";
         var rewrittenText = userAnswer.GetProperty("rewrittenText").GetString() ?? "";
 
-        // Get evaluation criteria
         var criteria = new List<string>();
         if (exerciseContent.TryGetProperty("evaluation_criteria", out var criteriaEl))
         {

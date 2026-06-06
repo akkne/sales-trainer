@@ -33,10 +33,10 @@ const SKILLS_TEMPLATE = JSON.stringify([
 function downloadSkillsTemplate() {
     const blob = new Blob([SKILLS_TEMPLATE], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "skills_template.json";
-    a.click();
+    const anchorElement = document.createElement("a");
+    anchorElement.href = url;
+    anchorElement.download = "skills_template.json";
+    anchorElement.click();
     URL.revokeObjectURL(url);
 }
 
@@ -72,7 +72,6 @@ export default function AdminSkillsPage() {
             const result = await importSkills.mutateAsync(file);
             setImportResult(result);
         } catch {
-            // Error handled by hook
         }
         if (fileInputRef.current) fileInputRef.current.value = "";
     }

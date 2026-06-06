@@ -102,8 +102,8 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
 
 builder.Services
     .AddAchievementFeatureServices()
-    .AddAuthenticationFeatureServices()
-    .AddDialogFeatureServices()
+    .AddAuthenticationFeatureServices(builder.Configuration)
+    .AddDialogFeatureServices(builder.Configuration)
     .AddExerciseFeatureServices()
     .AddFriendFeatureServices()
     .AddGamificationFeatureServices()
@@ -114,7 +114,7 @@ builder.Services
     .AddReferenceFeatureServices()
     .AddSkillTreeFeatureServices()
     .AddTechniqueFeatureServices()
-    .AddTranscriptionFeatureServices()
+    .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration);
 
 builder.Services.AddHttpClient("OpenAI")

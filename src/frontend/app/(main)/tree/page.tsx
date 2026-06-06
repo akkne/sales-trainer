@@ -12,8 +12,6 @@ import { Progress } from "@/shared/components/progress";
 import { ErrorState } from "@/shared/components/error-state";
 import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
 
-// ── Skill lesson view ─────────────────────────────────────────────────────────
-
 function SkillLessonView({
     skillSlug,
     skillTitle,
@@ -147,8 +145,6 @@ function SkillLessonView({
     );
 }
 
-// ── Left sidebar ──────────────────────────────────────────────────────────────
-
 function SkillRow({
     skill,
     selected,
@@ -192,8 +188,6 @@ function SkillRow({
         </button>
     );
 }
-
-// ── Stage group ───────────────────────────────────────────────────────────────
 
 interface StageGroupProps {
     stageKey: string;
@@ -375,7 +369,6 @@ function SkillSidebar() {
         );
     }
 
-    // Group by stage. Known stages first (in fixed order), then any unknown stages alphabetically.
     const byStage = new Map<string, typeof enrolledSkills>();
     for (const skill of enrolledSkills) {
         const key = skill.stage || "general";
@@ -408,8 +401,6 @@ function SkillSidebar() {
         </div>
     );
 }
-
-// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SkillTreePage() {
     const { data: skillTreeData, isLoading, isError, refetch } = useSkillTree();

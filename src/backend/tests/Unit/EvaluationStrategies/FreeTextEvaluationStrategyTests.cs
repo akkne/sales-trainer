@@ -2,10 +2,11 @@ using System.Net;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Exercises.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
@@ -14,7 +15,7 @@ namespace SalesTrainer.Tests.Unit.EvaluationStrategies;
 public class FreeTextEvaluationStrategyTests
 {
     private IHttpClientFactory _httpClientFactory = null!;
-    private IConfiguration _configuration = null!;
+    private IOptions<OpenAiConfiguration> _openAiOptions = null!;
     private AppDbContext _dbContext = null!;
     private FreeTextEvaluationStrategy _strategy = null!;
 
@@ -23,24 +24,20 @@ public class FreeTextEvaluationStrategyTests
     {
         _httpClientFactory = Substitute.For<IHttpClientFactory>();
 
-        var configValues = new Dictionary<string, string?>
+        _openAiOptions = Options.Create(new OpenAiConfiguration
         {
-            ["OpenAI:ApiKey"] = "test-api-key",
-            ["OpenAI:BaseUrl"] = "https://api.test.com",
-            ["OpenAI:ChatCompletionsPath"] = "/v1/chat/completions",
-            ["OpenAI:OpenQuestionModel"] = "gpt-4",
-            ["OpenAI:MaxTokensOpenQuestion"] = "300"
-        };
-        _configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configValues)
-            .Build();
+            ApiKey = "test-api-key",
+            BaseUrl = "https://api.test.com",
+            ChatCompletionsPath = "/v1/chat/completions",
+            OpenQuestionModel = "gpt-4"
+        });
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         _dbContext = new AppDbContext(options);
 
-        _strategy = new FreeTextEvaluationStrategy(_httpClientFactory, _configuration, _dbContext);
+        _strategy = new FreeTextEvaluationStrategy(_httpClientFactory, _openAiOptions, _dbContext);
     }
 
     [TearDown]

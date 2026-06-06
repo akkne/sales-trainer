@@ -1,3 +1,3 @@
 namespace SalesTrainer.Api.Features.Voice.Models;
 
-public class GoogleTtsAuthenticationException(string message) : GoogleTtsException(message);
+public sealed class GoogleTtsAuthenticationException(string message) : GoogleTtsException(message);

@@ -1,6 +1,6 @@
 namespace SalesTrainer.Api.Features.Gamification.Models;
 
-public class UserStreak
+public sealed class UserStreak
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }

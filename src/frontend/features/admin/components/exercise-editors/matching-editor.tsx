@@ -50,10 +50,8 @@ export function MatchingEditor({ content, onChange }: Props) {
         let correctPairs: MatchingContent["correctPairs"];
 
         if (existing?.right === right) {
-            // Remove pair
             correctPairs = content.correctPairs.filter(p => p.left !== left);
         } else {
-            // Replace or add pair
             correctPairs = content.correctPairs.filter(p => p.left !== left);
             correctPairs.push({ left, right });
         }
