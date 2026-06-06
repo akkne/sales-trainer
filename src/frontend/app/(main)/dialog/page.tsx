@@ -104,7 +104,7 @@ export default function DialogPage() {
                 {/* NPC Mentor card */}
                 <div className="mentor-card">
                     <div className="mentor-tex" />
-                    <GeoAvatar seed="sergey" size={84} />
+                    <GeoAvatar seed="sergey" size={84} palette={["var(--violet)", "var(--primary)", "var(--flame)"]} />
                     <div className="grow" style={{ position: "relative" }}>
                         <h3 className="h3" style={{ color: "#fff" }}>Skeptic Sergey</h3>
                         <span className="eyebrow" style={{ color: "var(--violet)" }}>VP · возражения</span>
@@ -112,7 +112,7 @@ export default function DialogPage() {
                             «Хочешь, позвоню и попробую развалить твою лучшую продажу? Пять минут на подготовку.»
                         </p>
                     </div>
-                    <Button variant="accent" size="lg" iconRightName="phone">
+                    <Button variant="primary" size="lg" iconRightName="phone">
                         CHALLENGE
                     </Button>
                 </div>
