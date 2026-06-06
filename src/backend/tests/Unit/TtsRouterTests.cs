@@ -1,10 +1,11 @@
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Voice;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
 using SalesTrainer.Api.Features.Voice.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Tests.Unit;
 
@@ -25,13 +26,10 @@ public class TtsRouterTests
 
     private TtsRouter CreateRouter(string? preferredProvider)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Voice:TtsProvider"] = preferredProvider,
-            })
-            .Build();
-        return new TtsRouter(_yandex, _voicer, _google, configuration);
+        var options = Options.Create(preferredProvider == null
+            ? new TtsRouterConfiguration()
+            : new TtsRouterConfiguration { TtsProvider = preferredProvider });
+        return new TtsRouter(_yandex, _voicer, _google, options);
     }
 
     [Test]

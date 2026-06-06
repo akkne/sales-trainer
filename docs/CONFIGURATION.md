@@ -20,6 +20,8 @@ This keeps each service self-contained for a future microservice split.
 | `.env.example` | yes | Template for `.env` with placeholders |
 | `src/backend/api/appsettings.json` | yes | All backend config: docker-network hostnames (mongo, redis, loki), models, voice settings, limits. Secrets = `INJECTED_FROM_ENV` |
 | `src/backend/api/appsettings.Development.json` | no (mounted by compose) | Dev-only overrides (provider base URLs, models) |
+| `src/backend/api/appsettings.Testing.json` | no | Integration-test config with real API keys. Copy from `appsettings.Testing.example.json` |
+| `src/backend/api/appsettings.Testing.example.json` | yes | Template for the Testing config |
 | `src/frontend/.env.production` | yes | `NEXT_PUBLIC_API_URL` (build-time) and `LOKI_URL` (runtime via compose `env_file`) |
 | `src/frontend/.env.local.example` | yes | Template for bare-metal `npm run dev` |
 

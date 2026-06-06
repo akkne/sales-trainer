@@ -1,11 +1,12 @@
 using System.Net;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Tests.Unit;
 
@@ -18,21 +19,19 @@ public class YandexTtsServiceTests
         RecordingHandler handler,
         string? apiKey = "real-key")
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["YandexTts:ApiKey"] = apiKey,
-                ["YandexTts:BaseUrl"] = "https://yandex.test",
-                ["YandexTts:Voice"] = "marina",
-                ["YandexTts:Lang"] = "ru-RU",
-                ["YandexTts:Speed"] = "1.0",
-            })
-            .Build();
+        var options = Options.Create(new YandexTtsConfiguration
+        {
+            ApiKey = apiKey!,
+            BaseUrl = "https://yandex.test",
+            Voice = "marina",
+            Lang = "ru-RU",
+            Speed = "1.0",
+        });
 
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient("YandexTts").Returns(new HttpClient(handler));
 
-        return new YandexTtsService(httpClientFactory, configuration, NullLogger<YandexTtsService>.Instance);
+        return new YandexTtsService(httpClientFactory, options, NullLogger<YandexTtsService>.Instance);
     }
 
     [Test]

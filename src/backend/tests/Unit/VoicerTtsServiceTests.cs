@@ -1,11 +1,12 @@
 using System.Net;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Implementation;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Tests.Unit;
 
@@ -18,20 +19,18 @@ public class VoicerTtsServiceTests
         HttpMessageHandler handler,
         string? apiKey = "real-key")
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["VoicerTts:ApiKey"] = apiKey,
-                ["VoicerTts:BaseUrl"] = "https://voicer.test",
-                ["VoicerTts:PollIntervalMs"] = "1",
-                ["VoicerTts:MaxPollAttempts"] = "5",
-            })
-            .Build();
+        var options = Options.Create(new VoicerTtsConfiguration
+        {
+            ApiKey = apiKey!,
+            BaseUrl = "https://voicer.test",
+            PollIntervalMilliseconds = 1,
+            MaximumPollAttemptCount = 5,
+        });
 
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient("VoicerTts").Returns(new HttpClient(handler));
 
-        return new VoicerTtsService(httpClientFactory, configuration, NullLogger<VoicerTtsService>.Instance);
+        return new VoicerTtsService(httpClientFactory, options, NullLogger<VoicerTtsService>.Instance);
     }
 
     [Test]

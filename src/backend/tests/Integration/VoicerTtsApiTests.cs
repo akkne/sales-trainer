@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using NUnit.Framework;
 
 namespace SalesTrainer.Tests.Integration;
@@ -31,10 +32,22 @@ public class VoicerTtsApiTests
     [SetUp]
     public void SetUp()
     {
-        // Read from appsettings.Testing.json
-        _apiKey = "1367636999:414861684761733453564337307175764574354c4f673d3d";
-        _baseUrl = "https://voiceapi.csv666.ru";
-        _voiceId = "21m00Tcm4TlvDq8ikWAM";
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.Testing.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        var apiKey = configuration["VoicerTts:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("YOUR_"))
+        {
+            Assert.Ignore("VoicerTts:ApiKey is not configured — copy appsettings.Testing.example.json " +
+                          "to appsettings.Testing.json and fill in real values.");
+        }
+
+        _apiKey = apiKey!;
+        _baseUrl = configuration["VoicerTts:BaseUrl"] ?? "https://voiceapi.csv666.ru";
+        _voiceId = configuration["VoicerTts:VoiceId"] ?? "21m00Tcm4TlvDq8ikWAM";
 
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("X-API-Key", _apiKey);
@@ -43,6 +56,8 @@ public class VoicerTtsApiTests
     [TearDown]
     public void TearDown()
     {
+        // _httpClient is null when SetUp short-circuits via Assert.Ignore
+        // (no API key configured), so the null-conditional matters here.
         _httpClient?.Dispose();
     }
 
