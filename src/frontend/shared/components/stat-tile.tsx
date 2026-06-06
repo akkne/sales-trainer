@@ -2,7 +2,16 @@
 
 import { ReactNode } from "react";
 
-export type StatTileTone = "neutral" | "rust" | "olive" | "indigo";
+export type StatTileTone =
+    | "neutral"
+    | "rust"
+    | "olive"
+    | "indigo"
+    | "flame"
+    | "primary"
+    | "violet"
+    | "success"
+    | "amber";
 
 interface StatTileProps {
     label: string;
@@ -15,10 +24,17 @@ interface StatTileProps {
 }
 
 const TONE_STYLES: Record<StatTileTone, { color: string; bg: string }> = {
-    neutral: { color: "var(--ink)", bg: "var(--surface)" },
-    rust: { color: "var(--rust)", bg: "var(--rust-soft)" },
-    olive: { color: "var(--olive)", bg: "var(--olive-soft)" },
-    indigo: { color: "var(--indigo)", bg: "var(--indigo-soft)" },
+    neutral: { color: "var(--ink)", bg: "var(--surface-2)" },
+    // legacy tone names mapped to the new palette
+    rust: { color: "var(--flame)", bg: "var(--flame-soft)" },
+    olive: { color: "var(--success)", bg: "var(--success-soft)" },
+    indigo: { color: "var(--primary)", bg: "var(--primary-soft)" },
+    // new palette tones
+    flame: { color: "var(--flame)", bg: "var(--flame-soft)" },
+    primary: { color: "var(--primary)", bg: "var(--primary-soft)" },
+    violet: { color: "var(--violet)", bg: "var(--violet-soft)" },
+    success: { color: "var(--success)", bg: "var(--success-soft)" },
+    amber: { color: "var(--amber)", bg: "var(--amber-soft)" },
 };
 
 export function StatTile({
@@ -33,51 +49,21 @@ export function StatTile({
     const t = TONE_STYLES[tone];
 
     return (
-        <div
-            className={className}
-            style={{
-                background: t.bg,
-                border: "1px solid var(--line)",
-                borderRadius: "var(--r-md)",
-                padding: big ? "20px" : "14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "11px",
-                    color: "var(--ink-3)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    fontWeight: 500,
-                }}
-            >
-                {icon}
-                {label}
-            </div>
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "4px",
-                    color: t.color,
-                    fontFamily: "var(--f-sans)",
-                    fontWeight: 500,
-                    fontSize: big ? "32px" : "22px",
-                    letterSpacing: "-0.5px",
-                }}
-            >
-                <span className="tnum">{value}</span>
-                {unit && (
-                    <span style={{ fontSize: big ? "14px" : "12px", color: "var(--ink-3)" }}>
-                        {unit}
+        <div className={`stat ${className}`} style={big ? { padding: 20 } : undefined}>
+            <div className="stat-head">
+                {icon && (
+                    <span
+                        className="stat-ic"
+                        style={{ background: t.bg, color: t.color }}
+                    >
+                        {icon}
                     </span>
                 )}
+                <span className="stat-label">{label}</span>
+            </div>
+            <div className="stat-num" style={{ fontSize: big ? 32 : 24 }}>
+                <span className="tnum">{value}</span>
+                {unit && <small>{unit}</small>}
             </div>
         </div>
     );

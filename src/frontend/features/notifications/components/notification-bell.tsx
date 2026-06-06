@@ -29,7 +29,7 @@ export function NotificationBell() {
             <button
                 type="button"
                 onClick={() => setIsPanelOpen((previouslyOpen) => !previouslyOpen)}
-                className="relative p-2 rounded-full hover:bg-bg-2 transition-colors"
+                className="icon-btn"
                 aria-label="Уведомления"
                 aria-expanded={isPanelOpen}
             >

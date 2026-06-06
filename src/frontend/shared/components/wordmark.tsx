@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "./icon";
+
 interface WordmarkProps {
     size?: number;
     color?: string;
@@ -10,35 +12,31 @@ interface WordmarkProps {
 export function Wordmark({
     size = 28,
     color,
-    accentColor,
     variant = "full",
 }: WordmarkProps) {
     const colorValue = color || "var(--ink)";
-    const accentColorValue = accentColor || "var(--indigo)";
-    const sq = Math.round(size * 0.22);
+    const markSize = Math.round(size * 1.2);
+
+    const mark = (
+        <span
+            style={{
+                display: "grid",
+                placeItems: "center",
+                width: markSize,
+                height: markSize,
+                background: "linear-gradient(135deg, var(--primary), var(--violet))",
+                borderRadius: Math.round(markSize * 0.32),
+                color: "#fff",
+                boxShadow: "var(--sh-primary)",
+                flex: "none",
+            }}
+        >
+            <Icon name="bolt" size={Math.round(markSize * 0.6)} />
+        </span>
+    );
 
     if (variant === "mark") {
-        return (
-            <span
-                style={{
-                    display: "inline-block",
-                    width: size,
-                    height: size,
-                    background: accentColorValue,
-                    borderRadius: 4,
-                    position: "relative",
-                }}
-            >
-                <span
-                    style={{
-                        position: "absolute",
-                        inset: "22%",
-                        background: "var(--bg)",
-                        borderRadius: 2,
-                    }}
-                />
-            </span>
-        );
+        return mark;
     }
 
     return (
@@ -46,25 +44,19 @@ export function Wordmark({
             style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: size * 0.18,
-                fontFamily: "var(--f-sans)",
-                fontWeight: 500,
-                fontSize: size,
-                letterSpacing: `-${size * 0.03}px`,
+                gap: size * 0.35,
+                fontFamily: "var(--font-display)",
+                fontWeight: 800,
+                fontSize: size * 0.72,
+                letterSpacing: "-0.02em",
                 color: colorValue,
                 lineHeight: 1,
             }}
         >
-            <span
-                style={{
-                    display: "inline-block",
-                    width: sq,
-                    height: sq,
-                    background: accentColorValue,
-                    borderRadius: 3,
-                }}
-            />
-            <span>sellevate</span>
+            {mark}
+            <span>
+                Sellevate<span style={{ color: "var(--primary)" }}>.</span>
+            </span>
         </span>
     );
 }

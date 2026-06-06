@@ -49,20 +49,18 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
         const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
             primary: {
+                background: "var(--primary)",
+                color: "var(--on-primary)",
+                boxShadow: "var(--sh-primary)",
+            },
+            accent: {
                 background: "var(--ink)",
                 color: "var(--bg)",
                 boxShadow: "var(--sh-2)",
             },
-            accent: {
-                background: "var(--indigo)",
-                color: "white",
-                boxShadow: "var(--sh-2)",
-            },
             secondary: {
-                background: "var(--surface)",
-                color: "var(--ink)",
-                border: "1px solid var(--line-2)",
-                boxShadow: "var(--sh-1)",
+                background: "var(--primary-soft)",
+                color: "var(--primary)",
             },
             ghost: {
                 background: "transparent",
@@ -74,7 +72,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 border: "1px solid var(--line-2)",
             },
             destructive: {
-                background: "var(--bad)",
+                background: "var(--heart)",
                 color: "white",
             },
         };
@@ -89,7 +87,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             fontSize: s.fontSize,
             borderRadius: s.radius,
             border: "1px solid transparent",
-            fontWeight: 500,
+            fontWeight: 700,
             letterSpacing: "-0.1px",
             cursor: isDisabled ? "not-allowed" : "pointer",
             transition: "transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease",

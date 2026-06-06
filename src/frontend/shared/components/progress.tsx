@@ -12,9 +12,17 @@ interface ProgressProps {
 }
 
 const TONE_COLORS: Record<ProgressTone, string> = {
-    rust: "var(--rust)",
-    olive: "var(--olive)",
-    indigo: "var(--indigo)",
+    rust: "var(--flame)",
+    olive: "var(--success)",
+    indigo: "linear-gradient(90deg, var(--primary), var(--violet))",
+    ink: "var(--ink)",
+};
+
+/* Stroke colors for SVG circular progress (gradients not supported there) */
+const TONE_STROKE: Record<ProgressTone, string> = {
+    rust: "var(--flame)",
+    olive: "var(--success)",
+    indigo: "var(--primary)",
     ink: "var(--ink)",
 };
 
@@ -131,7 +139,7 @@ export function CircularProgress({
                     cy={size / 2}
                     r={radius}
                     fill="none"
-                    stroke={TONE_COLORS[tone]}
+                    stroke={TONE_STROKE[tone]}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeDasharray={circumference}

@@ -43,155 +43,106 @@ export function TopAppBar() {
 
     return (
         <>
-            <header
-                style={{
-                    height: 60,
-                    background: "var(--surface)",
-                    borderBottom: "1px solid var(--line)",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "0 32px",
-                    gap: 32,
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 20,
-                }}
-            >
-                {/* Logo */}
-                <Link href="/tree" style={{ cursor: "pointer", fontWeight: 700, fontSize: 18, letterSpacing: -0.5, color: "var(--ink)", textDecoration: "none" }}>
-                    SalesTrainer
-                </Link>
-
-                {/* Desktop nav items */}
-                <nav className="hidden md:flex" style={{ gap: 4, alignItems: "center" }}>
-                    {NAV_ITEMS.map((item) => {
-                        const isActive = currentPathname.startsWith(item.href);
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                style={{
-                                    position: "relative",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    padding: "8px 14px",
-                                    background: isActive ? "var(--bg-2)" : "transparent",
-                                    color: isActive ? "var(--ink)" : "var(--ink-3)",
-                                    border: "none",
-                                    borderRadius: 10,
-                                    fontSize: 14,
-                                    fontWeight: 500,
-                                    textDecoration: "none",
-                                    fontFamily: "var(--f-sans)",
-                                    letterSpacing: "-0.1px",
-                                    transition: "background 0.15s, color 0.15s",
-                                }}
-                            >
-                                <Icon name={item.icon} size="sm" />
-                                {item.label}
-                                {item.href === "/friends" && incomingRequestCount > 0 && (
-                                    <span
-                                        style={{
-                                            position: "absolute",
-                                            top: 4,
-                                            right: 4,
-                                            minWidth: 16,
-                                            height: 16,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            borderRadius: 999,
-                                            background: "var(--bad)",
-                                            color: "white",
-                                            fontSize: 10,
-                                            fontWeight: 600,
-                                            padding: "0 4px",
-                                        }}
-                                    >
-                                        {incomingRequestCount}
-                                    </span>
-                                )}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                <div style={{ flex: 1 }} />
-
-                {/* Right side */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {/* Streak */}
-                    {streak > 0 && (
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                background: "var(--rust-soft)",
-                                color: "var(--rust-ink)",
-                                fontSize: 13,
-                                fontWeight: 500,
-                            }}
-                        >
-                            <Icon name="flame" size="sm" />
-                            <span className="tnum">{streak}</span>
-                        </div>
-                    )}
-
-                    {/* Notifications */}
-                    <NotificationBell />
-
-                    {/* Profile chip - desktop */}
-                    <Link
-                        href="/profile"
-                        className="hidden md:flex"
-                        style={{
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "4px 10px 4px 4px",
-                            borderRadius: 999,
-                            background: "var(--bg-2)",
-                            textDecoration: "none",
-                            color: "var(--ink)",
-                        }}
-                        aria-label={`Профиль (${displayName})`}
-                    >
-                        <GeoAvatar seed={displayName} size={28} />
-                        <div style={{ fontSize: 12, lineHeight: 1.2 }}>
-                            <div
-                                style={{
-                                    color: "var(--ink-3)",
-                                    fontSize: 10,
-                                    textTransform: "uppercase",
-                                    letterSpacing: 0.5,
-                                }}
-                            >
-                                Уровень
-                            </div>
-                            <div style={{ fontWeight: 600, fontFamily: "var(--f-mono)" }}>
-                                {level}
-                            </div>
-                        </div>
+            <header className="appbar">
+                <div className="appbar-inner">
+                    {/* Logo */}
+                    <Link href="/tree" className="wordmark">
+                        <span className="mark">
+                            <Icon name="bolt" size="sm" />
+                        </span>
+                        <span>
+                            Sellevate<span className="dotmark">.</span>
+                        </span>
                     </Link>
 
-                    {/* Mobile menu button */}
-                    <button
-                        className="md:hidden"
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 8,
-                            color: "var(--ink-2)",
-                        }}
-                        aria-label="Открыть меню"
-                    >
-                        <Icon name={mobileMenuOpen ? "close" : "grid"} size="md" />
-                    </button>
+                    {/* Desktop nav items */}
+                    <nav className="hidden md:flex" style={{ gap: 2, alignItems: "center" }}>
+                        {NAV_ITEMS.map((item) => {
+                            const isActive = currentPathname.startsWith(item.href);
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={`nav-pill${isActive ? " active" : ""}`}
+                                    style={{ position: "relative" }}
+                                >
+                                    <Icon name={item.icon} size="sm" />
+                                    {item.label}
+                                    {item.href === "/friends" && incomingRequestCount > 0 && (
+                                        <span
+                                            style={{
+                                                position: "absolute",
+                                                top: 2,
+                                                right: 2,
+                                                minWidth: 16,
+                                                height: 16,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                borderRadius: 999,
+                                                background: "var(--heart)",
+                                                color: "white",
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                padding: "0 4px",
+                                            }}
+                                        >
+                                            {incomingRequestCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+
+                    <div style={{ flex: 1 }} />
+
+                    {/* Right side */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
+                        {/* Streak */}
+                        {streak > 0 && (
+                            <div className="streak-pill hidden md:inline-flex">
+                                <Icon name="flame" size="sm" />
+                                <span className="tnum">{streak}</span>
+                            </div>
+                        )}
+
+                        {/* Notifications */}
+                        <NotificationBell />
+
+                        {/* Profile chip - desktop */}
+                        <Link
+                            href="/profile"
+                            className="profile-chip hidden md:inline-flex"
+                            aria-label={`Профиль (${displayName})`}
+                        >
+                            <GeoAvatar seed={displayName} size={34} />
+                            <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25 }}>
+                                <div
+                                    style={{
+                                        fontFamily: "var(--font-mono)",
+                                        fontSize: 9,
+                                        letterSpacing: "0.1em",
+                                        color: "var(--ink-4)",
+                                        fontWeight: 600,
+                                        textTransform: "uppercase",
+                                    }}
+                                >
+                                    Уровень
+                                </div>
+                                <div>{level}</div>
+                            </div>
+                        </Link>
+
+                        {/* Mobile menu button */}
+                        <button
+                            className="icon-btn md:hidden"
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            aria-label="Открыть меню"
+                        >
+                            <Icon name={mobileMenuOpen ? "close" : "grid"} size="md" />
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -201,12 +152,12 @@ export function TopAppBar() {
                     className="md:hidden"
                     style={{
                         position: "fixed",
-                        top: 60,
+                        top: 66,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: "var(--surface)",
-                        zIndex: 19,
+                        background: "var(--bg)",
+                        zIndex: 39,
                         padding: 16,
                         overflowY: "auto",
                     }}
@@ -225,14 +176,14 @@ export function TopAppBar() {
                                         alignItems: "center",
                                         gap: 12,
                                         padding: "14px 16px",
-                                        background: isActive ? "var(--bg-2)" : "transparent",
-                                        color: isActive ? "var(--ink)" : "var(--ink-2)",
+                                        background: isActive ? "var(--primary-soft)" : "transparent",
+                                        color: isActive ? "var(--primary)" : "var(--ink-2)",
                                         border: "none",
-                                        borderRadius: 12,
+                                        borderRadius: "var(--r-sm)",
                                         fontSize: 16,
-                                        fontWeight: 500,
+                                        fontWeight: 600,
                                         textDecoration: "none",
-                                        fontFamily: "var(--f-sans)",
+                                        fontFamily: "var(--font-ui)",
                                     }}
                                 >
                                     <Icon name={item.icon} size="md" />
@@ -247,10 +198,10 @@ export function TopAppBar() {
                                                 alignItems: "center",
                                                 justifyContent: "center",
                                                 borderRadius: 999,
-                                                background: "var(--bad)",
+                                                background: "var(--heart)",
                                                 color: "white",
                                                 fontSize: 11,
-                                                fontWeight: 600,
+                                                fontWeight: 700,
                                             }}
                                         >
                                             {incomingRequestCount}
@@ -263,11 +214,10 @@ export function TopAppBar() {
 
                     {/* Profile card in mobile menu */}
                     <div
+                        className="card"
                         style={{
                             marginTop: 24,
                             padding: 16,
-                            background: "var(--bg-2)",
-                            borderRadius: 16,
                             display: "flex",
                             alignItems: "center",
                             gap: 12,
@@ -275,11 +225,17 @@ export function TopAppBar() {
                     >
                         <GeoAvatar seed={displayName} size={48} />
                         <div>
-                            <div style={{ fontWeight: 500, fontSize: 16 }}>{displayName}</div>
-                            <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>
+                            <div style={{ fontWeight: 700, fontSize: 16 }}>{displayName}</div>
+                            <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
                                 Уровень {level}
                             </div>
                         </div>
+                        {streak > 0 && (
+                            <div className="streak-pill" style={{ marginLeft: "auto" }}>
+                                <Icon name="flame" size="sm" />
+                                <span className="tnum">{streak}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

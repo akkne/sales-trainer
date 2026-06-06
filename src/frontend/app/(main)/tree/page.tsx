@@ -48,12 +48,12 @@ function SkillLessonView({
             {/* Skill header */}
             <div
                 style={{
-                    padding: "28px 48px 20px",
+                    padding: "28px clamp(16px, 4vw, 48px) 20px",
                     background: "var(--bg)",
                     borderBottom: "1px solid var(--line)",
                 }}
             >
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                             style={{
@@ -436,15 +436,7 @@ export default function SkillTreePage() {
 
     return (
         <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "300px 1fr 320px",
-                    gap: 0,
-                    height: "calc(100vh - 60px)",
-                }}
-                className="hidden md:grid"
-            >
+            <div className="tree-desktop-grid">
                 {/* LEFT — Skills list */}
                 <aside
                     style={{
