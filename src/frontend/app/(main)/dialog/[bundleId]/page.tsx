@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useDialogBundles, useDialogModes } from "@/features/dialog/hooks/use-dialog";
-import { ModeCard } from "@/features/dialog/components/mode-card";
 import { Icon } from "@/shared/components/icon";
 
 export default function BundleModesPage() {
@@ -18,184 +17,73 @@ export default function BundleModesPage() {
 
     if (isLoading) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--indigo)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            <div className="row center" style={{ minHeight: "60vh" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
             </div>
         );
     }
 
     if (error) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "80px 60px" }}>
-                <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
-                    <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--bad-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-                        <Icon name="close" size="lg" color="var(--bad)" />
+            <div className="page container">
+                <div className="empty" style={{ paddingTop: 100 }}>
+                    <div className="ic" style={{ background: "var(--heart-soft)", color: "var(--heart)" }}>
+                        <Icon name="close" size="lg" />
                     </div>
-                    <h1 style={{ fontSize: 28, fontWeight: 500, marginBottom: 8 }}>Ошибка загрузки</h1>
-                    <p style={{ color: "var(--ink-3)" }}>{error.message}</p>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>Ошибка загрузки</h1>
+                    <p className="small">{error.message}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-            {/* Header */}
-            <div style={{ padding: "40px 60px 32px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
-                <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-                    <button
-                        onClick={() => router.push("/dialog")}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "var(--ink-3)",
-                            fontSize: 13,
-                            marginBottom: 20,
-                            padding: 0,
-                        }}
-                    >
-                        <Icon name="chevron-left" size="sm" />
-                        Назад к диалогам
-                    </button>
+        <div className="page">
+            <div className="container">
+                <button className="back-link" onClick={() => router.push("/dialog")}>
+                    <Icon name="chevron-left" size={20} />
+                    Назад к диалогам
+                </button>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                        {currentBundle && (
-                            <div
-                                style={{
-                                    width: 72,
-                                    height: 72,
-                                    borderRadius: 18,
-                                    background: "var(--indigo-soft)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 36,
-                                }}
-                            >
-                                {currentBundle.iconEmoji || "💬"}
-                            </div>
+                <div className="row gap-4 wrap" style={{ padding: "24px 0 12px" }}>
+                    <span className="itile primary" style={{ width: 72, height: 72, fontSize: 36 }}>
+                        {currentBundle?.iconEmoji || "💬"}
+                    </span>
+                    <div>
+                        <span className="eyebrow">Выбери режим</span>
+                        <h1 className="h1" style={{ margin: "8px 0 6px", fontSize: "clamp(28px, 3.6vw, 44px)" }}>
+                            {currentBundle?.title || "Режимы практики"}
+                        </h1>
+                        {currentBundle?.description && (
+                            <p className="lead">{currentBundle.description}</p>
                         )}
-                        <div>
-                            <div style={{ fontSize: 12, color: "var(--indigo)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 500, marginBottom: 6, fontFamily: "var(--f-mono)" }}>
-                                ВЫБЕРИ РЕЖИМ
-                            </div>
-                            <h1 style={{ margin: 0, fontSize: 36, letterSpacing: -1, fontWeight: 500, lineHeight: 1 }}>
-                                {currentBundle?.title || "Режимы практики"}
-                            </h1>
-                            {currentBundle?.description && (
-                                <p style={{ fontSize: 15, color: "var(--ink-3)", marginTop: 8 }}>
-                                    {currentBundle.description}
-                                </p>
-                            )}
-                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Modes grid */}
-            <div style={{ padding: "32px 60px 80px", maxWidth: 1200, margin: "0 auto" }}>
                 {(!modes || modes.length === 0) ? (
-                    <div style={{ textAlign: "center", padding: "64px 0" }}>
-                        <div
-                            style={{
-                                width: 64,
-                                height: 64,
-                                borderRadius: "50%",
-                                background: "var(--surface)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                margin: "0 auto 16px",
-                            }}
-                        >
-                            <Icon name="message" size="lg" color="var(--ink-3)" />
+                    <div className="empty">
+                        <div className="ic">
+                            <Icon name="message" size="lg" />
                         </div>
-                        <p style={{ fontWeight: 600, marginBottom: 4 }}>Режимы пока не добавлены</p>
-                        <p style={{ fontSize: 14, color: "var(--ink-3)" }}>Администратор ещё не настроил сценарии</p>
+                        <p className="h4" style={{ marginBottom: 4 }}>Режимы пока не добавлены</p>
+                        <p className="small">Администратор ещё не настроил сценарии</p>
                     </div>
                 ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+                    <div className="mode-grid">
                         {modes.map((mode) => (
-                            <div
-                                key={mode.id}
-                                style={{
-                                    background: "var(--surface)",
-                                    border: "1px solid var(--line)",
-                                    borderRadius: 16,
-                                    padding: 20,
-                                    transition: "all 0.2s",
-                                    boxShadow: "var(--sh-1)",
-                                    height: "100%",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: 16,
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.boxShadow = "var(--sh-2)";
-                                    e.currentTarget.style.borderColor = "var(--indigo)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.boxShadow = "var(--sh-1)";
-                                    e.currentTarget.style.borderColor = "var(--line)";
-                                }}
-                            >
-                                <Link
-                                    href={`/dialog/${bundleId}/${mode.id}`}
-                                    style={{ textDecoration: "none", color: "inherit", flex: 1 }}
-                                >
-                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                                        <div>
-                                            <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 6 }}>{mode.title}</div>
-                                            <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4 }}>
-                                                {mode.description}
-                                            </div>
-                                        </div>
-                                        <Icon name="arrow-right" size="sm" color="var(--indigo)" style={{ flexShrink: 0, marginTop: 4 }} />
-                                    </div>
-                                </Link>
-
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                                    <Link
-                                        href={`/dialog/${bundleId}/${mode.id}`}
-                                        style={{
-                                            textDecoration: "none",
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            gap: 6,
-                                            padding: "8px 14px",
-                                            borderRadius: 999,
-                                            background: "var(--surface-2)",
-                                            color: "var(--ink)",
-                                            border: "1px solid var(--line)",
-                                            fontSize: 13,
-                                            fontWeight: 500,
-                                        }}
-                                    >
-                                        <Icon name="message" size="xs" />
+                            <div key={mode.id} className="card card-pad mode-card">
+                                <h3 className="h3">{mode.title}</h3>
+                                <p className="body" style={{ margin: "8px 0 20px", flex: 1 }}>
+                                    {mode.description}
+                                </p>
+                                <div className="row gap-3">
+                                    <Link href={`/dialog/${bundleId}/${mode.id}`} className="btn btn-outline">
+                                        <Icon name="message" size={18} />
                                         Чат
                                     </Link>
                                     {mode.voiceEnabled && (
-                                        <Link
-                                            href={`/dialog/${bundleId}/${mode.id}/voice`}
-                                            style={{
-                                                textDecoration: "none",
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: 6,
-                                                padding: "8px 14px",
-                                                borderRadius: 999,
-                                                background: "var(--olive)",
-                                                color: "var(--bg)",
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                boxShadow: "var(--sh-1)",
-                                            }}
-                                        >
-                                            <Icon name="phone" size="xs" />
+                                        <Link href={`/dialog/${bundleId}/${mode.id}/voice`} className="btn btn-success grow">
+                                            <Icon name="phone" size={18} />
                                             Позвонить
                                         </Link>
                                     )}
@@ -204,6 +92,7 @@ export default function BundleModesPage() {
                         ))}
                     </div>
                 )}
+                <div style={{ height: 60 }} />
             </div>
         </div>
     );

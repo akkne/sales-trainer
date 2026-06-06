@@ -9,7 +9,7 @@ interface ChatInputProps {
     placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Напишите сообщение..." }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Введите сообщение…" }: ChatInputProps) {
     const [inputValue, setInputValue] = useState("");
 
     const handleSubmit = (submitEvent: FormEvent) => {
@@ -24,24 +24,22 @@ export function ChatInput({ onSend, disabled, placeholder = "Напишите с
     const canSend = !disabled && inputValue.trim().length > 0;
 
     return (
-        <form onSubmit={handleSubmit} className="flex gap-3">
+        <form onSubmit={handleSubmit} className="row gap-3" style={{ width: "100%" }}>
             <input
                 type="text"
                 value={inputValue}
                 onChange={(changeEvent) => setInputValue(changeEvent.target.value)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="flex-1 px-4 py-3 bg-surface text-ink placeholder:text-ink-4 rounded-full border border-line focus:border-indigo focus:outline-none focus:ring-2 focus:ring-indigo/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="field grow"
+                style={disabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
             />
             <button
                 type="submit"
                 disabled={!canSend}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                    canSend
-                        ? "bg-ink text-bg active:translate-y-px"
-                        : "bg-surface-2 text-ink-4 cursor-not-allowed"
-                }`}
-                style={canSend ? { boxShadow: "var(--sh-2)" } : undefined}
+                aria-label="Отправить"
+                className={"btn " + (canSend ? "btn-primary" : "btn-soft")}
+                style={{ width: 48, padding: 0, flex: "none", ...(canSend ? {} : { opacity: 0.5, cursor: "not-allowed", boxShadow: "none" }) }}
             >
                 <Icon name="send" size="md" />
             </button>

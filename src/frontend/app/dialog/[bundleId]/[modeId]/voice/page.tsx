@@ -44,15 +44,15 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
         return {
             label: "Готов к звонку",
             hint: "Нажмите «Позвонить», чтобы соединиться с собеседником",
-            ringColor: "var(--line)",
+            ringColor: "var(--line-strong)",
             pulse: false,
         };
     }
     if (callStatus === "dialing" || state === "initializing") {
         return {
-            label: "Соединение...",
+            label: "Соединение…",
             hint: "Гудки. Собеседник вот-вот возьмёт трубку",
-            ringColor: "var(--indigo)",
+            ringColor: "var(--primary)",
             pulse: true,
         };
     }
@@ -60,7 +60,7 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
         return {
             label: "Звонок завершён",
             hint: "Готовим разбор разговора",
-            ringColor: "var(--ink-3)",
+            ringColor: "var(--line-strong)",
             pulse: false,
         };
     }
@@ -69,42 +69,42 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
             return {
                 label: "На связи · слушаю вас",
                 hint: "Говорите свободно — я отвечу, как только сделаете паузу",
-                ringColor: "var(--olive)",
+                ringColor: "var(--success)",
                 pulse: false,
             };
         case "speaking":
             return {
                 label: "Слышу вас",
                 hint: "Продолжайте — фиксирую реплику",
-                ringColor: "var(--olive)",
+                ringColor: "var(--success)",
                 pulse: true,
             };
         case "processing":
             return {
-                label: "Думаю над ответом...",
+                label: "Думаю над ответом…",
                 hint: "Готовлю реплику собеседника",
-                ringColor: "var(--clay)",
+                ringColor: "var(--amber)",
                 pulse: true,
             };
         case "playing":
             return {
                 label: "Собеседник говорит",
                 hint: "Прерывайте, когда захотите ответить",
-                ringColor: "var(--rust)",
+                ringColor: "var(--flame)",
                 pulse: true,
             };
         case "error":
             return {
                 label: "Помехи на линии",
                 hint: "Попробуйте позвонить ещё раз",
-                ringColor: "var(--bad)",
+                ringColor: "var(--heart)",
                 pulse: false,
             };
         default:
             return {
                 label: "На линии",
                 hint: "",
-                ringColor: "var(--indigo)",
+                ringColor: "var(--primary)",
                 pulse: false,
             };
     }
@@ -354,338 +354,152 @@ export default function VoiceCallPage() {
 
     if (!isVoiceAvailable && currentMode) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-                <div style={{ maxWidth: 460, width: "100%", textAlign: "center", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 24, padding: 40, boxShadow: "var(--sh-1)" }}>
-                    <div style={{ width: 72, height: 72, borderRadius: 18, background: "var(--bad-soft)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-                        <Icon name="mic" size="lg" color="var(--bad)" />
+            <div className="voice">
+                <div className="row center grow" style={{ padding: 40 }}>
+                    <div className="card fade-up" style={{ maxWidth: 460, width: "100%", textAlign: "center", padding: 40 }}>
+                        <span className="itile heart" style={{ width: 72, height: 72, margin: "0 auto 20px" }}>
+                            <Icon name="mic" size="lg" />
+                        </span>
+                        <h1 className="h3" style={{ marginBottom: 8 }}>Голосовой режим недоступен</h1>
+                        <p className="small" style={{ marginBottom: 24 }}>
+                            Этот сценарий не поддерживает звонки, либо браузер не умеет распознавать речь.
+                            Попробуйте Chrome или Edge на десктопе.
+                        </p>
+                        <button className="btn btn-dark" onClick={handleClose}>
+                            Назад
+                        </button>
                     </div>
-                    <h1 style={{ fontSize: 24, fontWeight: 500, marginBottom: 8 }}>Голосовой режим недоступен</h1>
-                    <p style={{ fontSize: 14, color: "var(--ink-3)", marginBottom: 24 }}>
-                        Этот сценарий не поддерживает звонки, либо браузер не умеет распознавать речь.
-                        Попробуйте Chrome или Edge на десктопе.
-                    </p>
-                    <button
-                        onClick={handleClose}
-                        style={{ padding: "12px 24px", borderRadius: 12, background: "var(--ink)", color: "var(--bg)", border: "none", cursor: "pointer", fontWeight: 500 }}
-                    >
-                        Назад
-                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        <div className="voice">
             {/* Top bar */}
-            <header
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "20px 32px",
-                    borderBottom: "1px solid var(--line)",
-                    background: "var(--surface-2)",
-                }}
-            >
-                <button
-                    onClick={handleClose}
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "var(--ink-3)",
-                        fontSize: 13,
-                        padding: 0,
-                    }}
-                >
+            <div className="voice-top">
+                <button className="back-link plain" onClick={handleClose}>
                     <Icon name="chevron-left" size="sm" />
                     К сценариям
                 </button>
 
-                <div
-                    style={{
-                        fontFamily: "var(--f-mono)",
-                        fontSize: 13,
-                        color: callStatus === "connected" ? "var(--olive)" : "var(--ink-3)",
-                        letterSpacing: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                    }}
-                >
+                <div className="voice-status" style={{ color: callStatus === "connected" ? "var(--success)" : "var(--ink-2)" }}>
                     <span
+                        className="vdot"
                         style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: callStatus === "connected" ? "var(--olive)" : "var(--ink-3)",
-                            display: "inline-block",
-                            animation: callStatus === "connected" ? "pulse 1.4s ease-in-out infinite" : "none",
+                            background: callStatus === "connected" ? "var(--success)" : "var(--ink-4)",
+                            animation: callStatus === "connected" ? "blink 1.4s ease-in-out infinite" : "none",
                         }}
                     />
-                    {callStatus === "idle" && "ОЖИДАНИЕ"}
-                    {callStatus === "dialing" && "ВЫЗОВ"}
-                    {callStatus === "connected" && formatTime(sessionTimer)}
-                    {callStatus === "ended" && "ЗАВЕРШЁН"}
+                    <span className="num">
+                        {callStatus === "idle" && "ОЖИДАНИЕ"}
+                        {callStatus === "dialing" && "ВЫЗОВ"}
+                        {callStatus === "connected" && formatTime(sessionTimer)}
+                        {callStatus === "ended" && "ЗАВЕРШЁН"}
+                    </span>
                 </div>
 
                 <div style={{ minWidth: 100, display: "flex", justifyContent: "flex-end" }}>
                     {usage && usage.dailyLimitSeconds > 0 && (
                         <div
-                            style={{
-                                fontFamily: "var(--f-mono)",
-                                fontSize: 11,
-                                color: usage.dailyExceeded ? "var(--bad)" : "var(--ink-3)",
-                                letterSpacing: 1,
-                                textAlign: "right",
-                                lineHeight: 1.3,
-                            }}
+                            className="voice-quota num"
+                            style={usage.dailyExceeded ? { color: "var(--heart)" } : undefined}
                             title={`Сегодня: ${Math.round(usage.dailyUsedSeconds / 60)} / ${Math.round(usage.dailyLimitSeconds / 60)} мин · В месяце: ${Math.round(usage.monthlyUsedSeconds / 60)} / ${Math.round(usage.monthlyLimitSeconds / 60)} мин`}
                         >
-                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН
-                            <br />
-                            <span style={{ opacity: 0.6 }}>СЕГОДНЯ</span>
+                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН СЕГОДНЯ
                         </div>
                     )}
                 </div>
-            </header>
+            </div>
 
-            {/* Call body */}
-            <main
-                style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "40px 24px 60px",
-                    gap: 28,
-                    position: "relative",
-                }}
-            >
-                {/* Persona block */}
-                <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {info.pulse && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                inset: -24,
-                                borderRadius: "50%",
-                                border: `2px solid ${info.ringColor}`,
-                                opacity: 0.5,
-                                animation: "ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite",
-                            }}
-                        />
-                    )}
-                    <div
-                        style={{
-                            padding: 8,
-                            borderRadius: "50%",
-                            background: "var(--surface)",
-                            border: `3px solid ${info.ringColor}`,
-                            boxShadow: "var(--sh-2)",
-                            transition: "border-color 0.3s ease",
-                        }}
-                    >
-                        <GeoAvatar seed={personaSeed} size={168} style={{ borderRadius: "50%" }} />
-                    </div>
+            {/* Call stage */}
+            <div className="voice-stage">
+                <div
+                    className={"voice-avatar" + (info.pulse ? " pulse" : "")}
+                    style={{ "--ring": info.ringColor } as React.CSSProperties}
+                >
+                    <div className="va-ring" style={{ borderColor: info.ringColor }} />
+                    <GeoAvatar seed={personaSeed} size={156} style={{ borderRadius: "50%" }} />
                 </div>
 
-                <div style={{ textAlign: "center", maxWidth: 480 }}>
-                    <div style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, fontFamily: "var(--f-mono)" }}>
-                        {currentBundle?.title ?? "СЦЕНАРИЙ"}
-                    </div>
-                    <h1 style={{ fontSize: 32, letterSpacing: -1, fontWeight: 500, lineHeight: 1.1, margin: 0 }}>
-                        {currentMode?.title ?? "Собеседник"}
-                    </h1>
-                    {currentMode?.description && (
-                        <p style={{ fontSize: 14, color: "var(--ink-3)", marginTop: 10, lineHeight: 1.5 }}>
-                            {currentMode.description}
-                        </p>
-                    )}
-                </div>
+                <span className="eyebrow">{currentBundle?.title ?? "Сценарий"}</span>
+                <h1 className="h1" style={{ margin: "10px 0 6px", fontSize: "clamp(28px, 3.6vw, 44px)" }}>
+                    {currentMode?.title ?? "Собеседник"}
+                </h1>
+                {currentMode?.description && (
+                    <p className="lead" style={{ maxWidth: 480 }}>{currentMode.description}</p>
+                )}
 
                 {/* Live subtitles */}
                 {(subtitles.length > 0 || (isCallActive && currentTranscript)) && (
-                    <div
-                        ref={subtitleScrollRef}
-                        style={{
-                            width: "100%",
-                            maxWidth: 560,
-                            maxHeight: "26vh",
-                            overflowY: "auto",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 10,
-                            padding: "4px 8px",
-                        }}
-                    >
+                    <div className="transcript" ref={subtitleScrollRef}>
                         {subtitles.map((entry, index) => (
                             <div
                                 key={index}
-                                style={{
-                                    alignSelf: entry.role === "user" ? "flex-end" : "flex-start",
-                                    maxWidth: "85%",
-                                }}
+                                className={"tr-bubble " + (entry.role === "user" ? "user" : "ai") + (entry.interrupted ? " interim" : "")}
                             >
-                                <div
-                                    style={{
-                                        fontSize: 10,
-                                        fontFamily: "var(--f-mono)",
-                                        letterSpacing: 1,
-                                        textTransform: "uppercase",
-                                        color: "var(--ink-3)",
-                                        marginBottom: 2,
-                                        textAlign: entry.role === "user" ? "right" : "left",
-                                    }}
-                                >
+                                <span className="tr-role">
                                     {entry.role === "user" ? "Вы" : currentMode?.title ?? "Собеседник"}
                                     {entry.interrupted && (
-                                        <span style={{ color: "var(--clay)", marginLeft: 6 }}>· прервано</span>
+                                        <span style={{ color: "var(--amber)", marginLeft: 6 }}>· прервано</span>
                                     )}
-                                </div>
-                                <div
-                                    style={{
-                                        background: entry.role === "user" ? "var(--surface-2)" : "var(--surface)",
-                                        border: entry.interrupted ? "1px dashed var(--line-2)" : "1px solid var(--line)",
-                                        borderRadius: 12,
-                                        padding: "8px 12px",
-                                        fontSize: 14,
-                                        lineHeight: 1.45,
-                                        color: "var(--ink)",
-                                        opacity: entry.interrupted ? 0.6 : 1,
-                                        transition: "opacity 0.3s ease",
-                                    }}
-                                >
-                                    {entry.text}
-                                </div>
+                                </span>
+                                <p>{entry.text}</p>
                             </div>
                         ))}
                         {/* Interim line: what the recognizer hears right now, before the phrase is committed */}
                         {isCallActive &&
                             currentTranscript &&
                             (voiceState === "speaking" || voiceState === "listening") && (
-                                <div style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
-                                    <div
-                                        style={{
-                                            background: "var(--surface-2)",
-                                            border: "1px dashed var(--line)",
-                                            borderRadius: 12,
-                                            padding: "8px 12px",
-                                            fontSize: 14,
-                                            lineHeight: 1.45,
-                                            color: "var(--ink-3)",
-                                            fontStyle: "italic",
-                                        }}
-                                    >
-                                        {currentTranscript}
-                                    </div>
+                                <div className="tr-bubble user interim">
+                                    <span className="tr-role">Вы</span>
+                                    <p>{currentTranscript}</p>
                                 </div>
                             )}
                     </div>
                 )}
 
                 {/* State pill */}
-                <div
-                    style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "10px 18px",
-                        borderRadius: 999,
-                        background: "var(--surface)",
-                        border: "1px solid var(--line)",
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: "var(--ink)",
-                    }}
-                >
-                    <span
-                        style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: info.ringColor,
-                            animation: info.pulse ? "pulse 1.2s ease-in-out infinite" : "none",
-                        }}
-                    />
+                <div className="state-pill" style={{ marginTop: subtitles.length > 0 ? 0 : 24 }}>
+                    <span className="pdot" style={{ background: info.ringColor }} />
                     {info.label}
                 </div>
-                <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", maxWidth: 380, margin: 0, minHeight: 38 }}>
-                    {info.hint}
-                </p>
+                <p className="small voice-hint" style={{ minHeight: 38 }}>{info.hint}</p>
 
                 {error && (
-                    <div
-                        style={{
-                            background: "var(--bad-soft)",
-                            color: "var(--bad)",
-                            padding: "10px 16px",
-                            borderRadius: 12,
-                            fontSize: 13,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                        }}
-                    >
+                    <span className="badge" style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "10px 16px", fontSize: 13 }}>
                         <Icon name="warning" size="sm" />
                         {error}
-                    </div>
+                    </span>
                 )}
 
                 {isCompleting && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink-3)", fontSize: 13 }}>
+                    <div className="row gap-2 small" style={{ marginTop: 10 }}>
                         <span
                             style={{
                                 width: 14,
                                 height: 14,
                                 borderRadius: "50%",
-                                border: "2px solid var(--indigo)",
+                                border: "2px solid var(--primary)",
                                 borderTopColor: "transparent",
                                 animation: "spin 0.8s linear infinite",
+                                display: "inline-block",
                             }}
                         />
-                        Готовим разбор...
+                        Готовим разбор…
                     </div>
                 )}
-            </main>
+            </div>
 
             {/* Call controls */}
-            <footer
-                style={{
-                    padding: "24px 32px 40px",
-                    borderTop: "1px solid var(--line)",
-                    background: "var(--surface-2)",
-                    display: "flex",
-                    justifyContent: "center",
-                    gap: 24,
-                }}
-            >
+            <div className="voice-foot">
                 {!isCallActive && !feedback && (
                     <button
+                        className="btn btn-success btn-lg voice-cta"
                         onClick={handlePickUp}
                         disabled={isCompleting}
                         aria-label="Позвонить"
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            padding: "16px 36px",
-                            borderRadius: 999,
-                            background: "var(--olive)",
-                            color: "var(--bg)",
-                            border: "none",
-                            cursor: isCompleting ? "not-allowed" : "pointer",
-                            fontSize: 16,
-                            fontWeight: 600,
-                            boxShadow: "var(--sh-2)",
-                            opacity: isCompleting ? 0.5 : 1,
-                            transition: "transform 0.15s ease",
-                        }}
+                        style={isCompleting ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                     >
                         <Icon name="phone" size="md" />
                         {callStatus === "ended" ? "Позвонить ещё раз" : "Позвонить"}
@@ -693,64 +507,20 @@ export default function VoiceCallPage() {
                 )}
 
                 {isCallActive && (
-                    <button
-                        onClick={handleHangUp}
-                        aria-label="Положить трубку"
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            padding: "16px 36px",
-                            borderRadius: 999,
-                            background: "var(--bad)",
-                            color: "#fff",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: 16,
-                            fontWeight: 600,
-                            boxShadow: "var(--sh-2)",
-                        }}
-                    >
+                    <button className="btn btn-danger btn-lg voice-cta" onClick={handleHangUp} aria-label="Положить трубку">
                         <Icon name="phone" size="md" style={{ transform: "rotate(135deg)" }} />
                         Положить трубку
                     </button>
                 )}
 
                 {feedback && (
-                    <button
-                        onClick={handleCloseFeedback}
-                        style={{
-                            padding: "16px 36px",
-                            borderRadius: 999,
-                            background: "var(--indigo)",
-                            color: "var(--bg)",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: 16,
-                            fontWeight: 600,
-                            boxShadow: "var(--sh-2)",
-                        }}
-                    >
+                    <button className="btn btn-primary btn-lg voice-cta" onClick={handleCloseFeedback}>
                         Закрыть разбор
                     </button>
                 )}
-            </footer>
+            </div>
 
             {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />}
-
-            <style jsx>{`
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; transform: scale(1); }
-                    50% { opacity: 0.55; transform: scale(0.85); }
-                }
-                @keyframes ping {
-                    0% { transform: scale(1); opacity: 0.7; }
-                    80%, 100% { transform: scale(1.4); opacity: 0; }
-                }
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
         </div>
     );
 }

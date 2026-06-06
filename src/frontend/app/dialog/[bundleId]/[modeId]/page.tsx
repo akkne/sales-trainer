@@ -343,7 +343,7 @@ export default function ChatPage() {
 
     if (isLoading && !sessionId && !isInitialized) {
         return (
-            <div className="flex h-screen bg-surface">
+            <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
                 {showSidebar && (
                     <SessionHistorySidebar
                         sessions={filteredSessions}
@@ -354,27 +354,21 @@ export default function ChatPage() {
                         onClose={handleClose}
                     />
                 )}
-                <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface">
-                        <button
-                            onClick={() => setShowSidebar(!showSidebar)}
-                            className="text-ink-3 hover:text-ink transition-colors md:hidden"
-                        >
-                            <Icon name="grid" size="md" />
-                        </button>
-                        <h1 className="font-bold text-ink">Загрузка...</h1>
-                    </header>
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-full border-4 border-indigo border-t-transparent animate-spin" />
+                <main className="dc-main">
+                    <div className="dc-head">
+                        <h1 className="h4">Загрузка...</h1>
                     </div>
-                </div>
+                    <div className="row center grow">
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                    </div>
+                </main>
             </div>
         );
     }
 
     if (error && !sessionId) {
         return (
-            <div className="flex h-screen bg-surface">
+            <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
                 {showSidebar && (
                     <SessionHistorySidebar
                         sessions={filteredSessions}
@@ -385,29 +379,28 @@ export default function ChatPage() {
                         onClose={handleClose}
                     />
                 )}
-                <div className="flex-1 flex flex-col">
-                    <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface">
-                        <h1 className="font-bold text-ink">Ошибка</h1>
-                    </header>
-                    <div className="flex-1 flex flex-col items-center justify-center p-4">
-                        <div className="w-16 h-16 rounded-full bg-bad-soft flex items-center justify-center mb-4">
-                            <Icon name="warning" size="xl" className="text-bad" />
-                        </div>
-                        <p className="text-bad text-center mb-6 font-medium">{error}</p>
-                        <button
-                            onClick={handleClose}
-                            className="px-6 py-3 bg-bg-2 text-ink font-semibold rounded-full hover:bg-surface-2 transition-colors"
-                        >
-                            Вернуться
-                        </button>
+                <main className="dc-main">
+                    <div className="dc-head">
+                        <h1 className="h4">Ошибка</h1>
                     </div>
-                </div>
+                    <div className="col center grow" style={{ padding: 16 }}>
+                        <div className="empty" style={{ padding: "20px 0 0" }}>
+                            <div className="ic" style={{ background: "var(--heart-soft)", color: "var(--heart)" }}>
+                                <Icon name="warning" size="xl" />
+                            </div>
+                            <p className="body" style={{ color: "var(--heart)", fontWeight: 600, marginBottom: 20 }}>{error}</p>
+                            <button className="btn btn-outline" onClick={handleClose}>
+                                Вернуться
+                            </button>
+                        </div>
+                    </div>
+                </main>
             </div>
         );
     }
 
     return (
-        <div className="flex h-screen bg-surface">
+        <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
             {showSidebar && (
                 <SessionHistorySidebar
                     sessions={filteredSessions}
@@ -419,46 +412,44 @@ export default function ChatPage() {
                 />
             )}
 
-            <div className="flex-1 flex flex-col">
+            <main className="dc-main">
                 {/* Header */}
-                <header className="flex items-center gap-4 px-4 py-3 border-b border-line bg-surface flex-shrink-0">
+                <div className="dc-head">
                     <button
+                        className="icon-btn"
                         onClick={() => setShowSidebar(!showSidebar)}
-                        className="text-ink-3 hover:text-ink transition-colors"
+                        aria-label="История диалогов"
+                        style={{ flex: "none" }}
                     >
                         <Icon name="grid" size="md" />
                     </button>
 
-                    {/* Persona card */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-indigo-soft flex items-center justify-center shrink-0">
-                            <Icon name="sparkle" size="md" className="text-indigo" />
+                    <span className="itile primary" style={{ width: 42, height: 42 }}>
+                        <Icon name="sparkle" size={21} />
+                    </span>
+                    <div className="grow" style={{ minWidth: 0 }}>
+                        <div className="h4" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {currentMode?.title || "AI Собеседник"}
                         </div>
-                        <div className="min-w-0">
-                            <h1 className="font-semibold text-ink truncate text-sm">
-                                {currentMode?.title || "AI Собеседник"}
-                            </h1>
-                            <p className="text-xs text-ink-3 truncate">
-                                {currentBundle?.title || "Тренировка диалога"}
-                            </p>
+                        <div className="small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {currentBundle?.title || "Тренировка диалога"} · текстовый режим
                         </div>
                     </div>
 
                     {/* Timer */}
                     {sessionId && (
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-2 text-ink-3">
+                        <span className="chip num" style={{ flex: "none" }}>
                             <Icon name="clock" size="sm" />
-                            <span className="text-sm font-mono font-medium tabular-nums">
-                                {formatTime(sessionTimer)}
-                            </span>
-                        </div>
+                            {formatTime(sessionTimer)}
+                        </span>
                     )}
 
                     {/* End session button */}
                     {sessionId && !isEnded && !feedback && (
                         <button
+                            className="btn btn-sm"
                             onClick={handleEndSession}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bad-soft text-bad text-sm font-medium hover:opacity-90 transition-colors"
+                            style={{ background: "var(--heart-soft)", color: "var(--heart)", flex: "none" }}
                         >
                             <Icon name="close" size="sm" />
                             Завершить
@@ -466,27 +457,24 @@ export default function ChatPage() {
                     )}
 
                     {/* Close button */}
-                    <button
-                        onClick={handleClose}
-                        className="p-2 rounded-full hover:bg-bg-2 transition-colors"
-                    >
-                        <Icon name="close" size="md" className="text-ink-3" />
+                    <button className="icon-btn" onClick={handleClose} aria-label="Закрыть" style={{ flex: "none" }}>
+                        <Icon name="close" size="md" />
                     </button>
-                </header>
+                </div>
 
                 {/* Status bar */}
                 {(isSending || isCompleting || voiceState !== "idle") && (
-                    <div className="px-4 py-2 bg-bg-2 border-b border-line">
-                        <p className="text-sm text-ink-3 text-center flex items-center justify-center gap-2">
+                    <div style={{ padding: "8px 16px", background: "var(--surface-2)", borderBottom: "1px solid var(--line)" }}>
+                        <p className="small row center gap-2" style={{ margin: 0 }}>
                             {isCompleting && (
                                 <>
-                                    <span className="w-4 h-4 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
+                                    <span style={{ width: 16, height: 16, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
                                     Формируем обратную связь...
                                 </>
                             )}
                             {isSending && !isCompleting && (
                                 <>
-                                    <span className="w-4 h-4 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
+                                    <span style={{ width: 16, height: 16, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
                                     AI думает...
                                 </>
                             )}
@@ -499,72 +487,67 @@ export default function ChatPage() {
                 )}
 
                 {/* Messages area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {!sessionId && messages.length === 0 && (
-                        <div className="flex-1 flex items-center justify-center h-full">
-                            <div className="text-center max-w-sm">
-                                <div className="w-16 h-16 rounded-full bg-indigo-soft flex items-center justify-center mx-auto mb-4">
-                                    <Icon name="phone" size="xl" className="text-indigo" />
+                <div className="dc-thread">
+                    <div className="dc-thread-inner">
+                        {!sessionId && messages.length === 0 && (
+                            <div className="empty" style={{ padding: "80px 20px" }}>
+                                <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                                    <Icon name="phone" size="xl" />
                                 </div>
-                                <p className="font-semibold text-ink mb-2">Начните разговор</p>
-                                <p className="text-sm text-ink-3">
+                                <p className="h4" style={{ marginBottom: 8 }}>Начните разговор</p>
+                                <p className="small" style={{ maxWidth: 320, margin: "0 auto" }}>
                                     Представьтесь и скажите свой опеннер — вы звоните клиенту первым
                                 </p>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {messages.map((message, messageIndex) => (
-                        <ChatMessage key={messageIndex} message={message} />
-                    ))}
+                        {messages.map((message, messageIndex) => (
+                            <ChatMessage key={messageIndex} message={message} />
+                        ))}
 
-                    {isSending && (
-                        <div className="flex justify-start">
-                            <div className="w-8 h-8 rounded-full bg-indigo-soft flex items-center justify-center mr-2">
-                                <Icon name="sparkle" size="sm" className="text-indigo" />
-                            </div>
-                            <div className="bg-bg-2 px-4 py-3 rounded-2xl rounded-tl-sm">
-                                <div className="flex gap-1">
-                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce" />
-                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce [animation-delay:0.1s]" />
-                                    <span className="w-2 h-2 bg-ink-4 rounded-full animate-bounce [animation-delay:0.2s]" />
+                        {isSending && (
+                            <div className="dc-msg ai">
+                                <span className="itile primary" style={{ width: 34, height: 34, borderRadius: "50%" }}>
+                                    <Icon name="sparkle" size="sm" />
+                                </span>
+                                <div className="dc-bubble typing">
+                                    <span />
+                                    <span />
+                                    <span />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {error && sessionId && (
-                        <div className="flex justify-center">
-                            <div className="bg-bad-soft text-bad text-sm px-4 py-2 rounded-full flex items-center gap-2">
-                                <Icon name="warning" size="sm" />
-                                {error}
+                        {error && sessionId && (
+                            <div className="row center">
+                                <span className="badge" style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "8px 16px", fontSize: 13 }}>
+                                    <Icon name="warning" size="sm" />
+                                    {error}
+                                </span>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    <div ref={messagesEndRef} />
+                        <div ref={messagesEndRef} />
+                    </div>
                 </div>
 
                 {/* Input area */}
-                <div className="flex-shrink-0 p-4 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
+                <div className="dc-input" style={{ flexDirection: "column", alignItems: "stretch", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
                     {voiceError && (
-                        <div className="text-center text-bad text-sm mb-3 flex items-center justify-center gap-2">
+                        <div className="row center gap-2 small" style={{ color: "var(--heart)", marginBottom: 4 }}>
                             <Icon name="warning" size="sm" />
                             {voiceError}
                         </div>
                     )}
 
                     {currentTranscript && (
-                        <div className="text-center text-ink-3 text-sm mb-3 italic bg-bg-2 rounded-full px-4 py-2">
-                            "{currentTranscript}"
+                        <div className="small" style={{ textAlign: "center", fontStyle: "italic", background: "var(--surface-2)", borderRadius: 999, padding: "8px 16px", marginBottom: 4 }}>
+                            «{currentTranscript}»
                         </div>
                     )}
 
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
-                        <button
-                            onClick={handleShowFeedback}
-                            className="w-full py-3 mb-3 bg-ink text-bg font-bold rounded-full active:shadow-none active:translate-y-1 transition-colors flex items-center justify-center gap-2"
-                        >
+                        <button className="btn btn-dark btn-block" onClick={handleShowFeedback} style={{ marginBottom: 4 }}>
                             <Icon name="book" size="sm" />
                             Показать обратную связь
                         </button>
@@ -572,7 +555,7 @@ export default function ChatPage() {
 
                     {/* Voice mode controls */}
                     {isVoiceMode && !isEnded && !feedback ? (
-                        <div className="flex flex-col items-center gap-4">
+                        <div className="col center gap-4">
                             <VoiceMicButton
                                 state={voiceState}
                                 isAvailable={isVoiceAvailable}
@@ -585,11 +568,11 @@ export default function ChatPage() {
                         <ChatInput
                             onSend={handleSendMessage}
                             disabled={isSending || isCompleting || isEnded || !!feedback}
-                            placeholder={isEnded || feedback ? "Диалог завершён" : "Введите сообщение..."}
+                            placeholder={isEnded || feedback ? "Диалог завершён" : "Введите сообщение…"}
                         />
                     )}
                 </div>
-            </div>
+            </main>
 
             {feedback && (
                 <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />

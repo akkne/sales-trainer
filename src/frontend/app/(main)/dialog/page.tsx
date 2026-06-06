@@ -1,7 +1,6 @@
 "use client";
 
 import { useDialogBundles } from "@/features/dialog/hooks/use-dialog";
-import { BundleCard } from "@/features/dialog/components/bundle-card";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
 import { Skeleton, GeoAvatar, StatTile, ErrorState } from "@/shared/components";
@@ -12,18 +11,18 @@ export default function DialogPage() {
 
     if (isLoading) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-                <div style={{ padding: "40px 60px 32px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
-                    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-                        <Skeleton width={220} height={14} />
-                        <Skeleton width={420} height={44} style={{ marginTop: 14 }} />
-                        <Skeleton width={360} height={16} style={{ marginTop: 12 }} />
+            <div className="page">
+                <div className="container">
+                    <div className="hero-head">
+                        <div className="hh-left">
+                            <Skeleton width={220} height={14} />
+                            <Skeleton width={420} height={44} style={{ marginTop: 14 }} />
+                            <Skeleton width={360} height={16} style={{ marginTop: 12 }} />
+                        </div>
                     </div>
-                </div>
-                <div style={{ padding: "32px 60px", maxWidth: 1200, margin: "0 auto" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                    <div className="bundle-grid">
                         {[1, 2, 3, 4].map((i) => (
-                            <Skeleton key={i} height={140} rounded={20} />
+                            <Skeleton key={i} height={180} rounded={16} />
                         ))}
                     </div>
                 </div>
@@ -33,7 +32,7 @@ export default function DialogPage() {
 
     if (error) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "60px 24px" }}>
+            <div className="page" style={{ padding: "60px 24px" }}>
                 <ErrorState
                     title="Ошибка загрузки"
                     message={error.message}
@@ -45,133 +44,79 @@ export default function DialogPage() {
 
     if (!bundles || bundles.length === 0) {
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "80px 60px" }}>
-                <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
-                    <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-                        <Icon name="message" size="lg" color="var(--ink-3)" />
+            <div className="page container">
+                <div className="empty" style={{ paddingTop: 120 }}>
+                    <div className="ic">
+                        <Icon name="message" size="lg" />
                     </div>
-                    <h1 style={{ fontSize: 28, fontWeight: 500, marginBottom: 8 }}>Практика диалогов пока недоступна</h1>
-                    <p style={{ color: "var(--ink-3)" }}>Функция находится в разработке или не настроена</p>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>Практика диалогов пока недоступна</h1>
+                    <p className="small">Функция находится в разработке или не настроена</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-            {/* Hero header */}
-            <div style={{ padding: "40px 60px 32px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 32, maxWidth: 1200, margin: "0 auto" }}>
-                    <div>
-                        <div style={{ fontSize: 12, color: "var(--indigo)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 500, marginBottom: 10, fontFamily: "var(--f-mono)" }}>
-                            AI ДИАЛОГ · {bundles.length} МОДУЛЕЙ
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: 48, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1 }}>
-                            Мастерство разговора.
+        <div className="page">
+            <div className="container">
+                {/* Hero header */}
+                <div className="hero-head">
+                    <div className="hh-left fade-up">
+                        <span className="eyebrow">
+                            AI Диалог<span className="dot">·</span>
+                            <span>{bundles.length} {bundles.length === 1 ? "модуль" : bundles.length < 5 ? "модуля" : "модулей"}</span>
+                        </span>
+                        <h1 className="h1 hh-title">
+                            Мастерство <span className="grad-text">разговора</span>.
                         </h1>
-                        <p style={{ fontSize: 16, color: "var(--ink-3)", marginTop: 10, maxWidth: 520 }}>
-                            Интерактивные сценарии для отработки техник продаж. AI-клиент реагирует как настоящий.
+                        <p className="lead">
+                            Интерактивные сценарии для отработки техник продаж. AI-клиент реагирует
+                            как настоящий — спорит, сомневается, перебивает.
                         </p>
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                        <StatTile big label="Диалогов" value="—" icon={<Icon name="message" size="xs" />} tone="indigo" />
-                        <StatTile big label="Средний балл" value="—" unit="/10" icon={<Icon name="star" size="xs" />} tone="rust" />
+                    <div className="hero-stats fade-up">
+                        <StatTile label="Диалогов" value="—" icon={<Icon name="message" size="xs" />} tone="primary" />
+                        <StatTile label="Средний балл" value="—" unit="/10" icon={<Icon name="star" size="xs" />} tone="amber" />
                     </div>
                 </div>
-            </div>
 
-            {/* Bundles grid */}
-            <div style={{ padding: "32px 60px", maxWidth: 1200, margin: "0 auto" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                {/* Bundles grid */}
+                <div className="bundle-grid">
                     {bundles.map((bundle) => (
-                        <Link key={bundle.id} href={`/dialog/${bundle.id}`} style={{ textDecoration: "none" }}>
-                            <div
-                                style={{
-                                    background: "var(--surface)",
-                                    border: "1px solid var(--line)",
-                                    borderRadius: 20,
-                                    padding: 24,
-                                    cursor: "pointer",
-                                    transition: "all 0.2s",
-                                    boxShadow: "var(--sh-1)",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.boxShadow = "var(--sh-2)";
-                                    e.currentTarget.style.borderColor = "var(--indigo)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.boxShadow = "var(--sh-1)";
-                                    e.currentTarget.style.borderColor = "var(--line)";
-                                }}
-                            >
-                                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-                                    <div
-                                        style={{
-                                            width: 56,
-                                            height: 56,
-                                            borderRadius: 14,
-                                            background: "var(--indigo-soft)",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            fontSize: 28,
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        {bundle.iconEmoji || "💬"}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>{bundle.title}</div>
-                                        <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4 }}>
-                                            {bundle.description}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                                    <Icon name="arrow-right" size="sm" color="var(--indigo)" />
+                        <Link key={bundle.id} href={`/dialog/${bundle.id}`} style={{ textDecoration: "none", color: "inherit", display: "flex" }}>
+                            <div className="card card-pad lift bundle-card" style={{ flex: 1 }}>
+                                <span className="itile primary" style={{ width: 56, height: 56, fontSize: 28 }}>
+                                    {bundle.iconEmoji || "💬"}
+                                </span>
+                                <h3 className="h3" style={{ margin: "16px 0 8px" }}>{bundle.title}</h3>
+                                <p className="body" style={{ flex: 1 }}>{bundle.description}</p>
+                                <div className="row between" style={{ marginTop: 16 }}>
+                                    <span className="chip">режимы внутри</span>
+                                    <span className="row gap-1" style={{ color: "var(--primary)", fontWeight: 700, fontSize: 14 }}>
+                                        Открыть <Icon name="arrow-right" size={18} />
+                                    </span>
                                 </div>
                             </div>
                         </Link>
                     ))}
                 </div>
-            </div>
 
-            {/* NPC Mentor card */}
-            <div style={{ padding: "0 60px 80px", maxWidth: 1200, margin: "0 auto" }}>
-                <div
-                    style={{
-                        background: "var(--ink)",
-                        color: "var(--bg)",
-                        borderRadius: 20,
-                        padding: 32,
-                        display: "flex",
-                        gap: 32,
-                        alignItems: "center",
-                        position: "relative",
-                        overflow: "hidden",
-                    }}
-                >
-                    <div style={{ position: "absolute", top: -40, right: -40, width: 200, height: 200, borderRadius: "50%", background: "var(--rust)", opacity: 0.2 }} />
-
-                    <div style={{ display: "flex", gap: 16, alignItems: "center", position: "relative" }}>
-                        <GeoAvatar seed="sergey" size={80} />
-                        <div>
-                            <div style={{ fontSize: 24, fontWeight: 500 }}>Skeptic Sergey</div>
-                            <div style={{ fontSize: 12, fontFamily: "var(--f-mono)", color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: 1 }}>
-                                VP · возражения
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ flex: 1, position: "relative" }}>
-                        <p style={{ fontSize: 15, color: "var(--ink-2)", lineHeight: 1.5, marginBottom: 16 }}>
+                {/* NPC Mentor card */}
+                <div className="mentor-card">
+                    <div className="mentor-tex" />
+                    <GeoAvatar seed="sergey" size={84} />
+                    <div className="grow" style={{ position: "relative" }}>
+                        <h3 className="h3" style={{ color: "#fff" }}>Skeptic Sergey</h3>
+                        <span className="eyebrow" style={{ color: "var(--violet)" }}>VP · возражения</span>
+                        <p className="body" style={{ color: "#cbd5e1", margin: "10px 0 0", maxWidth: 560 }}>
                             «Хочешь, позвоню и попробую развалить твою лучшую продажу? Пять минут на подготовку.»
                         </p>
-                        <Button variant="accent" size="lg" iconRightName="phone">
-                            CHALLENGE
-                        </Button>
                     </div>
+                    <Button variant="accent" size="lg" iconRightName="phone">
+                        CHALLENGE
+                    </Button>
                 </div>
+                <div style={{ height: 60 }} />
             </div>
         </div>
     );

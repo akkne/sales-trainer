@@ -70,83 +70,66 @@ export function SessionHistorySidebar({
 
     return (
         <>
-            <aside className="w-64 bg-surface border-r border-line flex flex-col h-full">
-                <div className="p-3 border-b border-line flex gap-2">
-                    <button
-                        onClick={onClose}
-                        className="p-2 text-ink-3 hover:text-ink hover:bg-bg-2 rounded-xl transition-colors"
-                        aria-label="Закрыть"
-                    >
-                        <Icon name="close" size="md" />
-                    </button>
-                    <button
-                        onClick={onNewChat}
-                        className="flex-1 py-2.5 px-4 bg-ink text-bg font-semibold rounded-full active:translate-y-px transition-colors flex items-center justify-center gap-2"
-                        style={{ boxShadow: "var(--sh-2)" }}
-                    >
+            <aside className="dc-side">
+                <div className="dc-side-top">
+                    <button className="btn btn-dark btn-sm" onClick={onNewChat}>
                         <Icon name="plus" size="sm" />
-                        <span>Новый диалог</span>
+                        Новый диалог
+                    </button>
+                    <button className="icon-btn" onClick={onClose} aria-label="Закрыть" style={{ flex: "none" }}>
+                        <Icon name="close" size="md" />
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="dc-history">
                     {sessions.length === 0 ? (
-                        <div className="p-4 text-center">
-                            <div className="w-12 h-12 rounded-full bg-bg-2 flex items-center justify-center mx-auto mb-3">
-                                <Icon name="message" size="lg" className="text-ink-4" />
+                        <div className="empty" style={{ padding: "40px 16px" }}>
+                            <div className="ic" style={{ width: 48, height: 48, marginBottom: 12 }}>
+                                <Icon name="message" size="lg" />
                             </div>
-                            <p className="text-sm text-ink-3">Нет истории диалогов</p>
+                            <p className="small">Нет истории диалогов</p>
                         </div>
                     ) : (
                         Array.from(groupedSessions.entries()).map(([dateLabel, dateSessions]) => (
-                            <div key={dateLabel} className="py-2">
-                                <div className="px-4 py-1 text-xs font-semibold text-ink-4 uppercase tracking-wider">
+                            <div key={dateLabel}>
+                                <span className="eyebrow muted" style={{ display: "block", margin: "14px 8px 8px" }}>
                                     {dateLabel}
-                                </div>
+                                </span>
                                 {dateSessions.map((session) => (
                                     <button
                                         key={session.id}
                                         onClick={() => onSessionClick(session.id)}
-                                        className={`w-full px-3 py-2.5 text-left transition-colors group ${
-                                            currentSessionId === session.id
-                                                ? "bg-indigo-soft"
-                                                : "hover:bg-bg-2"
-                                        }`}
+                                        className={"dc-conv group" + (currentSessionId === session.id ? " active" : "")}
                                     >
-                                        <div className="flex items-start gap-2">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-sm font-medium truncate ${
-                                                        currentSessionId === session.id
-                                                            ? "text-indigo-ink"
-                                                            : "text-ink"
-                                                    }`}>
-                                                        {session.modeTitle}
+                                        <div className="row between gap-2">
+                                            <span className="dc-conv-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {session.modeTitle}
+                                            </span>
+                                            <span className="row gap-1" style={{ flex: "none" }}>
+                                                {session.status === "completed" && session.xpEarned > 0 && (
+                                                    <span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                                                        +{session.xpEarned}
                                                     </span>
-                                                    {session.status === "completed" && session.xpEarned > 0 && (
-                                                        <span className="text-xs text-indigo-ink font-semibold flex-shrink-0 bg-indigo-soft px-1.5 py-0.5 rounded font-mono">
-                                                            +{session.xpEarned}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-xs text-ink-3 truncate">
-                                                        {session.bundleTitle}
-                                                    </span>
-                                                    <span className="text-xs text-ink-4">•</span>
-                                                    <span className="text-xs text-ink-3 flex items-center gap-0.5">
-                                                        <Icon name="message" size="sm" />
-                                                        {session.messageCount}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={(e) => handleDeleteClick(e, session.id)}
-                                                className="text-ink-3 hover:text-bad opacity-0 group-hover:opacity-100 transition-colors self-center flex-shrink-0 p-1 rounded hover:bg-bad-soft"
-                                                aria-label="Удалить чат"
-                                            >
-                                                <Icon name="delete" size="sm" />
-                                            </button>
+                                                )}
+                                                <span
+                                                    onClick={(e) => handleDeleteClick(e, session.id)}
+                                                    role="button"
+                                                    aria-label="Удалить чат"
+                                                    style={{ color: "var(--ink-4)", display: "inline-flex", padding: 2 }}
+                                                >
+                                                    <Icon name="delete" size="sm" />
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div className="row gap-2 small" style={{ marginTop: 4 }}>
+                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {session.bundleTitle}
+                                            </span>
+                                            <span style={{ color: "var(--ink-4)" }}>·</span>
+                                            <span className="row gap-1" style={{ flex: "none" }}>
+                                                <Icon name="message" size={13} />
+                                                {session.messageCount}
+                                            </span>
                                         </div>
                                     </button>
                                 ))}
@@ -155,11 +138,8 @@ export function SessionHistorySidebar({
                     )}
                 </div>
 
-                <div className="p-3 border-t border-line">
-                    <Link
-                        href="/dialog"
-                        className="flex items-center justify-center gap-2 text-sm text-ink-3 hover:text-ink transition-colors py-2"
-                    >
+                <div style={{ padding: 12, borderTop: "1px solid var(--line)" }}>
+                    <Link href="/dialog" className="back-link" style={{ width: "100%", justifyContent: "center" }}>
                         <Icon name="arrow-left" size="sm" />
                         К выбору навыка
                     </Link>

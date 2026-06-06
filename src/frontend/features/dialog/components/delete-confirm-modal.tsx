@@ -21,43 +21,31 @@ export function DeleteConfirmModal({ onConfirm, onCancel }: DeleteConfirmModalPr
     }, [onCancel]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-surface border border-line rounded-2xl max-w-sm w-full" style={{ boxShadow: "var(--sh-3)" }}>
-                {/* Header */}
-                <div className="p-5 border-b border-line flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Icon name="delete" size="md" className="text-bad" />
-                        <h3 className="text-lg font-bold text-ink">Удалить чат?</h3>
+        <div className="modal-overlay" onClick={onCancel}>
+            <div className="modal fade-up" style={{ maxWidth: 400 }} onClick={(event) => event.stopPropagation()}>
+                <div className="modal-head">
+                    <div className="row gap-3">
+                        <span className="itile heart" style={{ width: 40, height: 40 }}>
+                            <Icon name="delete" size="md" />
+                        </span>
+                        <h3 className="h3">Удалить чат?</h3>
                     </div>
-                    <button
-                        onClick={onCancel}
-                        className="p-2 rounded-full hover:bg-bg-2 transition-colors"
-                        aria-label="Закрыть"
-                    >
-                        <Icon name="close" size="md" className="text-ink-3" />
+                    <button className="icon-btn" onClick={onCancel} aria-label="Закрыть">
+                        <Icon name="close" size="md" />
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="p-5">
-                    <p className="text-ink-3 text-sm">
+                <div className="modal-body">
+                    <p className="body" style={{ margin: 0 }}>
                         Вы точно хотите удалить этот чат? Это действие нельзя отменить.
                     </p>
                 </div>
 
-                {/* Footer */}
-                <div className="p-5 border-t border-line flex gap-3">
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 py-2.5 px-4 bg-surface-2 text-ink font-semibold rounded-full hover:bg-bg-2 transition-colors"
-                    >
+                <div className="modal-foot row gap-3">
+                    <button className="btn btn-outline grow" onClick={onCancel}>
                         Отмена
                     </button>
-                    <button
-                        onClick={onConfirm}
-                        className="flex-1 py-2.5 px-4 bg-bad text-white font-semibold rounded-full active:translate-y-px transition-colors flex items-center justify-center gap-2"
-                        style={{ boxShadow: "var(--sh-2)" }}
-                    >
+                    <button className="btn btn-danger grow" onClick={onConfirm}>
                         <Icon name="delete" size="sm" />
                         Удалить
                     </button>
