@@ -18,10 +18,9 @@ services:
     pull_policy: build
     ports:
       - "5001:8080"
-    env_file:
-      - ./src/backend/api/.env.docker
     environment:
-      # Secrets interpolated from the root .env
+      - ASPNETCORE_ENVIRONMENT=Development
+      # Secrets interpolated from the root .env; everything else lives in appsettings*.json
       - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Jwt__Key=${JWT_KEY}
       - Google__ClientId=${GOOGLE_CLIENT_ID}

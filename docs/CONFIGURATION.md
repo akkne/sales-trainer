@@ -4,9 +4,13 @@ Updated: 2026-06-06
 
 ## Principle
 
-Secrets and infrastructure credentials live in the **root `.env`** (gitignored).
-Service-specific, non-secret config lives in each service's own files —
-this prepares the codebase for splitting into microservices.
+- **Root `.env`** (gitignored) — secrets and shared infrastructure credentials only.
+- **Backend** — all service config lives in `appsettings.json` (committed, no secrets;
+  secret values are marked `INJECTED_FROM_ENV`). `appsettings.Development.json`
+  (gitignored, mounted by compose) holds dev-only overrides.
+- **Frontend** — service config in `.env.production` (committed, no secrets).
+
+This keeps each service self-contained for a future microservice split.
 
 ## File map
 
@@ -14,9 +18,8 @@ this prepares the codebase for splitting into microservices.
 |------|-----------|---------|
 | `.env` | no | All secrets: DB credentials, JWT key, API keys (OpenAI, Deepgram, Voicer, Yandex TTS), Google client id, superadmin, Grafana admin |
 | `.env.example` | yes | Template for `.env` with placeholders |
-| `src/backend/api/.env.docker` | yes | Backend wiring inside docker network: Mongo/Redis URLs, JWT issuer/audience, frontend URL, Loki URL |
-| `src/backend/api/appsettings.json` | yes | Backend defaults: models, voice settings, limits (no secrets — placeholders only) |
-| `src/backend/api/appsettings.Development.json` | no (gitignored, mounted by compose) | Dev-only overrides (models, providers). Secrets stripped — they come from env vars |
+| `src/backend/api/appsettings.json` | yes | All backend config: docker-network hostnames (mongo, redis, loki), models, voice settings, limits. Secrets = `INJECTED_FROM_ENV` |
+| `src/backend/api/appsettings.Development.json` | no (mounted by compose) | Dev-only overrides (provider base URLs, models) |
 | `src/frontend/.env.production` | yes | `NEXT_PUBLIC_API_URL` (build-time) and `LOKI_URL` (runtime via compose `env_file`) |
 | `src/frontend/.env.local.example` | yes | Template for bare-metal `npm run dev` |
 
@@ -25,7 +28,6 @@ this prepares the codebase for splitting into microservices.
 ```
 .env ──(interpolation)──> docker-compose.yml environment ──> backend env vars
                                                               (override appsettings.json)
-src/backend/api/.env.docker ──(env_file)──> backend env vars
 src/frontend/.env.production ──(COPY . . at build)──> next build (NEXT_PUBLIC_*)
                              ──(env_file)──> frontend runtime (LOKI_URL)
 GOOGLE_CLIENT_ID ──(build arg)──> NEXT_PUBLIC_GOOGLE_CLIENT_ID
