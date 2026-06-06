@@ -3,6 +3,9 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { ExerciseResultBanner } from "./exercise-result-banner";
 
 interface FreeTextContent {
     situation?: string;

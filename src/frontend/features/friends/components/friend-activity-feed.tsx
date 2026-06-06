@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
 import { useFriendActivity } from "@/features/friends/hooks/use-friends";
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {

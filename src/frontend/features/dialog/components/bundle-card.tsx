@@ -1,6 +1,7 @@
 import { DialogBundle } from "@/features/dialog/hooks/use-dialog";
 import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
 
 interface BundleCardProps {
     bundle: DialogBundle;

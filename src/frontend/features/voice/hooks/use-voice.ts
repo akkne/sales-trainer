@@ -1,65 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/shared/api/api-client";
-import { WebSpeechClient, WebSpeechState, isWebSpeechSupported } from "@/features/voice/services/web-speech-client";
-import { AudioPlayer, AudioPlayerState } from "@/features/voice/services/audio-player";
-import { VoiceStreamReader } from "@/features/voice/services/voice-stream-reader";
 import { EnvironmentConfiguration } from "@/config/environment";
+import { WebSpeechClient, isWebSpeechSupported } from "@/features/voice/services/web-speech-client";
+import type { WebSpeechState } from "@/features/voice/services/web-speech-client";
+import { AudioPlayer } from "@/features/voice/services/audio-player";
+import type { AudioPlayerState } from "@/features/voice/services/audio-player";
+import { VoiceStreamReader } from "@/features/voice/services/voice-stream-reader";
+import { VoiceApiRoutes } from "@/features/voice/constants/voice-api-routes";
+import { useVoiceConfig } from "@/features/voice/hooks/use-voice-config";
+import type { VoicePipelineState } from "@/features/voice/types/voice-pipeline-state";
+import type { UseVoiceOptions } from "@/features/voice/types/use-voice-options";
 
-export interface VoiceConfig {
-    enabled: boolean;
-    vadSilenceMs: number;
-    maxRecordingSeconds: number;
-    dailyLimitMinutes: number;
-    monthlyLimitMinutes: number;
-}
-
-export function useVoiceConfig() {
-    return useQuery({
-        queryKey: ["voice", "config"],
-        queryFn: () => apiClient.get<VoiceConfig>("/dialog/voice/config"),
-        staleTime: 5 * 60 * 1000,
-    });
-}
-
-export interface VoiceUsage {
-    dailyUsedSeconds: number;
-    dailyLimitSeconds: number;
-    monthlyUsedSeconds: number;
-    monthlyLimitSeconds: number;
-    dailyExceeded: boolean;
-    monthlyExceeded: boolean;
-}
-
-export function useVoiceUsage(enabled = true) {
-    return useQuery({
-        queryKey: ["voice", "usage"],
-        queryFn: () => apiClient.get<VoiceUsage>("/dialog/voice/usage"),
-        staleTime: 30 * 1000,
-        enabled,
-    });
-}
-
-export type VoicePipelineState =
-    | "idle"
-    | "initializing"
-    | "listening"
-    | "speaking"
-    | "processing"
-    | "playing"
-    | "error";
-
-export interface UseVoiceOptions {
-    sessionId: string | null;
-    modeVoiceEnabled: boolean;
-    bundleId?: string;
-    modeId?: string;
-    onSessionCreated?: (sessionId: string) => void;
-    onTranscript?: (transcript: string) => void;
-    onAiText?: (textChunk: string) => void;
-    onAiResponse?: (content: string, isStopSignal: boolean) => void;
-    onError?: (error: Error) => void;
-}
+export type { VoicePipelineState } from "@/features/voice/types/voice-pipeline-state";
+export type { UseVoiceOptions } from "@/features/voice/types/use-voice-options";
 
 export function useVoice(options: UseVoiceOptions) {
     const { sessionId, modeVoiceEnabled, bundleId, modeId, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
@@ -133,7 +86,7 @@ export function useVoice(options: UseVoiceOptions) {
         try {
             speechClientRef.current?.pause();
 
-            const response = await fetch(`${EnvironmentConfiguration.apiBaseUrl}/dialog/sessions/${activeSessionId}/voice/stream`, {
+            const response = await fetch(`${EnvironmentConfiguration.apiBaseUrl}${VoiceApiRoutes.stream(activeSessionId)}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -241,13 +194,13 @@ export function useVoice(options: UseVoiceOptions) {
                         transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
                         setCurrentTranscript(transcriptBufferRef.current);
 
-                        const vadSilenceMs = voiceConfig?.vadSilenceMs ?? 600;
+                        const voiceActivityDetectionSilenceMilliseconds = voiceConfig?.vadSilenceMs ?? 600;
                         silenceTimeoutRef.current = setTimeout(() => {
                             const finalTranscript = transcriptBufferRef.current.trim();
                             if (finalTranscript) {
                                 processSpeech(finalTranscript);
                             }
-                        }, vadSilenceMs);
+                        }, voiceActivityDetectionSilenceMilliseconds);
                     } else {
                         setCurrentTranscript(transcriptBufferRef.current + (transcriptBufferRef.current ? " " : "") + transcript);
                     }

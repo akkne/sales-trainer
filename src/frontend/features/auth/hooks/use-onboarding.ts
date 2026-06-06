@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/shared/api/api-client";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 
 interface OnboardingPayload {
     salesType: string;

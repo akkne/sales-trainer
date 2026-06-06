@@ -11,7 +11,7 @@ import {
     type AdminTechnique,
     type AdminTechniqueWriteBody,
     type AdminTechniqueImportResult,
-} from "@/lib/hooks/useAdmin";
+} from "@/features/admin/hooks/use-admin";
 
 const DIFFICULTY_OPTIONS = [
     { value: 1, label: "1 · Novice" },

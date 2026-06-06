@@ -1,7 +1,7 @@
 "use client";
 
-import { Icon } from "./Icon";
-import { Button } from "./Button";
+import { Icon } from "./icon";
+import { Button } from "./button";
 
 interface ErrorStateProps {
     title?: string;

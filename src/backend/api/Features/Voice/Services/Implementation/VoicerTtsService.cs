@@ -197,6 +197,13 @@ internal sealed class VoicerTtsService : IVoicerTtsService
         return memoryStream;
     }
 
+    private static string PadTextToMinimumLength(string text)
+    {
+        const int minimumCharacterCount = 500;
+        if (text.Length >= minimumCharacterCount) return text;
+        return text + new string(' ', minimumCharacterCount - text.Length);
+    }
+
     private static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,

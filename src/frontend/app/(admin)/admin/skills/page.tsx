@@ -10,6 +10,7 @@ import {
     type AdminSkill,
     type SkillsImportResult,
 } from "@/features/admin/hooks/use-admin";
+import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",

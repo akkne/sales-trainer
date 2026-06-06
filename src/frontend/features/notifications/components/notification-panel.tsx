@@ -7,7 +7,7 @@ import {
     useNotifications,
     type NotificationData,
 } from "@/features/notifications/hooks/use-notifications";
-import { NotificationCard } from "./NotificationCard";
+import { NotificationCard } from "./notification-card";
 
 interface NotificationPanelProps {
     isOpen: boolean;

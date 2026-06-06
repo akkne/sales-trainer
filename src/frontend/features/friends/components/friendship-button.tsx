@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/shared/components/button";
+import type { ButtonSize, ButtonVariant } from "@/shared/components/button";
 import {
     useSendFriendRequest,
     useAcceptFriendRequest,

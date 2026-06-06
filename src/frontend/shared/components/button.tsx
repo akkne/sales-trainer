@@ -1,7 +1,7 @@
 "use client";
 
 import { ButtonHTMLAttributes, forwardRef, ReactNode } from "react";
-import { Icon, IconName } from "./Icon";
+import { Icon, IconName } from "./icon";
 
 export type ButtonVariant = "primary" | "accent" | "secondary" | "ghost" | "outline" | "destructive";
 export type ButtonSize = "sm" | "md" | "lg" | "xl";

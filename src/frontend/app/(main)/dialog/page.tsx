@@ -3,6 +3,8 @@
 import { useDialogBundles } from "@/features/dialog/hooks/use-dialog";
 import { BundleCard } from "@/features/dialog/components/bundle-card";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { Skeleton, GeoAvatar, StatTile, ErrorState } from "@/shared/components";
 import Link from "next/link";
 
 export default function DialogPage() {

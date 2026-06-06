@@ -2,8 +2,8 @@
 
 import { Icon } from "@/shared/components/icon";
 import { useConversations } from "@/features/friends/hooks/use-chat";
-import { ConversationCard } from "./ConversationCard";
-import { ChatWindow } from "./ChatWindow";
+import { ConversationCard } from "./conversation-card";
+import { ChatWindow } from "./chat-window";
 
 interface ChatsPaneProps {
     selectedConversationId: string | null;

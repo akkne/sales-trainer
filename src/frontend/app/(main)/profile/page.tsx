@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useProfile } from "@/features/profile/hooks/use-profile";
 import { useAchievements } from "@/features/achievements/hooks/use-achievements";
 import { useLogout } from "@/features/auth/hooks/use-auth";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
 import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
+import { ThemeToggle } from "@/shared/components/theme-toggle";
+import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 

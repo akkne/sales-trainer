@@ -1,6 +1,6 @@
 "use client";
 
-import { useThemeStore } from "@/stores/theme-store";
+import { useThemeStore } from "@/shared/stores/theme-store";
 import { Icon, IconName } from "@/shared/components/icon";
 
 type Theme = "light" | "dark" | "system";

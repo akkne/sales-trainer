@@ -2,8 +2,9 @@
 
 import { useState, useDeferredValue } from "react";
 import { Icon } from "@/shared/components/icon";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { useUserSearch, useSendFriendRequest } from "@/features/friends/hooks/use-friends";
-import { FriendshipButton } from "./FriendshipButton";
+import { FriendshipButton } from "./friendship-button";
 
 export function UserSearchBar() {
     const [searchInput, setSearchInput] = useState("");

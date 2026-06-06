@@ -3,8 +3,10 @@
 import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
+import { StatTile } from "@/shared/components/stat-tile";
 import { useFriends, useFriendRequests } from "@/features/friends/hooks/use-friends";
-import { useCreateConversation } from "@/features/friends/hooks/use-chat";
+import { useCreateConversation, useConversations } from "@/features/friends/hooks/use-chat";
 import { FriendCard } from "@/features/friends/components/friend-card";
 import { FriendRequestCard } from "@/features/friends/components/friend-request-card";
 import { FriendLeaderboard } from "@/features/friends/components/friend-leaderboard";

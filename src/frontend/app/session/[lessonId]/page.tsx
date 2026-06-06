@@ -22,6 +22,9 @@ import { EvaluateCallExercise } from "@/features/exercise/components/evaluate-ca
 import { FreeTextExercise } from "@/features/exercise/components/free-text-exercise";
 import { AchievementToastQueue, type AchievementToastData } from "@/shared/components/achievement-toast";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { Progress } from "@/shared/components/progress";
+import { StatTile } from "@/shared/components/stat-tile";
 
 const PASSING_SCORE_THRESHOLD = 7;
 const MAX_RETRY_ATTEMPTS = 2;

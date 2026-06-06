@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { Chip } from "@/shared/components/chip";
 
 const OFFSETS = [0, 80, 120, 80, 0, -80, -120];
 const NODE_H = 104;

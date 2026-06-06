@@ -1,7 +1,7 @@
 "use client";
 
 import { useAdminUsers, useChangeUserRole } from "@/features/admin/hooks/use-admin";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 
 const ROLES = ["User", "Admin", "SuperAdmin"];
 

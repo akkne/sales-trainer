@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/apiClient";
-import { Icon } from "@/components/ui/Icon";
+import { apiClient } from "@/shared/api/api-client";
+import { Icon } from "@/shared/components/icon";
 
 interface AdminVoiceUsageEntry {
     userId: string;

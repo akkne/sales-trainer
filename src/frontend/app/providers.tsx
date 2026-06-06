@@ -2,8 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useInitAuth } from "@/features/auth/hooks/use-auth";
+import { useThemeStore } from "@/shared/stores/theme-store";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 

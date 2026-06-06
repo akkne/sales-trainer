@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/shared/components/icon";
 import { useUnreadNotificationCount } from "@/features/notifications/hooks/use-notifications";
-import { NotificationPanel } from "./NotificationPanel";
+import { NotificationPanel } from "./notification-panel";
 
 export function NotificationBell() {
     const [isPanelOpen, setIsPanelOpen] = useState(false);

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
 
 const NAV_ICONS: Record<string, IconName> = {
     "/admin/skills": "target",

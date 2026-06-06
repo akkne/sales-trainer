@@ -2,13 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import { Icon } from "@/shared/components/icon";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import {
     useChatMessages,
     useSendChatMessage,
     useConversations,
 } from "@/features/friends/hooks/use-chat";
-import { ChatBubble } from "./ChatBubble";
-import { ChatInput } from "./ChatInput";
+import { ChatBubble } from "./chat-bubble";
+import { ChatInput } from "./chat-input";
 
 interface ChatWindowProps {
     conversationId: string;

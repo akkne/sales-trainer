@@ -5,13 +5,13 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 
 const NAV_ITEMS = [
-    { href: "/tree", icon: "school", label: "Путь" },
+    { href: "/tree", icon: "book", label: "Путь" },
     { href: "/league", icon: "trophy", label: "Лига" },
-    { href: "/guidebook", icon: "menu_book", label: "Справочник" },
-    { href: "/dialog", icon: "forum", label: "Диалог" },
-    { href: "/friends", icon: "group", label: "Друзья" },
-    { href: "/profile", icon: "person", label: "Профиль" },
-] as const;
+    { href: "/guidebook", icon: "layers", label: "Справочник" },
+    { href: "/dialog", icon: "message", label: "Диалог" },
+    { href: "/friends", icon: "users", label: "Друзья" },
+    { href: "/profile", icon: "user", label: "Профиль" },
+] as const satisfies { href: string; icon: import("@/shared/components/icon").IconName; label: string }[];
 
 export function BottomNav() {
     const currentPathname = usePathname();
@@ -32,7 +32,6 @@ export function BottomNav() {
                     >
                         <Icon
                             name={navItem.icon}
-                            variant={isActive ? "filled" : "outlined"}
                             size="md"
                         />
                         <span className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}>

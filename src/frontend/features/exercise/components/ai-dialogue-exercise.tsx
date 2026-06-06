@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { ExerciseResultBanner } from "./exercise-result-banner";
 import { apiClient } from "@/shared/api/api-client";
 
 interface ChatMessage {

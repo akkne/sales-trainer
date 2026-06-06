@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { useCompleteOnboarding, useSkillsForOnboarding } from "@/features/auth/hooks/use-onboarding";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
 
 const PERSONA_OPTIONS = [
     { id: "sdr", label: "SDR", desc: "Холодный outbound, квалификация", shape: "square" },

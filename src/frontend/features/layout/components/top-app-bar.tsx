@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
-import { useAuthStore } from "@/stores/auth-store";
+import type { IconName } from "@/shared/components/icon";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { NotificationBell } from "@/features/notifications/components/notification-bell";
+import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkillTree } from "@/features/skills/hooks/use-skill-tree";
 import { useFriendRequests } from "@/features/friends/hooks/use-friends";
 
@@ -54,8 +58,8 @@ export function TopAppBar() {
                 }}
             >
                 {/* Logo */}
-                <Link href="/tree" style={{ cursor: "pointer" }}>
-                    <Wordmark size={22} />
+                <Link href="/tree" style={{ cursor: "pointer", fontWeight: 700, fontSize: 18, letterSpacing: -0.5, color: "var(--ink)", textDecoration: "none" }}>
+                    SalesTrainer
                 </Link>
 
                 {/* Desktop nav items */}

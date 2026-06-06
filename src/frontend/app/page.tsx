@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 import { apiClient } from "@/shared/api/api-client";
 
 const FEATURE_LIST = [
@@ -60,7 +60,7 @@ export default function LandingPage() {
     return (
         <div className="min-h-screen bg-bg text-ink">
             <header className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
-                <Wordmark size={22} />
+                <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>SalesTrainer</span>
                 <Link
                     href="/login"
                     className="text-sm font-semibold text-ink-3 hover:text-ink transition-colors"

@@ -1,6 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
+import { Card } from "@/shared/components/card";
+import { Progress } from "@/shared/components/progress";
+import { Button } from "@/shared/components/button";
+import { Chip } from "@/shared/components/chip";
+import { StatTile } from "@/shared/components/stat-tile";
 
 interface StatsWidgetProps {
     currentStreakDayCount: number;

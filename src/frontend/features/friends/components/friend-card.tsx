@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import type { Friend } from "@/features/friends/hooks/use-friends";
 
 const PERSONA_LABELS: Record<string, string> = {

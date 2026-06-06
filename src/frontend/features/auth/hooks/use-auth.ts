@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/shared/api/api-client";
-import { useAuthStore, type UserRole } from "@/stores/auth-store";
+import { useAuthStore, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 
 interface AuthTokenResponse {

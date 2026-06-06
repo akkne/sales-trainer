@@ -5,6 +5,11 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useHandbook, useHandbookCategories } from "@/features/skills/hooks/use-reference";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { StatTile } from "@/shared/components/stat-tile";
+import { Skeleton } from "@/shared/components/skeleton";
+import { useTechniques, useTechniquesMeta, useTechnique, useMarkTechniqueSeen, type TechniqueCard, type TechniqueDetail } from "@/features/skills/hooks/use-techniques";
 
 function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
     const size = 56;
@@ -514,7 +519,7 @@ function TechniqueCardView({
     onTagClick,
     activeTags,
 }: {
-    card: TechniqueCardData;
+    card: TechniqueCard;
     isExpanded: boolean;
     detail: TechniqueDetail | null;
     onToggle: () => void;

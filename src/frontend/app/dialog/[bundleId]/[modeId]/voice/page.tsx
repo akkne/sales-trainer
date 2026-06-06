@@ -10,9 +10,11 @@ import {
     DialogFeedback,
 } from "@/features/dialog/hooks/use-dialog";
 import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
+import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
 import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
 import { Icon } from "@/shared/components/icon";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 
 function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -131,6 +133,10 @@ export default function VoiceCallPage() {
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const callSoundsPlayerRef = useRef<CallSoundsPlayer>(new CallSoundsPlayer());
+    const previousCallStatusRef = useRef<CallStatus>("idle");
+    const previousVoiceStateRef = useRef<VoicePipelineState>("idle");
+    const assistantReplyOpenRef = useRef<boolean>(false);
+    const subtitleScrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => () => callSoundsPlayerRef.current.stopRinging(), []);
     useEffect(() => {
@@ -154,20 +160,17 @@ export default function VoiceCallPage() {
         previousCallStatusRef.current = callStatus;
 
         if (callStatus === "dialing") {
-            startRingingTone();
+            callSoundsPlayerRef.current.startRinging();
         } else {
-            stopRingingTone();
+            callSoundsPlayerRef.current.stopRinging();
         }
         if (callStatus === "connected" && previous === "dialing") {
-            vibrateOnConnect();
+            callSoundsPlayerRef.current.vibrateOnConnect();
         }
         if (callStatus === "ended" && (previous === "connected" || previous === "dialing")) {
-            playHangupBeep();
+            callSoundsPlayerRef.current.playHangupBeep();
         }
     }, [callStatus]);
-
-    // Stop any looping tones when leaving the page.
-    useEffect(() => stopRingingTone, []);
 
     const handleVoiceError = useCallback((err: Error) => {
         setError(err.message);
@@ -179,14 +182,7 @@ export default function VoiceCallPage() {
         setCallStatus("connected");
     }, []);
 
-    const handleAiResponse = useCallback((content: string, isStopSignal: boolean) => {
-        if (isStopSignal && sessionId) {
-            setIsEnded(true);
-            completeSession(sessionId);
-        }
-    }, [sessionId]);
-
-    const completeSession = async (sid: string) => {
+    const completeSession = useCallback(async (sid: string) => {
         if (isCompleting) return;
         setIsCompleting(true);
         try {
@@ -195,7 +191,6 @@ export default function VoiceCallPage() {
                 setFeedback(sessionFeedback);
                 queryClient.invalidateQueries({ queryKey: ["profile"] });
             } else {
-                // Empty call — nothing was evaluated, no feedback modal.
                 setSessionId(null);
             }
         } catch (err) {

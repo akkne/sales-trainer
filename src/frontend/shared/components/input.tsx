@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes, ReactNode } from "react";
-import { Icon, IconName } from "./Icon";
+import { Icon, IconName } from "./icon";
 
 /**
  * Base input wrapper with label and error support

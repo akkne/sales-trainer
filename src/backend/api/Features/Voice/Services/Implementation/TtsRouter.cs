@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Voice.Services.Implementation;
 
@@ -7,25 +9,25 @@ internal sealed class TtsRouter : ITtsRouter
     private readonly IYandexTtsService _yandexTtsService;
     private readonly IVoicerTtsService _voicerTtsService;
     private readonly IGoogleTtsService _googleTtsService;
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<TtsRouterConfiguration> _ttsRouterOptions;
 
     public TtsRouter(
         IYandexTtsService yandexTtsService,
         IVoicerTtsService voicerTtsService,
         IGoogleTtsService googleTtsService,
-        IConfiguration configuration)
+        IOptions<TtsRouterConfiguration> ttsRouterOptions)
     {
         _yandexTtsService = yandexTtsService;
         _voicerTtsService = voicerTtsService;
         _googleTtsService = googleTtsService;
-        _configuration = configuration;
+        _ttsRouterOptions = ttsRouterOptions;
     }
 
     private string ActiveProvider
     {
         get
         {
-            var preferred = (_configuration["Voice:TtsProvider"] ?? "yandex").Trim().ToLowerInvariant();
+            var preferred = _ttsRouterOptions.Value.TtsProvider.Trim().ToLowerInvariant();
             return preferred switch
             {
                 "yandex" when _yandexTtsService.IsConfigured => "yandex",

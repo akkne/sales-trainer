@@ -4,6 +4,9 @@ import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { useKeyboardControls } from "@/shared/hooks/use-keyboard-controls";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { ExerciseResultBanner } from "./exercise-result-banner";
 
 interface FillBlankContent {
     before: string;

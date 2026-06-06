@@ -8,6 +8,8 @@ public static class VoiceServiceCollectionExtensions
 {
     public static IServiceCollection AddVoiceFeatureServices(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<VoiceFeatureConfiguration>(configuration.GetSection(VoiceFeatureConfiguration.SectionName));
+        services.Configure<TtsRouterConfiguration>(configuration.GetSection(TtsRouterConfiguration.SectionName));
         services.Configure<YandexTtsConfiguration>(configuration.GetSection(YandexTtsConfiguration.SectionName));
         services.Configure<VoicerTtsConfiguration>(configuration.GetSection(VoicerTtsConfiguration.SectionName));
         services.Configure<GoogleTtsConfiguration>(configuration.GetSection(GoogleTtsConfiguration.SectionName));

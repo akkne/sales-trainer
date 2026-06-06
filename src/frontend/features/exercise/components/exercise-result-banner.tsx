@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef, useState, useEffect } from "react";
 import { Icon } from "@/shared/components/icon";
+import { Button } from "@/shared/components/button";
 
 interface ExerciseResultBannerProps {
     isCorrect: boolean;

@@ -3,6 +3,9 @@
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { Chip } from "@/shared/components/chip";
+import { StatTile } from "@/shared/components/stat-tile";
 import { usePublicProfile } from "@/features/friends/hooks/use-friends";
 import { useCreateConversation } from "@/features/friends/hooks/use-chat";
 import { FriendshipButton } from "@/features/friends/components/friendship-button";

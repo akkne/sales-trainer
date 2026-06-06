@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import type { ChatConversationSummary } from "@/features/friends/hooks/use-chat";
 
 interface ConversationCardProps {

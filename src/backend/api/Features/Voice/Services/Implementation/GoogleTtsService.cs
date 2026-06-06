@@ -95,34 +95,4 @@ internal sealed class GoogleTtsService : IGoogleTtsService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
-
-    private sealed class TtsRequest
-    {
-        public TtsInput Input { get; set; } = null!;
-        public TtsVoice Voice { get; set; } = null!;
-        public TtsAudioConfig AudioConfig { get; set; } = null!;
-    }
-
-    private sealed class TtsInput
-    {
-        public string Text { get; set; } = null!;
-    }
-
-    private sealed class TtsVoice
-    {
-        public string LanguageCode { get; set; } = null!;
-        public string Name { get; set; } = null!;
-    }
-
-    private sealed class TtsAudioConfig
-    {
-        public string AudioEncoding { get; set; } = null!;
-        public double SpeakingRate { get; set; }
-        public double Pitch { get; set; }
-    }
-
-    private sealed class TtsResponse
-    {
-        public string? AudioContent { get; set; }
-    }
 }

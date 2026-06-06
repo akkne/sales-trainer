@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.Voice.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 
 namespace SalesTrainer.Api.Features.Voice;
 
@@ -10,36 +12,30 @@ namespace SalesTrainer.Api.Features.Voice;
 [Authorize]
 public class VoiceConfigController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
     private readonly ITtsRouter _ttsRouter;
 
     public VoiceConfigController(
-        IConfiguration configuration,
+        IOptions<VoiceFeatureConfiguration> voiceFeatureOptions,
         ITtsRouter ttsRouter)
     {
-        _configuration = configuration;
+        _voiceFeatureOptions = voiceFeatureOptions;
         _ttsRouter = ttsRouter;
     }
 
     [HttpGet("config")]
-    public ActionResult<VoiceConfigDto> GetVoiceConfig()
+    public ActionResult<VoiceConfigDto> GetVoiceConfiguration()
     {
-        var voiceEnabled = _configuration.GetValue("Voice:Enabled", false);
-        var vadSilenceMs = _configuration.GetValue("Voice:VadSilenceMs", 600);
-        var maxRecordingSeconds = _configuration.GetValue("Voice:MaxRecordingSeconds", 60);
-        var dailyLimitMinutes = _configuration.GetValue("Voice:DailyLimitMinutes", 30);
-        var monthlyLimitMinutes = _configuration.GetValue("Voice:MonthlyLimitMinutes", 300);
-
-        // Voice is enabled if TTS is configured (STT uses browser's Web Speech API)
-        var isEnabled = voiceEnabled && _ttsRouter.IsConfigured;
+        var voiceFeatureConfiguration = _voiceFeatureOptions.Value;
+        var isEnabled = voiceFeatureConfiguration.Enabled && _ttsRouter.IsConfigured;
 
         return Ok(new VoiceConfigDto
         {
             Enabled = isEnabled,
-            VadSilenceMs = vadSilenceMs,
-            MaxRecordingSeconds = maxRecordingSeconds,
-            DailyLimitMinutes = dailyLimitMinutes,
-            MonthlyLimitMinutes = monthlyLimitMinutes,
+            VadSilenceMs = voiceFeatureConfiguration.VadSilenceMilliseconds,
+            MaxRecordingSeconds = voiceFeatureConfiguration.MaxRecordingSeconds,
+            DailyLimitMinutes = voiceFeatureConfiguration.DailyLimitMinutes,
+            MonthlyLimitMinutes = voiceFeatureConfiguration.MonthlyLimitMinutes,
         });
     }
 }

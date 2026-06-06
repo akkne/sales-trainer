@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LessonPath } from "@/shared/components/lesson-path";
 import { StatsWidget } from "@/features/layout/components/stats-widget";
-import { useSkillTree, useSkills } from "@/features/skills/hooks/use-skill-tree";
+import { useSkillTree, useSkills, type SkillTreeNode } from "@/features/skills/hooks/use-skill-tree";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
-import { useSelectedSkillStore } from "@/stores/selected-skill-store";
+import { useSelectedSkillStore } from "@/shared/stores/selected-skill-store";
 import { Icon } from "@/shared/components/icon";
+import { Progress } from "@/shared/components/progress";
+import { ErrorState } from "@/shared/components/error-state";
+import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
 
 // ── Skill lesson view ─────────────────────────────────────────────────────────
 
@@ -145,6 +148,50 @@ function SkillLessonView({
 }
 
 // ── Left sidebar ──────────────────────────────────────────────────────────────
+
+function SkillRow({
+    skill,
+    selected,
+    onClick,
+}: {
+    skill: SkillTreeNode;
+    selected: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 8px 6px 10px",
+                borderRadius: 8,
+                background: selected ? "var(--surface-2)" : "transparent",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+                width: "100%",
+                transition: "background 0.15s",
+            }}
+        >
+            <Icon name={skill.iconName as Parameters<typeof Icon>[0]["name"]} size="xs" color={selected ? "var(--indigo)" : "var(--ink-3)"} />
+            <span
+                style={{
+                    flex: 1,
+                    fontSize: 12,
+                    color: selected ? "var(--ink)" : "var(--ink-2)",
+                    fontWeight: selected ? 500 : 400,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                }}
+            >
+                {skill.title}
+            </span>
+        </button>
+    );
+}
 
 // ── Stage group ───────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { useSkillTree } from "@/features/skills/hooks/use-skill-tree";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore } from "@/shared/stores/auth-store";
 
 const NAV_ITEMS = [
     { href: "/tree", icon: "target", label: "Мастерство" },

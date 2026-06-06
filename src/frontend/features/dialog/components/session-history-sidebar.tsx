@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { DialogSessionSummary } from "@/features/dialog/hooks/use-dialog";
-import { DeleteConfirmModal } from "./DeleteConfirmModal";
+import { DeleteConfirmModal } from "./delete-confirm-modal";
 import { Icon } from "@/shared/components/icon";
 
 interface SessionHistorySidebarProps {

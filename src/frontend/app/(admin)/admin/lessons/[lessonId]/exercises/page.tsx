@@ -41,17 +41,19 @@ import {
     labelCls,
 } from "@/features/admin/components/exercise-editors";
 
-import { MultipleChoiceEditor } from "@/features/admin/components/exercise-editors/MultipleChoiceEditor";
-import { FillBlankEditor } from "@/features/admin/components/exercise-editors/FillBlankEditor";
-import { OpenQuestionEditor } from "@/features/admin/components/exercise-editors/OpenQuestionEditor";
-import { OrderingEditor } from "@/features/admin/components/exercise-editors/OrderingEditor";
-import { MatchingEditor } from "@/features/admin/components/exercise-editors/MatchingEditor";
-import { CategorizingEditor } from "@/features/admin/components/exercise-editors/CategorizingEditor";
-import { FindErrorEditor } from "@/features/admin/components/exercise-editors/FindErrorEditor";
-import { RewriteBetterEditor } from "@/features/admin/components/exercise-editors/RewriteBetterEditor";
-import { AiDialogEditor } from "@/features/admin/components/exercise-editors/AiDialogEditor";
-import { RateCallEditor } from "@/features/admin/components/exercise-editors/RateCallEditor";
-import { WrittenAnswerEditor } from "@/features/admin/components/exercise-editors/WrittenAnswerEditor";
+import {
+    MultipleChoiceEditor,
+    FillBlankEditor,
+    OpenQuestionEditor,
+    OrderingEditor,
+    MatchingEditor,
+    CategorizingEditor,
+    FindErrorEditor,
+    RewriteBetterEditor,
+    AiDialogEditor,
+    RateCallEditor,
+    WrittenAnswerEditor,
+} from "@/features/admin/components/exercise-editors";
 
 function typeBadgeColor(): string {
     return "bg-bg-2 text-ink-3 border border-line";

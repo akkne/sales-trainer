@@ -11,6 +11,7 @@ import {
     useDeleteTopic,
     type AdminSkill,
 } from "@/features/admin/hooks/use-admin";
+import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
 
 export default function AdminSkillDetailPage({
     params,

@@ -2,7 +2,7 @@
 
 import { Icon } from "@/shared/components/icon";
 import type { NotificationData } from "@/features/notifications/hooks/use-notifications";
-import { formatRelativeTimestamp, getNotificationVisualMeta } from "./notificationMeta";
+import { formatRelativeTimestamp, getNotificationVisualMeta } from "@/features/notifications/constants/notification-meta";
 
 interface NotificationCardProps {
     notification: NotificationData;

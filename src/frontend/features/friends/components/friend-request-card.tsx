@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/shared/components/button";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import {
     useAcceptFriendRequest,
     useDeclineFriendRequest,
