@@ -49,7 +49,7 @@ export default function AdminVoiceUsagePage() {
     const { data, isLoading, isError, refetch } = useAdminVoiceUsage();
 
     return (
-        <div className="p-6 max-w-5xl">
+        <div className="p-6 max-w-7xl">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-ink">Voice Usage</h1>

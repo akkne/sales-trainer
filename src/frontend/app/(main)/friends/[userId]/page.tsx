@@ -45,7 +45,7 @@ export default function PublicProfilePage() {
 
     if (!profile) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-8 text-center">
+            <div className="max-w-4xl mx-auto px-4 py-8 text-center">
                 <p className="text-ink-4">Пользователь не найден</p>
             </div>
         );
@@ -55,7 +55,7 @@ export default function PublicProfilePage() {
         <div className="min-h-screen bg-bg pb-20">
             {/* Header band */}
             <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
-                <div className="max-w-2xl mx-auto">
+                <div className="max-w-4xl mx-auto">
                     <button
                         onClick={() => router.back()}
                         className="flex items-center gap-1 text-ink-4 hover:text-ink transition-colors mb-4"
@@ -88,7 +88,7 @@ export default function PublicProfilePage() {
                 </div>
             </div>
 
-            <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
+            <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
                 {/* Stats grid */}
                 <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
                     Показатели

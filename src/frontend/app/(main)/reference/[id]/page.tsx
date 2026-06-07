@@ -26,7 +26,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-8">
             <button
                 onClick={() => router.back()}
                 className="text-ink-4 hover:text-ink text-sm mb-6 inline-block"

@@ -88,7 +88,7 @@ export default function ProfilePage() {
     return (
         <div className="page">
             <div className="app-backdrop" />
-            <div className="container" style={{ maxWidth: 760 }}>
+            <div className="container" style={{ maxWidth: 1320 }}>
                 {/* Header */}
                 <div className="profile-head">
                     <GeoAvatar seed={profileStats.displayName} size={88} />
@@ -149,6 +149,10 @@ export default function ProfilePage() {
                         unit="%"
                     />
                 </div>
+
+                {/* Two-column body on desktop */}
+                <div className="profile-grid">
+                <div>
 
                 {/* Skills progress */}
                 <div className="card card-pad" style={{ marginTop: 16 }}>
@@ -223,6 +227,9 @@ export default function ProfilePage() {
                         </div>
                     </div>
                 )}
+
+                </div>
+                <div>
 
                 {/* My Skills */}
                 <div className="card card-pad" style={{ marginTop: 16 }}>
@@ -353,6 +360,9 @@ export default function ProfilePage() {
                     </div>
                     <Icon name="chevron-right" style={{ color: "var(--ink-4)" }} />
                 </button>
+
+                </div>
+                </div>
             </div>
         </div>
     );

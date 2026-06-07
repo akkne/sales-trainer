@@ -204,7 +204,7 @@ function FriendsPageContent() {
 
                 {/* Requests tab */}
                 {activeTab === "requests" && (
-                    <div className="col gap-5" style={{ maxWidth: 620 }}>
+                    <div className="col gap-5" style={{ maxWidth: 880 }}>
                         {incomingRequests.length > 0 && (
                             <div className="col gap-2">
                                 <span className="eyebrow muted">Входящие · {incomingRequests.length}</span>
@@ -237,7 +237,7 @@ function FriendsPageContent() {
 
                 {/* Leaderboard tab */}
                 {activeTab === "leaderboard" && (
-                    <div style={{ maxWidth: 620 }}>
+                    <div style={{ maxWidth: 880 }}>
                         <FriendLeaderboard />
                     </div>
                 )}

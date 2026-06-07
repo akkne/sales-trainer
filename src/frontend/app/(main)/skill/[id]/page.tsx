@@ -25,7 +25,7 @@ export default function SkillPage({ params }: SkillPageProps) {
     const completedCount = lessons.filter((l) => l.status === "completed").length;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-8">
             <Link
                 href="/tree"
                 className="text-ink-4 hover:text-ink text-sm mb-6 inline-flex items-center gap-1"

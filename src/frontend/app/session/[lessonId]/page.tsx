@@ -265,7 +265,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                     alignItems: "flex-start",
                 }}
             >
-                <div className="exercise fade-up" style={{ maxWidth: 820 }}>
+                <div className="exercise fade-up" style={{ maxWidth: 900 }}>
                     {currentExercise.type === ExerciseTypes.ChooseOption && (
                         <ChooseOptionExercise
                             key={currentQueued.queueKey}

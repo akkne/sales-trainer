@@ -2,7 +2,7 @@
 
 > Purpose: an exhaustive, factual snapshot of the existing frontend (screens, layout, elements, visual system) for Claude Design to use as the starting point of a redesign. This document describes **what exists today** — it intentionally contains no redesign direction.
 
-Last updated: 2026-06-06.
+Last updated: 2026-06-07.
 
 ---
 
@@ -104,6 +104,9 @@ Redirects: unauthenticated → `/login`; authenticated visiting `/` → `/tree`;
 
 ## 5. Shared layout
 
+### Page width
+Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 1840px; padding: 0 clamp(24px, 3.5vw, 72px)`; `.appbar-inner` matches. Page grids stretch with it (`.tree-grid-a` minmax columns, `.friends-grid` fluid left column, `.gb-grid` auto-fit ≥420px → 3 columns on wide screens). Reading-style pages cap narrower: skill/reference/friend-profile `max-w-4xl`, session exercise 860–900px, dialog chat thread 980px.
+
 ### TopAppBar (sticky, 60px, all main pages) — `features/layout/components/top-app-bar.tsx`
 - Left: wordmark "SalesTrainer".
 - Center (desktop): 6 nav items with icons — Tree, League, Guidebook, Dialog, Friends, Profile; active item gets `--bg-2` highlight.
@@ -204,7 +207,7 @@ Full-height, own layout, **inline styles** (not token classes).
 - Sub-pages: `/friends/[userId]` public profile, `/friends/chat/[conversationId]` full DM view.
 
 ### 6.11 Profile `/profile`
-Single column, max-width 2xl:
+Two-column desktop layout (`.profile-grid`, collapses to one column ≤1000px) inside a 1320px container; header + stats span full width:
 - Header card: GeoAvatar 80px square (initials on indigo), name, email, persona pill (e.g. "SDR").
 - Stats grid 4×: streak / XP / record / accuracy (icon circles in rust/indigo/olive/clay).
 - "Навыки пройдено" progress bar.

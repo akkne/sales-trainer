@@ -32,7 +32,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
     const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-4 py-8">
             {/* Back link */}
             <Link
                 href="/tree"
