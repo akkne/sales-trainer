@@ -364,6 +364,21 @@ Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migra
 
 ---
 
+### `DailyQuotes`
+
+Quote of the day shown in the stats widget ("Совет дня"). One quote per calendar date; managed from the admin calendar at `/admin/quotes`. Created by migration `20260607120000_AddDailyQuotes`, which also seeds today's row with the previously hardcoded widget tip. The public `GET /daily-quote` endpoint falls back to the most recent quote at or before the requested date.
+
+| Column      | Type                       | Nullable | Notes                          |
+|-------------|----------------------------|----------|--------------------------------|
+| `Id`        | `uuid`                     | NOT NULL | PK                             |
+| `Date`      | `date`                     | NOT NULL | UNIQUE — one quote per day     |
+| `Text`      | `text`                     | NOT NULL | quote body                     |
+| `Author`    | `character varying(120)`   | NOT NULL | may be empty string            |
+| `CreatedAt` | `timestamp with time zone` | NOT NULL |                                |
+| `UpdatedAt` | `timestamp with time zone` | NOT NULL |                                |
+
+---
+
 ### `Achievements`
 
 | Column               | Type      | Nullable | Notes                                                       |

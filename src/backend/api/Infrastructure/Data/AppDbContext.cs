@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.DailyQuotes.Models;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Friends.Models;
@@ -41,6 +42,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
     public DbSet<Technique> Techniques => Set<Technique>();
     public DbSet<TechniqueSkill> TechniqueSkills => Set<TechniqueSkill>();
     public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();

@@ -175,6 +175,16 @@ Tiers (in order): `bronze → silver → gold → diamond`
 
 ---
 
+## Daily Quote
+
+| Method | Path | Response |
+|---|---|---|
+| GET | /daily-quote?date=YYYY-MM-DD | `DailyQuoteDto` or 204 if no quotes exist yet |
+
+`DailyQuoteDto`: `{text, author, date}`. `date` query param is optional (defaults to UTC today; the frontend passes the client's local date). Returns the quote for the requested date, falling back to the most recent quote at or before it — so the widget keeps showing the last scheduled quote on days without a dedicated one. Requires auth (any role); managed via `/admin/daily-quotes` (see ADMIN_PANEL.md).
+
+---
+
 ## Auth — updated response
 
 `AuthTokenResponseDto` now includes `role: "User" | "Admin" | "SuperAdmin"`.

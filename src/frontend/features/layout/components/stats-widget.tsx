@@ -5,6 +5,12 @@ import { Icon } from "@/shared/components/icon";
 import { Card } from "@/shared/components/card";
 import { Progress } from "@/shared/components/progress";
 import { StatTile } from "@/shared/components/stat-tile";
+import { useDailyQuote } from "@/features/layout/hooks/use-daily-quote";
+
+const FALLBACK_QUOTE = {
+    text: "Когда клиент говорит «дорого», не называйте скидку. Спросите — «дорого по сравнению с чем?»",
+    author: "Skeptic Sergey",
+};
 
 interface StatsWidgetProps {
     currentStreakDayCount: number;
@@ -22,6 +28,9 @@ export function StatsWidget({
     dailyXpCurrent = 40,
 }: StatsWidgetProps) {
     const remaining = Math.max(0, dailyXpGoal - dailyXpCurrent);
+    const { data: dailyQuote } = useDailyQuote();
+    const quoteText = dailyQuote?.text ?? FALLBACK_QUOTE.text;
+    const quoteAuthor = dailyQuote?.author ?? FALLBACK_QUOTE.author;
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -95,12 +104,13 @@ export function StatsWidget({
                         margin: "10px 0 12px",
                     }}
                 >
-                    Когда клиент говорит «дорого», не называйте скидку. Спросите —
-                    <span style={{ color: "var(--primary)", fontWeight: 600 }}> «дорого по сравнению с чем?»</span>
+                    {quoteText}
                 </div>
-                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-                    — Skeptic Sergey
-                </div>
+                {quoteAuthor && (
+                    <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
+                        — {quoteAuthor}
+                    </div>
+                )}
             </Card>
 
             {/* League card */}

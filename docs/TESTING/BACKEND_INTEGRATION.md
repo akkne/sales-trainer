@@ -76,3 +76,18 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `CloseCurrent_Returns204`
 - [x] `UpdateSettings_PersistsValues`
 - [x] `UpdateSettings_ZonesExceedMax_Returns400`
+
+## Block 6 — Daily Quotes
+**File:** `Integration/AdminDailyQuotesTests.cs`
+**Status:** [x]
+
+- [x] `GetAll_AsAdmin_FiltersByDateRange`
+- [x] `GetAll_AsRegularUser_Returns403`
+- [x] `Create_AsAdmin_Returns200WithCreatedQuote`
+- [x] `Create_DuplicateDate_Returns409`
+- [x] `Create_EmptyText_Returns400`
+- [x] `Update_AsAdmin_Returns200WithUpdatedData`
+- [x] `Update_NonExistentQuote_Returns404`
+- [x] `Delete_AsAdmin_Returns204`
+- [x] `Delete_NonExistentQuote_Returns404`
+- [x] `PublicEndpoint_ReturnsQuoteForDate_AndFallsBackToEarlier`

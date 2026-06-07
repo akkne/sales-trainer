@@ -88,6 +88,16 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 
 XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants live in the single-row `LeagueSettings` table.
 
+### Daily Quotes
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/daily-quotes | query: `?from=&to=` (ISO dates) | `AdminDailyQuoteDto[]` ordered by date |
+| POST | /admin/daily-quotes | `{date, text, author?}` | `AdminDailyQuoteDto` (409 if the date already has a quote, 400 on empty text) |
+| PUT | /admin/daily-quotes/:id | same | `AdminDailyQuoteDto` |
+| DELETE | /admin/daily-quotes/:id | — | 204 |
+
+`AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. The admin UI is a month calendar (`/admin/quotes`) — click a day to create/edit/delete its quote.
+
 ### Users (SuperAdmin only)
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -126,6 +136,8 @@ app/(admin)/
       page.tsx         ← all lessons view + inline JSON import
     reference/
       page.tsx         ← global reference materials view
+    quotes/
+      page.tsx         ← daily quotes month calendar (click a day → edit quote)
     dialog/
       page.tsx         ← dialog bundles management
     open-question/

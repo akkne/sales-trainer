@@ -125,4 +125,5 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Visual exercise editor for all 11 types
 - JSON import with inline editor
 - Dialog bundle/mode management with prompt editors
+- Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - User role management (SuperAdmin only)

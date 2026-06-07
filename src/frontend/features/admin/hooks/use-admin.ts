@@ -613,6 +613,81 @@ export function useImportTechniques() {
     });
 }
 
+// --- Daily Quotes ---
+
+export interface AdminDailyQuote {
+    id: string;
+    date: string;
+    text: string;
+    author: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface AdminDailyQuoteWriteBody {
+    date: string;
+    text: string;
+    author: string | null;
+}
+
+export function useAdminDailyQuotes(filters?: { from?: string; to?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.from) params.set("from", filters.from);
+    if (filters?.to) params.set("to", filters.to);
+    const queryString = params.toString();
+    return useQuery({
+        queryKey: ["admin", "daily-quotes", filters],
+        queryFn: () =>
+            apiClient.get<AdminDailyQuote[]>(
+                `/admin/daily-quotes${queryString ? `?${queryString}` : ""}`
+            ),
+    });
+}
+
+export function useCreateDailyQuote() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: AdminDailyQuoteWriteBody) =>
+            apiClient.post<AdminDailyQuote>("/admin/daily-quotes", body),
+        onSuccess: (data) => {
+            clientLogger.info("Daily quote created", { quoteId: data.id, date: data.date });
+            queryClient.invalidateQueries({ queryKey: ["admin", "daily-quotes"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to create daily quote", { date: variables.date, error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateDailyQuote() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, body }: { id: string; body: AdminDailyQuoteWriteBody }) =>
+            apiClient.put<AdminDailyQuote>(`/admin/daily-quotes/${id}`, body),
+        onSuccess: (data) => {
+            clientLogger.info("Daily quote updated", { quoteId: data.id, date: data.date });
+            queryClient.invalidateQueries({ queryKey: ["admin", "daily-quotes"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update daily quote", { quoteId: variables.id, error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteDailyQuote() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete<void>(`/admin/daily-quotes/${id}`),
+        onSuccess: (_, id) => {
+            clientLogger.warn("Daily quote deleted", { quoteId: id });
+            queryClient.invalidateQueries({ queryKey: ["admin", "daily-quotes"] });
+        },
+        onError: (error, id) => {
+            clientLogger.error("Failed to delete daily quote", { quoteId: id, error: (error as Error).message });
+        },
+    });
+}
+
 // --- Users ---
 
 export function useAdminUsers() {
