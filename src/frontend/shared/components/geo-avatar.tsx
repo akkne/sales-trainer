@@ -11,10 +11,10 @@ interface GeoAvatarProps {
 }
 
 const DEFAULT_PALETTES = [
-    ["var(--indigo)", "var(--clay)", "var(--ink)"],
-    ["var(--olive)", "var(--sage)", "var(--ink)"],
-    ["var(--rust)", "var(--clay)", "var(--ink)"],
-    ["var(--indigo)", "var(--olive)", "var(--ink-2)"],
+    ["var(--primary)", "var(--amber)", "var(--violet)"],
+    ["var(--success)", "var(--primary)", "var(--amber)"],
+    ["var(--flame)", "var(--amber)", "var(--violet)"],
+    ["var(--violet)", "var(--success)", "var(--primary)"],
 ];
 
 export function GeoAvatar({

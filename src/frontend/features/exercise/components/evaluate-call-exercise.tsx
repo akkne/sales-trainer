@@ -3,8 +3,8 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface TranscriptLine {
     speaker: string;
@@ -54,7 +54,7 @@ export function EvaluateCallExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 Оцените звонок по критериям:
             </h2>
 
@@ -80,7 +80,7 @@ export function EvaluateCallExercise({
                         border: "none",
                         cursor: "pointer",
                         fontSize: 13,
-                        fontFamily: "var(--f-sans)",
+                        fontFamily: "var(--font-ui)",
                         color: "var(--ink-2)",
                     }}
                 >
@@ -100,7 +100,7 @@ export function EvaluateCallExercise({
                             lineHeight: 1.6,
                             maxHeight: 280,
                             overflow: "auto",
-                            fontFamily: "var(--f-mono)",
+                            fontFamily: "var(--font-mono)",
                         }}
                     >
                         {content.transcript.map((line, idx) => (
@@ -157,10 +157,10 @@ export function EvaluateCallExercise({
                                         borderRadius: 10,
                                         border: "none",
                                         cursor: isAnswered ? "default" : "pointer",
-                                        background: ratings[axis.name] >= value ? "var(--rust)" : "var(--bg-2)",
+                                        background: ratings[axis.name] >= value ? "var(--amber)" : "var(--bg-2)",
                                         color: ratings[axis.name] >= value ? "white" : "var(--ink-4)",
                                         fontSize: 14,
-                                        fontFamily: "var(--f-mono)",
+                                        fontFamily: "var(--font-mono)",
                                         fontWeight: 500,
                                     }}
                                 >
@@ -191,7 +191,7 @@ export function EvaluateCallExercise({
                             outline: "none",
                             resize: "none",
                             minHeight: 80,
-                            fontFamily: "var(--f-sans)",
+                            fontFamily: "var(--font-ui)",
                             fontSize: 14,
                         }}
                     />
@@ -209,46 +209,13 @@ export function EvaluateCallExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => onSubmit({ ratings, overallComment: overallComment || undefined })}
-                                disabled={!allRated || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ОТПРАВИТЬ ОЦЕНКУ
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => onSubmit({ ratings, overallComment: overallComment || undefined })}
+                    submitLabel="Отправить оценку"
+                    canSubmit={allRated}
+                    isSubmitting={isSubmitting}
+                />
             )}
         </div>
     );

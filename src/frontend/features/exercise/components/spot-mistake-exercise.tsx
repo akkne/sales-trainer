@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
-import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface DialogueLine {
     speaker: string;
@@ -48,19 +47,19 @@ export function SpotMistakeExercise({
 
         if (!isAnswered) {
             return {
-                background: isSelected ? "var(--bad-soft)" : "transparent",
-                border: `1px solid ${isSelected ? "var(--bad)" : "transparent"}`,
+                background: isSelected ? "var(--heart-soft)" : "transparent",
+                border: `1px solid ${isSelected ? "var(--heart)" : "transparent"}`,
             };
         }
 
         if (wasSelected && isMistakeLine) {
-            return { background: "var(--good-soft)", border: "1px solid var(--good)" };
+            return { background: "var(--success-soft)", border: "1px solid var(--success)" };
         }
         if (wasSelected && !isMistakeLine) {
-            return { background: "var(--bad-soft)", border: "1px solid var(--bad)" };
+            return { background: "var(--heart-soft)", border: "1px solid var(--heart)" };
         }
         if (isMistakeLine) {
-            return { background: "var(--good-soft)", border: "1px solid var(--good)", opacity: 0.7 };
+            return { background: "var(--success-soft)", border: "1px solid var(--success)", opacity: 0.7 };
         }
         return { background: "transparent", border: "1px solid transparent" };
     }
@@ -77,7 +76,7 @@ export function SpotMistakeExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 Найдите реплику, где продавец допустил ошибку:
             </h2>
 
@@ -106,7 +105,7 @@ export function SpotMistakeExercise({
                                 borderRadius: 10,
                                 cursor: isAnswered ? "default" : "pointer",
                                 fontSize: 14,
-                                fontFamily: "var(--f-sans)",
+                                fontFamily: "var(--font-ui)",
                                 display: "flex",
                                 gap: 10,
                                 opacity: (lineStyle as { opacity?: number }).opacity ?? 1,
@@ -115,7 +114,7 @@ export function SpotMistakeExercise({
                             <span
                                 style={{
                                     fontSize: 11,
-                                    fontFamily: "var(--f-mono)",
+                                    fontFamily: "var(--font-mono)",
                                     color: "var(--ink-4)",
                                     marginTop: 2,
                                     width: 28,
@@ -148,7 +147,7 @@ export function SpotMistakeExercise({
                             outline: "none",
                             resize: "none",
                             minHeight: 100,
-                            fontFamily: "var(--f-sans)",
+                            fontFamily: "var(--font-ui)",
                             fontSize: 14,
                         }}
                     />
@@ -165,46 +164,12 @@ export function SpotMistakeExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={handleSubmit}
-                                disabled={!canSubmit || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ПРОВЕРИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={handleSubmit}
+                    canSubmit={canSubmit}
+                    isSubmitting={isSubmitting}
+                />
             )}
         </div>
     );

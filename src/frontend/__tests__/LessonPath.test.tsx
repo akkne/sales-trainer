@@ -29,19 +29,19 @@ function makeLesson(
 describe("LessonPath", () => {
     it("renders lesson titles", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Урок 1", status: "completed" }),
-            makeLesson({ lessonId: "l2", title: "Урок 2", status: "available" }),
-            makeLesson({ lessonId: "l3", title: "Урок 3", status: "locked" }),
+            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "completed" }),
+            makeLesson({ lessonId: "l2", title: "Второй звонок", status: "available" }),
+            makeLesson({ lessonId: "l3", title: "Третий звонок", status: "locked" }),
         ];
         render(<LessonPath lessons={lessons} />);
-        expect(screen.getByText("Урок 1")).toBeTruthy();
-        expect(screen.getByText("Урок 2")).toBeTruthy();
-        expect(screen.getByText("Урок 3")).toBeTruthy();
+        expect(screen.getByText("Первый звонок")).toBeTruthy();
+        expect(screen.getByText("Второй звонок")).toBeTruthy();
+        expect(screen.getByText("Третий звонок")).toBeTruthy();
     });
 
     it("popover is hidden initially", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Урок 1", status: "available" }),
+            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available" }),
         ];
         render(<LessonPath lessons={lessons} />);
         expect(screen.queryByText("Продолжить")).toBeNull();
@@ -95,7 +95,7 @@ describe("LessonPath", () => {
 
     it("only one popover open at a time", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Урок 1", status: "available", sortOrder: 1 }),
+            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available", sortOrder: 1 }),
             makeLesson({ lessonId: "l2", title: "Урок 2", status: "available", sortOrder: 2 }),
         ];
         render(<LessonPath lessons={lessons} />);

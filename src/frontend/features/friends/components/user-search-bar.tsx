@@ -12,46 +12,71 @@ export function UserSearchBar() {
     const { data: searchResults, isLoading } = useUserSearch(deferredQuery);
 
     return (
-        <div className="relative">
-            <div className="relative">
-                <Icon
-                    name="search"
-                    size="md"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4"
-                />
+        <div style={{ position: "relative" }}>
+            <div className="field-wrap has-ic">
+                <Icon name="search" className="lead-ic" />
                 <input
                     type="text"
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder="Найти пользователя..."
-                    className="w-full pl-11 pr-4 py-3 rounded-xl bg-surface border border-line text-ink placeholder:text-ink-4 text-sm focus:outline-none focus:ring-2"
-                    style={{ "--tw-ring-color": "var(--indigo)", boxShadow: "var(--sh-1)" } as React.CSSProperties}
+                    placeholder="Найти пользователя…"
+                    className="field"
                 />
             </div>
 
             {deferredQuery.length >= 2 && (
                 <div
-                    className="absolute top-full left-0 right-0 mt-2 bg-surface border border-line rounded-xl overflow-hidden max-h-80 overflow-y-auto z-20"
-                    style={{ boxShadow: "var(--sh-3)" }}
+                    className="card"
+                    style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 8,
+                        overflow: "hidden",
+                        maxHeight: 320,
+                        overflowY: "auto",
+                        zIndex: 20,
+                        boxShadow: "var(--sh-3)",
+                    }}
                 >
                     {isLoading ? (
-                        <div className="p-4 text-center">
-                            <div className="w-6 h-6 rounded-full border-2 border-indigo border-t-transparent animate-spin mx-auto" />
+                        <div style={{ padding: 16, textAlign: "center" }}>
+                            <div
+                                style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: "50%",
+                                    border: "2px solid var(--primary)",
+                                    borderTopColor: "transparent",
+                                    margin: "0 auto",
+                                    animation: "spin 0.8s linear infinite",
+                                }}
+                            />
                         </div>
                     ) : searchResults && searchResults.length > 0 ? (
-                        <div className="divide-y divide-line">
+                        <div>
                             {searchResults.map((result) => (
                                 <div
                                     key={result.userId}
-                                    className="flex items-center gap-3 px-4 py-3 hover:bg-bg-2 transition-colors"
+                                    className="row gap-3"
+                                    style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}
                                 >
                                     <GeoAvatar seed={result.displayName} size={36} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-ink text-sm truncate">
+                                    <div className="grow" style={{ minWidth: 0 }}>
+                                        <p
+                                            className="h4"
+                                            style={{
+                                                fontSize: 14,
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
                                             {result.displayName}
                                         </p>
                                         {result.persona && (
-                                            <p className="text-xs text-ink-4">
+                                            <p className="small" style={{ color: "var(--ink-4)" }}>
                                                 {result.persona}
                                             </p>
                                         )}
@@ -64,7 +89,7 @@ export function UserSearchBar() {
                             ))}
                         </div>
                     ) : (
-                        <p className="p-4 text-center text-sm text-ink-4">
+                        <p className="small" style={{ padding: 16, textAlign: "center", color: "var(--ink-4)" }}>
                             Никого не найдено
                         </p>
                     )}

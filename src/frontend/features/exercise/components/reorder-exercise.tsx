@@ -3,8 +3,8 @@
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface ReorderItem {
     text: string;
@@ -87,7 +87,7 @@ export function ReorderExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Расставьте элементы в правильном порядке:"}
             </h2>
 
@@ -107,14 +107,14 @@ export function ReorderExercise({
                     let badgeColor = "var(--bg)";
 
                     if (showCorrect) {
-                        bgColor = "var(--good-soft)";
-                        borderColor = "var(--good)";
-                        badgeBg = "var(--good)";
+                        bgColor = "var(--success-soft)";
+                        borderColor = "var(--success)";
+                        badgeBg = "var(--success)";
                         badgeColor = "white";
                     } else if (showWrong) {
-                        bgColor = "var(--bad-soft)";
-                        borderColor = "var(--bad)";
-                        badgeBg = "var(--bad)";
+                        bgColor = "var(--heart-soft)";
+                        borderColor = "var(--heart)";
+                        badgeBg = "var(--heart)";
                         badgeColor = "white";
                     }
 
@@ -147,7 +147,7 @@ export function ReorderExercise({
                                     alignItems: "center",
                                     justifyContent: "center",
                                     fontSize: 13,
-                                    fontFamily: "var(--f-mono)",
+                                    fontFamily: "var(--font-mono)",
                                     fontWeight: 500,
                                 }}
                             >
@@ -210,60 +210,13 @@ export function ReorderExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <div
-                                className="mono"
-                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
-                                data-keyboard-hint
-                            >
-                                ↑↓ порядок · Enter — проверить
-                            </div>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => onSubmit({ order: orderedIndices })}
-                                disabled={isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ПРОВЕРИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                    <style jsx global>{`
-                        @media (pointer: fine) {
-                            [data-keyboard-hint] {
-                                display: block !important;
-                            }
-                        }
-                    `}</style>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => onSubmit({ order: orderedIndices })}
+                    canSubmit={true}
+                    isSubmitting={isSubmitting}
+                    keyboardHint="↑↓ порядок · Enter — проверить"
+                />
             )}
         </div>
     );

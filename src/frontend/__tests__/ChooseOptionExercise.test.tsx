@@ -47,7 +47,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        const submitButton = screen.getByText("ПРОВЕРИТЬ").closest("button")!;
+        const submitButton = screen.getByText("Проверить").closest("button")!;
         expect(submitButton.disabled).toBe(true);
 
         fireEvent.click(screen.getByText(CONTENT.options[1].text));
@@ -64,7 +64,7 @@ describe("ChooseOptionExercise", () => {
             />
         );
         fireEvent.click(screen.getByText(CONTENT.options[2].text));
-        fireEvent.click(screen.getByText("ПРОВЕРИТЬ"));
+        fireEvent.click(screen.getByText("Проверить"));
         expect(onSubmit).toHaveBeenCalledWith({ selectedOptionIndex: 2 });
     });
 
@@ -76,7 +76,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        expect(screen.queryByText("ПРОПУСТИТЬ")).toBeNull();
+        expect(screen.queryByText("Пропустить")).toBeNull();
 
         rerender(
             <ChooseOptionExercise
@@ -86,7 +86,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        expect(screen.getByText("ПРОПУСТИТЬ")).toBeTruthy();
+        expect(screen.getByText("Пропустить")).toBeTruthy();
     });
 
     it("locks options after a result is submitted", () => {

@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
+import { Icon, IconName } from "@/shared/components/icon";
 
 interface ExerciseResultBannerProps {
     isCorrect: boolean;
@@ -21,10 +20,13 @@ function pickTone(isCorrect: boolean, score: number): Tone {
     return "bad";
 }
 
-const TONE_STYLES: Record<Tone, { bg: string; color: string; title: string; icon: "check" | "close" }> = {
-    good: { bg: "var(--good-soft)", color: "var(--good)", title: "Верно!", icon: "check" },
-    warn: { bg: "var(--warn-soft)", color: "var(--warn)", title: "Почти", icon: "close" },
-    bad:  { bg: "var(--bad-soft)",  color: "var(--bad)",  title: "Не совсем", icon: "close" },
+const TONE_STYLES: Record<
+    Tone,
+    { footClass: string; tileBg: string; tileColor: string; title: string; icon: IconName; btnClass: string }
+> = {
+    good: { footClass: " ok", tileBg: "var(--success-soft)", tileColor: "var(--success)", title: "Верно!", icon: "check", btnClass: "btn-success" },
+    warn: { footClass: " bad", tileBg: "var(--amber-soft)", tileColor: "var(--amber)", title: "Почти", icon: "warning", btnClass: "btn-danger" },
+    bad: { footClass: " bad", tileBg: "var(--heart-soft)", tileColor: "var(--heart)", title: "Не совсем", icon: "warning", btnClass: "btn-danger" },
 };
 
 export function ExerciseResultBanner({
@@ -56,63 +58,32 @@ export function ExerciseResultBanner({
 
     return (
         <div
+            className={"session-foot" + t.footClass}
             style={{
                 position: "fixed",
                 bottom: 0,
                 left: 0,
                 right: 0,
-                background: "var(--surface)",
-                borderTop: "1px solid var(--line)",
-                padding: "20px 32px",
-                paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                paddingBottom: "max(18px, env(safe-area-inset-bottom))",
             }}
         >
             <div
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: detailed ? 14 : 0,
-                    maxWidth: 820,
-                    margin: "0 auto",
-                    padding: detailed ? 18 : 16,
-                    background: t.bg,
-                    borderRadius: 14,
-                    animation: "slideUp 0.3s cubic-bezier(0.5, 1.6, 0.4, 1)",
-                }}
-                className="slide-up"
+                className="container session-foot-inner"
+                style={{ flexDirection: "column", gap: detailed ? 14 : 0, width: "100%" }}
             >
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 20,
-                    }}
-                >
-                    <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
-                        <div
-                            style={{
-                                width: 42,
-                                height: 42,
-                                borderRadius: 12,
-                                background: t.color,
-                                color: "white",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                            }}
+                <div className="row between wrap gap-4 grow">
+                    <div className="row gap-3" style={{ minWidth: 0 }}>
+                        <span
+                            className="itile"
+                            style={{ width: 44, height: 44, background: t.tileBg, color: t.tileColor, flex: "none" }}
                         >
-                            <Icon name={t.icon} size={20} />
-                        </div>
+                            <Icon name={t.icon} size={22} />
+                        </span>
                         <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: t.color }}>
-                                {t.title}
-                            </div>
+                            <div className="h4">{t.title}</div>
                             <div
+                                className="small"
                                 style={{
-                                    fontSize: 13,
-                                    color: "var(--ink-2)",
                                     marginTop: 2,
                                     maxWidth: 520,
                                     overflow: "hidden",
@@ -125,7 +96,7 @@ export function ExerciseResultBanner({
                         </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                    <div className="row gap-3" style={{ flex: "none" }}>
                         {ratingOutOfTen !== null && (
                             <div
                                 aria-label={`Оценка ${ratingOutOfTen} из 10`}
@@ -135,10 +106,10 @@ export function ExerciseResultBanner({
                                     gap: 2,
                                     padding: "6px 10px",
                                     background: "var(--surface)",
-                                    border: `1px solid ${t.color}`,
+                                    border: `1px solid ${t.tileColor}`,
                                     borderRadius: 10,
-                                    fontFamily: "var(--f-mono)",
-                                    color: t.color,
+                                    fontFamily: "var(--font-mono)",
+                                    color: t.tileColor,
                                 }}
                             >
                                 <span style={{ fontSize: 16, fontWeight: 600 }}>{ratingOutOfTen}</span>
@@ -148,50 +119,30 @@ export function ExerciseResultBanner({
                         {isCorrect && xpEarned > 0 && (
                             <span
                                 style={{
-                                    fontFamily: "var(--f-mono)",
+                                    fontFamily: "var(--font-mono)",
                                     fontSize: 13,
                                     fontWeight: 500,
-                                    color: t.color,
+                                    color: t.tileColor,
                                 }}
                             >
                                 +{xpEarned} XP
                             </span>
                         )}
-                        <Button variant="primary" onClick={onContinue} iconRightName="arrow-right">
-                            ПРОДОЛЖИТЬ
-                        </Button>
+                        <button className={"btn btn-lg " + t.btnClass} onClick={onContinue}>
+                            Дальше
+                            <Icon name="arrow-right" size={18} />
+                        </button>
                     </div>
                 </div>
 
                 {detailed && (
                     <div
-                        style={{
-                            background: "var(--surface)",
-                            border: "1px solid var(--line)",
-                            borderRadius: 12,
-                            padding: "12px 14px",
-                        }}
+                        className="card card-pad"
+                        style={{ width: "100%" }}
                     >
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                marginBottom: 6,
-                            }}
-                        >
-                            <Icon name="sparkle" size="xs" style={{ color: t.color }} />
-                            <span
-                                style={{
-                                    fontSize: 11,
-                                    letterSpacing: 1,
-                                    textTransform: "uppercase",
-                                    color: "var(--ink-3)",
-                                    fontWeight: 500,
-                                }}
-                            >
-                                Разбор ответа
-                            </span>
+                        <div className="row gap-2" style={{ marginBottom: 6 }}>
+                            <Icon name="sparkle" size="xs" style={{ color: t.tileColor }} />
+                            <span className="eyebrow">Разбор ответа</span>
                         </div>
                         <div
                             ref={scrollerRef}

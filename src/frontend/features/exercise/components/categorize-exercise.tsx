@@ -2,9 +2,8 @@
 
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
-import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface CategorizeItem {
     text: string;
@@ -95,7 +94,7 @@ export function CategorizeExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Распределите реплики по типам:"}
             </h2>
 
@@ -209,7 +208,7 @@ export function CategorizeExercise({
                                     const isCorrect = content.items[item.idx].category === category;
                                     let itemBg = "var(--bg-2)";
                                     if (isAnswered) {
-                                        itemBg = isCorrect ? "var(--good-soft)" : "var(--bad-soft)";
+                                        itemBg = isCorrect ? "var(--success-soft)" : "var(--heart-soft)";
                                     }
                                     return (
                                         <div
@@ -262,60 +261,13 @@ export function CategorizeExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <div
-                                className="mono"
-                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
-                                data-keyboard-hint
-                            >
-                                Enter — проверить
-                            </div>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => onSubmit({ mapping })}
-                                disabled={!canSubmit || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ПРОВЕРИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                    <style jsx global>{`
-                        @media (pointer: fine) {
-                            [data-keyboard-hint] {
-                                display: block !important;
-                            }
-                        }
-                    `}</style>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => onSubmit({ mapping })}
+                    canSubmit={canSubmit}
+                    isSubmitting={isSubmitting}
+                    keyboardHint="Enter — проверить"
+                />
             )}
         </div>
     );

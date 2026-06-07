@@ -5,10 +5,10 @@ import type { IconName } from "@/shared/components/icon";
 import { useFriendActivity } from "@/features/friends/hooks/use-friends";
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {
-    earned_achievement: { icon: "trophy", color: "text-olive" },
-    earned_xp: { icon: "bolt", color: "text-indigo" },
-    completed_lesson: { icon: "check", color: "text-indigo" },
-    streak_milestone: { icon: "flame", color: "text-rust" },
+    earned_achievement: { icon: "trophy", color: "var(--amber)" },
+    earned_xp: { icon: "bolt", color: "var(--primary)" },
+    completed_lesson: { icon: "check", color: "var(--primary)" },
+    streak_milestone: { icon: "flame", color: "var(--flame)" },
 };
 
 function formatRelativeTime(dateString: string): string {
@@ -31,49 +31,58 @@ export function FriendActivityFeed() {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col gap-2">
-                {[1, 2, 3].map((index) => (
-                    <div key={index} className="h-12 rounded-xl bg-surface animate-pulse" />
-                ))}
-            </div>
+            <>
+                <span className="eyebrow muted">Активность друзей</span>
+                <div className="col gap-2" style={{ marginTop: 14 }}>
+                    {[1, 2, 3].map((index) => (
+                        <div key={index} style={{ height: 40, borderRadius: 12, background: "var(--surface-2)" }} />
+                    ))}
+                </div>
+            </>
         );
     }
 
     if (!activities || activities.length === 0) {
-        return null;
+        return (
+            <>
+                <span className="eyebrow muted">Активность друзей</span>
+                <p className="small" style={{ marginTop: 14 }}>Пока тихо. Активность друзей появится здесь.</p>
+            </>
+        );
     }
 
     return (
-        <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-2">
-                Активность друзей
-            </h3>
-            {activities.slice(0, 10).map((activity, index) => {
-                const config = ACTIVITY_CONFIG[activity.activityType] ?? {
-                    icon: "info",
-                    color: "text-ink-3",
-                };
+        <>
+            <span className="eyebrow muted">Активность друзей</span>
+            <div className="col" style={{ marginTop: 14 }}>
+                {activities.slice(0, 10).map((activity, index) => {
+                    const config = ACTIVITY_CONFIG[activity.activityType] ?? {
+                        icon: "info" as IconName,
+                        color: "var(--ink-3)",
+                    };
 
-                return (
-                    <div
-                        key={`${activity.userId}-${activity.occurredAt}-${index}`}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl"
-                    >
-                        <div className="w-8 h-8 rounded-xl bg-bg-2 flex items-center justify-center shrink-0">
-                            <Icon name={config.icon} size="sm" className={config.color} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs text-ink-3">
-                                <span className="font-medium text-ink">{activity.displayName}</span>{" "}
+                    return (
+                        <div
+                            key={`${activity.userId}-${activity.occurredAt}-${index}`}
+                            className="act-row"
+                        >
+                            <span
+                                className="itile"
+                                style={{ width: 32, height: 32, background: "var(--surface-2)", color: config.color }}
+                            >
+                                <Icon name={config.icon} size={17} />
+                            </span>
+                            <span className="grow small">
+                                <b style={{ color: "var(--ink)" }}>{activity.displayName}</b>{" "}
                                 {activity.description}
-                            </p>
+                            </span>
+                            <span className="small" style={{ color: "var(--ink-4)", flexShrink: 0 }}>
+                                {formatRelativeTime(activity.occurredAt)}
+                            </span>
                         </div>
-                        <span className="text-[10px] text-ink-4 font-mono shrink-0">
-                            {formatRelativeTime(activity.occurredAt)}
-                        </span>
-                    </div>
-                );
-            })}
-        </div>
+                    );
+                })}
+            </div>
+        </>
     );
 }

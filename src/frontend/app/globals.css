@@ -25,6 +25,12 @@
   --amber:          #f5a623;
   --amber-soft:     rgba(245, 166, 35, 0.14);
 
+  /* tier colors */
+  --tier-bronze:    #c47b3f;
+  --tier-silver:    #9aa3ad;
+  --tier-gold:      #e3b23c;
+  --tier-diamond:   #4cc6e8;
+
   /* Legacy aliases — keep components working */
   --indigo:         var(--primary);
   --indigo-soft:    var(--primary-soft);

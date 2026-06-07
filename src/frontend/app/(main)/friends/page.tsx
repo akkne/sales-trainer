@@ -96,94 +96,69 @@ function FriendsPageContent() {
     const outgoingRequests = requests?.filter((request) => request.direction === "outgoing") ?? [];
 
     return (
-        <div style={{ minHeight: "100vh", background: "var(--bg)" }} className="pb-20">
-            {/* Hero band — handbook style */}
-            <div
-                style={{
-                    padding: "40px 60px 32px",
-                    borderBottom: "1px solid var(--line)",
-                    background: "var(--surface-2)",
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-end",
-                        gap: 32,
-                        maxWidth: 1200,
-                        margin: "0 auto",
-                        flexWrap: "wrap",
-                    }}
-                >
-                    <div style={{ minWidth: 0 }}>
-                        <div
-                            style={{
-                                fontSize: 12,
-                                color: "var(--indigo)",
-                                letterSpacing: 2,
-                                textTransform: "uppercase",
-                                fontWeight: 500,
-                                marginBottom: 10,
-                                fontFamily: "var(--f-mono)",
-                            }}
-                        >
-                            СООБЩЕСТВО · {friendsCount} ДРУЗ{plural(friendsCount)}
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: 48, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1, color: "var(--ink)" }}>
-                            Друзья.
-                        </h1>
-                        <p style={{ fontSize: 16, color: "var(--ink-3)", marginTop: 10, maxWidth: 520 }}>
+        <div className="page">
+            <div className="container">
+                {/* Hero header */}
+                <div className="hero-head">
+                    <div className="hh-left fade-up">
+                        <span className="eyebrow">
+                            Сообщество<span className="dot">·</span>
+                            <span>{friendsCount} {pluralFriends(friendsCount)}</span>
+                        </span>
+                        <h1 className="h1 hh-title">Друзья.</h1>
+                        <p className="lead">
                             Твоё боевое окружение. Добавляй напарников, отслеживай активность
                             и соревнуйся за верхнюю строку в своём рейтинге.
                         </p>
                     </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div className="hero-stats fade-up">
                         <StatTile
-                            big
                             label="Друзей"
                             value={friendsCount}
                             icon={<Icon name="users" size="xs" />}
-                            tone="olive"
+                            tone="primary"
                         />
                         <StatTile
-                            big
                             label="Запросов"
                             value={incomingRequestCount}
                             icon={<Icon name="user" size="xs" />}
-                            tone="rust"
+                            tone="flame"
                         />
                         <StatTile
-                            big
                             label="Чатов"
                             value={conversationsCount}
                             icon={<Icon name="message" size="xs" />}
-                            tone="indigo"
+                            tone="violet"
                         />
                     </div>
                 </div>
-            </div>
 
-            {/* Tab bar + content */}
-            <div style={{ padding: "24px 60px 0", maxWidth: 1200, margin: "0 auto" }}>
-                <div className="flex gap-2 mb-6 flex-wrap">
+                {/* Tab bar */}
+                <div className="tabbar">
                     {TABS.map((tab) => (
                         <button
                             key={tab.key}
                             onClick={() => handleTabChange(tab.key)}
-                            className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                                activeTab === tab.key
-                                    ? "bg-ink text-bg"
-                                    : "bg-surface border border-line text-ink-3 hover:text-ink hover:border-line-2"
-                            }`}
-                            style={activeTab === tab.key ? { boxShadow: "var(--sh-2)" } : { boxShadow: "var(--sh-1)" }}
+                            className={`tab${activeTab === tab.key ? " active" : ""}`}
                         >
-                            <Icon name={tab.icon} size="sm" />
+                            <Icon name={tab.icon} size={18} />
                             {tab.label}
                             {tab.key === "requests" && incomingRequestCount > 0 && (
                                 <span
-                                    className="min-w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1"
-                                    style={{ background: "var(--bad)", color: "white" }}
+                                    className="num"
+                                    style={{
+                                        minWidth: 20,
+                                        height: 20,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: 999,
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        padding: "0 5px",
+                                        background: "var(--flame)",
+                                        color: "#fff",
+                                    }}
                                 >
                                     {incomingRequestCount}
                                 </span>
@@ -194,23 +169,21 @@ function FriendsPageContent() {
 
                 {/* Friends tab */}
                 {activeTab === "friends" && (
-                    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                        <div className="flex flex-col gap-5 min-w-0">
+                    <div className="friends-grid">
+                        <div className="col gap-4" style={{ minWidth: 0 }}>
                             <div ref={searchInputRef}>
                                 <UserSearchBar />
                             </div>
 
                             {friendsLoading ? (
-                                <div className="flex flex-col gap-3">
+                                <div className="col gap-3">
                                     {[1, 2, 3].map((index) => (
-                                        <div key={index} className="h-20 rounded-2xl bg-surface animate-pulse" />
+                                        <div key={index} className="card" style={{ height: 80 }} />
                                     ))}
                                 </div>
                             ) : friends && friends.length > 0 ? (
-                                <div className="flex flex-col gap-2">
-                                    <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-2">
-                                        Мои друзья ({friends.length})
-                                    </h3>
+                                <div className="col gap-2">
+                                    <span className="eyebrow muted">Мои друзья · {friends.length}</span>
                                     {friends.map((friend) => (
                                         <FriendCard
                                             key={friend.userId}
@@ -223,7 +196,7 @@ function FriendsPageContent() {
                                 <EmptyFriendsState onSearchFocus={handleSearchFocus} />
                             )}
                         </div>
-                        <aside className="min-w-0">
+                        <aside className="card card-pad activity" style={{ minWidth: 0 }}>
                             <FriendActivityFeed />
                         </aside>
                     </div>
@@ -231,47 +204,32 @@ function FriendsPageContent() {
 
                 {/* Requests tab */}
                 {activeTab === "requests" && (
-                    <div className="flex flex-col gap-5 max-w-2xl">
+                    <div className="col gap-5" style={{ maxWidth: 620 }}>
                         {incomingRequests.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
-                                    Входящие ({incomingRequests.length})
-                                </h3>
-                                <div className="flex flex-col gap-2">
-                                    {incomingRequests.map((request) => (
-                                        <FriendRequestCard key={request.friendshipId} request={request} />
-                                    ))}
-                                </div>
+                            <div className="col gap-2">
+                                <span className="eyebrow muted">Входящие · {incomingRequests.length}</span>
+                                {incomingRequests.map((request) => (
+                                    <FriendRequestCard key={request.friendshipId} request={request} />
+                                ))}
                             </div>
                         )}
 
                         {outgoingRequests.length > 0 && (
-                            <div>
-                                <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
-                                    Исходящие ({outgoingRequests.length})
-                                </h3>
-                                <div className="flex flex-col gap-2">
-                                    {outgoingRequests.map((request) => (
-                                        <FriendRequestCard key={request.friendshipId} request={request} />
-                                    ))}
-                                </div>
+                            <div className="col gap-2">
+                                <span className="eyebrow muted">Исходящие · {outgoingRequests.length}</span>
+                                {outgoingRequests.map((request) => (
+                                    <FriendRequestCard key={request.friendshipId} request={request} />
+                                ))}
                             </div>
                         )}
 
                         {incomingRequests.length === 0 && outgoingRequests.length === 0 && (
-                            <div
-                                className="bg-surface border border-line rounded-2xl px-5 py-8 text-left"
-                                style={{ boxShadow: "var(--sh-1)" }}
-                            >
-                                <div className="w-12 h-12 rounded-xl bg-bg-2 flex items-center justify-center mb-3">
-                                    <Icon name="send" size="lg" className="text-ink-4" />
+                            <div className="empty">
+                                <div className="ic">
+                                    <Icon name="send" size="lg" />
                                 </div>
-                                <p className="text-sm font-medium text-ink">
-                                    Нет запросов в друзья
-                                </p>
-                                <p className="text-xs text-ink-4 mt-1">
-                                    Все заявки обработаны
-                                </p>
+                                <p className="h4" style={{ marginBottom: 6 }}>Нет запросов в друзья</p>
+                                <p className="small">Все заявки обработаны</p>
                             </div>
                         )}
                     </div>
@@ -279,7 +237,7 @@ function FriendsPageContent() {
 
                 {/* Leaderboard tab */}
                 {activeTab === "leaderboard" && (
-                    <div className="max-w-2xl">
+                    <div style={{ maxWidth: 620 }}>
                         <FriendLeaderboard />
                     </div>
                 )}
@@ -296,10 +254,10 @@ function FriendsPageContent() {
     );
 }
 
-function plural(count: number): string {
+function pluralFriends(count: number): string {
     const mod10 = count % 10;
     const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return "Ь";
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "Я";
-    return "ЕЙ";
+    if (mod10 === 1 && mod100 !== 11) return "друг";
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "друга";
+    return "друзей";
 }

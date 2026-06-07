@@ -2,9 +2,8 @@
 
 import { useState, useMemo } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
-import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface MatchPair {
     left: string;
@@ -26,8 +25,8 @@ interface MatchPairsExerciseProps {
     submittedResult?: ExerciseSubmissionResult | null;
 }
 
-const PAIR_COLORS = ["var(--olive)", "var(--indigo)", "var(--rust)", "var(--clay)"];
-const PAIR_BG_COLORS = ["var(--olive-soft)", "var(--indigo-soft)", "var(--rust-soft)", "var(--bg-2)"];
+const PAIR_COLORS = ["var(--success)", "var(--primary)", "var(--flame)", "var(--violet)"];
+const PAIR_BG_COLORS = ["var(--success-soft)", "var(--primary-soft)", "var(--flame-soft)", "var(--violet-soft)"];
 
 export function MatchPairsExercise({
     content,
@@ -93,7 +92,7 @@ export function MatchPairsExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Сопоставьте пары:"}
             </h2>
 
@@ -139,8 +138,8 @@ export function MatchPairsExercise({
                             if (isAnswered) {
                                 const pair = userPairs.find(p => p.left === item);
                                 const isCorrect = pair && correctPairsSet.has(`${pair.left}:${pair.right}`);
-                                bgColor = isCorrect ? "var(--good-soft)" : "var(--bad-soft)";
-                                borderColor = isCorrect ? "var(--good)" : "var(--bad)";
+                                bgColor = isCorrect ? "var(--success-soft)" : "var(--heart-soft)";
+                                borderColor = isCorrect ? "var(--success)" : "var(--heart)";
                             }
 
                             return (
@@ -157,7 +156,7 @@ export function MatchPairsExercise({
                                         cursor: isAnswered || isConnected ? "default" : "pointer",
                                         textAlign: "left",
                                         fontSize: 14,
-                                        fontFamily: "var(--f-sans)",
+                                        fontFamily: "var(--font-ui)",
                                     }}
                                 >
                                     {item}
@@ -194,8 +193,8 @@ export function MatchPairsExercise({
                             if (isAnswered) {
                                 const pair = userPairs.find(p => p.right === item);
                                 const isCorrect = pair && correctPairsSet.has(`${pair.left}:${pair.right}`);
-                                bgColor = isCorrect ? "var(--good-soft)" : pair ? "var(--bad-soft)" : "var(--bg-2)";
-                                borderColor = isCorrect ? "var(--good)" : pair ? "var(--bad)" : "var(--line)";
+                                bgColor = isCorrect ? "var(--success-soft)" : pair ? "var(--heart-soft)" : "var(--bg-2)";
+                                borderColor = isCorrect ? "var(--success)" : pair ? "var(--heart)" : "var(--line)";
                                 textColor = "var(--ink)";
                             }
 
@@ -214,7 +213,7 @@ export function MatchPairsExercise({
                                         opacity: selectedLeft && isConnected ? 0.6 : 1,
                                         textAlign: "left",
                                         fontSize: 14,
-                                        fontFamily: "var(--f-sans)",
+                                        fontFamily: "var(--font-ui)",
                                     }}
                                 >
                                     {item}
@@ -234,7 +233,7 @@ export function MatchPairsExercise({
                             color: "var(--ink-3)",
                             fontSize: 12,
                             cursor: "pointer",
-                            fontFamily: "var(--f-mono)",
+                            fontFamily: "var(--font-mono)",
                         }}
                     >
                         ↺ Сбросить
@@ -253,60 +252,13 @@ export function MatchPairsExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <div
-                                className="mono"
-                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
-                                data-keyboard-hint
-                            >
-                                Enter — проверить
-                            </div>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => onSubmit({ pairs: userPairs })}
-                                disabled={!canSubmit || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ПРОВЕРИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                    <style jsx global>{`
-                        @media (pointer: fine) {
-                            [data-keyboard-hint] {
-                                display: block !important;
-                            }
-                        }
-                    `}</style>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => onSubmit({ pairs: userPairs })}
+                    canSubmit={canSubmit}
+                    isSubmitting={isSubmitting}
+                    keyboardHint="Enter — проверить"
+                />
             )}
         </div>
     );

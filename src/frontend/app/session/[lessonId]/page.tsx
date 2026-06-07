@@ -24,7 +24,6 @@ import { AchievementToastQueue, type AchievementToastData } from "@/shared/compo
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
 import { Progress } from "@/shared/components/progress";
-import { StatTile } from "@/shared/components/stat-tile";
 
 const PASSING_SCORE_THRESHOLD = 7;
 const MAX_RETRY_ATTEMPTS = 2;
@@ -157,7 +156,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     if (isLoading || exerciseQueue.length === 0) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--indigo)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
             </div>
         );
     }
@@ -168,84 +167,50 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
         const accuracyPercent = originalExerciseCount > 0 ? Math.round((correctAnswerCount / originalExerciseCount) * 100) : 100;
 
         return (
-            <div style={{ minHeight: "100vh", background: "var(--bg)", position: "relative", overflow: "hidden" }}>
-                {/* Confetti */}
+            <div className="complete">
                 <Confetti />
-
-                {/* Header */}
-                <div style={{ padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ width: 22 }} />
-                    <button
-                        onClick={() => router.back()}
-                        style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 6 }}
-                    >
-                        <Icon name="close" size={22} />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 32px", textAlign: "center" }}>
-                    <div
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 120,
-                            height: 120,
-                            borderRadius: "50%",
-                            background: "var(--olive-soft)",
-                            color: "var(--olive)",
-                            marginBottom: 24,
-                            position: "relative",
-                        }}
-                    >
-                        <div
-                            style={{
-                                position: "absolute",
-                                inset: -12,
-                                borderRadius: "50%",
-                                background: "var(--olive-soft)",
-                                opacity: 0.5,
-                                animation: "pulse 2s ease-in-out infinite",
-                            }}
-                        />
-                        <Icon name="check" size={56} />
+                <div className="complete-inner fade-up">
+                    <div className="check-circle">
+                        <Icon name="check" size={56} color="#fff" />
                     </div>
-
-                    <div
-                        style={{
-                            fontSize: 12,
-                            color: "var(--olive)",
-                            letterSpacing: 2,
-                            textTransform: "uppercase",
-                            marginBottom: 10,
-                            fontWeight: 500,
-                            fontFamily: "var(--f-mono)",
-                        }}
-                    >
-                        УРОК ЗАВЕРШЁН
-                    </div>
-
-                    <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -2, fontWeight: 500, lineHeight: 1 }}>
+                    <span className="eyebrow" style={{ justifyContent: "center" }}>
+                        Урок завершён
+                    </span>
+                    <h1 className="h1" style={{ margin: "12px 0 30px" }}>
                         Отличная работа!
                     </h1>
-
-                    <p style={{ fontSize: 17, color: "var(--ink-3)", marginTop: 16, maxWidth: 480, margin: "16px auto 40px" }}>
-                        Завтра раскройте ту же технику на холодном клиенте. Стрик продолжается.
-                    </p>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32 }}>
-                        <StatTile big label="XP получено" value={`+${totalXpEarned}`} icon={<Icon name="bolt" size="xs" />} tone="indigo" />
-                        <StatTile big label="Точность" value={accuracyPercent} unit="%" icon={<Icon name="target" size="xs" />} tone="olive" />
-                        <StatTile big label="Время" value={formatSessionDuration(sessionDurationSeconds)} icon={<Icon name="clock" size="xs" />} />
-                        <StatTile big label="Жизни" value={`${hearts}/4`} icon={<Icon name="heart" size="xs" />} tone="rust" />
+                    <div className="complete-stats">
+                        <div className="cs">
+                            <Icon name="bolt" size={24} style={{ color: "var(--primary)" }} />
+                            <b className="num">+{totalXpEarned}</b>
+                            <span>XP</span>
+                        </div>
+                        <div className="cs">
+                            <Icon name="target" size={24} style={{ color: "var(--success)" }} />
+                            <b className="num">{accuracyPercent}%</b>
+                            <span>точность</span>
+                        </div>
+                        {sessionDurationSeconds > 0 && (
+                            <div className="cs">
+                                <Icon name="clock" size={24} style={{ color: "var(--violet)" }} />
+                                <b className="num">{formatSessionDuration(sessionDurationSeconds)}</b>
+                                <span>время</span>
+                            </div>
+                        )}
+                        <div className="cs">
+                            <Icon name="heart" size={24} style={{ color: "var(--heart)" }} />
+                            <b className="num">{hearts}/4</b>
+                            <span>жизни</span>
+                        </div>
                     </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        <Button variant="accent" size="xl" fullWidth iconRightName="arrow-right" onClick={() => router.back()}>
-                            Вернуться к пути
-                        </Button>
-                    </div>
+                    <button
+                        className="btn btn-primary btn-lg btn-block"
+                        style={{ marginTop: 30 }}
+                        onClick={() => router.back()}
+                    >
+                        Вернуться к пути
+                        <Icon name="arrow-right" size={18} />
+                    </button>
                 </div>
             </div>
         );
@@ -260,42 +225,32 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     }
 
     return (
-        <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        <div className="session">
             <AchievementToastQueue queue={toastQueue} onDismiss={dismissToast} />
 
             {/* Header */}
-            <div
-                style={{
-                    padding: "16px 32px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 20,
-                    borderBottom: "1px solid var(--line)",
-                    background: "var(--surface)",
-                }}
-            >
+            <div className="session-top">
                 <button
+                    className="icon-btn"
                     onClick={() => router.back()}
-                    style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 6 }}
                     aria-label="Выйти"
                 >
                     <Icon name="close" size={22} />
                 </button>
 
-                <div style={{ flex: 1 }}>
+                <div className="grow">
                     <Progress value={progressPercent} max={100} tone="indigo" height={8} />
-                    <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>
-                        <span>УРОК</span>
-                        <span>{currentQueueIndex + 1}/{exerciseQueue.length}</span>
-                    </div>
                 </div>
 
                 {/* Hearts */}
-                <div style={{ display: "flex", gap: 4 }}>
+                <div className="row gap-1">
                     {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Icon name="heart" size={20} color={i < hearts ? "var(--rust)" : "var(--line-2)"} />
-                        </div>
+                        <Icon
+                            key={i}
+                            name="heart"
+                            size={22}
+                            color={i < hearts ? "var(--heart)" : "var(--line-2)"}
+                        />
                     ))}
                 </div>
             </div>
@@ -303,16 +258,14 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
             {/* Exercise content */}
             <div
                 key={currentQueued.queueKey}
+                className="session-body"
                 style={{
-                    flex: 1,
                     overflowY: "auto",
                     padding: lastSubmissionResult?.aiFeedback ? "48px 24px 320px" : "48px 24px 180px",
-                    display: "flex",
                     alignItems: "flex-start",
-                    justifyContent: "center",
                 }}
             >
-                <div style={{ maxWidth: 820, width: "100%" }}>
+                <div className="exercise fade-up" style={{ maxWidth: 820 }}>
                     {currentExercise.type === ExerciseTypes.ChooseOption && (
                         <ChooseOptionExercise
                             key={currentQueued.queueKey}
@@ -431,30 +384,18 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     );
 }
 
-function Confetti() {
-    const pieces = Array.from({ length: 36 }).map((_, i) => ({
-        left: Math.random() * 100,
-        delay: Math.random() * 0.4,
-        dur: 1.5 + Math.random() * 1.5,
-        rot: Math.random() * 360,
-        color: ["var(--indigo)", "var(--olive)", "var(--rust)", "var(--clay)"][i % 4],
-        w: 6 + Math.random() * 6,
-    }));
+const CONFETTI_COLORS = ["var(--primary)", "var(--violet)", "var(--flame)", "var(--success)", "var(--amber)"];
 
+function Confetti() {
     return (
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
-            {pieces.map((p, i) => (
-                <div
+        <div className="confetti">
+            {Array.from({ length: 40 }).map((_, i) => (
+                <span
                     key={i}
                     style={{
-                        position: "absolute",
-                        left: `${p.left}%`,
-                        top: -20,
-                        width: p.w,
-                        height: p.w,
-                        background: p.color,
-                        transform: `rotate(${p.rot}deg)`,
-                        animation: `confetti ${p.dur}s cubic-bezier(.3,0,.7,1) ${p.delay}s forwards`,
+                        left: `${i * 2.5}%`,
+                        animationDelay: `${(i % 10) * 0.12}s`,
+                        background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
                     }}
                 />
             ))}

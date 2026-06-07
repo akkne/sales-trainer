@@ -28,34 +28,39 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
     const isIncoming = request.direction === "incoming";
 
     return (
-        <div
-            className="bg-surface border border-line rounded-2xl p-4 flex items-center gap-4"
-            style={{ boxShadow: "var(--sh-1)" }}
-        >
+        <div className="card card-pad friend-row">
             <Link
                 href={`/friends/${request.userId}`}
-                className="shrink-0"
+                style={{ flexShrink: 0 }}
                 aria-label={request.displayName}
             >
-                <GeoAvatar seed={request.displayName} size={40} />
+                <GeoAvatar seed={request.displayName} size={48} />
             </Link>
 
-            <div className="flex-1 min-w-0">
+            <div className="grow" style={{ minWidth: 0 }}>
                 <Link
                     href={`/friends/${request.userId}`}
-                    className="font-medium text-ink truncate block text-sm"
+                    className="h4"
+                    style={{
+                        display: "block",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        textDecoration: "none",
+                        color: "inherit",
+                    }}
                 >
                     {request.displayName}
                 </Link>
-                {request.persona && (
-                    <p className="text-xs text-ink-4">
-                        {PERSONA_LABELS[request.persona] ?? request.persona}
-                    </p>
-                )}
+                <div className="small">
+                    {isIncoming
+                        ? PERSONA_LABELS[request.persona ?? ""] ?? request.persona ?? "хочет добавить тебя в друзья"
+                        : "отправлен запрос в друзья"}
+                </div>
             </div>
 
             {isIncoming ? (
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="row gap-2" style={{ flexShrink: 0 }}>
                     <Button
                         variant="primary"
                         size="sm"
@@ -74,12 +79,7 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
                     </Button>
                 </div>
             ) : (
-                <span
-                    className="text-xs font-mono shrink-0 px-3 py-1.5 rounded-full"
-                    style={{ background: "var(--bg-2)", color: "var(--ink-4)" }}
-                >
-                    Ожидание...
-                </span>
+                <span className="chip" style={{ flexShrink: 0 }}>Ожидание…</span>
             )}
         </div>
     );

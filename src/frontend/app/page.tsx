@@ -5,27 +5,41 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { apiClient } from "@/shared/api/api-client";
+import { Icon } from "@/shared/components/icon";
+import type { IconName } from "@/shared/components/icon";
+import { Wordmark } from "@/shared/components/wordmark";
 
-const FEATURE_LIST = [
+type FeatureTint = "primary" | "success" | "violet" | "amber";
+
+const FEATURE_LIST: {
+    icon: IconName;
+    tint: FeatureTint;
+    title: string;
+    description: string;
+}[] = [
     {
-        emoji: "🎯",
+        icon: "phone",
+        tint: "primary",
         title: "Реальные сценарии",
-        description: "Упражнения на основе настоящих возражений и ситуаций из продаж",
+        description: "AI-клиент спорит, сомневается и перебивает — как живой ЛПР.",
     },
     {
-        emoji: "🤖",
-        title: "AI-оценка",
-        description: "GPT-4 анализирует твои ответы и даёт персональный фидбек",
+        icon: "mic",
+        tint: "success",
+        title: "Голосовые звонки",
+        description: "Тренируй холодные звонки голосом и получай разбор каждой реплики.",
     },
     {
-        emoji: "🔥",
-        title: "Стрики и лиги",
-        description: "Соревнуйся с другими, набирай XP и поднимайся по лигам",
+        icon: "zap",
+        tint: "violet",
+        title: "XP, стрики и лиги",
+        description: "Игровая механика держит в тонусе и доводит навык до автоматизма.",
     },
     {
-        emoji: "📚",
+        icon: "book",
+        tint: "amber",
         title: "Справочник техник",
-        description: "Все ключевые техники продаж — под рукой, с примерами",
+        description: "SPIN, якорение цены, работа с возражениями — с примерами.",
     },
 ];
 
@@ -58,64 +72,70 @@ export default function LandingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-bg text-ink">
-            <header className="max-w-4xl mx-auto px-4 py-6 flex items-center justify-between">
-                <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>SalesTrainer</span>
-                <Link
-                    href="/login"
-                    className="text-sm font-semibold text-ink-3 hover:text-ink transition-colors"
-                >
+        <div className="landing">
+            <div className="app-backdrop" />
+            <header className="land-top container">
+                <Wordmark size={28} />
+                <Link href="/login" className="btn btn-ghost">
                     Войти
                 </Link>
             </header>
 
-            <main className="max-w-4xl mx-auto px-4">
-                <div className="text-center py-16">
-                    <div className="text-6xl mb-6">🚀</div>
-                    <h1 className="text-4xl font-bold text-ink mb-4 leading-tight tracking-tight">
-                        Прокачай продажи
-                        <br />
-                        <span className="text-rust">за 5 минут в день</span>
-                    </h1>
-                    <p className="text-lg text-ink-3 mb-10 max-w-md mx-auto">
-                        Тренажёр навыков в стиле Duolingo. Реальные сценарии,
-                        AI-фидбек и соревнования с коллегами.
-                    </p>
+            <div className="container land-hero">
+                <span
+                    className="badge"
+                    style={{
+                        background: "var(--primary-soft)",
+                        color: "var(--primary)",
+                        padding: "7px 14px",
+                        fontSize: 13,
+                    }}
+                >
+                    <Icon name="bolt" size={15} />
+                    Тренажёр продаж нового поколения
+                </span>
 
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link
-                            href="/register"
-                            className="px-8 py-4 rounded-2xl bg-ink text-bg font-bold text-lg active:translate-y-px transition-transform"
-                            style={{ boxShadow: "var(--sh-2)" }}
-                        >
-                            Начать бесплатно
-                        </Link>
-                        <button
-                            onClick={startDemoSession}
-                            className="px-8 py-4 rounded-2xl bg-surface border border-line text-ink-2 font-bold text-lg hover:bg-bg-2 transition-colors"
-                            style={{ boxShadow: "var(--sh-1)" }}
-                        >
-                            Попробовать без регистрации
-                        </button>
-                    </div>
+                <h1 className="display land-title">
+                    Прокачай продажи
+                    <br />
+                    <span className="grad-text">за 5 минут</span> в день
+                </h1>
+
+                <p
+                    className="lead"
+                    style={{ maxWidth: 560, margin: "0 auto 32px", textWrap: "pretty" }}
+                >
+                    Учись на реальных диалогах с AI, отрабатывай голосовые звонки и расти в
+                    лигах вместе с другими продавцами.
+                </p>
+
+                <div className="row gap-3 center wrap">
+                    <Link href="/register" className="btn btn-dark btn-lg">
+                        Начать бесплатно
+                        <Icon name="arrow-right" size={18} />
+                    </Link>
+                    <button onClick={startDemoSession} className="btn btn-outline btn-lg">
+                        <Icon name="play" size={18} />
+                        Попробовать без регистрации
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-16">
-                    {FEATURE_LIST.map((featureItem) => (
-                        <div
-                            key={featureItem.title}
-                            className="bg-surface border border-line rounded-2xl p-6"
-                            style={{ boxShadow: "var(--sh-1)" }}
-                        >
-                            <span className="text-3xl mb-3 block">{featureItem.emoji}</span>
-                            <h3 className="font-bold text-ink mb-2">
-                                {featureItem.title}
-                            </h3>
-                            <p className="text-sm text-ink-3">{featureItem.description}</p>
+                <div className="land-features">
+                    {FEATURE_LIST.map((f) => (
+                        <div key={f.title} className="card card-pad lift land-feat">
+                            <span className={"itile " + f.tint} style={{ width: 50, height: 50 }}>
+                                <Icon name={f.icon} size={26} />
+                            </span>
+                            <h4 className="h4" style={{ margin: "16px 0 8px" }}>
+                                {f.title}
+                            </h4>
+                            <p className="small" style={{ textWrap: "pretty" }}>
+                                {f.description}
+                            </p>
                         </div>
                     ))}
                 </div>
-            </main>
+            </div>
         </div>
     );
 }

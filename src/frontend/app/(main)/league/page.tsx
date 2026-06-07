@@ -3,7 +3,7 @@
 import { useCurrentLeague } from "@/features/league/hooks/use-league";
 import { useEffect, useState } from "react";
 import { Icon } from "@/shared/components/icon";
-import { SkeletonList, ErrorState } from "@/shared/components";
+import { StatTile, GeoAvatar, ErrorState } from "@/shared/components";
 import Link from "next/link";
 import { TimingConstants } from "@/shared/constants/timing-constants";
 
@@ -32,11 +32,13 @@ function useCountdown(weekEndDate: string) {
     return timeLeft;
 }
 
+// Tier colors mirror the design tokens (--tier-*), which are not declared in
+// the app globals.css, so they are inlined here.
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
-    bronze: { label: "Бронза", color: "var(--clay)" },
-    silver: { label: "Серебро", color: "var(--ink-3)" },
-    gold: { label: "Золото", color: "var(--rust)" },
-    diamond: { label: "Алмаз", color: "var(--indigo)" },
+    bronze: { label: "Бронза", color: "#c47b3f" },
+    silver: { label: "Серебро", color: "#9aa3ad" },
+    gold: { label: "Золото", color: "#e3b23c" },
+    diamond: { label: "Алмаз", color: "#4cc6e8" },
 };
 
 const PROMOTION_ZONE_SIZE = 10;
@@ -44,20 +46,26 @@ const DEMOTION_ZONE_SIZE = 5;
 
 export default function LeaguePage() {
     const { data: leagueData, isLoading, isError, refetch } = useCurrentLeague();
-    const [bannerDismissed, setBannerDismissed] = useState(false);
     const countdown = useCountdown(leagueData?.weekEndDate ?? "");
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-bg">
-                <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
-                    <div className="max-w-2xl mx-auto space-y-3">
-                        <div className="h-3 w-32 rounded bg-surface-2 animate-pulse" />
-                        <div className="h-8 w-56 rounded-xl bg-surface-2 animate-pulse" />
+            <div className="page">
+                <div className="container">
+                    <div className="hero-head">
+                        <div className="hh-left">
+                            <div className="h-3 w-40 rounded bg-surface-2 animate-pulse" />
+                            <div className="h-10 w-72 rounded-xl bg-surface-2 animate-pulse" style={{ marginTop: 14 }} />
+                            <div className="h-4 w-96 rounded bg-surface-2 animate-pulse" style={{ marginTop: 12 }} />
+                        </div>
                     </div>
-                </div>
-                <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
-                    <SkeletonList count={8} rowHeight={56} gap={8} />
+                    <div className="league-grid">
+                        <div className="col gap-4">
+                            <div className="card" style={{ height: 160 }} />
+                            <div className="card" style={{ height: 96 }} />
+                        </div>
+                        <div className="card" style={{ height: 480 }} />
+                    </div>
                 </div>
             </div>
         );
@@ -65,7 +73,7 @@ export default function LeaguePage() {
 
     if (isError) {
         return (
-            <div className="min-h-screen bg-bg flex items-center justify-center">
+            <div className="page" style={{ padding: "60px 24px" }}>
                 <ErrorState title="Не удалось загрузить лигу" onRetry={() => refetch()} />
             </div>
         );
@@ -73,340 +81,153 @@ export default function LeaguePage() {
 
     if (!leagueData) {
         return (
-            <div className="min-h-screen bg-bg flex flex-col items-center justify-center text-center px-6">
-                <div className="w-14 h-14 rounded-2xl bg-bg-2 flex items-center justify-center mb-4">
-                    <Icon name="trophy" size="lg" className="text-ink-4" />
+            <div className="page container">
+                <div className="empty" style={{ paddingTop: 120 }}>
+                    <div className="ic">
+                        <Icon name="trophy" size="lg" />
+                    </div>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>Лига ещё не сформирована</h1>
+                    <p className="small">Заработай первые XP — и попадёшь в еженедельный рейтинг.</p>
                 </div>
-                <h3 className="font-medium text-ink mb-1">Лига ещё не сформирована</h3>
-                <p className="text-sm text-ink-3 max-w-sm">
-                    Заработай первые XP — и попадёшь в еженедельный рейтинг.
-                </p>
             </div>
         );
     }
 
     const tierInfo = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
     const totalParticipantCount = leagueData.participantsByRank.length;
-    const currentUser = leagueData.participantsByRank.find(p => p.isCurrentUser);
+    const currentUser = leagueData.participantsByRank.find((p) => p.isCurrentUser);
     const currentUserXp = currentUser?.weeklyXpAmount ?? 0;
-    const topTenMinXp = leagueData.participantsByRank[PROMOTION_ZONE_SIZE - 1]?.weeklyXpAmount ?? 0;
-    const xpToTopTen = Math.max(0, topTenMinXp - currentUserXp + 1);
-
-    const isInPromotionZone = leagueData.currentUserRank <= PROMOTION_ZONE_SIZE;
-    const isInDemotionZone = leagueData.currentUserRank > totalParticipantCount - DEMOTION_ZONE_SIZE;
 
     return (
-        <div className="min-h-screen bg-bg pb-20">
-            {/* Header */}
-            <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
-                <div className="max-w-2xl mx-auto">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span
-                            className="text-[10px] font-mono tracking-[2px] uppercase"
-                            style={{ color: tierInfo.color }}
-                        >
-                            АРЕНА · НЕДЕЛЯ
+        <div className="page">
+            <div className="container">
+                {/* Hero header */}
+                <div className="hero-head">
+                    <div className="hh-left fade-up">
+                        <span className="eyebrow">
+                            Арена<span className="dot">·</span>
+                            <span>Неделя</span>
                         </span>
-                    </div>
-                    <h1 className="text-3xl md:text-4xl font-medium tracking-tight text-ink">
-                        Лига {tierInfo.label}
-                    </h1>
-                    <p className="text-sm text-ink-3 mt-2 max-w-md">
-                        Топ {PROMOTION_ZONE_SIZE} поднимаются выше. Займи место до окончания недели.
-                    </p>
-                </div>
-            </div>
-
-            <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
-                {/* Outcome Banner */}
-                {leagueData.previousWeekOutcome && !bannerDismissed && (
-                    <div
-                        className={`rounded-2xl p-4 mb-6 flex items-start gap-3 ${
-                            leagueData.previousWeekOutcome === "promoted"
-                                ? "bg-olive-soft"
-                                : "bg-bad-soft"
-                        }`}
-                    >
-                        <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                leagueData.previousWeekOutcome === "promoted"
-                                    ? "bg-olive text-white"
-                                    : "bg-bad text-white"
-                            }`}
-                        >
-                            <Icon
-                                name={leagueData.previousWeekOutcome === "promoted" ? "arrow-up" : "chevron-down"}
-                                size="md"
-                            />
-                        </div>
-                        <div className="flex-1">
-                            <p className="font-medium text-ink">
-                                {leagueData.previousWeekOutcome === "promoted" ? "Повышение!" : "Понижение"}
-                            </p>
-                            <p className="text-sm text-ink-3">
-                                {leagueData.previousWeekOutcome === "promoted"
-                                    ? "Ты поднялся в следующую лигу. Отличная работа!"
-                                    : "На прошлой неделе не хватило XP. Держись — впереди новая неделя!"}
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setBannerDismissed(true)}
-                            className="text-ink-4 hover:text-ink-2 transition-colors p-1"
-                        >
-                            <Icon name="close" size="sm" />
-                        </button>
-                    </div>
-                )}
-
-                {/* Countdown Timer */}
-                <div className="bg-surface border border-line rounded-2xl p-5 mb-4" style={{ boxShadow: "var(--sh-1)" }}>
-                    <div className="text-[10px] font-mono tracking-[1.5px] uppercase text-ink-4 mb-3">
-                        До конца недели
-                    </div>
-                    <div className="flex items-end gap-3">
-                        <TimeUnit value={countdown.days} label="Дней" />
-                        <span className="text-2xl font-medium text-ink-4 mb-1">:</span>
-                        <TimeUnit value={countdown.hours} label="Часов" />
-                        <span className="text-2xl font-medium text-ink-4 mb-1">:</span>
-                        <TimeUnit value={countdown.mins} label="Минут" />
-                    </div>
-                </div>
-
-                {/* Stats Row */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                    {/* Rank Stat */}
-                    <StatTile
-                        label="Твоё место"
-                        value={`#${leagueData.currentUserRank}`}
-                        tone={isInPromotionZone ? "olive" : isInDemotionZone ? "bad" : "neutral"}
-                        badge={isInPromotionZone ? "Зона повышения" : isInDemotionZone ? "Зона вылета" : undefined}
-                    />
-                    {/* XP Stat */}
-                    <StatTile
-                        label="Твой XP"
-                        value={currentUserXp.toLocaleString()}
-                        tone="indigo"
-                        badge={!isInPromotionZone && xpToTopTen > 0 ? `${xpToTopTen} до топ-${PROMOTION_ZONE_SIZE}` : undefined}
-                    />
-                </div>
-
-                {/* Leaderboard */}
-                <div className="bg-surface border border-line rounded-2xl overflow-hidden" style={{ boxShadow: "var(--sh-1)" }}>
-                    {/* Table Header */}
-                    <div className="grid grid-cols-[3rem_1fr_auto] items-center px-4 py-3 bg-bg-2 border-b border-line">
-                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4">#</span>
-                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4">Участник</span>
-                        <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 text-right">XP</span>
-                    </div>
-
-                    {/* Rows */}
-                    {leagueData.participantsByRank.map((participant, idx) => {
-                        const isInPromoZone = idx < PROMOTION_ZONE_SIZE;
-                        const isInDemoZone = idx >= totalParticipantCount - DEMOTION_ZONE_SIZE;
-                        const showPromoBoundary = idx === PROMOTION_ZONE_SIZE;
-                        const showDemoBoundary = idx === totalParticipantCount - DEMOTION_ZONE_SIZE;
-
-                        return (
-                            <div key={participant.userId}>
-                                {showPromoBoundary && <ZoneDivider label="Безопасная зона" />}
-                                {showDemoBoundary && <ZoneDivider label="Зона вылета" tone="bad" />}
-
-                                <div
-                                    className={`grid grid-cols-[3rem_1fr_auto] items-center px-4 py-3 gap-3 border-b border-line/50 transition-colors ${
-                                        participant.isCurrentUser
-                                            ? "bg-indigo-soft"
-                                            : isInPromoZone
-                                            ? "bg-olive-soft/30"
-                                            : isInDemoZone
-                                            ? "bg-bad-soft/30"
-                                            : ""
-                                    }`}
-                                    style={participant.isCurrentUser ? { borderLeft: "3px solid var(--indigo)" } : undefined}
-                                >
-                                    {/* Rank Badge */}
-                                    <RankBadge
-                                        rank={participant.rank}
-                                        isCurrentUser={participant.isCurrentUser}
-                                        isInDemotionZone={isInDemoZone}
-                                    />
-
-                                    {/* Participant Info */}
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div
-                                            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0 ${
-                                                participant.isCurrentUser
-                                                    ? "bg-indigo text-white"
-                                                    : "bg-bg-2 text-ink-3"
-                                            }`}
-                                        >
-                                            {participant.displayName[0]?.toUpperCase()}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p
-                                                className={`font-medium text-sm truncate ${
-                                                    participant.isCurrentUser ? "text-indigo" : "text-ink"
-                                                }`}
-                                            >
-                                                {participant.displayName}
-                                                {participant.isCurrentUser && (
-                                                    <span className="text-ink-4 font-normal"> (ты)</span>
-                                                )}
-                                            </p>
-                                            {participant.rank <= 3 && (
-                                                <p className="text-[10px] font-mono text-ink-4">
-                                                    {participant.rank === 1 ? "Лидер" : `${participant.rank}-е место`}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* XP */}
-                                    <span
-                                        className={`font-mono font-medium text-sm tabular-nums ${
-                                            participant.isCurrentUser
-                                                ? "text-indigo"
-                                                : isInDemoZone
-                                                ? "text-bad"
-                                                : "text-ink-2"
-                                        }`}
-                                    >
-                                        {participant.weeklyXpAmount}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Zone Legend */}
-                <div className="mt-4 flex flex-wrap gap-4 justify-center text-xs text-ink-4">
-                    <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-sm bg-olive" />
-                        Топ {PROMOTION_ZONE_SIZE} → повышение
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-sm bg-bad" />
-                        Низ {DEMOTION_ZONE_SIZE} → вылет
-                    </span>
-                </div>
-
-                {/* CTA Banner */}
-                <div
-                    className="mt-6 rounded-2xl bg-indigo-soft p-5 flex items-center gap-4"
-                    style={{ boxShadow: "var(--sh-1)" }}
-                >
-                    <div className="w-12 h-12 rounded-xl bg-indigo text-white flex items-center justify-center shrink-0">
-                        <Icon name="bolt" size="md" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="font-medium text-ink text-sm">Ускорь продвижение</p>
-                        <p className="text-xs text-ink-3 mt-0.5">
-                            Пройди урок, чтобы заработать XP и подняться выше.
+                        <h1 className="h1 hh-title">
+                            Лига <span style={{ color: tierInfo.color }}>{tierInfo.label}</span>
+                        </h1>
+                        <p className="lead">
+                            Топ-{PROMOTION_ZONE_SIZE} поднимаются выше, нижние {DEMOTION_ZONE_SIZE} вылетают.
+                            Займи место до конца недели.
                         </p>
                     </div>
-                    <Link
-                        href="/tree"
-                        className="shrink-0 bg-indigo text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
-                    >
-                        Учиться
-                        <Icon name="arrow-right" size="sm" />
-                    </Link>
+                    <div className="hero-stats fade-up">
+                        <StatTile
+                            label="Твоё место"
+                            value={`#${leagueData.currentUserRank}`}
+                            icon={<Icon name="trophy" size="xs" />}
+                            tone="amber"
+                        />
+                        <StatTile
+                            label="Твой XP"
+                            value={currentUserXp.toLocaleString("ru")}
+                            icon={<Icon name="bolt" size="xs" />}
+                            tone="primary"
+                        />
+                    </div>
+                </div>
+
+                <div className="league-grid">
+                    {/* Left column */}
+                    <div className="col gap-4">
+                        <div className="card card-pad countdown">
+                            <span className="eyebrow muted">До конца недели</span>
+                            <div className="cd-row">
+                                <div className="cd-unit">
+                                    <b className="num">{String(countdown.days).padStart(2, "0")}</b>
+                                    <span>дней</span>
+                                </div>
+                                <span className="cd-sep">:</span>
+                                <div className="cd-unit">
+                                    <b className="num">{String(countdown.hours).padStart(2, "0")}</b>
+                                    <span>часов</span>
+                                </div>
+                                <span className="cd-sep">:</span>
+                                <div className="cd-unit">
+                                    <b className="num">{String(countdown.mins).padStart(2, "0")}</b>
+                                    <span>минут</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="card card-pad cta-row">
+                            <span className="itile primary" style={{ width: 48, height: 48 }}>
+                                <Icon name="bolt" />
+                            </span>
+                            <div className="grow">
+                                <h4 className="h4">Ускорь продвижение</h4>
+                                <p className="small">Пройди урок, чтобы заработать XP и подняться выше.</p>
+                            </div>
+                            <Link href="/tree" className="btn btn-primary">
+                                Учиться
+                                <Icon name="play" size={16} />
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Leaderboard */}
+                    <div className="card lb-card">
+                        <div className="lb-head">
+                            <span>#</span>
+                            <span>Участник</span>
+                            <span>XP</span>
+                        </div>
+                        {leagueData.participantsByRank.map((participant, idx) => {
+                            const isInPromoZone = idx < PROMOTION_ZONE_SIZE;
+                            const isInDemoZone = idx >= totalParticipantCount - DEMOTION_ZONE_SIZE;
+                            const showPromoBoundary = idx === PROMOTION_ZONE_SIZE;
+                            const showDemoBoundary =
+                                idx === totalParticipantCount - DEMOTION_ZONE_SIZE && idx > 0;
+
+                            const zoneClass = participant.isCurrentUser
+                                ? "you"
+                                : isInPromoZone
+                                  ? "promo"
+                                  : isInDemoZone
+                                    ? "demote"
+                                    : "";
+
+                            return (
+                                <div key={participant.userId}>
+                                    {showPromoBoundary && (
+                                        <div className="lb-divider promo">
+                                            <Icon name="arrow-up" size={14} />
+                                            Зона повышения
+                                        </div>
+                                    )}
+                                    {showDemoBoundary && (
+                                        <div className="lb-divider demote">
+                                            <Icon name="chevron-down" size={14} />
+                                            Зона вылета
+                                        </div>
+                                    )}
+
+                                    <div className={`lb-row ${zoneClass}`}>
+                                        <span className={`rank-badge r${Math.min(participant.rank, 4)}`}>
+                                            {String(participant.rank).padStart(2, "0")}
+                                        </span>
+                                        <div className="row gap-3 grow" style={{ minWidth: 0 }}>
+                                            <GeoAvatar seed={participant.displayName} size={36} />
+                                            <span className="lb-name">
+                                                {participant.displayName}
+                                                {participant.isCurrentUser && (
+                                                    <span className="you-tag"> · ты</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <span className="num lb-xp">{participant.weeklyXpAmount}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
-}
-
-function TimeUnit({ value, label }: { value: number; label: string }) {
-    return (
-        <div className="flex flex-col items-center">
-            <span className="text-3xl md:text-4xl font-medium tabular-nums text-ink tracking-tight">
-                {String(value).padStart(2, "0")}
-            </span>
-            <span className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mt-1">
-                {label}
-            </span>
-        </div>
-    );
-}
-
-function StatTile({
-    label,
-    value,
-    tone = "neutral",
-    badge
-}: {
-    label: string;
-    value: string;
-    tone?: "neutral" | "olive" | "indigo" | "bad";
-    badge?: string;
-}) {
-    const toneStyles = {
-        neutral: { bg: "bg-surface", valueColor: "text-ink" },
-        olive: { bg: "bg-olive-soft", valueColor: "text-olive" },
-        indigo: { bg: "bg-indigo-soft", valueColor: "text-indigo" },
-        bad: { bg: "bg-bad-soft", valueColor: "text-bad" },
-    };
-    const style = toneStyles[tone];
-
-    return (
-        <div
-            className={`${style.bg} border border-line rounded-2xl p-4`}
-            style={{ boxShadow: "var(--sh-1)" }}
-        >
-            <div className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mb-2">
-                {label}
-            </div>
-            <div className={`text-3xl font-medium tabular-nums ${style.valueColor}`}>
-                {value}
-            </div>
-            {badge && (
-                <div className="text-[11px] text-ink-3 mt-1 font-mono">
-                    {badge}
-                </div>
-            )}
-        </div>
-    );
-}
-
-function RankBadge({
-    rank,
-    isCurrentUser,
-    isInDemotionZone
-}: {
-    rank: number;
-    isCurrentUser: boolean;
-    isInDemotionZone: boolean;
-}) {
-    const getBadgeStyles = () => {
-        if (rank === 1) return "bg-rust text-white";
-        if (rank === 2) return "bg-ink-3 text-white";
-        if (rank === 3) return "bg-clay text-white";
-        if (isCurrentUser) return "bg-indigo text-white";
-        if (isInDemotionZone) return "bg-bad-soft text-bad";
-        return "bg-bg-2 text-ink-3";
-    };
-
-    return (
-        <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-medium text-xs ${getBadgeStyles()}`}
-        >
-            {String(rank).padStart(2, "0")}
-        </div>
-    );
-}
-
-function ZoneDivider({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "bad" }) {
-    const lineColor = tone === "bad" ? "bg-bad/30" : "bg-line";
-    const textColor = tone === "bad" ? "text-bad" : "text-ink-4";
-
-    return (
-        <div className="flex items-center gap-3 py-2 px-4">
-            <div className={`flex-1 h-px ${lineColor}`} />
-            <span className={`text-[10px] font-mono tracking-[1px] uppercase whitespace-nowrap ${textColor}`}>
-                {label}
-            </span>
-            <div className={`flex-1 h-px ${lineColor}`} />
         </div>
     );
 }

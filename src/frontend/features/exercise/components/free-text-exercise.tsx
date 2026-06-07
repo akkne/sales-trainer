@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface FreeTextContent {
     situation?: string;
@@ -46,7 +46,7 @@ export function FreeTextExercise({
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                             <span style={{ fontSize: 13, fontWeight: 500 }}>Клиент</span>
-                            <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>prospect</span>
+                            <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>prospect</span>
                         </div>
                         <div
                             style={{
@@ -66,7 +66,7 @@ export function FreeTextExercise({
                 </div>
             )}
 
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction}
             </h2>
 
@@ -90,7 +90,7 @@ export function FreeTextExercise({
                         outline: "none",
                         resize: "vertical",
                         background: "transparent",
-                        fontFamily: "var(--f-sans)",
+                        fontFamily: "var(--font-ui)",
                         fontSize: 15,
                         color: "var(--ink)",
                         lineHeight: 1.5,
@@ -104,14 +104,14 @@ export function FreeTextExercise({
                         marginTop: 8,
                         fontSize: 12,
                         color: "var(--ink-3)",
-                        fontFamily: "var(--f-mono)",
+                        fontFamily: "var(--font-mono)",
                     }}
                 >
                     <span>
                         {charCount < minLength ? (
-                            <span style={{ color: "var(--warn)" }}>минимум {minLength} · сейчас {charCount}</span>
+                            <span style={{ color: "var(--amber)" }}>минимум {minLength} · сейчас {charCount}</span>
                         ) : (
-                            <span style={{ color: "var(--good)" }}>{charCount} символов ✓</span>
+                            <span style={{ color: "var(--success)" }}>{charCount} символов ✓</span>
                         )}
                     </span>
                     <button
@@ -127,7 +127,7 @@ export function FreeTextExercise({
                             color: "var(--ink-2)",
                             cursor: "pointer",
                             fontSize: 12,
-                            fontFamily: "var(--f-mono)",
+                            fontFamily: "var(--font-mono)",
                         }}
                     >
                         <Icon name="mic" size="xs" /> Голосом
@@ -174,46 +174,13 @@ export function FreeTextExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => onSubmit({ text })}
-                                disabled={!isValidLength || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ОТПРАВИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => onSubmit({ text })}
+                    submitLabel="Отправить"
+                    canSubmit={isValidLength}
+                    isSubmitting={isSubmitting}
+                />
             )}
         </div>
     );

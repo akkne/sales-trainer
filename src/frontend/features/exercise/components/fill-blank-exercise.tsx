@@ -3,10 +3,9 @@
 import { useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { useKeyboardControls } from "@/shared/hooks/use-keyboard-controls";
-import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { ExerciseResultBanner } from "./exercise-result-banner";
+import { ExerciseActionFooter } from "./exercise-action-footer";
 
 interface FillBlankContent {
     before: string;
@@ -61,7 +60,7 @@ export function FillBlankExercise({
                 <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>Клиент</span>
-                        <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--f-mono)" }}>prospect</span>
+                        <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>prospect</span>
                     </div>
                     <div
                         style={{
@@ -73,6 +72,7 @@ export function FillBlankExercise({
                             fontSize: 15,
                             lineHeight: 1.5,
                             boxShadow: "var(--sh-1)",
+                            fontFamily: "var(--font-ui)",
                         }}
                     >
                         {content.before}
@@ -80,7 +80,7 @@ export function FillBlankExercise({
                 </div>
             </div>
 
-            <h2 style={{ fontSize: 22, fontWeight: 500, letterSpacing: -0.3, margin: 0, lineHeight: 1.3 }}>
+            <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 Дополните реплику:
             </h2>
 
@@ -93,7 +93,7 @@ export function FillBlankExercise({
                     padding: 24,
                     background: "var(--surface)",
                     border: "1px solid var(--line)",
-                    borderRadius: 14,
+                    borderRadius: "var(--r-md)",
                     marginBottom: 4,
                 }}
             >
@@ -104,9 +104,9 @@ export function FillBlankExercise({
                         minWidth: 180,
                         padding: "4px 12px",
                         borderRadius: 8,
-                        background: selectedText ? "var(--indigo-soft)" : "var(--bg-2)",
-                        color: selectedText ? "var(--indigo-ink)" : "var(--ink-4)",
-                        border: selectedText ? "1px dashed var(--indigo)" : "1px dashed var(--line-2)",
+                        background: selectedText ? "var(--primary-soft)" : "var(--bg-2)",
+                        color: selectedText ? "var(--primary-strong)" : "var(--ink-4)",
+                        border: selectedText ? "1px dashed var(--primary)" : "1px dashed var(--line-2)",
                         textAlign: "center",
                         fontSize: 18,
                     }}
@@ -117,7 +117,7 @@ export function FillBlankExercise({
             </div>
 
             {/* Options grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {(content.options ?? []).map((option, optionIndex) => {
                     const isSelected = selectedOptionIndex === optionIndex;
                     const isCorrectOption = option.is_correct;
@@ -125,77 +125,23 @@ export function FillBlankExercise({
                     const showWrong = isAnswered && isSelected && !submittedResult?.isCorrect;
                     const showSuccess = isAnswered && isSelected && submittedResult?.isCorrect;
 
-                    let bgColor = isSelected ? "var(--ink)" : "var(--surface)";
-                    let textColor = isSelected ? "var(--bg)" : "var(--ink)";
-                    let borderColor = isSelected ? "var(--ink)" : "var(--line)";
-                    let badgeBg = isSelected ? "var(--bg)" : "var(--bg-2)";
-                    let badgeColor = isSelected ? "var(--ink)" : "var(--ink-3)";
-
-                    if (showSuccess) {
-                        bgColor = "var(--good-soft)";
-                        textColor = "var(--ink)";
-                        borderColor = "var(--good)";
-                        badgeBg = "var(--good)";
-                        badgeColor = "white";
-                    } else if (showWrong) {
-                        bgColor = "var(--bad-soft)";
-                        textColor = "var(--ink)";
-                        borderColor = "var(--bad)";
-                        badgeBg = "var(--bad)";
-                        badgeColor = "white";
-                    } else if (showCorrect) {
-                        bgColor = "var(--good-soft)";
-                        textColor = "var(--ink)";
-                        borderColor = "var(--good)";
-                        badgeBg = "var(--good)";
-                        badgeColor = "white";
-                    }
+                    let cls = "opt";
+                    if (showSuccess || showCorrect) cls += " correct";
+                    else if (showWrong) cls += " wrong";
+                    else if (isAnswered) cls += " dim";
+                    else if (isSelected) cls += " sel";
 
                     return (
                         <button
                             key={optionIndex}
+                            className={cls}
                             onClick={() => {
                                 if (!isAnswered) setSelectedOptionIndex(optionIndex);
                             }}
                             disabled={isAnswered}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 14,
-                                padding: "14px 18px",
-                                background: bgColor,
-                                color: textColor,
-                                border: `1px solid ${borderColor}`,
-                                borderRadius: 12,
-                                cursor: isAnswered ? "default" : "pointer",
-                                textAlign: "left",
-                                fontSize: 15,
-                                fontFamily: "var(--f-sans)",
-                                fontWeight: 400,
-                                lineHeight: 1.4,
-                                transition: "all 0.12s",
-                                boxShadow: isSelected && !isAnswered ? "var(--sh-2)" : "var(--sh-1)",
-                            }}
                         >
-                            <span
-                                style={{
-                                    width: 26,
-                                    height: 26,
-                                    borderRadius: 7,
-                                    background: badgeBg,
-                                    color: badgeColor,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 12,
-                                    fontFamily: "var(--f-mono)",
-                                    fontWeight: 500,
-                                    flexShrink: 0,
-                                }}
-                            >
-                                {optionIndex + 1}
-                            </span>
-                            <span>{option.text}</span>
+                            <span className="opt-key">{String.fromCharCode(1040 + optionIndex)}</span>
+                            <span className="opt-text">{option.text}</span>
                         </button>
                     );
                 })}
@@ -212,62 +158,15 @@ export function FillBlankExercise({
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (
-                <div
-                    style={{
-                        position: "fixed",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background: "var(--surface)",
-                        borderTop: "1px solid var(--line)",
-                        padding: "20px 32px",
-                        paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+                <ExerciseActionFooter
+                    onSkip={onSkip}
+                    onSubmit={() => {
+                        if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
                     }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            maxWidth: 820,
-                            margin: "0 auto",
-                        }}
-                    >
-                        {onSkip && (
-                            <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
-                            </Button>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-                            <div
-                                className="mono"
-                                style={{ fontSize: 11, color: "var(--ink-4)", display: "none" }}
-                                data-keyboard-hint
-                            >
-                                1–4 выбрать · Enter — проверить
-                            </div>
-                            <Button
-                                variant="accent"
-                                size="lg"
-                                onClick={() => {
-                                    if (selectedOptionIndex !== null) onSubmit({ selectedOptionIndex });
-                                }}
-                                disabled={selectedOptionIndex === null || isSubmitting}
-                                loading={isSubmitting}
-                                iconRightName="arrow-right"
-                            >
-                                ПРОВЕРИТЬ
-                            </Button>
-                        </div>
-                    </div>
-                    <style jsx global>{`
-                        @media (pointer: fine) {
-                            [data-keyboard-hint] {
-                                display: block !important;
-                            }
-                        }
-                    `}</style>
-                </div>
+                    canSubmit={selectedOptionIndex !== null}
+                    isSubmitting={isSubmitting}
+                    keyboardHint="1–4 выбрать · Enter — проверить"
+                />
             )}
         </div>
     );
