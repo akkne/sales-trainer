@@ -126,7 +126,7 @@ gets the reply as text, and the stream finishes normally with the final sentinel
     "BaseUrl": "https://tts.api.cloud.yandex.net",
     "Voice": "marina",
     "Lang": "ru-RU",
-    "Speed": "1.0"
+    "Speed": "1.2"
   },
   "Voice": {
     "Enabled": true,
