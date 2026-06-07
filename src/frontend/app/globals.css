@@ -689,6 +689,8 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 /* unlayered .bottom-nav beats Tailwind's layered md:hidden — hide on desktop here */
 @media (min-width: 768px) {
   .bottom-nav { display: none; }
+  /* same gotcha: .icon-btn's display:grid beats md:hidden on the mobile menu button */
+  .mobile-menu-btn { display: none; }
 }
 
 /* reserve space for the fixed bottom nav on mobile */

@@ -136,7 +136,7 @@ export function TopAppBar() {
 
                         {/* Mobile menu button */}
                         <button
-                            className="icon-btn md:hidden"
+                            className="icon-btn mobile-menu-btn"
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                             aria-label="Открыть меню"
                         >
