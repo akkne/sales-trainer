@@ -170,8 +170,7 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 `LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser}`
 
 Tiers (in order): `bronze → silver → gold → diamond`
-- Top 10 per tier promoted to next tier next week
-- Bottom 5 per tier demoted (minimum bronze)
+- Top N per tier promoted to next tier next week, bottom M demoted (minimum bronze) — zone sizes come from the `LeagueSettings` table (defaults: promotion 10, demotion 5, max participants 30), editable via `/admin/leagues/settings`
 - `previousWeekOutcome`: shown only if user had a membership last week; use for in-app banner
 
 ---
@@ -270,6 +269,27 @@ All routes prefixed `/admin`. Unauthorized → 403.
 `AdminTechniqueWriteRequestDto`: same shape minus `id`/timestamps and server-derived fields. `dialog`, `case`, and `coach.challenges` accept any JSON value — the server persists them to the `DialogJson` / `CaseJson` / `ChallengesJson` columns verbatim. `difficulty` must be 1..4.
 
 `AdminTechniqueImportResultDto`: `{createdCount, updatedCount, failedCount, errors: string[]}` — import upserts each entry by `slug`, validates it, and rolls through the list, returning per-slug errors instead of aborting the whole batch.
+
+### Leagues
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/leagues | — (`?weekStart=YYYY-MM-DD&tier=gold`) | `AdminLeagueListItemDto[]` |
+| GET | /admin/leagues/weeks | — | `string[]` (distinct week start dates, desc) |
+| GET | /admin/leagues/:id | — | `AdminLeagueDetailDto` |
+| POST | /admin/leagues/close-current | — | 204 — manually runs the weekly closure job |
+| POST | /admin/leagues/:id/resync | — | `AdminLeagueDetailDto` — recomputes weekly XP from `UserXpRecords` |
+| PUT | /admin/leagues/memberships/:membershipId/tier | `{tier}` | `AdminLeagueDetailDto` of the target league (same week; created if missing) |
+| PUT | /admin/leagues/memberships/:membershipId/xp | `{delta}` (non-zero int, may be negative) | `AdminLeagueDetailDto` |
+| DELETE | /admin/leagues/memberships/:membershipId | — | 204 |
+| GET | /admin/leagues/settings | — | `LeagueSettingsDto` |
+| PUT | /admin/leagues/settings | `LeagueSettingsDto` | `LeagueSettingsDto` (400 if values non-positive or zones exceed max) |
+
+`AdminLeagueListItemDto`: `{id, tier, weekStartDate, weekEndDate, memberCount}`
+`AdminLeagueDetailDto`: `{id, tier, weekStartDate, weekEndDate, members: AdminLeagueMemberDto[]}`
+`AdminLeagueMemberDto`: `{membershipId, userId, displayName, email, weeklyXpAmount, rank, promotionOutcome}`
+`LeagueSettingsDto`: `{maximumLeagueParticipantCount, promotionZoneSize, demotionZoneSize}`
+
+XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the league's week start — a direct `WeeklyXpAmount` write would be erased by the next XP sync, while a correction record survives every re-sync and stays auditable.
 
 ### Users (requires `RequireSuperAdmin` for role change)
 | Method | Path | Body | Response |

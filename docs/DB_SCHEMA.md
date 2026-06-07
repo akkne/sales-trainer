@@ -322,7 +322,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | `Id`       | `uuid`                     | NOT NULL | PK                                               |
 | `UserId`   | `uuid`                     | NOT NULL | FK → `Users.Id`                                  |
 | `Amount`   | `integer`                  | NOT NULL |                                                  |
-| `Source`   | `text`                     | NOT NULL | `exercise` / `streak_bonus` / `league_bonus`     |
+| `Source`   | `text`                     | NOT NULL | `exercise` / `streak_bonus` / `league_bonus` / `admin_correction` |
 | `EarnedAt` | `timestamp with time zone` | NOT NULL |                                                  |
 
 ---
@@ -348,6 +348,19 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | `WeeklyXpAmount`  | `integer` | NOT NULL |                                              |
 | `Rank`            | `integer` | NOT NULL |                                              |
 | `PromotionOutcome`| `text`    | NULL     | `promoted` / `demoted` / `stayed` / NULL (active) |
+
+---
+
+### `LeagueSettings`
+
+Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migration `20260607000000_AddLeagueSettings` with the previously hardcoded defaults. Read by `LeagueService` at runtime; edited via `/admin/leagues/settings`.
+
+| Column                          | Type      | Nullable | Notes               |
+|---------------------------------|-----------|----------|---------------------|
+| `Id`                            | `uuid`    | NOT NULL | PK                  |
+| `MaximumLeagueParticipantCount` | `integer` | NOT NULL | default 30          |
+| `PromotionZoneSize`             | `integer` | NOT NULL | default 10          |
+| `DemotionZoneSize`              | `integer` | NOT NULL | default 5           |
 
 ---
 

@@ -17,6 +17,7 @@ const NAV_ICONS: Record<string, IconName> = {
     "/admin/dialog": "message",
     "/admin/open-question": "sparkle",
     "/admin/voice/usage": "mic",
+    "/admin/leagues": "trophy",
     "/admin/users": "users",
 };
 
@@ -98,6 +99,7 @@ export default function AdminLayout({
         { href: "/admin/dialog", label: "Dialog" },
         { href: "/admin/open-question", label: "AI Prompts" },
         { href: "/admin/voice/usage", label: "Voice Usage" },
+        { href: "/admin/leagues", label: "Leagues" },
         ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
     ];
 

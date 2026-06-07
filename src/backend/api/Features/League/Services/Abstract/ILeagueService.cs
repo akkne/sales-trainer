@@ -10,4 +10,8 @@ public interface ILeagueService
 
     Task CloseCurrentLeagueAndCreateNextAsync(
         CancellationToken cancellationToken = default);
+
+    Task SyncLeagueWeeklyXpAsync(
+        Guid leagueId,
+        CancellationToken cancellationToken = default);
 }

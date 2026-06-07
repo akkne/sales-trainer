@@ -145,6 +145,51 @@ public class LeagueServiceTests
     }
 
     [Test]
+    public async Task Close_RespectsConfiguredPromotionAndDemotionZones()
+    {
+        _db.LeagueSettings.Add(new LeagueSettings
+        {
+            MaximumLeagueParticipantCount = 30,
+            PromotionZoneSize = 3,
+            DemotionZoneSize = 2
+        });
+        await _db.SaveChangesAsync();
+
+        var (_, memberships) = await SeedLeagueWithMembersAsync(10);
+
+        await _service.CloseCurrentLeagueAndCreateNextAsync();
+        foreach (var m in memberships) await _db.Entry(m).ReloadAsync();
+
+        var sorted = memberships.OrderByDescending(m => m.WeeklyXpAmount).ToList();
+
+        sorted.Take(3).Should().AllSatisfy(m => m.PromotionOutcome.Should().Be("promoted"));
+        sorted.Skip(3).Take(5).Should().AllSatisfy(m => m.PromotionOutcome.Should().BeNull());
+        sorted.Skip(8).Should().AllSatisfy(m => m.PromotionOutcome.Should().Be("demoted"));
+    }
+
+    [Test]
+    public async Task SyncLeagueWeeklyXp_RecomputesFromXpRecords()
+    {
+        var (league, memberships) = await SeedLeagueWithMembersAsync(2);
+        var member = memberships[0];
+
+        _db.UserXpRecords.Add(new UserXp
+        {
+            Id = Guid.NewGuid(),
+            UserId = member.UserId,
+            Amount = 125,
+            Source = "admin_correction",
+            EarnedAt = league.WeekStartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+        });
+        await _db.SaveChangesAsync();
+
+        await _service.SyncLeagueWeeklyXpAsync(league.Id);
+        await _db.Entry(member).ReloadAsync();
+
+        member.WeeklyXpAmount.Should().Be(125);
+    }
+
+    [Test]
     public async Task GetCurrent_NoLeagueExists_CreatesAndJoinsUser()
     {
         var userId = Guid.NewGuid();

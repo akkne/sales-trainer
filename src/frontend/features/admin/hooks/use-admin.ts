@@ -637,6 +637,181 @@ export function useChangeUserRole() {
     });
 }
 
+// --- Leagues ---
+
+export interface AdminLeagueListItem {
+    id: string;
+    tier: string;
+    weekStartDate: string;
+    weekEndDate: string;
+    memberCount: number;
+}
+
+export interface AdminLeagueMember {
+    membershipId: string;
+    userId: string;
+    displayName: string;
+    email: string;
+    weeklyXpAmount: number;
+    rank: number;
+    promotionOutcome: string | null;
+}
+
+export interface AdminLeagueDetail {
+    id: string;
+    tier: string;
+    weekStartDate: string;
+    weekEndDate: string;
+    members: AdminLeagueMember[];
+}
+
+export interface AdminLeagueSettings {
+    maximumLeagueParticipantCount: number;
+    promotionZoneSize: number;
+    demotionZoneSize: number;
+}
+
+export function useAdminLeagues(filters?: { weekStart?: string; tier?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.weekStart) params.set("weekStart", filters.weekStart);
+    if (filters?.tier) params.set("tier", filters.tier);
+    const queryString = params.toString();
+    return useQuery({
+        queryKey: ["admin", "leagues", filters],
+        queryFn: () =>
+            apiClient.get<AdminLeagueListItem[]>(
+                `/admin/leagues${queryString ? `?${queryString}` : ""}`
+            ),
+    });
+}
+
+export function useAdminLeagueWeeks() {
+    return useQuery({
+        queryKey: ["admin", "leagues", "weeks"],
+        queryFn: () => apiClient.get<string[]>("/admin/leagues/weeks"),
+    });
+}
+
+export function useAdminLeagueDetail(leagueId: string) {
+    return useQuery({
+        queryKey: ["admin", "leagues", "detail", leagueId],
+        queryFn: () => apiClient.get<AdminLeagueDetail>(`/admin/leagues/${leagueId}`),
+        enabled: !!leagueId,
+    });
+}
+
+export function useAdminLeagueSettings() {
+    return useQuery({
+        queryKey: ["admin", "leagues", "settings"],
+        queryFn: () => apiClient.get<AdminLeagueSettings>("/admin/leagues/settings"),
+    });
+}
+
+export function useUpdateLeagueSettings() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: AdminLeagueSettings) =>
+            apiClient.put<AdminLeagueSettings>("/admin/leagues/settings", body),
+        onSuccess: (data) => {
+            clientLogger.info("League settings updated", { ...data });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update league settings", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useCloseCurrentLeagueWeek() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => apiClient.post<void>("/admin/leagues/close-current", {}),
+        onSuccess: () => {
+            clientLogger.warn("League week manually closed");
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to close league week", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useResyncLeague() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (leagueId: string) =>
+            apiClient.post<AdminLeagueDetail>(`/admin/leagues/${leagueId}/resync`, {}),
+        onSuccess: (data) => {
+            clientLogger.info("League XP resynced", { leagueId: data.id });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error, leagueId) => {
+            clientLogger.error("Failed to resync league", { leagueId, error: (error as Error).message });
+        },
+    });
+}
+
+export function useMoveMembershipTier() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ membershipId, tier }: { membershipId: string; tier: string }) =>
+            apiClient.put<AdminLeagueDetail>(`/admin/leagues/memberships/${membershipId}/tier`, { tier }),
+        onSuccess: (data, variables) => {
+            clientLogger.info("League membership tier changed", {
+                membershipId: variables.membershipId,
+                newTier: variables.tier,
+                leagueId: data.id,
+            });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to move membership tier", {
+                membershipId: variables.membershipId,
+                tier: variables.tier,
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
+export function useAdjustMembershipXp() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ membershipId, delta }: { membershipId: string; delta: number }) =>
+            apiClient.put<AdminLeagueDetail>(`/admin/leagues/memberships/${membershipId}/xp`, { delta }),
+        onSuccess: (data, variables) => {
+            clientLogger.info("League membership XP adjusted", {
+                membershipId: variables.membershipId,
+                delta: variables.delta,
+                leagueId: data.id,
+            });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to adjust membership XP", {
+                membershipId: variables.membershipId,
+                delta: variables.delta,
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
+export function useRemoveLeagueMembership() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (membershipId: string) =>
+            apiClient.delete<void>(`/admin/leagues/memberships/${membershipId}`),
+        onSuccess: (_, membershipId) => {
+            clientLogger.warn("League membership removed", { membershipId });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error, membershipId) => {
+            clientLogger.error("Failed to remove league membership", { membershipId, error: (error as Error).message });
+        },
+    });
+}
+
 // --- Exercise Type Prompts ---
 
 export interface ExerciseTypePrompt {

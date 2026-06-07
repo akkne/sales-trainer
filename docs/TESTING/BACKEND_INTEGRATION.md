@@ -60,3 +60,19 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `UpdateSkill_AdminToken_Returns200WithUpdatedData`
 - [x] `UpdateSkill_UnknownId_Returns404`
 - [x] `DeleteSkill_AdminToken_Returns204`
+
+## Block 5 — Admin Leagues
+**File:** `Integration/AdminLeaguesTests.cs`
+**Status:** [x]
+
+- [x] `GetLeagues_AsAdmin_Returns200`
+- [x] `GetLeagues_AsUser_Returns403`
+- [x] `GetLeagueDetail_ReturnsMembersWithUserInfo`
+- [x] `AdjustXp_CreatesCorrectionRecordAndSurvivesResync`
+- [x] `AdjustXp_NonExistentMembership_Returns404`
+- [x] `MoveTier_MovesToSameWeekLeague_CreatingIfMissing`
+- [x] `MoveTier_InvalidTier_Returns400`
+- [x] `RemoveMembership_Returns204AndDeletesRow`
+- [x] `CloseCurrent_Returns204`
+- [x] `UpdateSettings_PersistsValues`
+- [x] `UpdateSettings_ZonesExceedMax_Returns400`

@@ -51,12 +51,13 @@ dotnet test src/backend/tests --verbosity normal
 | Evaluation Strategies | 8 | Unit |
 | AuthenticationService | 10 | Unit |
 | ExerciseService | 9 | Unit |
-| LeagueService | 6 | Unit |
+| LeagueService | 8 | Unit |
 | Auth Endpoints | 8 | Integration |
 | Exercise Endpoints | 9 | Integration |
 | Onboarding + SkillTree | 7 | Integration |
 | Admin CRUD + Policies | 13 | Integration |
-| **Total** | **70** | |
+| Admin Leagues | 11 | Integration |
+| **Total** | **83** | |
 
 ## Notes on cookie tests
 

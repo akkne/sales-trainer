@@ -53,6 +53,8 @@ All unit tests use EF Core InMemory DB. No Docker required.
 - [x] `Close_Bottom5_GetDemotedOutcome`
 - [x] `Close_MiddleMembers_HaveNullPromotionOutcome`
 - [x] `Close_CreatesNewLeagueForNextWeek`
+- [x] `Close_RespectsConfiguredPromotionAndDemotionZones` — zone sizes come from `LeagueSettings` row
+- [x] `SyncLeagueWeeklyXp_RecomputesFromXpRecords` — incl. `admin_correction` records
 - [x] `GetCurrent_NoLeagueExists_CreatesAndJoinsUser`
 
 ## Block 5 — Voice dialog: structured chat output

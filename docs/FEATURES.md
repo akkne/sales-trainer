@@ -78,9 +78,10 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 
 ### Leagues
 - Weekly leaderboards (Bronze → Silver → Gold → Diamond)
-- Top-10 promotion, bottom-5 demotion
+- Top-N promotion, bottom-M demotion (zone sizes configurable in DB via admin)
 - Countdown timer to week end
 - Weekly closure job
+- Admin management at `/admin/leagues`: browse leagues by week/tier with full history, view members (XP, rank, outcome), move members between tiers, adjust weekly XP (via `admin_correction` XP records), remove members, force XP re-sync, manually close the week, edit league settings
 
 ### Reference & Handbook
 - **Techniques** ("Коллекция") — first-class entities with per-user mastery ring (Unseen/Novice/Practitioner/Expert/Master), category + tag filtering, sample dialog with annotations, case study, and optional coach sidecar

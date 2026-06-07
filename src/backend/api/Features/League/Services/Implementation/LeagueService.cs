@@ -7,9 +7,6 @@ namespace SalesTrainer.Api.Features.League.Services.Implementation;
 
 internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueService
 {
-    private const int MaximumLeagueParticipantCount = 30;
-    private const int PromotionZoneSize = 10;
-    private const int DemotionZoneSize = 5;
     private const int WeekLengthDays = 7;
     private const int WeekEndOffsetDays = 6;
 
@@ -67,6 +64,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
 
         await SyncWeeklyExperiencePointsForLeagueAsync(currentLeague.Id, weekStart, cancellationToken);
 
+        var settings = await LoadSettingsAsync(cancellationToken);
+
         var allMemberships = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == currentLeague.Id)
             .Join(
@@ -75,7 +74,7 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
                 user => user.Id,
                 (membership, user) => new { membership, user })
             .OrderByDescending(pair => pair.membership.WeeklyXpAmount)
-            .Take(MaximumLeagueParticipantCount)
+            .Take(settings.MaximumLeagueParticipantCount)
             .ToListAsync(cancellationToken);
 
         var participants = allMemberships
@@ -112,6 +111,7 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
 
         if (leaguesToClose.Count == 0) return;
 
+        var settings = await LoadSettingsAsync(cancellationToken);
         var nextWeekLeaguesByTier = new Dictionary<string, Models.League>();
 
         foreach (var league in leaguesToClose)
@@ -125,9 +125,9 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
             {
                 var membership = memberships[membershipIndex];
                 membership.Rank = membershipIndex + 1;
-                membership.PromotionOutcome = membershipIndex < PromotionZoneSize
+                membership.PromotionOutcome = membershipIndex < settings.PromotionZoneSize
                     ? "promoted"
-                    : membershipIndex >= memberships.Count - DemotionZoneSize
+                    : membershipIndex >= memberships.Count - settings.DemotionZoneSize
                         ? "demoted"
                         : null;
             }
@@ -157,6 +157,21 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
 
         await databaseContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task SyncLeagueWeeklyXpAsync(Guid leagueId, CancellationToken cancellationToken = default)
+    {
+        var league = await databaseContext.Leagues
+            .FirstOrDefaultAsync(leagueRecord => leagueRecord.Id == leagueId, cancellationToken);
+        if (league is null) return;
+
+        await SyncWeeklyExperiencePointsForLeagueAsync(league.Id, league.WeekStartDate, cancellationToken);
+    }
+
+    private async Task<LeagueSettings> LoadSettingsAsync(CancellationToken cancellationToken) =>
+        await databaseContext.LeagueSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken)
+        ?? new LeagueSettings();
 
     private async Task<Models.League> CreateLeagueForWeekAsync(
         DateOnly weekStart,

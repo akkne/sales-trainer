@@ -396,6 +396,26 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.ToTable("LeagueMemberships");
                 });
 
+            modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.LeagueSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DemotionZoneSize")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaximumLeagueParticipantCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PromotionZoneSize")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LeagueSettings");
+                });
+
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Exercise", b =>
                 {
                     b.Property<Guid>("Id")

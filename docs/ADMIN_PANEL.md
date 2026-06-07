@@ -72,6 +72,22 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 | PUT | /admin/reference/:id | same | `AdminReferenceMaterialDto` |
 | DELETE | /admin/reference/:id | — | 204 |
 
+### Leagues
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/leagues | query: `?weekStart=&tier=` | `AdminLeagueListItemDto[]` |
+| GET | /admin/leagues/weeks | — | `string[]` |
+| GET | /admin/leagues/:id | — | `AdminLeagueDetailDto` |
+| POST | /admin/leagues/close-current | — | 204 |
+| POST | /admin/leagues/:id/resync | — | `AdminLeagueDetailDto` |
+| PUT | /admin/leagues/memberships/:membershipId/tier | `{tier}` | `AdminLeagueDetailDto` |
+| PUT | /admin/leagues/memberships/:membershipId/xp | `{delta}` | `AdminLeagueDetailDto` |
+| DELETE | /admin/leagues/memberships/:membershipId | — | 204 |
+| GET | /admin/leagues/settings | — | `LeagueSettingsDto` |
+| PUT | /admin/leagues/settings | `LeagueSettingsDto` | `LeagueSettingsDto` |
+
+XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants live in the single-row `LeagueSettings` table.
+
 ### Users (SuperAdmin only)
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -114,6 +130,10 @@ app/(admin)/
       page.tsx         ← dialog bundles management
     open-question/
       page.tsx         ← AI prompts management
+    leagues/
+      page.tsx         ← league list (week/tier filters) + settings + manual week closure
+      [id]/
+        page.tsx       ← league members: move tier, adjust XP, remove, force re-sync
     users/
       page.tsx         ← user list + role management (superadmin only)
 ```
