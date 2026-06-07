@@ -30,6 +30,9 @@ export function GeoAvatar({
         for (let i = 0; i < s.length; i++) {
             h = ((h << 5) - h + s.charCodeAt(i)) | 0;
         }
+        // keep the hash non-negative: a negative seed made rnd() return negative
+        // values (palette lookups fell back to ink, SVG radius went negative)
+        h = Math.abs(h);
 
         const rnd = (n: number) => {
             h = (h * 9301 + 49297) % 233280;

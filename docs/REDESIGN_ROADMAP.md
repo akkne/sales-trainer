@@ -146,8 +146,14 @@ Port from mockup css not yet in globals.css:
 - [x] S3 Dialog list + mode — HeroHead, bundle-grid, mentor-card, mode-grid; verified
 - [x] S4 Text chat — chat-screen/dc-* layout, history sidebar, bubbles, typing dots; verified
 - [x] S5 Voice — voice-stage, pulsing avatar ring, tr-bubbles, state-pill; verified
-- [~] S6 Guidebook — in progress
-- [~] S7 League/Friends/Profile/Session — in progress (Session DONE: shell→`.session*`, options→`.opt*` (А/Б/В keys, sel/correct/wrong/dim + check/close icons), pre-submit footer→shared `ExerciseActionFooter` (`.session-foot` + `.btn-primary.btn-lg`), result banner→`.session-foot.ok/.bad` with `.itile` verdict, complete screen→`.complete`/`.confetti`/`.check-circle`/`.complete-stats`; all 10 exercise types migrated off legacy `--indigo/--good/--bad/--warn/--f-sans/--f-mono` vars and `StatTile`)
-- [~] S8 Landing/Auth — in progress
+- [x] S6 Guidebook — hero-head, gb-tools search/filters, expandable gb-cards with mastery ring; verified
+- [x] S7 League/Friends/Profile/Session — countdown/lb-card with promo/demote zones, tabbar/friends-grid/activity rail, profile-head/ach-grid/theme-grid/logout-row; Session: shell→`.session*`, options→`.opt*` (А/Б/В keys, sel/correct/wrong/dim), shared `ExerciseActionFooter`, result banner→`.session-foot.ok/.bad` with `.btn-success`/`.btn-danger` Дальше, complete screen→`.complete`/`.confetti`; all 10 exercise types migrated off legacy vars; verified
+- [x] S8 Landing/Auth — land-hero with grad-text display title, land-features, centered auth-card with wordmark/auth-or/Google; verified
 
 After each phase: rebuild `docker compose up --build -d frontend`, verify via Playwright MCP, commit.
+
+## Verification (Playwright, 2026-06-07, stage 2)
+- Verified against the running app: /tree (variant A + serpentine + mobile + dark theme), /dialog, /dialog/[id], AI text chat (bubbles, typing dots, history sidebar), voice call, /guidebook, /league, /friends, /profile, landing (logged out), /login, /session (option select → green/red verdict bar)
+- vitest 53/53, tsc clean (tests updated: button labels «Проверить»/«Пропустить», non-colliding lesson titles in LessonPath test)
+- Fixed long-standing GeoAvatar bug: negative seed hash produced ink-on-ink avatars and the negative-SVG-radius console error; avatars now render the new palette
+- Remaining known console noise: Google OAuth origin 403 (env config), 404 lessons for skills without content
