@@ -17,6 +17,9 @@ export interface CurrentLeagueData {
     participantsByRank: LeagueParticipant[];
     currentUserRank: number;
     previousWeekOutcome: "promoted" | "demoted" | null;
+    promotionZoneSize: number;
+    demotionZoneSize: number;
+    maximumLeagueParticipantCount: number;
 }
 
 export function useCurrentLeague() {

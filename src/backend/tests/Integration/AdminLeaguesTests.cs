@@ -162,6 +162,24 @@ public class AdminLeaguesTests
     }
 
     [Test]
+    public async Task MoveTier_ClearsStalePromotionOutcome()
+    {
+        var (_, membership) = await SeedLeagueWithMemberAsync();
+        membership.PromotionOutcome = "promoted";
+        await _db.SaveChangesAsync();
+
+        var response = await _adminClient.PutAsJsonAsync(
+            $"/admin/leagues/memberships/{membership.Id}/tier",
+            new { tier = "silver" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var moved = await _db.LeagueMemberships.AsNoTracking()
+            .FirstAsync(m => m.Id == membership.Id);
+        moved.PromotionOutcome.Should().BeNull();
+    }
+
+    [Test]
     public async Task MoveTier_InvalidTier_Returns400()
     {
         var (_, membership) = await SeedLeagueWithMemberAsync();

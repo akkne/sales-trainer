@@ -129,7 +129,14 @@ public sealed class AdminLeaguesController(
 
         membership.LeagueId = targetLeague.Id;
         membership.Rank = 0;
+        // The promotion outcome belonged to the previous tier; clear it so a stale
+        // promoted/demoted badge does not follow the member into the new league.
+        membership.PromotionOutcome = null;
         await database.SaveChangesAsync();
+
+        // Recompute weekly XP for the league the member just joined so their XP and
+        // the relative ranking of everyone in that league reflect the move.
+        await leagueService.SyncLeagueWeeklyXpAsync(targetLeague.Id);
 
         logger.LogInformation(
             "League membership moved MembershipId={MembershipId} UserId={UserId} {OldTier} → {NewTier} by ActorId={ActorId}",

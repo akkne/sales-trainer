@@ -41,9 +41,6 @@ const TIER_CONFIG: Record<string, { label: string; color: string }> = {
     diamond: { label: "Алмаз", color: "#4cc6e8" },
 };
 
-const PROMOTION_ZONE_SIZE = 10;
-const DEMOTION_ZONE_SIZE = 5;
-
 export default function LeaguePage() {
     const { data: leagueData, isLoading, isError, refetch } = useCurrentLeague();
     const countdown = useCountdown(leagueData?.weekEndDate ?? "");
@@ -94,6 +91,8 @@ export default function LeaguePage() {
     }
 
     const tierInfo = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
+    const PROMOTION_ZONE_SIZE = leagueData.promotionZoneSize;
+    const DEMOTION_ZONE_SIZE = leagueData.demotionZoneSize;
     const totalParticipantCount = leagueData.participantsByRank.length;
     const currentUser = leagueData.participantsByRank.find((p) => p.isCurrentUser);
     const currentUserXp = currentUser?.weeklyXpAmount ?? 0;

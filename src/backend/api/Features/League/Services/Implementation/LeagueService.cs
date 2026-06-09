@@ -96,7 +96,10 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
             currentLeague.WeekEndDate,
             participants,
             currentUserRank,
-            previousWeekOutcome);
+            previousWeekOutcome,
+            settings.PromotionZoneSize,
+            settings.DemotionZoneSize,
+            settings.MaximumLeagueParticipantCount);
     }
 
     public async Task CloseCurrentLeagueAndCreateNextAsync(CancellationToken cancellationToken = default)
