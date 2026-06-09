@@ -63,6 +63,75 @@ public sealed class AdminExercisesController(AppDbContext database, ILogger<Admi
             exercise.OrderInLesson, dto.Content, exercise.CustomAiPrompt));
     }
 
+    [HttpPost("admin/lessons/{lessonId:guid}/exercises/import")]
+    public async Task<ActionResult<ExercisesImportResultDto>> Import(
+        Guid lessonId, [FromBody] List<CreateExerciseRequestDto> items)
+    {
+        var lessonExists = await database.Lessons.AnyAsync(l => l.Id == lessonId);
+        if (!lessonExists) return NotFound();
+
+        if (items is null || items.Count == 0)
+            return BadRequest(new { message = "JSON must be a non-empty array of exercise objects." });
+
+        var existing = await database.Exercises
+            .Where(e => e.LessonId == lessonId)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        var created = 0;
+        var updated = 0;
+        var errors = new List<string>();
+
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            try
+            {
+                if (string.IsNullOrWhiteSpace(item.Type))
+                    throw new InvalidOperationException("type is empty.");
+
+                var match = existing.FirstOrDefault(e => e.OrderInLesson == item.OrderInLesson);
+                if (match is not null)
+                {
+                    match.Type = item.Type;
+                    match.SerializedContent = item.Content.GetRawText();
+                    match.CustomAiPrompt = item.CustomAiPrompt;
+                    match.UpdatedAt = now;
+                    updated++;
+                }
+                else
+                {
+                    var exercise = new Exercise
+                    {
+                        Id = Guid.NewGuid(),
+                        LessonId = lessonId,
+                        Type = item.Type,
+                        OrderInLesson = item.OrderInLesson,
+                        SerializedContent = item.Content.GetRawText(),
+                        CustomAiPrompt = item.CustomAiPrompt,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    };
+                    database.Exercises.Add(exercise);
+                    existing.Add(exercise);
+                    created++;
+                }
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"Item {index + 1}: {exception.Message}");
+            }
+        }
+
+        await database.SaveChangesAsync();
+
+        logger.LogInformation(
+            "Exercises imported LessonId={LessonId} Created={Created} Updated={Updated} Errors={ErrorCount} by ActorId={ActorId}",
+            lessonId, created, updated, errors.Count, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new ExercisesImportResultDto(created, updated, errors));
+    }
+
     [HttpPut("admin/exercises/{id:guid}")]
     public async Task<ActionResult<AdminExerciseDto>> Update(
         Guid id, [FromBody] CreateExerciseRequestDto dto)

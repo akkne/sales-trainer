@@ -59,8 +59,11 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 |---|---|---|---|
 | GET | /admin/lessons/:lessonId/exercises | — | `AdminExerciseDto[]` |
 | POST | /admin/lessons/:lessonId/exercises | `{type, sortOrder, content: <jsonb>}` | `AdminExerciseDto` |
+| POST | /admin/lessons/:lessonId/exercises/import | array `[{type, orderInLesson, content, customAiPrompt?}]` | `ExercisesImportResultDto` |
 | PUT | /admin/exercises/:id | same | `AdminExerciseDto` |
 | DELETE | /admin/exercises/:id | — | 204 |
+
+The exercises editor page has **Export JSON** (downloads the lesson's exercises as a re-importable array) and **Import JSON** (uploads such an array; upsert by `orderInLesson`). Business data such as users is intentionally not exportable.
 
 ### Reference Materials
 | Method | Path | Body | Response |

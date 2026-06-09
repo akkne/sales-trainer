@@ -309,6 +309,32 @@ export function useDeleteExercise(lessonId: string) {
     });
 }
 
+export interface ExercisesImportResult {
+    exercisesCreated: number;
+    exercisesUpdated: number;
+    errors: string[];
+}
+
+export function useImportExercises(lessonId: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (items: Omit<AdminExercise, "id" | "lessonId">[]) =>
+            apiClient.post<ExercisesImportResult>(`/admin/lessons/${lessonId}/exercises/import`, items),
+        onSuccess: (data) => {
+            clientLogger.info("Exercises import complete", {
+                lessonId,
+                created: data.exercisesCreated,
+                updated: data.exercisesUpdated,
+                errors: data.errors.length,
+            });
+            queryClient.invalidateQueries({ queryKey: ["admin", "exercises", lessonId] });
+        },
+        onError: (error) => {
+            clientLogger.error("Exercises import failed", { lessonId, error: (error as Error).message });
+        },
+    });
+}
+
 // --- Reference ---
 
 export function useAdminReferenceAll(filters?: { skillId?: string; category?: string; search?: string }) {

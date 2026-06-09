@@ -21,14 +21,16 @@ const LESSONS_TEMPLATE = JSON.stringify([
         orderInTopic: 1,
         exercises: [
             {
-                type: "multiple_choice",
+                type: "choose_option",
                 orderInLesson: 1,
                 content: {
-                    situation: "Client is hesitant",
-                    question: "What is the best approach?",
-                    options: ["Option A", "Option B", "Option C", "Option D"],
-                    correctOptionIndex: 0,
-                    explanation: "Option A is best because..."
+                    situation: "Клиент говорит: 'Это слишком дорого'",
+                    options: [
+                        { text: "Да, понимаю. Могу предложить скидку.", is_correct: false },
+                        { text: "Скажите, дорого относительно чего?", is_correct: true },
+                        { text: "Это лучшая цена на рынке.", is_correct: false }
+                    ],
+                    explanation: "Лучше уточнить причину возражения, чем сразу снижать цену."
                 },
                 customAiPrompt: null
             }

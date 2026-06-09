@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { use } from "react";
 import Link from "next/link";
 import {
     useAdminExercises,
     useCreateExercise,
     useDeleteExercise,
+    useImportExercises,
     AdminExercise,
+    type ExercisesImportResult,
 } from "@/features/admin/hooks/use-admin";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
@@ -157,6 +159,9 @@ export default function AdminLessonExercisesPage({
 
     const createMut = useCreateExercise(lessonId);
     const deleteMut = useDeleteExercise(lessonId);
+    const importMut = useImportExercises(lessonId);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [importResult, setImportResult] = useState<ExercisesImportResult | null>(null);
     const qc = useQueryClient();
     const updateExerciseMut = useMutation({
         mutationFn: ({ exerciseId, body }: { exerciseId: string; body: Omit<AdminExercise, "id" | "lessonId"> }) =>
@@ -230,6 +235,44 @@ export default function AdminLessonExercisesPage({
         if (editingId === id) setEditingId(null);
     }
 
+    function exportExercises() {
+        // Dump all saved exercises as an import-ready JSON array (not a single object).
+        const payload = [...exercises]
+            .sort((a, b) => a.orderInLesson - b.orderInLesson)
+            .map((ex) => ({
+                type: ex.type,
+                orderInLesson: ex.orderInLesson,
+                content: ex.content,
+                customAiPrompt: ex.customAiPrompt ?? null,
+            }));
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `exercises_${lessonId}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportResult(null);
+        try {
+            const parsed = JSON.parse(await file.text());
+            if (!Array.isArray(parsed)) {
+                alert("JSON must be an array of exercise objects.");
+                return;
+            }
+            const result = await importMut.mutateAsync(parsed);
+            setImportResult(result);
+            setLocalRows(null);
+        } catch (err) {
+            alert(`Import failed: ${(err as Error).message}`);
+        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+
     const isLoadingMut = createMut.isPending || updateExerciseMut.isPending;
 
     // AI-powered types that show custom prompt field
@@ -248,13 +291,49 @@ export default function AdminLessonExercisesPage({
 
             <div className="flex items-center justify-between mb-4">
                 <h1 className="text-lg font-semibold text-ink">Edit Exercises</h1>
-                <button
-                    onClick={addExercise}
-                    className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
-                >
-                    + Add exercise
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={exportExercises}
+                        disabled={exercises.length === 0}
+                        className="px-3 py-1.5 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        Export JSON
+                    </button>
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={importMut.isPending}
+                        className="px-3 py-1.5 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        {importMut.isPending ? "Importing…" : "Import JSON"}
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleImport}
+                        className="hidden"
+                    />
+                    <button
+                        onClick={addExercise}
+                        className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                    >
+                        + Add exercise
+                    </button>
+                </div>
             </div>
+
+            {importResult && (
+                <div className="mb-4 p-3 bg-bg-2 rounded-md">
+                    <p className="text-xs text-ink">
+                        Imported — Created: <span className="font-medium">{importResult.exercisesCreated}</span> | Updated: <span className="font-medium">{importResult.exercisesUpdated}</span>
+                    </p>
+                    {importResult.errors.length > 0 && (
+                        <ul className="mt-1 text-xs text-bad font-mono max-h-32 overflow-y-auto">
+                            {importResult.errors.map((err, i) => <li key={i}>{err}</li>)}
+                        </ul>
+                    )}
+                </div>
+            )}
 
             {rows.length === 0 && !isLoading && (
                 <p className="text-sm text-ink-3">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>

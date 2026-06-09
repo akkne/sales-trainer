@@ -71,11 +71,28 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `AdjustXp_CreatesCorrectionRecordAndSurvivesResync`
 - [x] `AdjustXp_NonExistentMembership_Returns404`
 - [x] `MoveTier_MovesToSameWeekLeague_CreatingIfMissing`
+- [x] `MoveTier_ClearsStalePromotionOutcome` _(regression: outcome badge must not follow member across tiers)_
 - [x] `MoveTier_InvalidTier_Returns400`
 - [x] `RemoveMembership_Returns204AndDeletesRow`
 - [x] `CloseCurrent_Returns204`
 - [x] `UpdateSettings_PersistsValues`
 - [x] `UpdateSettings_ZonesExceedMax_Returns400`
+
+## Block 5b — Admin Topics (update by GUID)
+**File:** `Integration/AdminTopicsTests.cs`
+**Status:** [x]
+
+- [x] `UpdateById_AsAdmin_PersistsChanges` _(regression: `PUT /admin/topics/:id` was missing → all topic edits 404'd)_
+- [x] `UpdateById_NonExistent_Returns404`
+- [x] `UpdateById_DuplicateIconicName_Returns409`
+
+## Block 5c — Admin Exercises Bulk Import
+**File:** `Integration/AdminExercisesImportTests.cs`
+**Status:** [x]
+
+- [x] `Import_AcceptsArray_CreatesAndUpdatesByOrder`
+- [x] `Import_EmptyArray_Returns400`
+- [x] `Import_NonExistentLesson_Returns404`
 
 ## Block 6 — Daily Quotes
 **File:** `Integration/AdminDailyQuotesTests.cs`

@@ -166,7 +166,9 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 |---|---|---|
 | GET | /league | `CurrentLeagueResponseDto` |
 
-`CurrentLeagueResponseDto`: `{leagueId, tier, weekStartDate, weekEndDate, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null}`
+`CurrentLeagueResponseDto`: `{leagueId, tier, weekStartDate, weekEndDate, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null, promotionZoneSize, demotionZoneSize, maximumLeagueParticipantCount}`
+
+- `promotionZoneSize`/`demotionZoneSize`/`maximumLeagueParticipantCount`: live from `LeagueSettings` (admin-configurable). The user league page must render zones from these, not hardcoded constants.
 `LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser}`
 
 Tiers (in order): `bronze → silver → gold → diamond`
@@ -234,8 +236,11 @@ All routes prefixed `/admin`. Unauthorized → 403.
 |---|---|---|---|
 | GET | /admin/lessons/:lessonId/exercises | — | `AdminExerciseDto[]` |
 | POST | /admin/lessons/:lessonId/exercises | `{type, orderInLesson, content: <jsonb>, customAiPrompt?}` | `AdminExerciseDto` |
+| POST | /admin/lessons/:lessonId/exercises/import | `[{type, orderInLesson, content, customAiPrompt?}, …]` (array) | `ExercisesImportResultDto` |
 | PUT | /admin/exercises/:id | same | `AdminExerciseDto` |
 | DELETE | /admin/exercises/:id | — | 204 |
+
+`ExercisesImportResultDto`: `{exercisesCreated, exercisesUpdated, errors[]}`. Bulk upsert by `orderInLesson` within the lesson; empty array → 400, unknown lesson → 404. The admin exercises page exports the lesson's exercises in exactly this array shape (re-importable).
 
 `AdminExerciseDto`: `{id, lessonId, type, orderInLesson, content, customAiPrompt}`
 
