@@ -88,6 +88,31 @@ public sealed class AdminTopicsController(AppDbContext database, ILogger<AdminTo
         return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.IconicName, topic.Title, topic.OrderInSkill));
     }
 
+    [HttpPut("admin/topics/{id:guid}")]
+    public async Task<ActionResult<AdminTopicDto>> UpdateById(
+        Guid id, [FromBody] UpdateTopicRequestDto dto)
+    {
+        var topic = await database.Topics.FindAsync(id);
+        if (topic is null) return NotFound();
+
+        if (dto.IconicName is not null && dto.IconicName != topic.IconicName)
+        {
+            var clash = await database.Topics.AnyAsync(t => t.IconicName == dto.IconicName && t.Id != id);
+            if (clash)
+                return Conflict(new { message = $"Topic with iconicName '{dto.IconicName}' already exists." });
+            topic.IconicName = dto.IconicName;
+        }
+        if (dto.Title is not null) topic.Title = dto.Title;
+        if (dto.OrderInSkill.HasValue) topic.OrderInSkill = dto.OrderInSkill.Value;
+
+        await database.SaveChangesAsync();
+
+        logger.LogInformation("Topic updated TopicId={TopicId} IconicName={IconicName} by ActorId={ActorId}",
+            topic.Id, topic.IconicName, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new AdminTopicDto(topic.Id, topic.SkillId, topic.IconicName, topic.Title, topic.OrderInSkill));
+    }
+
     [HttpDelete("admin/topics/{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
