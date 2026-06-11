@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
@@ -72,7 +71,7 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             cancellationToken: ct);
 
         var replyParser = new StreamingChatReplyParser();
-        var sentenceBuffer = new StringBuilder();
+        var sentenceChunker = new SentenceChunker();
         // TTS pipeline: synthesis of sentence N runs concurrently with LLM streaming of sentence N+1.
         // Tasks are awaited in order, so audio chunks always arrive in reply order.
         var pendingAudio = new Queue<Task<byte[]?>>();
@@ -82,9 +81,9 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             var replyText = replyParser.Push(delta);
             if (replyText.Length == 0) continue;
 
-            sentenceBuffer.Append(replyText);
+            sentenceChunker.Append(replyText);
 
-            while (TryExtractSentence(sentenceBuffer, out var sentence))
+            while (sentenceChunker.TryExtractSentence(out var sentence))
             {
                 var cleaned = sentence.Trim();
                 if (string.IsNullOrWhiteSpace(cleaned)) continue;
@@ -108,11 +107,10 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             _logger.LogWarning(
                 "Chat model ignored the JSON reply contract for session {SessionId}; recovered plain-text reply ({Length} chars)",
                 sessionId, parseResult.Reply.Length);
-            sentenceBuffer.Clear();
-            sentenceBuffer.Append(parseResult.Reply);
+            sentenceChunker.Replace(parseResult.Reply);
         }
 
-        var tailCleaned = sentenceBuffer.ToString().Trim();
+        var tailCleaned = sentenceChunker.DrainRemaining().Trim();
         if (!string.IsNullOrWhiteSpace(tailCleaned))
         {
             yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
@@ -143,38 +141,6 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             sessionId, transcript.Length, parseResult.Reply.Length, parseResult.EndCall);
 
         yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: true);
-    }
-
-    private static bool TryExtractSentence(StringBuilder buffer, out string sentence)
-    {
-        const int minLength = 20;
-        var text = buffer.ToString();
-        if (text.Length < minLength)
-        {
-            sentence = string.Empty;
-            return false;
-        }
-
-        var idx = -1;
-        for (var i = minLength; i < text.Length; i++)
-        {
-            var ch = text[i];
-            if (ch == '.' || ch == '!' || ch == '?' || ch == '\n')
-            {
-                idx = i;
-                break;
-            }
-        }
-
-        if (idx < 0)
-        {
-            sentence = string.Empty;
-            return false;
-        }
-
-        sentence = text[..(idx + 1)];
-        buffer.Remove(0, idx + 1);
-        return true;
     }
 
     private async Task<byte[]?> TrySynthesizeAsync(string text, string? voiceId, string sessionId, CancellationToken ct)

@@ -109,6 +109,13 @@ background while the next sentence is still streaming from the LLM; audio
 frames are flushed in reply order as they complete, so speech starts almost
 immediately and flows sentence-by-sentence with no stalls between sentences.
 
+Sentence extraction lives in `SentenceChunker` (unit-tested separately). The
+**first** chunk also splits on clause delimiters (`, ; : — –` followed by
+whitespace, so `1,5` stays intact) with a lower minimum length (12 chars vs
+20), so the very first TTS request — and the first audible audio — starts as
+early as possible; subsequent chunks split on sentence enders (`. ! ? \n`)
+only, keeping natural prosody.
+
 `TtsRouter` is the single source of truth for provider selection
 (`Voice:TtsProvider`, fallback order yandex → google) and for the
 "is voice configured" checks in both controllers. Yandex synthesizes raw LPCM

@@ -81,3 +81,27 @@ JSON `{"reply", "endCall"}`:
 - [x] `SendChatMessageAsync_FallsBackToPlainTextReply`
 
 Run: `dotnet test --filter "FullyQualifiedName~StreamingChatReplyParser|FullyQualifiedName~OpenAiChatServiceTests"`
+
+## Block 6 — Voice dialog: sentence chunking for TTS
+**File:** `Unit/SentenceChunkerTests.cs`
+**Status:** [x]
+
+`SentenceChunker` — splits the streamed LLM reply into TTS chunks; the first
+chunk also splits on clause delimiters (`, ; : — –` + whitespace, min 12 chars)
+so the first audio starts earlier; later chunks split on `. ! ? \n` (min 20):
+- [x] `TryExtractSentence_EmptyBuffer_ReturnsFalse`
+- [x] `FirstChunk_ShorterThanMinimum_NotExtracted`
+- [x] `FirstChunk_SplitsOnCommaFollowedByWhitespace`
+- [x] `FirstChunk_SplitsOnSentenceEnder`
+- [x] `FirstChunk_DoesNotSplitCommaInsideNumber` (`1,5` stays intact)
+- [x] `SubsequentChunks_IgnoreClauseDelimiters`
+- [x] `SubsequentChunks_RequireLongerMinimumLength`
+- [x] `StreamedAppends_ExtractAcrossDeltaBoundaries`
+- [x] `DrainRemaining_ReturnsTailAndClearsBuffer`
+- [x] `Replace_OverwritesBufferedText`
+
+Run: `dotnet test --filter "FullyQualifiedName~SentenceChunker"`
+
+> Note: `IntegrationTestSetup` is scoped to the `SalesTrainer.Tests.Integration`
+> namespace, so unit tests run without Docker:
+> `dotnet test --filter "FullyQualifiedName~SalesTrainer.Tests.Unit"`

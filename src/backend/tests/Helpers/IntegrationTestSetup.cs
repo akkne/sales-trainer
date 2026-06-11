@@ -6,7 +6,9 @@ using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 using Testcontainers.PostgreSql;
 
-namespace SalesTrainer.Tests;
+// Scoped to the Integration namespace so the Postgres testcontainer starts only
+// for integration tests; Unit tests must run without a docker daemon.
+namespace SalesTrainer.Tests.Integration;
 
 [SetUpFixture]
 public class IntegrationTestSetup
