@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: sallevate-backend
+    static_configs:
+      # Backend runs on the host in the local dev profile (docker-compose.infra.yml).
+      # Host port 5001 is where the locally-run API listens (see scripts/dev-backend.sh).
+      - targets: ['host.docker.internal:5001']
+    metrics_path: /metrics

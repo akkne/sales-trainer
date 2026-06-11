@@ -10,6 +10,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Local Dev](LOCAL_DEV.md) | Run backend/frontend on the host (no image rebuilds) with infra in Docker — `scripts/dev-*.sh`, `docker-compose.infra.yml` |
 | [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |

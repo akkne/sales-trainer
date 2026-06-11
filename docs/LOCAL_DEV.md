@@ -1,0 +1,96 @@
+# Local Dev Profile (app on host, infra in Docker)
+
+A second way to run SalesTrainer, alongside the original full-Docker stack.
+
+The motivation: rebuilding the `backend` and `frontend` Docker images on every
+code change is slow and piles up image/layer cache. In this profile the two
+**app** services run **directly on the host** (`dotnet run` / `next dev`, both
+with hot reload), while all **stateful + observability** services stay in
+Docker. Nothing about the original setup changes.
+
+## The two profiles
+
+| | Full Docker (original) | Local Dev (new) |
+|---|---|---|
+| Compose file | `docker-compose.yml` | `docker-compose.infra.yml` |
+| backend | Docker (`code-backend-1`) | host — `dotnet run`, port **5001** |
+| frontend | Docker (`code-frontend-1`) | host — `next dev`, port **3000** |
+| postgres / mongo / redis | Docker | Docker (same ports & volumes) |
+| loki / prometheus / grafana | Docker | Docker |
+| Rebuild on code change | image rebuild | none — hot reload |
+
+Both profiles publish the **same host ports** and share the **same named
+volumes**, so data (Postgres, Mongo, …) is identical whichever profile you use.
+Run only one profile at a time — they bind the same ports.
+
+## Quick start
+
+```bash
+# Start everything (infra in Docker + backend + frontend on host):
+scripts/dev-up.sh
+
+# Tail app logs:
+tail -f logs/backend.log logs/frontend.log
+
+# Stop everything (host processes + Docker infra):
+scripts/dev-down.sh
+```
+
+Open http://localhost:3000 (frontend) → talks to http://localhost:5001 (backend).
+
+> If the full-Docker stack was running, stop its app containers first so they
+> free ports 5001/3000:
+> `docker stop code-backend-1 code-frontend-1`
+
+## Run pieces individually
+
+```bash
+scripts/dev-infra.sh      # infra only (docker compose -f docker-compose.infra.yml up -d)
+scripts/dev-backend.sh    # backend on host, foreground (Ctrl-C to stop)
+scripts/dev-frontend.sh   # frontend on host, foreground
+```
+
+## Files added by this profile
+
+| File | Purpose |
+|---|---|
+| `docker-compose.infra.yml` | Infra-only stack (no backend/frontend). Shares volumes with `docker-compose.yml`. |
+| `infrastructure/prometheus/prometheus.local.yml` | Prometheus scrapes the host backend via `host.docker.internal:5001`. |
+| `scripts/lib-local-env.sh` | Shared helper: loads root `.env`, exports backend config overrides. Sourced, not run. |
+| `scripts/dev-infra.sh` | Start the Docker infra. |
+| `scripts/dev-backend.sh` | Run backend on host, pointed at infra on `localhost`. |
+| `scripts/dev-frontend.sh` | Run frontend on host (`next dev`); auto-generates `src/frontend/.env.local`. |
+| `scripts/dev-up.sh` | Start infra + backend + frontend (apps backgrounded, logs in `logs/`). |
+| `scripts/dev-down.sh` | Stop host apps + Docker infra. |
+
+`src/frontend/.env.local` and `logs/` / `.local-run/` are gitignored.
+
+## How host services reach infra
+
+In Docker, services address each other by name (`postgres`, `mongo`, `loki`).
+On the host they use `localhost` + the published port. `scripts/lib-local-env.sh`
+injects these as env-var config overrides (same keys docker-compose sets):
+
+| Config key | Value (host) |
+|---|---|
+| `ConnectionStrings__Postgres` | `Host=localhost;Port=5433;…` |
+| `ConnectionStrings__Mongo` | `mongodb://localhost:27017` |
+| `ConnectionStrings__Redis` | `localhost:6379` |
+| `Logging__Loki__Url` | `http://localhost:3100` |
+| `ASPNETCORE_URLS` | `http://localhost:5001` |
+
+Secrets (JWT, Google, OpenAI, Deepgram, Yandex, SuperAdmin) come from the root
+`.env`, parsed the same way docker-compose reads it.
+
+## Gotchas (learned while setting this up)
+
+- **`dotnet run` ignores `ASPNETCORE_URLS`** unless `--no-launch-profile` is
+  passed, because `Properties/launchSettings.json`'s `http` profile pins
+  `applicationUrl=http://localhost:5188`. `dev-backend.sh` passes the flag, so
+  the backend binds **5001** (the port the frontend expects), not 5188.
+- **The "Now listening on…" line is suppressed** — Serilog overrides
+  `Microsoft` to `Warning`. Don't wait for it in logs; probe
+  `http://localhost:5001/swagger/index.html` instead.
+- **Root `.env` has an unquoted value with a space**
+  (`SUPERADMIN_DISPLAY_NAME=Super Admin`). `lib-local-env.sh` parses line-by-line
+  rather than `source`-ing, so this works exactly as it does for compose.

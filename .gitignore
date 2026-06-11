@@ -37,6 +37,9 @@ appsettings.*.json
 .mongo_data/
 .redis_data/
 
+# Local dev profile runtime (PIDs for scripts/dev-up.sh)
+.local-run/
+
 # IDE
 .idea/
 .vscode/
