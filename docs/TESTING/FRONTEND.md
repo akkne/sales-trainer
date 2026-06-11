@@ -68,3 +68,20 @@ Tests the `formatSessionDuration(totalSeconds)` pure utility used in the session
 | 90 seconds | 90 | "1 мин 30 сек" |
 | 185 seconds | 185 | "3 мин 5 сек" |
 | 10 minutes | 600 | "10 мин 0 сек" |
+
+## AiDialogueExercise — Cold-call dialog (text/voice)
+
+**File:** `__tests__/AiDialogueExercise.test.tsx`
+
+Covers the reworked cold-call exercise: user-first flow and the text/voice mode choice.
+
+| Case | Expectation |
+|---|---|
+| Mode choice on mount | Renders "Текст" / "Голос"; no chat request fired (user speaks first) |
+| Text mode | Selecting "Текст" reveals the reply input and "Напишите первую реплику" hint |
+| First message | Posts the user's opening line to `/exercises/:id/chat` |
+| Voice unavailable | "Голос" button disabled when `useExerciseVoice().isVoiceAvailable` is false |
+
+The voice pipeline (`useExerciseVoice`) is mocked — it reuses the live-call STT/VAD/TTS
+services (`features/voice/services/*`) but streams from `/exercises/:id/voice/stream`.
+Manual voice checks follow the live-call checklist in [VOICE_CALL.md](VOICE_CALL.md).

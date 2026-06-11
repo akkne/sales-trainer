@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { ExerciseResultBanner } from "./exercise-result-banner";
 import { apiClient } from "@/shared/api/api-client";
+import { useExerciseVoice } from "@/features/exercise/hooks/use-exercise-voice";
+import { VoiceMicButton } from "@/features/voice/components/voice-mic-button";
 
 interface ChatMessage {
     role: "user" | "assistant";
@@ -21,6 +23,8 @@ interface AiDialogueContent {
     success_criteria?: string[];
     ai_prompt?: string;
 }
+
+type DialogueMode = "text" | "voice";
 
 interface AiDialogueExerciseProps {
     content: AiDialogueContent;
@@ -41,10 +45,12 @@ export function AiDialogueExercise({
     isSubmitting,
     submittedResult,
 }: AiDialogueExerciseProps) {
+    const [mode, setMode] = useState<DialogueMode | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState("");
     const [isSending, setIsSending] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
+    const [voiceError, setVoiceError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
@@ -53,50 +59,56 @@ export function AiDialogueExercise({
     const userTurnCount = messages.filter(m => m.role === "user").length;
     const canComplete = userTurnCount >= minTurns;
 
+    // --- Voice pipeline (same services as live calls) ---
+    const handleVoiceTranscript = useCallback((transcript: string) => {
+        setMessages(prev => [...prev, { role: "user", content: transcript }]);
+    }, []);
+
+    const handleVoiceResponse = useCallback((aiContent: string, isStopSignal: boolean) => {
+        if (aiContent.trim()) {
+            setMessages(prev => [...prev, { role: "assistant", content: aiContent }]);
+        }
+        if (isStopSignal) setIsComplete(true);
+    }, []);
+
+    const handleVoiceError = useCallback((error: Error) => {
+        setVoiceError(error.message);
+    }, []);
+
+    const voice = useExerciseVoice({
+        exerciseId,
+        onTranscript: handleVoiceTranscript,
+        onAiResponse: handleVoiceResponse,
+        onError: handleVoiceError,
+    });
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
     useEffect(() => {
-        if (messages.length === 0 && !isAnswered) {
-            startConversation();
+        // Stop the voice pipeline once the dialog is complete or submitted.
+        if ((isComplete || isAnswered) && voice.state !== "idle") {
+            voice.stopVoice();
         }
-    }, []);
-
-    async function startConversation() {
-        setIsSending(true);
-        try {
-            const data = await apiClient.post<{ response: string; isComplete: boolean; isFinished: boolean }>(
-                `/exercises/${exerciseId}/chat`,
-                { message: "" }
-            );
-            setMessages([{ role: "assistant", content: data.response }]);
-            if (data.isComplete || data.isFinished) setIsComplete(true);
-        } catch (error) {
-            console.error("Failed to start conversation:", error);
-            setMessages([{
-                role: "assistant",
-                content: `${content.persona}: Да, слушаю. Что вы хотели?`
-            }]);
-        } finally {
-            setIsSending(false);
-        }
-    }
+    }, [isComplete, isAnswered, voice]);
 
     async function sendMessage() {
         if (!inputText.trim() || isSending || isComplete || isAnswered) return;
 
-        const userMessage: ChatMessage = { role: "user", content: inputText };
-        setMessages([...messages, userMessage]);
+        const messageText = inputText;
+        setMessages(prev => [...prev, { role: "user", content: messageText }]);
         setInputText("");
         setIsSending(true);
 
         try {
             const data = await apiClient.post<{ response: string; isComplete: boolean; isFinished: boolean }>(
                 `/exercises/${exerciseId}/chat`,
-                { message: inputText }
+                { message: messageText }
             );
-            setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+            if (data.response.trim()) {
+                setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+            }
             if (data.isComplete || data.isFinished) setIsComplete(true);
         } catch (error) {
             console.error("Failed to send message:", error);
@@ -110,6 +122,7 @@ export function AiDialogueExercise({
     }
 
     function handleComplete() {
+        if (voice.state !== "idle") voice.stopVoice();
         onSubmit({
             messages,
             completedNaturally: isComplete,
@@ -122,6 +135,9 @@ export function AiDialogueExercise({
             sendMessage();
         }
     }
+
+    const showInput = !isAnswered && !isComplete && mode === "text";
+    const showVoiceControls = !isAnswered && !isComplete && mode === "voice";
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
@@ -148,65 +164,106 @@ export function AiDialogueExercise({
                 <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>{content.context}</p>
             )}
 
-            {/* Chat messages */}
-            <div
-                style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                    minHeight: 200,
-                    maxHeight: 400,
-                    padding: 8,
-                    background: "var(--surface)",
-                    border: "1px solid var(--line)",
-                    borderRadius: 14,
-                }}
-            >
-                {messages.map((message, idx) => (
-                    <div
-                        key={idx}
-                        style={{
-                            display: "flex",
-                            justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-                        }}
-                    >
-                        <div
+            {/* Mode selection — shown before the dialog starts */}
+            {mode === null && !isAnswered && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <p style={{ fontSize: 14, color: "var(--ink-2)", margin: 0 }}>
+                        Вы звоните первым. Выберите, как вести диалог:
+                    </p>
+                    <div style={{ display: "flex", gap: 12 }}>
+                        <button
+                            onClick={() => setMode("text")}
+                            style={modeChoiceStyle}
+                        >
+                            <Icon name="send" size="lg" />
+                            <span style={{ fontWeight: 600 }}>Текст</span>
+                            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Писать реплики</span>
+                        </button>
+                        <button
+                            onClick={() => { setVoiceError(null); setMode("voice"); }}
+                            disabled={!voice.isVoiceAvailable}
                             style={{
-                                maxWidth: "80%",
-                                padding: "10px 14px",
-                                borderRadius: message.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
-                                background: message.role === "user" ? "var(--primary)" : "var(--bg-2)",
-                                color: message.role === "user" ? "white" : "var(--ink)",
-                                fontSize: 14,
-                                lineHeight: 1.4,
+                                ...modeChoiceStyle,
+                                opacity: voice.isVoiceAvailable ? 1 : 0.5,
+                                cursor: voice.isVoiceAvailable ? "pointer" : "not-allowed",
                             }}
                         >
-                            {message.content}
-                        </div>
+                            <Icon name="mic" size="lg" />
+                            <span style={{ fontWeight: 600 }}>Голос</span>
+                            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                                {voice.isVoiceAvailable ? "Говорить вслух" : "Недоступно"}
+                            </span>
+                        </button>
                     </div>
-                ))}
-                {isSending && (
-                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                        <div
-                            style={{
-                                padding: "10px 14px",
-                                borderRadius: "4px 14px 14px 14px",
-                                background: "var(--bg-2)",
-                                color: "var(--ink-3)",
-                                fontSize: 14,
-                            }}
-                        >
-                            <span style={{ opacity: 0.7 }}>Печатает...</span>
-                        </div>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
+                </div>
+            )}
 
-            {/* Input or result */}
-            {!isAnswered && !isComplete && (
+            {/* Chat messages */}
+            {mode !== null && (
+                <div
+                    style={{
+                        flex: 1,
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 12,
+                        minHeight: 200,
+                        maxHeight: 400,
+                        padding: 8,
+                        background: "var(--surface)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 14,
+                    }}
+                >
+                    {messages.length === 0 && (
+                        <p style={{ fontSize: 13, color: "var(--ink-4)", textAlign: "center", margin: "auto" }}>
+                            {mode === "voice" ? "Нажмите на микрофон и начните разговор" : "Напишите первую реплику"}
+                        </p>
+                    )}
+                    {messages.map((message, idx) => (
+                        <div
+                            key={idx}
+                            style={{
+                                display: "flex",
+                                justifyContent: message.role === "user" ? "flex-end" : "flex-start",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    maxWidth: "80%",
+                                    padding: "10px 14px",
+                                    borderRadius: message.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
+                                    background: message.role === "user" ? "var(--primary)" : "var(--bg-2)",
+                                    color: message.role === "user" ? "white" : "var(--ink)",
+                                    fontSize: 14,
+                                    lineHeight: 1.4,
+                                }}
+                            >
+                                {message.content}
+                            </div>
+                        </div>
+                    ))}
+                    {(isSending || voice.state === "processing") && (
+                        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                            <div
+                                style={{
+                                    padding: "10px 14px",
+                                    borderRadius: "4px 14px 14px 14px",
+                                    background: "var(--bg-2)",
+                                    color: "var(--ink-3)",
+                                    fontSize: 14,
+                                }}
+                            >
+                                <span style={{ opacity: 0.7 }}>Печатает...</span>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+            )}
+
+            {/* Text input */}
+            {showInput && (
                 <div style={{ display: "flex", gap: 8 }}>
                     <input
                         type="text"
@@ -215,6 +272,7 @@ export function AiDialogueExercise({
                         onKeyDown={handleKeyDown}
                         placeholder="Ваша реплика…"
                         disabled={isSending}
+                        autoFocus
                         style={{
                             flex: 1,
                             padding: "10px 14px",
@@ -236,7 +294,27 @@ export function AiDialogueExercise({
                 </div>
             )}
 
-            {!isAnswered && !canComplete && (
+            {/* Voice controls */}
+            {showVoiceControls && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                    {voice.currentTranscript && (
+                        <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0, fontStyle: "italic" }}>
+                            {voice.currentTranscript}
+                        </p>
+                    )}
+                    <VoiceMicButton
+                        state={voice.state}
+                        isAvailable={voice.isVoiceAvailable}
+                        onStart={voice.startVoice}
+                        onStop={voice.stopVoice}
+                    />
+                    {voiceError && (
+                        <p style={{ fontSize: 12, color: "var(--heart)", margin: 0 }}>{voiceError}</p>
+                    )}
+                </div>
+            )}
+
+            {mode !== null && !isAnswered && !canComplete && (
                 <p style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", margin: 0 }}>
                     Ещё {minTurns - userTurnCount} реплик до возможности завершить
                 </p>
@@ -297,3 +375,18 @@ export function AiDialogueExercise({
         </div>
     );
 }
+
+const modeChoiceStyle: React.CSSProperties = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    padding: "20px 16px",
+    background: "var(--surface)",
+    border: "1px solid var(--line-2)",
+    borderRadius: 14,
+    cursor: "pointer",
+    color: "var(--ink)",
+    fontFamily: "var(--font-ui)",
+};

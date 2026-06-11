@@ -248,7 +248,18 @@ User improves weak text. AI evaluates improvement against criteria.
 ## Type 8: AI Dialogue (`ai_dialogue`)
 
 ### Purpose
-Multi-turn text chat where AI plays customer. Tests conversation skills.
+Multi-turn cold-call simulation where the AI plays the customer. Tests conversation skills.
+
+### Interaction model
+- **User speaks first.** The salesperson (user) opens the call — there is no AI greeting.
+  Backend returns an empty turn for an empty message; the AI only replies after the opening line.
+- **Two modes, chosen by the user before the dialog starts:**
+  - **Text** — type replies, posted to `POST /exercises/:id/chat`.
+  - **Voice** — speak aloud (`useExerciseVoice` hook), streamed from
+    `POST /exercises/:id/voice/stream`. Reuses the exact STT/VAD/TTS pipeline as live
+    calls (WebSpeech STT → exercise voice stream → MP3 playback). The AI can hang up
+    (`endCall`/isStopSignal) to end the dialog naturally.
+  - Both modes share the same chat history and feed the same completion submission.
 
 ### Content Schema
 ```json

@@ -12,6 +12,7 @@ using SalesTrainer.Api.Features.Exercises.Services.Implementation;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
+using SalesTrainer.Api.Features.Voice.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Tests.Helpers;
 
@@ -34,9 +35,10 @@ public class ExerciseServiceTests
         var achievementService = Substitute.For<IAchievementService>();
         var openAiChatService = Substitute.For<IOpenAiChatService>();
         var notificationService = Substitute.For<INotificationService>();
+        var ttsRouter = Substitute.For<ITtsRouter>();
         // ExerciseService is internal, so NSubstitute cannot proxy ILogger<ExerciseService> — use the null logger.
         var logger = NullLogger<ExerciseService>.Instance;
-        _service = new ExerciseService(_db, factory, achievementService, openAiChatService, notificationService, logger);
+        _service = new ExerciseService(_db, factory, achievementService, openAiChatService, notificationService, ttsRouter, logger);
     }
 
     [TearDown]

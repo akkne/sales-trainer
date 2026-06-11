@@ -1,15 +1,20 @@
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SalesTrainer.Api.Features.Achievements.Services.Abstract;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Dialog.Services.Implementation;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 using SalesTrainer.Api.Features.Gamification.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.Notifications.Models;
 using SalesTrainer.Api.Features.Notifications.Services.Abstract;
+using SalesTrainer.Api.Features.Voice.Services.Abstract;
+using SalesTrainer.Api.Features.Voice.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.Exercises.Services.Implementation;
@@ -20,6 +25,7 @@ internal sealed class ExerciseService(
     IAchievementService achievementService,
     IOpenAiChatService openAiChatService,
     INotificationService notificationService,
+    ITtsRouter ttsRouter,
     ILogger<ExerciseService> logger) : IExerciseService
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
@@ -352,6 +358,152 @@ internal sealed class ExerciseService(
         string userMessage,
         CancellationToken cancellationToken = default)
     {
+        var chatContext = await BuildExerciseChatContextAsync(exerciseId, cancellationToken);
+        var cacheKey = BuildChatCacheKey(userId, exerciseId);
+        var messages = await GetChatMessagesFromCacheAsync(cacheKey, cancellationToken);
+
+        // The user always speaks first (e.g. opens the cold call). With no user
+        // message yet there is nothing to respond to — return an empty turn.
+        if (string.IsNullOrWhiteSpace(userMessage))
+        {
+            return new ExerciseChatResponseDto(
+                Response: string.Empty,
+                IsComplete: false,
+                IsFinished: false,
+                TurnNumber: messages.Count(m => m.Role == "user"),
+                MaxTurns: chatContext.MaxTurns);
+        }
+
+        messages.Add(new ChatMessage("user", userMessage));
+
+        var turnNumber = messages.Count(m => m.Role == "user");
+        if (turnNumber > chatContext.MaxTurns)
+        {
+            await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+            return new ExerciseChatResponseDto(
+                Response: "Диалог завершён — достигнуто максимальное количество реплик.",
+                IsComplete: true,
+                IsFinished: false,
+                TurnNumber: turnNumber,
+                MaxTurns: chatContext.MaxTurns);
+        }
+
+        var dialogHistory = ToDialogHistory(messages);
+
+        var aiResponse = await GenerateAiResponseAsync(chatContext.SystemPrompt, dialogHistory, cancellationToken);
+        messages.Add(new ChatMessage("assistant", aiResponse.Response));
+
+        await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+
+        return new ExerciseChatResponseDto(
+            Response: aiResponse.Response,
+            IsComplete: aiResponse.IsComplete || turnNumber >= chatContext.MaxTurns,
+            IsFinished: aiResponse.IsFinished,
+            TurnNumber: turnNumber,
+            MaxTurns: chatContext.MaxTurns);
+    }
+
+    public async IAsyncEnumerable<VoiceStreamChunk> StreamExerciseVoiceAsync(
+        Guid userId,
+        Guid exerciseId,
+        string transcript,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var chatContext = await BuildExerciseChatContextAsync(exerciseId, cancellationToken);
+        var cacheKey = BuildChatCacheKey(userId, exerciseId);
+        var messages = await GetChatMessagesFromCacheAsync(cacheKey, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(transcript))
+            messages.Add(new ChatMessage("user", transcript));
+
+        var dialogHistory = ToDialogHistory(messages);
+
+        // Same pipeline as live calls: stream the JSON reply, chunk into sentences,
+        // synthesize each sentence to speech while the next one is still streaming.
+        var replyParser = new StreamingChatReplyParser();
+        var sentenceChunker = new SentenceChunker();
+        var pendingAudio = new Queue<Task<byte[]?>>();
+
+        await foreach (var delta in openAiChatService.StreamChatMessageAsync(chatContext.SystemPrompt, dialogHistory, cancellationToken))
+        {
+            var replyText = replyParser.Push(delta);
+            if (replyText.Length == 0) continue;
+
+            sentenceChunker.Append(replyText);
+
+            while (sentenceChunker.TryExtractSentence(out var sentence))
+            {
+                var cleaned = sentence.Trim();
+                if (string.IsNullOrWhiteSpace(cleaned)) continue;
+
+                yield return new VoiceStreamChunk(cleaned, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
+                pendingAudio.Enqueue(TrySynthesizeAsync(cleaned, cancellationToken));
+            }
+
+            while (pendingAudio.Count > 0 && pendingAudio.Peek().IsCompleted)
+            {
+                var readyAudio = await pendingAudio.Dequeue();
+                if (readyAudio is { Length: > 0 })
+                    yield return new VoiceStreamChunk(string.Empty, readyAudio, IsStopSignal: false, IsFinal: false);
+            }
+        }
+
+        var parseResult = replyParser.Complete();
+        if (parseResult.UsedFallback)
+            sentenceChunker.Replace(parseResult.Reply);
+
+        var tailCleaned = sentenceChunker.DrainRemaining().Trim();
+        if (!string.IsNullOrWhiteSpace(tailCleaned))
+        {
+            yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
+            pendingAudio.Enqueue(TrySynthesizeAsync(tailCleaned, cancellationToken));
+        }
+
+        while (pendingAudio.Count > 0)
+        {
+            var audio = await pendingAudio.Dequeue();
+            if (audio is { Length: > 0 })
+                yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
+        }
+
+        messages.Add(new ChatMessage("assistant", parseResult.Reply));
+        await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+
+        var maxTurnsReached = messages.Count(m => m.Role == "user") >= chatContext.MaxTurns;
+        yield return new VoiceStreamChunk(
+            string.Empty,
+            Array.Empty<byte>(),
+            IsStopSignal: parseResult.EndCall || maxTurnsReached,
+            IsFinal: true);
+    }
+
+    private async Task<byte[]?> TrySynthesizeAsync(string text, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var stream = await ttsRouter.SynthesizeSpeechAsync(text, null, cancellationToken);
+            await using (stream)
+            {
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream, cancellationToken);
+                return memoryStream.ToArray();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Exercise TTS synthesis failed ({TextLength} chars); reply delivered as text only", text.Length);
+            return null;
+        }
+    }
+
+    private async Task<ExerciseChatContext> BuildExerciseChatContextAsync(
+        Guid exerciseId,
+        CancellationToken cancellationToken)
+    {
         var exercise = await databaseContext.Exercises
             .FirstOrDefaultAsync(e => e.Id == exerciseId, cancellationToken)
             ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
@@ -362,7 +514,6 @@ internal sealed class ExerciseService(
         var content = JsonDocument.Parse(exercise.SerializedContent).RootElement;
         var maxTurns = content.TryGetProperty("max_turns", out var maxEl) ? maxEl.GetInt32() : 10;
 
-        // Build system prompt from exercise content
         var persona = content.TryGetProperty("persona", out var personaEl) ? personaEl.GetString() ?? "" : "";
         var scenario = content.TryGetProperty("scenario", out var scenarioEl) ? scenarioEl.GetString() ?? "" : "";
         var contextInfo = content.TryGetProperty("context", out var contextEl) ? contextEl.GetString() ?? "" : "";
@@ -370,67 +521,23 @@ internal sealed class ExerciseService(
 
         var systemPrompt = !string.IsNullOrEmpty(aiPrompt)
             ? aiPrompt
-            : $"Ты играешь роль: {persona}. Сценарий: {scenario}. {contextInfo}\n\nОтвечай кратко, в 1-3 предложения. Веди себя естественно для своей роли.";
+            : $"Ты играешь роль: {persona}. Сценарий: {scenario}. {contextInfo}\n\nОтвечай кратко, в 1-3 предложения. Веди себя естественно для своей роли. Пользователь звонит первым.";
 
-        // Get or create chat state from cache
-        var cacheKey = $"exercise_chat:{userId}:{exerciseId}";
-        var messages = await GetChatMessagesFromCacheAsync(cacheKey, cancellationToken);
+        return new ExerciseChatContext(systemPrompt, maxTurns);
+    }
 
-        // If no messages, start with AI greeting
-        if (messages.Count == 0)
-        {
-            var greetingHistory = new List<DialogMessage>();
-            var greeting = await GenerateAiResponseAsync(systemPrompt, greetingHistory, cancellationToken);
-            messages.Add(new ChatMessage("assistant", greeting.Response));
-            await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
+    private static string BuildChatCacheKey(Guid userId, Guid exerciseId) =>
+        $"exercise_chat:{userId}:{exerciseId}";
 
-            return new ExerciseChatResponseDto(
-                Response: greeting.Response,
-                IsComplete: greeting.IsComplete,
-                IsFinished: greeting.IsFinished,
-                TurnNumber: 1,
-                MaxTurns: maxTurns);
-        }
-
-        // Add user message
-        if (!string.IsNullOrEmpty(userMessage))
-        {
-            messages.Add(new ChatMessage("user", userMessage));
-        }
-
-        var turnNumber = messages.Count(m => m.Role == "user");
-        if (turnNumber >= maxTurns)
-        {
-            await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
-            return new ExerciseChatResponseDto(
-                Response: "Диалог завершён — достигнуто максимальное количество реплик.",
-                IsComplete: true,
-                IsFinished: false,
-                TurnNumber: turnNumber,
-                MaxTurns: maxTurns);
-        }
-
-        // Convert to DialogMessage format for OpenAI service
-        var dialogHistory = messages.Select(m => new DialogMessage
+    private static List<DialogMessage> ToDialogHistory(IEnumerable<ChatMessage> messages) =>
+        messages.Select(m => new DialogMessage
         {
             Role = m.Role,
             Content = m.Content,
             Timestamp = DateTime.UtcNow
         }).ToList();
 
-        // Generate AI response
-        var aiResponse = await GenerateAiResponseAsync(systemPrompt, dialogHistory, cancellationToken);
-        messages.Add(new ChatMessage("assistant", aiResponse.Response));
-
-        await SaveChatMessagesToCacheAsync(cacheKey, messages, cancellationToken);
-
-        return new ExerciseChatResponseDto(
-            Response: aiResponse.Response,
-            IsComplete: aiResponse.IsComplete,
-            IsFinished: aiResponse.IsFinished,
-            TurnNumber: turnNumber,
-            MaxTurns: maxTurns);
-    }
+    private sealed record ExerciseChatContext(string SystemPrompt, int MaxTurns);
 
     private record ChatMessage(string Role, string Content);
 

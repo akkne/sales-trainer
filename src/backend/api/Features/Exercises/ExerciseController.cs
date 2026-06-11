@@ -102,6 +102,58 @@ public class ExerciseController(IExerciseService exerciseService, ILogger<Exerci
         }
     }
 
+    [HttpPost("exercises/{exerciseId:guid}/voice/stream")]
+    public async Task StreamVoiceMessage(
+        Guid exerciseId,
+        [FromBody] ExerciseChatRequestDto chatRequest,
+        CancellationToken cancellationToken)
+    {
+        var userId = ResolveCurrentUserId();
+        if (userId is null)
+        {
+            Response.StatusCode = 401;
+            return;
+        }
+
+        Response.StatusCode = 200;
+        Response.ContentType = "application/octet-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        try
+        {
+            await foreach (var chunk in exerciseService.StreamExerciseVoiceAsync(
+                userId.Value, exerciseId, chatRequest.Message, cancellationToken))
+            {
+                var flags = (chunk.IsFinal ? 1u : 0u) | (chunk.IsStopSignal ? 2u : 0u);
+                var textBytes = System.Text.Encoding.UTF8.GetBytes(chunk.Text);
+
+                await WriteUInt32BeAsync(Response.Body, flags, cancellationToken);
+                await WriteUInt32BeAsync(Response.Body, (uint)textBytes.Length, cancellationToken);
+                if (textBytes.Length > 0)
+                    await Response.Body.WriteAsync(textBytes, cancellationToken);
+                await WriteUInt32BeAsync(Response.Body, (uint)chunk.AudioMp3.Length, cancellationToken);
+                if (chunk.AudioMp3.Length > 0)
+                    await Response.Body.WriteAsync(chunk.AudioMp3, cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation("Exercise voice stream cancelled by client for exercise {ExerciseId}", exerciseId);
+        }
+    }
+
+    private static async Task WriteUInt32BeAsync(Stream stream, uint value, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[4];
+        buffer[0] = (byte)((value >> 24) & 0xff);
+        buffer[1] = (byte)((value >> 16) & 0xff);
+        buffer[2] = (byte)((value >> 8) & 0xff);
+        buffer[3] = (byte)(value & 0xff);
+        await stream.WriteAsync(buffer, cancellationToken);
+    }
+
     private Guid? ResolveCurrentUserId()
     {
         var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)

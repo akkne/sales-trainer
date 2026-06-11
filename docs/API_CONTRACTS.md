@@ -63,10 +63,15 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 | GET | /lessons/:lessonId/next | — | `NextLessonDto` or 204 if no next lesson |
 | POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
+| POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |
 
 **AI Dialog Chat Endpoint:**
 `POST /exercises/:exerciseId/chat` — for `ai_dialog` type exercises only. Handles multi-turn conversation.
 `ExerciseChatResponseDto`: `{response: string, isComplete: boolean, turnNumber: number, maxTurns: number}`
+The **user speaks first** — an empty `message` returns an empty turn (no AI greeting); the AI only replies after the user's opening line.
+
+**AI Dialog Voice Endpoint:**
+`POST /exercises/:exerciseId/voice/stream` — voice mode for `ai_dialog` exercises. Streams the same length-prefixed `[flags u32][textLen u32][text][audioLen u32][audioMp3]` frames as the live-call voice stream (`flags` bit0 = isFinal, bit1 = isStopSignal/endCall). Shares chat history with `/chat`, so text and voice turns interleave. Uses the same TTS pipeline as calls.
 
 **Lesson unlock behavior:**
 - First call to `GET /skills/:slug/lessons` lazy-seeds `UserLessonProgress` rows: lesson 1 → `available`, rest → `locked`.
