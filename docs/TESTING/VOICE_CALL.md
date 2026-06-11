@@ -15,6 +15,8 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 
 - [ ] Speaking → interim subtitle (italic, dashed border) updates live
 - [ ] Pause (~silence timeout) → phrase commits to a user bubble, AI starts replying
+      (commits from interim text — no extra wait for browser finalization;
+      unit tests: `__tests__/speechEndpointer.test.ts`)
 - [ ] AI reply streams into a single assistant bubble chunk-by-chunk; audio plays sentence-by-sentence
 - [ ] Subtitles auto-scroll to the newest line
 

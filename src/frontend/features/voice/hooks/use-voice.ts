@@ -5,6 +5,7 @@ import { WebSpeechClient, isWebSpeechSupported } from "@/features/voice/services
 import type { WebSpeechState } from "@/features/voice/services/web-speech-client";
 import { AudioPlayer } from "@/features/voice/services/audio-player";
 import type { AudioPlayerState } from "@/features/voice/services/audio-player";
+import { SpeechEndpointer } from "@/features/voice/services/speech-endpointer";
 import { VoiceStreamReader } from "@/features/voice/services/voice-stream-reader";
 import { VoiceApiRoutes } from "@/features/voice/constants/voice-api-routes";
 import { useVoiceConfig } from "@/features/voice/hooks/use-voice-config";
@@ -23,8 +24,7 @@ export function useVoice(options: UseVoiceOptions) {
 
     const speechClientRef = useRef<WebSpeechClient | null>(null);
     const audioPlayerRef = useRef<AudioPlayer | null>(null);
-    const transcriptBufferRef = useRef<string>("");
-    const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const endpointerRef = useRef<SpeechEndpointer | null>(null);
     const currentSessionIdRef = useRef<string | null>(sessionId);
     const isProcessingRef = useRef(false);
     const stateRef = useRef<VoicePipelineState>("idle");
@@ -83,7 +83,7 @@ export function useVoice(options: UseVoiceOptions) {
         // The phrase is committed to the subtitle history now — clear the interim
         // line immediately so it does not reappear as a duplicate once the
         // pipeline returns to listening/speaking.
-        transcriptBufferRef.current = "";
+        endpointerRef.current?.reset();
         setCurrentTranscript("");
 
         const controller = new AbortController();
@@ -183,30 +183,24 @@ export function useVoice(options: UseVoiceOptions) {
         }
 
         try {
+            endpointerRef.current = new SpeechEndpointer({
+                silenceMs: voiceConfig?.vadSilenceMs ?? 600,
+                onUtterance: (utterance: string) => {
+                    processSpeech(utterance);
+                },
+            });
+
             speechClientRef.current = new WebSpeechClient({
                 language: "ru-RU",
                 continuous: true,
                 interimResults: true,
                 onResult: (transcript: string, isFinal: boolean) => {
-                    if (silenceTimeoutRef.current) {
-                        clearTimeout(silenceTimeoutRef.current);
-                        silenceTimeoutRef.current = null;
-                    }
+                    // The utterance was already committed from an interim result;
+                    // drop trailing recognition so it does not duplicate the phrase.
+                    if (isProcessingRef.current) return;
 
-                    if (isFinal) {
-                        transcriptBufferRef.current += (transcriptBufferRef.current ? " " : "") + transcript;
-                        setCurrentTranscript(transcriptBufferRef.current);
-
-                        const voiceActivityDetectionSilenceMilliseconds = voiceConfig?.vadSilenceMs ?? 600;
-                        silenceTimeoutRef.current = setTimeout(() => {
-                            const finalTranscript = transcriptBufferRef.current.trim();
-                            if (finalTranscript) {
-                                processSpeech(finalTranscript);
-                            }
-                        }, voiceActivityDetectionSilenceMilliseconds);
-                    } else {
-                        setCurrentTranscript(transcriptBufferRef.current + (transcriptBufferRef.current ? " " : "") + transcript);
-                    }
+                    endpointerRef.current?.handleResult(transcript, isFinal);
+                    setCurrentTranscript(endpointerRef.current?.currentText ?? "");
                 },
                 onError: (error: Error) => {
                     onError?.(error);
@@ -239,10 +233,8 @@ export function useVoice(options: UseVoiceOptions) {
     }, [isVoiceAvailable, bundleId, modeId, voiceConfig, onSessionCreated, onError, processSpeech]);
 
     const stopVoice = useCallback(() => {
-        if (silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
-            silenceTimeoutRef.current = null;
-        }
+        endpointerRef.current?.reset();
+        endpointerRef.current = null;
 
         streamAbortRef.current?.abort();
         streamAbortRef.current = null;
@@ -254,14 +246,11 @@ export function useVoice(options: UseVoiceOptions) {
 
         setState("idle");
         setCurrentTranscript("");
-        transcriptBufferRef.current = "";
     }, []);
 
     useEffect(() => {
         return () => {
-            if (silenceTimeoutRef.current) {
-                clearTimeout(silenceTimeoutRef.current);
-            }
+            endpointerRef.current?.reset();
             speechClientRef.current?.stop();
             audioPlayerRef.current?.destroy();
         };

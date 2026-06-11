@@ -45,6 +45,12 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
   «· прервано» label and dashed border.
 - **Live subtitles**: interim recognizer text shown italic/dashed; committed
   phrases become user bubbles; AI reply streams chunk-by-chunk into one bubble.
+- **End-of-speech detection** (`features/voice/services/speech-endpointer.ts`):
+  the silence timer is armed on *interim* recognition results too
+  (`vadSilenceMs + 250ms` grace), so an utterance is committed without waiting
+  for the browser to finalize it (Web Speech finalization adds 0.5–1.5s).
+  A final result arms the plain `vadSilenceMs` timer; recognition results that
+  arrive while a turn is already processing are dropped to avoid duplicates.
 - **Usage limits**: header shows `X/Y МИН СЕГОДНЯ` (from `GET /dialog/voice/usage`);
   backend returns 429 when `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes`
   exceeded. Per-user spend report for admins: `GET /admin/voice/usage` +
