@@ -117,8 +117,11 @@ export function SpotMistakeExercise({
                                     fontFamily: "var(--font-mono)",
                                     color: "var(--ink-4)",
                                     marginTop: 2,
-                                    width: 28,
+                                    width: 52,
                                     flexShrink: 0,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
                                 }}
                             >
                                 {line.speaker}
