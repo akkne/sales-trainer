@@ -15,7 +15,11 @@ public static class VoiceServiceCollectionExtensions
         services.Configure<VoiceUsageLimitsConfiguration>(configuration.GetSection(VoiceUsageLimitsConfiguration.SectionName));
         services.AddScoped<IYandexTtsService, YandexTtsService>();
         services.AddScoped<IGoogleTtsService, GoogleTtsService>();
-        services.AddScoped<ITtsRouter, TtsRouter>();
+        services.AddSingleton<TtsAudioCache>();
+        services.AddScoped<TtsRouter>();
+        services.AddScoped<ITtsRouter>(provider => new CachingTtsRouter(
+            provider.GetRequiredService<TtsRouter>(),
+            provider.GetRequiredService<TtsAudioCache>()));
         services.AddScoped<IVoiceDialogService, VoiceDialogService>();
         services.AddScoped<IVoiceUsageService, VoiceUsageService>();
         return services;

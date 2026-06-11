@@ -105,3 +105,22 @@ Run: `dotnet test --filter "FullyQualifiedName~SentenceChunker"`
 > Note: `IntegrationTestSetup` is scoped to the `SalesTrainer.Tests.Integration`
 > namespace, so unit tests run without Docker:
 > `dotnet test --filter "FullyQualifiedName~SalesTrainer.Tests.Unit"`
+
+## Block 7 — Voice latency: TTS cache & upstream warmup
+**Files:** `Unit/CachingTtsRouterTests.cs`, `Unit/UpstreamConnectionWarmupTests.cs`
+**Status:** [x]
+
+`CachingTtsRouter` — in-process audio cache for short phrases (≤80 chars):
+- [x] `ShortPhrase_SecondCallServedFromCache`
+- [x] `LongText_BypassesCache`
+- [x] `DifferentVoices_GetSeparateCacheEntries`
+- [x] `ProviderFailure_IsNotCached`
+- [x] `IsConfigured_DelegatesToInnerRouter`
+
+`UpstreamConnectionWarmup` — keeps OpenAI/Yandex/Google TLS connections warm:
+- [x] `WarmsEveryConfiguredUpstream`
+- [x] `SkipsUpstreamsWithPlaceholderOrEmptyKeys`
+- [x] `RequestFailures_AreSwallowed`
+- [x] `CallerCancellation_IsPropagated`
+
+Run: `dotnet test --filter "FullyQualifiedName~CachingTtsRouter|FullyQualifiedName~UpstreamConnectionWarmup"`

@@ -12,6 +12,7 @@ using Prometheus;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Api.Infrastructure.Http;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
 using SalesTrainer.Api.Features.Dialog;
@@ -117,16 +118,24 @@ builder.Services
     .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration);
 
-builder.Services.AddHttpClient("OpenAI")
-    .ConfigureHttpClient(client =>
-        client.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddHttpClient("GoogleTts")
-    .ConfigureHttpClient(client =>
-        client.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddHttpClient("YandexTts")
-    .ConfigureHttpClient(client =>
-        client.Timeout = TimeSpan.FromSeconds(30));
+// Latency-critical upstreams: keep pooled connections alive well past the default
+// idle timeout and rotate handlers rarely, so dialog turns reuse warm TLS sockets
+// (UpstreamConnectionWarmupService re-pings them every few minutes).
+foreach (var upstreamClientName in new[] { "OpenAI", "GoogleTts", "YandexTts" })
+{
+    builder.Services.AddHttpClient(upstreamClientName)
+        .ConfigureHttpClient(client =>
+            client.Timeout = TimeSpan.FromSeconds(30))
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(10),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(30),
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30));
+}
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<UpstreamConnectionWarmup>();
+builder.Services.AddHostedService<UpstreamConnectionWarmupService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

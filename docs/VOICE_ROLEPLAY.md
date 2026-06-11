@@ -118,7 +118,16 @@ only, keeping natural prosody.
 
 `TtsRouter` is the single source of truth for provider selection
 (`Voice:TtsProvider`, fallback order yandex → google) and for the
-"is voice configured" checks in both controllers. Yandex synthesizes raw LPCM
+"is voice configured" checks in both controllers. It is wrapped by
+`CachingTtsRouter`: audio for short phrases (≤80 chars) is cached in-process
+(`TtsAudioCache`, 32 MB size-bounded, 24h TTL), so repeated greetings and
+confirmations skip the provider round-trip entirely.
+
+Connections to OpenAI / Yandex TTS / Google TTS are kept warm:
+the named HttpClients use `SocketsHttpHandler` with a 10-minute pooled idle
+timeout, and `UpstreamConnectionWarmupService` HEAD-pings each configured
+upstream every 4 minutes, so a dialog turn after an idle period does not pay
+the TCP+TLS handshake (~100–300ms). Yandex synthesizes raw LPCM
 which the service wraps in a WAV header (v1 REST API has no mp3; OggOpus is not
 decodable in Safari). A TTS failure is logged and swallowed — the user still
 gets the reply as text, and the stream finishes normally with the final sentinel.
