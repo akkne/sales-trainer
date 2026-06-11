@@ -1,12 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Features.SkillTree.Services.Abstract;
+using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.SkillTree.Services.Implementation;
 
-internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTreeService
+internal sealed class SkillTreeService(
+    AppDbContext databaseContext,
+    IOptions<GamificationConfiguration> gamificationOptions) : ISkillTreeService
 {
+
     public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -137,10 +142,19 @@ internal sealed class SkillTreeService(AppDbContext databaseContext) : ISkillTre
                          DateOnly.FromDateTime(experiencePointRecord.EarnedAt) >= weekStart)
             .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var dailyExperiencePointsAmount = await databaseContext.UserXpRecords
+            .Where(experiencePointRecord => experiencePointRecord.UserId == userId &&
+                         DateOnly.FromDateTime(experiencePointRecord.EarnedAt) == today)
+            .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
+
         return new SkillTreeResponseDto(
             allSkills,
             currentStreakDayCount,
             totalExperiencePointsAmount,
-            weeklyExperiencePointsAmount);
+            weeklyExperiencePointsAmount,
+            dailyExperiencePointsAmount,
+            gamificationOptions.Value.DailyXpGoal);
     }
 }

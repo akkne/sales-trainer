@@ -306,6 +306,8 @@ export default function SkillTreePage() {
                             currentStreakDayCount={skillTreeData.currentStreakDayCount}
                             totalXpAmount={skillTreeData.totalXpAmount}
                             weeklyXpAmount={skillTreeData.weeklyXpAmount}
+                            dailyXpCurrent={skillTreeData.dailyXpAmount}
+                            dailyXpGoal={skillTreeData.dailyXpGoal}
                         />
                     </aside>
                 </div>

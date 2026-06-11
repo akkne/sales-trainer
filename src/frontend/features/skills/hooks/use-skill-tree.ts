@@ -19,6 +19,8 @@ export interface SkillTreeData {
     currentStreakDayCount: number;
     totalXpAmount: number;
     weeklyXpAmount: number;
+    dailyXpAmount: number;
+    dailyXpGoal: number;
 }
 
 export function useSkillTree() {

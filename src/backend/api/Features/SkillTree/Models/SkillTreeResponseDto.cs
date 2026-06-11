@@ -4,5 +4,7 @@ public record SkillTreeResponseDto(
     IReadOnlyList<SkillTreeNodeDto> SkillNodes,
     int CurrentStreakDayCount,
     int TotalXpAmount,
-    int WeeklyXpAmount
+    int WeeklyXpAmount,
+    int DailyXpAmount,
+    int DailyXpGoal
 );

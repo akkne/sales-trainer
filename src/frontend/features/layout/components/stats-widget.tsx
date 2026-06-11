@@ -16,16 +16,16 @@ interface StatsWidgetProps {
     currentStreakDayCount: number;
     totalXpAmount: number;
     weeklyXpAmount: number;
-    dailyXpGoal?: number;
-    dailyXpCurrent?: number;
+    dailyXpGoal: number;
+    dailyXpCurrent: number;
 }
 
 export function StatsWidget({
     currentStreakDayCount,
     totalXpAmount,
     weeklyXpAmount,
-    dailyXpGoal = 100,
-    dailyXpCurrent = 40,
+    dailyXpGoal,
+    dailyXpCurrent,
 }: StatsWidgetProps) {
     const remaining = Math.max(0, dailyXpGoal - dailyXpCurrent);
     const { data: dailyQuote } = useDailyQuote();

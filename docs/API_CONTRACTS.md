@@ -47,7 +47,8 @@ Skills in the list that are not yet enrolled are set to `available`.
 Skills currently enrolled but absent from the list are set to `locked` (progress preserved).  
 `sales-basics` is always kept enrolled.
 
-`SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount}`  
+`SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal}`  
+`dailyXpAmount` = XP earned today (UTC); `dailyXpGoal` = target from `Gamification:DailyXpGoal` config (default 100).  
 `SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).
 
 ---

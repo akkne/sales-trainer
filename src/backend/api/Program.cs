@@ -115,7 +115,7 @@ builder.Services
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices()
     .AddReferenceFeatureServices()
-    .AddSkillTreeFeatureServices()
+    .AddSkillTreeFeatureServices(builder.Configuration)
     .AddTechniqueFeatureServices()
     .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration);
