@@ -17,6 +17,22 @@ import {
     type TechniqueDetail,
 } from "@/features/skills/hooks/use-techniques";
 
+/**
+ * Technique bodies are stored with escape sequences (`\n`, `\t`) instead of real
+ * whitespace, and CommonMark collapses single newlines into spaces. Convert the
+ * escapes to real whitespace and turn every newline into a hard break so the
+ * formatting renders as authored.
+ */
+function normalizeMarkdown(raw: string): string {
+    const INDENT = "    ";
+    return raw
+        .replace(/\\t/g, INDENT) // literal "\t"
+        .replace(/\\r\\n|\\n|\\r/g, "\n") // literal "\n" / "\r\n"
+        .replace(/\t/g, INDENT) // real tab
+        .replace(/\r\n|\r/g, "\n") // normalise real CRLF
+        .replace(/\n/g, "  \n"); // newline -> markdown hard break
+}
+
 function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
     const radius = 24;
     const circumference = 2 * Math.PI * radius;
@@ -293,7 +309,7 @@ function TechniqueBody({ card, detail }: { card: TechniqueCard; detail: Techniqu
 
             {detail?.body && (
                 <div className="body" style={{ color: "var(--ink)" }}>
-                    <ReactMarkdown>{detail.body}</ReactMarkdown>
+                    <ReactMarkdown>{normalizeMarkdown(detail.body)}</ReactMarkdown>
                 </div>
             )}
 

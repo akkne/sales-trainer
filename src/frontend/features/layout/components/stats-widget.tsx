@@ -27,7 +27,9 @@ export function StatsWidget({
     dailyXpGoal,
     dailyXpCurrent,
 }: StatsWidgetProps) {
-    const remaining = Math.max(0, dailyXpGoal - dailyXpCurrent);
+    const safeGoal = Number.isFinite(dailyXpGoal) ? dailyXpGoal : 0;
+    const safeCurrent = Number.isFinite(dailyXpCurrent) ? dailyXpCurrent : 0;
+    const remaining = Math.max(0, safeGoal - safeCurrent);
     const { data: dailyQuote } = useDailyQuote();
     const quoteText = dailyQuote?.text ?? FALLBACK_QUOTE.text;
     const quoteAuthor = dailyQuote?.author ?? FALLBACK_QUOTE.author;
@@ -87,10 +89,10 @@ export function StatsWidget({
                         ещё {remaining} XP
                     </span>
                     <span className="tnum" style={{ fontSize: 13, color: "var(--ink-3)" }}>
-                        {dailyXpCurrent} / {dailyXpGoal}
+                        {safeCurrent} / {safeGoal}
                     </span>
                 </div>
-                <Progress value={dailyXpCurrent} max={dailyXpGoal} tone="indigo" height={10} />
+                <Progress value={safeCurrent} max={safeGoal} tone="indigo" height={10} />
             </Card>
 
             {/* Tip card */}

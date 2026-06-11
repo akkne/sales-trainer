@@ -34,7 +34,7 @@ export function Progress({
     showLabel = false,
     className = "",
 }: ProgressProps) {
-    const pct = Math.min(100, Math.max(0, (value / max) * 100));
+    const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
 
     return (
         <div className={className} style={{ width: "100%" }}>

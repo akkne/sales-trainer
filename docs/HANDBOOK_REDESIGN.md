@@ -208,3 +208,17 @@ Admin CRUD mirrors current `/admin/reference/*` but rooted at `/admin/techniques
 - Coach/NPC — is this shared across techniques (a roster of mentors) or per-technique embedded? If shared, `TechniqueCoaches` becomes `Coaches` + `TechniqueCoaches(TechniqueId, CoachId)` M:N.
 - Practice challenges — pre-authored strings (as shown) or dynamic mini-exercises? If dynamic, each challenge should reference a real `Exercise` or `DialogMode`.
 - Localization — current field names are bilingual (`Title` in Russian). If we need EN/RU split, sub-entities have to be locale-keyed.
+
+---
+
+## 7. Body formatting (fix)
+
+Technique `Body` text is authored/stored with literal escape sequences (`\n`, `\t`)
+rather than real whitespace, and CommonMark collapses single newlines into spaces.
+`guidebook/page.tsx` runs `normalizeMarkdown()` before `<ReactMarkdown>`:
+
+- literal `\t` / real tab → 4 non-breaking spaces (NBSP avoids markdown indented-code-block parsing)
+- literal `\n` / `\r\n` and real newlines → CommonMark hard break (`"  \n"`)
+
+This keeps inline markdown (bold, links) working while rendering authored line breaks
+and indentation correctly. `remark-breaks` is intentionally not used (not installed).
