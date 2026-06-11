@@ -3,6 +3,7 @@ using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.DailyQuotes.Models;
 using SalesTrainer.Api.Features.Dialog.Models;
+using SalesTrainer.Api.Features.Discuss.Models;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Gamification.Models;
@@ -47,6 +48,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TechniqueSkill> TechniqueSkills => Set<TechniqueSkill>();
     public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();
     public DbSet<UserTechniqueProgress> UserTechniqueProgressRecords => Set<UserTechniqueProgress>();
+    public DbSet<DiscussThread> DiscussThreads => Set<DiscussThread>();
+    public DbSet<DiscussReply> DiscussReplies => Set<DiscussReply>();
+    public DbSet<DiscussTag> DiscussTags => Set<DiscussTag>();
+    public DbSet<DiscussThreadTag> DiscussThreadTags => Set<DiscussThreadTag>();
+    public DbSet<DiscussVote> DiscussVotes => Set<DiscussVote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

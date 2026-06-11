@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Discuss.Models;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.Onboarding.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
@@ -154,5 +155,109 @@ public static class TestDbSeeder
         db.UserSkillProgressRecords.Add(progress);
         await db.SaveChangesAsync();
         return progress;
+    }
+
+    public static async Task<DiscussTag> SeedDiscussTagAsync(
+        AppDbContext db,
+        string? slug = null,
+        string? name = null,
+        bool isCurated = true)
+    {
+        var resolvedSlug = slug ?? $"tag-{Guid.NewGuid()}";
+        var tag = new DiscussTag
+        {
+            Id = Guid.NewGuid(),
+            Slug = resolvedSlug,
+            Name = name ?? resolvedSlug,
+            IsCurated = isCurated,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.DiscussTags.Add(tag);
+        await db.SaveChangesAsync();
+        return tag;
+    }
+
+    public static async Task<DiscussThread> SeedDiscussThreadAsync(
+        AppDbContext db,
+        Guid authorId,
+        string title = "How to handle objections?",
+        string body = "Sharing my approach and looking for feedback.",
+        int upvoteCount = 0,
+        int replyCount = 0,
+        bool isPinned = false,
+        bool isHot = false,
+        DateTime? createdAt = null,
+        DateTime? lastActivityAt = null,
+        Guid? tagId = null)
+    {
+        var now = createdAt ?? DateTime.UtcNow;
+        var thread = new DiscussThread
+        {
+            Id = Guid.NewGuid(),
+            AuthorId = authorId,
+            Title = title,
+            Body = body,
+            UpvoteCount = upvoteCount,
+            ReplyCount = replyCount,
+            IsPinned = isPinned,
+            IsHot = isHot,
+            CreatedAt = now,
+            UpdatedAt = now,
+            LastActivityAt = lastActivityAt ?? now
+        };
+        if (tagId.HasValue)
+        {
+            thread.ThreadTags.Add(new DiscussThreadTag
+            {
+                Id = Guid.NewGuid(),
+                ThreadId = thread.Id,
+                TagId = tagId.Value
+            });
+        }
+        db.DiscussThreads.Add(thread);
+        await db.SaveChangesAsync();
+        return thread;
+    }
+
+    public static async Task<DiscussReply> SeedDiscussReplyAsync(
+        AppDbContext db,
+        Guid threadId,
+        Guid authorId,
+        string body = "Great point, here is what worked for me.",
+        int upvoteCount = 0)
+    {
+        var reply = new DiscussReply
+        {
+            Id = Guid.NewGuid(),
+            ThreadId = threadId,
+            AuthorId = authorId,
+            Body = body,
+            UpvoteCount = upvoteCount,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.DiscussReplies.Add(reply);
+        await db.SaveChangesAsync();
+        return reply;
+    }
+
+    public static async Task<DiscussVote> SeedDiscussVoteAsync(
+        AppDbContext db,
+        Guid userId,
+        DiscussVoteTarget targetType,
+        Guid targetId,
+        DateTime? createdAt = null)
+    {
+        var vote = new DiscussVote
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TargetType = targetType,
+            TargetId = targetId,
+            CreatedAt = createdAt ?? DateTime.UtcNow
+        };
+        db.DiscussVotes.Add(vote);
+        await db.SaveChangesAsync();
+        return vote;
     }
 }
