@@ -1194,3 +1194,17 @@
 - [x] Unit tests for new utilities/components added in this phase
 - [x] `docs/TESTING/NIGHT_POLISH.md` — manual checklist
 - [x] Update `docs/FEATURES.md`
+
+### Phase 38 — Discuss (Community Forum)
+- [x] Backend vertical slice `Features/Discuss` (PostgreSQL): threads, replies, polymorphic
+      upvotes (unique index, no double-voting), hybrid curated + free-form tags, EF migration
+- [x] `IDiscussService`/`DiscussService`: list (hot/new/unanswered sort, search, tag filter,
+      pagination), create thread, replies, vote/unvote, author-or-admin accepted reply,
+      popular tags, stats (totals + top authors of the week)
+- [x] `DiscussController` (user) + `AdminDiscussController` (pin/hot/delete + tag CRUD)
+- [x] Integration tests `DiscussTests` / `AdminDiscussTests` + seeder helpers
+- [x] Frontend `/discuss` list (hero, search, sort, tag filter, thread cards, popular-tags +
+      top-authors sidebars) and `/discuss/[threadId]` (voting, replies, accept answer)
+- [x] Admin `/admin/discuss` (thread moderation + curated tag catalog); nav entries + "forum" icon
+- [x] Vitest tests; `.dsc-*` styles ported into `globals.css`
+- [x] Docs: `DISCUSS.md`, `TESTING/DISCUSS.md`, API_CONTRACTS, FEATURES

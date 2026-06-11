@@ -28,6 +28,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [New Exercise Types](NEW_EXERCISE_TYPES.md) | 8 additional exercise types with AI evaluation |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 | [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
+| [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 
 ## Testing
 
@@ -42,6 +43,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and achievement button cleanup |
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
 | [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
+| [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
@@ -126,4 +128,12 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - JSON import with inline editor
 - Dialog bundle/mode management with prompt editors
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
+- Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
 - User role management (SuperAdmin only)
+
+### Discuss (Community Forum)
+- Threads with title/body and one or more tags; replies; upvote-only voting on threads and replies
+- Author or admin marks an accepted reply → thread shows "Решено"; admin pin/hot flags
+- Hybrid tags: admin-curated catalog + user free-form tags created on the fly; dynamic popular-tag counts
+- Sort hot (pinned-first, time-decayed) / new / unanswered; text search; tag filter; pagination
+- Stats: total threads, total replies, top authors of the week (upvotes received in last 7 days)

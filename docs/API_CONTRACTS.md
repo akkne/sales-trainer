@@ -580,3 +580,56 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 - `relatedEntityId` stores source-entity id as string (friendship id, conversation id, achievement key, etc.)
 - Marking a single notification as read is idempotent; already-read notifications return 204
 - Hangfire recurring job `notification-cleanup` deletes read notifications older than 30 days (daily at 00:30 UTC)
+
+---
+
+## Discuss (community forum)
+
+All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are upvote-only
+(a row's existence = upvoted), de-duplicated by a unique `(userId, targetType, targetId)` index.
+
+### User endpoints
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /discuss/threads?sort=&search=&tag=&page=&pageSize= | — | `PagedResult<DiscussThreadSummaryDto>` |
+| GET | /discuss/threads/{threadId} | — | `DiscussThreadDetailDto` (also increments view count) |
+| POST | /discuss/threads | `{title, body, tags: string[]}` | `DiscussThreadDetailDto` (201) |
+| POST | /discuss/threads/{threadId}/replies | `{body}` | `DiscussReplyDto` (201) |
+| POST | /discuss/threads/{threadId}/upvote | — | `VoteResultDto` |
+| DELETE | /discuss/threads/{threadId}/upvote | — | `VoteResultDto` |
+| POST | /discuss/replies/{replyId}/upvote | — | `VoteResultDto` |
+| DELETE | /discuss/replies/{replyId}/upvote | — | `VoteResultDto` |
+| POST | /discuss/threads/{threadId}/accepted-reply | `{replyId}` | `DiscussThreadDetailDto` (author or admin; else 403) |
+| DELETE | /discuss/threads/{threadId}/accepted-reply | — | `DiscussThreadDetailDto` (clears solved) |
+| GET | /discuss/tags?curatedOnly= | — | `DiscussTagDto[]` |
+| GET | /discuss/tags/popular?limit= | — | `PopularTagDto[]` |
+| GET | /discuss/stats | — | `DiscussStatsDto` |
+
+`sort`: `hot` (default; pinned first, then time-decayed score, manual `isHot` boosts) | `new` (by lastActivityAt) | `unanswered` (zero-reply only).
+
+- `DiscussThreadSummaryDto`: `{id, title, bodyPreview, authorId, authorName, upvoteCount, replyCount, viewCount, isPinned, isHot, isSolved, tags: [{slug, name}], createdAt, lastActivityAt, viewerHasUpvoted}`
+- `DiscussThreadDetailDto`: summary fields + `{body, acceptedReplyId, replies: DiscussReplyDto[]}`
+- `DiscussReplyDto`: `{id, threadId, authorId, authorName, body, upvoteCount, isAccepted, createdAt, viewerHasUpvoted}`
+- `DiscussTagDto`: `{id, slug, name, isCurated}`
+- `PopularTagDto`: `{slug, name, threadCount}`
+- `DiscussStatsDto`: `{totalThreads, totalReplies, topAuthorsOfWeek: [{authorId, authorName, upvotesReceived}]}` (upvotes received on the author's threads+replies in the last 7 days)
+- `VoteResultDto`: `{upvoteCount, hasUpvoted}`
+- `PagedResult<T>`: `{items: T[], page, pageSize, totalCount}`
+
+Tags are hybrid: a thread's `tags` array mixes existing curated/free slugs and brand-new labels;
+unknown labels are created on the fly as non-curated tags (slug = lowercased, whitespace→`-`).
+
+### Admin endpoints (`RequireAdmin`)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/discuss/threads?search=&page=&pageSize= | — | `PagedResult<DiscussThreadSummaryDto>` |
+| DELETE | /admin/discuss/threads/{threadId} | — | 204 (cascades replies, thread-tags, votes) |
+| POST | /admin/discuss/threads/{threadId}/pin | `{isPinned}` | `DiscussThreadSummaryDto` |
+| POST | /admin/discuss/threads/{threadId}/hot | `{isHot}` | `DiscussThreadSummaryDto` |
+| DELETE | /admin/discuss/replies/{replyId} | — | 204 (clears accepted-reply if it pointed here, decrements count) |
+| GET | /admin/discuss/tags | — | `DiscussTagDto[]` |
+| POST | /admin/discuss/tags | `{name, slug?}` | `DiscussTagDto` (201; 409 on duplicate slug) |
+| PUT | /admin/discuss/tags/{tagId} | `{name?, slug?}` | `DiscussTagDto` (409 on duplicate slug) |
+| DELETE | /admin/discuss/tags/{tagId} | — | 204 (cascades thread-tags) |
