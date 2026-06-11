@@ -1,23 +1,25 @@
-# Local Dev Profile (app on host, infra in Docker)
+# Local Dev Profile (app on host, infra in Docker) — DEFAULT for development
 
-A second way to run SalesTrainer, alongside the original full-Docker stack.
+This is the **default way to run SalesTrainer during development.** The
+full-Docker stack still exists (it's the production/deploy shape) but is no
+longer the default for local iteration.
 
 The motivation: rebuilding the `backend` and `frontend` Docker images on every
-code change is slow and piles up image/layer cache. In this profile the two
-**app** services run **directly on the host** (`dotnet run` / `next dev`, both
-with hot reload), while all **stateful + observability** services stay in
-Docker. Nothing about the original setup changes.
+code change is slow and piles up image/layer cache that clogs the machine's
+disk. In this profile the two **app** services run **directly on the host**
+(`dotnet run` / `next dev`, both with hot reload), while all **stateful +
+observability** services stay in Docker. No image rebuilds, so no cache buildup.
 
 ## The two profiles
 
-| | Full Docker (original) | Local Dev (new) |
+| | Local Dev (default) | Full Docker (deploy shape) |
 |---|---|---|
-| Compose file | `docker-compose.yml` | `docker-compose.infra.yml` |
-| backend | Docker (`code-backend-1`) | host — `dotnet run`, port **5001** |
-| frontend | Docker (`code-frontend-1`) | host — `next dev`, port **3000** |
-| postgres / mongo / redis | Docker | Docker (same ports & volumes) |
+| Compose file | `docker-compose.infra.yml` | `docker-compose.yml` |
+| backend | host — `dotnet run`, port **5001** | Docker (`code-backend-1`) |
+| frontend | host — `next dev`, port **3000** | Docker (`code-frontend-1`) |
+| postgres / mongo / redis | Docker (same ports & volumes) | Docker |
 | loki / prometheus / grafana | Docker | Docker |
-| Rebuild on code change | image rebuild | none — hot reload |
+| Rebuild on code change | none — hot reload | image rebuild |
 
 Both profiles publish the **same host ports** and share the **same named
 volumes**, so data (Postgres, Mongo, …) is identical whichever profile you use.
