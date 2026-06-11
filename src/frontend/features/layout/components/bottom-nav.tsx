@@ -9,6 +9,7 @@ const NAV_ITEMS = [
     { href: "/league", icon: "trophy", label: "Лига" },
     { href: "/guidebook", icon: "layers", label: "Справочник" },
     { href: "/dialog", icon: "message", label: "Диалог" },
+    { href: "/discuss", icon: "forum", label: "Обсуждения" },
     { href: "/friends", icon: "users", label: "Друзья" },
     { href: "/profile", icon: "user", label: "Профиль" },
 ] as const satisfies { href: string; icon: import("@/shared/components/icon").IconName; label: string }[];

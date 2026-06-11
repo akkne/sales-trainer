@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
     { href: "/league", icon: "trophy", label: "Лига" },
     { href: "/guidebook", icon: "book", label: "Справочник" },
     { href: "/dialog", icon: "message", label: "Диалог" },
+    { href: "/discuss", icon: "forum", label: "Обсуждения" },
     { href: "/friends", icon: "users", label: "Друзья" },
     { href: "/profile", icon: "user", label: "Профиль" },
 ];

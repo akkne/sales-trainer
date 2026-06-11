@@ -65,7 +65,8 @@ type IconName =
     | "delete"
     | "info"
     | "warning"
-    | "send";
+    | "send"
+    | "forum";
 
 export type { IconName };
 
@@ -375,6 +376,13 @@ export function Icon({
                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
                 </svg>
             );
+        case "forum":
+            return (
+                <svg {...svgProps}>
+                    <path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-5 4V5z" />
+                    <path d="M16 8h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2v3l-3-3h-4a2 2 0 0 1-2-2" />
+                </svg>
+            );
         default:
             return null;
     }
@@ -423,4 +431,5 @@ export const ICON_NAMES = {
     info: "info",
     warning: "warning",
     send: "send",
+    forum: "forum",
 } as const;
