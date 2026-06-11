@@ -63,7 +63,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
-    const [hearts, setHearts] = useState(4);
     const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
     const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
     const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
@@ -111,7 +110,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                             }
                         }
                     } else {
-                        setHearts((prev) => Math.max(0, prev - 1));
                         if (currentQueued.attemptNumber < MAX_RETRY_ATTEMPTS) {
                             const retryEntry: QueuedExercise = {
                                 exercise: currentExercise,
@@ -197,11 +195,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                                 <span>время</span>
                             </div>
                         )}
-                        <div className="cs">
-                            <Icon name="heart" size={24} style={{ color: "var(--heart)" }} />
-                            <b className="num">{hearts}/4</b>
-                            <span>жизни</span>
-                        </div>
                     </div>
                     <button
                         className="btn btn-primary btn-lg btn-block"
@@ -240,18 +233,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
                 <div className="grow">
                     <Progress value={progressPercent} max={100} tone="indigo" height={8} />
-                </div>
-
-                {/* Hearts */}
-                <div className="row gap-1">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                        <Icon
-                            key={i}
-                            name="heart"
-                            size={22}
-                            color={i < hearts ? "var(--heart)" : "var(--line-2)"}
-                        />
-                    ))}
                 </div>
             </div>
 
