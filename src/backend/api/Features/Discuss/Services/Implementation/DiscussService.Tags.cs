@@ -93,8 +93,19 @@ public sealed partial class DiscussService
             .ToListAsync(ct);
         _db.DiscussVotes.RemoveRange(votes);
 
+        var photos = await _db.DiscussPhotos
+            .Where(photo => (photo.OwnerType == DiscussPhotoOwner.Thread && photo.OwnerId == threadId)
+                || (photo.OwnerType == DiscussPhotoOwner.Reply && replyIds.Contains(photo.OwnerId)))
+            .ToListAsync(ct);
+        var photoObjectKeys = photos.Select(photo => photo.ObjectKey).ToList();
+        _db.DiscussPhotos.RemoveRange(photos);
+
         _db.DiscussThreads.Remove(thread); // cascades replies + thread-tags
         await _db.SaveChangesAsync(ct);
+
+        foreach (var objectKey in photoObjectKeys)
+            await DeleteObjectBestEffortAsync(objectKey, ct);
+
         return true;
     }
 
@@ -116,8 +127,18 @@ public sealed partial class DiscussService
             .ToListAsync(ct);
         _db.DiscussVotes.RemoveRange(votes);
 
+        var photos = await _db.DiscussPhotos
+            .Where(photo => photo.OwnerType == DiscussPhotoOwner.Reply && photo.OwnerId == replyId)
+            .ToListAsync(ct);
+        var photoObjectKeys = photos.Select(photo => photo.ObjectKey).ToList();
+        _db.DiscussPhotos.RemoveRange(photos);
+
         _db.DiscussReplies.Remove(reply);
         await _db.SaveChangesAsync(ct);
+
+        foreach (var objectKey in photoObjectKeys)
+            await DeleteObjectBestEffortAsync(objectKey, ct);
+
         return true;
     }
 

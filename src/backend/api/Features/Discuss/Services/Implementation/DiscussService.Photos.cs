@@ -187,6 +187,18 @@ public sealed partial class DiscussService
                 group => (IReadOnlyList<DiscussPhoto>)group.ToList());
     }
 
+    private async Task DeleteObjectBestEffortAsync(string objectKey, CancellationToken ct)
+    {
+        try
+        {
+            await _objectStorage.DeleteAsync(objectKey, ct);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to delete discuss photo object {ObjectKey}", objectKey);
+        }
+    }
+
     private static DiscussPhotoDto MapPhotoToDto(DiscussPhoto photo) =>
         new(photo.Id, DiscussPhotoUrlBuilder.Build(photo.Id), photo.OrderIndex);
 
