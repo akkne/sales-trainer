@@ -1,0 +1,9 @@
+namespace SalesTrainer.Api.Features.Discuss.Models;
+
+public enum DiscussPhotoUploadStatus
+{
+    Success,
+    OwnerNotFound,
+    Forbidden,
+    ValidationError
+}

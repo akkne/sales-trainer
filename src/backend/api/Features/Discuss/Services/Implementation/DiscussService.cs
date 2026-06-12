@@ -3,6 +3,7 @@ using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Discuss.Models;
 using SalesTrainer.Api.Features.Discuss.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Api.Infrastructure.Storage.Abstract;
 
 namespace SalesTrainer.Api.Features.Discuss.Services.Implementation;
 
@@ -13,8 +14,15 @@ public sealed partial class DiscussService : IDiscussService
     private const int TopAuthorsCount = 3;
 
     private readonly AppDbContext _db;
+    private readonly IObjectStorage _objectStorage;
+    private readonly ILogger<DiscussService> _logger;
 
-    public DiscussService(AppDbContext db) => _db = db;
+    public DiscussService(AppDbContext db, IObjectStorage objectStorage, ILogger<DiscussService> logger)
+    {
+        _db = db;
+        _objectStorage = objectStorage;
+        _logger = logger;
+    }
 
     // ===================== Listing =====================
 
