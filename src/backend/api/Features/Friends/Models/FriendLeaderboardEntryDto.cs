@@ -5,5 +5,6 @@ public sealed record FriendLeaderboardEntryDto(
     string DisplayName,
     int TotalXpAmount,
     int Rank,
-    bool IsCurrentUser
+    bool IsCurrentUser,
+    string AvatarUrl
 );

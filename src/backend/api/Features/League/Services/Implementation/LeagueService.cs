@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Features.League.Models;
 using SalesTrainer.Api.Features.League.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
@@ -83,7 +84,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
                 pair.user.DisplayName,
                 pair.membership.WeeklyXpAmount,
                 index + 1,
-                pair.user.Id == userId))
+                pair.user.Id == userId,
+                AvatarUrls.For(pair.user.Id)))
             .ToList();
 
         var currentUserRank = participants

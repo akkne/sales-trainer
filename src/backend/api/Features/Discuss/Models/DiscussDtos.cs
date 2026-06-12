@@ -8,6 +8,7 @@ public sealed record DiscussThreadSummaryDto(
     string BodyPreview,
     Guid AuthorId,
     string AuthorName,
+    string AuthorAvatarUrl,
     int UpvoteCount,
     int ReplyCount,
     int ViewCount,
@@ -24,6 +25,7 @@ public sealed record DiscussReplyDto(
     Guid ThreadId,
     Guid AuthorId,
     string AuthorName,
+    string AuthorAvatarUrl,
     string Body,
     int UpvoteCount,
     bool IsAccepted,
@@ -36,6 +38,7 @@ public sealed record DiscussThreadDetailDto(
     string Body,
     Guid AuthorId,
     string AuthorName,
+    string AuthorAvatarUrl,
     int UpvoteCount,
     int ReplyCount,
     int ViewCount,
@@ -53,7 +56,7 @@ public sealed record DiscussTagDto(Guid Id, string Slug, string Name, bool IsCur
 
 public sealed record PopularTagDto(string Slug, string Name, int ThreadCount);
 
-public sealed record TopAuthorDto(Guid AuthorId, string AuthorName, int UpvotesReceived);
+public sealed record TopAuthorDto(Guid AuthorId, string AuthorName, string AuthorAvatarUrl, int UpvotesReceived);
 
 public sealed record DiscussStatsDto(
     int TotalThreads,

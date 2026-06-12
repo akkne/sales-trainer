@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Features.Friends.Models;
 using SalesTrainer.Api.Features.Friends.Services.Abstract;
 using SalesTrainer.Api.Features.Notifications.Models;
@@ -77,7 +78,8 @@ internal sealed class FriendService(
                     profile?.Persona,
                     xpTotal?.TotalAmount ?? 0,
                     streak?.CurrentStreakDayCount ?? 0,
-                    achievementCount?.Count ?? 0);
+                    achievementCount?.Count ?? 0,
+                    AvatarUrls.For(user.Id));
             })
             .OrderByDescending(friend => friend.TotalXpAmount)
             .ToList();
@@ -292,7 +294,8 @@ internal sealed class FriendService(
                     user.Id,
                     user.DisplayName,
                     profile?.Persona,
-                    friendshipStatus);
+                    friendshipStatus,
+                    AvatarUrls.For(user.Id));
             })
             .ToList();
     }
@@ -341,7 +344,8 @@ internal sealed class FriendService(
             streakRecord?.CurrentStreakDayCount ?? 0,
             achievementCount,
             Math.Round(averageExerciseScore, 1),
-            friendshipStatus);
+            friendshipStatus,
+            AvatarUrls.For(targetUser.Id));
     }
 
     public async Task<List<FriendLeaderboardEntryDto>> GetFriendLeaderboardAsync(
@@ -371,7 +375,8 @@ internal sealed class FriendService(
                     user.DisplayName,
                     entry.TotalAmount,
                     index + 1,
-                    entry.UserId == userId);
+                    entry.UserId == userId,
+                    AvatarUrls.For(entry.UserId));
             })
             .ToList();
 
@@ -386,7 +391,8 @@ internal sealed class FriendService(
                     currentUser.DisplayName,
                     0,
                     rankedEntries.Count + 1,
-                    true));
+                    true,
+                    AvatarUrls.For(userId)));
             }
         }
 

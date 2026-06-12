@@ -4,5 +4,6 @@ public sealed record UserSearchResultDto(
     Guid UserId,
     string DisplayName,
     string? Persona,
-    string FriendshipStatus
+    string FriendshipStatus,
+    string AvatarUrl
 );

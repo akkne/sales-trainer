@@ -8,5 +8,6 @@ public sealed record PublicProfileDto(
     int CurrentStreakDayCount,
     int AchievementCount,
     double AverageExerciseScore,
-    string FriendshipStatus
+    string FriendshipStatus,
+    string AvatarUrl
 );

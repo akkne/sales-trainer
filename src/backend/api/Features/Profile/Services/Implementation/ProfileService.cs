@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Features.Onboarding.Models;
 using SalesTrainer.Api.Features.Profile.Models;
 using SalesTrainer.Api.Features.Profile.Services.Abstract;
@@ -45,7 +46,8 @@ internal sealed class ProfileService(AppDbContext databaseContext) : IProfileSer
             completedSkillCount,
             totalSkillCount,
             Math.Round(averageExerciseScore, 1),
-            userProfile?.Persona);
+            userProfile?.Persona,
+            AvatarUrls.For(userId));
     }
 
     public async Task UpdatePersonaForUserAsync(

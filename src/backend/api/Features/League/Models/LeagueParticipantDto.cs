@@ -5,5 +5,6 @@ public record LeagueParticipantDto(
     string DisplayName,
     int WeeklyXpAmount,
     int Rank,
-    bool IsCurrentUser
+    bool IsCurrentUser,
+    string AvatarUrl
 );

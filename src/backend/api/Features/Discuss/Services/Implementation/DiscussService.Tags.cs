@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Features.Discuss.Models;
 
 namespace SalesTrainer.Api.Features.Discuss.Services.Implementation;
@@ -69,7 +70,7 @@ public sealed partial class DiscussService
 
         var authorNames = await ResolveAuthorNamesAsync(top.Select(kv => kv.Key), ct);
         var topAuthors = top
-            .Select(kv => new TopAuthorDto(kv.Key, authorNames.GetValueOrDefault(kv.Key, ""), kv.Value))
+            .Select(kv => new TopAuthorDto(kv.Key, authorNames.GetValueOrDefault(kv.Key, ""), AvatarUrls.For(kv.Key), kv.Value))
             .ToList();
 
         return new DiscussStatsDto(totalThreads, totalReplies, topAuthors);
@@ -224,6 +225,7 @@ public sealed partial class DiscussService
             Preview(thread.Body),
             thread.AuthorId,
             authorNames.GetValueOrDefault(thread.AuthorId, ""),
+            AvatarUrls.For(thread.AuthorId),
             thread.UpvoteCount,
             thread.ReplyCount,
             thread.ViewCount,
@@ -244,6 +246,7 @@ public sealed partial class DiscussService
             thread.Body,
             thread.AuthorId,
             authorNames.GetValueOrDefault(thread.AuthorId, ""),
+            AvatarUrls.For(thread.AuthorId),
             thread.UpvoteCount,
             thread.ReplyCount,
             thread.ViewCount,
@@ -264,6 +267,7 @@ public sealed partial class DiscussService
             reply.ThreadId,
             reply.AuthorId,
             authorNames.GetValueOrDefault(reply.AuthorId, ""),
+            AvatarUrls.For(reply.AuthorId),
             reply.Body,
             reply.UpvoteCount,
             reply.IsAccepted,

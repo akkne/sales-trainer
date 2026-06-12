@@ -6,5 +6,6 @@ public sealed record FriendDto(
     string? Persona,
     int TotalXpAmount,
     int CurrentStreakDayCount,
-    int AchievementCount
+    int AchievementCount,
+    string AvatarUrl
 );

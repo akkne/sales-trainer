@@ -154,7 +154,7 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 | GET | /profile/achievements | `AchievementDto[]` |
 | PUT | /profile/persona | `{persona: string}` → 204 |
 
-`UserProfileStatsDto`: `{displayName, email, currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona?}`
+`UserProfileStatsDto`: `{displayName, email, currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona?, avatarUrl}`
 
 `persona` values: `sdr` | `account_executive` | `account_manager` | `founder` | `other`
 
@@ -175,7 +175,7 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 `CurrentLeagueResponseDto`: `{leagueId, tier, weekStartDate, weekEndDate, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null, promotionZoneSize, demotionZoneSize, maximumLeagueParticipantCount}`
 
 - `promotionZoneSize`/`demotionZoneSize`/`maximumLeagueParticipantCount`: live from `LeagueSettings` (admin-configurable). The user league page must render zones from these, not hardcoded constants.
-`LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser}`
+`LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser, avatarUrl}`
 
 Tiers (in order): `bronze → silver → gold → diamond`
 - Top N per tier promoted to next tier next week, bottom M demoted (minimum bronze) — zone sizes come from the `LeagueSettings` table (defaults: promotion 10, demotion 5, max participants 30), editable via `/admin/leagues/settings`
@@ -528,17 +528,17 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 | GET | /friends/activity | — | `FriendActivityDto[]` |
 | GET | /friends/profile/{userId} | — | `PublicProfileDto` |
 
-`FriendDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount}`
+`FriendDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, avatarUrl}`
 
 `FriendRequestDto`: `{friendshipId, userId, displayName, persona?, direction, createdAt}`
 - `direction`: `"incoming"` | `"outgoing"`
 
-`PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus}`
+`PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus, avatarUrl}`
 - `friendshipStatus`: `"none"` | `"pending_outgoing"` | `"pending_incoming"` | `"friends"`
 
-`UserSearchResultDto`: `{userId, displayName, persona?, friendshipStatus}`
+`UserSearchResultDto`: `{userId, displayName, persona?, friendshipStatus, avatarUrl}`
 
-`FriendLeaderboardEntryDto`: `{userId, displayName, totalXpAmount, rank, isCurrentUser}`
+`FriendLeaderboardEntryDto`: `{userId, displayName, totalXpAmount, rank, isCurrentUser, avatarUrl}`
 
 `FriendActivityDto`: `{userId, displayName, activityType, description, occurredAt}`
 - `activityType`: `"earned_achievement"` | `"earned_xp"` | `"completed_lesson"` | `"streak_milestone"`
@@ -614,12 +614,12 @@ All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are
 
 `sort`: `hot` (default; pinned first, then time-decayed score, manual `isHot` boosts) | `new` (by lastActivityAt) | `unanswered` (zero-reply only).
 
-- `DiscussThreadSummaryDto`: `{id, title, bodyPreview, authorId, authorName, upvoteCount, replyCount, viewCount, isPinned, isHot, isSolved, tags: [{slug, name}], createdAt, lastActivityAt, viewerHasUpvoted}`
+- `DiscussThreadSummaryDto`: `{id, title, bodyPreview, authorId, authorName, authorAvatarUrl, upvoteCount, replyCount, viewCount, isPinned, isHot, isSolved, tags: [{slug, name}], createdAt, lastActivityAt, viewerHasUpvoted}`
 - `DiscussThreadDetailDto`: summary fields + `{body, acceptedReplyId, replies: DiscussReplyDto[]}`
-- `DiscussReplyDto`: `{id, threadId, authorId, authorName, body, upvoteCount, isAccepted, createdAt, viewerHasUpvoted}`
+- `DiscussReplyDto`: `{id, threadId, authorId, authorName, authorAvatarUrl, body, upvoteCount, isAccepted, createdAt, viewerHasUpvoted}`
 - `DiscussTagDto`: `{id, slug, name, isCurated}`
 - `PopularTagDto`: `{slug, name, threadCount}`
-- `DiscussStatsDto`: `{totalThreads, totalReplies, topAuthorsOfWeek: [{authorId, authorName, upvotesReceived}]}` (upvotes received on the author's threads+replies in the last 7 days)
+- `DiscussStatsDto`: `{totalThreads, totalReplies, topAuthorsOfWeek: [{authorId, authorName, authorAvatarUrl, upvotesReceived}]}` (upvotes received on the author's threads+replies in the last 7 days)
 - `VoteResultDto`: `{upvoteCount, hasUpvoted}`
 - `PagedResult<T>`: `{items: T[], page, pageSize, totalCount}`
 

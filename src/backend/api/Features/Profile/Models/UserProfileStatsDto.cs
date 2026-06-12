@@ -9,5 +9,6 @@ public record UserProfileStatsDto(
     int CompletedSkillCount,
     int TotalSkillCount,
     double AverageExerciseScore,
-    string? Persona
+    string? Persona,
+    string AvatarUrl
 );
