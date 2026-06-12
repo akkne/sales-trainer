@@ -26,6 +26,17 @@ public interface IDiscussService
     Task<(DiscussOperationStatus Status, DiscussThreadDetailDto? Thread)> SetAcceptedReplyAsync(
         Guid threadId, Guid actingUserId, bool isAdmin, Guid? replyId, CancellationToken ct = default);
 
+    Task<(DiscussPhotoUploadStatus Status, IReadOnlyList<DiscussPhotoDto> Photos)> UploadPhotosAsync(
+        DiscussPhotoOwner ownerType,
+        Guid ownerId,
+        Guid actingUserId,
+        IReadOnlyList<DiscussPhotoUploadFile> files,
+        CancellationToken ct = default);
+
+    Task<DiscussOperationStatus> DeletePhotoAsync(Guid photoId, Guid actingUserId, CancellationToken ct = default);
+
+    Task<(Stream Content, string ContentType)?> GetPhotoContentAsync(Guid photoId, CancellationToken ct = default);
+
     Task<List<DiscussTagDto>> GetTagsAsync(bool curatedOnly, CancellationToken ct = default);
     Task<List<PopularTagDto>> GetPopularTagsAsync(int limit, CancellationToken ct = default);
     Task<DiscussStatsDto> GetStatsAsync(CancellationToken ct = default);

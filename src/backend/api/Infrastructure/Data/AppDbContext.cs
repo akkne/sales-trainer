@@ -54,6 +54,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DiscussTag> DiscussTags => Set<DiscussTag>();
     public DbSet<DiscussThreadTag> DiscussThreadTags => Set<DiscussThreadTag>();
     public DbSet<DiscussVote> DiscussVotes => Set<DiscussVote>();
+    public DbSet<DiscussPhoto> DiscussPhotos => Set<DiscussPhoto>();
     public DbSet<DefaultAvatar> DefaultAvatars => Set<DefaultAvatar>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

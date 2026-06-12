@@ -2,7 +2,19 @@
 
 ## MinIO / S3 Object Storage
 
-Used for storing user avatar images (and any future binary assets).
+Used for storing user avatar images and Discuss photo attachments (and any future binary assets).
+
+### Object key layout (shared `salestrainer-avatars` bucket)
+
+| Key prefix | Owner | Set by |
+|------------|-------|--------|
+| `defaults/avatar-{NN}.png` | Bundled default avatars | `DefaultAvatarSeeder` |
+| `users/{userId}/avatar{ext}` | Uploaded user avatar | `POST /avatars` |
+| `discuss/threads/{threadId}/{photoId}{ext}` | Discuss thread photo | `POST /discuss/threads/{threadId}/photos` |
+| `discuss/replies/{replyId}/{photoId}{ext}` | Discuss reply photo | `POST /discuss/replies/{replyId}/photos` |
+
+Discuss photo attachments share the avatars bucket under the `discuss/` prefix — see
+[DISCUSS.md](DISCUSS.md#photos) and [API_CONTRACTS.md](API_CONTRACTS.md#photos).
 
 ### Local Development
 

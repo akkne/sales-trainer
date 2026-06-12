@@ -93,8 +93,19 @@ public sealed partial class DiscussService
             .ToListAsync(ct);
         _db.DiscussVotes.RemoveRange(votes);
 
+        var photos = await _db.DiscussPhotos
+            .Where(photo => (photo.OwnerType == DiscussPhotoOwner.Thread && photo.OwnerId == threadId)
+                || (photo.OwnerType == DiscussPhotoOwner.Reply && replyIds.Contains(photo.OwnerId)))
+            .ToListAsync(ct);
+        var photoObjectKeys = photos.Select(photo => photo.ObjectKey).ToList();
+        _db.DiscussPhotos.RemoveRange(photos);
+
         _db.DiscussThreads.Remove(thread); // cascades replies + thread-tags
         await _db.SaveChangesAsync(ct);
+
+        foreach (var objectKey in photoObjectKeys)
+            await DeleteObjectBestEffortAsync(objectKey, ct);
+
         return true;
     }
 
@@ -116,8 +127,18 @@ public sealed partial class DiscussService
             .ToListAsync(ct);
         _db.DiscussVotes.RemoveRange(votes);
 
+        var photos = await _db.DiscussPhotos
+            .Where(photo => photo.OwnerType == DiscussPhotoOwner.Reply && photo.OwnerId == replyId)
+            .ToListAsync(ct);
+        var photoObjectKeys = photos.Select(photo => photo.ObjectKey).ToList();
+        _db.DiscussPhotos.RemoveRange(photos);
+
         _db.DiscussReplies.Remove(reply);
         await _db.SaveChangesAsync(ct);
+
+        foreach (var objectKey in photoObjectKeys)
+            await DeleteObjectBestEffortAsync(objectKey, ct);
+
         return true;
     }
 
@@ -135,7 +156,12 @@ public sealed partial class DiscussService
         await _db.SaveChangesAsync(ct);
 
         var authorNames = await ResolveAuthorNamesAsync([thread.AuthorId], ct);
-        return ToSummary(thread, authorNames, viewerHasUpvoted: false);
+        var photosByThreadId = await LoadThreadPhotosByThreadIdAsync([thread.Id], ct);
+        var threadPhotos = photosByThreadId.GetValueOrDefault(thread.Id, Array.Empty<DiscussPhoto>());
+        var firstPhotoUrl = threadPhotos.Count == 0
+            ? null
+            : DiscussPhotoUrlBuilder.Build(threadPhotos.MinBy(photo => photo.OrderIndex)!.Id);
+        return ToSummary(thread, authorNames, viewerHasUpvoted: false, threadPhotos.Count, firstPhotoUrl);
     }
 
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> CreateCuratedTagAsync(
@@ -218,7 +244,8 @@ public sealed partial class DiscussService
     }
 
     private static DiscussThreadSummaryDto ToSummary(
-        DiscussThread thread, IReadOnlyDictionary<Guid, string> authorNames, bool viewerHasUpvoted) =>
+        DiscussThread thread, IReadOnlyDictionary<Guid, string> authorNames, bool viewerHasUpvoted,
+        int photoCount, string? firstPhotoUrl) =>
         new(
             thread.Id,
             thread.Title,
@@ -235,11 +262,14 @@ public sealed partial class DiscussService
             thread.ThreadTags.Select(tt => new TagRefDto(tt.Tag.Slug, tt.Tag.Name)).ToList(),
             thread.CreatedAt,
             thread.LastActivityAt,
-            viewerHasUpvoted);
+            viewerHasUpvoted,
+            photoCount,
+            firstPhotoUrl);
 
     private static DiscussThreadDetailDto ToDetail(
         DiscussThread thread, IReadOnlyDictionary<Guid, string> authorNames,
-        bool viewerHasUpvoted, IReadOnlyList<DiscussReplyDto> replies) =>
+        bool viewerHasUpvoted, IReadOnlyList<DiscussReplyDto> replies,
+        IReadOnlyList<DiscussPhotoDto> photos) =>
         new(
             thread.Id,
             thread.Title,
@@ -258,10 +288,12 @@ public sealed partial class DiscussService
             thread.CreatedAt,
             thread.LastActivityAt,
             viewerHasUpvoted,
-            replies);
+            replies,
+            photos);
 
     private static DiscussReplyDto ToReplyDto(
-        DiscussReply reply, IReadOnlyDictionary<Guid, string> authorNames, bool viewerHasUpvoted) =>
+        DiscussReply reply, IReadOnlyDictionary<Guid, string> authorNames, bool viewerHasUpvoted,
+        IReadOnlyList<DiscussPhotoDto> photos) =>
         new(
             reply.Id,
             reply.ThreadId,
@@ -272,7 +304,8 @@ public sealed partial class DiscussService
             reply.UpvoteCount,
             reply.IsAccepted,
             reply.CreatedAt,
-            viewerHasUpvoted);
+            viewerHasUpvoted,
+            photos);
 
     private static string Preview(string body) =>
         body.Length <= BodyPreviewLength ? body : body[..BodyPreviewLength].TrimEnd() + "…";

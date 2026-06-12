@@ -6,6 +6,12 @@ export interface TagRef {
     name: string;
 }
 
+export interface DiscussPhoto {
+    id: string;
+    url: string;
+    orderIndex: number;
+}
+
 export interface DiscussThreadSummary {
     id: string;
     title: string;
@@ -23,6 +29,8 @@ export interface DiscussThreadSummary {
     createdAt: string;
     lastActivityAt: string;
     viewerHasUpvoted: boolean;
+    photoCount: number;
+    firstPhotoUrl: string | null;
 }
 
 export interface DiscussReply {
@@ -35,6 +43,7 @@ export interface DiscussReply {
     isAccepted: boolean;
     createdAt: string;
     viewerHasUpvoted: boolean;
+    photos: DiscussPhoto[];
 }
 
 export interface DiscussThreadDetail {
@@ -55,6 +64,7 @@ export interface DiscussThreadDetail {
     lastActivityAt: string;
     viewerHasUpvoted: boolean;
     replies: DiscussReply[];
+    photos: DiscussPhoto[];
 }
 
 export interface DiscussTag {
@@ -173,6 +183,55 @@ export function useAddReply(threadId: string) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
             queryClient.invalidateQueries({ queryKey: ["discuss", "stats"] });
+        },
+    });
+}
+
+function buildPhotoFormData(files: File[]): FormData {
+    const formData = new FormData();
+    for (const file of files) {
+        formData.append("files", file);
+    }
+    return formData;
+}
+
+export function useUploadThreadPhotos(threadId: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (files: File[]) =>
+            apiClient.postFile<{ photos: DiscussPhoto[] }>(
+                `/discuss/threads/${threadId}/photos`,
+                buildPhotoFormData(files)
+            ),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
+            queryClient.invalidateQueries({ queryKey: ["discuss", "threads"] });
+        },
+    });
+}
+
+export function useUploadReplyPhotos(threadId: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ replyId, files }: { replyId: string; files: File[] }) =>
+            apiClient.postFile<{ photos: DiscussPhoto[] }>(
+                `/discuss/replies/${replyId}/photos`,
+                buildPhotoFormData(files)
+            ),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
+        },
+    });
+}
+
+export function useDeleteDiscussPhoto(threadId: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (photoId: string) =>
+            apiClient.delete<void>(`/discuss/photos/${photoId}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["discuss", "threads", threadId] });
+            queryClient.invalidateQueries({ queryKey: ["discuss", "threads"] });
         },
     });
 }

@@ -8,13 +8,17 @@ import { Textarea } from "@/shared/components/input";
 import { GeoAvatar, Skeleton, ErrorState } from "@/shared/components";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { VoteButton } from "@/features/discuss/components/vote-button";
+import { PhotoPicker } from "@/features/discuss/components/photo-picker";
+import { PhotoGallery } from "@/features/discuss/components/photo-gallery";
 import { formatTimeAgo } from "@/features/discuss/lib/format";
 import {
     useAddReply,
+    useDeleteDiscussPhoto,
     useDiscussThread,
     useReplyVote,
     useSetAcceptedReply,
     useThreadVote,
+    useUploadReplyPhotos,
 } from "@/features/discuss/hooks/use-discuss";
 
 export default function ThreadDetailPage({ params }: { params: Promise<{ threadId: string }> }) {
@@ -26,8 +30,12 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
     const replyVote = useReplyVote(threadId);
     const acceptedReply = useSetAcceptedReply(threadId);
     const addReply = useAddReply(threadId);
+    const uploadReplyPhotos = useUploadReplyPhotos(threadId);
+    const deletePhoto = useDeleteDiscussPhoto(threadId);
 
     const [replyBody, setReplyBody] = useState("");
+    const [replyFiles, setReplyFiles] = useState<File[]>([]);
+    const [replyError, setReplyError] = useState<string | null>(null);
 
     const canModerate =
         !!thread &&
@@ -36,10 +44,24 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
             authenticatedUser.role === "Admin" ||
             authenticatedUser.role === "SuperAdmin");
 
+    const isViewingOwnThread = !!thread && !!authenticatedUser && authenticatedUser.id === thread.authorId;
+
+    const isReplyBusy = addReply.isPending || uploadReplyPhotos.isPending;
+
     const submitReply = async () => {
         if (!replyBody.trim()) return;
-        await addReply.mutateAsync(replyBody.trim());
+        setReplyError(null);
+        const createdReply = await addReply.mutateAsync(replyBody.trim());
+        const filesToUpload = replyFiles;
         setReplyBody("");
+        setReplyFiles([]);
+        if (filesToUpload.length > 0) {
+            try {
+                await uploadReplyPhotos.mutateAsync({ replyId: createdReply.id, files: filesToUpload });
+            } catch {
+                setReplyError("Ответ опубликован, но фото не загрузились");
+            }
+        }
     };
 
     if (isLoading) {
@@ -101,6 +123,12 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                         </div>
                         <h1 className="h2 dsc-title">{thread.title}</h1>
                         <p className="body" style={{ margin: "12px 0 16px", whiteSpace: "pre-wrap" }}>{thread.body}</p>
+                        <PhotoGallery
+                            photos={thread.photos}
+                            canDelete={isViewingOwnThread}
+                            deleteDisabled={deletePhoto.isPending}
+                            onDelete={(photoId) => deletePhoto.mutate(photoId)}
+                        />
                         <div className="dsc-meta">
                             <GeoAvatar seed={thread.authorName || thread.authorId} size={24} />
                             <span style={{ fontWeight: 600 }}>{thread.authorName || "Аноним"}</span>
@@ -135,6 +163,12 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                                     </span>
                                 )}
                                 <p className="body" style={{ whiteSpace: "pre-wrap" }}>{reply.body}</p>
+                                <PhotoGallery
+                                    photos={reply.photos}
+                                    canDelete={!!authenticatedUser && authenticatedUser.id === reply.authorId}
+                                    deleteDisabled={deletePhoto.isPending}
+                                    onDelete={(photoId) => deletePhoto.mutate(photoId)}
+                                />
                                 <div className="dsc-meta" style={{ marginTop: 12 }}>
                                     <GeoAvatar seed={reply.authorName || reply.authorId} size={24} />
                                     <span style={{ fontWeight: 600 }}>{reply.authorName || "Аноним"}</span>
@@ -169,11 +203,15 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                         style={{ marginTop: 8 }}
                         onChange={(event) => setReplyBody(event.target.value)}
                     />
+                    <div style={{ marginTop: 12 }}>
+                        <PhotoPicker files={replyFiles} onChange={setReplyFiles} disabled={isReplyBusy} />
+                    </div>
+                    {replyError && <p className="text-xs text-bad" style={{ marginTop: 8 }}>{replyError}</p>}
                     <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
                         <Button
                             variant="primary"
                             iconLeft="send"
-                            loading={addReply.isPending}
+                            loading={isReplyBusy}
                             disabled={!replyBody.trim()}
                             onClick={submitReply}
                         >

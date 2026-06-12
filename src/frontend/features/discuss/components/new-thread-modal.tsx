@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/shared/components/button";
 import { Icon } from "@/shared/components/icon";
 import { TextInput, Textarea } from "@/shared/components/input";
-import { useCreateThread, useDiscussTags } from "../hooks/use-discuss";
+import { PhotoPicker } from "./photo-picker";
+import { useCreateThread, useDiscussTags, useUploadThreadPhotos } from "../hooks/use-discuss";
 
 export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => void }) {
     const { data: curatedTags } = useDiscussTags(true);
@@ -14,7 +15,24 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
     const [body, setBody] = useState("");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [customTag, setCustomTag] = useState("");
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    const uploadThreadPhotos = useUploadThreadPhotos(createdThreadId ?? "");
+
+    useEffect(() => {
+        if (!createdThreadId) return;
+        if (selectedFiles.length === 0) {
+            onClose(createdThreadId);
+            return;
+        }
+        uploadThreadPhotos.mutate(selectedFiles, {
+            onSuccess: () => onClose(createdThreadId),
+            onError: () => setError("Тема создана, но фото не загрузились. Закройте окно, чтобы открыть тему."),
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the thread id is set
+    }, [createdThreadId]);
 
     const toggleTag = (name: string) => {
         setSelectedTags((current) =>
@@ -35,20 +53,25 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
             setError("Заполните заголовок и текст темы");
             return;
         }
+        setError(null);
         try {
             const created = await createThread.mutateAsync({ title, body, tags: selectedTags });
-            onClose(created.id);
+            setCreatedThreadId(created.id);
         } catch (submitError) {
             setError(submitError instanceof Error ? submitError.message : "Не удалось создать тему");
         }
     };
 
+    const isBusy = createThread.isPending || uploadThreadPhotos.isPending;
+
+    const closeModal = () => onClose(createdThreadId ?? undefined);
+
     return (
-        <div className="dsc-modal-backdrop" onClick={() => onClose()}>
+        <div className="dsc-modal-backdrop" onClick={closeModal}>
             <div className="card card-pad dsc-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="row between" style={{ marginBottom: 16 }}>
                     <h2 className="h3">Новая тема</h2>
-                    <button className="icon-btn" onClick={() => onClose()} aria-label="Закрыть">
+                    <button className="icon-btn" onClick={closeModal} aria-label="Закрыть">
                         <Icon name="close" size="md" />
                     </button>
                 </div>
@@ -114,11 +137,16 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
                         </div>
                     </div>
 
+                    <div className="col" style={{ gap: 8 }}>
+                        <label className="text-sm font-medium text-ink">Фото</label>
+                        <PhotoPicker files={selectedFiles} onChange={setSelectedFiles} disabled={isBusy} />
+                    </div>
+
                     {error && <p className="text-xs text-bad">{error}</p>}
 
                     <div className="row gap-2" style={{ justifyContent: "flex-end", marginTop: 8 }}>
-                        <Button variant="ghost" onClick={() => onClose()}>Отмена</Button>
-                        <Button variant="primary" loading={createThread.isPending} onClick={submit} iconLeft="check">
+                        <Button variant="ghost" disabled={isBusy} onClick={closeModal}>Отмена</Button>
+                        <Button variant="primary" loading={isBusy} onClick={submit} iconLeft="check">
                             Опубликовать
                         </Button>
                     </div>
