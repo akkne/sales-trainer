@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { VoteButton } from "./vote-button";
 import { formatTimeAgo } from "../lib/format";
 import { useThreadVote, type DiscussThreadSummary } from "../hooks/use-discuss";
@@ -46,7 +46,7 @@ export function ThreadCard({ thread }: { thread: DiscussThreadSummary }) {
                 <p className="small dsc-excerpt">{thread.bodyPreview}</p>
 
                 <div className="dsc-meta">
-                    <GeoAvatar seed={thread.authorName || thread.authorId} size={24} />
+                    <UserAvatar avatarUrl={thread.authorAvatarUrl} seed={thread.authorName || thread.authorId} size={24} circle />
                     <span style={{ fontWeight: 600 }}>{thread.authorName || "Аноним"}</span>
                     <span className="dsc-dot">·</span>
                     <span className="row gap-1"><Icon name="message" size={15} />{thread.replyCount}</span>

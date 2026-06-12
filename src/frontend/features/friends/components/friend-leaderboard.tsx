@@ -1,7 +1,7 @@
 "use client";
 
 import { Icon } from "@/shared/components/icon";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { useFriendLeaderboard } from "@/features/friends/hooks/use-friends";
 
 export function FriendLeaderboard() {
@@ -45,7 +45,7 @@ export function FriendLeaderboard() {
                         {String(entry.rank).padStart(2, "0")}
                     </span>
                     <div className="row gap-3 grow" style={{ minWidth: 0 }}>
-                        <GeoAvatar seed={entry.displayName} size={36} />
+                        <UserAvatar avatarUrl={entry.avatarUrl} seed={entry.displayName} size={36} circle />
                         <span className="lb-name">
                             {entry.displayName}
                             {entry.isCurrentUser && <span className="you-tag"> · ты</span>}

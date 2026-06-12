@@ -12,6 +12,7 @@ export interface DiscussThreadSummary {
     bodyPreview: string;
     authorId: string;
     authorName: string;
+    authorAvatarUrl?: string | null;
     upvoteCount: number;
     replyCount: number;
     viewCount: number;
@@ -73,6 +74,7 @@ export interface TopAuthor {
     authorId: string;
     authorName: string;
     upvotesReceived: number;
+    authorAvatarUrl?: string | null;
 }
 
 export interface DiscussStats {

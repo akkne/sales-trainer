@@ -3,7 +3,8 @@
 import { useCurrentLeague } from "@/features/league/hooks/use-league";
 import { useEffect, useState } from "react";
 import { Icon } from "@/shared/components/icon";
-import { StatTile, GeoAvatar, ErrorState } from "@/shared/components";
+import { StatTile, ErrorState } from "@/shared/components";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import Link from "next/link";
 import { TimingConstants } from "@/shared/constants/timing-constants";
 
@@ -211,7 +212,7 @@ export default function LeaguePage() {
                                             {String(participant.rank).padStart(2, "0")}
                                         </span>
                                         <div className="row gap-3 grow" style={{ minWidth: 0 }}>
-                                            <GeoAvatar seed={participant.displayName} size={36} />
+                                            <UserAvatar avatarUrl={participant.avatarUrl} seed={participant.displayName} size={36} circle />
                                             <span className="lb-name">
                                                 {participant.displayName}
                                                 {participant.isCurrentUser && (

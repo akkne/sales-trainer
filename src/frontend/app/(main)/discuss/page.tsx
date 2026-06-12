@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
-import { GeoAvatar, Skeleton, StatTile, ErrorState } from "@/shared/components";
+import { Skeleton, StatTile, ErrorState } from "@/shared/components";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { ThreadCard } from "@/features/discuss/components/thread-card";
 import { NewThreadModal } from "@/features/discuss/components/new-thread-modal";
 import {
@@ -160,7 +161,7 @@ export default function DiscussPage() {
                                 {(stats?.topAuthorsOfWeek ?? []).map((author, index) => (
                                     <div key={author.authorId} className="dsc-author">
                                         <span className={`rank-badge r${index + 1}`}>{index + 1}</span>
-                                        <GeoAvatar seed={author.authorName || author.authorId} size={32} />
+                                        <UserAvatar avatarUrl={author.authorAvatarUrl} seed={author.authorName || author.authorId} size={32} circle />
                                         <span className="grow" style={{ fontWeight: 600, fontSize: 14 }}>
                                             {author.authorName || "Аноним"}
                                         </span>

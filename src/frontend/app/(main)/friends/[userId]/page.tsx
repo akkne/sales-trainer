@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { Chip } from "@/shared/components/chip";
 import { StatTile } from "@/shared/components/stat-tile";
 import { usePublicProfile } from "@/features/friends/hooks/use-friends";
@@ -71,7 +71,7 @@ export default function PublicProfilePage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <GeoAvatar seed={profile.displayName} size={64} />
+                        <UserAvatar avatarUrl={profile.avatarUrl} seed={profile.displayName} size={64} circle />
                         <div className="min-w-0 flex-1">
                             <h1 className="text-2xl font-medium tracking-tight text-ink truncate">
                                 {profile.displayName}

@@ -7,6 +7,7 @@ export interface LeagueParticipant {
     weeklyXpAmount: number;
     rank: number;
     isCurrentUser: boolean;
+    avatarUrl?: string | null;
 }
 
 export interface CurrentLeagueData {

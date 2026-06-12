@@ -8,6 +8,7 @@ export interface Friend {
     totalXpAmount: number;
     currentStreakDayCount: number;
     achievementCount: number;
+    avatarUrl?: string | null;
 }
 
 export interface FriendRequest {
@@ -35,6 +36,7 @@ export interface PublicProfile {
     achievementCount: number;
     averageExerciseScore: number;
     friendshipStatus: "none" | "pending_outgoing" | "pending_incoming" | "friends";
+    avatarUrl?: string | null;
 }
 
 export interface FriendLeaderboardEntry {
@@ -43,6 +45,7 @@ export interface FriendLeaderboardEntry {
     totalXpAmount: number;
     rank: number;
     isCurrentUser: boolean;
+    avatarUrl?: string | null;
 }
 
 export interface FriendActivity {

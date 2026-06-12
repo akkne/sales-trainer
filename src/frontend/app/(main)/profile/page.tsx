@@ -9,7 +9,7 @@ import { useThemeStore } from "@/shared/stores/theme-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { StatTile } from "@/shared/components/stat-tile";
 import { Progress } from "@/shared/components/progress";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
@@ -91,7 +91,7 @@ export default function ProfilePage() {
             <div className="container" style={{ maxWidth: 1320 }}>
                 {/* Header */}
                 <div className="profile-head">
-                    <GeoAvatar seed={profileStats.displayName} size={88} />
+                    <UserAvatar avatarUrl={profileStats.avatarUrl} seed={profileStats.displayName} size={88} circle />
                     <div className="grow">
                         <div className="row gap-3 wrap" style={{ alignItems: "center" }}>
                             <h1 className="h1" style={{ fontSize: 36 }}>

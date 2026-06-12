@@ -11,6 +11,7 @@ export interface UserProfileStats {
     totalSkillCount: number;
     averageExerciseScore: number;
     persona: string | null;
+    avatarUrl?: string | null;
 }
 
 export function useProfile() {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import type { Friend } from "@/features/friends/hooks/use-friends";
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -22,7 +22,7 @@ export function FriendCard({ friend, onChatClick }: FriendCardProps) {
     return (
         <div className="card card-pad lift friend-row">
             <Link href={`/friends/${friend.userId}`} style={{ flexShrink: 0 }} aria-label={friend.displayName}>
-                <GeoAvatar seed={friend.displayName} size={48} />
+                <UserAvatar avatarUrl={friend.avatarUrl} seed={friend.displayName} size={48} circle />
             </Link>
 
             <Link href={`/friends/${friend.userId}`} className="grow" style={{ minWidth: 0, textDecoration: "none", color: "inherit" }}>

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
+import { UserAvatar } from "@/shared/components/user-avatar";
 import { NotificationBell } from "@/features/notifications/components/notification-bell";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkillTree } from "@/features/skills/hooks/use-skill-tree";
@@ -117,7 +117,7 @@ export function TopAppBar() {
                             className="profile-chip hidden md:inline-flex"
                             aria-label={`Профиль (${displayName})`}
                         >
-                            <GeoAvatar seed={displayName} size={34} circle />
+                            <UserAvatar seed={displayName} size={34} circle />
                             <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25 }}>
                                 <div
                                     style={{
@@ -224,7 +224,7 @@ export function TopAppBar() {
                             gap: 12,
                         }}
                     >
-                        <GeoAvatar seed={displayName} size={48} circle />
+                        <UserAvatar seed={displayName} size={48} circle />
                         <div>
                             <div style={{ fontWeight: 700, fontSize: 16 }}>{displayName}</div>
                             <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
