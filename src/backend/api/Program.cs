@@ -189,6 +189,17 @@ using (var serviceScope = application.Services.CreateScope())
 
     var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
     await achievementSeeder.SeedAsync();
+
+    try
+    {
+        var defaultAvatarSeeder = serviceScope.ServiceProvider.GetRequiredService<DefaultAvatarSeeder>();
+        await defaultAvatarSeeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        startupLogger.LogWarning(ex, "DefaultAvatarSeeder failed at startup; continuing without default avatars");
+    }
 }
 
 application.Run();

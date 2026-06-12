@@ -72,3 +72,22 @@ removing the `BasicAWSCredentials` constructor — requires a code change).
 | `src/backend/api/Infrastructure/Storage/Abstract/IObjectStorage.cs` | Storage abstraction interface |
 | `src/backend/api/Infrastructure/Storage/Implementation/S3ObjectStorage.cs` | AWS SDK S3 implementation |
 | `src/backend/api/Features/Avatars/AvatarsServiceCollectionExtensions.cs` | DI registration (`AddAvatarStorage`) |
+
+## Default Avatar Seeder
+
+At startup (after `Database.Migrate()`), `DefaultAvatarSeeder.SeedAsync()` runs idempotently:
+
+- Reads 6 tiny PNG files from `SeedAssets/` (copied to build output via `.csproj` `<Content CopyToOutputDirectory>`).
+- For each index `i` in `[0, DefaultAvatarCount)`, uploads `defaults/avatar-{i:00}.png` to object storage if not already present (`IObjectStorage.ExistsAsync` guard), then upserts a `DefaultAvatars` DB row by `Index == i`.
+- Re-runs are safe: no duplicate DB rows, no redundant object store puts.
+- If the object store is unreachable at boot, a warning is logged and startup continues.
+
+### Deterministic avatar assignment
+
+When a new user is created (email registration or Google sign-in), `DefaultAvatarIndexResolver.Resolve(userId, DefaultAvatarSeeder.DefaultAvatarCount)` assigns `User.DefaultAvatarIndex`. The resolver derives a stable, non-negative index from the first 4 bytes of the user's Guid as a `uint`, then takes `% catalogSize`. This means every user gets a consistent default avatar even before the seeder has run.
+
+| File | Role |
+|------|------|
+| `src/backend/api/Features/Avatars/DefaultAvatarIndexResolver.cs` | Pure static resolver; no dependencies |
+| `src/backend/api/Features/Avatars/DefaultAvatarSeeder.cs` | Startup seeder; wired in `Program.cs` |
+| `src/backend/api/SeedAssets/avatar-{00..05}.png` | Bundled 1×1 PNG images (6 colors) |

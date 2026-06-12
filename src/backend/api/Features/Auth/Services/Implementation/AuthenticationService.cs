@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Abstract;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
@@ -40,13 +41,15 @@ internal sealed class AuthenticationService(
             throw new InvalidOperationException("Email already registered.");
         }
 
+        var newUserId = Guid.NewGuid();
         var newUser = new User
         {
-            Id = Guid.NewGuid(),
+            Id = newUserId,
             Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
         };
 
         databaseContext.Users.Add(newUser);
@@ -105,13 +108,15 @@ internal sealed class AuthenticationService(
 
         if (existingUser is null)
         {
+            var newGoogleUserId = Guid.NewGuid();
             existingUser = new User
             {
-                Id = Guid.NewGuid(),
+                Id = newGoogleUserId,
                 Email = googlePayload.Email,
                 DisplayName = googlePayload.Name,
                 GoogleId = googlePayload.Subject,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
             };
             databaseContext.Users.Add(existingUser);
             await databaseContext.SaveChangesAsync(cancellationToken);

@@ -23,6 +23,7 @@ public static class AvatarsServiceCollectionExtensions
         });
 
         services.AddScoped<IAvatarService, AvatarService>();
+        services.AddScoped<DefaultAvatarSeeder>();
 
         return services;
     }
