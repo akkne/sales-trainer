@@ -9,6 +9,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Architecture](ARCHITECTURE.md) | Stack overview, folder structure, EF column types |
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
+| [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |
 | [Local Dev](LOCAL_DEV.md) | Run backend/frontend on the host (no image rebuilds) with infra in Docker — `scripts/dev-*.sh`, `docker-compose.infra.yml` |
@@ -149,3 +150,4 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Hybrid tags: admin-curated catalog + user free-form tags created on the fly; dynamic popular-tag counts
 - Sort hot (pinned-first, time-decayed) / new / unanswered; text search; tag filter; pagination
 - Stats: total threads, total replies, top authors of the week (upvotes received in last 7 days)
+- Photo attachments: up to 10 images per thread/reply (PNG/JPEG/WEBP, ≤5 MB), stored in S3/MinIO + `DiscussPhotos`; two-step upload, author-only management, cleaned up on delete

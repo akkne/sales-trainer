@@ -640,6 +640,34 @@ unknown labels are created on the fly as non-curated tags (slug = lowercased, wh
 | PUT | /admin/discuss/tags/{tagId} | `{name?, slug?}` | `DiscussTagDto` (409 on duplicate slug) |
 | DELETE | /admin/discuss/tags/{tagId} | — | 204 (cascades thread-tags) |
 
+### Photos
+
+Photos (up to 10) attach to a thread or a reply via a two-step flow: create the thread/reply
+with the existing JSON endpoints above, then upload images to its photo sub-resource. Stored in
+S3/MinIO (bucket `salestrainer-avatars`, key prefix `discuss/`) + the `DiscussPhotos` table.
+All require auth except the content GET.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /discuss/threads/{threadId}/photos | `multipart/form-data`, field `files` (1..N images) | `200 DiscussPhotoListDto` |
+| POST | /discuss/replies/{replyId}/photos | `multipart/form-data`, field `files` (1..N images) | `200 DiscussPhotoListDto` |
+| DELETE | /discuss/photos/{photoId} | — | 204 (author only; else 403) |
+| GET | /discuss/photos/{photoId}/content `[public]` | — | `200` image bytes |
+
+- Upload errors: `400` (no files / >10 total / unsupported type / file >5 MB), `403` (not the author), `404` (thread/reply missing).
+- `GET /discuss/photos/{photoId}/content` returns the image bytes with `Content-Type` from the stored value, `Cache-Control: public, max-age=60`, and `X-Content-Type-Options: nosniff`; `404` if missing.
+- Allowed types: PNG / JPEG / WEBP (magic-byte validated). Per-file max 5 MB. Max 10 photos per owner (service-enforced).
+- Photo `url` is the relative path `/discuss/photos/{id}/content`.
+- Deleting a thread or reply (including admin delete) removes its photo rows and best-effort-deletes the S3 objects.
+
+- `DiscussPhotoListDto`: `{photos: DiscussPhotoDto[]}`
+- `DiscussPhotoDto`: `{id, url, orderIndex}`
+
+DTO additions on the Discuss user endpoints above:
+- `DiscussThreadDetailDto` gains `photos: DiscussPhotoDto[]`
+- `DiscussReplyDto` gains `photos: DiscussPhotoDto[]`
+- `DiscussThreadSummaryDto` gains `photoCount: number` and `firstPhotoUrl: string | null`
+
 ---
 
 ## Avatars

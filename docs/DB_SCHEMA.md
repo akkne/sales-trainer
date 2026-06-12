@@ -423,6 +423,25 @@ Quote of the day shown in the stats widget ("Совет дня"). One quote per 
 
 ---
 
+### `DiscussPhotos`
+
+Photo attachments for Discuss threads and replies. Polymorphic owner (no FK), mirroring `DiscussVotes`. See [DISCUSS.md](DISCUSS.md#photos).
+
+| Column        | Type            | Nullable | Notes                                                  |
+|---------------|-----------------|----------|--------------------------------------------------------|
+| `Id`          | `uuid`          | NOT NULL | PK                                                     |
+| `OwnerType`   | `integer`       | NOT NULL | 0=Thread, 1=Reply                                      |
+| `OwnerId`     | `uuid`          | NOT NULL | thread id or reply id (polymorphic, no FK — mirrors `DiscussVotes`) |
+| `ObjectKey`   | `varchar(512)`  | NOT NULL | S3 object key                                          |
+| `ContentType` | `varchar(100)`  | NOT NULL | e.g. `image/png`                                       |
+| `OrderIndex`  | `integer`       | NOT NULL | 0-based display order                                  |
+| `SizeBytes`   | `bigint`        | NOT NULL | uploaded byte size                                     |
+| `CreatedAt`   | `timestamp with time zone` | NOT NULL |                                             |
+
+Indexes: `IX_DiscussPhotos_OwnerType_OwnerId_OrderIndex`.
+
+---
+
 ## Hierarchy Structure
 
 ```
@@ -503,3 +522,4 @@ Skills
 | `AlignExerciseTypePromptKeys`         | 2026-04-21 | Aligns `ExerciseTypePrompts` keys with `ExerciseTypes` constants |
 | `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |
 | `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index`; backfills `DefaultAvatarIndex` for existing users via `abs(hashtext(Id::text)) % 6` |
+| `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
