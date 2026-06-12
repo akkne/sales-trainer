@@ -9,4 +9,7 @@ public sealed class User
     public string? GoogleId { get; set; }
     public DateTime CreatedAt { get; set; }
     public UserRole Role { get; set; } = UserRole.User;
+    public AvatarKind AvatarType { get; set; } = AvatarKind.Default;
+    public string? AvatarKey { get; set; }
+    public int DefaultAvatarIndex { get; set; }
 }

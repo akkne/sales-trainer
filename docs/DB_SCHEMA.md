@@ -1,6 +1,6 @@
 # DB Schema
 
-Last updated: 2026-04-21
+Last updated: 2026-06-12
 
 ## Databases overview
 
@@ -27,8 +27,26 @@ All tables managed by EF Core migrations (`Infrastructure/Data/Migrations/`).
 | `PasswordHash` | `text`                      | NULL     | NULL for Google-only accounts      |
 | `DisplayName`  | `text`                      | NOT NULL |                                    |
 | `GoogleId`     | `text`                      | NULL     | NULL for email/password accounts   |
-| `Role`         | `integer`                   | NOT NULL | 0=User, 1=Admin, 2=SuperAdmin      |
-| `CreatedAt`    | `timestamp with time zone`  | NOT NULL |                                    |
+| `Role`                | `integer`                   | NOT NULL | 0=User, 1=Admin, 2=SuperAdmin      |
+| `AvatarType`          | `integer`                   | NOT NULL | 0=Default, 1=Uploaded (default 0)  |
+| `AvatarKey`           | `text`                      | NULL     | S3 object key for uploaded avatar; NULL when using a default |
+| `DefaultAvatarIndex`  | `integer`                   | NOT NULL | Index into `DefaultAvatars` catalog (default 0) |
+| `CreatedAt`           | `timestamp with time zone`  | NOT NULL |                                    |
+
+---
+
+### `DefaultAvatars`
+
+Catalog of bundled default avatar images stored in S3. Seeded by the admin; users pick one by index.
+
+| Column      | Type                       | Nullable | Notes                              |
+|-------------|----------------------------|----------|------------------------------------|
+| `Id`        | `uuid`                     | NOT NULL | PK                                 |
+| `Index`     | `integer`                  | NOT NULL | UNIQUE — display order / picker index |
+| `ObjectKey` | `text`                     | NOT NULL | S3 object key, e.g. `defaults/avatar-03.png` |
+| `CreatedAt` | `timestamp with time zone` | NOT NULL |                                    |
+
+Indexes: `IX_DefaultAvatars_Index` (unique).
 
 ---
 
@@ -484,3 +502,4 @@ Skills
 | `AddNotifications`                    | 2026-04-18 | `Notifications` table with recipient+read and recipient+createdAt indexes |
 | `AlignExerciseTypePromptKeys`         | 2026-04-21 | Aligns `ExerciseTypePrompts` keys with `ExerciseTypes` constants |
 | `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |
+| `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index` |

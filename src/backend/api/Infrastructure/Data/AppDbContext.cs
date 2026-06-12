@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SalesTrainer.Api.Features.Achievements.Models;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Features.Avatars.Models;
 using SalesTrainer.Api.Features.DailyQuotes.Models;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Discuss.Models;
@@ -53,6 +54,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DiscussTag> DiscussTags => Set<DiscussTag>();
     public DbSet<DiscussThreadTag> DiscussThreadTags => Set<DiscussThreadTag>();
     public DbSet<DiscussVote> DiscussVotes => Set<DiscussVote>();
+    public DbSet<DefaultAvatar> DefaultAvatars => Set<DefaultAvatar>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
