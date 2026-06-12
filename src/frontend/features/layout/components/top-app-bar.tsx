@@ -39,6 +39,7 @@ export function TopAppBar() {
     ).length ?? 0;
 
     const displayName = authenticatedUser?.displayName ?? "User";
+    const userId = authenticatedUser?.id;
     const level = Math.floor((skillTreeData?.totalXpAmount ?? 0) / 1000) + 1;
     const streak = skillTreeData?.currentStreakDayCount ?? 0;
 
@@ -117,7 +118,7 @@ export function TopAppBar() {
                             className="profile-chip hidden md:inline-flex"
                             aria-label={`Профиль (${displayName})`}
                         >
-                            <UserAvatar seed={displayName} size={34} circle />
+                            <UserAvatar seed={displayName} size={34} circle avatarUrl={userId ? `/avatars/${userId}` : undefined} />
                             <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25 }}>
                                 <div
                                     style={{
@@ -224,7 +225,7 @@ export function TopAppBar() {
                             gap: 12,
                         }}
                     >
-                        <UserAvatar seed={displayName} size={48} circle />
+                        <UserAvatar seed={displayName} size={48} circle avatarUrl={userId ? `/avatars/${userId}` : undefined} />
                         <div>
                             <div style={{ fontWeight: 700, fontSize: 16 }}>{displayName}</div>
                             <div style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>

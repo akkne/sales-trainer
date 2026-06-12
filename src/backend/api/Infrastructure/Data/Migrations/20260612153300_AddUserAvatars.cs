@@ -50,6 +50,12 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                 table: "DefaultAvatars",
                 column: "Index",
                 unique: true);
+
+            // Distribute existing users deterministically across 6 default avatar slots.
+            // 6 = DefaultAvatarSeeder.DefaultAvatarCount
+            migrationBuilder.Sql(
+                @"UPDATE ""Users"" SET ""DefaultAvatarIndex"" = (abs(hashtext(""Id""::text)) % 6);"
+            );
         }
 
         /// <inheritdoc />

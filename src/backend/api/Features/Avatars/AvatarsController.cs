@@ -13,6 +13,33 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
     private static readonly HashSet<string> AllowedExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
 
+    // Magic-byte signatures for allowed image types
+    private static readonly byte[] PngSignature  = [0x89, 0x50, 0x4E, 0x47];
+    private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
+    private static readonly byte[] RiffHeader    = [0x52, 0x49, 0x46, 0x46]; // "RIFF"
+    private static readonly byte[] WebpMarker    = [0x57, 0x45, 0x42, 0x50]; // "WEBP" at offset 8
+
+    private static bool HasValidImageMagicBytes(byte[] header)
+    {
+        if (header.Length >= 4 && header[0] == PngSignature[0] && header[1] == PngSignature[1]
+                && header[2] == PngSignature[2] && header[3] == PngSignature[3])
+            return true;
+
+        if (header.Length >= 3 && header[0] == JpegSignature[0] && header[1] == JpegSignature[1]
+                && header[2] == JpegSignature[2])
+            return true;
+
+        // WebP: RIFF....WEBP
+        if (header.Length >= 12
+                && header[0] == RiffHeader[0] && header[1] == RiffHeader[1]
+                && header[2] == RiffHeader[2] && header[3] == RiffHeader[3]
+                && header[8] == WebpMarker[0] && header[9] == WebpMarker[1]
+                && header[10] == WebpMarker[2] && header[11] == WebpMarker[3])
+            return true;
+
+        return false;
+    }
+
     [HttpPost]
     [Authorize]
     [RequestSizeLimit(5 * 1024 * 1024)]
@@ -34,7 +61,14 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
         if (!AllowedExtensions.Contains(ext))
             return BadRequest(new { error = $"Extension '{ext}' is not allowed. Allowed: .png, .jpg, .jpeg, .webp." });
 
+        // Read leading bytes into a buffer for magic-byte validation, then rewind.
         await using var stream = file.OpenReadStream();
+        var header = new byte[12];
+        var headerRead = await stream.ReadAsync(header, 0, header.Length, cancellationToken);
+        if (headerRead < 3 || !HasValidImageMagicBytes(header))
+            return BadRequest(new { error = "File content does not match an allowed image type (PNG, JPEG, or WebP)." });
+        stream.Seek(0, SeekOrigin.Begin);
+
         await avatarService.UploadAvatarAsync(userId.Value, stream, file.FileName, cancellationToken);
 
         return Ok(new AvatarUploadResponseDto($"/avatars/{userId.Value}"));
@@ -68,7 +102,8 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
         if (result is null)
             return NotFound();
 
-        Response.Headers["Cache-Control"] = "public, max-age=300";
+        Response.Headers["Cache-Control"] = "public, max-age=60";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         return File(result.Value.Stream, result.Value.ContentType);
     }
 

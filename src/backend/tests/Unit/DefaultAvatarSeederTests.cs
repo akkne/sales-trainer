@@ -42,6 +42,43 @@ public class DefaultAvatarSeederTests
         }
     }
 
+    /// <summary>
+    /// Fake storage that throws on PutAsync for a specific index key, simulating an S3 outage.
+    /// </summary>
+    private sealed class FailingObjectStorage : IObjectStorage
+    {
+        private readonly string _failKey;
+        private readonly Dictionary<string, byte[]> _store = new();
+
+        public FailingObjectStorage(string failKey) => _failKey = failKey;
+
+        public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default)
+        {
+            if (key == _failKey)
+                throw new InvalidOperationException($"Simulated upload failure for {key}");
+            using var ms = new MemoryStream();
+            content.CopyTo(ms);
+            _store[key] = ms.ToArray();
+            return Task.CompletedTask;
+        }
+
+        public Task<Stream> GetAsync(string key, CancellationToken cancellationToken = default)
+        {
+            if (_store.TryGetValue(key, out var data))
+                return Task.FromResult<Stream>(new MemoryStream(data));
+            throw new KeyNotFoundException(key);
+        }
+
+        public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_store.ContainsKey(key));
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _store.Remove(key);
+            return Task.CompletedTask;
+        }
+    }
+
     private static DefaultAvatarSeeder CreateSeeder(
         SalesTrainer.Api.Infrastructure.Data.AppDbContext db,
         IObjectStorage storage)
@@ -157,5 +194,37 @@ public class DefaultAvatarSeederTests
         var rows = await db.DefaultAvatars.CountAsync();
         rows.Should().Be(rowCountAfterFirst);
         storage.PutCount.Should().Be(putCountAfterFirst, "second run must not re-upload existing objects");
+    }
+
+    [Test]
+    public async Task SeedAsync_UploadFailsForOneIndex_ThatIndexGetsNoDbRow_OthersSeeded_DoesNotThrow()
+    {
+        EnsureSeedAssetsExist();
+        var db = InMemoryDbContextFactory.Create();
+
+        // Index 2 will fail to upload
+        const int failIndex = 2;
+        var failKey = $"defaults/avatar-{failIndex:00}.png";
+        var storage = new FailingObjectStorage(failKey);
+        var seeder = CreateSeeder(db, storage);
+
+        // Must not throw
+        await seeder.SeedAsync();
+
+        var rows = await db.DefaultAvatars.ToListAsync();
+
+        // The failed index must have no row
+        rows.Should().NotContain(a => a.Index == failIndex,
+            "a failed upload must not produce a catalog row");
+
+        // All other indices must be seeded
+        rows.Should().HaveCount(DefaultAvatarSeeder.DefaultAvatarCount - 1,
+            "every other index should have been seeded successfully");
+
+        for (var i = 0; i < DefaultAvatarSeeder.DefaultAvatarCount; i++)
+        {
+            if (i == failIndex) continue;
+            rows.Should().Contain(a => a.Index == i, $"index {i} should be seeded");
+        }
     }
 }

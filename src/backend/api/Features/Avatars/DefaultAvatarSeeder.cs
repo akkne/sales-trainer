@@ -29,6 +29,7 @@ public sealed class DefaultAvatarSeeder(
                 continue;
             }
 
+            bool objectReady;
             try
             {
                 var exists = await objectStorage.ExistsAsync(objectKey, cancellationToken);
@@ -38,12 +39,16 @@ public sealed class DefaultAvatarSeeder(
                     await objectStorage.PutAsync(objectKey, stream, "image/png", cancellationToken);
                     logger.LogInformation("DefaultAvatarSeeder: uploaded {Key}", objectKey);
                 }
+                objectReady = true;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "DefaultAvatarSeeder: object store unreachable while seeding {Key}, continuing", objectKey);
-                // Mirror existing seeder pattern: log warning and continue
+                logger.LogWarning(ex, "DefaultAvatarSeeder: object store unreachable while seeding {Key}, skipping index {Index}", objectKey, i);
+                objectReady = false;
             }
+
+            if (!objectReady)
+                continue;
 
             var existing = await db.DefaultAvatars
                 .FirstOrDefaultAsync(a => a.Index == i, cancellationToken);

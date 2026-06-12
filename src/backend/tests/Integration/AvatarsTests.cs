@@ -260,4 +260,55 @@ public class AvatarsTests
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+
+    // -----------------------------------------------------------------------
+    // POST /avatars — .png extension but non-image bytes → 400 (magic-byte check)
+    // -----------------------------------------------------------------------
+    [Test]
+    public async Task UploadAvatar_PngExtensionButTextBytes_Returns400()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"av_magic_{Guid.NewGuid()}@test.com");
+        var authedClient = _factory.CreateAuthenticatedClient(user.Id, user.Email, user.DisplayName);
+
+        // Bytes are plain text, not a PNG
+        var fakeBytes = Encoding.UTF8.GetBytes("this is definitely not an image file");
+
+        var content = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(fakeBytes);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+        content.Add(fileContent, "file", "avatar.png");
+
+        var response = await authedClient.PostAsync("/avatars", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /avatars/{userId} — response includes nosniff header and short cache
+    // -----------------------------------------------------------------------
+    [Test]
+    public async Task GetAvatar_AfterUpload_HasNoSniffHeaderAndShortCache()
+    {
+        var user = await TestDbSeeder.SeedUserAsync(_db, email: $"av_headers_{Guid.NewGuid()}@test.com");
+        var authedClient = _factory.CreateAuthenticatedClient(user.Id, user.Email, user.DisplayName);
+
+        // Upload first
+        var uploadContent = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(MinimalPng);
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+        uploadContent.Add(fileContent, "file", "avatar.png");
+        var uploadResponse = await authedClient.PostAsync("/avatars", uploadContent);
+        uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // GET and check headers
+        var getResponse = await authedClient.GetAsync($"/avatars/{user.Id}");
+        getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        getResponse.Headers.TryGetValues("X-Content-Type-Options", out var nosniffValues).Should().BeTrue();
+        nosniffValues!.Should().Contain("nosniff");
+
+        var cacheControl = getResponse.Headers.CacheControl;
+        cacheControl.Should().NotBeNull();
+        cacheControl!.MaxAge.Should().Be(TimeSpan.FromSeconds(60));
+    }
 }

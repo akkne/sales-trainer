@@ -8,7 +8,8 @@ namespace SalesTrainer.Api.Features.Avatars.Services.Implementation;
 
 public sealed class AvatarService(
     AppDbContext db,
-    IObjectStorage objectStorage) : IAvatarService
+    IObjectStorage objectStorage,
+    ILogger<AvatarService> logger) : IAvatarService
 {
     private static readonly Dictionary<string, string> ContentTypeByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -81,15 +82,18 @@ public sealed class AvatarService(
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
+        if (user.AvatarType == AvatarKind.Default && user.AvatarKey is null)
+            return;
+
         if (user.AvatarKey is not null)
         {
             try
             {
                 await objectStorage.DeleteAsync(user.AvatarKey, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
-                // best-effort deletion; do not block the reset
+                logger.LogWarning(ex, "Failed to delete avatar object {Key} during reset", user.AvatarKey);
             }
         }
 
