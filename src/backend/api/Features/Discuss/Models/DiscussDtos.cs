@@ -2,6 +2,10 @@ namespace SalesTrainer.Api.Features.Discuss.Models;
 
 public sealed record TagRefDto(string Slug, string Name);
 
+public sealed record DiscussPhotoDto(Guid Id, string Url, int OrderIndex);
+
+public sealed record DiscussPhotoListDto(IReadOnlyList<DiscussPhotoDto> Photos);
+
 public sealed record DiscussThreadSummaryDto(
     Guid Id,
     string Title,
@@ -18,7 +22,9 @@ public sealed record DiscussThreadSummaryDto(
     IReadOnlyList<TagRefDto> Tags,
     DateTime CreatedAt,
     DateTime LastActivityAt,
-    bool ViewerHasUpvoted);
+    bool ViewerHasUpvoted,
+    int PhotoCount,
+    string? FirstPhotoUrl);
 
 public sealed record DiscussReplyDto(
     Guid Id,
@@ -30,7 +36,8 @@ public sealed record DiscussReplyDto(
     int UpvoteCount,
     bool IsAccepted,
     DateTime CreatedAt,
-    bool ViewerHasUpvoted);
+    bool ViewerHasUpvoted,
+    IReadOnlyList<DiscussPhotoDto> Photos);
 
 public sealed record DiscussThreadDetailDto(
     Guid Id,
@@ -50,7 +57,8 @@ public sealed record DiscussThreadDetailDto(
     DateTime CreatedAt,
     DateTime LastActivityAt,
     bool ViewerHasUpvoted,
-    IReadOnlyList<DiscussReplyDto> Replies);
+    IReadOnlyList<DiscussReplyDto> Replies,
+    IReadOnlyList<DiscussPhotoDto> Photos);
 
 public sealed record DiscussTagDto(Guid Id, string Slug, string Name, bool IsCurated);
 

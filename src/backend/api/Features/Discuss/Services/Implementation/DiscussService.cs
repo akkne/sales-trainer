@@ -86,7 +86,7 @@ public sealed partial class DiscussService : IDiscussService
             viewerId, DiscussVoteTarget.Thread, pageItems.Select(t => t.Id).ToList(), ct);
 
         var items = pageItems
-            .Select(thread => ToSummary(thread, authorNames, upvotedThreadIds.Contains(thread.Id)))
+            .Select(thread => ToSummary(thread, authorNames, upvotedThreadIds.Contains(thread.Id), photoCount: 0, firstPhotoUrl: null))
             .ToList();
 
         return new PagedResultDto<DiscussThreadSummaryDto>(items, page, pageSize, totalCount);
@@ -131,10 +131,10 @@ public sealed partial class DiscussService : IDiscussService
 
         var replies = thread.Replies
             .OrderBy(r => r.CreatedAt)
-            .Select(r => ToReplyDto(r, authorNames, upvotedReplyIds.Contains(r.Id)))
+            .Select(r => ToReplyDto(r, authorNames, upvotedReplyIds.Contains(r.Id), Array.Empty<DiscussPhotoDto>()))
             .ToList();
 
-        return ToDetail(thread, authorNames, threadUpvoted.Contains(thread.Id), replies);
+        return ToDetail(thread, authorNames, threadUpvoted.Contains(thread.Id), replies, Array.Empty<DiscussPhotoDto>());
     }
 
     // ===================== Create thread =====================
@@ -170,7 +170,7 @@ public sealed partial class DiscussService : IDiscussService
         await _db.SaveChangesAsync(ct);
 
         var authorNames = await ResolveAuthorNamesAsync([authorId], ct);
-        return ToDetail(thread, authorNames, viewerHasUpvoted: false, replies: []);
+        return ToDetail(thread, authorNames, viewerHasUpvoted: false, replies: [], photos: Array.Empty<DiscussPhotoDto>());
     }
 
     /// <summary>Resolves existing tags by slug (curated or not) and creates free-form ones as needed.</summary>
@@ -237,7 +237,7 @@ public sealed partial class DiscussService : IDiscussService
         await _db.SaveChangesAsync(ct);
 
         var authorNames = await ResolveAuthorNamesAsync([authorId], ct);
-        return ToReplyDto(reply, authorNames, viewerHasUpvoted: false);
+        return ToReplyDto(reply, authorNames, viewerHasUpvoted: false, photos: Array.Empty<DiscussPhotoDto>());
     }
 
     // ===================== Voting =====================
