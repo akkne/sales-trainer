@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SalesTrainer.Api.Features.Discuss.Constants;
 using SalesTrainer.Api.Features.Discuss.Models;
 using SalesTrainer.Api.Features.Discuss.Services.Abstract;
 
@@ -109,6 +110,45 @@ public sealed class DiscussController : ControllerBase
         return MapAcceptedReplyResult(status, thread);
     }
 
+    [HttpPost("threads/{threadId:guid}/photos")]
+    [RequestSizeLimit(DiscussPhotoConstants.MaximumUploadRequestSizeBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = DiscussPhotoConstants.MaximumUploadRequestSizeBytes)]
+    public Task<IActionResult> UploadThreadPhotos(Guid threadId, [FromForm] IFormFileCollection files, CancellationToken ct = default)
+        => UploadPhotos(DiscussPhotoOwner.Thread, threadId, files, ct);
+
+    [HttpPost("replies/{replyId:guid}/photos")]
+    [RequestSizeLimit(DiscussPhotoConstants.MaximumUploadRequestSizeBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = DiscussPhotoConstants.MaximumUploadRequestSizeBytes)]
+    public Task<IActionResult> UploadReplyPhotos(Guid replyId, [FromForm] IFormFileCollection files, CancellationToken ct = default)
+        => UploadPhotos(DiscussPhotoOwner.Reply, replyId, files, ct);
+
+    [HttpDelete("photos/{photoId:guid}")]
+    public async Task<IActionResult> DeletePhoto(Guid photoId, CancellationToken ct = default)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var status = await _discussService.DeletePhotoAsync(photoId, userId.Value, ct);
+        return status switch
+        {
+            DiscussOperationStatus.Success => NoContent(),
+            DiscussOperationStatus.Forbidden => Forbid(),
+            _ => NotFound(new { message = "Photo not found" })
+        };
+    }
+
+    [HttpGet("photos/{photoId:guid}/content")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPhotoContent(Guid photoId, CancellationToken ct = default)
+    {
+        var content = await _discussService.GetPhotoContentAsync(photoId, ct);
+        if (content == null) return NotFound();
+
+        Response.Headers["Cache-Control"] = "public, max-age=60";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(content.Value.Content, content.Value.ContentType);
+    }
+
     [HttpGet("tags")]
     public async Task<IActionResult> GetTags([FromQuery] bool curatedOnly = false, CancellationToken ct = default)
         => Ok(await _discussService.GetTagsAsync(curatedOnly, ct));
@@ -120,6 +160,28 @@ public sealed class DiscussController : ControllerBase
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats(CancellationToken ct = default)
         => Ok(await _discussService.GetStatsAsync(ct));
+
+    private async Task<IActionResult> UploadPhotos(DiscussPhotoOwner ownerType, Guid ownerId, IFormFileCollection files, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        if (files == null || files.Count == 0)
+            return BadRequest(new { message = "No files were provided" });
+
+        var uploadFiles = files
+            .Select(file => new DiscussPhotoUploadFile(file.OpenReadStream(), file.FileName, file.Length))
+            .ToList();
+
+        var (status, photos) = await _discussService.UploadPhotosAsync(ownerType, ownerId, userId.Value, uploadFiles, ct);
+        return status switch
+        {
+            DiscussPhotoUploadStatus.Success => Ok(new DiscussPhotoListDto(photos)),
+            DiscussPhotoUploadStatus.OwnerNotFound => NotFound(new { message = "Owner not found" }),
+            DiscussPhotoUploadStatus.Forbidden => Forbid(),
+            _ => BadRequest(new { message = "One or more photos failed validation" })
+        };
+    }
 
     private async Task<IActionResult> SetThreadVote(Guid threadId, bool upvote, CancellationToken ct)
     {

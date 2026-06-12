@@ -5,6 +5,8 @@ internal static class DiscussPhotoConstants
     public const int MaximumPhotosPerOwner = 10;
     public const long MaximumFileSizeBytes = 5 * 1024 * 1024;
 
+    public const long MaximumUploadRequestSizeBytes = MaximumFileSizeBytes * MaximumPhotosPerOwner + 1024 * 1024;
+
     public const string ThreadObjectKeyPrefix = "discuss/threads";
     public const string ReplyObjectKeyPrefix = "discuss/replies";
 
