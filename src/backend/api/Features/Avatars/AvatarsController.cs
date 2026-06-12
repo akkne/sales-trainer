@@ -60,7 +60,7 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
     }
 
     [HttpGet("{userId:guid}")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAvatar(Guid userId, CancellationToken cancellationToken)
     {
         var result = await avatarService.GetAvatarAsync(userId, cancellationToken);

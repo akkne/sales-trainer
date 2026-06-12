@@ -178,22 +178,18 @@ public class AvatarsTests
     [Test]
     public async Task GetAvatar_DefaultAvatarSeeded_Returns200WithDefaultBytes()
     {
+        // The startup seeder already inserted DefaultAvatars rows for indices 0–5.
+        // Look up an existing row so we never collide with the unique index on DefaultAvatar.Index.
+        var existingDefault = await _db.DefaultAvatars
+            .OrderBy(a => a.Index)
+            .FirstAsync();
+
+        // The test user defaults to DefaultAvatarIndex = 0, which matches existingDefault.Index (0).
         var user = await TestDbSeeder.SeedUserAsync(_db, email: $"av_default_{Guid.NewGuid()}@test.com");
-        // user.DefaultAvatarIndex == 0 by default
 
-        // Seed the default avatar row and put bytes into in-memory storage
-        var defaultKey = "defaults/avatar-0.png";
+        // Seed the in-memory object storage with fake bytes under the key the seeder registered.
         var defaultBytes = Encoding.UTF8.GetBytes("fake-default-png-bytes");
-        await _factory.ObjectStorage.PutAsync(defaultKey, new MemoryStream(defaultBytes), "image/png");
-
-        _db.DefaultAvatars.Add(new DefaultAvatar
-        {
-            Id = Guid.NewGuid(),
-            Index = 0,
-            ObjectKey = defaultKey,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync();
+        await _factory.ObjectStorage.PutAsync(existingDefault.ObjectKey, new MemoryStream(defaultBytes), "image/png");
 
         var authedClient = _factory.CreateAuthenticatedClient(user.Id, user.Email, user.DisplayName);
         var response = await authedClient.GetAsync($"/avatars/{user.Id}");
