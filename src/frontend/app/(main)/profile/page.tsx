@@ -10,6 +10,7 @@ import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
 import { UserAvatar } from "@/shared/components/user-avatar";
+import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
 import { StatTile } from "@/shared/components/stat-tile";
 import { Progress } from "@/shared/components/progress";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
@@ -41,6 +42,8 @@ export default function ProfilePage() {
     const { data: voiceUsage } = useVoiceUsage();
     const { authenticatedUser } = useAuthStore();
     const { theme, setTheme } = useThemeStore();
+    const { version, uploading, uploadError, fileInputRef, openFilePicker, handleFileChange } =
+        useAvatarUpload();
     const isAdmin =
         authenticatedUser?.role === "Admin" || authenticatedUser?.role === "SuperAdmin";
 
@@ -91,7 +94,61 @@ export default function ProfilePage() {
             <div className="container" style={{ maxWidth: 1320 }}>
                 {/* Header */}
                 <div className="profile-head">
-                    <UserAvatar avatarUrl={profileStats.avatarUrl} seed={profileStats.displayName} size={88} circle />
+                    <div
+                        className="group"
+                        style={{ position: "relative", flexShrink: 0, cursor: uploading ? "wait" : "pointer" }}
+                        onClick={uploading ? undefined : openFilePicker}
+                        title="Изменить фото"
+                    >
+                        <UserAvatar
+                            avatarUrl={
+                                version > 0 && profileStats.avatarUrl
+                                    ? `${profileStats.avatarUrl}?v=${version}`
+                                    : profileStats.avatarUrl
+                            }
+                            seed={profileStats.displayName}
+                            size={88}
+                            circle
+                        />
+                        <div
+                            className="group-hover:opacity-100"
+                            style={{
+                                position: "absolute",
+                                inset: 0,
+                                borderRadius: "50%",
+                                background: "rgba(0,0,0,0.45)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 28,
+                                opacity: uploading ? 1 : 0,
+                                transition: "opacity 0.15s",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            {uploading ? (
+                                <div
+                                    style={{
+                                        width: 24,
+                                        height: 24,
+                                        borderRadius: "50%",
+                                        border: "2.5px solid rgba(255,255,255,0.4)",
+                                        borderTopColor: "#fff",
+                                        animation: "spin 0.8s linear infinite",
+                                    }}
+                                />
+                            ) : (
+                                "📷"
+                            )}
+                        </div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            style={{ display: "none" }}
+                            onChange={handleFileChange}
+                        />
+                    </div>
                     <div className="grow">
                         <div className="row gap-3 wrap" style={{ alignItems: "center" }}>
                             <h1 className="h1" style={{ fontSize: 36 }}>
@@ -118,6 +175,15 @@ export default function ProfilePage() {
                         {unlockedAchievements.length} достижений
                     </span>
                 </div>
+
+                {uploadError && (
+                    <p
+                        className="small"
+                        style={{ marginTop: 8, color: "var(--heart)", textAlign: "center" }}
+                    >
+                        {uploadError}
+                    </p>
+                )}
 
                 {/* Stats grid */}
                 <div className="profile-stats">

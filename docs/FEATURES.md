@@ -47,6 +47,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
 | [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
 | [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
+| [USER_AVATARS.md](TESTING/USER_AVATARS.md) | User avatar upload on own profile: hover overlay, file picker, cache-busting, fallback |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
@@ -133,6 +134,13 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
 - User role management (SuperAdmin only)
+
+### User Avatars
+- Custom avatar upload on own profile page (`POST /avatars`, multipart, ≤5 MB, png/jpg/webp)
+- Camera-emoji 📷 hover overlay on the profile avatar opens a file picker; spinner shown during upload
+- Cache-busting `?v=<n>` appended to avatar URL after successful upload so the new image appears immediately
+- GeoAvatar (coloured SVG) fallback for users with no uploaded avatar or when the image fails to load
+- Public friend profile pages are read-only — no upload affordance shown there
 
 ### Discuss (Community Forum)
 - Threads with title/body and one or more tags; replies; upvote-only voting on threads and replies
