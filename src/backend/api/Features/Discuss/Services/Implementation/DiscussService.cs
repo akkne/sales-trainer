@@ -92,9 +92,17 @@ public sealed partial class DiscussService : IDiscussService
         var authorNames = await ResolveAuthorNamesAsync(pageItems.Select(t => t.AuthorId), ct);
         var upvotedThreadIds = await GetUpvotedTargetIdsAsync(
             viewerId, DiscussVoteTarget.Thread, pageItems.Select(t => t.Id).ToList(), ct);
+        var photosByThreadId = await LoadThreadPhotosByThreadIdAsync(pageItems.Select(t => t.Id).ToList(), ct);
 
         var items = pageItems
-            .Select(thread => ToSummary(thread, authorNames, upvotedThreadIds.Contains(thread.Id), photoCount: 0, firstPhotoUrl: null))
+            .Select(thread =>
+            {
+                var threadPhotos = photosByThreadId.GetValueOrDefault(thread.Id, Array.Empty<DiscussPhoto>());
+                var firstPhotoUrl = threadPhotos.Count == 0
+                    ? null
+                    : DiscussPhotoUrlBuilder.Build(threadPhotos.MinBy(photo => photo.OrderIndex)!.Id);
+                return ToSummary(thread, authorNames, upvotedThreadIds.Contains(thread.Id), threadPhotos.Count, firstPhotoUrl);
+            })
             .ToList();
 
         return new PagedResultDto<DiscussThreadSummaryDto>(items, page, pageSize, totalCount);
@@ -137,12 +145,18 @@ public sealed partial class DiscussService : IDiscussService
         var upvotedReplyIds = await GetUpvotedTargetIdsAsync(
             viewerId, DiscussVoteTarget.Reply, replyIds, ct);
 
+        var (threadPhotos, replyPhotosByReplyId) = await LoadThreadAndReplyPhotosAsync(thread.Id, replyIds, ct);
+
         var replies = thread.Replies
             .OrderBy(r => r.CreatedAt)
-            .Select(r => ToReplyDto(r, authorNames, upvotedReplyIds.Contains(r.Id), Array.Empty<DiscussPhotoDto>()))
+            .Select(r => ToReplyDto(
+                r,
+                authorNames,
+                upvotedReplyIds.Contains(r.Id),
+                replyPhotosByReplyId.GetValueOrDefault(r.Id, Array.Empty<DiscussPhotoDto>())))
             .ToList();
 
-        return ToDetail(thread, authorNames, threadUpvoted.Contains(thread.Id), replies, Array.Empty<DiscussPhotoDto>());
+        return ToDetail(thread, authorNames, threadUpvoted.Contains(thread.Id), replies, threadPhotos);
     }
 
     // ===================== Create thread =====================

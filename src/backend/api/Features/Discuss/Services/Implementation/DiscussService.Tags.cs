@@ -135,7 +135,12 @@ public sealed partial class DiscussService
         await _db.SaveChangesAsync(ct);
 
         var authorNames = await ResolveAuthorNamesAsync([thread.AuthorId], ct);
-        return ToSummary(thread, authorNames, viewerHasUpvoted: false, photoCount: 0, firstPhotoUrl: null);
+        var photosByThreadId = await LoadThreadPhotosByThreadIdAsync([thread.Id], ct);
+        var threadPhotos = photosByThreadId.GetValueOrDefault(thread.Id, Array.Empty<DiscussPhoto>());
+        var firstPhotoUrl = threadPhotos.Count == 0
+            ? null
+            : DiscussPhotoUrlBuilder.Build(threadPhotos.MinBy(photo => photo.OrderIndex)!.Id);
+        return ToSummary(thread, authorNames, viewerHasUpvoted: false, threadPhotos.Count, firstPhotoUrl);
     }
 
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> CreateCuratedTagAsync(

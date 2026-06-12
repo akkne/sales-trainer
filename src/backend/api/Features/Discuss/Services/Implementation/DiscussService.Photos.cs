@@ -145,6 +145,51 @@ public sealed partial class DiscussService
             .ToList();
     }
 
+    private async Task<(IReadOnlyList<DiscussPhotoDto> ThreadPhotos, IReadOnlyDictionary<Guid, IReadOnlyList<DiscussPhotoDto>> ReplyPhotosByReplyId)> LoadThreadAndReplyPhotosAsync(
+        Guid threadId, IReadOnlyList<Guid> replyIds, CancellationToken ct)
+    {
+        var photos = await _db.DiscussPhotos.AsNoTracking()
+            .Where(photo =>
+                (photo.OwnerType == DiscussPhotoOwner.Thread && photo.OwnerId == threadId)
+                || (photo.OwnerType == DiscussPhotoOwner.Reply && replyIds.Contains(photo.OwnerId)))
+            .OrderBy(photo => photo.OrderIndex)
+            .ToListAsync(ct);
+
+        var threadPhotos = photos
+            .Where(photo => photo.OwnerType == DiscussPhotoOwner.Thread)
+            .Select(MapPhotoToDto)
+            .ToList();
+
+        var replyPhotosByReplyId = photos
+            .Where(photo => photo.OwnerType == DiscussPhotoOwner.Reply)
+            .GroupBy(photo => photo.OwnerId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<DiscussPhotoDto>)group.Select(MapPhotoToDto).ToList());
+
+        return (threadPhotos, replyPhotosByReplyId);
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, IReadOnlyList<DiscussPhoto>>> LoadThreadPhotosByThreadIdAsync(
+        IReadOnlyList<Guid> threadIds, CancellationToken ct)
+    {
+        if (threadIds.Count == 0) return new Dictionary<Guid, IReadOnlyList<DiscussPhoto>>();
+
+        var photos = await _db.DiscussPhotos.AsNoTracking()
+            .Where(photo => photo.OwnerType == DiscussPhotoOwner.Thread && threadIds.Contains(photo.OwnerId))
+            .OrderBy(photo => photo.OrderIndex)
+            .ToListAsync(ct);
+
+        return photos
+            .GroupBy(photo => photo.OwnerId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<DiscussPhoto>)group.ToList());
+    }
+
+    private static DiscussPhotoDto MapPhotoToDto(DiscussPhoto photo) =>
+        new(photo.Id, DiscussPhotoUrlBuilder.Build(photo.Id), photo.OrderIndex);
+
     private static string ResolveObjectKeyPrefix(DiscussPhotoOwner ownerType) => ownerType == DiscussPhotoOwner.Thread
         ? DiscussPhotoConstants.ThreadObjectKeyPrefix
         : DiscussPhotoConstants.ReplyObjectKeyPrefix;
