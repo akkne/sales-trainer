@@ -639,3 +639,18 @@ unknown labels are created on the fly as non-curated tags (slug = lowercased, wh
 | POST | /admin/discuss/tags | `{name, slug?}` | `DiscussTagDto` (201; 409 on duplicate slug) |
 | PUT | /admin/discuss/tags/{tagId} | `{name?, slug?}` | `DiscussTagDto` (409 on duplicate slug) |
 | DELETE | /admin/discuss/tags/{tagId} | — | 204 (cascades thread-tags) |
+
+---
+
+## Avatars
+
+| Method | Path | Auth | Body | Response |
+|---|---|---|---|---|
+| POST | /avatars | Bearer | `multipart/form-data` with `file` field (PNG/JPG/JPEG/WEBP, max 5 MB) | `200 { "avatarUrl": "/avatars/{userId}" }` |
+| DELETE | /avatars | Bearer | — | 204 |
+| GET | /avatars/{userId:guid} | Bearer | — | `200` image bytes with `Content-Type: image/png\|jpeg\|webp`; `404` if user or avatar object not found |
+
+- `POST /avatars` stores the image in S3 under `users/{userId}/avatar{ext}` and sets `AvatarType = Uploaded` on the user row.
+- `DELETE /avatars` best-effort deletes the uploaded object from S3, then resets `AvatarType = Default`, `AvatarKey = null`.
+- `GET /avatars/{userId}` returns the uploaded object if `AvatarType == Uploaded`, otherwise the `DefaultAvatars` row matching `user.DefaultAvatarIndex`. Response includes `Cache-Control: public, max-age=300`.
+- Subtask 5 will expose `avatarUrl` (value: `/avatars/{userId}`) on profile/user DTOs throughout the API.

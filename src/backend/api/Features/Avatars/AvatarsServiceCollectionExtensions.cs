@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Options;
+using SalesTrainer.Api.Features.Avatars.Services.Abstract;
+using SalesTrainer.Api.Features.Avatars.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Storage.Abstract;
 using SalesTrainer.Api.Infrastructure.Storage.Implementation;
@@ -19,6 +21,8 @@ public static class AvatarsServiceCollectionExtensions
             var config = sp.GetRequiredService<IOptions<S3Configuration>>().Value;
             return new S3ObjectStorage(config);
         });
+
+        services.AddScoped<IAvatarService, AvatarService>();
 
         return services;
     }
