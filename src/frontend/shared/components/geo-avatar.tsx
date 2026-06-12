@@ -8,6 +8,7 @@ interface GeoAvatarProps {
     palette?: string[];
     className?: string;
     style?: CSSProperties;
+    circle?: boolean;
 }
 
 const DEFAULT_PALETTES = [
@@ -23,6 +24,7 @@ export function GeoAvatar({
     palette,
     className = "",
     style = {},
+    circle = false,
 }: GeoAvatarProps) {
     const { bg, fg, shape, accent } = useMemo(() => {
         const s = String(seed || "a");
@@ -55,7 +57,7 @@ export function GeoAvatar({
             style={{
                 width: size,
                 height: size,
-                borderRadius: size * 0.25,
+                borderRadius: circle ? "50%" : size * 0.25,
                 background: bg,
                 position: "relative",
                 overflow: "hidden",
