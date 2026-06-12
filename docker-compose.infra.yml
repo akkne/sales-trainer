@@ -13,6 +13,23 @@
 # The full Docker stack (backend + frontend in containers) still lives in
 # docker-compose.yml and is untouched.
 services:
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -93,3 +110,4 @@ volumes:
   loki_data:
   prometheus_data:
   grafana_data:
+  minio_data:

@@ -15,6 +15,7 @@ using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Http;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
+using SalesTrainer.Api.Features.Avatars;
 using SalesTrainer.Api.Features.Dialog;
 using SalesTrainer.Api.Features.Discuss;
 using SalesTrainer.Api.Features.Exercises;
@@ -101,6 +102,8 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()));
+
+builder.Services.AddAvatarStorage(builder.Configuration);
 
 builder.Services
     .AddAchievementFeatureServices()

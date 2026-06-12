@@ -32,6 +32,10 @@ services:
       - SuperAdmin__Email=${SUPERADMIN_EMAIL}
       - SuperAdmin__Password=${SUPERADMIN_PASSWORD}
       - SuperAdmin__DisplayName=${SUPERADMIN_DISPLAY_NAME}
+      - Storage__S3__Endpoint=http://minio:9000
+      - Storage__S3__AccessKey=${MINIO_ROOT_USER}
+      - Storage__S3__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Storage__S3__Bucket=salestrainer-avatars
     volumes:
       - ./src/backend/api/appsettings.Development.json:/app/appsettings.Development.json:ro
     depends_on:
@@ -43,6 +47,25 @@ services:
         condition: service_started
       loki:
         condition: service_started
+      minio:
+        condition: service_healthy
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   postgres:
     image: postgres:17-alpine
@@ -121,3 +144,4 @@ volumes:
   loki_data:
   prometheus_data:
   grafana_data:
+  minio_data:
