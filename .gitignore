@@ -32,6 +32,13 @@ appsettings.*.json
 .claude/
 .design/
 
+# OMC runtime state (sessions, mission/tool state, project memory) — local only
+.omc/
+
+# Nimbalyst local workspace artifacts (automations runtime, outputs) — local only.
+# The canonical task pipeline is documented in docs/TASK_WORKFLOW.md.
+nimbalyst-local/
+
 # Docker volumes (if mounted locally)
 .postgres_data/
 .mongo_data/
