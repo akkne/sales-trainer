@@ -22,6 +22,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       # Secrets interpolated from the root .env; everything else lives in appsettings*.json
       - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # CORS allow-list: comma-separated origins (local dev + deployed Vercel frontend)
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Google__ClientId=${GOOGLE_CLIENT_ID}
       - OpenAI__ApiKey=${OPENAI_API_KEY}

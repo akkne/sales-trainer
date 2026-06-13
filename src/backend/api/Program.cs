@@ -96,9 +96,14 @@ builder.Services.AddHangfire(hangfireConfiguration =>
         storageOptions.UseNpgsqlConnection(builder.Configuration.GetConnectionString("Postgres"))));
 builder.Services.AddHangfireServer();
 
+// Frontend:Url may hold a comma-separated list so local dev (localhost:3000) and
+// the deployed Vercel origin can be allowed at the same time. AllowCredentials()
+// forbids a wildcard origin, so each origin must be listed explicitly.
+var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
-        .WithOrigins(builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+        .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()));
