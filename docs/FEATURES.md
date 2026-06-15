@@ -28,13 +28,14 @@ All significant features, architectural decisions, and infrastructure docs.
 | Feature | Description |
 |---------|-------------|
 | [Skills & Exercises](SKILLS_AND_EXERCISES.md) | Skill/lesson/exercise data model, evaluation logic |
+| [New Exercise Types](NEW_EXERCISE_TYPES.md) | 10 exercise types: 5 basic + 5 AI-evaluated |
 | [AI Dialog](AI_DIALOG.md) | GPT-powered sales conversation practice |
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
-| [New Exercise Types](NEW_EXERCISE_TYPES.md) | 8 additional exercise types with AI evaluation |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 | [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
+| [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
 
 ## Testing
 
@@ -47,6 +48,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
 | [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |
+| [EXERCISE_CONTENT_VALIDATION.md](TESTING/EXERCISE_CONTENT_VALIDATION.md) | Per-type content validation: unit tests, integration tests, frontend type checking |
 | [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and achievement button cleanup |
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
 | [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |

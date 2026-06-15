@@ -45,25 +45,49 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 | PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?, stage?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
+### Topics
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/topics | — | `AdminTopicWithSkillDto[]` (all topics) |
+| GET | /admin/skills/:skillIconicName/topics | — | `AdminTopicDto[]` |
+| POST | /admin/skills/:skillIconicName/topics | `{iconicName, title, orderInSkill}` | `AdminTopicDto` |
+| PUT | /admin/topics/:id | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
+| DELETE | /admin/topics/:id | — | 204 |
+
 ### Lessons
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /admin/lessons | — | `AdminLessonWithSkillDto[]` (all lessons) |
-| GET | /admin/skills/:skillId/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/skills/:skillId/lessons | `{title, sortOrder, difficultyLevel, xpReward}` | `AdminLessonDto` |
-| PUT | /admin/lessons/:id | same | `AdminLessonDto` |
+| GET | /admin/lessons | — | `AdminLessonWithTopicDto[]` (all lessons) |
+| GET | /admin/topics/:topicIconicName/lessons | — | `AdminLessonDto[]` |
+| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
+| PUT | /admin/lessons/:id | `{title, orderInTopic}` | `AdminLessonDto` |
 | DELETE | /admin/lessons/:id | — | 204 |
 
 ### Exercises
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/lessons/:lessonId/exercises | — | `AdminExerciseDto[]` |
-| POST | /admin/lessons/:lessonId/exercises | `{type, sortOrder, content: <jsonb>}` | `AdminExerciseDto` |
-| POST | /admin/lessons/:lessonId/exercises/import | array `[{type, orderInLesson, content, customAiPrompt?}]` | `ExercisesImportResultDto` |
-| PUT | /admin/exercises/:id | same | `AdminExerciseDto` |
+| POST | /admin/lessons/:lessonId/exercises | `{type, orderInLesson, content: <jsonb>, customAiPrompt?}` | `AdminExerciseDto` (400 if content invalid for type) |
+| POST | /admin/lessons/:lessonId/exercises/import | array `[{type, orderInLesson, content, customAiPrompt?}, …]` | `ExercisesImportResultDto` (per-item validation: bad items skipped, reported in errors) |
+| PUT | /admin/exercises/:id | same | `AdminExerciseDto` (400 if content invalid for type) |
 | DELETE | /admin/exercises/:id | — | 204 |
 
+**Content validation:** The `content` field is validated server-side per exercise type. Single create/update return 400 with joined error messages on invalid content. Import validates each exercise and skips bad ones, reporting errors per item.
+
 The exercises editor page has **Export JSON** (downloads the lesson's exercises as a re-importable array) and **Import JSON** (uploads such an array; upsert by `orderInLesson`). Business data such as users is intentionally not exportable.
+
+### Exercise Type Prompts
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/exercise-type-prompts | — | `ExerciseTypePromptDto[]` |
+| GET | /admin/exercise-type-prompts/:exerciseType | — | `ExerciseTypePromptDto` |
+| PUT | /admin/exercise-type-prompts/:exerciseType | `{systemPrompt}` | `ExerciseTypePromptDto` |
+
+**Two-level AI prompt model:** For AI-evaluated exercise types (6-10), prompts combine:
+1. **Global type prompt** (stored in `ExerciseTypePrompts` table, edited at `/admin/exercise-type-prompts/:type`)
+2. **Per-exercise prompt** (field `ai_prompt` inside `content` JSON)
+
+The final prompt sent to the model is: `[global] + "Additional criteria:" + [per-exercise] + format instruction`.
 
 ### Reference Materials
 | Method | Path | Body | Response |
@@ -111,7 +135,10 @@ XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — t
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | /admin/seeder/skills | `multipart/form-data` with JSON file | `SkillsImportResultDto` |
+| POST | /admin/seeder/topics | `multipart/form-data` with JSON file | `TopicsImportResultDto` |
 | POST | /admin/seeder/lessons | `multipart/form-data` with JSON file | `LessonsImportResultDto` |
+
+See [SEEDER.md](SEEDER.md) for JSON format and field details.
 
 ---
 
@@ -127,24 +154,29 @@ app/(admin)/
     skills/
       page.tsx         ← skill list + inline JSON import
       [id]/
-        page.tsx       ← edit skill + lessons list
-        lessons/
-          [lessonId]/
-            page.tsx       ← lesson edit + exercises list
-            exercises/
-              page.tsx     ← visual exercise editor (all 11 types)
+        page.tsx       ← edit skill + topics list
+        topics/
+          [topicId]/
+            page.tsx       ← edit topic + lessons list
+            lessons/
+              [lessonId]/
+                page.tsx       ← lesson edit + exercises list
+                exercises/
+                  page.tsx     ← visual exercise editor (all 10 types)
         reference/
           page.tsx     ← reference materials list + editor
+    topics/
+      page.tsx         ← all topics view + inline JSON import
     lessons/
-      page.tsx         ← all lessons view + inline JSON import
+      page.tsx         ← all lessons view
     reference/
       page.tsx         ← global reference materials view
+    prompts/
+      page.tsx         ← exercise type AI prompts management
     quotes/
       page.tsx         ← daily quotes month calendar (click a day → edit quote)
     dialog/
       page.tsx         ← dialog bundles management
-    open-question/
-      page.tsx         ← AI prompts management
     leagues/
       page.tsx         ← league list (week/tier filters) + settings + manual week closure
       [id]/
@@ -349,17 +381,19 @@ Features:
 - Add/edit/delete exercises without raw JSON editing
 - Auto-assigns orderInLesson based on position
 
-Each exercise type has a dedicated editor component in `src/frontend/components/admin/exercise-editors/`:
-- ChooseOptionEditor.tsx
-- FillBlankEditor.tsx
-- ReorderEditor.tsx
-- MatchPairsEditor.tsx
-- CategorizeEditor.tsx
-- SpotMistakeEditor.tsx
-- RewriteEditor.tsx
-- AiDialogueEditor.tsx
-- EvaluateCallEditor.tsx
-- FreeTextEditor.tsx
+Each exercise type has a dedicated editor component in `src/frontend/features/admin/components/exercise-editors/` (kebab-case):
+- `choose-option-editor.tsx` / `multiple-choice-editor.tsx`
+- `fill-blank-editor.tsx`
+- `ordering-editor.tsx`
+- `matching-editor.tsx`
+- `categorizing-editor.tsx`
+- `find-error-editor.tsx`
+- `rewrite-better-editor.tsx`
+- `ai-dialog-editor.tsx`
+- `rate-call-editor.tsx`
+- `open-question-editor.tsx` / `written-answer-editor.tsx`
+
+Each component includes the canonical TypeScript schema and client-side validation.
 
 ---
 

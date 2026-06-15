@@ -1,27 +1,12 @@
 # Content Seeders
 
-Administrators can bulk-import content via the admin panel using two separate seeders.
+Administrators can bulk-import content via the admin panel using three seeder endpoints: skills, topics, and lessons. All seeders accept **JSON only** and perform idempotent upsert operations.
 
 ---
 
-## 1. Skills Seeder — `/admin/seeder`
+## 1. Skills Seeder — `/admin/seeder/skills`
 
-Imports skills only. Accepts **CSV** or **JSON**.
-
-### CSV format
-
-| Column | Type | Notes |
-|---|---|---|
-| `slug` | string | Unique identifier — upsert key |
-| `title` | string | Display title |
-| `icon_name` | string | Icon name (e.g. `phone`, `handshake`) |
-| `sort_order` | integer | Position in the skill tree |
-| `sales_types` | string | Pipe-separated list: `b2b_saas\|retail\|b2c` |
-
-```csv
-slug,title,icon_name,sort_order,sales_types
-cold-calling,Cold Calling,phone,1,b2b_saas|b2c
-```
+Imports skills only.
 
 ### JSON format
 
@@ -37,7 +22,13 @@ cold-calling,Cold Calling,phone,1,b2b_saas|b2c
 ]
 ```
 
-`stage` is optional. Known values: `preparation`, `discovery`, `engagement`, `closing`, `retention`. Defaults to `general` when omitted on create; preserved when omitted on update.
+| Field | Type | Notes |
+|---|---|---|
+| `iconicName` | string | Unique identifier — upsert key |
+| `title` | string | Display title |
+| `description` | string \| null | Optional description |
+| `orderInTree` | number | Position in skill tree (lower = higher) |
+| `stage` | string | Skill stage: `preparation`, `discovery`, `engagement`, `closing`, `retention`, or `general` (default when omitted) |
 
 ### API endpoint
 
@@ -46,95 +37,135 @@ POST /admin/seeder/skills
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data
 
-file: <CSV or JSON file>
+file: <JSON file>
 ```
 
-### Success response `200 OK`
+### Response `200 OK`
 
 ```json
 {
   "skillsCreated": 2,
-  "skillsUpdated": 0,
+  "skillsUpdated": 1,
   "errors": []
 }
 ```
 
 ---
 
-## 2. Content Import — `/admin/content`
+## 2. Topics Seeder — `/admin/seeder/topics`
 
-Imports lessons and exercises for a **selected skill**. Accepts **CSV** or **JSON**.
-
-The skill is selected via dropdown in the admin panel — no skill metadata is included in the import file.
-
-### CSV format
-
-One row = one exercise. Lessons are auto-created or updated by title.
-
-| Column | Type | Notes |
-|---|---|---|
-| `lesson_title` | string | Upsert key within the skill |
-| `lesson_sort_order` | integer | Order within the skill |
-| `lesson_difficulty` | integer | 1 = easy, 2 = medium, 3 = hard |
-| `lesson_xp` | integer | XP awarded on lesson completion |
-| `exercise_type` | string | `multiple_choice` / `fill_blank` / `free_text` |
-| `exercise_sort_order` | integer | Order within the lesson — upsert key for exercises |
-| `exercise_content_json` | JSON | Must be valid JSON; quote the field in CSV |
-
-```csv
-lesson_title,lesson_sort_order,lesson_difficulty,lesson_xp,exercise_type,exercise_sort_order,exercise_content_json
-Opening the Call,1,1,50,multiple_choice,1,"{""situation"":""You just dialed."",""question"":""Best opener?"",""options"":[""Hi boss"",""Hi I'm Alex"",""Buy something?""],""correctOptionIndex"":1}"
-```
+Imports topics (groups of lessons within a skill).
 
 ### JSON format
-
-Lessons contain nested exercises — no need for repeated lesson fields per row.
 
 ```json
 [
   {
+    "skillIconicName": "cold-calling",
+    "iconicName": "opening-techniques",
+    "title": "Opening Techniques",
+    "orderInSkill": 1
+  }
+]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `skillIconicName` | string | Parent skill's `iconicName` |
+| `iconicName` | string | Unique topic identifier within the skill — upsert key (combined with skill) |
+| `title` | string | Display title |
+| `orderInSkill` | number | Position within the skill (lower = higher) |
+
+### API endpoint
+
+```
+POST /admin/seeder/topics
+Authorization: Bearer <adminToken>
+Content-Type: multipart/form-data
+
+file: <JSON file>
+```
+
+### Response `200 OK`
+
+```json
+{
+  "topicsCreated": 3,
+  "topicsUpdated": 1,
+  "errors": []
+}
+```
+
+---
+
+## 3. Lessons Seeder — `/admin/seeder/lessons`
+
+Imports lessons and their nested exercises in one operation. Exercises are validated per type; bad exercises are skipped and reported in errors.
+
+### JSON format
+
+```json
+[
+  {
+    "topicIconicName": "opening-techniques",
     "title": "Opening the Call",
-    "sortOrder": 1,
-    "difficultyLevel": 1,
-    "xpReward": 50,
+    "orderInTopic": 1,
     "exercises": [
       {
-        "type": "multiple_choice",
-        "sortOrder": 1,
+        "type": "choose_option",
+        "orderInLesson": 1,
         "content": {
-          "situation": "You just dialed a prospect.",
-          "question": "Best opener?",
-          "options": ["Hi boss", "Hi I'm Alex from Acme", "Buy something?"],
-          "correctOptionIndex": 1,
-          "explanation": "A friendly opener sets the tone."
+          "situation": "Client says: 'Too expensive'",
+          "options": [
+            { "text": "I can offer a discount.", "is_correct": false },
+            { "text": "Expensive relative to what?", "is_correct": true }
+          ],
+          "explanation": "Better to ask why than to cut price."
         }
       },
       {
-        "type": "fill_blank",
-        "sortOrder": 2,
+        "type": "free_text",
+        "orderInLesson": 2,
         "content": {
-          "characterName": "Prospect",
-          "characterLine": "Who is this?",
-          "options": ["Nobody.", "I'm Alex from Acme.", "Please don't hang up!"],
-          "correctOptionIndex": 1
-        }
+          "situation": "Client: 'We already have a vendor'",
+          "instruction": "Write your response",
+          "evaluation_criteria": ["Doesn't lower price", "Asks about pain"],
+          "ai_prompt": "Evaluate the response."
+        },
+        "customAiPrompt": null
       }
     ]
   }
 ]
 ```
 
+| Field | Type | Notes |
+|---|---|---|
+| `topicIconicName` | string | Parent topic's `iconicName` |
+| `title` | string | Lesson title — upsert key (combined with topic) |
+| `orderInTopic` | number | Position within the topic |
+| `exercises` | array | Nested exercises (see below) |
+
+**Exercise object** (in the nested `exercises` array):
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | string | Exercise type (see [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md)) |
+| `orderInLesson` | number | Position within the lesson — upsert key for exercises |
+| `content` | object | JSON content per type. **Validated server-side per type.** Invalid content returns 400 on single create/update; per-item errors on import (bad items skipped, reported in response) |
+| `customAiPrompt` | string \| null | Optional per-exercise AI prompt (legacy; admin UI always sends null now — use `content.ai_prompt` instead) |
+
 ### API endpoint
 
 ```
-POST /admin/seeder/lessons?skillId={guid}
+POST /admin/seeder/lessons
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data
 
-file: <CSV or JSON file>
+file: <JSON file>
 ```
 
-### Success response `200 OK`
+### Response `200 OK`
 
 ```json
 {
@@ -142,7 +173,7 @@ file: <CSV or JSON file>
   "lessonsUpdated": 1,
   "exercisesCreated": 10,
   "exercisesUpdated": 2,
-  "errors": []
+  "errors": ["Exercise 2 in 'Opening the Call': missing required field 'options'"]
 }
 ```
 
@@ -150,42 +181,19 @@ file: <CSV or JSON file>
 
 | Status | When |
 |---|---|
-| 400 | No file, wrong extension, missing skillId, unparseable file, missing required columns |
+| 400 | No file, unparseable JSON, missing required fields at lesson level |
 | 401 | Missing/expired token |
 | 403 | User is not Admin or SuperAdmin |
-| 404 | Skill not found for given skillId |
+| 404 | Skill or topic not found |
 
 ---
 
-## exercise_content_json shapes
+## Exercise Content Schemas
 
-**multiple_choice**
-```json
-{
-  "situation": "...",
-  "question": "...",
-  "options": ["A", "B", "C"],
-  "correctOptionIndex": 1,
-  "explanation": "optional"
-}
-```
+For the complete content schema and validation rules for each of the 10 exercise types, see [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md). The canonical schemas are:
 
-**fill_blank**
-```json
-{
-  "characterName": "Prospect",
-  "characterLine": "...",
-  "options": ["A", "B", "C"],
-  "correctOptionIndex": 0,
-  "explanation": "optional"
-}
-```
+- `choose_option`, `fill_blank` — binary-choice types with options and correct index
+- `reorder`, `match_pairs`, `categorize` — structured arrangement types
+- `spot_mistake`, `rewrite`, `ai_dialogue`, `evaluate_call`, `free_text` — AI-evaluated types with `ai_prompt` field
 
-**free_text**
-```json
-{
-  "situation": "...",
-  "prompt": "...",
-  "evaluationCriteria": "..."
-}
-```
+Each type is validated on import; exercises with invalid `content` are skipped and reported in the response `errors` array.
