@@ -2,6 +2,22 @@ import { EnvironmentConfiguration } from "@/config/environment";
 
 const API_BASE_URL = EnvironmentConfiguration.apiBaseUrl;
 
+export class ApiError extends Error {
+    readonly status: number;
+    readonly payload: Record<string, unknown>;
+
+    constructor(status: number, payload: Record<string, unknown>) {
+        super(
+            typeof payload.message === "string"
+                ? payload.message
+                : `HTTP ${status}`
+        );
+        this.name = "ApiError";
+        this.status = status;
+        this.payload = payload;
+    }
+}
+
 async function fetchWithAuthToken<TResponseBody>(
     path: string,
     requestOptions?: RequestInit
@@ -35,7 +51,7 @@ async function fetchWithAuthToken<TResponseBody>(
 
     if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message ?? `HTTP ${response.status}`);
+        throw new ApiError(response.status, errorBody);
     }
 
     if (response.status === 204) {

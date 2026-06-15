@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@/shared/api/api-client";
+import { ApiError, apiClient } from "@/shared/api/api-client";
 import { useAuthStore, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
+
+const PENDING_VERIFICATION_EMAIL_KEY = "pendingVerificationEmail";
 
 interface AuthTokenResponse {
     accessToken: string;
@@ -11,6 +13,22 @@ interface AuthTokenResponse {
     displayName: string;
     isOnboardingCompleted: boolean;
     role: UserRole;
+}
+
+interface RegistrationResult {
+    email: string;
+    requiresEmailVerification: boolean;
+}
+
+export function readPendingVerificationEmail(): string {
+    if (typeof window === "undefined") return "";
+    return window.sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) ?? "";
+}
+
+function storePendingVerificationEmail(email: string) {
+    if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, email);
+    }
 }
 
 function useHandleSuccessfulAuth() {
@@ -59,21 +77,20 @@ export function useInitAuth() {
 }
 
 export function useRegister() {
-    const handleSuccessfulAuth = useHandleSuccessfulAuth();
+    const router = useRouter();
 
     return useMutation({
         mutationFn: (credentials: {
             email: string;
             password: string;
             displayName: string;
-        }) => apiClient.post<AuthTokenResponse>("/auth/register", credentials),
+        }) => apiClient.post<RegistrationResult>("/auth/register", credentials),
         onSuccess: (data, variables) => {
-            clientLogger.info("Registration successful", {
-                userId: data.userId,
+            clientLogger.info("Registration pending email verification", {
                 email: variables.email,
-                role: data.role,
             });
-            handleSuccessfulAuth(data);
+            storePendingVerificationEmail(data.email);
+            router.push("/verify-email");
         },
         onError: (error, variables) => {
             clientLogger.warn("Registration failed", {
@@ -84,7 +101,42 @@ export function useRegister() {
     });
 }
 
+export function useVerifyEmail() {
+    const handleSuccessfulAuth = useHandleSuccessfulAuth();
+
+    return useMutation({
+        mutationFn: (credentials: { email: string; code: string }) =>
+            apiClient.post<AuthTokenResponse>("/auth/verify-email", credentials),
+        onSuccess: (data, variables) => {
+            clientLogger.info("Email verification successful", {
+                userId: data.userId,
+                email: variables.email,
+            });
+            handleSuccessfulAuth(data);
+        },
+        onError: (error, variables) => {
+            clientLogger.warn("Email verification failed", {
+                email: variables.email,
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
+export function useResendVerificationCode() {
+    return useMutation({
+        mutationFn: (email: string) =>
+            apiClient.post<void>("/auth/resend-code", { email }),
+        onError: (error) => {
+            clientLogger.warn("Resend verification code failed", {
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
 export function useLogin() {
+    const router = useRouter();
     const handleSuccessfulAuth = useHandleSuccessfulAuth();
 
     return useMutation({
@@ -99,6 +151,17 @@ export function useLogin() {
             handleSuccessfulAuth(data);
         },
         onError: (error, variables) => {
+            if (
+                error instanceof ApiError &&
+                error.payload.requiresEmailVerification === true
+            ) {
+                clientLogger.info("Login requires email verification", {
+                    email: variables.email,
+                });
+                storePendingVerificationEmail(variables.email);
+                router.push("/verify-email");
+                return;
+            }
             clientLogger.warn("Login failed", {
                 email: variables.email,
                 error: (error as Error).message,
