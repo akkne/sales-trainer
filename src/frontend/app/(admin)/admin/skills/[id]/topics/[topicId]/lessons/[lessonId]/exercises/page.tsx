@@ -57,8 +57,7 @@ function moveExercise(exercises: ExerciseRow[], from: number, to: number): Exerc
     const result = [...exercises];
     const [moved] = result.splice(from, 1);
     result.splice(to, 0, moved);
-    result.forEach((ex, i) => { ex.sortOrder = i + 1; });
-    return result;
+    return result.map((ex, i) => ({ ...ex, sortOrder: i + 1 }));
 }
 
 interface ExerciseRow {

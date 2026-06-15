@@ -40,10 +40,11 @@ export function OrderingEditor({ content, onChange }: Props) {
 
     function removeItem(index: number) {
         if (content.items.length <= 2) return;
-        const items = content.items.filter((_, i) => i !== index);
-        // Re-normalise positions to 1..n
-        const sorted = [...items].sort((a, b) => a.correct_position - b.correct_position);
-        sorted.forEach((it, i) => { it.correct_position = i + 1; });
+        // Drop the item, then re-normalise positions to 1..n immutably.
+        const items = content.items
+            .filter((_, i) => i !== index)
+            .sort((a, b) => a.correct_position - b.correct_position)
+            .map((it, i) => ({ ...it, correct_position: i + 1 }));
         onChange({ ...content, items });
     }
 

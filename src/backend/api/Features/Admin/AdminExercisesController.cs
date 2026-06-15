@@ -78,6 +78,9 @@ public sealed class AdminExercisesController(AppDbContext database, ILogger<Admi
         if (items is null || items.Count == 0)
             return BadRequest(new { message = "JSON must be a non-empty array of exercise objects." });
 
+        if (items.Count > 500)
+            return BadRequest(new { message = "Too many exercises in one import (max 500)." });
+
         var existing = await database.Exercises
             .Where(e => e.LessonId == lessonId)
             .ToListAsync();
