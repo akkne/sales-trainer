@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Exercises.Services;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Infrastructure.Data;
@@ -220,11 +221,19 @@ public sealed class AdminSeederController(AppDbContext database, ILogger<AdminSe
                             {
                                 var exerciseType = exerciseElement.GetProperty("type").GetString()?.Trim() ?? "";
                                 var orderInLesson = exerciseElement.GetProperty("orderInLesson").GetInt32();
-                                var contentJson = exerciseElement.GetProperty("content").GetRawText();
+                                var contentElement = exerciseElement.GetProperty("content");
                                 var customAiPrompt = exerciseElement.TryGetProperty("customAiPrompt", out var promptProp) && promptProp.ValueKind != JsonValueKind.Null
                                     ? promptProp.GetString()
                                     : null;
-                                UpsertExercise(lesson, exerciseType, orderInLesson, contentJson, customAiPrompt, allExercises, state);
+
+                                var contentErrors = ExerciseContentValidator.Validate(exerciseType, contentElement);
+                                if (contentErrors.Count > 0)
+                                {
+                                    state.Errors.Add($"Item {lessonIndex}, exercise {exerciseIndex} ({exerciseType}): {string.Join(" ", contentErrors)}");
+                                    continue;
+                                }
+
+                                UpsertExercise(lesson, exerciseType, orderInLesson, contentElement.GetRawText(), customAiPrompt, allExercises, state);
                             }
                             catch (Exception exception)
                             {

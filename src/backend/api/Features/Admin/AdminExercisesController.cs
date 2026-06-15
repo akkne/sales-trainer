@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Exercises.Services;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Infrastructure.Data;
 
@@ -36,6 +37,10 @@ public sealed class AdminExercisesController(AppDbContext database, ILogger<Admi
     public async Task<ActionResult<AdminExerciseDto>> Create(
         Guid lessonId, [FromBody] CreateExerciseRequestDto dto)
     {
+        var contentErrors = ExerciseContentValidator.Validate(dto.Type, dto.Content);
+        if (contentErrors.Count > 0)
+            return BadRequest(new { message = string.Join(" ", contentErrors) });
+
         var lessonExists = await database.Lessons.AnyAsync(l => l.Id == lessonId);
         if (!lessonExists) return NotFound();
 
@@ -90,6 +95,13 @@ public sealed class AdminExercisesController(AppDbContext database, ILogger<Admi
                 if (string.IsNullOrWhiteSpace(item.Type))
                     throw new InvalidOperationException("type is empty.");
 
+                var contentErrors = ExerciseContentValidator.Validate(item.Type, item.Content);
+                if (contentErrors.Count > 0)
+                {
+                    errors.Add($"Item {index + 1} ({item.Type}): {string.Join(" ", contentErrors)}");
+                    continue;
+                }
+
                 var match = existing.FirstOrDefault(e => e.OrderInLesson == item.OrderInLesson);
                 if (match is not null)
                 {
@@ -136,6 +148,10 @@ public sealed class AdminExercisesController(AppDbContext database, ILogger<Admi
     public async Task<ActionResult<AdminExerciseDto>> Update(
         Guid id, [FromBody] CreateExerciseRequestDto dto)
     {
+        var contentErrors = ExerciseContentValidator.Validate(dto.Type, dto.Content);
+        if (contentErrors.Count > 0)
+            return BadRequest(new { message = string.Join(" ", contentErrors) });
+
         var exercise = await database.Exercises.FindAsync(id);
         if (exercise is null) return NotFound();
 
