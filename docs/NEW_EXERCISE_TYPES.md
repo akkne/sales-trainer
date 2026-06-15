@@ -1,6 +1,8 @@
 # Exercise Types — Reference
 
 > This document describes all 10 exercise types in the SalesTrainer platform.
+> For the content model (Skill → Topic → Lesson → Exercise), admin/seeder API, and
+> progress rules, see [SKILLS_AND_EXERCISES.md](SKILLS_AND_EXERCISES.md).
 
 ## Overview
 
@@ -349,17 +351,44 @@ User writes free-form response to prompt. AI evaluates against criteria.
 
 ---
 
+## Scoring
+
+All types return `score` on a **0–100** scale. `isCorrect` rules differ:
+
+| Type | Scoring | `isCorrect` |
+|------|---------|-------------|
+| `choose_option`, `fill_blank`, `reorder` | Binary: 100 or 0 | score == 100 |
+| `match_pairs`, `categorize` | Partial: `(correct / total) × 100` | all items correct |
+| `spot_mistake` | 50 pts for the right line + 0–50 from AI on the explanation | score ≥ 75 |
+| `rewrite`, `free_text`, `evaluate_call` | AI: `score = rating × 10` | `passed \|\| rating ≥ 8` |
+| `ai_dialogue` | AI, but score 30 / fail if user turns < `max_turns / 2` | `passed \|\| rating ≥ 8` |
+
+> The config key `ExerciseEvaluation:PassingScoreThreshold` (default `7`) exists in
+> `appsettings.json` but is **not** used by the current evaluation logic — the AI
+> pass threshold is hardcoded as `rating >= 8` in `AiEvaluationStrategyBase`.
+
 ## AI Configuration
 
 For AI-powered types (6-10), prompts are configured at two levels:
 
-1. **Global Type Prompts** — stored in `ExerciseTypePrompts` table
-2. **Per-Exercise Prompts** — stored in `ai_prompt` field of exercise content
+1. **Global Type Prompts** — stored in the `ExerciseTypePrompts` table
+   (managed via `PUT admin/exercise-type-prompts/{exerciseType}`).
+2. **Per-Exercise Prompts** — the `ai_prompt` field inside the exercise content
+   JSON, or the `Exercise.CustomAiPrompt` column.
 
-Combined prompt = Global prompt + Per-exercise prompt
+Combined prompt = Global prompt + `Дополнительные критерии:` + per-exercise prompt
++ response-format instruction.
+
+### Model
+AI evaluation uses `OpenAI:OpenQuestionModel`:
+- **Production:** `gpt-4.1-nano`
+- **Development:** `gpt-4.1-mini`
+
+(The legacy `FreeTextModel` / `gpt-4o-mini` key is not used by the current
+evaluation path.)
 
 ### AI Response Format
-All AI-powered types return:
+All AI-powered types expect the model to return:
 ```json
 {
     "passed": true,
@@ -367,3 +396,5 @@ All AI-powered types return:
     "feedback": "Detailed feedback text..."
 }
 ```
+`rating` is 1–10 (defaults to 5 if missing); the platform computes
+`score = rating × 10`.
