@@ -112,8 +112,8 @@ export default function OnboardingPage() {
                             }}
                         />
                     ))}
-                    <span style={{ marginLeft: 12, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ink-3)" }}>
-                        0{step + 1} / 0{totalSteps}
+                    <span style={{ marginLeft: 12, fontFamily: "var(--f-sans)", fontSize: 12, color: "var(--ink-3)" }}>
+                        {step + 1} / {totalSteps}
                     </span>
                 </div>
                 <button
@@ -145,8 +145,8 @@ export default function OnboardingPage() {
                                 transition={{ duration: 0.25 }}
                             >
                                 <div style={{ textAlign: "center", marginBottom: 48 }}>
-                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
-                                        ШАГ 01 / 04
+                                    <div style={{ fontFamily: "var(--f-sans)", fontSize: 12, color: "var(--rust)", fontWeight: 600, letterSpacing: 1, marginBottom: 12 }}>
+                                        ШАГ 1 / 4
                                     </div>
                                     <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
                                         Кто вы в продажах?
@@ -203,8 +203,8 @@ export default function OnboardingPage() {
                                 transition={{ duration: 0.25 }}
                             >
                                 <div style={{ textAlign: "center", marginBottom: 48 }}>
-                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
-                                        ШАГ 02 / 04
+                                    <div style={{ fontFamily: "var(--f-sans)", fontSize: 12, color: "var(--rust)", fontWeight: 600, letterSpacing: 1, marginBottom: 12 }}>
+                                        ШАГ 2 / 4
                                     </div>
                                     <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
                                         Что вы продаёте?
@@ -248,8 +248,8 @@ export default function OnboardingPage() {
                                 transition={{ duration: 0.25 }}
                             >
                                 <div style={{ textAlign: "center", marginBottom: 48 }}>
-                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
-                                        ШАГ 03 / 04
+                                    <div style={{ fontFamily: "var(--f-sans)", fontSize: 12, color: "var(--rust)", fontWeight: 600, letterSpacing: 1, marginBottom: 12 }}>
+                                        ШАГ 3 / 4
                                     </div>
                                     <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
                                         Сколько лет в продажах?
@@ -296,8 +296,8 @@ export default function OnboardingPage() {
                                 transition={{ duration: 0.25 }}
                             >
                                 <div style={{ textAlign: "center", marginBottom: 48 }}>
-                                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--rust)", letterSpacing: 2, marginBottom: 12 }}>
-                                        ШАГ 04 / 04
+                                    <div style={{ fontFamily: "var(--f-sans)", fontSize: 12, color: "var(--rust)", fontWeight: 600, letterSpacing: 1, marginBottom: 12 }}>
+                                        ШАГ 4 / 4
                                     </div>
                                     <h1 style={{ fontSize: 48, margin: 0, letterSpacing: -1.5, fontWeight: 500, lineHeight: 1.05 }}>
                                         С чего начнём?
@@ -313,9 +313,14 @@ export default function OnboardingPage() {
                                             <div key={i} style={{ height: 80, borderRadius: 14, background: "var(--surface)", animation: "pulse 2s infinite" }} />
                                         ))}
                                     </div>
+                                ) : !allSkills || allSkills.length === 0 ? (
+                                    <p style={{ textAlign: "center", color: "var(--ink-3)", fontSize: 15, lineHeight: 1.5 }}>
+                                        Навыки пока не загрузились. Нажмите «Начать» — они появятся
+                                        в дереве навыков, и вы сможете выбрать их там.
+                                    </p>
                                 ) : (
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                                        {(allSkills ?? []).map((skill) => {
+                                        {allSkills.map((skill) => {
                                             const sel = selectedSlugs.has(skill.slug);
                                             const isDefault = skill.slug === DEFAULT_SKILL_SLUG;
                                             return (
