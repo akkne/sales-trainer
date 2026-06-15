@@ -29,6 +29,9 @@ services:
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Google__ClientId=${GOOGLE_CLIENT_ID}
+      - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
+      - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
+      - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}

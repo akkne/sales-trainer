@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
+using SalesTrainer.Api.Features.Auth.Exceptions;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Implementation;
 using SalesTrainer.Api.Infrastructure.Configuration;
@@ -14,6 +15,8 @@ namespace SalesTrainer.Tests.Unit;
 public class AuthenticationServiceTests
 {
     private AppDbContext _db = null!;
+    private RecordingEmailSender _emailSender = null!;
+    private EmailVerificationService _emailVerificationService = null!;
     private AuthenticationService _service = null!;
 
     [SetUp]
@@ -31,9 +34,18 @@ public class AuthenticationServiceTests
         {
             ClientId = "test-client-id"
         });
+        var emailVerificationOptions = Options.Create(new EmailVerificationConfiguration());
+
+        _emailSender = new RecordingEmailSender();
+        _emailVerificationService = new EmailVerificationService(
+            _db,
+            _emailSender,
+            emailVerificationOptions,
+            NullLogger<EmailVerificationService>.Instance);
 
         _service = new AuthenticationService(
             _db,
+            _emailVerificationService,
             jwtOptions,
             googleOptions,
             NullLogger<AuthenticationService>.Instance);
@@ -43,17 +55,43 @@ public class AuthenticationServiceTests
     public void TearDown() => _db.Dispose();
 
     [Test]
-    public async Task Register_NewEmail_CreatesUserReturnsTokenPair()
+    public async Task Register_NewEmail_CreatesUnverifiedUserAndSendsCode()
     {
-        var result = await _service.RegisterWithEmailAsync(
+        await _service.RegisterWithEmailAsync(
             "new@example.com", "Password123!", "New User");
+
+        var user = _db.Users.FirstOrDefault(u => u.Email == "new@example.com");
+        user.Should().NotBeNull();
+        user!.IsEmailVerified.Should().BeFalse();
+        _emailSender.GetLastCodeFor("new@example.com").Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task VerifyEmail_CorrectCode_MarksVerifiedAndReturnsTokenPair()
+    {
+        await _service.RegisterWithEmailAsync(
+            "verify@example.com", "Password123!", "Verify User");
+        var code = _emailSender.GetLastCodeFor("verify@example.com")!;
+
+        var result = await _service.VerifyEmailAsync("verify@example.com", code);
 
         result.Should().NotBeNull();
         result.AccessToken.Should().NotBeNullOrEmpty();
         result.RefreshToken.Should().NotBeNullOrEmpty();
 
-        var user = _db.Users.FirstOrDefault(u => u.Email == "new@example.com");
-        user.Should().NotBeNull();
+        var user = _db.Users.First(u => u.Email == "verify@example.com");
+        user.IsEmailVerified.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task VerifyEmail_WrongCode_ThrowsUnauthorizedAccessException()
+    {
+        await _service.RegisterWithEmailAsync(
+            "wrongcode@example.com", "Password123!", "Wrong Code User");
+
+        var act = async () => await _service.VerifyEmailAsync("wrongcode@example.com", "000000");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
     [Test]
@@ -94,7 +132,8 @@ public class AuthenticationServiceTests
             Email = "login@example.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!"),
             DisplayName = "Login User",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = true
         });
         await _db.SaveChangesAsync();
 
@@ -103,6 +142,26 @@ public class AuthenticationServiceTests
         result.Should().NotBeNull();
         result.AccessToken.Should().NotBeNullOrEmpty();
         result.RefreshToken.Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task Login_UnverifiedEmail_ThrowsEmailNotVerifiedException()
+    {
+        await _db.Users.AddAsync(new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "unverified@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!"),
+            DisplayName = "Unverified User",
+            CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = false
+        });
+        await _db.SaveChangesAsync();
+
+        var act = async () =>
+            await _service.LoginWithEmailAsync("unverified@example.com", "Password123!");
+
+        await act.Should().ThrowAsync<EmailNotVerifiedException>();
     }
 
     [Test]

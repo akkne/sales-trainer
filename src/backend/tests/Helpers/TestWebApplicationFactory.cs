@@ -4,12 +4,16 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SalesTrainer.Api.Features.Auth.Models;
+using SalesTrainer.Api.Infrastructure.Email.Abstract;
 
 namespace SalesTrainer.Tests.Helpers;
 
 public class TestWebApplicationFactory(string connectionString) : WebApplicationFactory<Program>
 {
+    public RecordingEmailSender EmailSender { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -44,6 +48,9 @@ public class TestWebApplicationFactory(string connectionString) : WebApplication
 
             services.AddHangfire(c => c.UseInMemoryStorage());
             services.AddHangfireServer();
+
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(EmailSender);
         });
     }
 

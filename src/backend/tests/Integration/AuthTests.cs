@@ -33,7 +33,7 @@ public class AuthTests
     }
 
     [Test]
-    public async Task Register_ValidCredentials_Returns200WithAccessToken()
+    public async Task Register_ValidCredentials_Returns200RequiringVerification()
     {
         var email = $"reg_{Guid.NewGuid()}@test.com";
 
@@ -46,8 +46,76 @@ public class AuthTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("requiresEmailVerification").GetBoolean().Should().BeTrue();
+        body.GetProperty("email").GetString().Should().Be(email);
+
+        var createdUser = _db.Users.First(user => user.Email == email);
+        createdUser.IsEmailVerified.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task VerifyEmail_WithCodeFromEmail_Returns200WithAccessToken()
+    {
+        var email = $"verify_{Guid.NewGuid()}@test.com";
+        await _client.PostAsJsonAsync("/auth/register", new
+        {
+            email,
+            password = "Password123!",
+            displayName = "Verify User"
+        });
+
+        var code = IntegrationTestSetup.Factory.EmailSender.GetLastCodeFor(email);
+        code.Should().NotBeNullOrEmpty();
+
+        var response = await _client.PostAsJsonAsync("/auth/verify-email", new { email, code });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         body.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();
-        body.GetProperty("role").GetString().Should().Be("User");
+    }
+
+    [Test]
+    public async Task VerifyEmail_WrongCode_Returns401()
+    {
+        var email = $"badcode_{Guid.NewGuid()}@test.com";
+        await _client.PostAsJsonAsync("/auth/register", new
+        {
+            email,
+            password = "Password123!",
+            displayName = "Bad Code User"
+        });
+
+        var response = await _client.PostAsJsonAsync("/auth/verify-email", new { email, code = "000001" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task Login_UnverifiedEmail_Returns403RequiringVerification()
+    {
+        var email = $"unver_{Guid.NewGuid()}@test.com";
+        await TestDbSeeder.SeedUserAsync(_db, email: email, isEmailVerified: false);
+
+        var response = await _client.PostAsJsonAsync("/auth/login", new
+        {
+            email,
+            password = "Password123!"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("requiresEmailVerification").GetBoolean().Should().BeTrue();
+    }
+
+    [Test]
+    public async Task ResendCode_UnknownEmail_Returns204WithoutEnumeration()
+    {
+        var response = await _client.PostAsJsonAsync("/auth/resend-code", new
+        {
+            email = $"ghost_{Guid.NewGuid()}@test.com"
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
     [Test]

@@ -52,6 +52,7 @@ public sealed class SuperAdminSeeder(
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = true,
             Role = UserRole.SuperAdmin
         });
 

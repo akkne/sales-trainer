@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SalesTrainer.Api.Features.Auth.Exceptions;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
@@ -47,23 +48,67 @@ public sealed class AuthController(
     }
 
     [HttpPost("register")]
-    public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(
+    public async Task<ActionResult<RegistrationResultDto>> RegisterWithEmail(
         [FromBody] RegisterRequestDto registerRequest,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var issuedTokenPair = await authenticationService.RegisterWithEmailAsync(
+            await authenticationService.RegisterWithEmailAsync(
                 registerRequest.Email,
                 registerRequest.Password,
                 registerRequest.DisplayName,
                 cancellationToken);
 
-            return OkWithRefreshTokenCookie(issuedTokenPair);
+            return Ok(new RegistrationResultDto(
+                Email: registerRequest.Email,
+                RequiresEmailVerification: true));
         }
         catch (InvalidOperationException exception)
         {
             return Conflict(new { message = exception.Message });
+        }
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<ActionResult<AuthTokenResponseDto>> VerifyEmail(
+        [FromBody] VerifyEmailRequestDto verifyEmailRequest,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var issuedTokenPair = await authenticationService.VerifyEmailAsync(
+                verifyEmailRequest.Email,
+                verifyEmailRequest.Code,
+                cancellationToken);
+
+            return OkWithRefreshTokenCookie(issuedTokenPair);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(new { message = exception.Message });
+        }
+    }
+
+    [HttpPost("resend-code")]
+    public async Task<IActionResult> ResendVerificationCode(
+        [FromBody] ResendVerificationCodeRequestDto resendRequest,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await authenticationService.ResendVerificationCodeAsync(
+                resendRequest.Email,
+                cancellationToken);
+
+            return NoContent();
+        }
+        catch (EmailVerificationCooldownException exception)
+        {
+            Response.Headers.RetryAfter = exception.RetryAfterSeconds.ToString();
+            return StatusCode(
+                StatusCodes.Status429TooManyRequests,
+                new { message = exception.Message, retryAfterSeconds = exception.RetryAfterSeconds });
         }
     }
 
@@ -80,6 +125,12 @@ public sealed class AuthController(
                 cancellationToken);
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
+        }
+        catch (EmailNotVerifiedException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { message = exception.Message, requiresEmailVerification = true, email = exception.Email });
         }
         catch (UnauthorizedAccessException exception)
         {

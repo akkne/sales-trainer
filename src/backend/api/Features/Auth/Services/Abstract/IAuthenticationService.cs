@@ -4,10 +4,19 @@ namespace SalesTrainer.Api.Features.Auth.Services.Abstract;
 
 public interface IAuthenticationService
 {
-    Task<IssuedTokenPair> RegisterWithEmailAsync(
+    Task RegisterWithEmailAsync(
         string email,
         string password,
         string displayName,
+        CancellationToken cancellationToken = default);
+
+    Task<IssuedTokenPair> VerifyEmailAsync(
+        string email,
+        string code,
+        CancellationToken cancellationToken = default);
+
+    Task ResendVerificationCodeAsync(
+        string email,
         CancellationToken cancellationToken = default);
 
     Task<IssuedTokenPair> LoginWithEmailAsync(

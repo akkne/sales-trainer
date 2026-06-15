@@ -12,6 +12,7 @@ using Prometheus;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Api.Infrastructure.Email;
 using SalesTrainer.Api.Infrastructure.Http;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
@@ -109,6 +110,7 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowCredentials()));
 
 builder.Services.AddAvatarStorage(builder.Configuration);
+builder.Services.AddEmailServices(builder.Configuration);
 
 builder.Services
     .AddAchievementFeatureServices()
@@ -183,6 +185,11 @@ RecurringJob.AddOrUpdate<NotificationCleanupJob>(
     "notification-cleanup",
     notificationCleanupJob => notificationCleanupJob.ExecuteAsync(),
     "30 0 * * *");
+
+RecurringJob.AddOrUpdate<ExpiredEmailVerificationCleanupJob>(
+    "expired-email-verification-cleanup",
+    expiredEmailVerificationCleanupJob => expiredEmailVerificationCleanupJob.ExecuteAsync(),
+    "45 0 * * *");
 
 using (var serviceScope = application.Services.CreateScope())
 {

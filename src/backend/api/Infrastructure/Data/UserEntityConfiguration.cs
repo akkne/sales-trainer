@@ -15,5 +15,7 @@ public class UserEntityConfiguration : IEntityTypeConfiguration<User>
             .HasDefaultValue(AvatarKind.Default);
         builder.Property(u => u.DefaultAvatarIndex)
             .HasDefaultValue(0);
+        builder.Property(u => u.IsEmailVerified)
+            .HasDefaultValue(false);
     }
 }

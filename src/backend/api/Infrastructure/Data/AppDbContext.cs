@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
     public DbSet<Skill> Skills => Set<Skill>();
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<UserSkillProgress> UserSkillProgressRecords => Set<UserSkillProgress>();

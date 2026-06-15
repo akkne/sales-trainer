@@ -14,7 +14,8 @@ public static class TestDbSeeder
         AppDbContext db,
         string email = "test@example.com",
         string displayName = "Test User",
-        UserRole role = UserRole.User)
+        UserRole role = UserRole.User,
+        bool isEmailVerified = true)
     {
         var user = new User
         {
@@ -23,6 +24,7 @@ public static class TestDbSeeder
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password123!"),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = isEmailVerified,
             Role = role
         };
         db.Users.Add(user);

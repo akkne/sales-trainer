@@ -13,8 +13,11 @@ public static class AuthenticationServiceCollectionExtensions
         services.Configure<JwtConfiguration>(configuration.GetSection(JwtConfiguration.SectionName));
         services.Configure<SuperAdminConfiguration>(configuration.GetSection(SuperAdminConfiguration.SectionName));
         services.Configure<GoogleAuthConfiguration>(configuration.GetSection(GoogleAuthConfiguration.SectionName));
+        services.Configure<EmailVerificationConfiguration>(configuration.GetSection(EmailVerificationConfiguration.SectionName));
         services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IEmailVerificationService, EmailVerificationService>();
         services.AddScoped<SuperAdminSeeder>();
+        services.AddScoped<ExpiredEmailVerificationCleanupJob>();
         return services;
     }
 }

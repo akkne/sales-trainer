@@ -6,6 +6,8 @@ using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using SalesTrainer.Api.Features.Auth.Constants;
+using SalesTrainer.Api.Features.Auth.Exceptions;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Abstract;
 using SalesTrainer.Api.Features.Avatars;
@@ -16,6 +18,7 @@ namespace SalesTrainer.Api.Features.Auth.Services.Implementation;
 
 internal sealed class AuthenticationService(
     AppDbContext databaseContext,
+    IEmailVerificationService emailVerificationService,
     IOptions<JwtConfiguration> jwtOptions,
     IOptions<GoogleAuthConfiguration> googleOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
@@ -23,7 +26,7 @@ internal sealed class AuthenticationService(
     private const int AccessTokenLifetimeMinutes = 15;
     private const int RefreshTokenLifetimeDays = 30;
 
-    public async Task<IssuedTokenPair> RegisterWithEmailAsync(
+    public async Task RegisterWithEmailAsync(
         string email,
         string password,
         string displayName,
@@ -49,14 +52,69 @@ internal sealed class AuthenticationService(
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = false,
             DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
         };
 
         databaseContext.Users.Add(newUser);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("User registered successfully {Email} UserId={UserId}", normalizedEmail, newUser.Id);
-        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false, cancellationToken);
+        await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, displayName, cancellationToken);
+
+        logger.LogInformation(
+            "User registered pending email verification {Email} UserId={UserId}", normalizedEmail, newUser.Id);
+    }
+
+    public async Task<IssuedTokenPair> VerifyEmailAsync(
+        string email,
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.ToLowerInvariant();
+
+        var user = await databaseContext.Users
+            .FirstOrDefaultAsync(userRecord => userRecord.Email == normalizedEmail, cancellationToken);
+
+        if (user is null)
+        {
+            logger.LogWarning("Email verification failed — unknown email {Email}", normalizedEmail);
+            throw new UnauthorizedAccessException(EmailVerificationConstants.InvalidCodeMessage);
+        }
+
+        var isCodeValid = await emailVerificationService.VerifyCodeAsync(normalizedEmail, code, cancellationToken);
+        if (!isCodeValid)
+            throw new UnauthorizedAccessException(EmailVerificationConstants.InvalidCodeMessage);
+
+        if (!user.IsEmailVerified)
+        {
+            user.IsEmailVerified = true;
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var isOnboardingCompleted = await databaseContext.UserProfiles
+            .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);
+
+        logger.LogInformation("Email verified {Email} UserId={UserId}", normalizedEmail, user.Id);
+        return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
+    }
+
+    public async Task ResendVerificationCodeAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = email.ToLowerInvariant();
+
+        var user = await databaseContext.Users
+            .FirstOrDefaultAsync(userRecord => userRecord.Email == normalizedEmail, cancellationToken);
+
+        if (user is null || user.IsEmailVerified)
+        {
+            logger.LogInformation(
+                "Resend verification code ignored for {Email} (unknown or already verified)", normalizedEmail);
+            return;
+        }
+
+        await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, user.DisplayName, cancellationToken);
     }
 
     public async Task<IssuedTokenPair> LoginWithEmailAsync(
@@ -75,6 +133,12 @@ internal sealed class AuthenticationService(
         {
             logger.LogWarning("Login failed — invalid credentials {Email}", normalizedEmail);
             throw new UnauthorizedAccessException("Invalid email or password.");
+        }
+
+        if (!user.IsEmailVerified)
+        {
+            logger.LogWarning("Login blocked — email not verified {Email}", normalizedEmail);
+            throw new EmailNotVerifiedException(normalizedEmail);
         }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
@@ -116,6 +180,7 @@ internal sealed class AuthenticationService(
                 DisplayName = googlePayload.Name,
                 GoogleId = googlePayload.Subject,
                 CreatedAt = DateTime.UtcNow,
+                IsEmailVerified = true,
                 DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
             };
             databaseContext.Users.Add(existingUser);
@@ -125,6 +190,7 @@ internal sealed class AuthenticationService(
         else if (existingUser.GoogleId is null)
         {
             existingUser.GoogleId = googlePayload.Subject;
+            existingUser.IsEmailVerified = true;
             await databaseContext.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Linked Google account to existing user {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
