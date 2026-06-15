@@ -38,7 +38,7 @@ services:
   frontend:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`sellevate.site`) || Host(`www.sellevate.site`)"
+      - "traefik.http.routers.frontend.rule=Host(`sellevate.site`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=le"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
