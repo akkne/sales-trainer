@@ -16,7 +16,7 @@ This keeps each service self-contained for a future microservice split.
 
 | File | Committed | Purpose |
 |------|-----------|---------|
-| `.env` | no | All secrets: DB credentials, JWT key, API keys (OpenAI, Deepgram, Yandex TTS), Google client id, superadmin, Grafana admin |
+| `.env` | no | All secrets: DB credentials, JWT key, API keys (OpenAI, Deepgram, Yandex TTS, MailerSend), Google client id, superadmin, Grafana admin |
 | `.env.example` | yes | Template for `.env` with placeholders |
 | `src/backend/api/appsettings.json` | yes | All backend config: docker-network hostnames (mongo, redis, loki), models, voice settings, limits. Secrets = `INJECTED_FROM_ENV` |
 | `src/backend/api/appsettings.Development.json` | no (mounted by compose) | Dev-only overrides (provider base URLs, models) |
@@ -49,7 +49,12 @@ Double underscore maps to a section: `YandexTts__ApiKey` → `YandexTts:ApiKey`.
 | `OPENAI_API_KEY/BASE_URL/CHAT_COMPLETIONS_PATH` | backend | `OpenAI:*` |
 | `DEEPGRAM_API_KEY` | backend | `Deepgram:ApiKey` |
 | `YANDEX_TTS_API_KEY` | backend | `YandexTts:ApiKey` |
+| `MAILERSEND_API_TOKEN/FROM_EMAIL/FROM_NAME` | backend | `MailerSend:*` |
 | `GRAFANA_ADMIN_USER/PASSWORD` | grafana | `GF_SECURITY_ADMIN_*` |
+
+Non-secret email-verification tuning (`EmailVerification:CodeLength`, `CodeLifetimeMinutes`,
+`MaximumVerificationAttempts`, `ResendCooldownSeconds`) lives in `appsettings.json`. See
+[EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md) and [INTEGRATIONS.md](INTEGRATIONS.md#mailersend-transactional-email).
 
 ## Yandex TTS key
 

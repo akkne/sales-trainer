@@ -1,5 +1,40 @@
 # External Integrations
 
+## MailerSend (transactional email)
+
+Used to deliver the registration verification code — see
+[EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md). MailerSend is EU-hosted, with a free tier
+sufficient for low-volume verification email.
+
+Transport is `Infrastructure/Email/Implementation/MailerSendEmailSender.cs` (implements
+`IEmailSender`), which POSTs to `{BaseUrl}/v1/email` (`https://api.mailersend.com`) with a
+Bearer API token. The `from` address must belong to a domain verified in MailerSend.
+
+### Setup
+
+1. Create an account at https://app.mailersend.com and add your domain.
+2. Configure the DNS records MailerSend shows (SPF, DKIM, and a Return-Path/DMARC record) at
+   your domain registrar, and wait for verification — this is what lets mail be sent from
+   `noreply@yourdomain`.
+3. Create an API token (Domains → your domain → API tokens) and set the env vars below.
+
+### Local development
+
+When `MAILERSEND_API_TOKEN` is left at its placeholder, `MailerSendEmailSender` **skips the
+HTTP call and logs the message** (including the code) at Warning level, so registration is
+testable locally without an account.
+
+### Environment Variables
+
+| Variable | Maps to | Description |
+|----------|---------|-------------|
+| `MAILERSEND_API_TOKEN` | `MailerSend:ApiToken` | API token (secret) |
+| `MAILERSEND_FROM_EMAIL` | `MailerSend:FromEmail` | Sender address on a verified domain |
+| `MAILERSEND_FROM_NAME` | `MailerSend:FromName` | Sender display name (defaults to `Sellevate`) |
+
+Non-secret tuning (`EmailVerification:*` — code length, lifetime, max attempts, resend
+cooldown) lives in `appsettings.json`. See [CONFIGURATION.md](CONFIGURATION.md).
+
 ## MinIO / S3 Object Storage
 
 Used for storing user avatar images and Discuss photo attachments (and any future binary assets).

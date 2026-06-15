@@ -4,6 +4,41 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-06-15 — Email verification by code
+
+### MailerSend as the email provider
+
+- **Decision:** Send the verification email through MailerSend.
+- **Why:** EU-hosted (matches the European server), free tier covers low-volume verification
+  mail, simple Bearer-token HTTP API, supports sending from a custom verified domain.
+- **Alternatives:** Brevo (also EU/free), Amazon SES (cheapest at scale, more setup),
+  self-hosted SMTP (rejected — new-IP deliverability is poor). The `IEmailSender` abstraction
+  keeps the provider swappable.
+
+### Store codes in Postgres, not Redis
+
+- **Decision:** Persist `EmailVerificationCodes` in Postgres via EF, despite Redis being wired up.
+- **Why:** Redis is registered but otherwise unused, with no established pattern; the codebase is
+  EF-centric and the integration-test harness runs a real Postgres but only a stub Redis. Postgres
+  gives a testable, well-trodden path plus expiry/attempt columns and a Hangfire cleanup job.
+- **Trade-off:** Codes need a periodic cleanup job (added) instead of Redis TTL auto-expiry.
+
+### Hash codes; one active code per email
+
+- **Decision:** Store only the SHA-256 hash of the code, replace any prior code on each request,
+  cap attempts, and rate-limit resends.
+- **Why:** Limits blast radius of a DB read, and the attempt cap + short TTL make a 6-digit code
+  safe against brute force. BCrypt was considered overkill for a short-lived single-use OTP.
+
+### Register no longer returns tokens
+
+- **Decision:** `/auth/register` returns `RegistrationResultDto` (verification required) instead of
+  an `AuthTokenResponseDto`; tokens are issued by `/auth/verify-email`.
+- **Why:** Tokens must not be granted before the address is proven. Google sign-in stays
+  auto-verified. Existing users are grandfathered verified by the migration.
+
+---
+
 ## 2026-06-12 — Discuss photo attachments
 
 ### Single polymorphic `DiscussPhotos` table

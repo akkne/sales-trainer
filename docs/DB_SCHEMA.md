@@ -31,7 +31,27 @@ All tables managed by EF Core migrations (`Infrastructure/Data/Migrations/`).
 | `AvatarType`          | `integer`                   | NOT NULL | 0=Default, 1=Uploaded (default 0)  |
 | `AvatarKey`           | `text`                      | NULL     | S3 object key for uploaded avatar; NULL when using a default |
 | `DefaultAvatarIndex`  | `integer`                   | NOT NULL | Index into `DefaultAvatars` catalog (default 0) |
+| `IsEmailVerified`     | `boolean`                   | NOT NULL | Email confirmed via code (default false; existing rows backfilled true; Google accounts auto-true) |
 | `CreatedAt`           | `timestamp with time zone`  | NOT NULL |                                    |
+
+---
+
+### `EmailVerificationCodes`
+
+Short-lived registration verification codes. One active row per email (a new request replaces
+the old). Only the code hash is stored. See [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
+
+| Column         | Type                       | Nullable | Notes                              |
+|----------------|----------------------------|----------|------------------------------------|
+| `Id`           | `uuid`                     | NOT NULL | PK                                 |
+| `Email`        | `text`                     | NOT NULL | Normalized lowercase               |
+| `CodeHash`     | `text`                     | NOT NULL | SHA-256 hex of the numeric code    |
+| `ExpiresAt`    | `timestamp with time zone` | NOT NULL | Default 10 min after creation      |
+| `AttemptCount` | `integer`                  | NOT NULL | Wrong-try counter; invalidated at the configured max |
+| `CreatedAt`    | `timestamp with time zone` | NOT NULL | Drives the resend cooldown         |
+
+Indexes: `IX_EmailVerificationCodes_Email`. Expired rows are purged by the daily Hangfire job
+`expired-email-verification-cleanup`.
 
 ---
 

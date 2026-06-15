@@ -34,6 +34,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 | [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
+| [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 
 ## Testing
 
@@ -42,6 +43,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | Document | Scope |
 |----------|-------|
 | [CORE.md](TESTING/CORE.md) | Test strategy, tooling, how to run |
+| [EMAIL_VERIFICATION.md](TESTING/EMAIL_VERIFICATION.md) | Registration code flow: unit, integration, manual checklist |
 | [BACKEND_UNIT.md](TESTING/BACKEND_UNIT.md) | Unit test roadmap |
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
 | [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |

@@ -10,14 +10,26 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /auth/register | `{email, password, displayName}` | `AuthTokenResponseDto` + cookie `refreshToken` |
+| POST | /auth/register | `{email, password, displayName}` | `RegistrationResultDto` (no tokens) |
+| POST | /auth/verify-email | `{email, code}` | `AuthTokenResponseDto` + cookie `refreshToken` |
+| POST | /auth/resend-code | `{email}` | 204 |
 | POST | /auth/login | `{email, password}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/google | `{idToken}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/refresh `[public]` | — (reads cookie) | `AuthTokenResponseDto` + new cookie |
 | POST | /auth/logout | — | 204 |
 | POST | /demo/token `[public]` | — | `{accessToken, expiresInSeconds}` |
 
-`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted}`
+`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role}`
+`RegistrationResultDto`: `{email, requiresEmailVerification}`
+
+**Email verification flow.** `/auth/register` creates an unverified user and emails a
+short-lived numeric code (MailerSend); it returns `RegistrationResultDto` instead of tokens.
+The client then calls `/auth/verify-email` with the code to receive tokens. `/auth/resend-code`
+re-issues a code (silent 204 for unknown/already-verified emails to avoid account enumeration;
+`429` with `Retry-After` + `{retryAfterSeconds}` while a resend cooldown is active).
+`/auth/verify-email` returns `401` on an invalid/expired/exhausted code.
+`/auth/login` returns `403 {message, requiresEmailVerification: true, email}` when the address
+is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
 
 ---
 
