@@ -23,6 +23,9 @@ src/SalesTrainer.Tests/obj/
 .env.local
 .env.*.local
 
+# Personal server deployment runbook (may contain IPs / notes / secrets) — local only
+SERVER_SETUP.md
+
 # ASP.NET environment-specific settings (may contain secrets)
 appsettings.*.json
 # Committed template for the Testing config

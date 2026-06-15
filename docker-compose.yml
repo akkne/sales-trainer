@@ -5,8 +5,10 @@ services:
       args:
         - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     pull_policy: build
+    # Bound to localhost only: Traefik reaches the container over the docker network.
+    # Docker bypasses UFW, so publishing to 0.0.0.0 would expose it to the internet.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - ./src/frontend/.env.production
     depends_on:
@@ -16,8 +18,9 @@ services:
   backend:
     build: ./src/backend/api
     pull_policy: build
+    # Bound to localhost only: Traefik proxies api.<domain> to this over the docker network.
     ports:
-      - "5001:8080"
+      - "127.0.0.1:5001:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       # Secrets interpolated from the root .env; everything else lives in appsettings*.json
@@ -55,9 +58,10 @@ services:
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
+    # Localhost only — object storage must not be reachable from the internet.
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -77,8 +81,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Localhost only — never expose the database to the internet.
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -89,20 +94,23 @@ services:
     image: mongo:8
     volumes:
       - mongo_data:/data/db
+    # Localhost only — never expose MongoDB to the internet.
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
+    # Localhost only — never expose Redis to the internet.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   loki:
     image: grafana/loki:3.4.2
+    # Localhost only — logs ingest stays internal.
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./infrastructure/loki:/etc/loki
       - loki_data:/loki
@@ -110,8 +118,9 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.2.1
+    # Localhost only — metrics stay internal.
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./infrastructure/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -124,8 +133,9 @@ services:
 
   grafana:
     image: grafana/grafana:11.6.0
+    # Localhost only — reach Grafana via SSH tunnel, or add a Traefik route if you want it public.
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     volumes:
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
       - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards

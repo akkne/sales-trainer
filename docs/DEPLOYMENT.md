@@ -1,9 +1,34 @@
 # Deployment
 
-Production runs as a **hybrid**:
+There are two supported shapes:
 
-- **Frontend (Next.js)** → **Vercel** — `https://sellevate.vercel.app`
-- **Backend (.NET API) + infra (Postgres, Mongo, Redis, MinIO, Loki, Prometheus, Grafana)** → **Docker Compose** on a host with a public HTTPS address.
+- **Option A — all-in-one server (current production).** Everything (frontend + backend + infra) runs via Docker Compose on a single EU cloud server behind Traefik with automatic HTTPS. See below.
+- **Option B — hybrid.** Frontend on Vercel, backend + infra via Docker Compose elsewhere.
+
+> EU server is required: the backend calls OpenAI and Deepgram, which block Russian IPs. The production server runs in Amsterdam (Timeweb), Ubuntu 24.04.
+
+---
+
+## Option A — all-in-one server with Traefik + auto HTTPS
+
+Files:
+- `docker-compose.yml` — base stack. All infra host ports are bound to `127.0.0.1` (Docker bypasses UFW, so they must not publish to `0.0.0.0`).
+- `docker-compose.prod.yml` — overlay that adds **Traefik** (reverse proxy) and routes `sellevate.site` → frontend, `api.sellevate.site` → backend, issuing Let's Encrypt certs automatically.
+
+Launch:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+Requirements in root `.env`: `ACME_EMAIL`, `FRONTEND_URL=https://sellevate.site,http://localhost:3000`, plus all secrets. The frontend build also needs `src/frontend/.env.production` → `NEXT_PUBLIC_API_URL=https://api.sellevate.site`.
+
+DNS: A records for `sellevate.site` and `*.sellevate.site` → server IP; firewall open on 80/443.
+
+> The full step-by-step server provisioning checklist (user, UFW, swap, Docker, build, verify) lives in the **gitignored `SERVER_SETUP.md`** at the repo root — it may contain the server IP and personal notes, so it is not committed.
+
+---
+
+## Option B — hybrid (frontend on Vercel)
 
 Vercel cannot host the .NET server or the stateful infra, so only the frontend lives there. The Vercel frontend talks to the backend over the public API URL, and the backend whitelists the Vercel origin via CORS.
 
