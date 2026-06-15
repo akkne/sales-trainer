@@ -136,7 +136,7 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 
 ### 6.1 Landing `/` — `app/page.tsx`
 - Header: wordmark + login link.
-- Hero: 🚀 emoji, title "Прокачай продажи за 5 минут в день" (accent phrase in rust), subtitle, two CTAs — primary dark "Начать бесплатно" (→ register) and outlined "Попробовать без регистрации" (demo login).
+- Hero: 🚀 emoji, title "Прокачай продажи за 5 минут в день" (accent phrase in rust), subtitle, single CTA — primary dark "Начать бесплатно" (→ register).
 - 4 feature cards (emoji + title + description): real scenarios, AI grading, streaks/leagues, guidebook.
 
 ### 6.2 Login / Register `(auth)/login`, `(auth)/register`

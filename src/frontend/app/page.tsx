@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuthStore } from "@/shared/stores/auth-store";
-import { apiClient } from "@/shared/api/api-client";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
 import { Wordmark } from "@/shared/components/wordmark";
@@ -45,31 +44,13 @@ const FEATURE_LIST: {
 
 export default function LandingPage() {
     const router = useRouter();
-    const { accessToken, setAccessToken, setAuthenticatedUser } = useAuthStore();
+    const { accessToken } = useAuthStore();
 
     useEffect(() => {
         if (accessToken) {
             router.replace("/tree");
         }
     }, [accessToken, router]);
-
-    async function startDemoSession() {
-        const response = await apiClient.post<{
-            accessToken: string;
-            expiresInSeconds: number;
-        }>("/demo/token", {});
-
-        setAccessToken(response.accessToken);
-        setAuthenticatedUser({
-            id: "demo",
-            email: "demo@sallevate.app",
-            displayName: "Demo User",
-            isOnboardingCompleted: false,
-            role: "User",
-        });
-
-        router.push("/onboarding");
-    }
 
     return (
         <div className="landing">
@@ -114,10 +95,6 @@ export default function LandingPage() {
                         Начать бесплатно
                         <Icon name="arrow-right" size={18} />
                     </Link>
-                    <button onClick={startDemoSession} className="btn btn-outline btn-lg">
-                        <Icon name="play" size={18} />
-                        Попробовать без регистрации
-                    </button>
                 </div>
 
                 <div className="land-features">
