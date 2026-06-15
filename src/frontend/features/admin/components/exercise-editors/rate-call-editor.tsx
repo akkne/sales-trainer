@@ -1,89 +1,84 @@
 "use client";
 
-import { RateCallContent, inputCls, labelCls, textareaCls } from "./types";
+import { EvaluateCallContent, TranscriptLine, EvaluationAxis, inputCls, labelCls, textareaCls } from "./types";
 
 interface Props {
-    content: RateCallContent;
-    onChange: (c: RateCallContent) => void;
+    content: EvaluateCallContent;
+    onChange: (c: EvaluateCallContent) => void;
 }
 
-let nextCriteriaId = 100;
-
 export function RateCallEditor({ content, onChange }: Props) {
+    // --- Transcript ---
     function addTranscriptLine() {
         onChange({
             ...content,
-            transcript: [...content.transcript, { speaker: "", text: "" }]
+            transcript: [...content.transcript, { speaker: "seller", text: "" }],
         });
     }
 
-    function removeTranscriptLine(index: number) {
-        onChange({
-            ...content,
-            transcript: content.transcript.filter((_, i) => i !== index)
-        });
-    }
-
-    function updateTranscriptLine(index: number, field: "speaker" | "text", value: string) {
-        const transcript = [...content.transcript];
-        transcript[index] = { ...transcript[index], [field]: value };
+    function updateTranscriptSpeaker(index: number, speaker: string) {
+        const transcript = content.transcript.map((line, i) => i === index ? { ...line, speaker } : line);
         onChange({ ...content, transcript });
     }
 
-    function addCriteria() {
-        const id = String(nextCriteriaId++);
-        onChange({
-            ...content,
-            criteria: [...content.criteria, { id, name: "", description: "" }]
-        });
+    function updateTranscriptText(index: number, text: string) {
+        const transcript = content.transcript.map((line, i) => i === index ? { ...line, text } : line);
+        onChange({ ...content, transcript });
     }
 
-    function removeCriteria(index: number) {
-        onChange({
-            ...content,
-            criteria: content.criteria.filter((_, i) => i !== index)
-        });
+    function removeTranscriptLine(index: number) {
+        if (content.transcript.length <= 1) return;
+        onChange({ ...content, transcript: content.transcript.filter((_, i) => i !== index) });
     }
 
-    function updateCriteria(index: number, field: "name" | "description", value: string) {
-        const criteria = [...content.criteria];
-        criteria[index] = { ...criteria[index], [field]: value };
-        onChange({ ...content, criteria });
+    // --- Evaluation axes ---
+    function addAxis() {
+        onChange({ ...content, evaluation_axes: [...content.evaluation_axes, { name: "", description: "" }] });
+    }
+
+    function updateAxisName(index: number, name: string) {
+        const evaluation_axes = content.evaluation_axes.map((ax, i) => i === index ? { ...ax, name } : ax);
+        onChange({ ...content, evaluation_axes });
+    }
+
+    function updateAxisDescription(index: number, description: string) {
+        const evaluation_axes = content.evaluation_axes.map((ax, i) => i === index ? { ...ax, description } : ax);
+        onChange({ ...content, evaluation_axes });
+    }
+
+    function removeAxis(index: number) {
+        if (content.evaluation_axes.length <= 1) return;
+        onChange({ ...content, evaluation_axes: content.evaluation_axes.filter((_, i) => i !== index) });
     }
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-4">
+            {/* Transcript */}
             <div>
                 <div className="flex items-center justify-between mb-1">
-                    <span className={labelCls}>Call Transcript</span>
-                    <button
-                        type="button"
-                        onClick={addTranscriptLine}
-                        className="text-xs text-ink-3 hover:text-ink"
-                    >
+                    <span className={labelCls}>Transcript</span>
+                    <button type="button" onClick={addTranscriptLine} className="text-xs text-ink-3 hover:text-ink">
                         + Add line
                     </button>
                 </div>
-                {content.transcript.map((line, i) => (
+                {content.transcript.map((line: TranscriptLine, i: number) => (
                     <div key={i} className="flex items-center gap-2 mt-1">
-                        <input
-                            className="w-24 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
+                        <select
+                            className="border border-line rounded-md px-2 py-1.5 text-xs bg-surface focus:outline-none focus:ring-1 focus:ring-indigo/30 shrink-0"
                             value={line.speaker}
-                            onChange={(e) => updateTranscriptLine(i, "speaker", e.target.value)}
-                            placeholder="Speaker"
-                        />
+                            onChange={(e) => updateTranscriptSpeaker(i, e.target.value)}
+                        >
+                            <option value="seller">seller</option>
+                            <option value="client">client</option>
+                        </select>
                         <input
-                            className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
+                            className={`${inputCls} flex-1`}
                             value={line.text}
-                            onChange={(e) => updateTranscriptLine(i, "text", e.target.value)}
-                            placeholder="What they said..."
+                            onChange={(e) => updateTranscriptText(i, e.target.value)}
+                            placeholder="Line text…"
                         />
                         {content.transcript.length > 1 && (
-                            <button
-                                type="button"
-                                onClick={() => removeTranscriptLine(i)}
-                                className="text-xs text-bad hover:text-bad/80"
-                            >
+                            <button type="button" onClick={() => removeTranscriptLine(i)} className="text-xs text-bad shrink-0">
                                 ×
                             </button>
                         )}
@@ -91,51 +86,46 @@ export function RateCallEditor({ content, onChange }: Props) {
                 ))}
             </div>
 
+            {/* Evaluation axes */}
             <div>
                 <div className="flex items-center justify-between mb-1">
-                    <span className={labelCls}>Rating Criteria (user rates 1-5 on each)</span>
-                    <button
-                        type="button"
-                        onClick={addCriteria}
-                        className="text-xs text-ink-3 hover:text-ink"
-                    >
-                        + Add criterion
+                    <span className={labelCls}>Evaluation axes</span>
+                    <button type="button" onClick={addAxis} className="text-xs text-ink-3 hover:text-ink">
+                        + Add axis
                     </button>
                 </div>
-                {content.criteria.map((criterion, i) => (
-                    <div key={criterion.id} className="mt-2 p-2 bg-surface rounded">
-                        <div className="flex items-center gap-2">
-                            <input
-                                className="w-32 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
-                                value={criterion.name}
-                                onChange={(e) => updateCriteria(i, "name", e.target.value)}
-                                placeholder="Criterion name"
-                            />
-                            <input
-                                className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
-                                value={criterion.description}
-                                onChange={(e) => updateCriteria(i, "description", e.target.value)}
-                                placeholder="Description of what to evaluate"
-                            />
-                            {content.criteria.length > 1 && (
-                                <button
-                                    type="button"
-                                    onClick={() => removeCriteria(i)}
-                                    className="text-xs text-bad hover:text-bad/80"
-                                >
-                                    ×
-                                </button>
-                            )}
-                        </div>
+                {content.evaluation_axes.map((ax: EvaluationAxis, i: number) => (
+                    <div key={i} className="flex items-start gap-2 mt-1">
+                        <input
+                            className={inputCls}
+                            value={ax.name}
+                            onChange={(e) => updateAxisName(i, e.target.value)}
+                            placeholder="Axis name"
+                        />
+                        <input
+                            className={`${inputCls} flex-1`}
+                            value={ax.description}
+                            onChange={(e) => updateAxisDescription(i, e.target.value)}
+                            placeholder="What to assess…"
+                        />
+                        {content.evaluation_axes.length > 1 && (
+                            <button type="button" onClick={() => removeAxis(i)} className="text-xs text-bad mt-2 shrink-0">
+                                ×
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>
 
             <label className="block">
-                <span className={labelCls}>AI Evaluation Prompt</span>
-                <textarea rows={4} className={textareaCls} value={content.aiPrompt}
-                    onChange={(e) => onChange({ ...content, aiPrompt: e.target.value })}
-                    placeholder="Compare user ratings with the actual call quality. Provide feedback on rating accuracy..." />
+                <span className={labelCls}>Per-exercise AI prompt (optional addendum)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.ai_prompt ?? ""}
+                    onChange={(e) => onChange({ ...content, ai_prompt: e.target.value })}
+                    placeholder="Extra instructions appended to the global type prompt for AI grading…"
+                />
             </label>
         </div>
     );

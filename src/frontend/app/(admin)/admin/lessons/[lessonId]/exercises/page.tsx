@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { use } from "react";
 import Link from "next/link";
 import {
@@ -9,10 +9,10 @@ import {
     useDeleteExercise,
     useImportExercises,
     AdminExercise,
-    type ExercisesImportResult,
 } from "@/features/admin/hooks/use-admin";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { ImportPanel } from "@/features/admin/components/import-panel";
 
 import {
     EXERCISE_TYPES,
@@ -29,16 +29,9 @@ import {
     AiDialogueContent,
     EvaluateCallContent,
     FreeTextContent,
-    emptyChooseOption,
-    emptyFillBlank,
-    emptyReorder,
-    emptyMatchPairs,
-    emptyCategorize,
-    emptySpotMistake,
-    emptyRewrite,
-    emptyAiDialogue,
-    emptyEvaluateCall,
-    emptyFreeText,
+    emptyContentFor,
+    buildExerciseImportTemplate,
+    validateExerciseContent,
     inputCls,
     labelCls,
 } from "@/features/admin/components/exercise-editors";
@@ -54,7 +47,6 @@ import {
     RewriteBetterEditor,
     AiDialogEditor,
     RateCallEditor,
-    WrittenAnswerEditor,
 } from "@/features/admin/components/exercise-editors";
 
 function typeBadgeColor(): string {
@@ -74,22 +66,6 @@ interface ExerciseRow {
     type: ExerciseType;
     sortOrder: number;
     content: ExerciseContent;
-    customAiPrompt: string | null;
-}
-
-function getEmptyContent(type: ExerciseType): ExerciseContent {
-    switch (type) {
-        case "choose_option": return emptyChooseOption();
-        case "fill_blank": return emptyFillBlank();
-        case "reorder": return emptyReorder();
-        case "match_pairs": return emptyMatchPairs();
-        case "categorize": return emptyCategorize();
-        case "spot_mistake": return emptySpotMistake();
-        case "rewrite": return emptyRewrite();
-        case "ai_dialogue": return emptyAiDialogue();
-        case "evaluate_call": return emptyEvaluateCall();
-        case "free_text": return emptyFreeText();
-    }
 }
 
 function contentEditor(
@@ -122,32 +98,39 @@ function contentEditor(
 }
 
 function renderContentPreview(row: ExerciseRow): string {
-    const c = row.content;
+    const c = row.content as unknown as Record<string, unknown>;
     switch (row.type) {
         case "choose_option":
-            return (c as ChooseOptionContent).question || "(no question)";
+            return String(c.situation || "(no situation)").slice(0, 60);
         case "fill_blank":
-            return `${(c as FillBlankContent).characterName}: ${(c as FillBlankContent).characterLine}`;
+            return String(c.before || "(no before)").slice(0, 60);
         case "free_text":
-            return (c as FreeTextContent).prompt?.slice(0, 50) || "(no prompt)";
+            return String(c.instruction || "(no instruction)").slice(0, 60);
         case "reorder":
-            return (c as ReorderContent).instruction || "(no instruction)";
+            return String(c.instruction || "(no instruction)").slice(0, 60);
         case "match_pairs":
-            return (c as MatchPairsContent).instruction || "(no instruction)";
+            return String(c.instruction || "(no instruction)").slice(0, 60);
         case "categorize":
-            return (c as CategorizeContent).instruction || "(no instruction)";
-        case "spot_mistake":
-            return (c as SpotMistakeContent).instruction || "(no instruction)";
+            return String(c.instruction || "(no instruction)").slice(0, 60);
+        case "spot_mistake": {
+            const dialogue = c.dialogue as Array<{ speaker: string; text: string }> | undefined;
+            return dialogue ? `${dialogue.length} lines` : "(no dialogue)";
+        }
         case "rewrite":
-            return (c as RewriteContent).originalText?.slice(0, 50) || "(no text)";
+            return String(c.original || "(no original)").slice(0, 60);
         case "ai_dialogue":
-            return (c as AiDialogueContent).scenario?.slice(0, 50) || "(no scenario)";
-        case "evaluate_call":
-            return `${(c as EvaluateCallContent).transcript?.length || 0} lines, ${(c as EvaluateCallContent).criteria?.length || 0} criteria`;
+            return String(c.scenario || "(no scenario)").slice(0, 60);
+        case "evaluate_call": {
+            const transcript = c.transcript as unknown[] | undefined;
+            const axes = c.evaluation_axes as unknown[] | undefined;
+            return `${transcript?.length ?? 0} lines, ${axes?.length ?? 0} axes`;
+        }
         default:
             return "(preview)";
     }
 }
+
+const IMPORT_TEMPLATE = EXERCISE_TYPES.map((t, i) => buildExerciseImportTemplate(t, i + 1));
 
 export default function AdminLessonExercisesPage({
     params,
@@ -160,8 +143,6 @@ export default function AdminLessonExercisesPage({
     const createMut = useCreateExercise(lessonId);
     const deleteMut = useDeleteExercise(lessonId);
     const importMut = useImportExercises(lessonId);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [importResult, setImportResult] = useState<ExercisesImportResult | null>(null);
     const qc = useQueryClient();
     const updateExerciseMut = useMutation({
         mutationFn: ({ exerciseId, body }: { exerciseId: string; body: Omit<AdminExercise, "id" | "lessonId"> }) =>
@@ -172,13 +153,14 @@ export default function AdminLessonExercisesPage({
     });
 
     const [localRows, setLocalRows] = useState<ExerciseRow[] | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
     const rows: ExerciseRow[] = localRows ?? exercises.map((ex) => ({
         id: ex.id,
         type: ex.type as ExerciseType,
         sortOrder: ex.orderInLesson,
-        content: ex.content as unknown as ExerciseContent,
-        customAiPrompt: ex.customAiPrompt ?? null,
+        content: ex.content as unknown as ExerciseContent,  // server JSON → typed content
     }));
 
     function setRows(newRows: ExerciseRow[] | ((prev: ExerciseRow[]) => ExerciseRow[])) {
@@ -189,10 +171,16 @@ export default function AdminLessonExercisesPage({
         }
     }
 
-    const [editingId, setEditingId] = useState<string | null>(null);
     const cardCls = "bg-surface border border-line rounded-2xl p-4";
 
     async function saveExercise(row: ExerciseRow) {
+        const errors = validateExerciseContent(row.type, row.content);
+        if (errors.length > 0) {
+            setValidationErrors((prev) => ({ ...prev, [row.id ?? "__new__"]: errors }));
+            return;
+        }
+        setValidationErrors((prev) => { const next = { ...prev }; delete next[row.id ?? "__new__"]; return next; });
+
         if (row.id) {
             await updateExerciseMut.mutateAsync({
                 exerciseId: row.id,
@@ -200,7 +188,7 @@ export default function AdminLessonExercisesPage({
                     type: row.type,
                     orderInLesson: row.sortOrder,
                     content: row.content as unknown as Record<string, unknown>,
-                    customAiPrompt: row.customAiPrompt,
+                    customAiPrompt: null,
                 },
             });
         } else {
@@ -208,7 +196,7 @@ export default function AdminLessonExercisesPage({
                 type: row.type,
                 orderInLesson: row.sortOrder,
                 content: row.content as unknown as Record<string, unknown>,
-                customAiPrompt: row.customAiPrompt,
+                customAiPrompt: null,
             });
         }
         setEditingId(null);
@@ -219,8 +207,7 @@ export default function AdminLessonExercisesPage({
             id: null,
             type: "choose_option",
             sortOrder: rows.length + 1,
-            content: emptyChooseOption(),
-            customAiPrompt: null,
+            content: emptyContentFor("choose_option"),
         };
         setRows([...rows, newRow]);
         setEditingId("__new__");
@@ -230,20 +217,17 @@ export default function AdminLessonExercisesPage({
         if (!id) return;
         if (!confirm("Delete this exercise?")) return;
         setRows(rows.filter((r) => r.id !== id));
-        if (editingId === "__new__" && !id) setEditingId(null);
         deleteMut.mutate(id);
         if (editingId === id) setEditingId(null);
     }
 
     function exportExercises() {
-        // Dump all saved exercises as an import-ready JSON array (not a single object).
         const payload = [...exercises]
             .sort((a, b) => a.orderInLesson - b.orderInLesson)
             .map((ex) => ({
                 type: ex.type,
                 orderInLesson: ex.orderInLesson,
                 content: ex.content,
-                customAiPrompt: ex.customAiPrompt ?? null,
             }));
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
@@ -254,37 +238,12 @@ export default function AdminLessonExercisesPage({
         URL.revokeObjectURL(url);
     }
 
-    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setImportResult(null);
-        try {
-            const parsed = JSON.parse(await file.text());
-            if (!Array.isArray(parsed)) {
-                alert("JSON must be an array of exercise objects.");
-                return;
-            }
-            const result = await importMut.mutateAsync(parsed);
-            setImportResult(result);
-            setLocalRows(null);
-        } catch (err) {
-            alert(`Import failed: ${(err as Error).message}`);
-        }
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-
     const isLoadingMut = createMut.isPending || updateExerciseMut.isPending;
-
-    // AI-powered types that show custom prompt field
-    const aiPoweredTypes: ExerciseType[] = ["spot_mistake", "rewrite", "ai_dialogue", "evaluate_call", "free_text"];
 
     return (
         <div>
             <div className="mb-6">
-                <Link
-                    href="/admin/lessons"
-                    className="text-xs text-ink-3 hover:text-ink transition-colors"
-                >
+                <Link href="/admin/lessons" className="text-xs text-ink-3 hover:text-ink transition-colors">
                     ← Back to lessons
                 </Link>
             </div>
@@ -300,20 +259,6 @@ export default function AdminLessonExercisesPage({
                         Export JSON
                     </button>
                     <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={importMut.isPending}
-                        className="px-3 py-1.5 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
-                    >
-                        {importMut.isPending ? "Importing…" : "Import JSON"}
-                    </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".json"
-                        onChange={handleImport}
-                        className="hidden"
-                    />
-                    <button
                         onClick={addExercise}
                         className="px-3 py-1.5 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
                     >
@@ -322,31 +267,49 @@ export default function AdminLessonExercisesPage({
                 </div>
             </div>
 
-            {importResult && (
-                <div className="mb-4 p-3 bg-bg-2 rounded-md">
-                    <p className="text-xs text-ink">
-                        Imported — Created: <span className="font-medium">{importResult.exercisesCreated}</span> | Updated: <span className="font-medium">{importResult.exercisesUpdated}</span>
-                    </p>
-                    {importResult.errors.length > 0 && (
-                        <ul className="mt-1 text-xs text-bad font-mono max-h-32 overflow-y-auto">
-                            {importResult.errors.map((err, i) => <li key={i}>{err}</li>)}
-                        </ul>
-                    )}
-                </div>
-            )}
+            <ImportPanel
+                title="Import Exercises"
+                description="Paste a JSON array of exercise objects. Download the template to see all supported types."
+                templateData={IMPORT_TEMPLATE}
+                templateFilename="exercises_template.json"
+                validate={(parsed) => {
+                    if (!Array.isArray(parsed)) return ["JSON must be an array of exercise objects."];
+                    const errs: string[] = [];
+                    (parsed as Array<Record<string, unknown>>).forEach((item, idx) => {
+                        const type = item.type as ExerciseType;
+                        if (!EXERCISE_TYPES.includes(type)) {
+                            errs.push(`[${idx}] unknown type "${String(item.type)}"`);
+                            return;
+                        }
+                        const contentErrors = validateExerciseContent(type, item.content);
+                        contentErrors.forEach((e) => errs.push(`[${idx}] ${e}`));
+                    });
+                    return errs;
+                }}
+                onImport={async ({ parsed }) => {
+                    const result = await importMut.mutateAsync(parsed as Omit<AdminExercise, "id" | "lessonId">[]);
+                    setLocalRows(null);
+                    return {
+                        created: result.exercisesCreated,
+                        updated: result.exercisesUpdated,
+                        errors: result.errors,
+                    };
+                }}
+            />
 
             {rows.length === 0 && !isLoading && (
                 <p className="text-sm text-ink-3">No exercises yet. Click &quot;+ Add exercise&quot; to create one.</p>
             )}
-
             {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
 
             <div className="space-y-4">
                 {rows.map((row, index) => {
                     const isEditing = editingId === row.id || (editingId === "__new__" && row.id === null);
+                    const rowKey = row.id ?? "__new__";
+                    const rowErrors = validationErrors[rowKey] ?? [];
 
                     return (
-                        <div key={row.id ?? "__new__"} className={cardCls}>
+                        <div key={rowKey} className={cardCls}>
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                     <div className="flex flex-col gap-0.5">
@@ -355,43 +318,30 @@ export default function AdminLessonExercisesPage({
                                             onClick={() => setRows(moveExercise(rows, index, index - 1))}
                                             className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
                                             title="Move up"
-                                        >
-                                            ▲
-                                        </button>
+                                        >▲</button>
                                         <button
                                             disabled={index === rows.length - 1}
                                             onClick={() => setRows(moveExercise(rows, index, index + 1))}
                                             className="text-ink-3 hover:text-ink disabled:opacity-30 text-xs leading-none"
                                             title="Move down"
-                                        >
-                                            ▼
-                                        </button>
+                                        >▼</button>
                                     </div>
                                     <span className={`text-xs px-2 py-0.5 rounded font-mono ${typeBadgeColor()}`}>
                                         {TYPE_LABELS[row.type] ?? row.type}
                                     </span>
                                     <span className="text-xs text-ink-3">#{row.sortOrder}</span>
-                                    {row.customAiPrompt && (
-                                        <span className="text-xs px-1.5 py-0.5 bg-indigo-soft text-indigo rounded">
-                                            AI
-                                        </span>
-                                    )}
                                 </div>
                                 {!isEditing && (
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => setEditingId(row.id ?? "__new__")}
                                             className="text-xs text-ink-3 hover:text-ink transition-colors"
-                                        >
-                                            Edit
-                                        </button>
+                                        >Edit</button>
                                         {row.id && (
                                             <button
                                                 onClick={() => deleteRow(row.id)}
                                                 className="text-xs text-bad hover:text-bad transition-colors"
-                                            >
-                                                Delete
-                                            </button>
+                                            >Delete</button>
                                         )}
                                     </div>
                                 )}
@@ -407,9 +357,8 @@ export default function AdminLessonExercisesPage({
                                             onChange={(e) => {
                                                 const newType = e.target.value as ExerciseType;
                                                 setRows(rows.map((r, ri) => {
-                                                    if (ri !== index) return r;
-                                                    if (newType === r.type) return r;
-                                                    return { ...r, type: newType, content: getEmptyContent(newType) };
+                                                    if (ri !== index || newType === r.type) return r;
+                                                    return { ...r, type: newType, content: emptyContentFor(newType) };
                                                 }));
                                             }}
                                         >
@@ -423,26 +372,13 @@ export default function AdminLessonExercisesPage({
                                         setRows(rows.map((r, ri) => ri === index ? { ...r, content: newContent } : r));
                                     })}
 
-                                    {/* Custom AI Prompt */}
-                                    {aiPoweredTypes.includes(row.type) && (
-                                        <label className="block mt-4">
-                                            <span className={labelCls}>Custom AI Prompt (optional)</span>
-                                            <textarea
-                                                className={`${inputCls} font-mono`}
-                                                rows={3}
-                                                value={row.customAiPrompt ?? ""}
-                                                onChange={(e) => {
-                                                    setRows(rows.map((r, ri) => ri === index
-                                                        ? { ...r, customAiPrompt: e.target.value || null }
-                                                        : r
-                                                    ));
-                                                }}
-                                                placeholder="Additional evaluation criteria specific to this exercise..."
-                                            />
-                                            <span className="text-[10px] text-ink-3 mt-1 block">
-                                                This prompt is appended to the global type prompt for AI evaluation
-                                            </span>
-                                        </label>
+                                    {rowErrors.length > 0 && (
+                                        <div className="mt-3 p-3 bg-bad/10 rounded-md">
+                                            <p className="text-xs text-bad font-medium">Fix these errors before saving:</p>
+                                            <ul className="mt-1 text-xs text-bad font-mono list-disc pl-4">
+                                                {rowErrors.map((e, i) => <li key={i}>{e}</li>)}
+                                            </ul>
+                                        </div>
                                     )}
 
                                     <div className="flex gap-3 mt-4">
@@ -464,7 +400,6 @@ export default function AdminLessonExercisesPage({
                                                                 type: orig.type as ExerciseType,
                                                                 sortOrder: orig.orderInLesson,
                                                                 content: orig.content as unknown as ExerciseContent,
-                                                                customAiPrompt: orig.customAiPrompt ?? null,
                                                             }
                                                             : r
                                                         ));
@@ -472,23 +407,17 @@ export default function AdminLessonExercisesPage({
                                                     setEditingId(null);
                                                 }}
                                                 className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
-                                            >
-                                                Cancel
-                                            </button>
+                                            >Cancel</button>
                                         ) : (
                                             <button
                                                 onClick={() => setRows(rows.filter((r) => r.id !== null))}
                                                 className="px-4 py-2 text-sm text-ink-3 hover:text-ink transition-colors"
-                                            >
-                                                Remove
-                                            </button>
+                                            >Remove</button>
                                         )}
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-xs text-ink-3 font-mono">
-                                    {renderContentPreview(row)}
-                                </p>
+                                <p className="text-xs text-ink-3 font-mono">{renderContentPreview(row)}</p>
                             )}
                         </div>
                     );

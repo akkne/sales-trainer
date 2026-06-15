@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
     useAdminSkills,
@@ -9,35 +9,24 @@ import {
     useUpdateTopic,
     useDeleteTopic,
     useImportTopics,
-    type AdminSkill,
     type AdminTopicWithSkill,
-    type TopicsImportResult,
 } from "@/features/admin/hooks/use-admin";
+import { ImportPanel } from "@/features/admin/components/import-panel";
 
-const TOPICS_TEMPLATE = JSON.stringify([
+const TOPICS_TEMPLATE = [
     {
-        skillIconicName: "sales-basics",
-        iconicName: "introduction-to-sales",
-        title: "Introduction to Sales",
-        orderInSkill: 1
+        skillIconicName: "cold-calling",
+        iconicName: "intro-cold-call",
+        title: "Introduction to Cold Calling",
+        orderInSkill: 1,
     },
     {
-        skillIconicName: "sales-basics",
-        iconicName: "prospecting",
-        title: "Prospecting",
-        orderInSkill: 2
-    }
-], null, 2);
-
-function downloadTopicsTemplate() {
-    const blob = new Blob([TOPICS_TEMPLATE], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchorElement = document.createElement("a");
-    anchorElement.href = url;
-    anchorElement.download = "topics_template.json";
-    anchorElement.click();
-    URL.revokeObjectURL(url);
-}
+        skillIconicName: "cold-calling",
+        iconicName: "objection-basics",
+        title: "Basic Objection Handling",
+        orderInSkill: 2,
+    },
+];
 
 export default function AdminTopicsPage() {
     const { data: skills = [] } = useAdminSkills();
@@ -54,10 +43,6 @@ export default function AdminTopicsPage() {
     const [formIconicName, setFormIconicName] = useState("");
     const [formTitle, setFormTitle] = useState("");
     const [formOrder, setFormOrder] = useState(1);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [showImport, setShowImport] = useState(false);
-    const [importResult, setImportResult] = useState<TopicsImportResult | null>(null);
 
     // For creating topics under any skill
     const createTopicForSkill = useCreateTopic(formSkillIconicName || skills[0]?.iconicName || "");
@@ -145,83 +130,33 @@ export default function AdminTopicsPage() {
         setConfirmDeleteId(null);
     }
 
-    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const result = await importTopics.mutateAsync(file);
-            setImportResult(result);
-        } catch {
-            // Error handled by hook
-        }
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Topics</h1>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => { setShowImport(v => !v); setImportResult(null); }}
-                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
-                    >
-                        {showImport ? "Close Import" : "Import JSON"}
-                    </button>
-                    <button
-                        onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
-                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
-                    >
-                        {showForm ? "Cancel" : "+ New topic"}
-                    </button>
-                </div>
+                <button
+                    onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
+                    className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                >
+                    {showForm ? "Cancel" : "+ New topic"}
+                </button>
             </div>
 
-            {/* Import Section */}
-            {showImport && (
-                <div className="bg-surface border border-line rounded-2xl p-5 mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-medium text-ink">Import Topics from JSON</h2>
-                        <button
-                            onClick={downloadTopicsTemplate}
-                            className="text-xs text-ink-3 hover:text-ink transition-colors underline"
-                        >
-                            Download template
-                        </button>
-                    </div>
-                    <p className="text-xs text-ink-3 mb-3">
-                        JSON array with objects: <code className="bg-bg-2 px-1 rounded">{"{ skillIconicName, iconicName, title, orderInSkill }"}</code>
-                    </p>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".json"
-                        onChange={handleImport}
-                        className="block w-full text-sm text-ink-3 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-line file:text-sm file:bg-bg-2 file:text-ink hover:file:bg-surface-2 cursor-pointer"
-                    />
-                    {importTopics.isPending && (
-                        <p className="mt-3 text-xs text-ink-3">Importing...</p>
-                    )}
-                    {importTopics.isError && (
-                        <p className="mt-3 text-xs text-bad">{(importTopics.error as Error).message}</p>
-                    )}
-                    {importResult && (
-                        <div className="mt-3 p-3 bg-bg-2 rounded-md">
-                            <p className="text-xs text-ink">
-                                Created: <span className="font-medium">{importResult.topicsCreated}</span> | Updated: <span className="font-medium">{importResult.topicsUpdated}</span>
-                            </p>
-                            {importResult.errors.length > 0 && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-bad font-medium">{importResult.errors.length} error(s):</p>
-                                    <ul className="mt-1 text-xs text-bad font-mono">
-                                        {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+            <ImportPanel
+                title="Import Topics"
+                description='JSON array: [{ skillIconicName, iconicName, title, orderInSkill }]'
+                templateData={TOPICS_TEMPLATE}
+                templateFilename="topics_template.json"
+                onImport={async ({ text }) => {
+                    const file = new File([text], "import.json", { type: "application/json" });
+                    const result = await importTopics.mutateAsync(file);
+                    return {
+                        created: result.topicsCreated,
+                        updated: result.topicsUpdated,
+                        errors: result.errors,
+                    };
+                }}
+            />
 
             {/* Create Form */}
             {showForm && (

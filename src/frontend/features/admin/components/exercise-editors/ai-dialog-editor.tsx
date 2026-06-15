@@ -1,80 +1,102 @@
 "use client";
 
-import { AiDialogContent, inputCls, labelCls, textareaCls } from "./types";
+import { AiDialogueContent, inputCls, labelCls, textareaCls } from "./types";
 
 interface Props {
-    content: AiDialogContent;
-    onChange: (c: AiDialogContent) => void;
+    content: AiDialogueContent;
+    onChange: (c: AiDialogueContent) => void;
 }
 
 export function AiDialogEditor({ content, onChange }: Props) {
-    function updatePersona(field: keyof AiDialogContent["persona"], value: string) {
-        onChange({
-            ...content,
-            persona: { ...content.persona, [field]: value }
-        });
+    const criteria = content.success_criteria ?? [];
+
+    function addCriterion() {
+        onChange({ ...content, success_criteria: [...criteria, ""] });
+    }
+
+    function updateCriterion(index: number, value: string) {
+        onChange({ ...content, success_criteria: criteria.map((c, i) => i === index ? value : c) });
+    }
+
+    function removeCriterion(index: number) {
+        onChange({ ...content, success_criteria: criteria.filter((_, i) => i !== index) });
     }
 
     return (
         <div className="space-y-3">
             <label className="block">
-                <span className={labelCls}>Scenario Description</span>
-                <textarea rows={2} className={inputCls} value={content.scenario}
-                    onChange={(e) => onChange({ ...content, scenario: e.target.value })}
-                    placeholder="You are calling a potential B2B client about your SaaS product..." />
+                <span className={labelCls}>Persona (AI character description)</span>
+                <textarea
+                    rows={3}
+                    className={textareaCls}
+                    value={content.persona}
+                    onChange={(e) => onChange({ ...content, persona: e.target.value })}
+                    placeholder="Sceptical IT director, responds briefly and is in a hurry…"
+                />
             </label>
 
-            <div className="p-3 bg-surface rounded-md">
-                <span className={labelCls + " block mb-2"}>AI Persona</span>
-                <div className="grid grid-cols-3 gap-2">
-                    <label className="block">
-                        <span className="text-[10px] text-ink-3">Name</span>
-                        <input className={inputCls} value={content.persona.name}
-                            onChange={(e) => updatePersona("name", e.target.value)}
-                            placeholder="Sarah" />
-                    </label>
-                    <label className="block">
-                        <span className="text-[10px] text-ink-3">Role</span>
-                        <input className={inputCls} value={content.persona.role}
-                            onChange={(e) => updatePersona("role", e.target.value)}
-                            placeholder="IT Manager" />
-                    </label>
-                    <label className="block">
-                        <span className="text-[10px] text-ink-3">Personality</span>
-                        <input className={inputCls} value={content.persona.personality}
-                            onChange={(e) => updatePersona("personality", e.target.value)}
-                            placeholder="Skeptical but fair" />
-                    </label>
+            <label className="block">
+                <span className={labelCls}>Scenario</span>
+                <input
+                    className={inputCls}
+                    value={content.scenario}
+                    onChange={(e) => onChange({ ...content, scenario: e.target.value })}
+                    placeholder="Discovery call with an IT director"
+                />
+            </label>
+
+            <label className="block">
+                <span className={labelCls}>Context (optional background)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.context ?? ""}
+                    onChange={(e) => onChange({ ...content, context: e.target.value })}
+                />
+            </label>
+
+            <label className="block">
+                <span className={labelCls}>Max turns</span>
+                <input
+                    type="number"
+                    min={1}
+                    className={inputCls}
+                    value={content.max_turns ?? 6}
+                    onChange={(e) => onChange({ ...content, max_turns: Number(e.target.value) || 6 })}
+                />
+            </label>
+
+            <div>
+                <div className="flex items-center justify-between mb-1">
+                    <span className={labelCls}>Success criteria</span>
+                    <button type="button" onClick={addCriterion} className="text-xs text-ink-3 hover:text-ink">
+                        + Add criterion
+                    </button>
                 </div>
+                {criteria.map((crit: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 mt-1">
+                        <input
+                            className={inputCls}
+                            value={crit}
+                            onChange={(e) => updateCriterion(i, e.target.value)}
+                            placeholder={`Criterion ${i + 1}`}
+                        />
+                        <button type="button" onClick={() => removeCriterion(i)} className="text-xs text-bad shrink-0">
+                            ×
+                        </button>
+                    </div>
+                ))}
             </div>
 
             <label className="block">
-                <span className={labelCls}>System Prompt (AI instructions)</span>
-                <textarea rows={6} className={textareaCls} value={content.systemPrompt}
-                    onChange={(e) => onChange({ ...content, systemPrompt: e.target.value })}
-                    placeholder="You are Sarah, an IT Manager at a mid-size company. You are skeptical of sales calls but will engage if the salesperson shows genuine understanding of your challenges..." />
-            </label>
-
-            <label className="block">
-                <span className={labelCls}>Min Turns for Completion</span>
-                <input
-                    type="number"
-                    className={inputCls + " w-24"}
-                    value={content.minTurnsForCompletion}
-                    onChange={(e) => onChange({ ...content, minTurnsForCompletion: parseInt(e.target.value) || 4 })}
-                    min={1}
-                    max={20}
+                <span className={labelCls}>Per-exercise AI prompt (optional addendum)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.ai_prompt ?? ""}
+                    onChange={(e) => onChange({ ...content, ai_prompt: e.target.value })}
+                    placeholder="Extra instructions appended to the global type prompt for AI grading…"
                 />
-                <span className="text-[10px] text-ink-3 ml-2">
-                    Minimum conversation turns before completion is possible
-                </span>
-            </label>
-
-            <label className="block">
-                <span className={labelCls}>AI Evaluation Prompt (for grading)</span>
-                <textarea rows={4} className={textareaCls} value={content.aiPrompt}
-                    onChange={(e) => onChange({ ...content, aiPrompt: e.target.value })}
-                    placeholder="Evaluate the salesperson's rapport building, discovery questions, and ability to handle objections..." />
             </label>
         </div>
     );

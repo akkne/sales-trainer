@@ -1,57 +1,84 @@
 "use client";
 
-import { RewriteBetterContent, inputCls, labelCls, textareaCls } from "./types";
+import { RewriteContent, inputCls, labelCls, textareaCls } from "./types";
 
 interface Props {
-    content: RewriteBetterContent;
-    onChange: (c: RewriteBetterContent) => void;
+    content: RewriteContent;
+    onChange: (c: RewriteContent) => void;
 }
 
 export function RewriteBetterEditor({ content, onChange }: Props) {
+    const criteria = content.evaluation_criteria ?? [];
+
+    function addCriterion() {
+        onChange({ ...content, evaluation_criteria: [...criteria, ""] });
+    }
+
+    function updateCriterion(index: number, value: string) {
+        onChange({ ...content, evaluation_criteria: criteria.map((c, i) => i === index ? value : c) });
+    }
+
+    function removeCriterion(index: number) {
+        onChange({ ...content, evaluation_criteria: criteria.filter((_, i) => i !== index) });
+    }
+
     return (
         <div className="space-y-3">
             <label className="block">
-                <span className={labelCls}>Original Text (to be rewritten)</span>
-                <textarea rows={3} className={inputCls} value={content.originalText}
-                    onChange={(e) => onChange({ ...content, originalText: e.target.value })}
-                    placeholder="Buy now or regret it forever!" />
+                <span className={labelCls}>Instruction</span>
+                <input
+                    className={inputCls}
+                    value={content.instruction}
+                    onChange={(e) => onChange({ ...content, instruction: e.target.value })}
+                    placeholder="Rewrite the following to be more effective…"
+                />
             </label>
 
             <label className="block">
-                <span className={labelCls}>Context</span>
-                <input className={inputCls} value={content.context}
-                    onChange={(e) => onChange({ ...content, context: e.target.value })}
-                    placeholder="Sales email opener, cold call script, etc." />
+                <span className={labelCls}>Original (text to rewrite)</span>
+                <textarea
+                    rows={3}
+                    className={textareaCls}
+                    value={content.original}
+                    onChange={(e) => onChange({ ...content, original: e.target.value })}
+                    placeholder="The original text the learner must improve…"
+                />
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                    <span className={labelCls}>Min Length (chars)</span>
-                    <input
-                        type="number"
-                        className={inputCls}
-                        value={content.minLength}
-                        onChange={(e) => onChange({ ...content, minLength: parseInt(e.target.value) || 0 })}
-                        min={0}
-                    />
-                </label>
-                <label className="block">
-                    <span className={labelCls}>Max Length (chars)</span>
-                    <input
-                        type="number"
-                        className={inputCls}
-                        value={content.maxLength}
-                        onChange={(e) => onChange({ ...content, maxLength: parseInt(e.target.value) || 500 })}
-                        min={1}
-                    />
-                </label>
+            <div>
+                <div className="flex items-center justify-between mb-1">
+                    <span className={labelCls}>Evaluation criteria</span>
+                    <button type="button" onClick={addCriterion} className="text-xs text-ink-3 hover:text-ink">
+                        + Add criterion
+                    </button>
+                </div>
+                {criteria.map((crit: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 mt-1">
+                        <input
+                            className={inputCls}
+                            value={crit}
+                            onChange={(e) => updateCriterion(i, e.target.value)}
+                            placeholder={`Criterion ${i + 1}`}
+                        />
+                        <button type="button" onClick={() => removeCriterion(i)} className="text-xs text-bad shrink-0">
+                            ×
+                        </button>
+                    </div>
+                ))}
+                {criteria.length === 0 && (
+                    <p className="text-[10px] text-ink-3 mt-1">No criteria yet — AI grader will use the global prompt only.</p>
+                )}
             </div>
 
             <label className="block">
-                <span className={labelCls}>AI Evaluation Prompt</span>
-                <textarea rows={4} className={textareaCls} value={content.aiPrompt}
-                    onChange={(e) => onChange({ ...content, aiPrompt: e.target.value })}
-                    placeholder="Evaluate if the rewrite is professional, maintains the intent, and avoids pushy language..." />
+                <span className={labelCls}>Per-exercise AI prompt (optional addendum)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.ai_prompt ?? ""}
+                    onChange={(e) => onChange({ ...content, ai_prompt: e.target.value })}
+                    placeholder="Extra instructions appended to the global type prompt for AI grading…"
+                />
             </label>
         </div>
     );

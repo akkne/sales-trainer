@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
     useAdminAllLessons,
@@ -10,189 +10,21 @@ import {
     useDeleteLesson,
     useImportLessons,
     type AdminLessonWithTopic,
-    type LessonsImportResult,
 } from "@/features/admin/hooks/use-admin";
+import { ImportPanel } from "@/features/admin/components/import-panel";
+import { buildExerciseImportTemplate } from "@/features/admin/components/exercise-editors";
 
 type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";
 
-const LESSONS_TEMPLATE = JSON.stringify([
+const LESSONS_TEMPLATE = [
     {
-        topicIconicName: "introduction",
+        topicIconicName: "intro-cold-call",
         title: "First Steps",
         orderInTopic: 1,
-        exercises: [
-            {
-                type: "choose_option",
-                orderInLesson: 1,
-                content: {
-                    situation: "Клиент говорит: 'Это слишком дорого'",
-                    options: [
-                        { text: "Да, понимаю. Могу предложить скидку.", is_correct: false },
-                        { text: "Скажите, дорого относительно чего?", is_correct: true },
-                        { text: "Это лучшая цена на рынке.", is_correct: false }
-                    ],
-                    explanation: "Лучше уточнить причину возражения, чем сразу снижать цену."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "fill_blank",
-                orderInLesson: 2,
-                content: {
-                    before: "Клиент: У нас уже есть поставщик.",
-                    after: "Клиент: Ну, в целом да, можно обсудить.",
-                    options: [
-                        { text: "Понял, но мы лучше!", is_correct: false },
-                        { text: "А что если я покажу, как можно сэкономить 20%?", is_correct: true },
-                        { text: "Жаль, до свидания.", is_correct: false },
-                        { text: "Давайте я отправлю презентацию.", is_correct: false }
-                    ]
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "reorder",
-                orderInLesson: 3,
-                content: {
-                    instruction: "Расставьте этапы холодного звонка в правильном порядке",
-                    items: [
-                        { text: "Приветствие и представление", correct_position: 1 },
-                        { text: "Выявление потребности", correct_position: 2 },
-                        { text: "Презентация решения", correct_position: 3 },
-                        { text: "Работа с возражениями", correct_position: 4 },
-                        { text: "Закрытие на следующий шаг", correct_position: 5 }
-                    ],
-                    explanation: "Важно сначала понять потребность, потом предлагать решение."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "match_pairs",
-                orderInLesson: 4,
-                content: {
-                    instruction: "Соедините возражение с лучшей техникой ответа",
-                    pairs: [
-                        { left: "Слишком дорого", right: "Техника сравнения ценности" },
-                        { left: "Нам ничего не нужно", right: "Техника бумеранга" },
-                        { left: "Отправьте на почту", right: "Техника моста" },
-                        { left: "Я подумаю", right: "Техника изоляции" }
-                    ],
-                    explanation: "Каждое возражение требует своего подхода."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "categorize",
-                orderInLesson: 5,
-                content: {
-                    instruction: "Распределите вопросы по категориям",
-                    categories: ["Хороший вопрос", "Плохой вопрос"],
-                    items: [
-                        { text: "Сколько у вас сотрудников?", category: "Хороший вопрос" },
-                        { text: "Вам нравится наш продукт?", category: "Плохой вопрос" },
-                        { text: "Какие цели на этот квартал?", category: "Хороший вопрос" },
-                        { text: "Хотите скидку?", category: "Плохой вопрос" }
-                    ],
-                    explanation: "Хорошие discovery-вопросы открытые и направлены на понимание."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "spot_mistake",
-                orderInLesson: 6,
-                content: {
-                    dialogue: [
-                        { speaker: "seller", text: "Добрый день! Меня зовут Алексей.", is_mistake: false },
-                        { speaker: "client", text: "Добрый день.", is_mistake: false },
-                        { speaker: "seller", text: "Мы лучшая CRM на рынке!", is_mistake: true },
-                        { speaker: "client", text: "Нам ничего не нужно.", is_mistake: false }
-                    ],
-                    explanation: "Продавец сразу начал питчить вместо вопроса о потребности.",
-                    ai_prompt: "Оцени, понял ли пользователь, что проблема в питче вместо discovery."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "rewrite",
-                orderInLesson: 7,
-                content: {
-                    instruction: "Перепишите тему холодного письма более цепляюще",
-                    original: "Предложение о сотрудничестве",
-                    evaluation_criteria: [
-                        "Персонализация",
-                        "Интрига без кликбейта",
-                        "Краткость (до 50 символов)"
-                    ],
-                    ai_prompt: "Оцени улучшенную тему письма по критериям."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "ai_dialogue",
-                orderInLesson: 8,
-                content: {
-                    persona: "Скептик Сергей",
-                    scenario: "Discovery-звонок с IT-директором",
-                    context: "Клиент скептически настроен, отвечает коротко, торопится",
-                    max_turns: 6,
-                    success_criteria: [
-                        "Качество вопросов",
-                        "Работа со скептицизмом",
-                        "Достижение следующего шага"
-                    ],
-                    ai_prompt: "Оцени диалог продавца по критериям."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "evaluate_call",
-                orderInLesson: 9,
-                content: {
-                    transcript: [
-                        { speaker: "seller", text: "Здравствуйте, это Алексей из компании Рост." },
-                        { speaker: "client", text: "Добрый день." },
-                        { speaker: "seller", text: "Скажите, вы рассматриваете новые решения для продаж?" },
-                        { speaker: "client", text: "В целом да, но не приоритет." },
-                        { speaker: "seller", text: "Понял. А что сейчас является приоритетом?" }
-                    ],
-                    evaluation_axes: [
-                        { name: "Квалификация", description: "Была ли проведена квалификация?" },
-                        { name: "Открытые вопросы", description: "Использовались ли открытые вопросы?" },
-                        { name: "Следующий шаг", description: "Был ли согласован следующий шаг?" }
-                    ],
-                    ai_prompt: "Сравни оценку пользователя с объективным анализом звонка."
-                },
-                customAiPrompt: null
-            },
-            {
-                type: "free_text",
-                orderInLesson: 10,
-                content: {
-                    situation: "Клиент говорит: 'Это слишком дорого для нас'",
-                    instruction: "Напишите ответ на это возражение",
-                    evaluation_criteria: [
-                        "Не снижает цену сразу",
-                        "Выясняет причину возражения",
-                        "Профессиональный тон"
-                    ],
-                    ai_prompt: "Оцени ответ на возражение 'дорого' по критериям."
-                },
-                customAiPrompt: null
-            }
-        ]
-    }
-], null, 2);
-
-function downloadLessonsTemplate() {
-    const blob = new Blob([LESSONS_TEMPLATE], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchorElement = document.createElement("a");
-    anchorElement.href = url;
-    anchorElement.download = "lessons_template.json";
-    anchorElement.click();
-    URL.revokeObjectURL(url);
-}
+        exercises: [buildExerciseImportTemplate("choose_option", 1)],
+    },
+];
 
 export default function LessonsPage() {
     const { data: lessons = [], isLoading } = useAdminAllLessons();
@@ -216,10 +48,6 @@ export default function LessonsPage() {
 
     const [deleteConfirm, setDeleteConfirm] = useState<AdminLessonWithTopic | null>(null);
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [showImport, setShowImport] = useState(false);
-    const [importResult, setImportResult] = useState<LessonsImportResult | null>(null);
-
     const updateLesson = useUpdateLesson(editState?.lessonId ?? "");
     const deleteLesson = useDeleteLesson(deleteConfirm?.topicId ?? "");
 
@@ -228,13 +56,6 @@ export default function LessonsPage() {
         else { setSortKey(key); setSortDir("asc"); }
     }
 
-    const topicToSkillMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        for (const topic of topics) {
-            map[topic.id] = topic.skillId;
-        }
-        return map;
-    }, [topics]);
 
     const filteredTopicsBySkill = useMemo(() => {
         if (!filterSkillId) return topics;
@@ -310,17 +131,6 @@ export default function LessonsPage() {
         setDeleteConfirm(null);
     }
 
-    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const result = await importLessons.mutateAsync(file);
-            setImportResult(result);
-        } catch {
-        }
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-
     function SortIcon({ col }: { col: SortKey }) {
         if (sortKey !== col) return <span className="ml-1 text-ink-4">↕</span>;
         return <span className="ml-1 text-ink-3">{sortDir === "asc" ? "↑" : "↓"}</span>;
@@ -333,63 +143,23 @@ export default function LessonsPage() {
                     <h1 className="text-xl font-semibold text-ink">Lessons</h1>
                     <p className="text-sm text-ink-3 mt-0.5">{lessons.length} total</p>
                 </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => { setShowImport(v => !v); setImportResult(null); }}
-                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
-                    >
-                        {showImport ? "Close Import" : "Import JSON"}
-                    </button>
-                </div>
             </div>
 
-            {showImport && (
-                <div className="bg-surface border border-line rounded-2xl p-5 mb-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-medium text-ink">Import Lessons from JSON</h2>
-                        <button
-                            onClick={downloadLessonsTemplate}
-                            className="text-xs text-ink-3 hover:text-ink transition-colors underline"
-                        >
-                            Download template
-                        </button>
-                    </div>
-                    <p className="text-xs text-ink-3 mb-3">
-                        JSON format: <code className="bg-bg-2 px-1 rounded">{"{ topicIconicName, title, orderInTopic, exercises[] }"}</code>
-                    </p>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".json"
-                        onChange={handleImport}
-                        className="block w-full text-sm text-ink-3 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-line file:text-sm file:bg-bg-2 file:text-ink hover:file:bg-surface-2 cursor-pointer"
-                    />
-                    {importLessons.isPending && (
-                        <p className="mt-3 text-xs text-ink-3">Importing...</p>
-                    )}
-                    {importLessons.isError && (
-                        <p className="mt-3 text-xs text-bad">{(importLessons.error as Error).message}</p>
-                    )}
-                    {importResult && (
-                        <div className="mt-3 p-3 bg-bg-2 rounded-md">
-                            <p className="text-xs text-ink">
-                                Lessons — Created: <span className="font-medium">{importResult.lessonsCreated}</span> | Updated: <span className="font-medium">{importResult.lessonsUpdated}</span>
-                            </p>
-                            <p className="text-xs text-ink mt-1">
-                                Exercises — Created: <span className="font-medium">{importResult.exercisesCreated}</span> | Updated: <span className="font-medium">{importResult.exercisesUpdated}</span>
-                            </p>
-                            {importResult.errors.length > 0 && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-bad font-medium">{importResult.errors.length} error(s):</p>
-                                    <ul className="mt-1 text-xs text-bad font-mono max-h-32 overflow-y-auto">
-                                        {importResult.errors.map((err, i) => <li key={i}>{err}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+            <ImportPanel
+                title="Import Lessons"
+                description='JSON array: [{ topicIconicName, title, orderInTopic, exercises[] }]. Download template for the full exercise schema.'
+                templateData={LESSONS_TEMPLATE}
+                templateFilename="lessons_template.json"
+                onImport={async ({ text }) => {
+                    const file = new File([text], "import.json", { type: "application/json" });
+                    const result = await importLessons.mutateAsync(file);
+                    return {
+                        created: result.lessonsCreated,
+                        updated: result.lessonsUpdated,
+                        errors: result.errors,
+                    };
+                }}
+            />
 
             <div className="bg-surface rounded-2xl p-4 mb-4 flex flex-wrap gap-3 items-end">
                 <div>

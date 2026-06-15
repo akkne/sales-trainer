@@ -1,53 +1,86 @@
 "use client";
 
-import { MultipleChoiceContent, inputCls, labelCls } from "./types";
+import { ChooseOptionContent, FlaggedOption, inputCls, labelCls } from "./types";
 
 interface Props {
-    content: MultipleChoiceContent;
-    onChange: (c: MultipleChoiceContent) => void;
+    content: ChooseOptionContent;
+    onChange: (c: ChooseOptionContent) => void;
 }
 
 export function MultipleChoiceEditor({ content, onChange }: Props) {
+    function setCorrect(index: number) {
+        const options = content.options.map((o, i) => ({ ...o, is_correct: i === index }));
+        onChange({ ...content, options });
+    }
+
+    function updateText(index: number, text: string) {
+        const options = content.options.map((o, i) => i === index ? { ...o, text } : o);
+        onChange({ ...content, options });
+    }
+
+    function addOption() {
+        onChange({ ...content, options: [...content.options, { text: "", is_correct: false }] });
+    }
+
+    function removeOption(index: number) {
+        if (content.options.length <= 2) return;
+        const options = content.options.filter((_, i) => i !== index);
+        // Ensure exactly one correct: if we removed the correct one, mark first
+        const hasCorrect = options.some((o) => o.is_correct);
+        onChange({ ...content, options: hasCorrect ? options : options.map((o, i) => ({ ...o, is_correct: i === 0 })) });
+    }
+
     return (
         <div className="space-y-3">
             <label className="block">
-                <span className={labelCls}>Situation (context)</span>
-                <input className={inputCls} value={content.situation}
-                    onChange={(e) => onChange({ ...content, situation: e.target.value })} />
+                <span className={labelCls}>Situation (context shown to learner)</span>
+                <textarea
+                    rows={2}
+                    className={inputCls}
+                    value={content.situation}
+                    onChange={(e) => onChange({ ...content, situation: e.target.value })}
+                    placeholder="E.g. Client says: 'It's too expensive.'"
+                />
             </label>
-            <label className="block">
-                <span className={labelCls}>Question</span>
-                <input className={inputCls} value={content.question}
-                    onChange={(e) => onChange({ ...content, question: e.target.value })} />
-            </label>
+
             <div>
-                <span className={labelCls}>Options</span>
-                {content.options.map((opt, i) => (
+                <div className="flex items-center justify-between mb-1">
+                    <span className={labelCls}>Options — radio marks the correct answer</span>
+                    <button type="button" onClick={addOption} className="text-xs text-ink-3 hover:text-ink">
+                        + Add option
+                    </button>
+                </div>
+                {content.options.map((opt: FlaggedOption, i: number) => (
                     <div key={i} className="flex items-center gap-2 mt-1">
                         <input
                             type="radio"
-                            checked={content.correctOptionIndex === i}
-                            onChange={() => onChange({ ...content, correctOptionIndex: i })}
+                            name={`correct-${i}`}
+                            checked={opt.is_correct}
+                            onChange={() => setCorrect(i)}
                             className="shrink-0"
                         />
-                        <input className={inputCls} value={opt}
-                            onChange={(e) => {
-                                const opts = [...content.options];
-                                opts[i] = e.target.value;
-                                onChange({ ...content, options: opts });
-                            }}
+                        <input
+                            className={inputCls}
+                            value={opt.text}
+                            onChange={(e) => updateText(i, e.target.value)}
                             placeholder={`Option ${i + 1}`}
                         />
+                        {content.options.length > 2 && (
+                            <button type="button" onClick={() => removeOption(i)} className="text-xs text-bad">
+                                ×
+                            </button>
+                        )}
                     </div>
                 ))}
-                <span className="text-[10px] text-ink-3 mt-1 block">
-                    Radio button marks the correct answer
-                </span>
             </div>
+
             <label className="block">
                 <span className={labelCls}>Explanation (shown after answer)</span>
-                <input className={inputCls} value={content.explanation}
-                    onChange={(e) => onChange({ ...content, explanation: e.target.value })} />
+                <input
+                    className={inputCls}
+                    value={content.explanation ?? ""}
+                    onChange={(e) => onChange({ ...content, explanation: e.target.value })}
+                />
             </label>
         </div>
     );

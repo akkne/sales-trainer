@@ -1,189 +1,110 @@
 "use client";
 
-import { FindErrorContent, inputCls, labelCls, textareaCls } from "./types";
+import { SpotMistakeContent, DialogueLine, inputCls, labelCls, textareaCls } from "./types";
 
 interface Props {
-    content: FindErrorContent;
-    onChange: (c: FindErrorContent) => void;
+    content: SpotMistakeContent;
+    onChange: (c: SpotMistakeContent) => void;
 }
 
-let nextLineId = 100;
-let nextFixId = 100;
-
 export function FindErrorEditor({ content, onChange }: Props) {
+    function setMistake(index: number) {
+        const dialogue = content.dialogue.map((line, i) => ({ ...line, is_mistake: i === index }));
+        onChange({ ...content, dialogue });
+    }
+
+    function updateSpeaker(index: number, speaker: string) {
+        const dialogue = content.dialogue.map((line, i) => i === index ? { ...line, speaker } : line);
+        onChange({ ...content, dialogue });
+    }
+
+    function updateText(index: number, text: string) {
+        const dialogue = content.dialogue.map((line, i) => i === index ? { ...line, text } : line);
+        onChange({ ...content, dialogue });
+    }
+
     function addLine() {
-        const id = String(nextLineId++);
         onChange({
             ...content,
-            dialogLines: [...content.dialogLines, { id, speaker: "", text: "" }]
+            dialogue: [...content.dialogue, { speaker: "seller", text: "", is_mistake: false }],
         });
     }
 
     function removeLine(index: number) {
-        const line = content.dialogLines[index];
-        const dialogLines = content.dialogLines.filter((_, i) => i !== index);
-        const errorLineId = content.errorLineId === line.id ? "" : content.errorLineId;
-        onChange({ ...content, dialogLines, errorLineId });
-    }
-
-    function updateLine(index: number, field: "speaker" | "text", value: string) {
-        const dialogLines = [...content.dialogLines];
-        dialogLines[index] = { ...dialogLines[index], [field]: value };
-        onChange({ ...content, dialogLines });
-    }
-
-    function setErrorLine(id: string) {
-        onChange({
-            ...content,
-            errorLineId: content.errorLineId === id ? "" : id
-        });
-    }
-
-    function addFix() {
-        const id = String(nextFixId++);
-        onChange({
-            ...content,
-            suggestedFixes: [...(content.suggestedFixes || []), { id, text: "" }]
-        });
-    }
-
-    function removeFix(index: number) {
-        const fix = content.suggestedFixes?.[index];
-        const suggestedFixes = (content.suggestedFixes || []).filter((_, i) => i !== index);
-        const correctFixIds = (content.correctFixIds || []).filter(id => id !== fix?.id);
-        onChange({ ...content, suggestedFixes, correctFixIds });
-    }
-
-    function updateFix(index: number, text: string) {
-        const suggestedFixes = [...(content.suggestedFixes || [])];
-        suggestedFixes[index] = { ...suggestedFixes[index], text };
-        onChange({ ...content, suggestedFixes });
-    }
-
-    function toggleCorrectFix(id: string) {
-        const correctFixIds = content.correctFixIds || [];
-        if (correctFixIds.includes(id)) {
-            onChange({ ...content, correctFixIds: correctFixIds.filter(f => f !== id) });
-        } else {
-            onChange({ ...content, correctFixIds: [...correctFixIds, id] });
-        }
+        if (content.dialogue.length <= 2) return;
+        const dialogue = content.dialogue.filter((_, i) => i !== index);
+        // If removed line was the mistake, clear all is_mistake flags (author must re-pick)
+        const hadMistake = content.dialogue[index].is_mistake;
+        const result = hadMistake ? dialogue.map((l) => ({ ...l, is_mistake: false })) : dialogue;
+        onChange({ ...content, dialogue: result });
     }
 
     return (
         <div className="space-y-3">
-            <label className="block">
-                <span className={labelCls}>Instruction</span>
-                <input className={inputCls} value={content.instruction}
-                    onChange={(e) => onChange({ ...content, instruction: e.target.value })}
-                    placeholder="Find the mistake in this conversation" />
-            </label>
-
             <div>
                 <div className="flex items-center justify-between mb-1">
-                    <span className={labelCls}>Dialog Lines (click to mark as error)</span>
-                    <button
-                        type="button"
-                        onClick={addLine}
-                        className="text-xs text-ink-3 hover:text-ink"
-                    >
+                    <span className={labelCls}>Dialogue — radio marks the single mistaken line</span>
+                    <button type="button" onClick={addLine} className="text-xs text-ink-3 hover:text-ink">
                         + Add line
                     </button>
                 </div>
-                {content.dialogLines.map((line, i) => (
+                {content.dialogue.map((line: DialogueLine, i: number) => (
                     <div
-                        key={line.id}
-                        className={`mt-2 p-2 rounded border cursor-pointer transition-colors ${
-                            content.errorLineId === line.id
-                                ? "border-bad bg-bad-soft"
-                                : "border-line bg-surface hover:border-line-2"
+                        key={i}
+                        className={`flex items-start gap-2 mt-1 p-2 rounded-md border ${
+                            line.is_mistake ? "border-bad/40 bg-bad/5" : "border-line"
                         }`}
-                        onClick={() => setErrorLine(line.id)}
                     >
-                        <div className="flex items-center gap-2">
-                            <input
-                                className="w-24 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
-                                value={line.speaker}
-                                onChange={(e) => { e.stopPropagation(); updateLine(i, "speaker", e.target.value); }}
-                                onClick={(e) => e.stopPropagation()}
-                                placeholder="Speaker"
-                            />
-                            <input
-                                className="flex-1 border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
-                                value={line.text}
-                                onChange={(e) => { e.stopPropagation(); updateLine(i, "text", e.target.value); }}
-                                onClick={(e) => e.stopPropagation()}
-                                placeholder="Dialog text"
-                            />
-                            {content.dialogLines.length > 1 && (
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); removeLine(i); }}
-                                    className="text-xs text-bad hover:text-bad/80"
-                                >
-                                    ×
-                                </button>
-                            )}
-                        </div>
-                        {content.errorLineId === line.id && (
-                            <span className="text-xs text-bad mt-1 block">← This is the error</span>
+                        <input
+                            type="radio"
+                            checked={line.is_mistake}
+                            onChange={() => setMistake(i)}
+                            className="shrink-0 mt-2"
+                            title="Mark as the mistake"
+                        />
+                        <select
+                            className="mt-1 border border-line rounded-md px-2 py-1.5 text-xs bg-surface focus:outline-none focus:ring-1 focus:ring-indigo/30 shrink-0"
+                            value={line.speaker}
+                            onChange={(e) => updateSpeaker(i, e.target.value)}
+                        >
+                            <option value="seller">seller</option>
+                            <option value="client">client</option>
+                        </select>
+                        <input
+                            className={`${inputCls} flex-1`}
+                            value={line.text}
+                            onChange={(e) => updateText(i, e.target.value)}
+                            placeholder="Line text…"
+                        />
+                        {content.dialogue.length > 2 && (
+                            <button type="button" onClick={() => removeLine(i)} className="text-xs text-bad mt-2 shrink-0">
+                                ×
+                            </button>
                         )}
                     </div>
                 ))}
-            </div>
-
-            <label className="flex items-center gap-2">
-                <input
-                    type="checkbox"
-                    checked={content.requireExplanation}
-                    onChange={(e) => onChange({ ...content, requireExplanation: e.target.checked })}
-                />
-                <span className={labelCls}>Require user explanation</span>
-            </label>
-
-            <div>
-                <div className="flex items-center justify-between mb-1">
-                    <span className={labelCls}>Suggested Fixes (optional)</span>
-                    <button
-                        type="button"
-                        onClick={addFix}
-                        className="text-xs text-ink-3 hover:text-ink"
-                    >
-                        + Add fix
-                    </button>
-                </div>
-                {(content.suggestedFixes || []).map((fix, i) => (
-                    <div key={fix.id} className="flex items-center gap-2 mt-1">
-                        <input
-                            type="checkbox"
-                            checked={(content.correctFixIds || []).includes(fix.id)}
-                            onChange={() => toggleCorrectFix(fix.id)}
-                            title="Mark as correct fix"
-                        />
-                        <input
-                            className={inputCls}
-                            value={fix.text}
-                            onChange={(e) => updateFix(i, e.target.value)}
-                            placeholder="Suggested fix text"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => removeFix(i)}
-                            className="text-xs text-bad hover:text-bad/80"
-                        >
-                            ×
-                        </button>
-                    </div>
-                ))}
-                <span className="text-[10px] text-ink-3 mt-1 block">
-                    Checkbox marks correct fixes
-                </span>
+                <p className="text-[10px] text-ink-3 mt-1">Exactly one line must be the mistake.</p>
             </div>
 
             <label className="block">
-                <span className={labelCls}>AI Evaluation Prompt</span>
-                <textarea rows={4} className={textareaCls} value={content.aiPrompt}
-                    onChange={(e) => onChange({ ...content, aiPrompt: e.target.value })}
-                    placeholder="Evaluate if user correctly identified the error and provided appropriate fix..." />
+                <span className={labelCls}>Explanation (shown after answer)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.explanation ?? ""}
+                    onChange={(e) => onChange({ ...content, explanation: e.target.value })}
+                />
+            </label>
+
+            <label className="block">
+                <span className={labelCls}>Per-exercise AI prompt (optional addendum)</span>
+                <textarea
+                    rows={2}
+                    className={textareaCls}
+                    value={content.ai_prompt ?? ""}
+                    onChange={(e) => onChange({ ...content, ai_prompt: e.target.value })}
+                    placeholder="Extra instructions appended to the global type prompt for AI grading…"
+                />
             </label>
         </div>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
     useAdminSkills,
@@ -8,9 +8,9 @@ import {
     useDeleteSkill,
     useImportSkills,
     type AdminSkill,
-    type SkillsImportResult,
 } from "@/features/admin/hooks/use-admin";
 import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
+import { ImportPanel } from "@/features/admin/components/import-panel";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",
@@ -20,25 +20,22 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
     stage: SKILL_STAGES[0].key,
 });
 
-const SKILLS_TEMPLATE = JSON.stringify([
+const SKILLS_TEMPLATE = [
     {
-        iconicName: "example-skill",
-        title: "Example Skill",
-        description: "Description of the skill",
+        iconicName: "cold-calling",
+        title: "Cold Calling",
+        description: "Mastering outbound cold calls",
         orderInTree: 1,
-        stage: "preparation"
-    }
-], null, 2);
-
-function downloadSkillsTemplate() {
-    const blob = new Blob([SKILLS_TEMPLATE], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchorElement = document.createElement("a");
-    anchorElement.href = url;
-    anchorElement.download = "skills_template.json";
-    anchorElement.click();
-    URL.revokeObjectURL(url);
-}
+        stage: "preparation",
+    },
+    {
+        iconicName: "objection-handling",
+        title: "Objection Handling",
+        description: "Techniques for common objections",
+        orderInTree: 2,
+        stage: "active",
+    },
+];
 
 export default function AdminSkillsPage() {
     const { data: skills = [], isLoading } = useAdminSkills();
@@ -49,10 +46,6 @@ export default function AdminSkillsPage() {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [showImport, setShowImport] = useState(false);
-    const [importResult, setImportResult] = useState<SkillsImportResult | null>(null);
 
     async function handleCreate() {
         await createSkill.mutateAsync(form);
@@ -65,78 +58,33 @@ export default function AdminSkillsPage() {
         setConfirmDeleteId(null);
     }
 
-    async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const result = await importSkills.mutateAsync(file);
-            setImportResult(result);
-        } catch {
-        }
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Skills</h1>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => { setShowImport((v) => !v); setImportResult(null); }}
-                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
-                    >
-                        {showImport ? "Close Import" : "Import JSON"}
-                    </button>
-                    <button
-                        onClick={() => setShowForm((v) => !v)}
-                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
-                    >
-                        {showForm ? "Cancel" : "+ New skill"}
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowForm((v) => !v)}
+                    className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                >
+                    {showForm ? "Cancel" : "+ New skill"}
+                </button>
             </div>
 
-            {showImport && (
-                <div className="bg-surface border border-line rounded-2xl p-5 mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-medium text-ink">Import Skills from JSON</h2>
-                        <button
-                            onClick={downloadSkillsTemplate}
-                            className="text-xs text-ink-3 hover:text-ink transition-colors underline"
-                        >
-                            Download template
-                        </button>
-                    </div>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".json"
-                        onChange={handleImport}
-                        className="block w-full text-sm text-ink-3 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-line file:text-sm file:bg-bg-2 file:text-ink hover:file:bg-surface-2 cursor-pointer"
-                    />
-                    {importSkills.isPending && (
-                        <p className="mt-3 text-xs text-ink-3">Importing...</p>
-                    )}
-                    {importSkills.isError && (
-                        <p className="mt-3 text-xs text-bad">{(importSkills.error as Error).message}</p>
-                    )}
-                    {importResult && (
-                        <div className="mt-3 p-3 bg-bg-2 rounded-md">
-                            <p className="text-xs text-ink">
-                                Created: <span className="font-medium">{importResult.skillsCreated}</span> | Updated: <span className="font-medium">{importResult.skillsUpdated}</span>
-                            </p>
-                            {importResult.errors.length > 0 && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-bad font-medium">{importResult.errors.length} error(s):</p>
-                                    <ul className="mt-1 text-xs text-bad font-mono">
-                                        {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+            <ImportPanel
+                title="Import Skills"
+                description='JSON array: [{ iconicName, title, description, orderInTree, stage }]'
+                templateData={SKILLS_TEMPLATE}
+                templateFilename="skills_template.json"
+                onImport={async ({ text }) => {
+                    const file = new File([text], "import.json", { type: "application/json" });
+                    const result = await importSkills.mutateAsync(file);
+                    return {
+                        created: result.skillsCreated,
+                        updated: result.skillsUpdated,
+                        errors: result.errors,
+                    };
+                }}
+            />
 
             {showForm && (
                 <div className="bg-surface rounded-2xl p-5 mb-6">
