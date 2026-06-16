@@ -54,6 +54,9 @@ public static class ExerciseContentValidator
             case ExerciseTypes.FreeText:
                 ValidateFreeText(content, errors);
                 break;
+            case ExerciseTypes.TheoryCard:
+                ValidateTheoryCard(content, errors);
+                break;
             default:
                 errors.Add($"Unknown exercise type '{type}'. Valid types: {string.Join(", ", ExerciseTypes.All)}.");
                 break;
@@ -335,6 +338,87 @@ public static class ExerciseContentValidator
     private static void ValidateFreeText(JsonElement root, List<string> errors)
     {
         RequireNonEmptyString(root, "instruction", errors);
+    }
+
+    // ── theory_card ──────────────────────────────────────────────────────────
+    // A non-graded "story" card. Shape depends on `layout`:
+    //   layout:"text"     { layout, title?, body:string(req) }
+    //   layout:"dialogue" { layout, title?, turns:[{side:"me"|"them", text:string, annotations?:[string]}] (>=1) }
+    //   layout:"bullets"  { layout, title?, items:[string] (>=1 non-empty) }
+    //   layout:"quote"    { layout, text:string(req), author? }
+    private static readonly string[] TheoryCardLayouts = ["text", "dialogue", "bullets", "quote"];
+
+    private static void ValidateTheoryCard(JsonElement root, List<string> errors)
+    {
+        if (!root.TryGetProperty("layout", out var layoutEl) || layoutEl.ValueKind != JsonValueKind.String)
+        {
+            errors.Add($"'layout' is required and must be one of: {string.Join(", ", TheoryCardLayouts)}.");
+            return;
+        }
+
+        var layout = layoutEl.GetString();
+        switch (layout)
+        {
+            case "text":
+                RequireNonEmptyString(root, "body", errors);
+                break;
+
+            case "dialogue":
+            {
+                var turns = RequireArray(root, "turns", errors);
+                if (turns is null) break;
+                if (turns.Value.GetArrayLength() < 1)
+                {
+                    errors.Add("turns must contain at least 1 item.");
+                    break;
+                }
+                var index = 0;
+                foreach (var turn in turns.Value.EnumerateArray())
+                {
+                    if (turn.ValueKind != JsonValueKind.Object)
+                    {
+                        errors.Add($"turns[{index}] must be an object.");
+                        index++;
+                        continue;
+                    }
+                    if (!turn.TryGetProperty("side", out var side) || side.ValueKind != JsonValueKind.String
+                        || (side.GetString() != "me" && side.GetString() != "them"))
+                        errors.Add($"turns[{index}].side must be \"me\" or \"them\".");
+                    if (!turn.TryGetProperty("text", out var text) || text.ValueKind != JsonValueKind.String
+                        || string.IsNullOrWhiteSpace(text.GetString()))
+                        errors.Add($"turns[{index}].text must be a non-empty string.");
+                    index++;
+                }
+                break;
+            }
+
+            case "bullets":
+            {
+                var items = RequireArray(root, "items", errors);
+                if (items is null) break;
+                if (items.Value.GetArrayLength() < 1)
+                {
+                    errors.Add("items must contain at least 1 item.");
+                    break;
+                }
+                var index = 0;
+                foreach (var item in items.Value.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
+                        errors.Add($"items[{index}] must be a non-empty string.");
+                    index++;
+                }
+                break;
+            }
+
+            case "quote":
+                RequireNonEmptyString(root, "text", errors);
+                break;
+
+            default:
+                errors.Add($"'layout' must be one of: {string.Join(", ", TheoryCardLayouts)} (got '{layout}').");
+                break;
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

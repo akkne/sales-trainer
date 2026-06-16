@@ -43,6 +43,8 @@ internal sealed class ExerciseService(
             .ThenBy(lesson => lesson.Id)
             .ToListAsync(cancellationToken);
 
+        var lessonKinds = await GetLessonKindsAsync(allLessons.Select(l => l.Id), cancellationToken);
+
         return allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
@@ -51,8 +53,32 @@ internal sealed class ExerciseService(
                 lesson.Title,
                 lesson.OrderInTopic,
                 progressRecord?.Status ?? "locked",
-                progressRecord?.BestScore ?? 0);
+                progressRecord?.BestScore ?? 0,
+                lessonKinds.GetValueOrDefault(lesson.Id, "practice"));
         }).ToList();
+    }
+
+    /// <summary>
+    /// Returns the "kind" of each lesson: "theory" when the lesson has at least one
+    /// exercise and every exercise is a theory_card, otherwise "practice".
+    /// </summary>
+    private async Task<Dictionary<Guid, string>> GetLessonKindsAsync(
+        IEnumerable<Guid> lessonIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = lessonIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<Guid, string>();
+
+        var exerciseTypesByLesson = await databaseContext.Exercises
+            .Where(exercise => ids.Contains(exercise.LessonId))
+            .Select(exercise => new { exercise.LessonId, exercise.Type })
+            .ToListAsync(cancellationToken);
+
+        return exerciseTypesByLesson
+            .GroupBy(exercise => exercise.LessonId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.All(exercise => exercise.Type == ExerciseTypes.TheoryCard) ? "theory" : "practice");
     }
 
     public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForTopicAsync(
@@ -69,6 +95,8 @@ internal sealed class ExerciseService(
             .OrderBy(lesson => lesson.OrderInTopic)
             .ToListAsync(cancellationToken);
 
+        var lessonKinds = await GetLessonKindsAsync(allLessons.Select(l => l.Id), cancellationToken);
+
         return allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
@@ -77,7 +105,8 @@ internal sealed class ExerciseService(
                 lesson.Title,
                 lesson.OrderInTopic,
                 progressRecord?.Status ?? "locked",
-                progressRecord?.BestScore ?? 0);
+                progressRecord?.BestScore ?? 0,
+                lessonKinds.GetValueOrDefault(lesson.Id, "practice"));
         }).ToList();
     }
 
@@ -111,6 +140,8 @@ internal sealed class ExerciseService(
             .OrderBy(lesson => lesson.OrderInTopic)
             .ToListAsync(cancellationToken);
 
+        var lessonKinds = await GetLessonKindsAsync(allLessons.Select(l => l.Id), cancellationToken);
+
         // Determine status for first lesson - should be available if not completed
         var isFirstLesson = true;
 
@@ -124,7 +155,8 @@ internal sealed class ExerciseService(
                 lesson.Title,
                 lesson.OrderInTopic,
                 status,
-                progressRecord?.BestScore ?? 0);
+                progressRecord?.BestScore ?? 0,
+                lessonKinds.GetValueOrDefault(lesson.Id, "practice"));
         }).ToList();
     }
 

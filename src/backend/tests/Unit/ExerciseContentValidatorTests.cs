@@ -415,4 +415,119 @@ public class ExerciseContentValidatorTests
         });
         errors.Should().Contain(e => e.Contains("'instruction'"));
     }
+
+    // ── theory_card ───────────────────────────────────────────────────────────
+
+    [Test]
+    public void TheoryCard_TextLayout_Valid_NoErrors()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "text",
+            title = "Что такое СПИН",
+            body = "СПИН — это методика продаж."
+        });
+        errors.Should().BeEmpty();
+    }
+
+    [Test]
+    public void TheoryCard_MissingLayout_ReturnsError()
+    {
+        var errors = Validate("theory_card", new { body = "text without layout" });
+        errors.Should().Contain(e => e.Contains("'layout' is required"));
+    }
+
+    [Test]
+    public void TheoryCard_UnknownLayout_ReturnsError()
+    {
+        var errors = Validate("theory_card", new { layout = "carousel", body = "x" });
+        errors.Should().Contain(e => e.Contains("'layout' must be one of"));
+    }
+
+    [Test]
+    public void TheoryCard_TextLayout_MissingBody_ReturnsError()
+    {
+        var errors = Validate("theory_card", new { layout = "text", title = "Заголовок" });
+        errors.Should().Contain(e => e.Contains("'body'"));
+    }
+
+    [Test]
+    public void TheoryCard_DialogueLayout_Valid_NoErrors()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "dialogue",
+            title = "Пример",
+            turns = new[]
+            {
+                new { side = "them", text = "Это дорого." },
+                new { side = "me", text = "Дорого относительно чего?" }
+            }
+        });
+        errors.Should().BeEmpty();
+    }
+
+    [Test]
+    public void TheoryCard_DialogueLayout_BadSide_ReturnsError()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "dialogue",
+            turns = new[] { new { side = "seller", text = "Hi" } }
+        });
+        errors.Should().Contain(e => e.Contains("side must be"));
+    }
+
+    [Test]
+    public void TheoryCard_DialogueLayout_EmptyTurns_ReturnsError()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "dialogue",
+            turns = Array.Empty<object>()
+        });
+        errors.Should().Contain(e => e.Contains("turns must contain at least 1 item"));
+    }
+
+    [Test]
+    public void TheoryCard_BulletsLayout_Valid_NoErrors()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "bullets",
+            title = "Правила",
+            items = new[] { "Слушай клиента", "Задавай вопросы" }
+        });
+        errors.Should().BeEmpty();
+    }
+
+    [Test]
+    public void TheoryCard_BulletsLayout_EmptyItem_ReturnsError()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "bullets",
+            items = new[] { "Хороший пункт", "" }
+        });
+        errors.Should().Contain(e => e.Contains("items[1]"));
+    }
+
+    [Test]
+    public void TheoryCard_QuoteLayout_Valid_NoErrors()
+    {
+        var errors = Validate("theory_card", new
+        {
+            layout = "quote",
+            text = "Люди покупают у тех, кому доверяют.",
+            author = "Зиг Зиглар"
+        });
+        errors.Should().BeEmpty();
+    }
+
+    [Test]
+    public void TheoryCard_QuoteLayout_MissingText_ReturnsError()
+    {
+        var errors = Validate("theory_card", new { layout = "quote", author = "Кто-то" });
+        errors.Should().Contain(e => e.Contains("'text'"));
+    }
 }

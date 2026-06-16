@@ -17,6 +17,12 @@ public static class ExerciseTypes
     public const string EvaluateCall = "evaluate_call";
     public const string FreeText = "free_text";
 
+    /// <summary>
+    /// Theory card — a non-graded "story" card the learner swipes through. A lesson
+    /// made entirely of theory_card exercises is a theory lesson (see NEW_EXERCISE_TYPES.md).
+    /// </summary>
+    public const string TheoryCard = "theory_card";
+
     public static readonly string[] All =
     [
         ChooseOption,
@@ -28,7 +34,8 @@ public static class ExerciseTypes
         Rewrite,
         AiDialogue,
         EvaluateCall,
-        FreeText
+        FreeText,
+        TheoryCard
     ];
 
     public static readonly string[] AiPowered =

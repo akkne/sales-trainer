@@ -24,6 +24,9 @@ public static class ExerciseServiceCollectionExtensions
         services.AddScoped<IExerciseEvaluationStrategy, EvaluateCallEvaluationStrategy>();  // evaluate_call
         services.AddScoped<IExerciseEvaluationStrategy, FreeTextEvaluationStrategy>();      // free_text
 
+        // Non-graded theory cards (no AI; reaching the end completes the lesson)
+        services.AddScoped<IExerciseEvaluationStrategy, TheoryCardEvaluationStrategy>();    // theory_card
+
         return services;
     }
 }
