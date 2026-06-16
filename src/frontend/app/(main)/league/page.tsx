@@ -12,16 +12,12 @@ function useCountdown(periodEndsAt: string) {
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, mins: 0 });
 
     useEffect(() => {
-        // An empty/invalid end date yields NaN — leave the timer at zero rather
-        // than rendering "NaN" while the league data is still loading.
-        const endMs = new Date(periodEndsAt).getTime();
-        if (Number.isNaN(endMs)) {
-            setTimeLeft({ days: 0, hours: 0, mins: 0 });
-            return;
-        }
         function compute() {
+            // An empty/invalid end date yields NaN — leave the timer at zero rather
+            // than rendering "NaN" while the league data is still loading.
+            const endMs = new Date(periodEndsAt).getTime();
             const diffMs = endMs - Date.now();
-            if (diffMs <= 0) {
+            if (Number.isNaN(endMs) || diffMs <= 0) {
                 setTimeLeft({ days: 0, hours: 0, mins: 0 });
                 return;
             }

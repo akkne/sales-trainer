@@ -43,7 +43,12 @@ export default function AdminLeagueTiersPage() {
         const d = draftFor(tier);
         updateTier.mutate(
             { id: tier.id, name: d.name, color: d.color, order: d.order },
-            { onSuccess: () => setDrafts((all) => { const { [tier.id]: _, ...rest } = all; return rest; }) }
+            {
+                onSuccess: () =>
+                    setDrafts((all) =>
+                        Object.fromEntries(Object.entries(all).filter(([id]) => id !== tier.id))
+                    ),
+            }
         );
     };
 
