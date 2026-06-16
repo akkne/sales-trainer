@@ -207,6 +207,36 @@ public class AdminBundleImportTests
     }
 
     [Test]
+    public async Task ImportBundle_DuplicateTopicAcrossSkills_ReportedAsError()
+    {
+        var topicIconic = $"tp-{Guid.NewGuid():N}";
+        var bundle = new
+        {
+            skills = new[]
+            {
+                new
+                {
+                    iconicName = $"sk-a-{Guid.NewGuid():N}", title = "A", orderInTree = 1,
+                    topics = new[] { new { iconicName = topicIconic, title = "Shared", orderInSkill = 1 } }
+                },
+                new
+                {
+                    iconicName = $"sk-b-{Guid.NewGuid():N}", title = "B", orderInTree = 2,
+                    topics = new[] { new { iconicName = topicIconic, title = "Shared", orderInSkill = 1 } }
+                }
+            }
+        };
+
+        var response = await _adminClient.PostAsync("/admin/seeder/bundle", JsonFile(bundle));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // First skill creates the topic; the second skill's duplicate iconicName is refused.
+        body.GetProperty("topicsCreated").GetInt32().Should().Be(1);
+        body.GetProperty("errors").GetArrayLength().Should().BeGreaterThan(0);
+    }
+
+    [Test]
     public async Task ImportBundle_AsRegularUser_Returns403()
     {
         var response = await _userClient.PostAsync("/admin/seeder/bundle",

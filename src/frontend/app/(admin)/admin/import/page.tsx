@@ -16,6 +16,9 @@ import {
  */
 function validateBundle(parsed: unknown): string[] {
     const errors: string[] = [];
+    // The server reads order fields with GetInt32(), which rejects non-integers
+    // (e.g. 1.5) — mirror that here so the client doesn't pass data the server fails.
+    const isInt = (value: unknown): boolean => typeof value === "number" && Number.isInteger(value);
 
     const root = parsed as Record<string, unknown> | unknown[];
     const skills = Array.isArray(root) ? root : (root as Record<string, unknown>)?.skills;
@@ -28,7 +31,7 @@ function validateBundle(parsed: unknown): string[] {
         const skillName = typeof s?.iconicName === "string" ? s.iconicName : `#${si + 1}`;
         if (typeof s?.iconicName !== "string" || !s.iconicName.trim()) errors.push(`Skill ${skillName}: iconicName is required.`);
         if (typeof s?.title !== "string" || !s.title.trim()) errors.push(`Skill ${skillName}: title is required.`);
-        if (typeof s?.orderInTree !== "number") errors.push(`Skill ${skillName}: orderInTree must be a number.`);
+        if (!isInt(s?.orderInTree)) errors.push(`Skill ${skillName}: orderInTree must be an integer.`);
 
         const topics = s?.topics;
         if (topics !== undefined && !Array.isArray(topics)) {
@@ -40,22 +43,22 @@ function validateBundle(parsed: unknown): string[] {
             const topicName = typeof t?.iconicName === "string" ? t.iconicName : `#${ti + 1}`;
             if (typeof t?.iconicName !== "string" || !t.iconicName.trim()) errors.push(`Skill ${skillName} › topic ${topicName}: iconicName is required.`);
             if (typeof t?.title !== "string" || !t.title.trim()) errors.push(`Skill ${skillName} › topic ${topicName}: title is required.`);
-            if (typeof t?.orderInSkill !== "number") errors.push(`Skill ${skillName} › topic ${topicName}: orderInSkill must be a number.`);
+            if (!isInt(t?.orderInSkill)) errors.push(`Skill ${skillName} › topic ${topicName}: orderInSkill must be an integer.`);
 
             const lessons = t?.lessons;
             if (lessons !== undefined && !Array.isArray(lessons)) {
-                errors.push(`Topic ${topicName}: lessons must be an array.`);
+                errors.push(`Skill ${skillName} › topic ${topicName}: lessons must be an array.`);
                 return;
             }
             (Array.isArray(lessons) ? lessons : []).forEach((lesson, li) => {
                 const l = lesson as Record<string, unknown>;
                 const lessonName = typeof l?.title === "string" ? l.title : `#${li + 1}`;
                 if (typeof l?.title !== "string" || !l.title.trim()) errors.push(`Topic ${topicName} › lesson #${li + 1}: title is required.`);
-                if (typeof l?.orderInTopic !== "number") errors.push(`Topic ${topicName} › lesson ${lessonName}: orderInTopic must be a number.`);
+                if (!isInt(l?.orderInTopic)) errors.push(`Topic ${topicName} › lesson ${lessonName}: orderInTopic must be an integer.`);
 
                 const exercises = l?.exercises;
                 if (exercises !== undefined && !Array.isArray(exercises)) {
-                    errors.push(`Lesson ${lessonName}: exercises must be an array.`);
+                    errors.push(`Topic ${topicName} › lesson ${lessonName}: exercises must be an array.`);
                     return;
                 }
                 (Array.isArray(exercises) ? exercises : []).forEach((exercise, ei) => {
@@ -65,7 +68,7 @@ function validateBundle(parsed: unknown): string[] {
                         errors.push(`Lesson ${lessonName} › exercise #${ei + 1}: unknown type "${String(e?.type)}".`);
                         return;
                     }
-                    if (typeof e?.orderInLesson !== "number") errors.push(`Lesson ${lessonName} › exercise #${ei + 1}: orderInLesson must be a number.`);
+                    if (!isInt(e?.orderInLesson)) errors.push(`Lesson ${lessonName} › exercise #${ei + 1}: orderInLesson must be an integer.`);
                     const contentProblems = validateExerciseContent(type, e?.content);
                     contentProblems.forEach((p) => errors.push(`Lesson ${lessonName} › exercise #${ei + 1} (${type}): ${p}`));
                 });

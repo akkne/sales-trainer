@@ -328,6 +328,16 @@ public sealed class AdminSeederController(AppDbContext database, ILogger<AdminSe
                         topicIconicName = topicElement.GetProperty("iconicName").GetString()?.Trim() ?? "";
                         var topicTitle = topicElement.GetProperty("title").GetString()?.Trim() ?? "";
                         var orderInSkill = topicElement.GetProperty("orderInSkill").GetInt32();
+
+                        // Topic iconicName is globally unique; refuse to silently reparent a
+                        // topic that already belongs to a different skill.
+                        var clashing = existingTopics.FirstOrDefault(t => t.IconicName == topicIconicName);
+                        if (clashing is not null && clashing.SkillId != skill.Id)
+                        {
+                            errors.Add($"Skill '{skillIconicName}', topic {topicIndex} ('{topicIconicName}'): iconicName already belongs to another skill.");
+                            continue;
+                        }
+
                         UpsertTopic(skill.Id, topicIconicName, topicTitle, orderInSkill, existingTopics, topicsState);
                     }
                     catch (Exception exception)
