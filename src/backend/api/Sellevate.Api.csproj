@@ -4,10 +4,12 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Assembly renamed to Sellevate.Api; keep the existing SalesTrainer.* code namespace. -->
+    <RootNamespace>SalesTrainer.Api</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="SalesTrainer.Tests" />
+    <InternalsVisibleTo Include="Sellevate.Tests" />
   </ItemGroup>
 
   <ItemGroup>

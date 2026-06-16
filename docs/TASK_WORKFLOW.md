@@ -116,7 +116,7 @@ Set plan → `in-review`. Run in order, loop until ALL pass:
    No tests for trivial getters, DTOs, wiring, or throwaway code. Quality over count.
 2. **Run the full suite ONCE** (backend + frontend) — this is the only place tests
    execute in the whole pipeline.
-3. **Build / lint:** `dotnet build src/backend/api/SalesTrainer.Api.csproj`; frontend
+3. **Build / lint:** `dotnet build src/backend/api/Sellevate.Api.csproj`; frontend
    `npm run lint` + `npm run typecheck` — introduce no new errors vs the base branch.
 4. **Style review:** `oh-my-claudecode:code-reviewer` (opus) checks the branch diff
    against `docs/CODESTYLE.md` — abbreviations, comments, magic strings, one-class-one-

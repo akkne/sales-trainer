@@ -10,10 +10,10 @@ See [DB_SCHEMA](../DB_SCHEMA.md) (`GamificationSettings`, `ExerciseTypeRewards`,
 Run from `src/backend`:
 
 ```bash
-dotnet test SalesTrainer.Tests.csproj --filter "FullyQualifiedName~GamificationServiceTests"
-dotnet test SalesTrainer.Tests.csproj --filter "FullyQualifiedName~OpenAiChatServiceTests"
-dotnet test SalesTrainer.Tests.csproj --filter "FullyQualifiedName~ExerciseServiceTests"
-dotnet test SalesTrainer.Tests.csproj --filter "FullyQualifiedName~AdminGamificationTests"   # needs Docker (Testcontainers)
+dotnet test Sellevate.Tests.csproj --filter "FullyQualifiedName~GamificationServiceTests"
+dotnet test Sellevate.Tests.csproj --filter "FullyQualifiedName~OpenAiChatServiceTests"
+dotnet test Sellevate.Tests.csproj --filter "FullyQualifiedName~ExerciseServiceTests"
+dotnet test Sellevate.Tests.csproj --filter "FullyQualifiedName~AdminGamificationTests"   # needs Docker (Testcontainers)
 ```
 
 - **`Unit/GamificationServiceTests`** — settings load-or-create + idempotency; exercise

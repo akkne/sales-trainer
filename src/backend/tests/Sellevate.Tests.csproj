@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- Assembly renamed to Sellevate.Tests; keep the existing SalesTrainer.Tests code namespace. -->
+    <RootNamespace>SalesTrainer.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +25,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\api\SalesTrainer.Api.csproj" />
+    <ProjectReference Include="..\api\Sellevate.Api.csproj" />
   </ItemGroup>
 </Project>

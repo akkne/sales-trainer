@@ -25,7 +25,7 @@ to storage on error paths.
 Run (no Docker required — unit tests use InMemory DB):
 ```bash
 cd src/backend
-dotnet test tests/SalesTrainer.Tests.csproj --filter "FullyQualifiedName~DiscussPhotoService"
+dotnet test tests/Sellevate.Tests.csproj --filter "FullyQualifiedName~DiscussPhotoService"
 ```
 
 ## Frontend component tests

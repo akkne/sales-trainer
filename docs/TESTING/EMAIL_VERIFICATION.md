@@ -4,7 +4,7 @@ Feature: [EMAIL_VERIFICATION.md](../EMAIL_VERIFICATION.md).
 
 ## Automated
 
-Backend tests live in the `SalesTrainer.Tests` project.
+Backend tests live in the `Sellevate.Tests` project.
 
 - **Unit** — `tests/Unit/EmailVerificationServiceTests.cs`
   - generate stores a single active code and emails it
@@ -31,8 +31,8 @@ Run (unit tests need no Docker; integration tests start a Postgres testcontainer
 
 ```bash
 cd src/backend
-dotnet test tests/SalesTrainer.Tests.csproj --filter "FullyQualifiedName~SalesTrainer.Tests.Unit"
-dotnet test tests/SalesTrainer.Tests.csproj   # all, incl. integration (Docker required)
+dotnet test tests/Sellevate.Tests.csproj --filter "FullyQualifiedName~SalesTrainer.Tests.Unit"
+dotnet test tests/Sellevate.Tests.csproj   # all, incl. integration (Docker required)
 ```
 
 ## Manual checklist

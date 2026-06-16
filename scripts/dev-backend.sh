@@ -12,4 +12,4 @@ echo "==> Backend -> http://localhost:${LOCAL_BACKEND_PORT} (ASPNETCORE_ENVIRONM
 cd "$REPO_ROOT/src/backend/api"
 # --no-launch-profile: ignore Properties/launchSettings.json, whose http profile
 # pins applicationUrl=http://localhost:5188 and would override ASPNETCORE_URLS.
-exec "$DOTNET_BIN" run --project SalesTrainer.Api.csproj --no-launch-profile "$@"
+exec "$DOTNET_BIN" run --project Sellevate.Api.csproj --no-launch-profile "$@"

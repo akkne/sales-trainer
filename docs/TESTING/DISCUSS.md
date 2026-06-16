@@ -7,7 +7,7 @@
 Run (requires a docker daemon for the Postgres testcontainer):
 ```
 cd src/backend
-dotnet test tests/SalesTrainer.Tests.csproj --filter "FullyQualifiedName~Discuss"
+dotnet test tests/Sellevate.Tests.csproj --filter "FullyQualifiedName~Discuss"
 ```
 Coverage: create thread with curated + free-form tags, validation, sort (new/unanswered/hot,
 pinned-first), tag filter, search, thread detail + viewer upvote flag, reply increments count,
