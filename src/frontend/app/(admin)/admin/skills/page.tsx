@@ -44,7 +44,7 @@ export default function AdminSkillsPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Skills</h1>
                 <button
                     onClick={() => setShowForm((v) => !v)}
@@ -73,7 +73,7 @@ export default function AdminSkillsPage() {
             {showForm && (
                 <div className="bg-surface rounded-2xl p-5 mb-6">
                     <h2 className="text-sm font-medium text-ink mb-4">New skill</h2>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <label className="block">
                             <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                             <input
@@ -116,7 +116,7 @@ export default function AdminSkillsPage() {
                                 ))}
                             </select>
                         </label>
-                        <label className="block col-span-2">
+                        <label className="block md:col-span-2">
                             <span className="text-xs text-ink-3">Description</span>
                             <textarea
                                 className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -146,7 +146,8 @@ export default function AdminSkillsPage() {
             ) : skills.length === 0 ? (
                 <p className="text-sm text-ink-3">No skills yet.</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full text-sm border-collapse min-w-[540px]">
                     <thead>
                         <tr className="border-b border-line">
                             <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
@@ -220,6 +221,7 @@ export default function AdminSkillsPage() {
                         ))}
                     </tbody>
                 </table>
+                </div>
             )}
         </div>
     );

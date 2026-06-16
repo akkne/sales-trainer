@@ -50,7 +50,7 @@ export default function AdminVoiceUsagePage() {
 
     return (
         <div className="p-6 max-w-7xl">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-ink">Voice Usage</h1>
                     <p className="text-sm text-ink-3 mt-1">
@@ -97,7 +97,7 @@ export default function AdminVoiceUsagePage() {
 
             {data && data.users.length > 0 && (
                 <div className="overflow-x-auto rounded-2xl border border-line bg-surface" style={{ boxShadow: "var(--sh-1)" }}>
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[640px]">
                         <thead>
                             <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-4">
                                 <th className="px-4 py-3 font-medium">Пользователь</th>

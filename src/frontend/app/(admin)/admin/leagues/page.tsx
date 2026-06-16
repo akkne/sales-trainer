@@ -71,9 +71,9 @@ export default function AdminLeaguesPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <h1 className="text-xl font-bold text-ink">Leagues</h1>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Link
                         href="/admin/leagues/tiers"
                         className="text-sm px-3 py-1.5 rounded-lg border border-line text-ink-3 hover:text-ink hover:bg-bg-2 transition-colors"
@@ -218,54 +218,56 @@ export default function AdminLeaguesPage() {
             ) : leagues.length === 0 ? (
                 <p className="text-sm text-ink-3">No leagues found.</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
-                    <thead>
-                        <tr className="border-b border-line">
-                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
-                                Tier
-                            </th>
-                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
-                                Week
-                            </th>
-                            <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
-                                Members
-                            </th>
-                            <th className="py-2 px-3" />
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {leagues.map((league) => (
-                            <tr
-                                key={league.id}
-                                className="border-b border-line hover:bg-bg-2"
-                            >
-                                <td className="py-2.5 px-3">
-                                    <span
-                                        className="inline-block px-2 py-0.5 text-xs rounded-full font-medium"
-                                        style={{
-                                            color: tierByKey[league.tier]?.color ?? "var(--ink-3)",
-                                            backgroundColor: `${tierByKey[league.tier]?.color ?? "#888"}1f`,
-                                        }}
-                                    >
-                                        {tierByKey[league.tier]?.name ?? league.tier}
-                                    </span>
-                                </td>
-                                <td className="py-2.5 px-3 text-ink-3 text-xs">
-                                    {league.weekStartDate} — {league.weekEndDate}
-                                </td>
-                                <td className="py-2.5 px-3 text-ink">{league.memberCount}</td>
-                                <td className="py-2.5 px-3 text-right">
-                                    <Link
-                                        href={`/admin/leagues/${league.id}`}
-                                        className="text-xs text-indigo hover:underline"
-                                    >
-                                        Manage
-                                    </Link>
-                                </td>
+                <div className="overflow-x-auto -mx-4 px-4">
+                    <table className="w-full text-sm border-collapse min-w-[480px]">
+                        <thead>
+                            <tr className="border-b border-line">
+                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
+                                    Tier
+                                </th>
+                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
+                                    Week
+                                </th>
+                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
+                                    Members
+                                </th>
+                                <th className="py-2 px-3" />
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {leagues.map((league) => (
+                                <tr
+                                    key={league.id}
+                                    className="border-b border-line hover:bg-bg-2"
+                                >
+                                    <td className="py-2.5 px-3">
+                                        <span
+                                            className="inline-block px-2 py-0.5 text-xs rounded-full font-medium"
+                                            style={{
+                                                color: tierByKey[league.tier]?.color ?? "var(--ink-3)",
+                                                backgroundColor: `${tierByKey[league.tier]?.color ?? "#888"}1f`,
+                                            }}
+                                        >
+                                            {tierByKey[league.tier]?.name ?? league.tier}
+                                        </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-ink-3 text-xs">
+                                        {league.weekStartDate} — {league.weekEndDate}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-ink">{league.memberCount}</td>
+                                    <td className="py-2.5 px-3 text-right">
+                                        <Link
+                                            href={`/admin/leagues/${league.id}`}
+                                            className="text-xs text-indigo hover:underline"
+                                        >
+                                            Manage
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </div>
     );

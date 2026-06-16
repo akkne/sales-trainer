@@ -153,10 +153,10 @@ export default function LessonsPage() {
             />
 
             <div className="bg-surface rounded-2xl p-4 mb-4 flex flex-wrap gap-3 items-end">
-                <div>
+                <div className="w-full sm:w-auto">
                     <label className="block text-xs text-ink-3 mb-1">Search</label>
                     <input
-                        className="border-line rounded px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-1 focus:ring-indigo/30"
+                        className="border-line rounded px-3 py-1.5 text-sm w-full sm:w-52 focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         placeholder="Title or topic…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -216,7 +216,8 @@ export default function LessonsPage() {
                                 </span>
                             </h3>
                             <div className="bg-surface rounded-2xl overflow-hidden">
-                                <table className="w-full text-sm border-collapse">
+                            <div className="overflow-x-auto -mx-4 px-4">
+                                <table className="w-full text-sm border-collapse min-w-[480px]">
                                     <thead>
                                         <tr className="border-b border-line bg-surface">
                                             <th
@@ -312,6 +313,7 @@ export default function LessonsPage() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
                             </div>
                         </div>
                     ))}

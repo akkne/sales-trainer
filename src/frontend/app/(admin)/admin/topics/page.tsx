@@ -118,7 +118,7 @@ export default function AdminTopicsPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Topics</h1>
                 <button
                     onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
@@ -148,7 +148,7 @@ export default function AdminTopicsPage() {
             {showForm && (
                 <div className="bg-surface rounded-2xl p-5 mb-6">
                     <h2 className="text-sm font-medium text-ink mb-4">New topic</h2>
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <label className="block">
                             <span className="text-xs text-ink-3">Skill</span>
                             <select
@@ -205,8 +205,8 @@ export default function AdminTopicsPage() {
             )}
 
             {/* Filters */}
-            <div className="flex gap-4 mb-4">
-                <label className="block flex-1 max-w-xs">
+            <div className="flex flex-wrap gap-4 mb-4">
+                <label className="block flex-1 min-w-[160px] max-w-xs">
                     <span className="text-xs text-ink-3">Filter by skill</span>
                     <select
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -219,7 +219,7 @@ export default function AdminTopicsPage() {
                         ))}
                     </select>
                 </label>
-                <label className="block flex-1 max-w-xs">
+                <label className="block flex-1 min-w-[160px] max-w-xs">
                     <span className="text-xs text-ink-3">Search</span>
                     <input
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -247,7 +247,8 @@ export default function AdminTopicsPage() {
                                     {group.topics.length} topic{group.topics.length !== 1 ? 's' : ''}
                                 </span>
                             </h3>
-                            <table className="w-full text-sm border-collapse">
+                            <div className="overflow-x-auto -mx-4 px-4">
+                            <table className="w-full text-sm border-collapse min-w-[400px]">
                                 <thead>
                                     <tr className="border-b border-line">
                                         <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
@@ -365,6 +366,7 @@ export default function AdminTopicsPage() {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     ))}
                 </div>

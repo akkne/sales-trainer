@@ -118,7 +118,7 @@ export default function AdminDialogPage() {
         <div className="p-6">
             <DialogXpScoringCard />
 
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
                 <h1 className="text-xl font-bold text-ink">Dialog Bundles</h1>
                 <button
                     onClick={startCreating}
@@ -172,7 +172,7 @@ export default function AdminDialogPage() {
                     <h2 className="text-lg font-semibold mb-4">
                         {isCreating ? "Create Bundle" : "Edit Bundle"}
                     </h2>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Skill
@@ -225,7 +225,7 @@ export default function AdminDialogPage() {
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                             />
                         </div>
-                        <div className="col-span-2">
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Description
                             </label>
@@ -237,7 +237,7 @@ export default function AdminDialogPage() {
                                 placeholder="Описание бандла..."
                             />
                         </div>
-                        <div className="col-span-2">
+                        <div className="md:col-span-2">
                             <label className="flex items-center gap-2">
                                 <input
                                     type="checkbox"
@@ -267,7 +267,8 @@ export default function AdminDialogPage() {
             )}
 
             <div className="bg-surface rounded-2xl overflow-hidden">
-                <table className="w-full">
+            <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full min-w-[560px]">
                     <thead className="bg-surface">
                         <tr>
                             <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Icon</th>
@@ -333,6 +334,7 @@ export default function AdminDialogPage() {
                         )}
                     </tbody>
                 </table>
+            </div>
             </div>
 
             {deletingBundleId && (

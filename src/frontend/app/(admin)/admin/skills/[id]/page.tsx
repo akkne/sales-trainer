@@ -80,7 +80,7 @@ export default function AdminSkillDetailPage({
 
             {/* Skill card */}
             <div className="bg-surface rounded-2xl p-5 mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                     <h1 className="text-lg font-semibold text-ink">{skill.title}</h1>
                     {!editMode && (
                         <button
@@ -94,7 +94,7 @@ export default function AdminSkillDetailPage({
 
                 {editMode && form ? (
                     <div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <label className="block">
                                 <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                                 <input
@@ -136,7 +136,7 @@ export default function AdminSkillDetailPage({
                                     ))}
                                 </select>
                             </label>
-                            <label className="block col-span-2">
+                            <label className="block md:col-span-2">
                                 <span className="text-xs text-ink-3">Description</span>
                                 <textarea
                                     className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -163,7 +163,7 @@ export default function AdminSkillDetailPage({
                         </div>
                     </div>
                 ) : (
-                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                         <div>
                             <dt className="text-xs text-ink-3">Iconic Name</dt>
                             <dd className="text-ink font-mono text-xs">{skill.iconicName}</dd>
@@ -176,7 +176,7 @@ export default function AdminSkillDetailPage({
                             <dt className="text-xs text-ink-3">Stage</dt>
                             <dd className="text-ink">{getStageMeta(skill.stage).label}</dd>
                         </div>
-                        <div className="col-span-2">
+                        <div className="sm:col-span-2">
                             <dt className="text-xs text-ink-3">Description</dt>
                             <dd className="text-ink">{skill.description || "—"}</dd>
                         </div>
@@ -185,7 +185,7 @@ export default function AdminSkillDetailPage({
             </div>
 
             {/* Topics */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-ink">Topics</h2>
                 <div className="flex items-center gap-3">
                     <Link
@@ -205,7 +205,7 @@ export default function AdminSkillDetailPage({
 
             {showTopicForm && (
                 <div className="bg-surface rounded-2xl p-5 mb-4">
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <label className="block">
                             <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                             <input
@@ -257,7 +257,8 @@ export default function AdminSkillDetailPage({
             ) : topics.length === 0 ? (
                 <p className="text-sm text-ink-3">No topics yet.</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full text-sm border-collapse min-w-[400px]">
                     <thead>
                         <tr className="border-b border-line">
                             <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
@@ -324,6 +325,7 @@ export default function AdminSkillDetailPage({
                         ))}
                     </tbody>
                 </table>
+                </div>
             )}
         </div>
     );

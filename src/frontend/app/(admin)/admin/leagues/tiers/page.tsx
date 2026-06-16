@@ -99,7 +99,8 @@ export default function AdminLeagueTiersPage() {
             {isLoading ? (
                 <p className="text-sm text-ink-3">Loading...</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full text-sm border-collapse min-w-[560px]">
                     <thead>
                         <tr className="border-b border-line">
                             <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium w-20">Order</th>
@@ -175,6 +176,7 @@ export default function AdminLeagueTiersPage() {
                             })}
                     </tbody>
                 </table>
+                </div>
             )}
 
             <div className="mt-6 p-4 border border-line rounded-xl bg-bg-2/50">

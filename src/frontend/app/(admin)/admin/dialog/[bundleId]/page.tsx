@@ -135,7 +135,7 @@ export default function AdminBundleModesPage() {
                 ← Back to Bundles
             </Link>
 
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
                 <div>
                     <h1 className="text-xl font-bold text-ink flex items-center gap-2">
                         {currentBundle?.iconEmoji} {currentBundle?.title || "Bundle"} — Modes
@@ -157,7 +157,7 @@ export default function AdminBundleModesPage() {
                     <h2 className="text-lg font-semibold text-ink mb-4">
                         {isCreating ? "Create Mode" : "Edit Mode"}
                     </h2>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Key
@@ -226,7 +226,7 @@ export default function AdminBundleModesPage() {
                                 disabled={!formData.voiceEnabled}
                             />
                         </div>
-                        <div className="col-span-2">
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Description
                             </label>
@@ -238,7 +238,7 @@ export default function AdminBundleModesPage() {
                                 placeholder="Описание режима..."
                             />
                         </div>
-                        <div className="col-span-2">
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Chat System Prompt (AI role for conversation)
                             </label>
@@ -253,7 +253,7 @@ export default function AdminBundleModesPage() {
                                 AI will add [DIALOG_END] when conversation should end.
                             </p>
                         </div>
-                        <div className="col-span-2">
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-ink mb-1">
                                 Feedback System Prompt (AI evaluation instructions)
                             </label>
@@ -288,7 +288,8 @@ export default function AdminBundleModesPage() {
             )}
 
             <div className="bg-surface rounded-2xl border border-line overflow-hidden">
-                <table className="w-full">
+            <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full min-w-[520px]">
                     <thead className="bg-surface">
                         <tr>
                             <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Title</th>
@@ -352,6 +353,7 @@ export default function AdminBundleModesPage() {
                         )}
                     </tbody>
                 </table>
+            </div>
             </div>
 
             {deletingModeId && (

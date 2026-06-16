@@ -56,10 +56,10 @@ export default function AdminDiscussPage() {
         <div className="p-6 space-y-10">
             {/* Threads moderation */}
             <section>
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
                     <h1 className="text-xl font-bold text-ink">Discuss — Threads</h1>
                     <form
-                        className="flex gap-2"
+                        className="flex flex-wrap gap-2"
                         onSubmit={(event) => {
                             event.preventDefault();
                             setPage(1);
@@ -81,7 +81,8 @@ export default function AdminDiscussPage() {
 
                 {threads && (
                     <div className="bg-surface rounded-2xl overflow-hidden">
-                        <table className="w-full">
+                    <div className="overflow-x-auto -mx-4 px-4">
+                        <table className="w-full min-w-[560px]">
                             <thead className="bg-surface">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Title</th>
@@ -140,6 +141,7 @@ export default function AdminDiscussPage() {
                             </tbody>
                         </table>
                     </div>
+                    </div>
                 )}
 
                 {threads && threads.totalCount > threads.pageSize && (
@@ -166,12 +168,12 @@ export default function AdminDiscussPage() {
             {/* Tag catalog */}
             <section>
                 <h2 className="text-lg font-bold text-ink mb-4">Tag Catalog</h2>
-                <div className="flex gap-2 mb-4">
+                <div className="flex flex-wrap gap-2 mb-4">
                     <input
                         value={newTagName}
                         onChange={(event) => setNewTagName(event.target.value)}
                         placeholder="New curated tag name…"
-                        className="px-3 py-2 border border-line rounded-xl bg-surface text-ink text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
+                        className="flex-1 min-w-[160px] px-3 py-2 border border-line rounded-xl bg-surface text-ink text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         onKeyDown={(event) => event.key === "Enter" && handleCreateTag()}
                     />
                     <button
@@ -185,7 +187,8 @@ export default function AdminDiscussPage() {
                 {tagError && <p className="text-bad text-sm mb-3">{tagError}</p>}
 
                 <div className="bg-surface rounded-2xl overflow-hidden">
-                    <table className="w-full">
+                <div className="overflow-x-auto -mx-4 px-4">
+                    <table className="w-full min-w-[380px]">
                         <thead className="bg-surface">
                             <tr>
                                 <th className="px-4 py-3 text-left text-sm font-medium text-ink-3">Name</th>
@@ -246,6 +249,7 @@ export default function AdminDiscussPage() {
                             )}
                         </tbody>
                     </table>
+                </div>
                 </div>
             </section>
 

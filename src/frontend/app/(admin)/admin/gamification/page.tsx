@@ -124,7 +124,7 @@ function StreakMilestonesCard() {
                     const draft = draftFor(m.id, m.dayCount, m.xpReward);
                     const dirty = draft.dayCount !== m.dayCount || draft.xpReward !== m.xpReward;
                     return (
-                        <div key={m.id} className="flex items-center gap-3">
+                        <div key={m.id} className="flex flex-wrap items-end gap-3">
                             <label className="text-xs text-ink-3">
                                 Days
                                 <input
@@ -171,7 +171,7 @@ function StreakMilestonesCard() {
                 )}
             </div>
 
-            <div className="flex items-end gap-3 border-t border-line pt-4">
+            <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
                 <label className="text-xs text-ink-3">
                     Days
                     <input

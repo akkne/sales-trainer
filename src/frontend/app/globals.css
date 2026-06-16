@@ -1105,6 +1105,80 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
   .land-features { grid-template-columns: 1fr; }
 }
 
+/* ── Phone-specific refinements (≤640px) ── */
+@media (max-width: 640px) {
+  /* tighter page gutters on phones */
+  .container, .appbar-inner { padding-left: 16px; padding-right: 16px; }
+
+  /* hero header: stack & shrink, stats go 2-up full width */
+  .hero-head { padding: 22px 0 18px; gap: 18px; }
+  .hero-stats { width: 100%; flex-wrap: wrap; }
+  .hero-stats .stat { min-width: calc(50% - 6px); }
+  .profile-head { padding: 24px 0 18px; gap: 14px; }
+
+  /* headings scale down */
+  .h2 { font-size: 23px; }
+  .h3 { font-size: 19px; }
+
+  /* cards a touch tighter */
+  .card-pad { padding: 16px; }
+
+  /* dialog list grids: single column — minmax(300/320) overflows narrow phones */
+  .bundle-grid, .mode-grid { grid-template-columns: 1fr; }
+  .mentor-card { padding: 20px; gap: 16px; }
+
+  /* league countdown shrink */
+  .cd-unit b { font-size: 34px; }
+  .cd-sep { font-size: 22px; }
+  .cd-row { gap: 10px; }
+
+  /* session player */
+  .session-top { padding: 12px 16px; gap: 12px; }
+  .session-body { padding: 16px; }
+  .session-foot { padding: 14px 0; }
+
+  /* text chat (AI dialog): wider bubbles, tighter padding */
+  .dc-head { padding: 12px 16px; }
+  .dc-thread-inner { padding: 18px 16px; gap: 12px; }
+  .dc-bubble { max-width: 85%; }
+  .dc-input { padding: 12px 16px; gap: 8px; }
+
+  /* friends chat + voice transcript bubbles wider */
+  .msg, .dx, .tr-bubble { max-width: 88%; }
+  .chat-msgs { padding: 16px; }
+  .chat-head, .chat-input { padding: 12px 16px; }
+
+  /* voice */
+  .voice-top { padding: 12px 16px; }
+  .voice-stage { padding: 28px 16px; }
+  .voice-avatar { width: 120px; height: 120px; }
+  .voice-cta { min-width: 0; width: 100%; }
+
+  /* lesson path: narrower nodes, less side padding, no inner scroll cap */
+  .lp-scroll { padding: 20px 8px 32px; max-height: none; }
+  .lp-row { padding: 0 6px; }
+  .lp-node, .lp-pulse { width: 60px; height: 60px; }
+  .lp-title { font-size: 15px; }
+
+  /* modals: near-fullscreen feel */
+  .modal-overlay { padding: 12px; }
+  .modal { max-height: 92vh; }
+  .modal-head { padding: 16px 18px; }
+  .modal-body { padding: 18px; }
+  .modal-foot { padding: 14px 18px; }
+
+  /* landing */
+  .land-top { padding: 16px; }
+  .land-hero { padding: 40px 0 50px; }
+  .land-features { margin-top: 36px; }
+
+  /* guidebook + discuss thread paddings */
+  .gb-top { padding: 18px; gap: 14px; }
+  .gb-body { padding: 0 18px 20px; }
+  .dsc-thread { padding: 16px; gap: 14px; }
+  .dsc-vote { width: 44px; }
+}
+
 /* ── Legacy Tailwind class helpers ── */
 .bg-surface { background: var(--surface); }
 .bg-surface-2 { background: var(--surface-2); }

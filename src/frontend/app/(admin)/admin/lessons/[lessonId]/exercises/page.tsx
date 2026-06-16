@@ -247,9 +247,9 @@ export default function AdminLessonExercisesPage({
                 </Link>
             </div>
 
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                 <h1 className="text-lg font-semibold text-ink">Edit Exercises</h1>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <button
                         onClick={exportExercises}
                         disabled={exercises.length === 0}

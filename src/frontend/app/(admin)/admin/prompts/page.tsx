@@ -76,7 +76,7 @@ export default function AdminPromptsPage() {
                             const dirty = xpDrafts[reward.exerciseType] !== undefined
                                 && xpDrafts[reward.exerciseType] !== reward.baseXpReward;
                             return (
-                                <div key={reward.exerciseType} className="flex items-center gap-3">
+                                <div key={reward.exerciseType} className="flex flex-wrap items-center gap-3">
                                     <span className="text-sm text-ink w-40">
                                         {TYPE_LABELS[reward.exerciseType as keyof typeof TYPE_LABELS] ?? reward.exerciseType}
                                     </span>
@@ -113,7 +113,7 @@ export default function AdminPromptsPage() {
 
                     return (
                         <div key={type} className="bg-surface border border-line rounded-2xl p-5">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                                 <div>
                                     <span className="text-sm font-medium text-ink">{TYPE_LABELS[type]}</span>
                                     <span className="ml-2 text-xs font-mono text-ink-3 px-1.5 py-0.5 bg-bg-2 rounded">

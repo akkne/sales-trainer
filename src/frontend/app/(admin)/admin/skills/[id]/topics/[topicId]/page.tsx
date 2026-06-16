@@ -129,7 +129,7 @@ export default function AdminTopicDetailPage({
 
             {/* Topic card */}
             <div className="bg-surface rounded-2xl p-5 mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                     <h1 className="text-lg font-semibold text-ink">{topic.title}</h1>
                     {!editMode && (
                         <button
@@ -143,7 +143,7 @@ export default function AdminTopicDetailPage({
 
                 {editMode && form ? (
                     <div>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <label className="block">
                                 <span className="text-xs text-ink-3">Iconic Name (English ID)</span>
                                 <input
@@ -189,7 +189,7 @@ export default function AdminTopicDetailPage({
                         </div>
                     </div>
                 ) : (
-                    <dl className="grid grid-cols-3 gap-3 text-sm">
+                    <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                         <div>
                             <dt className="text-xs text-ink-3">Iconic Name</dt>
                             <dd className="text-ink font-mono text-xs">{topic.iconicName}</dd>
@@ -209,7 +209,7 @@ export default function AdminTopicDetailPage({
             {/* Import Section */}
             {showImport && (
                 <div className="bg-surface border border-line rounded-2xl p-5 mb-6">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-wrap gap-3 items-center justify-between mb-3">
                         <h2 className="text-sm font-medium text-ink">Import Lessons from JSON</h2>
                         <button
                             onClick={downloadLessonsTemplate}
@@ -256,9 +256,9 @@ export default function AdminTopicDetailPage({
             )}
 
             {/* Lessons */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-ink">Lessons</h2>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <button
                         onClick={() => { setShowImport(v => !v); setImportResult(null); }}
                         className="px-3 py-1.5 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
@@ -276,7 +276,7 @@ export default function AdminTopicDetailPage({
 
             {showLessonForm && (
                 <div className="bg-surface rounded-2xl p-5 mb-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <label className="block">
                             <span className="text-xs text-ink-3">Title</span>
                             <input
@@ -317,7 +317,8 @@ export default function AdminTopicDetailPage({
             ) : lessons.length === 0 ? (
                 <p className="text-sm text-ink-3">No lessons yet.</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full text-sm border-collapse min-w-[360px]">
                     <thead>
                         <tr className="border-b border-line">
                             <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
@@ -386,6 +387,7 @@ export default function AdminTopicDetailPage({
                         ))}
                     </tbody>
                 </table>
+                </div>
             )}
         </div>
     );

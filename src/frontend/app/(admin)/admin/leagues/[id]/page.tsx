@@ -72,7 +72,7 @@ export default function AdminLeagueDetailPage({
                     ← All leagues
                 </Link>
             </div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <div>
                     <h1 className="text-xl font-bold text-ink capitalize">
                         {league.tier} league
@@ -94,7 +94,8 @@ export default function AdminLeagueDetailPage({
             {league.members.length === 0 ? (
                 <p className="text-sm text-ink-3">No members in this league.</p>
             ) : (
-                <table className="w-full text-sm border-collapse">
+                <div className="overflow-x-auto -mx-4 px-4">
+                <table className="w-full text-sm border-collapse min-w-[700px]">
                     <thead>
                         <tr className="border-b border-line">
                             <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">
@@ -215,6 +216,7 @@ export default function AdminLeagueDetailPage({
                         ))}
                     </tbody>
                 </table>
+                </div>
             )}
         </div>
     );

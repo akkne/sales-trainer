@@ -73,7 +73,7 @@ export default function AdminReferenceAllPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <h1 className="text-xl font-semibold text-ink">Reference Materials</h1>
                 <button
                     onClick={() => setShowCreateForm((v) => !v)}
@@ -255,8 +255,8 @@ function ReferenceFormFields({
                     onChange={(e) => onChange({ ...form, title: e.target.value })}
                 />
             </label>
-            <div className="flex gap-3">
-                <label className="block flex-1">
+            <div className="flex flex-wrap gap-3">
+                <label className="block flex-1 min-w-[140px]">
                     <span className="text-xs text-ink-3">Category</span>
                     <input
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -265,7 +265,7 @@ function ReferenceFormFields({
                         onChange={(e) => onChange({ ...form, category: e.target.value || null })}
                     />
                 </label>
-                <label className="block flex-1">
+                <label className="block flex-1 min-w-[140px]">
                     <span className="text-xs text-ink-3">Tags (comma-separated)</span>
                     <input
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"

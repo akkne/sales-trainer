@@ -119,9 +119,9 @@ export default function AdminTechniquesPage() {
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <h1 className="text-xl font-semibold text-ink">Techniques</h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <input
                         ref={importInputRef}
                         type="file"
@@ -408,8 +408,8 @@ function TechniqueFormFields({
 
     return (
         <>
-            <div className="flex gap-3">
-                <label className="block flex-1">
+            <div className="flex flex-wrap gap-3">
+                <label className="block flex-1 min-w-[140px]">
                     <span className="text-xs text-ink-3">Slug *</span>
                     <input
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -417,7 +417,7 @@ function TechniqueFormFields({
                         onChange={(e) => onChange({ ...form, slug: e.target.value })}
                     />
                 </label>
-                <label className="block flex-1">
+                <label className="block flex-1 min-w-[140px]">
                     <span className="text-xs text-ink-3">Name *</span>
                     <input
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -436,8 +436,8 @@ function TechniqueFormFields({
                 />
             </label>
 
-            <div className="flex gap-3">
-                <label className="block flex-1">
+            <div className="flex flex-wrap gap-3">
+                <label className="block flex-1 min-w-[160px]">
                     <span className="text-xs text-ink-3">Primary skill</span>
                     <select
                         className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -534,8 +534,8 @@ function TechniqueFormFields({
                 </label>
                 {coachEnabled && form.coach && (
                     <>
-                        <div className="flex gap-3">
-                            <label className="block flex-1">
+                        <div className="flex flex-wrap gap-3">
+                            <label className="block flex-1 min-w-[120px]">
                                 <span className="text-xs text-ink-3">Avatar seed</span>
                                 <input
                                     className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -543,7 +543,7 @@ function TechniqueFormFields({
                                     onChange={(e) => updateCoach({ avatarSeed: e.target.value })}
                                 />
                             </label>
-                            <label className="block flex-1">
+                            <label className="block flex-1 min-w-[120px]">
                                 <span className="text-xs text-ink-3">Name</span>
                                 <input
                                     className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
@@ -551,7 +551,7 @@ function TechniqueFormFields({
                                     onChange={(e) => updateCoach({ name: e.target.value })}
                                 />
                             </label>
-                            <label className="block flex-1">
+                            <label className="block flex-1 min-w-[120px]">
                                 <span className="text-xs text-ink-3">Role</span>
                                 <input
                                     className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30"
