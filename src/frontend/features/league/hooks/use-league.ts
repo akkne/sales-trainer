@@ -13,8 +13,11 @@ export interface LeagueParticipant {
 export interface CurrentLeagueData {
     leagueId: string;
     tier: string;
+    tierName: string;
+    tierColor: string;
     weekStartDate: string;
     weekEndDate: string;
+    periodEndsAt: string;
     participantsByRank: LeagueParticipant[];
     currentUserRank: number;
     previousWeekOutcome: "promoted" | "demoted" | null;

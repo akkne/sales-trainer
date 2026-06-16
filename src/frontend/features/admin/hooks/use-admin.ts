@@ -860,6 +860,16 @@ export interface AdminLeagueSettings {
     maximumLeagueParticipantCount: number;
     promotionZoneSize: number;
     demotionZoneSize: number;
+    currentPeriodEndsAt: string | null;
+    periodLengthDays: number;
+}
+
+export interface AdminLeagueTier {
+    id: string;
+    key: string;
+    name: string;
+    color: string;
+    order: number;
 }
 
 export function useAdminLeagues(filters?: { weekStart?: string; tier?: string }) {
@@ -999,6 +1009,59 @@ export function useRemoveLeagueMembership() {
         },
         onError: (error, membershipId) => {
             clientLogger.error("Failed to remove league membership", { membershipId, error: (error as Error).message });
+        },
+    });
+}
+
+// --- League Tiers ---
+
+export function useAdminLeagueTiers() {
+    return useQuery({
+        queryKey: ["admin", "leagues", "tiers"],
+        queryFn: () => apiClient.get<AdminLeagueTier[]>("/admin/leagues/tiers"),
+    });
+}
+
+export function useCreateLeagueTier() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: { key: string; name: string; color: string; order: number }) =>
+            apiClient.post<AdminLeagueTier>("/admin/leagues/tiers", body),
+        onSuccess: (data) => {
+            clientLogger.info("League tier created", { key: data.key });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to create league tier", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateLeagueTier() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, ...body }: { id: string; name: string; color: string; order: number }) =>
+            apiClient.put<AdminLeagueTier>(`/admin/leagues/tiers/${id}`, body),
+        onSuccess: (data) => {
+            clientLogger.info("League tier updated", { key: data.key });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update league tier", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteLeagueTier() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete<void>(`/admin/leagues/tiers/${id}`),
+        onSuccess: (_, id) => {
+            clientLogger.warn("League tier deleted", { id });
+            queryClient.invalidateQueries({ queryKey: ["admin", "leagues"] });
+        },
+        onError: (error, id) => {
+            clientLogger.error("Failed to delete league tier", { id, error: (error as Error).message });
         },
     });
 }

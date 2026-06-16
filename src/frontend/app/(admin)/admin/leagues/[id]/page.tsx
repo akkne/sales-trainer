@@ -8,9 +8,8 @@ import {
     useMoveMembershipTier,
     useAdjustMembershipXp,
     useRemoveLeagueMembership,
+    useAdminLeagueTiers,
 } from "@/features/admin/hooks/use-admin";
-
-const TIERS = ["bronze", "silver", "gold", "diamond"];
 
 const outcomeBadgeClass: Record<string, string> = {
     promoted: "bg-olive-soft text-olive",
@@ -25,6 +24,7 @@ export default function AdminLeagueDetailPage({
     const { id } = use(params);
 
     const { data: league, isLoading } = useAdminLeagueDetail(id);
+    const { data: tiers = [] } = useAdminLeagueTiers();
     const resync = useResyncLeague();
     const moveTier = useMoveMembershipTier();
     const adjustXp = useAdjustMembershipXp();
@@ -162,9 +162,9 @@ export default function AdminLeagueDetailPage({
                                         }
                                         className="text-xs border border-line rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo/30 disabled:opacity-50"
                                     >
-                                        {TIERS.map((t) => (
-                                            <option key={t} value={t}>
-                                                {t}
+                                        {tiers.map((t) => (
+                                            <option key={t.key} value={t.key}>
+                                                {t.name}
                                             </option>
                                         ))}
                                     </select>

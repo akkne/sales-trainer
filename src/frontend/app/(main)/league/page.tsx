@@ -8,12 +8,18 @@ import { UserAvatar } from "@/shared/components/user-avatar";
 import Link from "next/link";
 import { TimingConstants } from "@/shared/constants/timing-constants";
 
-function useCountdown(weekEndDate: string) {
+function useCountdown(periodEndsAt: string) {
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, mins: 0 });
 
     useEffect(() => {
+        // An empty/invalid end date yields NaN — leave the timer at zero rather
+        // than rendering "NaN" while the league data is still loading.
+        const endMs = new Date(periodEndsAt).getTime();
+        if (Number.isNaN(endMs)) {
+            setTimeLeft({ days: 0, hours: 0, mins: 0 });
+            return;
+        }
         function compute() {
-            const endMs = new Date(weekEndDate).getTime();
             const diffMs = endMs - Date.now();
             if (diffMs <= 0) {
                 setTimeLeft({ days: 0, hours: 0, mins: 0 });
@@ -28,13 +34,14 @@ function useCountdown(weekEndDate: string) {
         compute();
         const id = setInterval(compute, TimingConstants.oneMinuteMs);
         return () => clearInterval(id);
-    }, [weekEndDate]);
+    }, [periodEndsAt]);
 
     return timeLeft;
 }
 
-// Tier colors mirror the design tokens (--tier-*), which are not declared in
-// the app globals.css, so they are inlined here.
+// Fallback tier presentation, used only if the API does not supply a name/color
+// (e.g. a tier deleted after a league was created). Tier name and color are now
+// admin-configured and delivered with the league payload.
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
     bronze: { label: "Бронза", color: "#c47b3f" },
     silver: { label: "Серебро", color: "#9aa3ad" },
@@ -44,7 +51,7 @@ const TIER_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default function LeaguePage() {
     const { data: leagueData, isLoading, isError, refetch } = useCurrentLeague();
-    const countdown = useCountdown(leagueData?.weekEndDate ?? "");
+    const countdown = useCountdown(leagueData?.periodEndsAt ?? "");
 
     if (isLoading) {
         return (
@@ -91,7 +98,11 @@ export default function LeaguePage() {
         );
     }
 
-    const tierInfo = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
+    const tierFallback = TIER_CONFIG[leagueData.tier] ?? { label: leagueData.tier, color: "var(--ink-3)" };
+    const tierInfo = {
+        label: leagueData.tierName || tierFallback.label,
+        color: leagueData.tierColor || tierFallback.color,
+    };
     const PROMOTION_ZONE_SIZE = leagueData.promotionZoneSize;
     const DEMOTION_ZONE_SIZE = leagueData.demotionZoneSize;
     const totalParticipantCount = leagueData.participantsByRank.length;

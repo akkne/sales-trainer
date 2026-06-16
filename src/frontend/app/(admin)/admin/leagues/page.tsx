@@ -8,17 +8,26 @@ import {
     useAdminLeagueSettings,
     useUpdateLeagueSettings,
     useCloseCurrentLeagueWeek,
+    useAdminLeagueTiers,
     type AdminLeagueSettings,
 } from "@/features/admin/hooks/use-admin";
 
-const TIERS = ["bronze", "silver", "gold", "diamond"];
+// Converts the stored UTC ISO instant to the value a <input type="datetime-local">
+// expects (local "YYYY-MM-DDTHH:mm"), and back.
+function isoToLocalInput(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
-const tierBadgeClass: Record<string, string> = {
-    bronze: "bg-accent-soft text-accent",
-    silver: "bg-bg-2 text-ink-3",
-    gold: "bg-olive-soft text-olive",
-    diamond: "bg-indigo-soft text-indigo",
-};
+function localInputToIso(local: string): string | null {
+    if (!local) return null;
+    const d = new Date(local);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+}
 
 export default function AdminLeaguesPage() {
     const [weekStart, setWeekStart] = useState("");
@@ -29,7 +38,10 @@ export default function AdminLeaguesPage() {
         tier: tier || undefined,
     });
     const { data: weeks = [] } = useAdminLeagueWeeks();
+    const { data: tiers = [] } = useAdminLeagueTiers();
     const { data: settings } = useAdminLeagueSettings();
+
+    const tierByKey = Object.fromEntries(tiers.map((t) => [t.key, t]));
     const updateSettings = useUpdateLeagueSettings();
     const closeWeek = useCloseCurrentLeagueWeek();
 
@@ -62,6 +74,12 @@ export default function AdminLeaguesPage() {
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-xl font-bold text-ink">Leagues</h1>
                 <div className="flex items-center gap-2">
+                    <Link
+                        href="/admin/leagues/tiers"
+                        className="text-sm px-3 py-1.5 rounded-lg border border-line text-ink-3 hover:text-ink hover:bg-bg-2 transition-colors"
+                    >
+                        Tiers
+                    </Link>
                     <button
                         onClick={openSettings}
                         disabled={!settings}
@@ -115,6 +133,35 @@ export default function AdminLeaguesPage() {
                                 />
                             </label>
                         ))}
+                        <label className="text-xs text-ink-3">
+                            Period ends at
+                            <input
+                                type="datetime-local"
+                                value={isoToLocalInput(settingsForm.currentPeriodEndsAt)}
+                                onChange={(e) =>
+                                    setSettingsForm({
+                                        ...settingsForm,
+                                        currentPeriodEndsAt: localInputToIso(e.target.value),
+                                    })
+                                }
+                                className="block mt-1 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30"
+                            />
+                        </label>
+                        <label className="text-xs text-ink-3">
+                            Period length (days)
+                            <input
+                                type="number"
+                                min={1}
+                                value={settingsForm.periodLengthDays}
+                                onChange={(e) =>
+                                    setSettingsForm({
+                                        ...settingsForm,
+                                        periodLengthDays: Number(e.target.value),
+                                    })
+                                }
+                                className="block mt-1 w-32 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30"
+                            />
+                        </label>
                         <div className="flex gap-2">
                             <button
                                 onClick={handleSaveSettings}
@@ -158,9 +205,9 @@ export default function AdminLeaguesPage() {
                     className="text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30"
                 >
                     <option value="">All tiers</option>
-                    {TIERS.map((t) => (
-                        <option key={t} value={t}>
-                            {t}
+                    {tiers.map((t) => (
+                        <option key={t.key} value={t.key}>
+                            {t.name}
                         </option>
                     ))}
                 </select>
@@ -194,12 +241,13 @@ export default function AdminLeaguesPage() {
                             >
                                 <td className="py-2.5 px-3">
                                     <span
-                                        className={`inline-block px-2 py-0.5 text-xs rounded-full capitalize ${
-                                            tierBadgeClass[league.tier] ??
-                                            "bg-bg-2 text-ink-3"
-                                        }`}
+                                        className="inline-block px-2 py-0.5 text-xs rounded-full font-medium"
+                                        style={{
+                                            color: tierByKey[league.tier]?.color ?? "var(--ink-3)",
+                                            backgroundColor: `${tierByKey[league.tier]?.color ?? "#888"}1f`,
+                                        }}
                                     >
-                                        {league.tier}
+                                        {tierByKey[league.tier]?.name ?? league.tier}
                                     </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-ink-3 text-xs">
