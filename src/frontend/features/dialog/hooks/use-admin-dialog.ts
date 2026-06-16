@@ -97,6 +97,29 @@ export function useAdminSkills() {
     });
 }
 
+export interface DialogImportResult {
+    bundlesCreated: number;
+    bundlesUpdated: number;
+    modesCreated: number;
+    modesUpdated: number;
+    errors: string[];
+}
+
+/** Import dialog bundles (with nested modes) from one JSON file. */
+export function useImportDialog() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.postFile<DialogImportResult>("/admin/dialog/import", formData);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "dialog", "bundles"] });
+        },
+    });
+}
+
 export function useCreateBundle() {
     const queryClient = useQueryClient();
     return useMutation({

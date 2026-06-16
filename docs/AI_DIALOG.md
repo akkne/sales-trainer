@@ -110,6 +110,19 @@ CREATE TABLE "DialogModes" (
 | POST | `/admin/dialog/bundles/{bundleId}/modes` | Create mode |
 | PUT | `/admin/dialog/modes/{id}` | Update mode (incl. system prompts) |
 | DELETE | `/admin/dialog/modes/{id}` | Delete mode |
+| POST | `/admin/dialog/import` | Bulk import bundles + nested modes from one JSON file |
+
+### Bulk import
+
+`POST /admin/dialog/import` (`multipart/form-data`, `file=<JSON>`, ≤20 MB) loads
+whole dialog bundles with their modes in one file — the same import/template UX as
+content (Download Template + paste/upload on the `/admin/dialog` page). Bundles
+reference their skill by `skillIconicName`. Upsert is idempotent: bundles by
+`(skillId, title)`, modes by `(bundleId, key)`. Bad items (unknown skill, empty
+key/title) are skipped into `errors[]`; everything else is still written. See the
+import-shape contract in [API_CONTRACTS.md](API_CONTRACTS.md). Tested by
+`tests/Integration/AdminDialogImportTests.cs` (create, idempotent re-import,
+unknown-skill error, 403 for non-admin — requires Docker).
 
 ## AI Integration
 

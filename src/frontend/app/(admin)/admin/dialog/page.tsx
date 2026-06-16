@@ -8,9 +8,12 @@ import {
     useCreateBundle,
     useUpdateBundle,
     useDeleteBundle,
+    useImportDialog,
     AdminDialogBundle,
     CreateBundleRequest,
 } from "@/features/dialog/hooks/use-admin-dialog";
+import { ImportPanel } from "@/features/admin/components/import-panel";
+import { DIALOG_TEMPLATE } from "@/features/admin/lib/import-templates";
 
 export default function AdminDialogPage() {
     const { data: bundles, isLoading, error } = useAdminDialogBundles();
@@ -18,6 +21,7 @@ export default function AdminDialogPage() {
     const createBundleMutation = useCreateBundle();
     const updateBundleMutation = useUpdateBundle();
     const deleteBundleMutation = useDeleteBundle();
+    const importDialog = useImportDialog();
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
@@ -116,6 +120,45 @@ export default function AdminDialogPage() {
                     + New Bundle
                 </button>
             </div>
+
+            <ImportPanel
+                title="Import Dialog Bundles"
+                description='JSON: { "bundles": [{ skillIconicName, title, ..., modes: [{ key, title, chatSystemPrompt, feedbackSystemPrompt, ... }] }] }'
+                templateData={DIALOG_TEMPLATE}
+                templateFilename="dialog_bundles_template.json"
+                validate={(parsed) => {
+                    const root = parsed as Record<string, unknown> | unknown[];
+                    const bundles = Array.isArray(root) ? root : (root as Record<string, unknown>)?.bundles;
+                    if (!Array.isArray(bundles)) return ['Root must be an object { "bundles": [...] } or an array of bundles.'];
+                    const problems: string[] = [];
+                    bundles.forEach((b, i) => {
+                        const bundle = b as Record<string, unknown>;
+                        const name = typeof bundle?.title === "string" && bundle.title ? bundle.title : `#${i + 1}`;
+                        if (typeof bundle?.skillIconicName !== "string" || !bundle.skillIconicName.trim()) problems.push(`Bundle ${name}: skillIconicName is required.`);
+                        if (typeof bundle?.title !== "string" || !bundle.title.trim()) problems.push(`Bundle #${i + 1}: title is required.`);
+                        const modes = bundle?.modes;
+                        if (modes !== undefined && !Array.isArray(modes)) { problems.push(`Bundle ${name}: modes must be an array.`); return; }
+                        (Array.isArray(modes) ? modes : []).forEach((m, mi) => {
+                            const mode = m as Record<string, unknown>;
+                            if (typeof mode?.key !== "string" || !mode.key.trim()) problems.push(`Bundle ${name} › mode #${mi + 1}: key is required.`);
+                            if (typeof mode?.title !== "string" || !mode.title.trim()) problems.push(`Bundle ${name} › mode #${mi + 1}: title is required.`);
+                        });
+                    });
+                    return problems;
+                }}
+                onImport={async ({ text }) => {
+                    const file = new File([text], "dialog.json", { type: "application/json" });
+                    const result = await importDialog.mutateAsync(file);
+                    return {
+                        created: result.bundlesCreated + result.modesCreated,
+                        updated: result.bundlesUpdated + result.modesUpdated,
+                        errors: result.errors,
+                        detail:
+                            `Bundles ${result.bundlesCreated}/${result.bundlesUpdated} · ` +
+                            `Modes ${result.modesCreated}/${result.modesUpdated} (created/updated)`,
+                    };
+                }}
+            />
 
             {(isCreating || editingBundleId) && (
                 <div className="mb-6 p-4 bg-surface rounded-2xl">

@@ -420,6 +420,10 @@ Errors:
 | POST | /admin/dialog/bundles/:bundleId/modes | `CreateModeRequestDto` | `AdminDialogModeDto` |
 | PUT | /admin/dialog/modes/:modeId | `UpdateModeRequestDto` | `AdminDialogModeDto` |
 | DELETE | /admin/dialog/modes/:modeId | — | 204 |
+| POST | /admin/dialog/import | `multipart/form-data; file=<JSON>` (≤20 MB) | `DialogImportResultDto` |
+
+**Dialog import JSON:** `{ bundles: [{ skillIconicName, title, description?, iconEmoji?, sortOrder?, isActive?, modes: [{ key, title, description?, chatSystemPrompt?, feedbackSystemPrompt?, sortOrder?, isActive?, voiceEnabled?, voiceId? }] }] }` (a bare bundles array is also accepted). `skillIconicName` must already exist. Idempotent upsert: bundles by `(skillId, title)`, modes by `(bundleId, key)`; modes with an unknown skill or empty key/title are skipped into `errors[]`. UI: import panel on `/admin/dialog`.
+`DialogImportResultDto = { bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors[] }`
 
 **Admin DTOs:**
 - `AdminDialogModeDto`: extends `DialogModeDto` with `chatSystemPrompt, feedbackSystemPrompt`

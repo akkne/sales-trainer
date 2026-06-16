@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -132,6 +134,176 @@ public class AdminDialogController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPost("import")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<DialogImportResultDto>> Import(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "File is required." });
+        if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only .json files are accepted." });
+
+        var skillsByIconicName = await _dbContext.Skills.ToDictionaryAsync(s => s.IconicName);
+        var existingBundles = await _dbContext.DialogBundles.ToListAsync();
+        var existingModes = await _dbContext.DialogModes.ToListAsync();
+
+        var bundlesCreated = 0;
+        var bundlesUpdated = 0;
+        var modesCreated = 0;
+        var modesUpdated = 0;
+        var errors = new List<string>();
+        var now = DateTime.UtcNow;
+
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(file.OpenReadStream());
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("bundles", out var bundlesProp))
+                root = bundlesProp;
+            if (root.ValueKind != JsonValueKind.Array)
+                return BadRequest(new { message = "JSON must be an object { \"bundles\": [...] } or an array of bundle objects." });
+
+            foreach (var (bundleElement, bundleIndex) in root.EnumerateArray().Select((e, i) => (e, i + 1)))
+            {
+                var bundleTitle = "";
+                DialogBundle bundle;
+                try
+                {
+                    var skillIconicName = bundleElement.GetProperty("skillIconicName").GetString()?.Trim() ?? "";
+                    if (!skillsByIconicName.TryGetValue(skillIconicName, out var skill))
+                    {
+                        errors.Add($"Bundle {bundleIndex}: skill '{skillIconicName}' not found.");
+                        continue;
+                    }
+
+                    bundleTitle = bundleElement.GetProperty("title").GetString()?.Trim() ?? "";
+                    if (string.IsNullOrWhiteSpace(bundleTitle))
+                        throw new InvalidOperationException("title is empty.");
+
+                    var description = ReadString(bundleElement, "description") ?? "";
+                    var iconEmoji = ReadString(bundleElement, "iconEmoji") ?? "💬";
+                    var sortOrder = bundleElement.TryGetProperty("sortOrder", out var soProp) ? soProp.GetInt32() : 0;
+                    var isActive = !bundleElement.TryGetProperty("isActive", out var iaProp) || iaProp.GetBoolean();
+
+                    var existingBundle = existingBundles.FirstOrDefault(b => b.SkillId == skill.Id && b.Title == bundleTitle);
+                    if (existingBundle is not null)
+                    {
+                        existingBundle.Description = description;
+                        existingBundle.IconEmoji = iconEmoji;
+                        existingBundle.SortOrder = sortOrder;
+                        existingBundle.IsActive = isActive;
+                        existingBundle.UpdatedAt = now;
+                        bundle = existingBundle;
+                        bundlesUpdated++;
+                    }
+                    else
+                    {
+                        bundle = new DialogBundle
+                        {
+                            Id = Guid.NewGuid(),
+                            SkillId = skill.Id,
+                            Title = bundleTitle,
+                            Description = description,
+                            IconEmoji = iconEmoji,
+                            SortOrder = sortOrder,
+                            IsActive = isActive,
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        };
+                        _dbContext.DialogBundles.Add(bundle);
+                        existingBundles.Add(bundle);
+                        bundlesCreated++;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    errors.Add($"Bundle {bundleIndex} ('{bundleTitle}'): {exception.Message}");
+                    continue;
+                }
+
+                if (!bundleElement.TryGetProperty("modes", out var modesElement) || modesElement.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var (modeElement, modeIndex) in modesElement.EnumerateArray().Select((e, i) => (e, i + 1)))
+                {
+                    try
+                    {
+                        var key = modeElement.GetProperty("key").GetString()?.Trim() ?? "";
+                        if (string.IsNullOrWhiteSpace(key))
+                            throw new InvalidOperationException("key is empty.");
+                        var modeTitle = modeElement.GetProperty("title").GetString()?.Trim() ?? "";
+                        if (string.IsNullOrWhiteSpace(modeTitle))
+                            throw new InvalidOperationException("title is empty.");
+
+                        var description = ReadString(modeElement, "description") ?? "";
+                        var chatPrompt = ReadString(modeElement, "chatSystemPrompt") ?? "";
+                        var feedbackPrompt = ReadString(modeElement, "feedbackSystemPrompt") ?? "";
+                        var sortOrder = modeElement.TryGetProperty("sortOrder", out var soProp) ? soProp.GetInt32() : 0;
+                        var isActive = !modeElement.TryGetProperty("isActive", out var iaProp) || iaProp.GetBoolean();
+                        var voiceEnabled = modeElement.TryGetProperty("voiceEnabled", out var veProp) && veProp.GetBoolean();
+                        var voiceId = ReadString(modeElement, "voiceId");
+
+                        var existingMode = existingModes.FirstOrDefault(m => m.BundleId == bundle.Id && m.Key == key);
+                        if (existingMode is not null)
+                        {
+                            existingMode.Title = modeTitle;
+                            existingMode.Description = description;
+                            existingMode.ChatSystemPrompt = chatPrompt;
+                            existingMode.FeedbackSystemPrompt = feedbackPrompt;
+                            existingMode.SortOrder = sortOrder;
+                            existingMode.IsActive = isActive;
+                            existingMode.VoiceEnabled = voiceEnabled;
+                            existingMode.VoiceId = voiceId;
+                            existingMode.UpdatedAt = now;
+                            modesUpdated++;
+                        }
+                        else
+                        {
+                            var mode = new DialogMode
+                            {
+                                Id = Guid.NewGuid(),
+                                BundleId = bundle.Id,
+                                Key = key,
+                                Title = modeTitle,
+                                Description = description,
+                                ChatSystemPrompt = chatPrompt,
+                                FeedbackSystemPrompt = feedbackPrompt,
+                                SortOrder = sortOrder,
+                                IsActive = isActive,
+                                VoiceEnabled = voiceEnabled,
+                                VoiceId = voiceId,
+                                CreatedAt = now,
+                                UpdatedAt = now
+                            };
+                            _dbContext.DialogModes.Add(mode);
+                            existingModes.Add(mode);
+                            modesCreated++;
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        errors.Add($"Bundle '{bundleTitle}', mode {modeIndex}: {exception.Message}");
+                    }
+                }
+            }
+        }
+        catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
+
+        await _dbContext.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Dialog import: Bundles={BC}/{BU} Modes={MC}/{MU} Errors={ErrorCount} by ActorId={ActorId}",
+            bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors.Count,
+            User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new DialogImportResultDto(bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors));
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString()
+            : null;
 
     [HttpGet("bundles/{bundleId:guid}/modes")]
     public async Task<IActionResult> GetModesForBundle(Guid bundleId)

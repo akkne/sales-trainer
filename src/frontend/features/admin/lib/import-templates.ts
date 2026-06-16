@@ -58,6 +58,37 @@ export const LESSONS_TEMPLATE = [
 ];
 
 /**
+ * `POST /admin/dialog/import` — dialog bundles with nested modes in one file.
+ * `skillIconicName` must already exist. Upsert: bundles by (skill, title), modes
+ * by (bundle, key). Re-importing the same file is safe.
+ */
+export const DIALOG_TEMPLATE = {
+    bundles: [
+        {
+            skillIconicName: "cold-calling",
+            title: "Cold call simulator",
+            description: "Practice live cold calls with an AI customer",
+            iconEmoji: "📞",
+            sortOrder: 1,
+            isActive: true,
+            modes: [
+                {
+                    key: "secretary-bypass",
+                    title: "Get past the gatekeeper",
+                    description: "The AI plays a protective secretary",
+                    chatSystemPrompt: "You are Marina, a secretary screening cold calls. Be polite but resistant; only put the seller through if they give a compelling, specific reason.",
+                    feedbackSystemPrompt: "Evaluate how well the seller handled the gatekeeper: did they stay confident, give a concrete reason, and avoid sounding scripted? End with [XP:N] where N is 0-100.",
+                    sortOrder: 1,
+                    isActive: true,
+                    voiceEnabled: false,
+                    voiceId: null,
+                },
+            ],
+        },
+    ],
+};
+
+/**
  * `POST /admin/seeder/bundle` — an entire content tree in one file.
  * Skill → topics → lessons → exercises. Everything is upserted idempotently
  * (skills/topics by iconicName, lessons by title-within-topic, exercises by
