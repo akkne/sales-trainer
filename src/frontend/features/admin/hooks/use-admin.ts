@@ -1104,3 +1104,120 @@ export function useUpdateExerciseTypePrompt() {
         },
     });
 }
+
+// --- Gamification (DB-driven XP economy) ---
+
+export interface GamificationSettings {
+    dailyXpGoal: number;
+    weeklyXpGoal: number;
+    dialogXpMultiplier: number;
+    dialogWeightConfidence: number;
+    dialogWeightStructure: number;
+    dialogWeightObjection: number;
+    dialogWeightGoal: number;
+}
+
+export interface ExerciseTypeReward {
+    id: string;
+    exerciseType: string;
+    baseXpReward: number;
+}
+
+export interface StreakMilestone {
+    id: string;
+    dayCount: number;
+    xpReward: number;
+}
+
+export function useGamificationSettings() {
+    return useQuery({
+        queryKey: ["admin", "gamification", "settings"],
+        queryFn: () => apiClient.get<GamificationSettings>("/admin/gamification/settings"),
+    });
+}
+
+export function useUpdateGamificationSettings() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: GamificationSettings) =>
+            apiClient.put<GamificationSettings>("/admin/gamification/settings", body),
+        onSuccess: () => {
+            clientLogger.info("Gamification settings updated");
+            queryClient.invalidateQueries({ queryKey: ["admin", "gamification", "settings"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update gamification settings", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useExerciseTypeRewards() {
+    return useQuery({
+        queryKey: ["admin", "gamification", "exercise-rewards"],
+        queryFn: () => apiClient.get<ExerciseTypeReward[]>("/admin/gamification/exercise-rewards"),
+    });
+}
+
+export function useUpdateExerciseTypeReward() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ exerciseType, baseXpReward }: { exerciseType: string; baseXpReward: number }) =>
+            apiClient.put<ExerciseTypeReward>(`/admin/gamification/exercise-rewards/${exerciseType}`, { baseXpReward }),
+        onSuccess: (data) => {
+            clientLogger.info("Exercise reward updated", { exerciseType: data.exerciseType });
+            queryClient.invalidateQueries({ queryKey: ["admin", "gamification", "exercise-rewards"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update exercise reward", { exerciseType: variables.exerciseType, error: (error as Error).message });
+        },
+    });
+}
+
+export function useStreakMilestones() {
+    return useQuery({
+        queryKey: ["admin", "gamification", "streak-milestones"],
+        queryFn: () => apiClient.get<StreakMilestone[]>("/admin/gamification/streak-milestones"),
+    });
+}
+
+export function useCreateStreakMilestone() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: { dayCount: number; xpReward: number }) =>
+            apiClient.post<StreakMilestone>("/admin/gamification/streak-milestones", body),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "gamification", "streak-milestones"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to create streak milestone", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateStreakMilestone() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, dayCount, xpReward }: { id: string; dayCount: number; xpReward: number }) =>
+            apiClient.put<StreakMilestone>(`/admin/gamification/streak-milestones/${id}`, { dayCount, xpReward }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "gamification", "streak-milestones"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update streak milestone", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteStreakMilestone() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) =>
+            apiClient.delete<void>(`/admin/gamification/streak-milestones/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["admin", "gamification", "streak-milestones"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to delete streak milestone", { error: (error as Error).message });
+        },
+    });
+}

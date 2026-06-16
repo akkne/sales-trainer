@@ -14,6 +14,11 @@ import {
 } from "@/features/dialog/hooks/use-admin-dialog";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { DIALOG_TEMPLATE } from "@/features/admin/lib/import-templates";
+import {
+    useGamificationSettings,
+    useUpdateGamificationSettings,
+    GamificationSettings,
+} from "@/features/admin/hooks/use-admin";
 
 export default function AdminDialogPage() {
     const { data: bundles, isLoading, error } = useAdminDialogBundles();
@@ -111,6 +116,8 @@ export default function AdminDialogPage() {
 
     return (
         <div className="p-6">
+            <DialogXpScoringCard />
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-xl font-bold text-ink">Dialog Bundles</h1>
                 <button
@@ -353,6 +360,99 @@ export default function AdminDialogPage() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+type DialogWeightKey =
+    | "dialogWeightConfidence"
+    | "dialogWeightStructure"
+    | "dialogWeightObjection"
+    | "dialogWeightGoal";
+
+const DIALOG_WEIGHT_FIELDS: { key: DialogWeightKey; label: string }[] = [
+    { key: "dialogWeightConfidence", label: "Confidence & tone" },
+    { key: "dialogWeightStructure", label: "Argument structure" },
+    { key: "dialogWeightObjection", label: "Objection handling" },
+    { key: "dialogWeightGoal", label: "Call-goal achievement" },
+];
+
+function DialogXpScoringCard() {
+    const { data: settings } = useGamificationSettings();
+    const updateSettings = useUpdateGamificationSettings();
+    const [form, setForm] = useState<GamificationSettings | null>(null);
+
+    const current = form ?? settings ?? null;
+    if (!current) return null;
+
+    const weightTotal =
+        current.dialogWeightConfidence +
+        current.dialogWeightStructure +
+        current.dialogWeightObjection +
+        current.dialogWeightGoal;
+
+    const set = (patch: Partial<GamificationSettings>) =>
+        setForm({ ...current, ...patch });
+
+    return (
+        <div className="mb-6 p-4 bg-surface rounded-2xl border border-line">
+            <h2 className="text-lg font-semibold text-ink mb-1">Dialog XP scoring</h2>
+            <p className="text-xs text-ink-3 mb-4">
+                The AI scores a completed dialog on four criteria (each capped at its weight). Earned XP =
+                <span className="font-mono"> round(score × multiplier)</span>. Weights are injected into the
+                feedback prompt.
+            </p>
+            <div className="flex flex-wrap gap-4 items-end">
+                <label className="text-xs text-ink-3">
+                    XP multiplier
+                    <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={current.dialogXpMultiplier}
+                        onChange={(e) => set({ dialogXpMultiplier: Number(e.target.value) })}
+                        className="block mt-1 w-28 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
+                    />
+                </label>
+                {DIALOG_WEIGHT_FIELDS.map(({ key, label }) => (
+                    <label key={key} className="text-xs text-ink-3">
+                        {label}
+                        <input
+                            type="number"
+                            min={0}
+                            value={current[key]}
+                            onChange={(e) => set({ [key]: Number(e.target.value) } as Partial<GamificationSettings>)}
+                            className="block mt-1 w-24 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
+                        />
+                    </label>
+                ))}
+                <span className="text-xs text-ink-3 pb-2">
+                    Max score: <strong className="text-ink">{weightTotal}</strong>
+                </span>
+            </div>
+            <div className="flex gap-2 mt-4 items-center">
+                <button
+                    onClick={() => updateSettings.mutate(current)}
+                    disabled={updateSettings.isPending || weightTotal <= 0}
+                    className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                    {updateSettings.isPending ? "Saving..." : "Save"}
+                </button>
+                {form && (
+                    <button
+                        onClick={() => setForm(null)}
+                        className="text-sm px-3 py-1.5 rounded-lg border border-line text-ink-3 hover:text-ink transition-colors"
+                    >
+                        Reset
+                    </button>
+                )}
+                {weightTotal <= 0 && (
+                    <span className="text-xs text-red-500">Weights must sum to more than 0.</span>
+                )}
+                {updateSettings.isError && (
+                    <span className="text-xs text-red-500">{(updateSettings.error as Error).message}</span>
+                )}
+            </div>
         </div>
     );
 }

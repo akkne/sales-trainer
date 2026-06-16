@@ -4,12 +4,28 @@ import { useState } from "react";
 import {
     useExerciseTypePrompts,
     useUpdateExerciseTypePrompt,
+    useExerciseTypeRewards,
+    useUpdateExerciseTypeReward,
 } from "@/features/admin/hooks/use-admin";
 import { AI_EXERCISE_TYPES, TYPE_LABELS } from "@/features/admin/components/exercise-editors";
 
 export default function AdminPromptsPage() {
     const { data: prompts = [], isLoading } = useExerciseTypePrompts();
     const updatePrompt = useUpdateExerciseTypePrompt();
+    const { data: rewards = [] } = useExerciseTypeRewards();
+    const updateReward = useUpdateExerciseTypeReward();
+
+    // Local edits for base XP: map of exerciseType -> current input value
+    const [xpDrafts, setXpDrafts] = useState<Record<string, number>>({});
+
+    function getRewardXp(exerciseType: string, stored: number): number {
+        return xpDrafts[exerciseType] ?? stored;
+    }
+
+    async function handleSaveReward(exerciseType: string) {
+        await updateReward.mutateAsync({ exerciseType, baseXpReward: getRewardXp(exerciseType, 0) });
+        setXpDrafts((prev) => { const next = { ...prev }; delete next[exerciseType]; return next; });
+    }
 
     // Local edits: map of exerciseType -> current textarea value
     const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -46,6 +62,47 @@ export default function AdminPromptsPage() {
                     field in its content, that text is appended as an addendum to the global prompt.
                 </p>
             </div>
+
+            {rewards.length > 0 && (
+                <div className="bg-surface border border-line rounded-2xl p-5 mb-8">
+                    <h2 className="text-sm font-semibold text-ink mb-1">Base XP per exercise type</h2>
+                    <p className="text-xs text-ink-3 mb-4">
+                        XP awarded when a user answers an exercise of this type correctly. Stored in the
+                        database — no hardcoded values.
+                    </p>
+                    <div className="space-y-2">
+                        {rewards.map((reward) => {
+                            const isSaving = updateReward.isPending && updateReward.variables?.exerciseType === reward.exerciseType;
+                            const dirty = xpDrafts[reward.exerciseType] !== undefined
+                                && xpDrafts[reward.exerciseType] !== reward.baseXpReward;
+                            return (
+                                <div key={reward.exerciseType} className="flex items-center gap-3">
+                                    <span className="text-sm text-ink w-40">
+                                        {TYPE_LABELS[reward.exerciseType as keyof typeof TYPE_LABELS] ?? reward.exerciseType}
+                                    </span>
+                                    <span className="text-xs font-mono text-ink-3 w-32">{reward.exerciseType}</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={getRewardXp(reward.exerciseType, reward.baseXpReward)}
+                                        onChange={(e) =>
+                                            setXpDrafts((prev) => ({ ...prev, [reward.exerciseType]: Number(e.target.value) }))
+                                        }
+                                        className="w-24 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
+                                    />
+                                    <button
+                                        onClick={() => handleSaveReward(reward.exerciseType)}
+                                        disabled={isSaving || !dirty}
+                                        className="px-3 py-1.5 text-xs bg-ink text-bg rounded-md hover:opacity-90 disabled:opacity-40 transition-colors"
+                                    >
+                                        {isSaving ? "Saving…" : "Save"}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {isLoading && <p className="text-sm text-ink-3">Loading...</p>}
 
