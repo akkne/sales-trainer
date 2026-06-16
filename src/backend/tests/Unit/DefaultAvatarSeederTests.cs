@@ -16,6 +16,8 @@ public class DefaultAvatarSeederTests
         private readonly Dictionary<string, byte[]> _store = new();
         public int PutCount { get; private set; }
 
+        public Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default)
         {
             using var ms = new MemoryStream();
@@ -51,6 +53,8 @@ public class DefaultAvatarSeederTests
         private readonly Dictionary<string, byte[]> _store = new();
 
         public FailingObjectStorage(string failKey) => _failKey = failKey;
+
+        public Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default)
         {

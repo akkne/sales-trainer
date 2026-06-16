@@ -184,6 +184,8 @@ internal sealed class InMemoryObjectStorage : IObjectStorage
 
     public int PutCallCount { get; private set; }
 
+    public Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     public Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default)
     {
         var data = ReadAllBytes(content);

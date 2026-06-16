@@ -190,6 +190,57 @@ public class LeagueServiceTests
     }
 
     [Test]
+    public async Task Close_RunTwice_DoesNotDuplicateNextWeekMemberships()
+    {
+        await SeedLeagueWithMembersAsync(3);
+        var nextWeekStart = CurrentWeekStart().AddDays(7);
+
+        await _service.CloseCurrentLeagueAndCreateNextAsync();
+        await _service.CloseCurrentLeagueAndCreateNextAsync();
+
+        var nextWeekMembershipCount = _db.LeagueMemberships
+            .Join(_db.Leagues, m => m.LeagueId, l => l.Id, (m, l) => l.WeekStartDate)
+            .Count(weekStart => weekStart == nextWeekStart);
+
+        nextWeekMembershipCount.Should().Be(3);
+    }
+
+    [Test]
+    public async Task GetCurrent_UserWithNoHistory_StartsBronze_IgnoringOtherUsers()
+    {
+        // A different user has a previous-week "promoted" bronze membership. The
+        // tier of the user we query must not be derived from someone else's history.
+        var previousWeekStart = CurrentWeekStart().AddDays(-7);
+        var otherLeague = new League
+        {
+            Id = Guid.NewGuid(),
+            Tier = "bronze",
+            WeekStartDate = previousWeekStart,
+            WeekEndDate = previousWeekStart.AddDays(6)
+        };
+        _db.Leagues.Add(otherLeague);
+        var otherUser = new User { Id = Guid.NewGuid(), Email = "other@test.com", DisplayName = "Other", CreatedAt = DateTime.UtcNow };
+        _db.Users.Add(otherUser);
+        _db.LeagueMemberships.Add(new LeagueMembership
+        {
+            Id = Guid.NewGuid(),
+            UserId = otherUser.Id,
+            LeagueId = otherLeague.Id,
+            WeeklyXpAmount = 100,
+            Rank = 1,
+            PromotionOutcome = "promoted"
+        });
+
+        var freshUserId = Guid.NewGuid();
+        _db.Users.Add(new User { Id = freshUserId, Email = "fresh@test.com", DisplayName = "Fresh", CreatedAt = DateTime.UtcNow });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetCurrentLeagueForUserAsync(freshUserId);
+
+        result.Tier.Should().Be("bronze");
+    }
+
+    [Test]
     public async Task GetCurrent_NoLeagueExists_CreatesAndJoinsUser()
     {
         var userId = Guid.NewGuid();
