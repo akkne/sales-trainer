@@ -10,6 +10,41 @@
 
 import { EXERCISE_CONTENT_TEMPLATES } from "@/features/admin/components/exercise-editors";
 
+// A theory lesson is a lesson whose exercises are ALL `theory_card`. The learner
+// swipes through the cards stories-style (no answer, no AI); reaching the last card
+// completes the lesson. Cards may use any layout — text / dialogue / bullets / quote.
+// This array is reused by both the lessons and bundle templates below.
+const THEORY_LESSON_EXERCISES = [
+    {
+        type: "theory_card",
+        orderInLesson: 1,
+        content: { layout: "text", title: "Зачем нужна разведка", body: "Перед звонком собери минимум информации о клиенте.\nЭто повышает доверие и экономит время." },
+    },
+    {
+        type: "theory_card",
+        orderInLesson: 2,
+        content: { layout: "bullets", title: "Что выяснить заранее", items: ["Сфера и размер компании", "Кто принимает решение", "Возможная проблема, которую решаем"] },
+    },
+    {
+        type: "theory_card",
+        orderInLesson: 3,
+        content: {
+            layout: "dialogue",
+            title: "Уточнение вместо скидки",
+            turns: [
+                { side: "them", text: "Это слишком дорого." },
+                { side: "me", text: "Подскажите, дорого относительно чего?", annotations: ["уточнение"] },
+                { side: "them", text: "У конкурентов дешевле." },
+            ],
+        },
+    },
+    {
+        type: "theory_card",
+        orderInLesson: 4,
+        content: { layout: "quote", text: "Люди покупают у тех, кому доверяют.", author: "Зиг Зиглар" },
+    },
+];
+
 /** `POST /admin/seeder/skills` — flat array of skills. */
 export const SKILLS_TEMPLATE = [
     {
@@ -54,6 +89,13 @@ export const LESSONS_TEMPLATE = [
             { type: "choose_option", orderInLesson: 1, content: EXERCISE_CONTENT_TEMPLATES.choose_option },
             { type: "free_text", orderInLesson: 2, content: EXERCISE_CONTENT_TEMPLATES.free_text, customAiPrompt: null },
         ],
+    },
+    {
+        // Theory lesson: every exercise is a theory_card → played as swipeable story cards.
+        topicIconicName: "cold-calling-basics",
+        title: "Теория: подготовка к звонку",
+        orderInTopic: 2,
+        exercises: THEORY_LESSON_EXERCISES,
     },
 ];
 
@@ -123,6 +165,12 @@ export const BUNDLE_TEMPLATE = {
                             exercises: [
                                 { type: "spot_mistake", orderInLesson: 1, content: EXERCISE_CONTENT_TEMPLATES.spot_mistake },
                             ],
+                        },
+                        {
+                            // Theory lesson: all theory_card → swipeable story cards.
+                            title: "Теория: подготовка к звонку",
+                            orderInTopic: 3,
+                            exercises: THEORY_LESSON_EXERCISES,
                         },
                     ],
                 },
