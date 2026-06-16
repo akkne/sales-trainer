@@ -96,7 +96,7 @@ Most main pages share a "hero header" pattern:
 | `/profile` | Profile & settings |
 
 ### Admin (sidebar layout, role-guarded)
-`/admin` + subpages: skills, topics, lessons, reference, techniques, dialog, open-question, voice/usage, users.
+`/admin` + subpages: import (bundle), skills, topics, lessons, reference, techniques, dialog, prompts (AI), voice/usage, users.
 
 Redirects: unauthenticated → `/login`; authenticated visiting `/` → `/tree`; non-admin on `/admin/*` → `/tree`.
 
