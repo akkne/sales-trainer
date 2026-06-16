@@ -22,6 +22,7 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
         var previousWeekStart = weekStart.AddDays(-WeekLengthDays);
 
         var previousMembershipData = await databaseContext.LeagueMemberships
+            .Where(membership => membership.UserId == userId)
             .Join(
                 databaseContext.Leagues,
                 membership => membership.LeagueId,
@@ -149,6 +150,12 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
                     nextWeekLeaguesByTier[nextTier] = nextLeague;
                 }
 
+                // Guard against double execution (cron + manual close, or a retried job):
+                // never create a second membership for the same user in the same league.
+                var alreadyJoined = await databaseContext.LeagueMemberships
+                    .AnyAsync(existing => existing.UserId == membership.UserId && existing.LeagueId == nextLeague.Id, cancellationToken);
+                if (alreadyJoined) continue;
+
                 databaseContext.LeagueMemberships.Add(new LeagueMembership
                 {
                     Id = Guid.NewGuid(),
@@ -221,6 +228,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
         DateOnly weekStart,
         CancellationToken cancellationToken = default)
     {
+        var weekEnd = weekStart.AddDays(WeekEndOffsetDays);
+
         var membershipUserIds = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == leagueId)
             .Select(membership => membership.UserId)
@@ -229,7 +238,8 @@ internal sealed class LeagueService(AppDbContext databaseContext) : ILeagueServi
         var weeklyExperiencePointsByUserId = await databaseContext.UserXpRecords
             .Where(experiencePointRecord =>
                 membershipUserIds.Contains(experiencePointRecord.UserId) &&
-                DateOnly.FromDateTime(experiencePointRecord.EarnedAt) >= weekStart)
+                DateOnly.FromDateTime(experiencePointRecord.EarnedAt) >= weekStart &&
+                DateOnly.FromDateTime(experiencePointRecord.EarnedAt) <= weekEnd)
             .GroupBy(experiencePointRecord => experiencePointRecord.UserId)
             .Select(group => new { UserId = group.Key, Total = group.Sum(record => record.Amount) })
             .ToDictionaryAsync(entry => entry.UserId, entry => entry.Total, cancellationToken);

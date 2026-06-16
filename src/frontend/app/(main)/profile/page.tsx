@@ -95,52 +95,68 @@ export default function ProfilePage() {
                 {/* Header */}
                 <div className="profile-head">
                     <div
-                        className="group"
-                        style={{ position: "relative", flexShrink: 0, cursor: uploading ? "wait" : "pointer" }}
-                        onClick={uploading ? undefined : openFilePicker}
-                        title="Изменить фото"
+                        style={{
+                            flexShrink: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 6,
+                        }}
                     >
-                        <UserAvatar
-                            avatarUrl={
-                                version > 0 && profileStats.avatarUrl
-                                    ? `${profileStats.avatarUrl}?v=${version}`
-                                    : profileStats.avatarUrl
-                            }
-                            seed={profileStats.displayName}
-                            size={88}
-                            circle
-                        />
-                        <div
-                            className="group-hover:opacity-100"
-                            style={{
-                                position: "absolute",
-                                inset: 0,
-                                borderRadius: "50%",
-                                background: "rgba(0,0,0,0.45)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: 28,
-                                opacity: uploading ? 1 : 0,
-                                transition: "opacity 0.15s",
-                                pointerEvents: "none",
-                            }}
-                        >
-                            {uploading ? (
+                        <div style={{ position: "relative" }}>
+                            <UserAvatar
+                                avatarUrl={
+                                    version > 0 && profileStats.avatarUrl
+                                        ? `${profileStats.avatarUrl}?v=${version}`
+                                        : profileStats.avatarUrl
+                                }
+                                seed={profileStats.displayName}
+                                size={88}
+                                circle
+                            />
+                            {uploading && (
                                 <div
                                     style={{
-                                        width: 24,
-                                        height: 24,
+                                        position: "absolute",
+                                        inset: 0,
                                         borderRadius: "50%",
-                                        border: "2.5px solid rgba(255,255,255,0.4)",
-                                        borderTopColor: "#fff",
-                                        animation: "spin 0.8s linear infinite",
+                                        background: "rgba(0,0,0,0.45)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        pointerEvents: "none",
                                     }}
-                                />
-                            ) : (
-                                "📷"
+                                >
+                                    <div
+                                        style={{
+                                            width: 24,
+                                            height: 24,
+                                            borderRadius: "50%",
+                                            border: "2.5px solid rgba(255,255,255,0.4)",
+                                            borderTopColor: "#fff",
+                                            animation: "spin 0.8s linear infinite",
+                                        }}
+                                    />
+                                </div>
                             )}
                         </div>
+                        <button
+                            type="button"
+                            onClick={uploading ? undefined : openFilePicker}
+                            disabled={uploading}
+                            className="small"
+                            style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                cursor: uploading ? "wait" : "pointer",
+                                color: "var(--primary)",
+                                textDecoration: "underline",
+                                fontSize: 13,
+                            }}
+                        >
+                            {uploading ? "Загрузка…" : "Обновить фото профиля"}
+                        </button>
                         <input
                             ref={fileInputRef}
                             type="file"

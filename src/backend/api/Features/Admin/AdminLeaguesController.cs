@@ -38,7 +38,12 @@ public sealed class AdminLeaguesController(
             .OrderByDescending(l => l.WeekStartDate)
             .Select(l => new AdminLeagueListItemDto(
                 l.Id, l.Tier, l.WeekStartDate, l.WeekEndDate,
-                database.LeagueMemberships.Count(m => m.LeagueId == l.Id)))
+                // Count only memberships whose user still exists, so the list count
+                // matches the member list on the detail page (which inner-joins Users).
+                // An orphaned membership (user deleted directly in the DB) is otherwise
+                // counted here but not shown there.
+                database.LeagueMemberships.Count(m => m.LeagueId == l.Id
+                    && database.Users.Any(u => u.Id == m.UserId))))
             .ToListAsync();
 
         var ordered = leagues

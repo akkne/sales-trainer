@@ -17,6 +17,7 @@ using SalesTrainer.Api.Infrastructure.Http;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
 using SalesTrainer.Api.Features.Avatars;
+using SalesTrainer.Api.Infrastructure.Storage.Abstract;
 using SalesTrainer.Api.Features.Dialog;
 using SalesTrainer.Api.Features.Discuss;
 using SalesTrainer.Api.Features.Exercises;
@@ -171,10 +172,13 @@ application.UseAuthorization();
 application.UseHangfireDashboard("/hangfire");
 application.MapControllers();
 
+// Run at the END of the week (Sunday 23:59 UTC) so "current week" is the week that
+// is finishing. Running at Monday 00:00 would close the week that just began (0 XP)
+// and never rank/promote the week that actually ended.
 RecurringJob.AddOrUpdate<WeeklyLeagueClosureJob>(
     "weekly-league-closure",
     weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
-    "0 0 * * 1");
+    "59 23 * * 0");
 
 RecurringJob.AddOrUpdate<StreakResetJob>(
     "daily-streak-reset",
@@ -204,13 +208,16 @@ using (var serviceScope = application.Services.CreateScope())
 
     try
     {
+        var objectStorage = serviceScope.ServiceProvider.GetRequiredService<IObjectStorage>();
+        await objectStorage.EnsureBucketExistsAsync();
+
         var defaultAvatarSeeder = serviceScope.ServiceProvider.GetRequiredService<DefaultAvatarSeeder>();
         await defaultAvatarSeeder.SeedAsync();
     }
     catch (Exception ex)
     {
         var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        startupLogger.LogWarning(ex, "DefaultAvatarSeeder failed at startup; continuing without default avatars");
+        startupLogger.LogWarning(ex, "Avatar storage init failed at startup; continuing without default avatars");
     }
 }
 
