@@ -12,5 +12,8 @@ public class LeagueSettingsConfiguration : IEntityTypeConfiguration<LeagueSettin
         builder.Property(x => x.MaximumLeagueParticipantCount).IsRequired();
         builder.Property(x => x.PromotionZoneSize).IsRequired();
         builder.Property(x => x.DemotionZoneSize).IsRequired();
+        builder.Property(x => x.PeriodLengthDays).IsRequired();
+        builder.Property(x => x.CurrentPeriodStartDate);
+        builder.Property(x => x.CurrentPeriodEndsAt);
     }
 }

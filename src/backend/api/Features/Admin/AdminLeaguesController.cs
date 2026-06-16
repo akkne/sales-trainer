@@ -19,13 +19,15 @@ public sealed class AdminLeaguesController(
 {
     private const string XpCorrectionSource = "admin_correction";
 
-    private static readonly string[] ValidTiers = ["bronze", "silver", "gold", "diamond"];
+    private Task<List<string>> LoadTierKeysAsync() =>
+        database.LeagueTiers.OrderBy(t => t.Order).Select(t => t.Key).ToListAsync();
 
     [HttpGet]
     public async Task<ActionResult<List<AdminLeagueListItemDto>>> GetAll(
         [FromQuery] DateOnly? weekStart, [FromQuery] string? tier)
     {
-        if (tier is not null && !ValidTiers.Contains(tier))
+        var tierKeys = await LoadTierKeysAsync();
+        if (tier is not null && !tierKeys.Contains(tier))
             return BadRequest(new { message = $"Unknown tier: {tier}" });
 
         var query = database.Leagues.AsQueryable();
@@ -48,7 +50,7 @@ public sealed class AdminLeaguesController(
 
         var ordered = leagues
             .OrderByDescending(l => l.WeekStartDate)
-            .ThenByDescending(l => Array.IndexOf(ValidTiers, l.Tier))
+            .ThenByDescending(l => tierKeys.IndexOf(l.Tier))
             .ToList();
 
         return Ok(ordered);
@@ -103,7 +105,8 @@ public sealed class AdminLeaguesController(
     public async Task<ActionResult<AdminLeagueDetailDto>> MoveMembershipTier(
         Guid membershipId, [FromBody] MoveMembershipTierRequestDto request)
     {
-        if (!ValidTiers.Contains(request.Tier))
+        var tierKeys = await LoadTierKeysAsync();
+        if (!tierKeys.Contains(request.Tier))
             return BadRequest(new { message = $"Unknown tier: {request.Tier}" });
 
         var membership = await database.LeagueMemberships
@@ -211,11 +214,8 @@ public sealed class AdminLeaguesController(
     [HttpGet("settings")]
     public async Task<ActionResult<LeagueSettingsDto>> GetSettings()
     {
-        var settings = await database.LeagueSettings.FirstOrDefaultAsync() ?? new LeagueSettings();
-        return Ok(new LeagueSettingsDto(
-            settings.MaximumLeagueParticipantCount,
-            settings.PromotionZoneSize,
-            settings.DemotionZoneSize));
+        var settings = await leagueService.GetSettingsAsync();
+        return Ok(ToSettingsDto(settings));
     }
 
     [HttpPut("settings")]
@@ -230,27 +230,141 @@ public sealed class AdminLeaguesController(
         if (request.PromotionZoneSize + request.DemotionZoneSize > request.MaximumLeagueParticipantCount)
             return BadRequest(new { message = "Promotion + demotion zones cannot exceed maximum participant count" });
 
-        var settings = await database.LeagueSettings.FirstOrDefaultAsync();
-        if (settings is null)
-        {
-            settings = new LeagueSettings();
-            database.LeagueSettings.Add(settings);
-        }
+        if (request.PeriodLengthDays is <= 0)
+            return BadRequest(new { message = "Period length must be positive" });
+
+        // Ensures the row exists and the period is initialized before we edit it.
+        var settings = await leagueService.GetSettingsAsync();
 
         settings.MaximumLeagueParticipantCount = request.MaximumLeagueParticipantCount;
         settings.PromotionZoneSize = request.PromotionZoneSize;
         settings.DemotionZoneSize = request.DemotionZoneSize;
+
+        if (request.PeriodLengthDays is { } periodLength)
+            settings.PeriodLengthDays = periodLength;
+
+        if (request.CurrentPeriodEndsAt is { } endsAt)
+        {
+            settings.CurrentPeriodEndsAt = endsAt;
+            // Keep the active period's leagues aligned with the new end date so the
+            // XP window (WeekStartDate..WeekEndDate) extends/shrinks with the schedule.
+            var newEndDate = DateOnly.FromDateTime(endsAt.UtcDateTime);
+            var activeLeagues = await database.Leagues
+                .Where(l => l.WeekStartDate == settings.CurrentPeriodStartDate)
+                .ToListAsync();
+            foreach (var league in activeLeagues)
+                league.WeekEndDate = newEndDate;
+        }
+
         await database.SaveChangesAsync();
 
         logger.LogInformation(
-            "League settings updated Max={Max} Promotion={Promotion} Demotion={Demotion} by ActorId={ActorId}",
+            "League settings updated Max={Max} Promotion={Promotion} Demotion={Demotion} PeriodEndsAt={PeriodEndsAt} PeriodLength={PeriodLength} by ActorId={ActorId}",
             settings.MaximumLeagueParticipantCount, settings.PromotionZoneSize, settings.DemotionZoneSize,
+            settings.CurrentPeriodEndsAt, settings.PeriodLengthDays,
             User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        return Ok(new LeagueSettingsDto(
-            settings.MaximumLeagueParticipantCount,
+        return Ok(ToSettingsDto(settings));
+    }
+
+    private static LeagueSettingsDto ToSettingsDto(LeagueSettings settings) =>
+        new(settings.MaximumLeagueParticipantCount,
             settings.PromotionZoneSize,
-            settings.DemotionZoneSize));
+            settings.DemotionZoneSize,
+            settings.CurrentPeriodEndsAt,
+            settings.PeriodLengthDays);
+
+    [HttpGet("tiers")]
+    public async Task<ActionResult<List<AdminLeagueTierDto>>> GetTiers()
+    {
+        var tiers = await database.LeagueTiers
+            .OrderBy(t => t.Order)
+            .Select(t => new AdminLeagueTierDto(t.Id, t.Key, t.Name, t.Color, t.Order))
+            .ToListAsync();
+        return Ok(tiers);
+    }
+
+    [HttpPost("tiers")]
+    public async Task<ActionResult<AdminLeagueTierDto>> CreateTier(
+        [FromBody] CreateLeagueTierRequestDto request)
+    {
+        var key = (request.Key ?? string.Empty).Trim().ToLowerInvariant();
+        var validation = ValidateTierFields(key, request.Name, request.Color);
+        if (validation is not null) return BadRequest(new { message = validation });
+
+        if (await database.LeagueTiers.AnyAsync(t => t.Key == key))
+            return BadRequest(new { message = $"Tier with key '{key}' already exists" });
+
+        var tier = new LeagueTier
+        {
+            Id = Guid.NewGuid(),
+            Key = key,
+            Name = request.Name.Trim(),
+            Color = request.Color.Trim(),
+            Order = request.Order
+        };
+        database.LeagueTiers.Add(tier);
+        await database.SaveChangesAsync();
+
+        logger.LogInformation("League tier created Key={Key} by ActorId={ActorId}",
+            tier.Key, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new AdminLeagueTierDto(tier.Id, tier.Key, tier.Name, tier.Color, tier.Order));
+    }
+
+    [HttpPut("tiers/{id:guid}")]
+    public async Task<ActionResult<AdminLeagueTierDto>> UpdateTier(
+        Guid id, [FromBody] UpdateLeagueTierRequestDto request)
+    {
+        // The key (slug) is immutable: it is stored on every League row, so renaming
+        // it would orphan history. Only label, color, and order are editable.
+        var validation = ValidateTierFields(key: "x", request.Name, request.Color);
+        if (validation is not null) return BadRequest(new { message = validation });
+
+        var tier = await database.LeagueTiers.FirstOrDefaultAsync(t => t.Id == id);
+        if (tier is null) return NotFound();
+
+        tier.Name = request.Name.Trim();
+        tier.Color = request.Color.Trim();
+        tier.Order = request.Order;
+        await database.SaveChangesAsync();
+
+        logger.LogInformation("League tier updated Key={Key} by ActorId={ActorId}",
+            tier.Key, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new AdminLeagueTierDto(tier.Id, tier.Key, tier.Name, tier.Color, tier.Order));
+    }
+
+    [HttpDelete("tiers/{id:guid}")]
+    public async Task<IActionResult> DeleteTier(Guid id)
+    {
+        var tier = await database.LeagueTiers.FirstOrDefaultAsync(t => t.Id == id);
+        if (tier is null) return NotFound();
+
+        if (await database.LeagueTiers.CountAsync() <= 1)
+            return BadRequest(new { message = "At least one tier must remain" });
+
+        if (await database.Leagues.AnyAsync(l => l.Tier == tier.Key))
+            return BadRequest(new { message = "Cannot delete a tier that has existing leagues; reassign members first" });
+
+        database.LeagueTiers.Remove(tier);
+        await database.SaveChangesAsync();
+
+        logger.LogWarning("League tier deleted Key={Key} by ActorId={ActorId}",
+            tier.Key, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return NoContent();
+    }
+
+    private static string? ValidateTierFields(string key, string? name, string? color)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return "Key is required";
+        if (string.IsNullOrWhiteSpace(name))
+            return "Name is required";
+        if (string.IsNullOrWhiteSpace(color))
+            return "Color is required";
+        return null;
     }
 
     private async Task<AdminLeagueDetailDto?> BuildDetailAsync(Guid leagueId)

@@ -172,13 +172,13 @@ application.UseAuthorization();
 application.UseHangfireDashboard("/hangfire");
 application.MapControllers();
 
-// Run at the END of the week (Sunday 23:59 UTC) so "current week" is the week that
-// is finishing. Running at Monday 00:00 would close the week that just began (0 XP)
-// and never rank/promote the week that actually ended.
+// The league period end date is admin-configurable, so the job runs every 15
+// minutes and rolls over only once the configured end moment has passed (rather
+// than on a fixed weekly cron). This keeps an arbitrary admin schedule honored.
 RecurringJob.AddOrUpdate<WeeklyLeagueClosureJob>(
     "weekly-league-closure",
     weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
-    "59 23 * * 0");
+    "*/15 * * * *");
 
 RecurringJob.AddOrUpdate<StreakResetJob>(
     "daily-streak-reset",

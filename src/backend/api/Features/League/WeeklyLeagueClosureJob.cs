@@ -6,6 +6,8 @@ public sealed class WeeklyLeagueClosureJob(ILeagueService leagueService)
 {
     public async Task ExecuteAsync()
     {
-        await leagueService.CloseCurrentLeagueAndCreateNextAsync();
+        // Runs frequently and closes the current period only once its configured
+        // end moment has passed, so an admin-set end date drives the schedule.
+        await leagueService.RolloverIfDueAsync();
     }
 }

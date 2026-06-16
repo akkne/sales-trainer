@@ -725,10 +725,19 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CurrentPeriodEndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("CurrentPeriodStartDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("DemotionZoneSize")
                         .HasColumnType("integer");
 
                     b.Property<int>("MaximumLeagueParticipantCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PeriodLengthDays")
                         .HasColumnType("integer");
 
                     b.Property<int>("PromotionZoneSize")
@@ -737,6 +746,38 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("LeagueSettings");
+                });
+
+            modelBuilder.Entity("SalesTrainer.Api.Features.League.Models.LeagueTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("LeagueTiers");
                 });
 
             modelBuilder.Entity("SalesTrainer.Api.Features.Lessons.Models.Exercise", b =>

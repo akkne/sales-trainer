@@ -33,11 +33,37 @@ public record AdjustMembershipXpRequestDto(int Delta);
 public record LeagueSettingsDto(
     int MaximumLeagueParticipantCount,
     int PromotionZoneSize,
-    int DemotionZoneSize
+    int DemotionZoneSize,
+    DateTimeOffset? CurrentPeriodEndsAt,
+    int PeriodLengthDays
 );
 
 public record UpdateLeagueSettingsRequestDto(
     int MaximumLeagueParticipantCount,
     int PromotionZoneSize,
-    int DemotionZoneSize
+    int DemotionZoneSize,
+    // Optional: only applied when provided, so callers may update zones alone.
+    DateTimeOffset? CurrentPeriodEndsAt,
+    int? PeriodLengthDays
+);
+
+public record AdminLeagueTierDto(
+    Guid Id,
+    string Key,
+    string Name,
+    string Color,
+    int Order
+);
+
+public record CreateLeagueTierRequestDto(
+    string Key,
+    string Name,
+    string Color,
+    int Order
+);
+
+public record UpdateLeagueTierRequestDto(
+    string Name,
+    string Color,
+    int Order
 );
