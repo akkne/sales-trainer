@@ -6,6 +6,7 @@ import { Card } from "@/shared/components/card";
 import { Progress } from "@/shared/components/progress";
 import { StatTile } from "@/shared/components/stat-tile";
 import { useDailyQuote } from "@/features/layout/hooks/use-daily-quote";
+import { useProfile } from "@/features/profile/hooks/use-profile";
 
 const FALLBACK_QUOTE = {
     text: "Когда клиент говорит «дорого», не называйте скидку. Спросите — «дорого по сравнению с чем?»",
@@ -33,6 +34,8 @@ export function StatsWidget({
     const { data: dailyQuote } = useDailyQuote();
     const quoteText = dailyQuote?.text ?? FALLBACK_QUOTE.text;
     const quoteAuthor = dailyQuote?.author ?? FALLBACK_QUOTE.author;
+    const { data: profileStats } = useProfile();
+    const accuracyPercent = Math.round(profileStats?.averageExerciseScore ?? 0);
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -61,7 +64,7 @@ export function StatsWidget({
                 />
                 <StatTile
                     label="Точность"
-                    value={87}
+                    value={accuracyPercent}
                     unit="%"
                     icon={<Icon name="target" size="xs" />}
                     tone="success"
