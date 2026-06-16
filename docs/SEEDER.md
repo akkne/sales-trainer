@@ -155,6 +155,16 @@ Imports lessons and their nested exercises in one operation. Exercises are valid
 | `content` | object | JSON content per type. **Validated server-side per type.** Invalid content returns 400 on single create/update; per-item errors on import (bad items skipped, reported in response) |
 | `customAiPrompt` | string \| null | Optional per-exercise AI prompt (legacy; admin UI always sends null now — use `content.ai_prompt` instead) |
 
+> **Theory lessons.** Theory cards are seeded exactly like any other exercise —
+> nested under a lesson with `"type": "theory_card"` and a `content` object whose
+> `layout` selects the card template (`text`/`dialogue`/`bullets`/`quote`, validated
+> server-side). A lesson whose exercises are **all** `theory_card` is treated as a
+> theory lesson by the app. Example:
+> ```json
+> { "type": "theory_card", "orderInLesson": 1,
+>   "content": { "layout": "text", "title": "Зачем теория", "body": "Короткий ввод." } }
+> ```
+
 ### API endpoint
 
 ```

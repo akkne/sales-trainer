@@ -8,10 +8,14 @@ Exercise content is validated server-side on creation, update, and import. The `
 
 **Location:** `src/backend/tests/Unit/ExerciseContentValidatorTests.cs`
 
-Tests validate the 10 exercise type schemas:
+Tests validate the 11 exercise type schemas:
 - `choose_option`, `fill_blank` — binary choice with options and correct index
 - `reorder`, `match_pairs`, `categorize` — structured arrangement
 - `spot_mistake`, `rewrite`, `ai_dialogue`, `evaluate_call`, `free_text` — AI-evaluated types
+- `theory_card` — non-graded story cards; validates the `layout` discriminator
+  (`text`/`dialogue`/`bullets`/`quote`) and per-layout fields. The
+  `TheoryCardEvaluationStrategy` (no answer, no AI) is covered by
+  `tests/Unit/EvaluationStrategies/TheoryCardEvaluationStrategyTests.cs`.
 
 Each type test covers:
 - Valid content (passes validation)

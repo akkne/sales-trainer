@@ -29,7 +29,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | Feature | Description |
 |---------|-------------|
 | [Skills & Exercises](SKILLS_AND_EXERCISES.md) | Skill/lesson/exercise data model, evaluation logic |
-| [New Exercise Types](NEW_EXERCISE_TYPES.md) | 10 exercise types: 5 basic + 5 AI-evaluated |
+| [New Exercise Types](NEW_EXERCISE_TYPES.md) | 11 exercise types: 5 basic + 5 AI-evaluated + theory cards |
 | [AI Dialog](AI_DIALOG.md) | GPT-powered sales conversation practice |
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
@@ -84,6 +84,10 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Keyboard shortcuts (1-4 select, Enter submit)
 - Skip button, post-session stats (XP, accuracy, time)
 - Completion screen with session summary
+- **Theory lessons** (`theory_card` type): stories-style cards (text / dialogue / bullets / quote)
+  the learner swipes through before practice — no answer, no AI. Dialogue cards reuse the
+  Guidebook bubble renderer. Marked with a book icon on the path; reaching the last card
+  completes the lesson and awards a small fixed XP (seeded 5, admin-editable)
 
 ### Gamification
 - **Fully DB-driven, admin-editable XP economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
