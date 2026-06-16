@@ -74,6 +74,20 @@ export interface AdminUser {
     displayName: string;
     role: string;
     createdAt: string;
+    isEmailVerified: boolean;
+    authProvider: string;
+    hasCustomAvatar: boolean;
+    avatarUrl: string;
+}
+
+export interface AdminUserDetail extends AdminUser {
+    currentStreakDayCount: number;
+    longestStreakDayCount: number;
+    totalXpAmount: number;
+    completedSkillCount: number;
+    totalSkillCount: number;
+    averageExerciseScore: number;
+    persona: string | null;
 }
 
 // --- Skills ---
@@ -762,6 +776,14 @@ export function useAdminUsers() {
     });
 }
 
+export function useAdminUser(id: string | null) {
+    return useQuery({
+        queryKey: ["admin", "users", "detail", id],
+        queryFn: () => apiClient.get<AdminUserDetail>(`/admin/users/${id}`),
+        enabled: !!id,
+    });
+}
+
 export function useChangeUserRole() {
     const queryClient = useQueryClient();
     return useMutation({
@@ -773,6 +795,35 @@ export function useChangeUserRole() {
         },
         onError: (error, variables) => {
             clientLogger.error("Failed to change user role", { userId: variables.id, role: variables.role, error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, displayName }: { id: string; displayName: string }) =>
+            apiClient.put<AdminUser>(`/admin/users/${id}`, { displayName }),
+        onSuccess: (data, variables) => {
+            clientLogger.info("User display name changed", { userId: variables.id, displayName: data.displayName });
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: (error, variables) => {
+            clientLogger.error("Failed to update user", { userId: variables.id, error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteUserAvatar() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete<void>(`/admin/users/${id}/avatar`),
+        onSuccess: (_, id) => {
+            clientLogger.warn("User avatar reset by admin", { userId: id });
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        },
+        onError: (error, id) => {
+            clientLogger.error("Failed to reset user avatar", { userId: id, error: (error as Error).message });
         },
     });
 }

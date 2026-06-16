@@ -61,6 +61,16 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `UpdateSkill_UnknownId_Returns404`
 - [x] `DeleteSkill_AdminToken_Returns204`
 
+**AdminUsers** (`Integration/AdminUsersTests.cs`) — list/detail, moderation rename, photo reset, role change:
+- [x] `GetAll_AsSuperAdmin_Returns200WithUsers` / `GetAll_AsAdmin_Returns200`
+- [x] `GetById_ReturnsRicherUserDetail` _(email, authProvider, hasCustomAvatar, activity stats)_
+- [x] `GetById_NonExistentUser_Returns404`
+- [x] `UpdateUser_AsAdmin_RenamesDisplayName` _(moderation rename)_
+- [x] `UpdateUser_TooShortName_Returns400` / `UpdateUser_NonExistentUser_Returns404`
+- [x] `DeleteAvatar_AsAdmin_Returns204` / `DeleteAvatar_NonExistentUser_Returns404` _(moderation photo reset)_
+- [x] `ChangeRole_AsSuperAdmin_Returns200WithNewRole` / `ChangeRole_AsAdmin_Returns403` _(SuperAdmin-only)_
+- [x] `ChangeRole_InvalidRole_Returns400` / `ChangeRole_NonExistentUser_Returns404`
+
 ## Block 5 — Admin Leagues
 **File:** `Integration/AdminLeaguesTests.cs`
 **Status:** [x]

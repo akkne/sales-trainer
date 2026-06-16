@@ -326,11 +326,19 @@ All routes prefixed `/admin`. Unauthorized → 403.
 
 XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the league's week start — a direct `WeeklyXpAmount` write would be erased by the next XP sync, while a correction record survives every re-sync and stays auditable.
 
-### Users (requires `RequireSuperAdmin` for role change)
+### Users (`RequireAdmin`; role change requires `RequireSuperAdmin`)
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/users | — | `AdminUserDto[]` |
-| PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` |
+| GET | /admin/users/:id | — | `AdminUserDetailDto` (404 if missing) |
+| PUT | /admin/users/:id | `{displayName}` | `AdminUserDto` (400 if name not 2–50 chars, 404 if missing) — moderation rename |
+| DELETE | /admin/users/:id/avatar | — | 204 (404 if missing) — moderation: reset uploaded photo to default |
+| PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` (SuperAdmin only) |
+
+`AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider ("Google"|"Password"), hasCustomAvatar, avatarUrl}`
+`AdminUserDetailDto`: `AdminUserDto` + `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`
+
+Rename and avatar moderation are available to any admin (inappropriate nicknames/photos); role changes stay SuperAdmin-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
 
 ### Seeder
 | Method | Path | Body | Response |

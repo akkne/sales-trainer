@@ -5,5 +5,28 @@ public record AdminUserDto(
     string Email,
     string DisplayName,
     string Role,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    bool IsEmailVerified,
+    string AuthProvider,
+    bool HasCustomAvatar,
+    string AvatarUrl
+);
+
+public record AdminUserDetailDto(
+    Guid Id,
+    string Email,
+    string DisplayName,
+    string Role,
+    DateTime CreatedAt,
+    bool IsEmailVerified,
+    string AuthProvider,
+    bool HasCustomAvatar,
+    string AvatarUrl,
+    int CurrentStreakDayCount,
+    int LongestStreakDayCount,
+    int TotalXpAmount,
+    int CompletedSkillCount,
+    int TotalSkillCount,
+    double AverageExerciseScore,
+    string? Persona
 );
