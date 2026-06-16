@@ -119,6 +119,25 @@ The final prompt sent to the model is: `[global] + "Additional criteria:" + [per
 
 XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants, and the period schedule (`CurrentPeriodEndsAt`, `PeriodLengthDays`) live in the single-row `LeagueSettings` table. The tier ladder (key/name/color/order) lives in `LeagueTiers` and is managed at `/admin/leagues/tiers`; the key is immutable once created and a tier with existing leagues cannot be deleted.
 
+### Gamification (XP economy)
+The XP economy is fully DB-driven; the controls are **distributed across the relevant admin sections**, not a single hub:
+- **Per-exercise-type base XP** → on the Exercise Type Prompts page (`/admin/prompts`).
+- **Dialog XP multiplier + criterion weights** → on the Dialog page (`/admin/dialog`).
+- **Daily/weekly XP goals + streak milestones** → on the Gamification page (`/admin/gamification`).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/gamification/settings | — | `GamificationSettingsDto` |
+| PUT | /admin/gamification/settings | `UpdateGamificationSettingsRequestDto` | `GamificationSettingsDto` |
+| GET | /admin/gamification/exercise-rewards | — | `ExerciseTypeRewardDto[]` |
+| PUT | /admin/gamification/exercise-rewards/:exerciseType | `{baseXpReward}` | `ExerciseTypeRewardDto` (upsert) |
+| GET | /admin/gamification/streak-milestones | — | `StreakMilestoneDto[]` |
+| POST | /admin/gamification/streak-milestones | `{dayCount, xpReward}` | `StreakMilestoneDto` (400 on duplicate day) |
+| PUT | /admin/gamification/streak-milestones/:id | `{dayCount, xpReward}` | `StreakMilestoneDto` |
+| DELETE | /admin/gamification/streak-milestones/:id | — | 204 |
+
+See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the XP formulas. Validation: goals & multiplier positive, weights non-negative summing to > 0, `baseXpReward` non-negative, `dayCount` positive & unique.
+
 ### Daily Quotes
 | Method | Path | Body | Response |
 |---|---|---|---|

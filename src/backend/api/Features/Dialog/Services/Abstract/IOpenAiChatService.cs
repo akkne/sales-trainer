@@ -19,5 +19,6 @@ public interface IOpenAiChatService
     Task<FeedbackResult> GenerateFeedbackAsync(
         string feedbackPrompt,
         List<DialogMessage> conversationHistory,
+        DialogXpWeights xpWeights,
         CancellationToken cancellationToken = default);
 }

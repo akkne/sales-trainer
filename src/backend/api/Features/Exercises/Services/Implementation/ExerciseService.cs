@@ -10,6 +10,7 @@ using SalesTrainer.Api.Features.Dialog.Services.Implementation;
 using SalesTrainer.Api.Features.Exercises.Models;
 using SalesTrainer.Api.Features.Exercises.Services.Abstract;
 using SalesTrainer.Api.Features.Gamification.Models;
+using SalesTrainer.Api.Features.Gamification.Services.Abstract;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.Notifications.Models;
 using SalesTrainer.Api.Features.Notifications.Services.Abstract;
@@ -25,6 +26,7 @@ internal sealed class ExerciseService(
     IAchievementService achievementService,
     IOpenAiChatService openAiChatService,
     INotificationService notificationService,
+    IGamificationService gamificationService,
     ITtsRouter ttsRouter,
     ILogger<ExerciseService> logger) : IExerciseService
 {
@@ -179,7 +181,8 @@ internal sealed class ExerciseService(
         var experiencePointsEarned = 0;
         if (evaluationResult.IsCorrect)
         {
-            experiencePointsEarned = 10; // Fixed XP per exercise
+            // Base XP per exercise type is admin-editable in the database (ExerciseTypeRewards).
+            experiencePointsEarned = await gamificationService.GetExerciseBaseXpAsync(exercise.Type, cancellationToken);
 
             databaseContext.UserXpRecords.Add(new UserXp
             {
@@ -324,12 +327,8 @@ internal sealed class ExerciseService(
         int currentStreak,
         CancellationToken cancellationToken)
     {
-        int bonusExperiencePoints = currentStreak switch
-        {
-            7  => 50,
-            30 => 200,
-            _  => 0
-        };
+        // Streak milestone bonuses are admin-editable in the database (StreakMilestones).
+        int bonusExperiencePoints = await gamificationService.GetStreakBonusXpAsync(currentStreak, cancellationToken);
 
         if (bonusExperiencePoints == 0) return;
 

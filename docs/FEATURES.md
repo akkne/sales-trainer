@@ -84,7 +84,11 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Completion screen with session summary
 
 ### Gamification
-- XP rewards for exercises and dialogs
+- **Fully DB-driven, admin-editable XP economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
+  - Per-exercise-type base XP (edited at `/admin/gamification/exercise-rewards`)
+  - Dialog XP = `round(AI score × multiplier)` with admin-tunable multiplier + per-criterion weights (edited at `/admin/dialog`)
+  - Daily & weekly XP goals (edited at `/admin/gamification`)
+  - Streak milestone bonuses as a CRUD ladder (edited at `/admin/gamification`)
 - Daily streak tracking with reset job
 - Achievement system with 10 default achievements
 - Achievement unlock toasts during session

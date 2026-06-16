@@ -6,5 +6,6 @@ public record SkillTreeResponseDto(
     int TotalXpAmount,
     int WeeklyXpAmount,
     int DailyXpAmount,
-    int DailyXpGoal
+    int DailyXpGoal,
+    int WeeklyXpGoal
 );

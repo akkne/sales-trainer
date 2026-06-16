@@ -10,6 +10,7 @@ using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
 using SalesTrainer.Api.Features.Exercises.Services.Implementation;
 using SalesTrainer.Api.Features.Gamification.Models;
+using SalesTrainer.Api.Features.Gamification.Services.Implementation;
 using SalesTrainer.Api.Features.Lessons.Models;
 using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Features.Voice.Services.Abstract;
@@ -36,9 +37,12 @@ public class ExerciseServiceTests
         var openAiChatService = Substitute.For<IOpenAiChatService>();
         var notificationService = Substitute.For<INotificationService>();
         var ttsRouter = Substitute.For<ITtsRouter>();
+        // Real gamification service over the in-memory DB: with no ExerciseTypeRewards /
+        // StreakMilestones seeded it falls back to the historic defaults (10 XP; 7→50, 30→200).
+        var gamificationService = new GamificationService(_db);
         // ExerciseService is internal, so NSubstitute cannot proxy ILogger<ExerciseService> — use the null logger.
         var logger = NullLogger<ExerciseService>.Instance;
-        _service = new ExerciseService(_db, factory, achievementService, openAiChatService, notificationService, ttsRouter, logger);
+        _service = new ExerciseService(_db, factory, achievementService, openAiChatService, notificationService, gamificationService, ttsRouter, logger);
     }
 
     [TearDown]
@@ -126,6 +130,43 @@ public class ExerciseServiceTests
         var xp = await _db.UserXpRecords.FirstOrDefaultAsync(x => x.UserId == userId);
         xp.Should().NotBeNull();
         xp!.Amount.Should().Be(10);
+    }
+
+    [Test]
+    public async Task Submit_CorrectAnswer_AwardsDbConfiguredBaseXp()
+    {
+        var (userId, _, _, _, exerciseId) = await SeedCoreDataAsync(correctOptionIndex: 0);
+        _db.ExerciseTypeRewards.Add(new ExerciseTypeReward
+        {
+            Id = Guid.NewGuid(), ExerciseType = "choose_option", BaseXpReward = 25
+        });
+        await _db.SaveChangesAsync();
+
+        await _service.SubmitExerciseAnswerAsync(userId, exerciseId, AnswerJson(0));
+
+        var xp = await _db.UserXpRecords.FirstAsync(x => x.UserId == userId && x.Source == "exercise");
+        xp.Amount.Should().Be(25);
+    }
+
+    [Test]
+    public async Task Submit_CorrectAnswer_AwardsDbConfiguredStreakBonus()
+    {
+        var (userId, _, _, _, exerciseId) = await SeedCoreDataAsync(correctOptionIndex: 0);
+        // Today completes a 5-day streak; a milestone is configured for day 5.
+        _db.UserStreaks.Add(new UserStreak
+        {
+            Id = Guid.NewGuid(), UserId = userId,
+            CurrentStreakDayCount = 4, LongestStreakDayCount = 4,
+            LastActivityDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1)
+        });
+        _db.StreakMilestones.Add(new StreakMilestone { Id = Guid.NewGuid(), DayCount = 5, XpReward = 75 });
+        await _db.SaveChangesAsync();
+
+        await _service.SubmitExerciseAnswerAsync(userId, exerciseId, AnswerJson(0));
+
+        var bonus = await _db.UserXpRecords.FirstOrDefaultAsync(x => x.UserId == userId && x.Source == "streak_bonus");
+        bonus.Should().NotBeNull();
+        bonus!.Amount.Should().Be(75);
     }
 
     [Test]

@@ -625,6 +625,80 @@ namespace SalesTrainer.Api.Infrastructure.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.ExerciseTypeReward", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BaseXpReward")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExerciseType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExerciseType")
+                        .IsUnique();
+
+                    b.ToTable("ExerciseTypeRewards");
+                });
+
+            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.GamificationSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DailyXpGoal")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DialogWeightConfidence")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DialogWeightGoal")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DialogWeightObjection")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DialogWeightStructure")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("DialogXpMultiplier")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("WeeklyXpGoal")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GamificationSettings");
+                });
+
+            modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.StreakMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DayCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("XpReward")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DayCount")
+                        .IsUnique();
+
+                    b.ToTable("StreakMilestones");
+                });
+
             modelBuilder.Entity("SalesTrainer.Api.Features.Gamification.Models.UserStreak", b =>
                 {
                     b.Property<Guid>("Id")
