@@ -140,7 +140,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Dialog bundle/mode management with prompt editors
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
-- User role management (SuperAdmin only)
+- User management (`/admin/users`, admins): rich user list (avatar, email + verification, auth provider, role), per-user detail modal with activity stats (XP, streaks, skills, avg score, persona), moderation rename of inappropriate nicknames, and removal of inappropriate uploaded photos (resets to default avatar). Role changes remain SuperAdmin-only.
 
 ### User Avatars
 - Custom avatar upload on own profile page (`POST /avatars`, multipart, ≤5 MB, png/jpg/webp)

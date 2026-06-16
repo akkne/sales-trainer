@@ -125,11 +125,18 @@ XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — t
 
 `AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. The admin UI is a month calendar (`/admin/quotes`) — click a day to create/edit/delete its quote.
 
-### Users (SuperAdmin only)
+### Users (`RequireAdmin`; role change is SuperAdmin only)
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/users | — | `AdminUserDto[]` |
-| PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` |
+| GET | /admin/users/:id | — | `AdminUserDetailDto` |
+| PUT | /admin/users/:id | `{displayName}` | `AdminUserDto` — moderation rename (2–50 chars) |
+| DELETE | /admin/users/:id/avatar | — | 204 — moderation: reset uploaded photo to default |
+| PUT | /admin/users/:id/role | `{role: "User"\|"Admin"\|"SuperAdmin"}` | `AdminUserDto` (SuperAdmin only) |
+
+`AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider, hasCustomAvatar, avatarUrl}`.
+`AdminUserDetailDto` adds activity stats: `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`.
+UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row opens a detail modal for moderation (rename, remove photo) and stats. Any admin can moderate; only SuperAdmins see the role selector.
 
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |

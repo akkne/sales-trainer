@@ -107,4 +107,84 @@ public class AdminUsersTests
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Test]
+    public async Task GetById_ReturnsRicherUserDetail()
+    {
+        var target = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"detail_{Guid.NewGuid()}@test.com", role: UserRole.User);
+
+        var response = await _adminClient.GetAsync($"/admin/users/{target.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("email").GetString().Should().Be(target.Email);
+        body.GetProperty("authProvider").GetString().Should().Be("Password");
+        body.GetProperty("hasCustomAvatar").GetBoolean().Should().BeFalse();
+        body.TryGetProperty("totalXpAmount", out _).Should().BeTrue();
+        body.TryGetProperty("currentStreakDayCount", out _).Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetById_NonExistentUser_Returns404()
+    {
+        var response = await _adminClient.GetAsync($"/admin/users/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task UpdateUser_AsAdmin_RenamesDisplayName()
+    {
+        var target = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"rename_{Guid.NewGuid()}@test.com", displayName: "Old Name");
+
+        var response = await _adminClient.PutAsJsonAsync(
+            $"/admin/users/{target.Id}",
+            new { displayName = "Clean Name" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("displayName").GetString().Should().Be("Clean Name");
+    }
+
+    [Test]
+    public async Task UpdateUser_TooShortName_Returns400()
+    {
+        var target = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"short_{Guid.NewGuid()}@test.com");
+
+        var response = await _adminClient.PutAsJsonAsync(
+            $"/admin/users/{target.Id}",
+            new { displayName = "x" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task UpdateUser_NonExistentUser_Returns404()
+    {
+        var response = await _adminClient.PutAsJsonAsync(
+            $"/admin/users/{Guid.NewGuid()}",
+            new { displayName = "Whoever" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task DeleteAvatar_AsAdmin_Returns204()
+    {
+        var target = await TestDbSeeder.SeedUserAsync(_db,
+            email: $"avatar_{Guid.NewGuid()}@test.com");
+
+        var response = await _adminClient.DeleteAsync($"/admin/users/{target.Id}/avatar");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Test]
+    public async Task DeleteAvatar_NonExistentUser_Returns404()
+    {
+        var response = await _adminClient.DeleteAsync($"/admin/users/{Guid.NewGuid()}/avatar");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }
