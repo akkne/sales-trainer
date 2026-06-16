@@ -33,6 +33,7 @@ Exercise content validation is also tested via HTTP endpoints:
 - `PUT /admin/exercises/:id` — single update with 400 on invalid content
 - `POST /admin/lessons/:lessonId/exercises/import` — batch import with per-item validation (bad items skipped, errors reported)
 - `POST /admin/seeder/lessons` — seeder import with per-item validation
+- `POST /admin/seeder/bundle` — whole skill tree (skill → topics → lessons → exercises) in one file. Covered by `tests/Integration/AdminBundleImportTests.cs`: full-tree create, idempotent re-import (skills updated / exercises updated, not duplicated), invalid exercise content reported in `errors[]` while the rest of the tree is still created, and `403` for a non-admin user. Requires Docker (Testcontainers Postgres).
 
 **Run integration tests:**
 ```bash

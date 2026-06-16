@@ -188,6 +188,94 @@ file: <JSON file>
 
 ---
 
+## 4. Bundle Seeder — `/admin/seeder/bundle`
+
+Imports an **entire content tree in one file**: skill → topics → lessons →
+exercises. This is the convenient "one file, whole skill" path and is exposed in
+the admin UI under **Bundle Import** (`/admin/import`), with a Download Template
+button. Steps 1–3 above (skills / topics / lessons) remain available for partial,
+level-by-level imports.
+
+### JSON format
+
+A `{ "skills": [...] }` object (a bare skills array is also accepted):
+
+```json
+{
+  "skills": [
+    {
+      "iconicName": "cold-calling",
+      "title": "Cold Calling",
+      "description": "Mastering outbound cold calls",
+      "orderInTree": 1,
+      "stage": "preparation",
+      "topics": [
+        {
+          "iconicName": "cold-calling-basics",
+          "title": "Basics",
+          "orderInSkill": 1,
+          "lessons": [
+            {
+              "title": "Opening the call",
+              "orderInTopic": 1,
+              "exercises": [
+                { "type": "choose_option", "orderInLesson": 1, "content": { } },
+                { "type": "free_text", "orderInLesson": 2, "content": { }, "customAiPrompt": null }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+`topics`, `lessons`, and `exercises` are all optional at their level — you can
+import just skills, or skills + topics, etc.
+
+### API endpoint
+
+```
+POST /admin/seeder/bundle
+Authorization: Bearer <adminToken>
+Content-Type: multipart/form-data   (max 20 MB)
+
+file: <JSON file>
+```
+
+### Behavior
+
+- **Idempotent upsert** — skills/topics by `iconicName`, lessons by
+  `(topicId, title)`, exercises by `(lessonId, orderInLesson)`. Re-importing the
+  same file is safe.
+- **Per-type content validation** runs before each exercise is written; invalid
+  exercises are skipped and reported in `errors[]` with a path prefix
+  (`Lesson '...', exercise N (type): ...`), while the rest of the tree is still
+  created.
+
+### Response `200 OK`
+
+```json
+{
+  "skillsCreated": 1, "skillsUpdated": 0,
+  "topicsCreated": 1, "topicsUpdated": 0,
+  "lessonsCreated": 2, "lessonsUpdated": 0,
+  "exercisesCreated": 4, "exercisesUpdated": 0,
+  "errors": []
+}
+```
+
+### Error responses
+
+| Status | When |
+|---|---|
+| 400 | No file, non-`.json` file, unparseable JSON, or root not an object/array |
+| 401 | Missing/expired token |
+| 403 | User is not Admin or SuperAdmin |
+
+---
+
 ## Exercise Content Schemas
 
 For the complete content schema and validation rules for each of the 10 exercise types, see [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md). The canonical schemas are:

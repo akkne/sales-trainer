@@ -6,6 +6,8 @@ export interface ImportSummary {
     created: number;
     updated: number;
     errors: string[];
+    /** Optional extra line shown above the counts, e.g. a per-level breakdown. */
+    detail?: string;
 }
 
 interface ImportPanelProps {
@@ -169,6 +171,7 @@ export function ImportPanel({
 
             {summary && (
                 <div className="mt-3 p-3 bg-bg-2 rounded-md">
+                    {summary.detail && <p className="text-xs text-ink-3 mb-1">{summary.detail}</p>}
                     <p className="text-xs text-ink">
                         Created: <span className="font-medium">{summary.created}</span>
                         {" · "}Updated: <span className="font-medium">{summary.updated}</span>

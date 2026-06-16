@@ -275,13 +275,62 @@ status = completedLessons == 0          ? "available"
 
 | Метод | URL | Ключ совпадения (upsert) |
 |-------|-----|--------------------------|
+| `POST` | `admin/seeder/bundle` | целое дерево за один файл (см. ниже) |
 | `POST` | `admin/seeder/skills` | по `IconicName` |
 | `POST` | `admin/seeder/topics` | по `IconicName` |
 | `POST` | `admin/seeder/lessons` | уроки по `(TopicId, Title)`, вложенные упражнения по `(LessonId, OrderInLesson)` |
 
 > Эндпоинт `admin/seeder/lessons` принимает уроки с **вложенным массивом
-> упражнений** — то есть целое поддерево «уроки + упражнения» можно залить одним
-> файлом. Это основной путь массового наполнения контентом.
+> упражнений** — то есть поддерево «уроки + упражнения» можно залить одним файлом.
+
+#### Bundle import — всё дерево одним файлом
+
+`POST admin/seeder/bundle` (лимит 20 МБ) принимает **весь контент-граф разом**:
+скил → темы → уроки → упражнения. Это самый удобный путь «посадить админа и
+залить контент». В UI — вкладка **Bundle Import** (`/admin/import`) с кнопкой
+Download Template.
+
+Формат файла — объект `{ "skills": [...] }` (или просто массив скилов):
+
+```json
+{
+  "skills": [
+    {
+      "iconicName": "cold-calling",
+      "title": "Холодные звонки",
+      "description": "…",
+      "orderInTree": 1,
+      "stage": "preparation",
+      "topics": [
+        {
+          "iconicName": "cold-calling-basics",
+          "title": "Основы",
+          "orderInSkill": 1,
+          "lessons": [
+            {
+              "title": "Открытие звонка",
+              "orderInTopic": 1,
+              "exercises": [
+                { "type": "choose_option", "orderInLesson": 1, "content": { /* по схеме типа */ } },
+                { "type": "free_text", "orderInLesson": 2, "content": { /* … */ }, "customAiPrompt": null }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Upsert-ключи те же, что у пошаговых сидеров (скилы/темы по `iconicName`, уроки по
+`(TopicId, Title)`, упражнения по `(LessonId, OrderInLesson)`) — **повторный
+импорт того же файла безопасен**. Контент каждого упражнения валидируется по типу
+до записи; невалидные упражнения пропускаются и попадают в `errors` с указанием
+пути (`Lesson '…', exercise N (type): …`), остальное дерево создаётся.
+
+Ответ — `BundleImportResultDto`: счётчики `*Created`/`*Updated` по каждому уровню
+плюс `errors[]`.
 
 ---
 

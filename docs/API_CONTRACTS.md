@@ -338,10 +338,13 @@ XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correct
 | POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>` | `SkillsImportResultDto` |
 | POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
 | POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
+| POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>` (≤20 MB) | `BundleImportResultDto` |
 
-**Skills JSON:** `[{ iconicName, title, description?, orderInTree }]`
+**Skills JSON:** `[{ iconicName, title, description?, orderInTree, stage? }]`
 **Topics JSON:** `[{ skillIconicName, iconicName, title, orderInSkill }]`
 **Lessons JSON:** `[{ topicIconicName, title, orderInTopic, exercises: [{ type, orderInLesson, content, customAiPrompt? }] }]`
+**Bundle JSON:** `{ skills: [{ iconicName, title, description?, orderInTree, stage?, topics: [{ iconicName, title, orderInSkill, lessons: [{ title, orderInTopic, exercises: [{ type, orderInLesson, content, customAiPrompt? }] }] }] }] }` (a bare skills array is also accepted). Whole skill tree in one file; idempotent upsert (skills/topics by `iconicName`, lessons by `(topicId, title)`, exercises by `(lessonId, orderInLesson)`); per-type content validation; invalid exercises are skipped into `errors[]`. UI: `/admin/import`.
+`BundleImportResultDto = { skillsCreated, skillsUpdated, topicsCreated, topicsUpdated, lessonsCreated, lessonsUpdated, exercisesCreated, exercisesUpdated, errors[] }`
 
 `SkillsImportResultDto`: `{skillsCreated, skillsUpdated, errors: string[]}`
 `TopicsImportResultDto`: `{topicsCreated, topicsUpdated, errors: string[]}`

@@ -12,21 +12,7 @@ import {
     type AdminTopicWithSkill,
 } from "@/features/admin/hooks/use-admin";
 import { ImportPanel } from "@/features/admin/components/import-panel";
-
-const TOPICS_TEMPLATE = [
-    {
-        skillIconicName: "cold-calling",
-        iconicName: "intro-cold-call",
-        title: "Introduction to Cold Calling",
-        orderInSkill: 1,
-    },
-    {
-        skillIconicName: "cold-calling",
-        iconicName: "objection-basics",
-        title: "Basic Objection Handling",
-        orderInSkill: 2,
-    },
-];
+import { TOPICS_TEMPLATE } from "@/features/admin/lib/import-templates";
 
 export default function AdminTopicsPage() {
     const { data: skills = [] } = useAdminSkills();

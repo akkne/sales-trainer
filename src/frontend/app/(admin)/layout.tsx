@@ -9,6 +9,7 @@ import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
 
 const NAV_ICONS: Record<string, IconName> = {
+    "/admin/import": "grid",
     "/admin/skills": "target",
     "/admin/topics": "folder",
     "/admin/lessons": "book",
@@ -94,6 +95,7 @@ export default function AdminLayout({
     const isSuperAdmin = authenticatedUser.role === "SuperAdmin";
 
     const navItems = [
+        { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
         { href: "/admin/topics", label: "Topics" },
         { href: "/admin/lessons", label: "Lessons" },

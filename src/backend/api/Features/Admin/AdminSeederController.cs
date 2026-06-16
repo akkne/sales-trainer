@@ -261,6 +261,159 @@ public sealed class AdminSeederController(AppDbContext database, ILogger<AdminSe
             state.Errors));
     }
 
+    [HttpPost("admin/seeder/bundle")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<BundleImportResultDto>> ImportBundle(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "File is required." });
+
+        if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only .json files are accepted." });
+
+        var existingSkills = await database.Skills.ToDictionaryAsync(s => s.IconicName);
+        var existingTopics = await database.Topics.ToListAsync();
+        var allLessons = await database.Lessons.ToListAsync();
+        var allExercises = await database.Exercises.ToListAsync();
+
+        var skillsState = new SkillsImportState();
+        var topicsState = new TopicsImportState();
+        var lessonsState = new LessonsImportState();
+        var errors = new List<string>();
+
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(file.OpenReadStream());
+            var root = doc.RootElement;
+
+            // Accept both the wrapped object form { "skills": [...] } and a bare array.
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("skills", out var skillsProp))
+                root = skillsProp;
+            if (root.ValueKind != JsonValueKind.Array)
+                return BadRequest(new { message = "JSON must be an object { \"skills\": [...] } or an array of skill objects." });
+
+            foreach (var (skillElement, skillIndex) in root.EnumerateArray().Select((e, i) => (e, i + 1)))
+            {
+                var skillIconicName = "";
+                try
+                {
+                    skillIconicName = skillElement.GetProperty("iconicName").GetString()?.Trim() ?? "";
+                    var skillTitle = skillElement.GetProperty("title").GetString()?.Trim() ?? "";
+                    var description = skillElement.TryGetProperty("description", out var descProp) && descProp.ValueKind != JsonValueKind.Null
+                        ? descProp.GetString()?.Trim()
+                        : null;
+                    var orderInTree = skillElement.GetProperty("orderInTree").GetInt32();
+                    var stage = skillElement.TryGetProperty("stage", out var stageProp) && stageProp.ValueKind == JsonValueKind.String
+                        ? stageProp.GetString()?.Trim()
+                        : null;
+                    UpsertSkill(skillIconicName, skillTitle, description, orderInTree, stage, existingSkills, skillsState);
+                }
+                catch (Exception exception)
+                {
+                    errors.Add($"Skill {skillIndex} ('{skillIconicName}'): {exception.Message}");
+                    continue;
+                }
+
+                if (!existingSkills.TryGetValue(skillIconicName, out var skill))
+                    continue;
+
+                if (!skillElement.TryGetProperty("topics", out var topicsElement) || topicsElement.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var (topicElement, topicIndex) in topicsElement.EnumerateArray().Select((e, i) => (e, i + 1)))
+                {
+                    var topicIconicName = "";
+                    try
+                    {
+                        topicIconicName = topicElement.GetProperty("iconicName").GetString()?.Trim() ?? "";
+                        var topicTitle = topicElement.GetProperty("title").GetString()?.Trim() ?? "";
+                        var orderInSkill = topicElement.GetProperty("orderInSkill").GetInt32();
+                        UpsertTopic(skill.Id, topicIconicName, topicTitle, orderInSkill, existingTopics, topicsState);
+                    }
+                    catch (Exception exception)
+                    {
+                        errors.Add($"Skill '{skillIconicName}', topic {topicIndex} ('{topicIconicName}'): {exception.Message}");
+                        continue;
+                    }
+
+                    var topic = existingTopics.FirstOrDefault(t => t.IconicName == topicIconicName);
+                    if (topic is null)
+                        continue;
+
+                    if (!topicElement.TryGetProperty("lessons", out var lessonsElement) || lessonsElement.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    foreach (var (lessonElement, lessonIndex) in lessonsElement.EnumerateArray().Select((e, i) => (e, i + 1)))
+                    {
+                        Lesson lesson;
+                        var lessonTitle = "";
+                        try
+                        {
+                            lessonTitle = lessonElement.GetProperty("title").GetString()?.Trim() ?? "";
+                            if (string.IsNullOrWhiteSpace(lessonTitle))
+                                throw new InvalidOperationException("title is empty.");
+                            var orderInTopic = lessonElement.GetProperty("orderInTopic").GetInt32();
+                            lesson = UpsertLesson(topic.Id, lessonTitle, orderInTopic, allLessons, lessonsState);
+                        }
+                        catch (Exception exception)
+                        {
+                            errors.Add($"Topic '{topicIconicName}', lesson {lessonIndex} ('{lessonTitle}'): {exception.Message}");
+                            continue;
+                        }
+
+                        if (!lessonElement.TryGetProperty("exercises", out var exercisesElement) || exercisesElement.ValueKind != JsonValueKind.Array)
+                            continue;
+
+                        foreach (var (exerciseElement, exerciseIndex) in exercisesElement.EnumerateArray().Select((e, i) => (e, i + 1)))
+                        {
+                            try
+                            {
+                                var exerciseType = exerciseElement.GetProperty("type").GetString()?.Trim() ?? "";
+                                var orderInLesson = exerciseElement.GetProperty("orderInLesson").GetInt32();
+                                var contentElement = exerciseElement.GetProperty("content");
+                                var customAiPrompt = exerciseElement.TryGetProperty("customAiPrompt", out var promptProp) && promptProp.ValueKind != JsonValueKind.Null
+                                    ? promptProp.GetString()
+                                    : null;
+
+                                var contentErrors = ExerciseContentValidator.Validate(exerciseType, contentElement);
+                                if (contentErrors.Count > 0)
+                                {
+                                    errors.Add($"Lesson '{lessonTitle}', exercise {exerciseIndex} ({exerciseType}): {string.Join(" ", contentErrors)}");
+                                    continue;
+                                }
+
+                                UpsertExercise(lesson, exerciseType, orderInLesson, contentElement.GetRawText(), customAiPrompt, allExercises, lessonsState);
+                            }
+                            catch (Exception exception)
+                            {
+                                errors.Add($"Lesson '{lessonTitle}', exercise {exerciseIndex}: {exception.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
+
+        await database.SaveChangesAsync();
+
+        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        logger.LogInformation(
+            "Bundle seeder import: Skills={SC}/{SU} Topics={TC}/{TU} Lessons={LC}/{LU} Exercises={EC}/{EU} Errors={ErrorCount} by ActorId={ActorId}",
+            skillsState.SkillsCreated, skillsState.SkillsUpdated,
+            topicsState.TopicsCreated, topicsState.TopicsUpdated,
+            lessonsState.LessonsCreated, lessonsState.LessonsUpdated,
+            lessonsState.ExercisesCreated, lessonsState.ExercisesUpdated,
+            errors.Count, actorId);
+
+        return Ok(new BundleImportResultDto(
+            skillsState.SkillsCreated, skillsState.SkillsUpdated,
+            topicsState.TopicsCreated, topicsState.TopicsUpdated,
+            lessonsState.LessonsCreated, lessonsState.LessonsUpdated,
+            lessonsState.ExercisesCreated, lessonsState.ExercisesUpdated,
+            errors));
+    }
+
     private Lesson UpsertLesson(Guid topicId, string title, int orderInTopic,
         List<Lesson> existingLessons, LessonsImportState state)
     {

@@ -509,6 +509,45 @@ export function useImportLessons() {
     });
 }
 
+export interface BundleImportResult {
+    skillsCreated: number;
+    skillsUpdated: number;
+    topicsCreated: number;
+    topicsUpdated: number;
+    lessonsCreated: number;
+    lessonsUpdated: number;
+    exercisesCreated: number;
+    exercisesUpdated: number;
+    errors: string[];
+}
+
+/** Import an entire content tree (skills → topics → lessons → exercises) from one file. */
+export function useImportBundle() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return apiClient.postFile<BundleImportResult>("/admin/seeder/bundle", formData);
+        },
+        onSuccess: (data) => {
+            clientLogger.info("Bundle seeder import complete", {
+                skillsCreated: data.skillsCreated,
+                topicsCreated: data.topicsCreated,
+                lessonsCreated: data.lessonsCreated,
+                exercisesCreated: data.exercisesCreated,
+                errors: data.errors.length,
+            });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skills"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "topics"] });
+            queryClient.invalidateQueries({ queryKey: ["admin", "lessons"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Bundle seeder import failed", { error: (error as Error).message });
+        },
+    });
+}
+
 // --- Techniques ---
 
 export interface AdminTechniqueCoach {

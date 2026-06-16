@@ -12,19 +12,10 @@ import {
     type AdminLessonWithTopic,
 } from "@/features/admin/hooks/use-admin";
 import { ImportPanel } from "@/features/admin/components/import-panel";
-import { buildExerciseImportTemplate } from "@/features/admin/components/exercise-editors";
+import { LESSONS_TEMPLATE } from "@/features/admin/lib/import-templates";
 
 type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";
-
-const LESSONS_TEMPLATE = [
-    {
-        topicIconicName: "intro-cold-call",
-        title: "First Steps",
-        orderInTopic: 1,
-        exercises: [buildExerciseImportTemplate("choose_option", 1)],
-    },
-];
 
 export default function LessonsPage() {
     const { data: lessons = [], isLoading } = useAdminAllLessons();

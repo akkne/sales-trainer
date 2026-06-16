@@ -11,6 +11,7 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
 import { ImportPanel } from "@/features/admin/components/import-panel";
+import { SKILLS_TEMPLATE } from "@/features/admin/lib/import-templates";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",
@@ -19,23 +20,6 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
     orderInTree: 0,
     stage: SKILL_STAGES[0].key,
 });
-
-const SKILLS_TEMPLATE = [
-    {
-        iconicName: "cold-calling",
-        title: "Cold Calling",
-        description: "Mastering outbound cold calls",
-        orderInTree: 1,
-        stage: "preparation",
-    },
-    {
-        iconicName: "objection-handling",
-        title: "Objection Handling",
-        description: "Techniques for common objections",
-        orderInTree: 2,
-        stage: "active",
-    },
-];
 
 export default function AdminSkillsPage() {
     const { data: skills = [], isLoading } = useAdminSkills();
