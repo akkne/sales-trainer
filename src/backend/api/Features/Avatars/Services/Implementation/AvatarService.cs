@@ -19,8 +19,9 @@ public sealed class AvatarService(
         [".webp"] = "image/webp"
     };
 
-    public async Task<(Stream Stream, string ContentType)?> GetAvatarAsync(
+    public async Task<AvatarContentResult?> GetAvatarAsync(
         Guid userId,
+        string? ifNoneMatch = null,
         CancellationToken cancellationToken = default)
     {
         var user = await db.Users.AsNoTracking()
@@ -46,11 +47,23 @@ public sealed class AvatarService(
             objectKey = defaultAvatar.ObjectKey;
         }
 
-        var stream = await objectStorage.GetAsync(objectKey, cancellationToken);
         var ext = Path.GetExtension(objectKey).ToLowerInvariant();
         var contentType = ContentTypeByExtension.GetValueOrDefault(ext, "application/octet-stream");
 
-        return (stream, contentType);
+        // ETag drives cache validation: clients revalidate on every load (Cache-Control: no-cache)
+        // and we serve a fresh image only when the stored object actually changed.
+        var etag = await objectStorage.TryGetETagAsync(objectKey, cancellationToken);
+
+        // Object key is in the DB but the underlying object is gone — treat as not found
+        // (404) so the client falls back to the generated avatar instead of getting a 500.
+        if (etag is null)
+            return null;
+
+        if (ifNoneMatch is not null && ifNoneMatch == etag)
+            return new AvatarContentResult(null, contentType, etag, NotModified: true);
+
+        var stream = await objectStorage.GetAsync(objectKey, cancellationToken);
+        return new AvatarContentResult(stream, contentType, etag, NotModified: false);
     }
 
     public async Task<string> UploadAvatarAsync(

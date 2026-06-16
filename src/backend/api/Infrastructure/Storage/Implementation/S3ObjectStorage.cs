@@ -81,6 +81,19 @@ public sealed class S3ObjectStorage : IObjectStorage
         }
     }
 
+    public async Task<string?> TryGetETagAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var metadata = await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
+            return metadata.ETag;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
         await _client.DeleteObjectAsync(_bucket, key, cancellationToken);

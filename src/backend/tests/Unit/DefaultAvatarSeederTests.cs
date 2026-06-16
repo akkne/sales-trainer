@@ -37,6 +37,11 @@ public class DefaultAvatarSeederTests
         public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult(_store.ContainsKey(key));
 
+        public Task<string?> TryGetETagAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_store.TryGetValue(key, out var data)
+                ? $"\"{Convert.ToHexString(System.Security.Cryptography.MD5.HashData(data))}\""
+                : null);
+
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
         {
             _store.Remove(key);
@@ -75,6 +80,11 @@ public class DefaultAvatarSeederTests
 
         public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult(_store.ContainsKey(key));
+
+        public Task<string?> TryGetETagAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_store.TryGetValue(key, out var data)
+                ? $"\"{Convert.ToHexString(System.Security.Cryptography.MD5.HashData(data))}\""
+                : null);
 
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
         {

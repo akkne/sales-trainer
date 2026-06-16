@@ -152,7 +152,7 @@ export default function ProfilePage() {
                                 cursor: uploading ? "wait" : "pointer",
                                 color: "var(--primary)",
                                 textDecoration: "underline",
-                                fontSize: 13,
+                                fontSize: 11,
                             }}
                         >
                             {uploading ? "Загрузка…" : "Обновить фото профиля"}

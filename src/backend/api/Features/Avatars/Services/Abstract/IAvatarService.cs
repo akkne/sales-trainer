@@ -1,13 +1,22 @@
 namespace SalesTrainer.Api.Features.Avatars.Services.Abstract;
 
+/// <summary>
+/// Resolved avatar payload. When <see cref="NotModified"/> is true the caller's
+/// If-None-Match matched the current ETag and <see cref="Stream"/> is null (send 304).
+/// </summary>
+public sealed record AvatarContentResult(Stream? Stream, string ContentType, string? ETag, bool NotModified);
+
 public interface IAvatarService
 {
     /// <summary>
-    /// Returns the S3 object stream and content-type for a user's current avatar.
-    /// Returns null if no matching default avatar row exists (catalog not seeded yet).
+    /// Returns the S3 object stream, content-type and ETag for a user's current avatar.
+    /// Returns null if the user/avatar object cannot be resolved (catalog not seeded, object missing).
+    /// When <paramref name="ifNoneMatch"/> matches the current ETag, returns a not-modified result
+    /// with a null stream so the controller can answer 304.
     /// </summary>
-    Task<(Stream Stream, string ContentType)?> GetAvatarAsync(
+    Task<AvatarContentResult?> GetAvatarAsync(
         Guid userId,
+        string? ifNoneMatch = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

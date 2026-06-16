@@ -204,6 +204,11 @@ internal sealed class InMemoryObjectStorage : IObjectStorage
     public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
         => Task.FromResult(_store.ContainsKey(key));
 
+    public Task<string?> TryGetETagAsync(string key, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.TryGetValue(key, out var entry)
+            ? $"\"{Convert.ToHexString(System.Security.Cryptography.MD5.HashData(entry.Data))}\""
+            : null);
+
     public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
         _store.Remove(key);

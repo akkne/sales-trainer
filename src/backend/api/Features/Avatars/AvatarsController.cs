@@ -97,14 +97,27 @@ public sealed class AvatarsController(IAvatarService avatarService) : Controller
     [AllowAnonymous]
     public async Task<IActionResult> GetAvatar(Guid userId, CancellationToken cancellationToken)
     {
-        var result = await avatarService.GetAvatarAsync(userId, cancellationToken);
+        var ifNoneMatch = Request.Headers.IfNoneMatch.ToString();
+        var result = await avatarService.GetAvatarAsync(
+            userId,
+            string.IsNullOrEmpty(ifNoneMatch) ? null : ifNoneMatch,
+            cancellationToken);
 
         if (result is null)
             return NotFound();
 
-        Response.Headers["Cache-Control"] = "public, max-age=60";
+        // no-cache = the client may cache but MUST revalidate via the ETag on every load.
+        // This is what makes a freshly uploaded avatar appear after a page refresh while
+        // still avoiding a full re-download (304) when the image is unchanged.
+        Response.Headers["Cache-Control"] = "public, no-cache";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File(result.Value.Stream, result.Value.ContentType);
+        if (result.ETag is not null)
+            Response.Headers.ETag = result.ETag;
+
+        if (result.NotModified)
+            return StatusCode(StatusCodes.Status304NotModified);
+
+        return File(result.Stream!, result.ContentType);
     }
 
     private Guid? ResolveUserId()
