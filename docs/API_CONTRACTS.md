@@ -59,8 +59,8 @@ Skills in the list that are not yet enrolled are set to `available`.
 Skills currently enrolled but absent from the list are set to `locked` (progress preserved).  
 `sales-basics` is always kept enrolled.
 
-`SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal}`  
-`dailyXpAmount` = XP earned today (UTC); `dailyXpGoal` = target from `Gamification:DailyXpGoal` config (default 100).  
+`SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal, weeklyXpGoal}`  
+`dailyXpAmount`/`weeklyXpAmount` = XP earned today / this week (UTC); `dailyXpGoal`/`weeklyXpGoal` = targets from the admin-editable `GamificationSettings` table (defaults 100 / 500), not hardcoded config.  
 `SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).
 
 ---
@@ -275,6 +275,29 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | PUT | /admin/exercise-type-prompts/:exerciseType | `{systemPrompt}` | `ExerciseTypePromptDto` |
 
 `ExerciseTypePromptDto`: `{id, exerciseType, systemPrompt, updatedAt}`
+
+### Gamification (XP)
+All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/gamification/settings | — | `GamificationSettingsDto` |
+| PUT | /admin/gamification/settings | `UpdateGamificationSettingsRequestDto` | `GamificationSettingsDto` |
+| GET | /admin/gamification/exercise-rewards | — | `ExerciseTypeRewardDto[]` |
+| PUT | /admin/gamification/exercise-rewards/:exerciseType | `{baseXpReward}` | `ExerciseTypeRewardDto` (upsert) |
+| GET | /admin/gamification/streak-milestones | — | `StreakMilestoneDto[]` |
+| POST | /admin/gamification/streak-milestones | `{dayCount, xpReward}` | `StreakMilestoneDto` (400 on duplicate `dayCount`) |
+| PUT | /admin/gamification/streak-milestones/:id | `{dayCount, xpReward}` | `StreakMilestoneDto` |
+| DELETE | /admin/gamification/streak-milestones/:id | — | 204 |
+
+`GamificationSettingsDto` / `UpdateGamificationSettingsRequestDto`: `{dailyXpGoal, weeklyXpGoal, dialogXpMultiplier, dialogWeightConfidence, dialogWeightStructure, dialogWeightObjection, dialogWeightGoal}`
+- `dailyXpGoal`/`weeklyXpGoal` must be positive; `dialogXpMultiplier` must be positive; criterion weights are non-negative and must sum to > 0.
+- **Dialog XP**: the AI scores a completed dialog on four criteria, each capped at its weight (raw score range `0..Σweights`). Earned XP = `round(rawScore × dialogXpMultiplier)`. The criterion maximums are injected into the feedback prompt, so editing weights re-shapes how the AI distributes points.
+- **Exercise XP**: `baseXpReward` per exercise type is awarded on a correct/passed answer (historic flat value 10; seeded for all 10 types). Unknown/unseeded types fall back to 10.
+- **Streak milestones**: a one-off bonus when the daily streak first reaches `dayCount`. When the table is non-empty it is authoritative; when empty the historic ladder (7→50, 30→200) applies.
+
+`ExerciseTypeRewardDto`: `{id, exerciseType, baseXpReward}`  
+`StreakMilestoneDto`: `{id, dayCount, xpReward}`
 
 ### Reference Materials
 | Method | Path | Body | Response |

@@ -1,15 +1,14 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using SalesTrainer.Api.Features.Gamification.Services.Abstract;
 using SalesTrainer.Api.Features.SkillTree.Models;
 using SalesTrainer.Api.Features.SkillTree.Services.Abstract;
-using SalesTrainer.Api.Infrastructure.Configuration;
 using SalesTrainer.Api.Infrastructure.Data;
 
 namespace SalesTrainer.Api.Features.SkillTree.Services.Implementation;
 
 internal sealed class SkillTreeService(
     AppDbContext databaseContext,
-    IOptions<GamificationConfiguration> gamificationOptions) : ISkillTreeService
+    IGamificationService gamificationService) : ISkillTreeService
 {
 
     public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
@@ -149,12 +148,15 @@ internal sealed class SkillTreeService(
                          DateOnly.FromDateTime(experiencePointRecord.EarnedAt) == today)
             .SumAsync(experiencePointRecord => (int?)experiencePointRecord.Amount, cancellationToken) ?? 0;
 
+        var gamificationSettings = await gamificationService.GetSettingsAsync(cancellationToken);
+
         return new SkillTreeResponseDto(
             allSkills,
             currentStreakDayCount,
             totalExperiencePointsAmount,
             weeklyExperiencePointsAmount,
             dailyExperiencePointsAmount,
-            gamificationOptions.Value.DailyXpGoal);
+            gamificationSettings.DailyXpGoal,
+            gamificationSettings.WeeklyXpGoal);
     }
 }

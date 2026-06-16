@@ -58,6 +58,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DiscussVote> DiscussVotes => Set<DiscussVote>();
     public DbSet<DiscussPhoto> DiscussPhotos => Set<DiscussPhoto>();
     public DbSet<DefaultAvatar> DefaultAvatars => Set<DefaultAvatar>();
+    public DbSet<GamificationSettings> GamificationSettings => Set<GamificationSettings>();
+    public DbSet<ExerciseTypeReward> ExerciseTypeRewards => Set<ExerciseTypeReward>();
+    public DbSet<StreakMilestone> StreakMilestones => Set<StreakMilestone>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

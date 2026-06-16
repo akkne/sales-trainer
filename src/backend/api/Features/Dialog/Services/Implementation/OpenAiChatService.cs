@@ -46,7 +46,27 @@ endCall: true означает, что твой персонаж кладёт т
 
 Во всех остальных случаях — endCall: false.";
 
-    private const string ExperiencePointsInstructionSuffix = @"
+    // Built per-request from admin-editable criterion weights (see GamificationSettings).
+    // Only the criteria block at the very end varies; everything above it is fixed guidance.
+    private static string BuildExperiencePointsSuffix(DialogXpWeights weights) =>
+        ExperiencePointsInstructionPrefix + $@"
+
+Критерии начисления XP (сумма от 0 до {weights.Total}, каждый критерий — только если он реально проявился в диалоге):
+- Уверенность и тон: до {weights.Confidence} XP
+- Структура и содержание аргументов: до {weights.Structure} XP
+- Работа с возражениями (если возражения были): до {weights.Objection} XP
+- Достижение цели звонка (прошёл секретаря, назначил встречу и т.д.): до {weights.Goal} XP
+
+Калибровка итоговой суммы (доля от максимума):
+- 0–20%: провал (клиент бросил трубку из-за ошибок, разговор не состоялся по вине менеджера)
+- 21–45%: слабо (цель не достигнута, заметные ошибки)
+- 46–70%: нормально (без грубых ошибок, цель достигнута частично)
+- 71–85%: хорошо (уверенный разговор, цель достигнута)
+- 86–100%: исключительно (ставь редко — почти безупречный звонок)
+
+Например: [XP:{weights.Total / 2}]";
+
+    private const string ExperiencePointsInstructionPrefix = @"
 
 ПРАВИЛА ЧЕСТНОЙ ОЦЕНКИ (важнее всего остального):
 1. Оценивай ТОЛЬКО то, что реально есть в диалоге ниже. Каждое утверждение в разборе подкрепляй прямой цитатой из диалога. НИЧЕГО не выдумывай: если в диалоге не было возражений — не пиши про работу с возражениями; если менеджер не здоровался — не хвали приветствие.
@@ -86,22 +106,7 @@ endCall: true означает, что твой персонаж кладёт т
 </ul>
 
 В КОНЦЕ своего ответа на отдельной строке укажи количество XP, которое заслужил пользователь за этот диалог в формате:
-[XP:число]
-
-Критерии начисления XP (сумма от 0 до 100, каждый критерий — только если он реально проявился в диалоге):
-- Уверенность и тон: до 25 XP
-- Структура и содержание аргументов: до 25 XP
-- Работа с возражениями (если возражения были): до 25 XP
-- Достижение цели звонка (прошёл секретаря, назначил встречу и т.д.): до 25 XP
-
-Калибровка итоговой суммы:
-- 0–20: провал (клиент бросил трубку из-за ошибок, разговор не состоялся по вине менеджера)
-- 21–45: слабо (цель не достигнута, заметные ошибки)
-- 46–70: нормально (без грубых ошибок, цель достигнута частично)
-- 71–85: хорошо (уверенный разговор, цель достигнута)
-- 86–100: исключительно (ставь редко — почти безупречный звонок)
-
-Например: [XP:55]";
+[XP:число]";
 
     public OpenAiChatService(
         IHttpClientFactory httpClientFactory,
@@ -247,13 +252,14 @@ endCall: true означает, что твой персонаж кладёт т
     public async Task<FeedbackResult> GenerateFeedbackAsync(
         string feedbackPrompt,
         List<DialogMessage> conversationHistory,
+        DialogXpWeights xpWeights,
         CancellationToken cancellationToken = default)
     {
         var feedbackModel = _openAiOptions.Value.OpenQuestionModel;
         var maxTokens = _openAiOptions.Value.MaximumFeedbackTokenCount;
 
         var conversationAsText = FormatConversationForFeedback(conversationHistory);
-        var fullPrompt = $"{feedbackPrompt}{ExperiencePointsInstructionSuffix}\n\n--- Диалог ---\n{conversationAsText}";
+        var fullPrompt = $"{feedbackPrompt}{BuildExperiencePointsSuffix(xpWeights)}\n\n--- Диалог ---\n{conversationAsText}";
 
         var emptyHistory = new List<DialogMessage>
         {
@@ -264,7 +270,7 @@ endCall: true означает, что твой персонаж кладёт т
 
         _logger.LogDebug("Feedback response from AI: {Response}", response);
 
-        var xpReward = ExtractExperiencePointsReward(response);
+        var xpReward = ExtractExperiencePointsReward(response, xpWeights.Total);
         var cleanedContent = Regex.Replace(response, @"\[XP:\d+\]", "").Trim();
         var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
 
@@ -332,11 +338,11 @@ endCall: true означает, что твой персонаж кладёт т
         return string.IsNullOrWhiteSpace(result) ? text : result;
     }
 
-    private int ExtractExperiencePointsReward(string response)
+    private int ExtractExperiencePointsReward(string response, int maxScore)
     {
         var match = Regex.Match(response, @"\[XP:(\d+)\]");
         if (match.Success && int.TryParse(match.Groups[1].Value, out var xp))
-            return Math.Clamp(xp, 0, 100);
+            return Math.Clamp(xp, 0, maxScore);
 
         _logger.LogWarning("Feedback response did not contain an [XP:N] tag; awarding 0 XP");
         return 0;

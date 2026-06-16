@@ -419,6 +419,43 @@ Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migra
 
 ---
 
+### `GamificationSettings`
+
+Single-row table holding the admin-editable XP economy (daily/weekly goals + dialog scoring) that was previously hardcoded. Created and seeded by migration `20260616130000_AddGamificationSettings`. Loaded-or-created on first access by `GamificationService`; edited via `/admin/gamification/settings`. Consumed by `SkillTreeService` (goals) and `DialogService`/`OpenAiChatService` (dialog scoring).
+
+| Column                   | Type               | Nullable | Notes                                                        |
+|--------------------------|--------------------|----------|--------------------------------------------------------------|
+| `Id`                     | `uuid`             | NOT NULL | PK                                                           |
+| `DailyXpGoal`            | `integer`          | NOT NULL | default 100                                                  |
+| `WeeklyXpGoal`           | `integer`          | NOT NULL | default 500                                                  |
+| `DialogXpMultiplier`     | `double precision` | NOT NULL | default 1.0; earned XP = `round(rawScore × multiplier)`      |
+| `DialogWeightConfidence` | `integer`          | NOT NULL | default 25; max points for tone/confidence criterion         |
+| `DialogWeightStructure`  | `integer`          | NOT NULL | default 25; max points for argument structure criterion      |
+| `DialogWeightObjection`  | `integer`          | NOT NULL | default 25; max points for objection-handling criterion      |
+| `DialogWeightGoal`       | `integer`          | NOT NULL | default 25; max points for call-goal criterion               |
+
+### `ExerciseTypeRewards`
+
+Per-exercise-type base XP, replacing the hardcoded flat 10. Seeded with all 10 exercise types → 10 by `20260616130000_AddGamificationSettings`. Read by `GamificationService.GetExerciseBaseXpAsync` (falls back to 10 for unknown types); edited via `/admin/gamification/exercise-rewards/:exerciseType` (upsert).
+
+| Column         | Type                     | Nullable | Notes                                  |
+|----------------|--------------------------|----------|----------------------------------------|
+| `Id`           | `uuid`                   | NOT NULL | PK                                     |
+| `ExerciseType` | `character varying(40)`  | NOT NULL | UNIQUE — see `ExerciseTypes` constants |
+| `BaseXpReward` | `integer`                | NOT NULL | XP on correct/passed answer            |
+
+### `StreakMilestones`
+
+Admin-editable streak-bonus ladder, replacing the hardcoded `7→50, 30→200` switch. Seeded with those two rows. Read by `GamificationService.GetStreakBonusXpAsync` — authoritative when non-empty, otherwise the historic ladder is used. Managed via `/admin/gamification/streak-milestones` (CRUD).
+
+| Column     | Type      | Nullable | Notes                                     |
+|------------|-----------|----------|-------------------------------------------|
+| `Id`       | `uuid`    | NOT NULL | PK                                        |
+| `DayCount` | `integer` | NOT NULL | UNIQUE — streak length that triggers bonus |
+| `XpReward` | `integer` | NOT NULL | one-off bonus XP                          |
+
+---
+
 ### `DailyQuotes`
 
 Quote of the day shown in the stats widget ("Совет дня"). One quote per calendar date; managed from the admin calendar at `/admin/quotes`. Created by migration `20260607120000_AddDailyQuotes`, which also seeds today's row with the previously hardcoded widget tip. The public `GET /daily-quote` endpoint falls back to the most recent quote at or before the requested date.
@@ -560,3 +597,5 @@ Skills
 | `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |
 | `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index`; backfills `DefaultAvatarIndex` for existing users via `abs(hashtext(Id::text)) % 6` |
 | `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
+| `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
+| `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using SalesTrainer.Api.Features.Dialog.Models;
 using SalesTrainer.Api.Features.Dialog.Services.Abstract;
+using SalesTrainer.Api.Features.Gamification.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Mongo;
 
@@ -12,17 +13,20 @@ internal sealed class DialogService : IDialogService
     private readonly AppDbContext _databaseContext;
     private readonly MongoDbContext _mongoContext;
     private readonly IOpenAiChatService _openAiChatService;
+    private readonly IGamificationService _gamificationService;
     private readonly ILogger<DialogService> _logger;
 
     public DialogService(
         AppDbContext databaseContext,
         MongoDbContext mongoContext,
         IOpenAiChatService openAiChatService,
+        IGamificationService gamificationService,
         ILogger<DialogService> logger)
     {
         _databaseContext = databaseContext;
         _mongoContext = mongoContext;
         _openAiChatService = openAiChatService;
+        _gamificationService = gamificationService;
         _logger = logger;
     }
 
@@ -217,7 +221,18 @@ internal sealed class DialogService : IDialogService
             throw new InvalidOperationException($"Mode {session.ModeId} not found");
         }
 
-        var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(mode.FeedbackSystemPrompt, session.Messages, cancellationToken);
+        // Criterion weights and the score→XP multiplier are admin-editable (GamificationSettings).
+        var gamificationSettings = await _gamificationService.GetSettingsAsync(cancellationToken);
+        var xpWeights = new DialogXpWeights(
+            gamificationSettings.DialogWeightConfidence,
+            gamificationSettings.DialogWeightStructure,
+            gamificationSettings.DialogWeightObjection,
+            gamificationSettings.DialogWeightGoal);
+
+        var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(mode.FeedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
+
+        // The AI returns a raw 0-Total score; the multiplier converts it into earned XP.
+        var earnedXp = (int)Math.Round(feedbackResult.XpReward * gamificationSettings.DialogXpMultiplier);
 
         var feedback = new DialogFeedback
         {
@@ -229,7 +244,7 @@ internal sealed class DialogService : IDialogService
         var updateDefinition = Builders<DialogSession>.Update
             .Set(sessionRecord => sessionRecord.Status, DialogSessionStatus.Completed)
             .Set(sessionRecord => sessionRecord.Feedback, feedback)
-            .Set(sessionRecord => sessionRecord.XpEarned, feedbackResult.XpReward)
+            .Set(sessionRecord => sessionRecord.XpEarned, earnedXp)
             .Set(sessionRecord => sessionRecord.CompletedAt, DateTime.UtcNow);
 
         await _mongoContext.DialogSessions.UpdateOneAsync(
@@ -238,12 +253,12 @@ internal sealed class DialogService : IDialogService
             cancellationToken: cancellationToken
         );
 
-        _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {ExperiencePoints}", sessionId, userId, feedbackResult.XpReward);
+        _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {ExperiencePoints}", sessionId, userId, earnedXp);
 
         return new DialogFeedbackResult
         {
             Feedback = feedback,
-            XpEarned = feedbackResult.XpReward
+            XpEarned = earnedXp
         };
     }
 

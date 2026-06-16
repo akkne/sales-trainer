@@ -54,7 +54,7 @@ public class OpenAiChatServiceTests
         var aiResponse = "<strong>Хорошее начало</strong>, но цель не достигнута.\n[DETAILED]\n<h3>Общая оценка</h3><p>Разбор.</p>\n[XP:55]";
         var service = CreateService(HttpStatusCode.OK, BuildCompletionResponse(aiResponse));
 
-        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation());
+        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation(), DialogXpWeights.Default);
 
         result.XpReward.Should().Be(55);
         result.Summary.Should().Contain("Хорошее начало");
@@ -68,7 +68,7 @@ public class OpenAiChatServiceTests
         var aiResponse = "Резюме без тега.\n[DETAILED]\n<p>Разбор без оценки.</p>";
         var service = CreateService(HttpStatusCode.OK, BuildCompletionResponse(aiResponse));
 
-        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation());
+        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation(), DialogXpWeights.Default);
 
         result.XpReward.Should().Be(0);
     }
@@ -79,9 +79,22 @@ public class OpenAiChatServiceTests
         var aiResponse = "Резюме.\n[DETAILED]\n<p>Разбор.</p>\n[XP:250]";
         var service = CreateService(HttpStatusCode.OK, BuildCompletionResponse(aiResponse));
 
-        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation());
+        var result = await service.GenerateFeedbackAsync("Оцени разговор.", BuildConversation(), DialogXpWeights.Default);
 
         result.XpReward.Should().Be(100);
+    }
+
+    [Test]
+    public async Task GenerateFeedbackAsync_ClampsXpToConfiguredWeightTotal()
+    {
+        // With custom weights summing to 60, a raw score above 60 must clamp to 60.
+        var aiResponse = "Резюме.\n[DETAILED]\n<p>Разбор.</p>\n[XP:95]";
+        var service = CreateService(HttpStatusCode.OK, BuildCompletionResponse(aiResponse));
+
+        var result = await service.GenerateFeedbackAsync(
+            "Оцени разговор.", BuildConversation(), new DialogXpWeights(20, 20, 10, 10));
+
+        result.XpReward.Should().Be(60);
     }
 
     [Test]
