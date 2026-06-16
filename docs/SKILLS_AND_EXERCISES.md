@@ -38,7 +38,7 @@ Skill (скил)
 | `Title` | строка | Название, которое видит пользователь. Например: `"Холодные звонки"` |
 | `Description` | строка \| null | Необязательное описание |
 | `OrderInTree` | число | Порядок отображения скила в дереве. Меньшее — выше |
-| `Stage` | строка | Классификация этапа. По умолчанию `"general"` |
+| `Stage` | строка | `key` этапа воронки для группировки на `/tree`. По умолчанию `"general"`. Этапы хранятся в БД (`SkillStages`) и редактируются в админке (`/admin/skill-stages`); встроенные ключи: `preparation`, `discovery`, `engagement`, `closing`, `retention`. |
 
 > Полей `slug`, `iconName`, `sortOrder`, `prerequisiteSkillId`,
 > `applicableSalesTypes` в коде **нет** — это устаревшие имена из старой версии

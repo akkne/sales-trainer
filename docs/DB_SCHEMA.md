@@ -107,9 +107,23 @@ Indexes: `IX_RefreshTokens_UserId`
 | `OrderInTree` | `integer` | NOT NULL | Display order in tree          |
 | `Title`       | `text`    | NOT NULL | Localized display name         |
 | `Description` | `text`    | NULL     |                                |
-| `Stage`       | `text`    | NOT NULL | Funnel stage bucket (DEFAULT `general`). Known values: `preparation`, `discovery`, `engagement`, `closing`, `retention`. |
+| `Stage`       | `text`    | NOT NULL | Funnel stage bucket (DEFAULT `general`). References `SkillStages.Key`; built-in keys: `preparation`, `discovery`, `engagement`, `closing`, `retention`. Free string (no FK) — `general` and unknown keys fall back to a generic bucket. |
 
 Indexes: `IX_Skills_IconicName` (unique), `IX_Skills_Stage`.
+
+### `SkillStages`
+
+The configurable funnel-stage list used to group skills on `/tree` (replaces the previously frontend-hardcoded list). Seeded by migration `20260616132237_AddSkillStages` with the original 5 stages (`preparation/discovery/engagement/closing/retention`). Managed via `/admin/skill-stages`; read publicly (ordered by `Order`) at `GET /skills/stages`. `Skills.Stage` references `Key` (free string, no FK constraint).
+
+| Column   | Type          | Nullable | Notes                                                  |
+|----------|---------------|----------|--------------------------------------------------------|
+| `Id`     | `uuid`        | NOT NULL | PK                                                     |
+| `Key`    | `varchar(40)` | NOT NULL | unique slug, immutable (stored on `Skills.Stage`)      |
+| `Label`  | `varchar(60)` | NOT NULL | display label                                          |
+| `Accent` | `varchar(40)` | NOT NULL | CSS color (hex or `var(--token)`)                      |
+| `Order`  | `integer`     | NOT NULL | display order along the funnel (ascending)             |
+
+Index: `IX_SkillStages_Key` (unique). `general` is the implicit fallback for unassigned/unknown keys and is intentionally not a stored row.
 
 ---
 
@@ -599,3 +613,4 @@ Skills
 | `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
+| `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |

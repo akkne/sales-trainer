@@ -18,4 +18,7 @@ public interface ISkillTreeService
     Task<SkillTreeResponseDto> GetSkillTreeForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
+        CancellationToken cancellationToken = default);
 }

@@ -74,6 +74,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Sequential lesson unlock within skills
 - Lazy seeding of lesson progress on first access
 - Course map view with progress tracking
+- Skills grouped on `/tree` by DB-driven funnel stages (label/accent/order), editable via `/admin/skill-stages` — full CRUD, no hardcoded list ([API_CONTRACTS](API_CONTRACTS.md), [DB_SCHEMA](DB_SCHEMA.md))
 
 ### Exercise Session
 - Full-screen session with progress bar

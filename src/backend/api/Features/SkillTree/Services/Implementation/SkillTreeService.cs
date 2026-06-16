@@ -11,6 +11,15 @@ internal sealed class SkillTreeService(
     IGamificationService gamificationService) : ISkillTreeService
 {
 
+    public async Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await databaseContext.SkillStages
+            .OrderBy(stage => stage.Order)
+            .Select(stage => new SkillStageDto(stage.Key, stage.Label, stage.Accent, stage.Order))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
         CancellationToken cancellationToken = default)
     {

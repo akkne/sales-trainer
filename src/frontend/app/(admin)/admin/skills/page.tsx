@@ -9,7 +9,8 @@ import {
     useImportSkills,
     type AdminSkill,
 } from "@/features/admin/hooks/use-admin";
-import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
+import { getStageMeta } from "@/features/skills/constants/skill-stages";
+import { useSkillStages } from "@/features/skills/hooks/use-skill-tree";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { SKILLS_TEMPLATE } from "@/features/admin/lib/import-templates";
 
@@ -18,11 +19,12 @@ const emptyForm = (): Omit<AdminSkill, "id"> => ({
     title: "",
     description: null,
     orderInTree: 0,
-    stage: SKILL_STAGES[0].key,
+    stage: "",
 });
 
 export default function AdminSkillsPage() {
     const { data: skills = [], isLoading } = useAdminSkills();
+    const { stages } = useSkillStages();
     const createSkill = useCreateSkill();
     const deleteSkill = useDeleteSkill();
     const importSkills = useImportSkills();
@@ -32,7 +34,8 @@ export default function AdminSkillsPage() {
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     async function handleCreate() {
-        await createSkill.mutateAsync(form);
+        const stage = form.stage || stages[0]?.key || "general";
+        await createSkill.mutateAsync({ ...form, stage });
         setForm(emptyForm());
         setShowForm(false);
     }
@@ -106,10 +109,10 @@ export default function AdminSkillsPage() {
                             <span className="text-xs text-ink-3">Stage</span>
                             <select
                                 className="mt-1 w-full border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 bg-surface"
-                                value={form.stage}
+                                value={form.stage || stages[0]?.key || ""}
                                 onChange={(e) => setForm({ ...form, stage: e.target.value })}
                             >
-                                {SKILL_STAGES.map((s) => (
+                                {stages.map((s) => (
                                     <option key={s.key} value={s.key}>
                                         {s.label}
                                     </option>
@@ -189,7 +192,7 @@ export default function AdminSkillsPage() {
                                     {skill.description || "—"}
                                 </td>
                                 <td className="py-2.5 px-3 text-ink-3 text-xs">
-                                    {getStageMeta(skill.stage).label}
+                                    {getStageMeta(skill.stage, stages).label}
                                 </td>
                                 <td className="py-2.5 px-3 text-ink-3">{skill.orderInTree}</td>
                                 <td className="py-2.5 px-3 text-right">

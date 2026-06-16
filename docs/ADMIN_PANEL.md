@@ -45,6 +45,16 @@ All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
 | PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?, stage?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
+### Skill Stages
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/skill-stages | — | `AdminSkillStageDto[]` |
+| POST | /admin/skill-stages | `{key, label, accent, order}` | `AdminSkillStageDto` |
+| PUT | /admin/skill-stages/:id | `{label, accent, order}` | `AdminSkillStageDto` |
+| DELETE | /admin/skill-stages/:id | — | 204 |
+
+The funnel stages used to group skills on `/tree` (`SkillStages` table). The `key` is immutable once created (it is stored on `Skills.Stage`); only `label`, `accent` color, and `order` are editable. A stage with skills still assigned to it cannot be deleted — reassign those skills first. Managed at `/admin/skill-stages`; read publicly at `GET /skills/stages`.
+
 ### Topics
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -181,6 +191,8 @@ app/(admin)/
   layout.tsx           ← sidebar nav + auth guard
   admin/
     page.tsx           ← redirect to /admin/skills
+    skill-stages/
+      page.tsx         ← funnel-stage CRUD (label/accent/order)
     skills/
       page.tsx         ← skill list + inline JSON import
       [id]/

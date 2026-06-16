@@ -24,7 +24,7 @@ export const SKILLS_TEMPLATE = [
         title: "Objection Handling",
         description: "Techniques for common objections",
         orderInTree: 2,
-        stage: "active",
+        stage: "closing",
     },
 ];
 

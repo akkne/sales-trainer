@@ -1066,6 +1066,70 @@ export function useDeleteLeagueTier() {
     });
 }
 
+// --- Skill Stages ---
+
+export interface AdminSkillStage {
+    id: string;
+    key: string;
+    label: string;
+    accent: string;
+    order: number;
+}
+
+export function useAdminSkillStages() {
+    return useQuery({
+        queryKey: ["admin", "skill-stages"],
+        queryFn: () => apiClient.get<AdminSkillStage[]>("/admin/skill-stages"),
+    });
+}
+
+export function useCreateSkillStage() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (body: { key: string; label: string; accent: string; order: number }) =>
+            apiClient.post<AdminSkillStage>("/admin/skill-stages", body),
+        onSuccess: (data) => {
+            clientLogger.info("Skill stage created", { key: data.key });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skill-stages"] });
+            queryClient.invalidateQueries({ queryKey: ["skill-stages"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to create skill stage", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useUpdateSkillStage() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, ...body }: { id: string; label: string; accent: string; order: number }) =>
+            apiClient.put<AdminSkillStage>(`/admin/skill-stages/${id}`, body),
+        onSuccess: (data) => {
+            clientLogger.info("Skill stage updated", { key: data.key });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skill-stages"] });
+            queryClient.invalidateQueries({ queryKey: ["skill-stages"] });
+        },
+        onError: (error) => {
+            clientLogger.error("Failed to update skill stage", { error: (error as Error).message });
+        },
+    });
+}
+
+export function useDeleteSkillStage() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => apiClient.delete<void>(`/admin/skill-stages/${id}`),
+        onSuccess: (_, id) => {
+            clientLogger.warn("Skill stage deleted", { id });
+            queryClient.invalidateQueries({ queryKey: ["admin", "skill-stages"] });
+            queryClient.invalidateQueries({ queryKey: ["skill-stages"] });
+        },
+        onError: (error, id) => {
+            clientLogger.error("Failed to delete skill stage", { id, error: (error as Error).message });
+        },
+    });
+}
+
 // --- Exercise Type Prompts ---
 
 export interface ExerciseTypePrompt {

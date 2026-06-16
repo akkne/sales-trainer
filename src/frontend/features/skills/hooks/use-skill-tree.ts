@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { SKILL_STAGES, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
 
 export interface SkillTreeNode {
     skillId: string;
@@ -28,6 +29,20 @@ export function useSkillTree() {
         queryKey: ["skill-tree"],
         queryFn: () => apiClient.get<SkillTreeData>("/skill-tree"),
     });
+}
+
+/**
+ * Returns the admin-configured funnel stages (label/accent/order) for grouping
+ * skills on the tree. Falls back to the built-in {@link SKILL_STAGES} defaults
+ * while loading, on error, or when none are configured.
+ */
+export function useSkillStages(): { stages: readonly SkillStageMeta[]; isLoading: boolean } {
+    const query = useQuery({
+        queryKey: ["skill-stages"],
+        queryFn: () => apiClient.get<SkillStageMeta[]>("/skills/stages"),
+    });
+    const stages = query.data && query.data.length > 0 ? query.data : SKILL_STAGES;
+    return { stages, isLoading: query.isLoading };
 }
 
 /** Returns ALL skills with current user's progress. Used for profile & tree. */

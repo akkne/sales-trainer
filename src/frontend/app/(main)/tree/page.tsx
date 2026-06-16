@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LessonPath } from "@/shared/components/lesson-path";
 import { StatsWidget } from "@/features/layout/components/stats-widget";
-import { useSkillTree, useSkills, type SkillTreeNode } from "@/features/skills/hooks/use-skill-tree";
+import { useSkillTree, useSkills, useSkillStages, type SkillTreeNode } from "@/features/skills/hooks/use-skill-tree";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSelectedSkillStore } from "@/shared/stores/selected-skill-store";
 import { Icon } from "@/shared/components/icon";
 import { Progress } from "@/shared/components/progress";
 import { ErrorState } from "@/shared/components/error-state";
-import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
+import { getStageMeta, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
 
 function Spinner() {
     return (
@@ -124,10 +124,11 @@ interface StageGroupProps {
     selectedSlug: string | undefined;
     onSelect: (skill: { slug: string; title: string; iconName: string }) => void;
     defaultOpen: boolean;
+    stages: readonly SkillStageMeta[];
 }
 
-function StageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen }: StageGroupProps) {
-    const meta = getStageMeta(stageKey);
+function StageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen, stages }: StageGroupProps) {
+    const meta = getStageMeta(stageKey, stages);
     const [open, setOpen] = useState(defaultOpen);
     useEffect(() => {
         if (defaultOpen) setOpen(true);
@@ -172,6 +173,7 @@ function StageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen }: S
 
 function SkillSidebar() {
     const { data: allSkills, isLoading } = useSkills();
+    const { stages } = useSkillStages();
     const { selectedSkill, setSelectedSkill } = useSelectedSkillStore();
 
     const enrolledSkills = (allSkills ?? []).filter((s) => s.status !== "locked");
@@ -224,7 +226,7 @@ function SkillSidebar() {
         bucket.push(skill);
         byStage.set(key, bucket);
     }
-    const knownOrder = SKILL_STAGES.map((s) => s.key);
+    const knownOrder = stages.map((s) => s.key);
     const orderedStages: string[] = [
         ...knownOrder.filter((k) => byStage.has(k)),
         ...Array.from(byStage.keys()).filter((k) => !knownOrder.includes(k)).sort(),
@@ -243,6 +245,7 @@ function SkillSidebar() {
                         selectedSlug={selectedSkill?.slug}
                         onSelect={setSelectedSkill}
                         defaultOpen={containsSelected}
+                        stages={stages}
                     />
                 );
             })}

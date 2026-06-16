@@ -52,6 +52,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 |---|---|---|---|
 | GET | /skill-tree | — | `SkillTreeResponseDto` |
 | GET | /skills | — | `SkillTreeNodeDto[]` (all skills, `locked` if not enrolled) |
+| GET | /skills/stages | — | `SkillStageDto[]` (admin-configured funnel stages, ordered) |
 | PUT | /skills/enrolled | `{skillSlugs: string[]}` | 204 |
 
 `PUT /skills/enrolled` — replaces the user's enrolled skill set.  
@@ -61,7 +62,8 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 
 `SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal, weeklyXpGoal}`  
 `dailyXpAmount`/`weeklyXpAmount` = XP earned today / this week (UTC); `dailyXpGoal`/`weeklyXpGoal` = targets from the admin-editable `GamificationSettings` table (defaults 100 / 500), not hardcoded config.  
-`SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).
+`SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).  
+`SkillStageDto`: `{key, label, accent, order}` — the admin-editable display metadata for a funnel stage (label, CSS accent color, sort order). The frontend groups `/tree` by `stage` and resolves each bucket's label/color via this list, falling back to built-in defaults while it loads. Stages are managed via the admin endpoints below; `general` is the implicit fallback bucket for unassigned skills and is not a stored row.
 
 ---
 
@@ -226,7 +228,17 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | PUT | /admin/skills/:id | `{iconicName?, title?, description?, orderInTree?, stage?}` | `AdminSkillDto` |
 | DELETE | /admin/skills/:id | — | 204 |
 
-`AdminSkillDto`: `{id, iconicName, title, description, orderInTree, stage}`. `stage` is one of `preparation`, `discovery`, `engagement`, `closing`, `retention`, `general` (default). Drives the grouped sidebar on `/tree`.
+`AdminSkillDto`: `{id, iconicName, title, description, orderInTree, stage}`. `stage` is the `key` of a configured Skill Stage (see below) — built-in keys are `preparation`, `discovery`, `engagement`, `closing`, `retention`; `general` is the fallback default. Drives the grouped sidebar on `/tree`.
+
+### Skill Stages
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/skill-stages | — | `AdminSkillStageDto[]` |
+| POST | /admin/skill-stages | `{key, label, accent, order}` | `AdminSkillStageDto` |
+| PUT | /admin/skill-stages/:id | `{label, accent, order}` | `AdminSkillStageDto` |
+| DELETE | /admin/skill-stages/:id | — | 204 |
+
+`AdminSkillStageDto`: `{id, key, label, accent, order}`. The funnel stages used to group skills on `/tree`, replacing the previously frontend-hardcoded list. `key` is the immutable slug stored on `Skills.Stage`; only `label`, `accent` (CSS color, e.g. `#7C3AED` or `var(--indigo)`), and `order` are editable. `key` is lowercased and must be unique. **Create** rejects a duplicate key (`400`); **Update** ignores any key change. **Delete** is blocked (`400`) while any skill is still assigned to the stage — reassign those skills first. Seeded defaults match the original 5 stages; `general` is the implicit fallback and is intentionally not a stored row.
 
 ### Topics
 | Method | Path | Body | Response |

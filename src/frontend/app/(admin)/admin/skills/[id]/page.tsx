@@ -11,7 +11,8 @@ import {
     useDeleteTopic,
     type AdminSkill,
 } from "@/features/admin/hooks/use-admin";
-import { SKILL_STAGES, getStageMeta } from "@/features/skills/constants/skill-stages";
+import { getStageMeta } from "@/features/skills/constants/skill-stages";
+import { useSkillStages } from "@/features/skills/hooks/use-skill-tree";
 
 export default function AdminSkillDetailPage({
     params,
@@ -21,6 +22,7 @@ export default function AdminSkillDetailPage({
     const { id } = use(params);
 
     const { data: skills = [] } = useAdminSkills();
+    const { stages } = useSkillStages();
     const skill = skills.find((s) => s.id === id);
 
     const updateSkill = useUpdateSkill(id);
@@ -129,7 +131,7 @@ export default function AdminSkillDetailPage({
                                     value={form.stage}
                                     onChange={(e) => setForm({ ...form, stage: e.target.value })}
                                 >
-                                    {SKILL_STAGES.map((s) => (
+                                    {stages.map((s) => (
                                         <option key={s.key} value={s.key}>
                                             {s.label}
                                         </option>
@@ -174,7 +176,7 @@ export default function AdminSkillDetailPage({
                         </div>
                         <div>
                             <dt className="text-xs text-ink-3">Stage</dt>
-                            <dd className="text-ink">{getStageMeta(skill.stage).label}</dd>
+                            <dd className="text-ink">{getStageMeta(skill.stage, stages).label}</dd>
                         </div>
                         <div className="sm:col-span-2">
                             <dt className="text-xs text-ink-3">Description</dt>

@@ -104,6 +104,17 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `UpdateById_NonExistent_Returns404`
 - [x] `UpdateById_DuplicateIconicName_Returns409`
 
+## Block 5d — Admin Skill Stages (DB-driven funnel stages)
+**File:** `Integration/AdminSkillStagesTests.cs`
+**Status:** [x]
+
+- [x] `GetAll_AsAdmin_Returns200WithList` / `GetAll_AsRegularUser_Returns403`
+- [x] `Create_AsAdmin_PersistsStageAndLowercasesKey`
+- [x] `Create_DuplicateKey_Returns400` / `Create_MissingLabel_Returns400`
+- [x] `Update_AsAdmin_ChangesLabelAccentOrderButNotKey` (key is immutable) / `Update_UnknownId_Returns404`
+- [x] `Delete_StageWithAssignedSkills_Returns400` / `Delete_UnusedStage_Returns204`
+- [x] `PublicStages_AsUser_Returns200OrderedByOrder` (`GET /skills/stages`)
+
 ## Block 5c — Admin Exercises Bulk Import
 **File:** `Integration/AdminExercisesImportTests.cs`
 **Status:** [x]

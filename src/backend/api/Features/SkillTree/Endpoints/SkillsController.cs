@@ -29,6 +29,13 @@ public sealed class SkillsController(ISkillTreeService skillTreeService, IExerci
         return Ok(skillsWithProgress);
     }
 
+    [HttpGet("stages")]
+    public async Task<ActionResult<IReadOnlyList<SkillStageDto>>> GetStages()
+    {
+        var stages = await skillTreeService.GetStagesAsync();
+        return Ok(stages);
+    }
+
     [HttpGet("{skillSlug}/lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(string skillSlug)
     {

@@ -103,6 +103,7 @@ export default function AdminLayout({
     const navItems = [
         { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
+        { href: "/admin/skill-stages", label: "Skill Stages" },
         { href: "/admin/topics", label: "Topics" },
         { href: "/admin/lessons", label: "Lessons" },
         { href: "/admin/reference", label: "Reference" },

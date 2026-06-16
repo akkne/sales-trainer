@@ -1,6 +1,8 @@
 // Skill stages — group skills on the path page by funnel stage.
-// Backend stores `stage` as a free string; this file is the single source of truth
-// for the displayed label, ordering, and accent color.
+// Stages are now DB-driven and admin-editable (see /admin/skill-stages and the
+// public GET /skills/stages endpoint). This file holds the BUILT-IN DEFAULTS,
+// used as a fallback while the API list loads, if it is empty, or on error.
+// Fetch the live list with `useSkillStages()` (features/skills/hooks/use-skill-tree).
 
 export interface SkillStageMeta {
     key: string;
@@ -24,7 +26,15 @@ const FALLBACK_STAGE: SkillStageMeta = {
     accent: "var(--ink-3)",
 };
 
-export function getStageMeta(stageKey: string | undefined | null): SkillStageMeta {
+/**
+ * Resolve display metadata for a stage key against the given stage list
+ * (defaults to the built-in {@link SKILL_STAGES}). Unknown keys fall back to a
+ * generic "Другое" bucket that preserves the original key.
+ */
+export function getStageMeta(
+    stageKey: string | undefined | null,
+    stages: readonly SkillStageMeta[] = SKILL_STAGES
+): SkillStageMeta {
     if (!stageKey) return FALLBACK_STAGE;
-    return SKILL_STAGES.find((s) => s.key === stageKey) ?? { ...FALLBACK_STAGE, key: stageKey, label: stageKey };
+    return stages.find((s) => s.key === stageKey) ?? { ...FALLBACK_STAGE, key: stageKey, label: stageKey };
 }

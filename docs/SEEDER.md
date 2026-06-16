@@ -28,7 +28,7 @@ Imports skills only.
 | `title` | string | Display title |
 | `description` | string \| null | Optional description |
 | `orderInTree` | number | Position in skill tree (lower = higher) |
-| `stage` | string | Skill stage: `preparation`, `discovery`, `engagement`, `closing`, `retention`, or `general` (default when omitted) |
+| `stage` | string | Skill stage `key`. Built-in: `preparation`, `discovery`, `engagement`, `closing`, `retention`; `general` is the default when omitted. Stages are DB-driven and admin-editable (`/admin/skill-stages`) — any configured `key` is valid; unknown keys render in a generic "Другое" bucket on `/tree`. |
 
 ### API endpoint
 
