@@ -29,6 +29,7 @@ import {
     AiDialogueContent,
     EvaluateCallContent,
     FreeTextContent,
+    TheoryCardContent,
     emptyContentFor,
     buildExerciseImportTemplate,
     validateExerciseContent,
@@ -47,6 +48,7 @@ import {
     RewriteBetterEditor,
     AiDialogEditor,
     RateCallEditor,
+    TheoryCardEditor,
 } from "@/features/admin/components/exercise-editors";
 
 function typeBadgeColor(): string {
@@ -93,6 +95,8 @@ function contentEditor(
             return <AiDialogEditor content={content as AiDialogueContent} onChange={onChange} />;
         case "evaluate_call":
             return <RateCallEditor content={content as EvaluateCallContent} onChange={onChange} />;
+        case "theory_card":
+            return <TheoryCardEditor content={content as TheoryCardContent} onChange={onChange} />;
     }
 }
 
@@ -124,6 +128,8 @@ function renderContentPreview(row: ExerciseRow): string {
             const axes = c.evaluation_axes as unknown[] | undefined;
             return `${transcript?.length ?? 0} lines, ${axes?.length ?? 0} axes`;
         }
+        case "theory_card":
+            return `theory · ${String(c.layout ?? "?")}`;
         default:
             return "(preview)";
     }

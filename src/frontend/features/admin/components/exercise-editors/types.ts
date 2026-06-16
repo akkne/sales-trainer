@@ -11,6 +11,9 @@
 // `is_mistake`, `ai_prompt`). Do NOT introduce camelCase content fields — the
 // learner UI and grader will not see them.
 
+import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
+export type { TheoryCardContent } from "@/features/exercise/types/theory-card";
+
 // Type constants — must match backend ExerciseTypes.cs
 export const EXERCISE_TYPES = [
     "choose_option",
@@ -23,6 +26,7 @@ export const EXERCISE_TYPES = [
     "ai_dialogue",
     "evaluate_call",
     "free_text",
+    "theory_card",
 ] as const;
 
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
@@ -38,6 +42,7 @@ export const TYPE_LABELS: Record<ExerciseType, string> = {
     ai_dialogue: "AI Dialogue",
     evaluate_call: "Evaluate Call",
     free_text: "Free Text",
+    theory_card: "Theory Card",
 };
 
 // AI-evaluated types. These read a per-exercise `ai_prompt` from content and a
@@ -164,7 +169,8 @@ export type ExerciseContent =
     | RewriteContent
     | AiDialogueContent
     | EvaluateCallContent
-    | FreeTextContent;
+    | FreeTextContent
+    | TheoryCardContent;
 
 // --- Empty content factories (minimal editable starting points) ---
 
@@ -266,6 +272,10 @@ export function emptyFreeText(): FreeTextContent {
     return { situation: "", instruction: "", evaluation_criteria: [], ai_prompt: "" };
 }
 
+export function emptyTheoryCard(): TheoryCardContent {
+    return { layout: "text", title: "", body: "" };
+}
+
 export function emptyContentFor(type: ExerciseType): ExerciseContent {
     switch (type) {
         case "choose_option": return emptyChooseOption();
@@ -278,6 +288,7 @@ export function emptyContentFor(type: ExerciseType): ExerciseContent {
         case "ai_dialogue": return emptyAiDialogue();
         case "evaluate_call": return emptyEvaluateCall();
         case "free_text": return emptyFreeText();
+        case "theory_card": return emptyTheoryCard();
     }
 }
 
@@ -377,6 +388,15 @@ export const EXERCISE_CONTENT_TEMPLATES: Record<ExerciseType, ExerciseContent> =
         instruction: "Напишите ответ на это возражение",
         evaluation_criteria: ["Не снижает цену сразу", "Выясняет причину возражения", "Профессиональный тон"],
         ai_prompt: "",
+    },
+    theory_card: {
+        layout: "dialogue",
+        title: "Уточняющий вопрос вместо скидки",
+        turns: [
+            { side: "them", text: "Это слишком дорого." },
+            { side: "me", text: "Подскажите, дорого относительно чего?", annotations: ["уточнение"] },
+            { side: "them", text: "Ну, у конкурентов дешевле." },
+        ],
     },
 };
 
@@ -538,6 +558,36 @@ export function validateExerciseContent(type: ExerciseType, content: unknown): s
         case "free_text":
             if (!isNonEmptyString(c.instruction)) errors.push("`instruction` is required.");
             break;
+        case "theory_card": {
+            const layout = c.layout;
+            const layouts = ["text", "dialogue", "bullets", "quote"];
+            if (typeof layout !== "string" || !layouts.includes(layout)) {
+                errors.push(`\`layout\` must be one of: ${layouts.join(", ")}.`);
+                break;
+            }
+            if (layout === "text") {
+                if (!isNonEmptyString(c.body)) errors.push("`body` is required.");
+            } else if (layout === "dialogue") {
+                const turns = c.turns;
+                if (!Array.isArray(turns) || turns.length < 1) {
+                    errors.push("`turns` must be a non-empty array.");
+                } else {
+                    turns.forEach((t, i) => {
+                        const o = t as Record<string, unknown>;
+                        if (o?.side !== "me" && o?.side !== "them") errors.push(`turns[${i}].side must be "me" or "them".`);
+                        if (!isNonEmptyString(o?.text)) errors.push(`turns[${i}].text is required.`);
+                    });
+                }
+            } else if (layout === "bullets") {
+                const items = c.items;
+                if (!Array.isArray(items) || items.length < 1 || !items.every(isNonEmptyString)) {
+                    errors.push("`items` must be a non-empty array of non-empty strings.");
+                }
+            } else if (layout === "quote") {
+                if (!isNonEmptyString(c.text)) errors.push("`text` is required.");
+            }
+            break;
+        }
     }
     return errors;
 }

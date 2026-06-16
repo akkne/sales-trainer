@@ -43,11 +43,14 @@ function LessonNode({
         return () => document.removeEventListener("mousedown", handleOutsideClick);
     }, [isPopoverOpen, onClosePopover]);
 
+    // Theory lessons (story cards, no practice) are marked with a book icon so they
+    // are visually distinct from practice lessons (play). Completed lessons keep the check.
+    const isTheory = lesson.kind === "theory";
     const cfg = isCompleted
         ? { bg: "var(--success)", color: "#fff", icon: "check" as const, shadow: "0 8px 20px var(--success-soft), var(--sh-1)" }
         : isActive
-            ? { bg: "var(--primary)", color: "#fff", icon: "play" as const, shadow: "0 8px 20px var(--primary-soft), var(--sh-1)" }
-            : { bg: "var(--surface-2)", color: "var(--ink-4)", icon: "lock" as const, shadow: "var(--sh-inner)" };
+            ? { bg: "var(--primary)", color: "#fff", icon: (isTheory ? "book" : "play") as "book" | "play", shadow: "0 8px 20px var(--primary-soft), var(--sh-1)" }
+            : { bg: "var(--surface-2)", color: "var(--ink-4)", icon: (isTheory ? "book" : "lock") as "book" | "lock", shadow: "var(--sh-inner)" };
 
     const justify = offset === 1 ? "flex-end" : offset === -1 ? "flex-start" : "center";
 
@@ -65,13 +68,13 @@ function LessonNode({
                     <Icon name={cfg.icon} size={28} />
                 </button>
                 <div className="lp-meta">
-                    <span className="lp-type">Урок {index + 1}</span>
+                    <span className="lp-type">{isTheory ? "Теория" : `Урок ${index + 1}`}</span>
                     <span className="lp-title" style={isLocked ? { color: "var(--ink-4)" } : undefined}>
                         {lesson.title}
                     </span>
                     <span className="lp-xp">
                         <Icon name="bolt" size={13} />
-                        60 XP
+                        {isTheory ? "5 XP" : "60 XP"}
                     </span>
                 </div>
 
@@ -102,11 +105,17 @@ function LessonNode({
                         </div>
 
                         <div className="row gap-4 small num" style={{ marginBottom: 14 }}>
+                            {isTheory ? (
+                                <span className="row gap-1">
+                                    <Icon name="book" size={13} /> Теория
+                                </span>
+                            ) : (
+                                <span className="row gap-1">
+                                    <Icon name="layers" size={13} /> 6 упр.
+                                </span>
+                            )}
                             <span className="row gap-1">
-                                <Icon name="layers" size={13} /> 6 упр.
-                            </span>
-                            <span className="row gap-1">
-                                <Icon name="bolt" size={13} /> 60 XP
+                                <Icon name="bolt" size={13} /> {isTheory ? "5 XP" : "60 XP"}
                             </span>
                         </div>
 
@@ -117,7 +126,7 @@ function LessonNode({
                                 fullWidth
                                 iconRightName="arrow-right"
                             >
-                                {isCompleted ? "Повторить" : "Продолжить"}
+                                {isCompleted ? "Повторить" : isTheory ? "Читать" : "Продолжить"}
                             </Button>
                         </Link>
                     </div>

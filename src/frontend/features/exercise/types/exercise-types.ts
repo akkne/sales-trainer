@@ -13,6 +13,7 @@ export const ExerciseTypes = {
   AiDialogue: 'ai_dialogue',
   EvaluateCall: 'evaluate_call',
   FreeText: 'free_text',
+  TheoryCard: 'theory_card',
 } as const;
 
 export type ExerciseType = typeof ExerciseTypes[keyof typeof ExerciseTypes];

@@ -11,3 +11,4 @@ export { RewriteBetterEditor } from "./rewrite-better-editor";
 export { AiDialogEditor } from "./ai-dialog-editor";
 export { RateCallEditor } from "./rate-call-editor";
 export { WrittenAnswerEditor } from "./written-answer-editor";
+export { TheoryCardEditor } from "./theory-card-editor";

@@ -8,6 +8,8 @@ export interface LessonSummary {
     orderInTopic: number;
     status: "locked" | "available" | "in_progress" | "completed";
     bestScore: number;
+    // "theory" when every exercise in the lesson is a theory_card, otherwise "practice".
+    kind: "theory" | "practice";
 }
 
 export interface ExerciseData {

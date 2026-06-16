@@ -20,6 +20,8 @@ import { RewriteExercise } from "@/features/exercise/components/rewrite-exercise
 import { AiDialogueExercise } from "@/features/exercise/components/ai-dialogue-exercise";
 import { EvaluateCallExercise } from "@/features/exercise/components/evaluate-call-exercise";
 import { FreeTextExercise } from "@/features/exercise/components/free-text-exercise";
+import { TheoryLessonPlayer } from "@/features/exercise/components/theory-lesson-player";
+import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
 import { AchievementToastQueue, type AchievementToastData } from "@/shared/components/achievement-toast";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
@@ -165,47 +167,12 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
         const accuracyPercent = originalExerciseCount > 0 ? Math.round((correctAnswerCount / originalExerciseCount) * 100) : 100;
 
         return (
-            <div className="complete">
-                <Confetti />
-                <div className="complete-inner fade-up">
-                    <div className="check-circle">
-                        <Icon name="check" size={56} color="#fff" />
-                    </div>
-                    <span className="eyebrow" style={{ justifyContent: "center" }}>
-                        Урок завершён
-                    </span>
-                    <h1 className="h1" style={{ margin: "12px 0 30px" }}>
-                        Отличная работа!
-                    </h1>
-                    <div className="complete-stats">
-                        <div className="cs">
-                            <Icon name="bolt" size={24} style={{ color: "var(--primary)" }} />
-                            <b className="num">+{totalXpEarned}</b>
-                            <span>XP</span>
-                        </div>
-                        <div className="cs">
-                            <Icon name="target" size={24} style={{ color: "var(--success)" }} />
-                            <b className="num">{accuracyPercent}%</b>
-                            <span>точность</span>
-                        </div>
-                        {sessionDurationSeconds > 0 && (
-                            <div className="cs">
-                                <Icon name="clock" size={24} style={{ color: "var(--violet)" }} />
-                                <b className="num">{formatSessionDuration(sessionDurationSeconds)}</b>
-                                <span>время</span>
-                            </div>
-                        )}
-                    </div>
-                    <button
-                        className="btn btn-primary btn-lg btn-block"
-                        style={{ marginTop: 30 }}
-                        onClick={() => router.back()}
-                    >
-                        Вернуться к пути
-                        <Icon name="arrow-right" size={18} />
-                    </button>
-                </div>
-            </div>
+            <CompletionScreen
+                xp={totalXpEarned}
+                accuracyPercent={accuracyPercent}
+                durationSeconds={sessionDurationSeconds}
+                onBack={() => router.back()}
+            />
         );
     }
 
@@ -384,7 +351,140 @@ function Confetti() {
     );
 }
 
+interface CompletionScreenProps {
+    xp: number;
+    accuracyPercent?: number;
+    durationSeconds: number;
+    onBack: () => void;
+    eyebrow?: string;
+    heading?: string;
+}
+
+function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebrow = "Урок завершён", heading = "Отличная работа!" }: CompletionScreenProps) {
+    return (
+        <div className="complete">
+            <Confetti />
+            <div className="complete-inner fade-up">
+                <div className="check-circle">
+                    <Icon name="check" size={56} color="#fff" />
+                </div>
+                <span className="eyebrow" style={{ justifyContent: "center" }}>
+                    {eyebrow}
+                </span>
+                <h1 className="h1" style={{ margin: "12px 0 30px" }}>
+                    {heading}
+                </h1>
+                <div className="complete-stats">
+                    <div className="cs">
+                        <Icon name="bolt" size={24} style={{ color: "var(--primary)" }} />
+                        <b className="num">+{xp}</b>
+                        <span>XP</span>
+                    </div>
+                    {accuracyPercent !== undefined && (
+                        <div className="cs">
+                            <Icon name="target" size={24} style={{ color: "var(--success)" }} />
+                            <b className="num">{accuracyPercent}%</b>
+                            <span>точность</span>
+                        </div>
+                    )}
+                    {durationSeconds > 0 && (
+                        <div className="cs">
+                            <Icon name="clock" size={24} style={{ color: "var(--violet)" }} />
+                            <b className="num">{formatSessionDuration(durationSeconds)}</b>
+                            <span>время</span>
+                        </div>
+                    )}
+                </div>
+                <button
+                    className="btn btn-primary btn-lg btn-block"
+                    style={{ marginTop: 30 }}
+                    onClick={onBack}
+                >
+                    Вернуться к пути
+                    <Icon name="arrow-right" size={18} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function SessionLoader() {
+    return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg)" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        </div>
+    );
+}
+
+/**
+ * Theory lesson flow: swipe through story cards. Reaching the end submits the last
+ * card once (the only graded-shaped call) so the lesson is marked complete on the
+ * backend and the fixed theory XP is awarded — then shows the completion screen.
+ */
+function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
+    const router = useRouter();
+    const submitExerciseMutation = useSubmitExercise();
+    const startTimeRef = useRef<number>(0);
+    const [completed, setCompleted] = useState(false);
+    const [xpEarned, setXpEarned] = useState(0);
+    const [durationSeconds, setDurationSeconds] = useState(0);
+
+    useEffect(() => {
+        startTimeRef.current = Date.now();
+    }, []);
+
+    const cards = exercises.map((ex) => ex.content as TheoryCardContent);
+
+    function handleComplete() {
+        const lastCard = exercises[exercises.length - 1];
+        submitExerciseMutation.mutate(
+            { exerciseId: lastCard.exerciseId, answer: {} },
+            {
+                onSuccess: (result) => {
+                    setXpEarned(result.xpEarned);
+                    setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
+                    setCompleted(true);
+                },
+            }
+        );
+    }
+
+    if (completed) {
+        return (
+            <CompletionScreen
+                xp={xpEarned}
+                durationSeconds={durationSeconds}
+                onBack={() => router.back()}
+                eyebrow="Теория пройдена"
+                heading="Теперь вы знаете больше!"
+            />
+        );
+    }
+
+    return (
+        <TheoryLessonPlayer
+            cards={cards}
+            onComplete={handleComplete}
+            isCompleting={submitExerciseMutation.isPending}
+            onExit={() => router.back()}
+        />
+    );
+}
+
+function SessionRouter({ lessonId }: { lessonId: string }) {
+    const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
+
+    if (isLoading || !exercises) return <SessionLoader />;
+
+    const isTheoryLesson =
+        exercises.length > 0 && exercises.every((ex) => ex.type === ExerciseTypes.TheoryCard);
+
+    if (isTheoryLesson) return <TheoryLessonFlow exercises={exercises} />;
+
+    return <SessionFlow lessonId={lessonId} />;
+}
+
 export default function SessionPage({ params }: SessionPageProps) {
     const { lessonId } = use(params);
-    return <SessionFlow lessonId={lessonId} />;
+    return <SessionRouter lessonId={lessonId} />;
 }
