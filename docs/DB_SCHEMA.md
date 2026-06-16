@@ -370,9 +370,23 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column          | Type      | Nullable | Notes                                           |
 |-----------------|-----------|----------|-------------------------------------------------|
 | `Id`            | `uuid`    | NOT NULL | PK                                              |
-| `Tier`          | `text`    | NOT NULL | `bronze` / `silver` / `gold` / `diamond`        |
-| `WeekStartDate` | `date`    | NOT NULL |                                                 |
-| `WeekEndDate`   | `date`    | NOT NULL |                                                 |
+| `Tier`          | `text`    | NOT NULL | tier key → `LeagueTiers.Key` (e.g. `bronze`)    |
+| `WeekStartDate` | `date`    | NOT NULL | start of the period (named "week" for history)  |
+| `WeekEndDate`   | `date`    | NOT NULL | end of the period (period length is configurable) |
+
+---
+
+### `LeagueTiers`
+
+The configurable tier ladder (replaces the previously hardcoded list). Seeded by migration `20260616120000_AddLeagueTiersAndSchedule` with `bronze/silver/gold/diamond`. Managed via `/admin/leagues/tiers`. `LeagueService` reads the ladder ordered by `Order`; `Leagues.Tier` references `Key`.
+
+| Column   | Type                    | Nullable | Notes                                         |
+|----------|-------------------------|----------|-----------------------------------------------|
+| `Id`     | `uuid`                  | NOT NULL | PK                                            |
+| `Key`    | `varchar(40)`           | NOT NULL | unique slug, immutable (stored on `Leagues.Tier`) |
+| `Name`   | `varchar(60)`           | NOT NULL | display label                                 |
+| `Color`  | `varchar(20)`           | NOT NULL | hex color for badges                          |
+| `Order`  | `integer`               | NOT NULL | promotion ladder, ascending (lowest = entry tier) |
 
 ---
 
@@ -391,14 +405,17 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 
 ### `LeagueSettings`
 
-Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migration `20260607000000_AddLeagueSettings` with the previously hardcoded defaults. Read by `LeagueService` at runtime; edited via `/admin/leagues/settings`.
+Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migration `20260607000000_AddLeagueSettings`; period columns added by `20260616120000_AddLeagueTiersAndSchedule`. Read by `LeagueService` at runtime; edited via `/admin/leagues/settings`. The period columns are initialized on first access (to the current Monday-based week) if null.
 
-| Column                          | Type      | Nullable | Notes               |
-|---------------------------------|-----------|----------|---------------------|
-| `Id`                            | `uuid`    | NOT NULL | PK                  |
-| `MaximumLeagueParticipantCount` | `integer` | NOT NULL | default 30          |
-| `PromotionZoneSize`             | `integer` | NOT NULL | default 10          |
-| `DemotionZoneSize`              | `integer` | NOT NULL | default 5           |
+| Column                          | Type                       | Nullable | Notes                                            |
+|---------------------------------|----------------------------|----------|--------------------------------------------------|
+| `Id`                            | `uuid`                     | NOT NULL | PK                                               |
+| `MaximumLeagueParticipantCount` | `integer`                  | NOT NULL | default 30                                       |
+| `PromotionZoneSize`             | `integer`                  | NOT NULL | default 10                                       |
+| `DemotionZoneSize`              | `integer`                  | NOT NULL | default 5                                        |
+| `CurrentPeriodStartDate`        | `date`                     | NULL     | start of the running period                      |
+| `CurrentPeriodEndsAt`           | `timestamptz`              | NULL     | exact close moment; drives countdown + rollover  |
+| `PeriodLengthDays`              | `integer`                  | NOT NULL | default 7; applied to each new period on rollover |
 
 ---
 

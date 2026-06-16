@@ -87,6 +87,14 @@ Note: these tests verify `text[]` PostgreSQL array containment — only works wi
 - [x] `CloseCurrent_Returns204`
 - [x] `UpdateSettings_PersistsValues`
 - [x] `UpdateSettings_ZonesExceedMax_Returns400`
+- [x] `UpdateSettings_PersistsPeriodEndAndLength` _(admin-set period schedule)_
+- [x] `GetTiers_ReturnsSeededLadder`
+- [x] `CreateTier_ThenAppearsInList`
+- [x] `CreateTier_DuplicateKey_Returns400`
+- [x] `UpdateTier_ChangesNameColorOrder`
+- [x] `DeleteTier_WithExistingLeagues_Returns400`
+- [x] `DeleteTier_WithoutLeagues_Returns204`
+- [x] `TierEndpoints_AsUser_Returns403`
 
 ## Block 5b — Admin Topics (update by GUID)
 **File:** `Integration/AdminTopicsTests.cs`

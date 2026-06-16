@@ -56,6 +56,11 @@ All unit tests use EF Core InMemory DB. No Docker required.
 - [x] `Close_RespectsConfiguredPromotionAndDemotionZones` — zone sizes come from `LeagueSettings` row
 - [x] `SyncLeagueWeeklyXp_RecomputesFromXpRecords` — incl. `admin_correction` records
 - [x] `GetCurrent_NoLeagueExists_CreatesAndJoinsUser`
+- [x] `GetSettings_InitializesCurrentPeriod` — period start/end seeded on first access
+- [x] `RolloverIfDue_PeriodNotEnded_DoesNotAdvance`
+- [x] `RolloverIfDue_PeriodEnded_RanksMembersAndAdvancesPeriod`
+- [x] `GetCurrent_ReturnsConfiguredTierNameColorAndPeriodEnd`
+- [x] `Close_UsesConfiguredTierLadderForPromotion` — promotion follows the DB `LeagueTiers` order
 
 ## Block 5 — Voice dialog: structured chat output
 **Files:** `Unit/StreamingChatReplyParserTests.cs`, `Unit/OpenAiChatServiceTests.cs`

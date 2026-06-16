@@ -90,11 +90,12 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Achievement unlock toasts during session
 
 ### Leagues
-- Weekly leaderboards (Bronze → Silver → Gold → Diamond)
+- Period leaderboards over a configurable tier ladder (default Bronze → Silver → Gold → Diamond)
+- Editable tiers (key/name/color/order) via `/admin/leagues/tiers` — full CRUD, no hardcoded list
 - Top-N promotion, bottom-M demotion (zone sizes configurable in DB via admin)
-- Countdown timer to week end
-- Weekly closure job
-- Admin management at `/admin/leagues`: browse leagues by week/tier with full history, view members (XP, rank, outcome), move members between tiers, adjust weekly XP (via `admin_correction` XP records), remove members, force XP re-sync, manually close the week, edit league settings
+- Countdown timer to the exact period end (`periodEndsAt`); the period end date & length are admin-settable for a custom schedule
+- Rollover job (every 15 min) closes the period only once its configured end has passed
+- Admin management at `/admin/leagues`: browse leagues by period/tier with full history, view members (XP, rank, outcome), move members between tiers, adjust weekly XP (via `admin_correction` XP records), remove members, force XP re-sync, manually close the period, edit settings (zones, period end date, period length), and manage the tier ladder
 
 ### Reference & Handbook
 - **Techniques** ("Коллекция") — first-class entities with per-user mastery ring (Unseen/Novice/Practitioner/Expert/Master), category + tag filtering, sample dialog with annotations, case study, and optional coach sidecar

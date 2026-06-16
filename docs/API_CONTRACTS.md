@@ -184,13 +184,16 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 |---|---|---|
 | GET | /league | `CurrentLeagueResponseDto` |
 
-`CurrentLeagueResponseDto`: `{leagueId, tier, weekStartDate, weekEndDate, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null, promotionZoneSize, demotionZoneSize, maximumLeagueParticipantCount}`
+`CurrentLeagueResponseDto`: `{leagueId, tier, tierName, tierColor, weekStartDate, weekEndDate, periodEndsAt, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null, promotionZoneSize, demotionZoneSize, maximumLeagueParticipantCount}`
 
 - `promotionZoneSize`/`demotionZoneSize`/`maximumLeagueParticipantCount`: live from `LeagueSettings` (admin-configurable). The user league page must render zones from these, not hardcoded constants.
+- `tierName`/`tierColor`: presentation for `tier`, resolved from the admin-editable `LeagueTiers` table (fall back to the tier key + neutral color if the tier was deleted).
+- `periodEndsAt` (ISO-8601 instant): exact moment the current period closes. The league-tab countdown MUST target this, not the day-start of `weekEndDate`.
 `LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser, avatarUrl}`
 
-Tiers (in order): `bronze → silver → gold → diamond`
-- Top N per tier promoted to next tier next week, bottom M demoted (minimum bronze) — zone sizes come from the `LeagueSettings` table (defaults: promotion 10, demotion 5, max participants 30), editable via `/admin/leagues/settings`
+Tiers: configurable via the `LeagueTiers` table (admin CRUD below). Default ladder `bronze → silver → gold → diamond`; the promotion ladder follows `Order` ascending (entry tier = lowest order).
+- Top N per tier promoted to next tier next period, bottom M demoted (cannot drop below the lowest-order tier) — zone sizes come from the `LeagueSettings` table (defaults: promotion 10, demotion 5, max participants 30), editable via `/admin/leagues/settings`
+- Period scheduling: the current period start/end live in `LeagueSettings` (`CurrentPeriodStartDate`, `CurrentPeriodEndsAt`, `PeriodLengthDays`). A recurring job (every 15 min) closes the period and creates the next only once `CurrentPeriodEndsAt` has passed, so an admin-set end date drives the schedule.
 - `previousWeekOutcome`: shown only if user had a membership last week; use for in-app banner
 
 ---
@@ -316,13 +319,19 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | PUT | /admin/leagues/memberships/:membershipId/tier | `{tier}` | `AdminLeagueDetailDto` of the target league (same week; created if missing) |
 | PUT | /admin/leagues/memberships/:membershipId/xp | `{delta}` (non-zero int, may be negative) | `AdminLeagueDetailDto` |
 | DELETE | /admin/leagues/memberships/:membershipId | — | 204 |
-| GET | /admin/leagues/settings | — | `LeagueSettingsDto` |
-| PUT | /admin/leagues/settings | `LeagueSettingsDto` | `LeagueSettingsDto` (400 if values non-positive or zones exceed max) |
+| GET | /admin/leagues/settings | — | `LeagueSettingsDto` (initializes the period on first access) |
+| PUT | /admin/leagues/settings | `UpdateLeagueSettingsRequestDto` | `LeagueSettingsDto` (400 if values non-positive, zones exceed max, or period length ≤ 0) |
+| GET | /admin/leagues/tiers | — | `AdminLeagueTierDto[]` (ordered by `order`) |
+| POST | /admin/leagues/tiers | `{key, name, color, order}` | `AdminLeagueTierDto` (400 on blank fields or duplicate key) |
+| PUT | /admin/leagues/tiers/:id | `{name, color, order}` | `AdminLeagueTierDto` (key is immutable; 404 if missing) |
+| DELETE | /admin/leagues/tiers/:id | — | 204 (400 if it is the last tier or has existing leagues) |
 
 `AdminLeagueListItemDto`: `{id, tier, weekStartDate, weekEndDate, memberCount}`
 `AdminLeagueDetailDto`: `{id, tier, weekStartDate, weekEndDate, members: AdminLeagueMemberDto[]}`
 `AdminLeagueMemberDto`: `{membershipId, userId, displayName, email, weeklyXpAmount, rank, promotionOutcome}`
-`LeagueSettingsDto`: `{maximumLeagueParticipantCount, promotionZoneSize, demotionZoneSize}`
+`AdminLeagueTierDto`: `{id, key, name, color, order}`
+`LeagueSettingsDto`: `{maximumLeagueParticipantCount, promotionZoneSize, demotionZoneSize, currentPeriodEndsAt, periodLengthDays}`
+`UpdateLeagueSettingsRequestDto`: same as above but `currentPeriodEndsAt`/`periodLengthDays` are optional — when omitted the period is left unchanged, so zones can be edited alone. Setting `currentPeriodEndsAt` also realigns the active period's leagues' `WeekEndDate` so the XP window tracks the new end.
 
 XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the league's week start — a direct `WeeklyXpAmount` write would be erased by the next XP sync, while a correction record survives every re-sync and stays auditable.
 

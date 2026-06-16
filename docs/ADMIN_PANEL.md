@@ -111,9 +111,13 @@ The final prompt sent to the model is: `[global] + "Additional criteria:" + [per
 | PUT | /admin/leagues/memberships/:membershipId/xp | `{delta}` | `AdminLeagueDetailDto` |
 | DELETE | /admin/leagues/memberships/:membershipId | — | 204 |
 | GET | /admin/leagues/settings | — | `LeagueSettingsDto` |
-| PUT | /admin/leagues/settings | `LeagueSettingsDto` | `LeagueSettingsDto` |
+| PUT | /admin/leagues/settings | `UpdateLeagueSettingsRequestDto` | `LeagueSettingsDto` |
+| GET | /admin/leagues/tiers | — | `AdminLeagueTierDto[]` |
+| POST | /admin/leagues/tiers | `{key, name, color, order}` | `AdminLeagueTierDto` |
+| PUT | /admin/leagues/tiers/:id | `{name, color, order}` | `AdminLeagueTierDto` |
+| DELETE | /admin/leagues/tiers/:id | — | 204 |
 
-XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants live in the single-row `LeagueSettings` table.
+XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants, and the period schedule (`CurrentPeriodEndsAt`, `PeriodLengthDays`) live in the single-row `LeagueSettings` table. The tier ladder (key/name/color/order) lives in `LeagueTiers` and is managed at `/admin/leagues/tiers`; the key is immutable once created and a tier with existing leagues cannot be deleted.
 
 ### Daily Quotes
 | Method | Path | Body | Response |

@@ -237,4 +237,121 @@ public class AdminLeaguesTests
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Test]
+    public async Task UpdateSettings_PersistsPeriodEndAndLength()
+    {
+        var endsAt = DateTimeOffset.UtcNow.AddDays(10);
+
+        var response = await _adminClient.PutAsJsonAsync("/admin/leagues/settings",
+            new
+            {
+                maximumLeagueParticipantCount = 30,
+                promotionZoneSize = 10,
+                demotionZoneSize = 5,
+                currentPeriodEndsAt = endsAt,
+                periodLengthDays = 14
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var getResponse = await _adminClient.GetAsync("/admin/leagues/settings");
+        var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("periodLengthDays").GetInt32().Should().Be(14);
+        body.GetProperty("currentPeriodEndsAt").GetDateTimeOffset()
+            .Should().BeCloseTo(endsAt, TimeSpan.FromSeconds(1));
+    }
+
+    [Test]
+    public async Task GetTiers_ReturnsSeededLadder()
+    {
+        var response = await _adminClient.GetAsync("/admin/leagues/tiers");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var tiers = await response.Content.ReadFromJsonAsync<JsonElement>();
+        tiers.GetArrayLength().Should().BeGreaterThanOrEqualTo(4);
+        tiers[0].GetProperty("key").GetString().Should().Be("bronze");
+    }
+
+    [Test]
+    public async Task CreateTier_ThenAppearsInList()
+    {
+        var key = $"plat_{Guid.NewGuid():N}".Substring(0, 12);
+
+        var response = await _adminClient.PostAsJsonAsync("/admin/leagues/tiers",
+            new { key, name = "Platinum", color = "#abcdef", order = 5 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        created.GetProperty("key").GetString().Should().Be(key.ToLowerInvariant());
+
+        var list = await _adminClient.GetFromJsonAsync<JsonElement>("/admin/leagues/tiers");
+        list.EnumerateArray().Should().Contain(t => t.GetProperty("key").GetString() == key.ToLowerInvariant());
+    }
+
+    [Test]
+    public async Task CreateTier_DuplicateKey_Returns400()
+    {
+        var response = await _adminClient.PostAsJsonAsync("/admin/leagues/tiers",
+            new { key = "bronze", name = "Dup", color = "#000000", order = 9 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task UpdateTier_ChangesNameColorOrder()
+    {
+        var key = $"upd_{Guid.NewGuid():N}".Substring(0, 12);
+        var created = await (await _adminClient.PostAsJsonAsync("/admin/leagues/tiers",
+            new { key, name = "Before", color = "#111111", order = 6 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetGuid();
+
+        var response = await _adminClient.PutAsJsonAsync($"/admin/leagues/tiers/{id}",
+            new { name = "After", color = "#999999", order = 7 });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("name").GetString().Should().Be("After");
+        body.GetProperty("color").GetString().Should().Be("#999999");
+        body.GetProperty("order").GetInt32().Should().Be(7);
+    }
+
+    [Test]
+    public async Task DeleteTier_WithExistingLeagues_Returns400()
+    {
+        var key = $"del_{Guid.NewGuid():N}".Substring(0, 12);
+        var created = await (await _adminClient.PostAsJsonAsync("/admin/leagues/tiers",
+            new { key, name = "Doomed", color = "#222222", order = 8 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetGuid();
+
+        // A league referencing the tier key blocks deletion.
+        await SeedLeagueWithMemberAsync(tier: key.ToLowerInvariant());
+
+        var response = await _adminClient.DeleteAsync($"/admin/leagues/tiers/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task DeleteTier_WithoutLeagues_Returns204()
+    {
+        var key = $"free_{Guid.NewGuid():N}".Substring(0, 12);
+        var created = await (await _adminClient.PostAsJsonAsync("/admin/leagues/tiers",
+            new { key, name = "Free", color = "#333333", order = 11 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetGuid();
+
+        var response = await _adminClient.DeleteAsync($"/admin/leagues/tiers/{id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Test]
+    public async Task TierEndpoints_AsUser_Returns403()
+    {
+        var response = await _userClient.GetAsync("/admin/leagues/tiers");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }

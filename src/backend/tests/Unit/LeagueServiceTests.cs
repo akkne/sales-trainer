@@ -241,6 +241,108 @@ public class LeagueServiceTests
     }
 
     [Test]
+    public async Task GetSettings_InitializesCurrentPeriod()
+    {
+        var settings = await _service.GetSettingsAsync();
+
+        settings.CurrentPeriodStartDate.Should().Be(CurrentWeekStart());
+        settings.CurrentPeriodEndsAt.Should().NotBeNull();
+        settings.PeriodLengthDays.Should().Be(7);
+    }
+
+    [Test]
+    public async Task RolloverIfDue_PeriodNotEnded_DoesNotAdvance()
+    {
+        var settings = await _service.GetSettingsAsync();
+        settings.CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(3);
+        await _db.SaveChangesAsync();
+        var startBefore = settings.CurrentPeriodStartDate;
+
+        await _service.RolloverIfDueAsync();
+        await _db.Entry(settings).ReloadAsync();
+
+        settings.CurrentPeriodStartDate.Should().Be(startBefore);
+    }
+
+    [Test]
+    public async Task RolloverIfDue_PeriodEnded_RanksMembersAndAdvancesPeriod()
+    {
+        var (_, memberships) = await SeedLeagueWithMembersAsync(5);
+        var settings = await _service.GetSettingsAsync();
+        var startBefore = settings.CurrentPeriodStartDate!.Value;
+        settings.CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        await _db.SaveChangesAsync();
+
+        await _service.RolloverIfDueAsync();
+        await _db.Entry(settings).ReloadAsync();
+        foreach (var m in memberships) await _db.Entry(m).ReloadAsync();
+
+        settings.CurrentPeriodStartDate!.Value.Should().BeAfter(startBefore);
+        memberships.OrderByDescending(m => m.WeeklyXpAmount).First().Rank.Should().Be(1);
+    }
+
+    [Test]
+    public async Task GetCurrent_ReturnsConfiguredTierNameColorAndPeriodEnd()
+    {
+        _db.LeagueTiers.Add(new LeagueTier { Key = "bronze", Name = "Бронза", Color = "#c47b3f", Order = 1 });
+        var userId = Guid.NewGuid();
+        _db.Users.Add(new User { Id = userId, Email = "tier@test.com", DisplayName = "Tier", CreatedAt = DateTime.UtcNow });
+        await _db.SaveChangesAsync();
+
+        var result = await _service.GetCurrentLeagueForUserAsync(userId);
+
+        result.Tier.Should().Be("bronze");
+        result.TierName.Should().Be("Бронза");
+        result.TierColor.Should().Be("#c47b3f");
+        result.PeriodEndsAt.Should().NotBe(default);
+    }
+
+    [Test]
+    public async Task Close_UsesConfiguredTierLadderForPromotion()
+    {
+        _db.LeagueTiers.AddRange(
+            new LeagueTier { Key = "rookie", Name = "Rookie", Color = "#111111", Order = 1 },
+            new LeagueTier { Key = "pro", Name = "Pro", Color = "#222222", Order = 2 });
+        _db.LeagueSettings.Add(new LeagueSettings
+        {
+            MaximumLeagueParticipantCount = 30,
+            PromotionZoneSize = 1,
+            DemotionZoneSize = 1
+        });
+        await _db.SaveChangesAsync();
+
+        var weekStart = CurrentWeekStart();
+        var league = new League
+        {
+            Id = Guid.NewGuid(),
+            Tier = "rookie",
+            WeekStartDate = weekStart,
+            WeekEndDate = weekStart.AddDays(6)
+        };
+        _db.Leagues.Add(league);
+        for (var i = 0; i < 3; i++)
+        {
+            var user = new User { Id = Guid.NewGuid(), Email = $"l{i}@test.com", DisplayName = $"L{i}", CreatedAt = DateTime.UtcNow };
+            _db.Users.Add(user);
+            _db.LeagueMemberships.Add(new LeagueMembership
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                LeagueId = league.Id,
+                WeeklyXpAmount = (3 - i) * 10,
+                Rank = 0
+            });
+        }
+        await _db.SaveChangesAsync();
+
+        await _service.CloseCurrentLeagueAndCreateNextAsync();
+
+        var nextStart = weekStart.AddDays(7);
+        _db.Leagues.FirstOrDefault(l => l.WeekStartDate == nextStart && l.Tier == "pro")
+            .Should().NotBeNull("the top member is promoted to the next-order tier from the DB ladder");
+    }
+
+    [Test]
     public async Task GetCurrent_NoLeagueExists_CreatesAndJoinsUser()
     {
         var userId = Guid.NewGuid();
