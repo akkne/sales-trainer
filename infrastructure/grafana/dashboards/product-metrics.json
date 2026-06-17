@@ -11,7 +11,7 @@
       "type": "stat",
       "title": "Users Online",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "app_users_online{job=\"sallevate-backend\"}",
@@ -24,7 +24,7 @@
       "type": "stat",
       "title": "Visits Today",
       "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[1d])",
@@ -37,7 +37,7 @@
       "type": "stat",
       "title": "Visits This Week",
       "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[7d])",
@@ -50,7 +50,7 @@
       "type": "stat",
       "title": "Registrations Today",
       "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "increase(app_registrations_total{job=\"sallevate-backend\"}[1d])",
@@ -63,7 +63,7 @@
       "type": "timeseries",
       "title": "Page View Rate (per page)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "sum by (page) (rate(app_page_views_total{job=\"sallevate-backend\"}[5m]))",
@@ -76,7 +76,7 @@
       "type": "timeseries",
       "title": "Logins Rate (per method)",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "sum by (method) (rate(app_logins_total{job=\"sallevate-backend\"}[5m]))",
@@ -89,7 +89,7 @@
       "type": "bargauge",
       "title": "Top Events (last 24h)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "options": { "orientation": "horizontal", "displayMode": "gradient" },
       "targets": [
         {
@@ -104,7 +104,7 @@
       "type": "timeseries",
       "title": "Daily Active (visits proxy, 1d rolling)",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[1d])",

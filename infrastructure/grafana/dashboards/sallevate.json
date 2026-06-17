@@ -11,7 +11,7 @@
       "type": "timeseries",
       "title": "HTTP Request Rate",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "rate(http_requests_received_total{job=\"sallevate-backend\"}[1m])",
@@ -24,7 +24,7 @@
       "type": "timeseries",
       "title": "HTTP Request Duration (p95)",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"sallevate-backend\"}[5m]))",
@@ -37,7 +37,7 @@
       "type": "timeseries",
       "title": "Error Rate (5xx)",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
           "expr": "rate(http_requests_received_total{job=\"sallevate-backend\", code=~\"5..\"}[1m])",
@@ -50,7 +50,7 @@
       "type": "logs",
       "title": "Application Logs",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
           "expr": "{service=~\"sallevate-.+\"}",
@@ -69,7 +69,7 @@
       "type": "logs",
       "title": "Error Logs",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
           "expr": "{service=~\"sallevate-.+\"} |= `\"level\":\"error\"` or {service=~\"sallevate-.+\"} |= `Error` or {service=~\"sallevate-.+\"} |= `\"level\":50`",
