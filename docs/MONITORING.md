@@ -14,7 +14,12 @@ top of the existing Prometheus + Grafana + Loki stack.
   (note the historical misspelling) — every PromQL query must use it verbatim.
   Config: `infrastructure/prometheus/prometheus.yml` (prod), `prometheus.local.yml` (host dev).
 - Grafana auto-provisions dashboards from `infrastructure/grafana/dashboards/*.json`
-  into the "Sellevate" folder (reload every 30s). Local: http://localhost:3001.
+  into the "Sellevate" folder (reload every 30s).
+- **Access.** Local dev: http://localhost:3001. Production: the `docker-compose.prod.yml`
+  Traefik overlay publishes it at `https://grafana.sellevate.site` (auto HTTPS, behind
+  Grafana's own login). If you don't want it public, drop the route and use an SSH tunnel
+  instead: `ssh -L 3001:localhost:3001 user@server` → http://localhost:3001. Login comes
+  from `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` in the root `.env`.
 
 ## Metric catalog
 Defined once in `src/backend/api/Infrastructure/Metrics/AppMetrics.cs` (process-global

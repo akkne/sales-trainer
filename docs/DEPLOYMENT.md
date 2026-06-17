@@ -13,7 +13,9 @@ There are two supported shapes:
 
 Files:
 - `docker-compose.yml` — base stack. All infra host ports are bound to `127.0.0.1` (Docker bypasses UFW, so they must not publish to `0.0.0.0`).
-- `docker-compose.prod.yml` — overlay that adds **Traefik** (reverse proxy) and routes `sellevate.site` → frontend, `api.sellevate.site` → backend, issuing Let's Encrypt certs automatically.
+- `docker-compose.prod.yml` — overlay that adds **Traefik** (reverse proxy) and routes `sellevate.site` → frontend, `api.sellevate.site` → backend, `grafana.sellevate.site` → Grafana, issuing Let's Encrypt certs automatically.
+
+> **Grafana** is published at `https://grafana.sellevate.site`, protected by Grafana's own login (anonymous + signup disabled). Set a strong `GRAFANA_ADMIN_PASSWORD` in the root `.env` before exposing it (the default `admin`/`admin` is a hole). Alternatively keep it private and reach it via SSH tunnel (`ssh -L 3001:localhost:3001 user@server` → http://localhost:3001) without the Traefik route.
 
 Launch:
 ```bash
@@ -22,7 +24,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
 Requirements in root `.env`: `ACME_EMAIL`, `FRONTEND_URL=https://sellevate.site,http://localhost:3000`, plus all secrets. The frontend build also needs `src/frontend/.env.production` → `NEXT_PUBLIC_API_URL=https://api.sellevate.site`.
 
-DNS: A records for `sellevate.site` and `*.sellevate.site` → server IP; firewall open on 80/443.
+DNS: A records for `sellevate.site` and `*.sellevate.site` → server IP; firewall open on 80/443. The wildcard already covers `grafana.sellevate.site` (and `api.`), so no extra record is needed; add a dedicated `grafana` A record only if you do not run a wildcard.
 
 > The full step-by-step server provisioning checklist (user, UFW, swap, Docker, build, verify) lives in the **gitignored `SERVER_SETUP.md`** at the repo root — it may contain the server IP and personal notes, so it is not committed.
 

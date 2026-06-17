@@ -51,5 +51,19 @@ services:
       - "traefik.http.routers.backend.tls.certresolver=le"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
 
+  # Grafana published at https://grafana.sellevate.site. Protected by Grafana's own
+  # login (anonymous disabled, signup disabled) — set a strong GRAFANA_ADMIN_PASSWORD
+  # in the root .env. ROOT_URL is needed so Grafana builds correct absolute links
+  # behind the TLS-terminating proxy.
+  grafana:
+    environment:
+      - GF_SERVER_ROOT_URL=https://grafana.sellevate.site
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.sellevate.site`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=le"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
 volumes:
   letsencrypt:
