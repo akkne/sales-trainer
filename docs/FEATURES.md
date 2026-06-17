@@ -16,6 +16,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |
 | [Deployment](DEPLOYMENT.md) | Production deploy: frontend on Vercel (`sellevate.vercel.app`), backend + infra via Docker Compose, CORS allow-list, env vars |
 | [Integrations](INTEGRATIONS.md) | External service integrations: MinIO/S3 object storage, endpoints, env keys |
+| [Monitoring & Product Metrics](MONITORING.md) | Usage metrics on Prometheus/Grafana: online users, visits/day/week, page views, UI events, logins/registrations — catalog, cardinality rules, dashboard |
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
@@ -159,6 +160,13 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Cache-busting `?v=<n>` appended to avatar URL after successful upload so the new image appears immediately
 - GeoAvatar (coloured SVG) fallback for users with no uploaded avatar or when the image fails to load
 - Public friend profile pages are read-only — no upload affordance shown there
+
+### Usage Metrics / Analytics
+- Product metrics on the existing Prometheus + Grafana stack (no new infra)
+- Online users (Redis-presence gauge, 5-min window), visits today/this week (derived from counters), page views per page, top UI events, logins per method, registrations
+- Backend `ActivityTrackingMiddleware` (visits + presence), `POST /tracking/events` with a server-side event/page whitelist (cardinality guard), counters in `AuthController`
+- Frontend best-effort tracking (`shared/analytics`): auto page views + a few key click events
+- "Sellevate Product Metrics" Grafana dashboard — see [MONITORING.md](MONITORING.md)
 
 ### Discuss (Community Forum)
 - Threads with title/body and one or more tags; replies; upvote-only voting on threads and replies

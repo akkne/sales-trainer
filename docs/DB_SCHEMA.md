@@ -586,6 +586,7 @@ Skills
 | `session:{userId}`                 | Hash   | 24h      | Session data                         |
 | `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly XP leaderboard                |
 | `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
+| `presence:online`                  | Sorted | —        | Online-presence (member=userId, score=last-seen unix sec); pruned to a 5-min window by the metrics updater — see [MONITORING.md](MONITORING.md) |
 
 ---
 

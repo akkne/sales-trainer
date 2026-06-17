@@ -759,3 +759,15 @@ DTO additions on the Discuss user endpoints above:
 - `GET /avatars/{userId}` returns the uploaded object if `AvatarType == Uploaded`, otherwise the `DefaultAvatars` row matching `user.DefaultAvatarIndex`. Returns `404` if the user/avatar object cannot be resolved (so the client falls back to the generated avatar instead of a 500).
 - `GET /avatars/{userId}` uses **validation-based caching**: it returns the object's `ETag` and `Cache-Control: public, no-cache` (clients cache but must revalidate every load). A matching `If-None-Match` yields `304 Not Modified` with no body. This makes a freshly uploaded avatar appear immediately after a page refresh (and in the nav bar) while unchanged images cost only a 304 round-trip. Do **not** restore a long `max-age` here — it reintroduces the stale-avatar-after-refresh bug.
 - Subtask 5 will expose `avatarUrl` (value: `/avatars/{userId}`) on profile/user DTOs throughout the API.
+
+---
+
+## Tracking / Usage Metrics
+
+| Method | Path | Auth | Body | Response |
+|---|---|---|---|---|
+| POST | /tracking/events | Bearer | `{event, page}` | `204` on success; `400` on unknown event/page; `401` if unauthenticated |
+
+- Feeds the Prometheus counters `app_page_views_total` / `app_events_total`. `event="page_view"` is recorded as a page view (uses only `page`); any other event uses both labels.
+- `event` and `page` are validated against a **server-side whitelist** (`Features/Metrics/Constants/TrackedEvents.cs`) to cap label cardinality — unknown values are rejected with `400`, never silently accepted.
+- All product metrics are scraped from the existing `/metrics` endpoint (job `sallevate-backend`); there is no read API for them — query them in Prometheus/Grafana. See [MONITORING.md](MONITORING.md).
