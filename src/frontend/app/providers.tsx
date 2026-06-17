@@ -7,9 +7,15 @@ import { useInitAuth } from "@/features/auth/hooks/use-auth";
 import { useThemeStore } from "@/shared/stores/theme-store";
 import { EnvironmentConfiguration } from "@/config/environment";
 import { TimingConstants } from "@/shared/constants/timing-constants";
+import { usePageViewTracker } from "@/shared/analytics/use-page-view-tracker";
 
 function AuthInitializer() {
     useInitAuth();
+    return null;
+}
+
+function PageViewTracker() {
+    usePageViewTracker();
     return null;
 }
 
@@ -46,6 +52,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             <QueryClientProvider client={queryClient}>
                 <AuthInitializer />
                 <ThemeInitializer />
+                <PageViewTracker />
                 {children}
             </QueryClientProvider>
         </GoogleOAuthProvider>
