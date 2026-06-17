@@ -14,6 +14,7 @@ using Serilog.Sinks.Grafana.Loki;
 using SalesTrainer.Api.Infrastructure.Data;
 using SalesTrainer.Api.Infrastructure.Email;
 using SalesTrainer.Api.Infrastructure.Http;
+using SalesTrainer.Api.Infrastructure.Metrics;
 using SalesTrainer.Api.Features.Achievements;
 using SalesTrainer.Api.Features.Auth;
 using SalesTrainer.Api.Features.Avatars;
@@ -24,6 +25,7 @@ using SalesTrainer.Api.Features.Exercises;
 using SalesTrainer.Api.Features.Friends;
 using SalesTrainer.Api.Features.Gamification;
 using SalesTrainer.Api.Features.League;
+using SalesTrainer.Api.Features.Metrics;
 using SalesTrainer.Api.Features.Notifications;
 using SalesTrainer.Api.Features.Onboarding;
 using SalesTrainer.Api.Features.Profile;
@@ -122,6 +124,7 @@ builder.Services
     .AddFriendFeatureServices()
     .AddGamificationFeatureServices()
     .AddLeagueFeatureServices()
+    .AddMetricsFeatureServices()
     .AddNotificationFeatureServices()
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices()
@@ -149,6 +152,7 @@ foreach (var upstreamClientName in new[] { "OpenAI", "GoogleTts", "YandexTts" })
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<UpstreamConnectionWarmup>();
 builder.Services.AddHostedService<UpstreamConnectionWarmupService>();
+builder.Services.AddHostedService<PresenceGaugeUpdaterService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -169,6 +173,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseActivityTracking();
 application.UseHangfireDashboard("/hangfire");
 application.MapControllers();
 

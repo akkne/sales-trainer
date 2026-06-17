@@ -6,6 +6,7 @@ using SalesTrainer.Api.Features.Auth.Exceptions;
 using SalesTrainer.Api.Features.Auth.Models;
 using SalesTrainer.Api.Features.Auth.Services.Abstract;
 using SalesTrainer.Api.Infrastructure.Data;
+using SalesTrainer.Api.Infrastructure.Metrics;
 
 namespace SalesTrainer.Api.Features.Auth;
 
@@ -82,6 +83,7 @@ public sealed class AuthController(
                 verifyEmailRequest.Code,
                 cancellationToken);
 
+            AppMetrics.Registrations.Inc();
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
         catch (UnauthorizedAccessException exception)
@@ -124,6 +126,7 @@ public sealed class AuthController(
                 loginRequest.Password,
                 cancellationToken);
 
+            AppMetrics.Logins.WithLabels("password").Inc();
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
         catch (EmailNotVerifiedException exception)
@@ -149,6 +152,7 @@ public sealed class AuthController(
                 googleLoginRequest.IdToken,
                 cancellationToken);
 
+            AppMetrics.Logins.WithLabels("google").Inc();
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
         catch (Exception exception) when (
