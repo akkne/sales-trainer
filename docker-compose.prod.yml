@@ -3,9 +3,11 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 #
 # Requires in the root .env:
+#   DOMAIN      - base domain (default: sellevate.site). Routes DOMAIN -> frontend,
+#                 api.DOMAIN -> backend, grafana.DOMAIN -> Grafana.
 #   ACME_EMAIL  - email for Let's Encrypt notifications
-#   FRONTEND_URL=https://sellevate.site  (backend CORS allow-list)
-# DNS A records for sellevate.site and *.sellevate.site must point to this server,
+#   FRONTEND_URL=https://<DOMAIN>  (backend CORS allow-list)
+# DNS A records for $DOMAIN and *.$DOMAIN must point to this server,
 # and ports 80 + 443 must be open in the firewall.
 
 services:
@@ -38,7 +40,7 @@ services:
   frontend:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`sellevate.site`)"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-sellevate.site}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=le"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
@@ -46,21 +48,21 @@ services:
   backend:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.sellevate.site`)"
+      - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN:-sellevate.site}`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls.certresolver=le"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
 
-  # Grafana published at https://grafana.sellevate.site. Protected by Grafana's own
+  # Grafana published at https://grafana.${DOMAIN}. Protected by Grafana's own
   # login (anonymous disabled, signup disabled) — set a strong GRAFANA_ADMIN_PASSWORD
   # in the root .env. ROOT_URL is needed so Grafana builds correct absolute links
   # behind the TLS-terminating proxy.
   grafana:
     environment:
-      - GF_SERVER_ROOT_URL=https://grafana.sellevate.site
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN:-sellevate.site}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`grafana.sellevate.site`)"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-sellevate.site}`)"
       - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls.certresolver=le"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"

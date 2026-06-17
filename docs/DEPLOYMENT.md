@@ -22,7 +22,7 @@ Launch:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-Requirements in root `.env`: `ACME_EMAIL`, `FRONTEND_URL=https://sellevate.site,http://localhost:3000`, plus all secrets. The frontend build also needs `src/frontend/.env.production` → `NEXT_PUBLIC_API_URL=https://api.sellevate.site`.
+Requirements in root `.env`: `DOMAIN` (base domain; defaults to `sellevate.site` if unset — Traefik derives `DOMAIN`/`api.DOMAIN`/`grafana.DOMAIN` from it), `ACME_EMAIL`, `FRONTEND_URL=https://sellevate.site,http://localhost:3000`, plus all secrets. The frontend build also needs `src/frontend/.env.production` → `NEXT_PUBLIC_API_URL=https://api.sellevate.site`.
 
 DNS: A records for `sellevate.site` and `*.sellevate.site` → server IP; firewall open on 80/443. The wildcard already covers `grafana.sellevate.site` (and `api.`), so no extra record is needed; add a dedicated `grafana` A record only if you do not run a wildcard.
 
@@ -92,6 +92,8 @@ This is wired in `docker-compose.yml` from the `FRONTEND_URL` root-`.env` variab
 
 | Variable | Purpose |
 |----------|---------|
+| `DOMAIN` | Base domain for the Traefik prod overlay (`DOMAIN`/`api.`/`grafana.`). Defaults to `sellevate.site`. |
+| `ACME_EMAIL` | Let's Encrypt notification email (prod overlay only) |
 | `FRONTEND_URL` | CORS allow-list, e.g. `http://localhost:3000,https://sellevate.vercel.app` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Postgres credentials |
 | `JWT_KEY` | JWT signing key (≥32 chars) |
