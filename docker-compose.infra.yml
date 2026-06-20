@@ -60,6 +60,13 @@ services:
     ports:
       - "6379:6379"
 
+  analytics-redis:
+    image: redis:7-alpine
+    volumes:
+      - analytics_redis_data:/data
+    ports:
+      - "6380:6379"
+
   # Single-broker Kafka in KRaft mode (no Zookeeper). Two listeners so both worlds
   # can reach it: host-run apps (local dev profile) connect on localhost:9092, while
   # other containers (Kafka UI, the full-Docker stack) connect on kafka:29092.
@@ -149,6 +156,7 @@ volumes:
   postgres_data:
   mongo_data:
   redis_data:
+  analytics_redis_data:
   kafka_data:
   loki_data:
   prometheus_data:

@@ -53,6 +53,7 @@ scripts/dev-frontend.sh   # frontend on host, foreground
 scripts/dev-gateway.sh    # API gateway (YARP) on host, proxying to backend + identity (optional)
 scripts/dev-identity.sh   # Identity microservice on host, port 5002 (own identity-db) (optional)
 scripts/dev-notifications.sh # Notification microservice on host, port 5004 (Redis-only) (optional)
+scripts/dev-analytics.sh  # Analytics microservice on host, port 5005 (own analytics-redis on 6380) (optional)
 ```
 
 > **Identity service (microservices Phase 2).** `scripts/dev-identity.sh` runs the
@@ -66,6 +67,12 @@ scripts/dev-notifications.sh # Notification microservice on host, port 5004 (Red
 > Redis (no relational database). With the gateway running, `/notifications` and
 > `/notifications/*` are proxied to it; the monolith serves the rest. See
 > [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md).
+
+> **Analytics service (microservices Phase 1).** `scripts/dev-analytics.sh` runs the
+> extracted Analytics service on `http://localhost:5005`, backed only by its own local Redis
+> (`analytics-redis` on port 6380, separate from the shared Redis). With the gateway running,
+> `/tracking/*` is proxied to it; the monolith serves the rest. It owns the product Prometheus
+> metrics (`/metrics`). See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md).
 
 ## Files added by this profile
 

@@ -9,3 +9,10 @@ scrape_configs:
       # Host port 5001 is where the locally-run API listens (see scripts/dev-backend.sh).
       - targets: ['host.docker.internal:5001']
     metrics_path: /metrics
+
+  - job_name: sellevate-analytics
+    static_configs:
+      # Analytics runs on the host in the local dev profile (scripts/dev-analytics.sh),
+      # listening on host port 5005.
+      - targets: ['host.docker.internal:5005']
+    metrics_path: /metrics
