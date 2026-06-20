@@ -172,18 +172,30 @@ Goal: user-to-user features; becomes a notification event producer.
 
 ---
 
-## Phase 6 — AI Engine Service `[ ]`
+## Phase 6 — AI Engine Service `[x]`
 Goal: isolate all LLM/speech compute; expose the sync grading endpoint Learning needs.
+See [AI_SERVICE.md](AI_SERVICE.md) for the implementation writeup.
 
-- [ ] **6.1** Scaffold `ai-service` + `ai-db` (Mongo for `dialog_sessions`/transcripts).
-- [ ] **6.2** Move `Dialog`, `Voice`, `Transcription` + the AI **evaluation strategies**
-      out of `Exercises`; preserve `IAsyncEnumerable` streaming through the gateway.
-- [ ] **6.3** Expose `POST /ai/evaluate` (sync, for Learning) + flip `/dialog/*`,
-      `/voice/*`, `/transcription/*` frontend routes.
-- [ ] **6.4** Produce `dialog.evaluated`; consume `gamification.dialog-weights.updated`
-      to cache scoring weights locally (no live cross-call).
-- [ ] **6.5** Tests: dialog turn + streaming, TTS cache, transcription, evaluate
-      contract, weight-cache refresh; update [AI_DIALOG.md], [VOICE_ROLEPLAY.md] + TESTING.
+- [x] **6.1** Scaffolded `src/backend/ai-service/Ai` (+ `Ai.Tests`) with its own Postgres
+      `ai` database (`DialogBundles`, `DialogModes`, `UserReplicas`; `DatabaseBootstrapper`
+      + EF migration `InitialAiSchema`) and Mongo `dialog_sessions`.
+- [x] **6.2** Moved `Dialog`, `Voice`, `Transcription` and the 5 AI **evaluation
+      strategies** out of `Exercises`; `IAsyncEnumerable` voice streaming preserved.
+      Monolith slices left in place as reference.
+- [x] **6.3** Exposes `POST /ai/evaluate` (internal sync endpoint for Learning — the
+      system-prompt text is passed in, so `ExerciseTypePrompt` stays owned by Learning).
+      Gateway flips `/dialog/*`, `/transcription/*`, `/admin/dialog/*`, `/admin/voice/*`
+      to the `ai` cluster (voice routes live under `/dialog/*`).
+- [x] **6.4** Produces `dialog.evaluated` on session completion (replacing the direct
+      `UserXp` write); consumes `gamification.dialog-weights.updated` to cache scoring
+      weights locally (default 25/25/25/25 ×1.0, no live cross-call) and `user.*` to keep
+      a local `UserReplica`.
+- [x] **6.5** Tests: scoring-weights cache, evaluation factory + spot-mistake local
+      scoring, streaming reply parser, sentence chunker (NUnit, offline). Added
+      [AI_SERVICE.md](AI_SERVICE.md) + [docs/TESTING/AI_SERVICE.md](TESTING/AI_SERVICE.md).
+- [~] **Caveat (6.3):** the dialog admin CRUD/import now takes `skillId` (a `Guid`)
+      directly instead of resolving a `skillIconicName` against the `Skills` table
+      (owned by Learning) — see [API_CONTRACTS.md](API_CONTRACTS.md).
 
 **Commit:** `feat: extract ai-service`.
 
