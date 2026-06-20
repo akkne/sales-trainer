@@ -15,11 +15,15 @@ DOCKER_BIN="${DOCKER_BIN:-/usr/local/bin/docker}"
 LOCAL_POSTGRES_PORT="${LOCAL_POSTGRES_PORT:-5433}"
 LOCAL_MONGO_PORT="${LOCAL_MONGO_PORT:-27017}"
 LOCAL_REDIS_PORT="${LOCAL_REDIS_PORT:-6379}"
+LOCAL_KAFKA_PORT="${LOCAL_KAFKA_PORT:-9092}"
+LOCAL_KAFKA_UI_PORT="${LOCAL_KAFKA_UI_PORT:-8085}"
 LOCAL_LOKI_PORT="${LOCAL_LOKI_PORT:-3100}"
 
 # Port the locally-run backend listens on (matches the 5001 the frontend expects).
 LOCAL_BACKEND_PORT="${LOCAL_BACKEND_PORT:-5001}"
 LOCAL_FRONTEND_PORT="${LOCAL_FRONTEND_PORT:-3000}"
+# Port the locally-run API gateway (YARP) listens on.
+LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5000}"
 
 # Load secrets/infra credentials from the root .env into the environment.
 # Parsed line-by-line (not `source`d) so unquoted values with spaces — e.g.
@@ -63,4 +67,22 @@ export_backend_env() {
   export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
   export SuperAdmin__Password="${SUPERADMIN_PASSWORD}"
   export SuperAdmin__DisplayName="${SUPERADMIN_DISPLAY_NAME}"
+
+  # Kafka broker (host listener). The monolith does not consume/produce yet, but
+  # extracted services started on the host will read this.
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+}
+
+# Config overrides for running the API gateway (YARP) on the host. It validates the
+# same JWT the monolith issues and proxies everything to the host-run monolith.
+export_gateway_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_GATEWAY_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  # Proxy target = the host-run monolith (appsettings.Development.json already
+  # points here, but keep it explicit so a custom LOCAL_BACKEND_PORT is honored).
+  export ReverseProxy__Clusters__monolith__Destinations__d1__Address="http://localhost:${LOCAL_BACKEND_PORT}/"
 }

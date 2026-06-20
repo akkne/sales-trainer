@@ -50,6 +50,7 @@ Open http://localhost:3000 (frontend) → talks to http://localhost:5001 (backen
 scripts/dev-infra.sh      # infra only (docker compose -f docker-compose.infra.yml up -d)
 scripts/dev-backend.sh    # backend on host, foreground (Ctrl-C to stop)
 scripts/dev-frontend.sh   # frontend on host, foreground
+scripts/dev-gateway.sh    # API gateway (YARP) on host, proxying to the backend (optional)
 ```
 
 ## Files added by this profile
@@ -62,6 +63,7 @@ scripts/dev-frontend.sh   # frontend on host, foreground
 | `scripts/dev-infra.sh` | Start the Docker infra. |
 | `scripts/dev-backend.sh` | Run backend on host, pointed at infra on `localhost`. |
 | `scripts/dev-frontend.sh` | Run frontend on host (`next dev`); auto-generates `src/frontend/.env.local`. |
+| `scripts/dev-gateway.sh` | Run the YARP API gateway on host (port 5000), proxying to the host backend. |
 | `scripts/dev-up.sh` | Start infra + backend + frontend (apps backgrounded, logs in `logs/`). |
 | `scripts/dev-down.sh` | Stop host apps + Docker infra. |
 
@@ -78,11 +80,34 @@ injects these as env-var config overrides (same keys docker-compose sets):
 | `ConnectionStrings__Postgres` | `Host=localhost;Port=5433;…` |
 | `ConnectionStrings__Mongo` | `mongodb://localhost:27017` |
 | `ConnectionStrings__Redis` | `localhost:6379` |
+| `Kafka__BootstrapServers` | `localhost:9092` |
 | `Logging__Loki__Url` | `http://localhost:3100` |
 | `ASPNETCORE_URLS` | `http://localhost:5001` |
 
 Secrets (JWT, Google, OpenAI, Deepgram, Yandex, SuperAdmin) come from the root
 `.env`, parsed the same way docker-compose reads it.
+
+## Kafka & the API gateway (microservices migration)
+
+Phase 0 of the [microservices migration](MICROSERVICES_ROADMAP.md) added a Kafka
+broker and a YARP gateway to the local stack. Both are part of the infra profile;
+the gateway runs on the host like the other apps.
+
+| Service | Host address | Notes |
+|---|---|---|
+| Kafka broker | `localhost:9092` | Single-broker KRaft (no Zookeeper). In-Docker clients use `kafka:29092`. |
+| Kafka UI | http://localhost:8085 | Inspect topics, consumer groups, messages. |
+| API gateway (YARP) | http://localhost:5000 | Catch-all proxy → backend on `5001`; validates JWT, injects `X-User-*`. |
+
+- `scripts/dev-infra.sh` now starts Kafka + Kafka UI alongside Postgres/Mongo/Redis.
+- `scripts/dev-gateway.sh` runs the gateway on the host (after the backend is up).
+  It is **optional** during the migration — the monolith still serves the frontend
+  directly on `5001` until routes are flipped at the gateway per service.
+- The monolith does not yet produce/consume Kafka events; extracted services will.
+
+The event envelope, topic names, idempotency store and the gateway's identity-header
+forwarding live in the shared `src/backend/building-blocks` library. See
+[ARCHITECTURE.md](ARCHITECTURE.md) and [MICROSERVICES.md](MICROSERVICES.md).
 
 ## Gotchas (learned while setting this up)
 

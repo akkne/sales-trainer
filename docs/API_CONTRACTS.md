@@ -430,6 +430,15 @@ Errors:
 
 ## Dialog (AI-powered conversation practice)
 
+> **Microservices (Phase 6):** `/dialog/*`, `/transcription/*`, `/admin/dialog/*` and
+> `/admin/voice/*` are served by the extracted **[ai-service](AI_SERVICE.md)** through the
+> YARP gateway — paths unchanged. On `/complete` the service now emits a `dialog.evaluated`
+> Kafka event (Gamification grants the XP) instead of writing `UserXpRecords` directly.
+> Internal-only (not via the gateway): `POST /ai/evaluate` `{exerciseType, systemPrompt?,
+> exerciseContent, userAnswer}` → `{isCorrect, score, explanation?, aiFeedback?}`, called
+> by Learning to grade AI exercise types. `DialogBundleDto.skillTitle` is now empty
+> (`Skills` are owned by Learning; only `skillId` is kept).
+
 ### Public endpoints
 
 | Method | Path | Body | Response |
@@ -476,7 +485,7 @@ Errors:
 | DELETE | /admin/dialog/modes/:modeId | — | 204 |
 | POST | /admin/dialog/import | `multipart/form-data; file=<JSON>` (≤20 MB) | `DialogImportResultDto` |
 
-**Dialog import JSON:** `{ bundles: [{ skillIconicName, title, description?, iconEmoji?, sortOrder?, isActive?, modes: [{ key, title, description?, chatSystemPrompt?, feedbackSystemPrompt?, sortOrder?, isActive?, voiceEnabled?, voiceId? }] }] }` (a bare bundles array is also accepted). `skillIconicName` must already exist. Idempotent upsert: bundles by `(skillId, title)`, modes by `(bundleId, key)`; modes with an unknown skill or empty key/title are skipped into `errors[]`. UI: import panel on `/admin/dialog`.
+**Dialog import JSON:** `{ bundles: [{ skillId, title, description?, iconEmoji?, sortOrder?, isActive?, modes: [{ key, title, description?, chatSystemPrompt?, feedbackSystemPrompt?, sortOrder?, isActive?, voiceEnabled?, voiceId? }] }] }` (a bare bundles array is also accepted). Since Phase 6 the bundle references its skill by `skillId` (a `Guid`) rather than `skillIconicName` — the ai-service does not own the `Skills` table. Idempotent upsert: bundles by `(skillId, title)`, modes by `(bundleId, key)`; bundles with a missing/invalid `skillId` and modes with empty key/title are skipped into `errors[]`. UI: import panel on `/admin/dialog`.
 `DialogImportResultDto = { bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors[] }`
 
 **Admin DTOs:**
