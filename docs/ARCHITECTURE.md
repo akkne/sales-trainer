@@ -81,6 +81,39 @@ Infrastructure/
 
 Backend auto-runs `db.Database.Migrate()` on startup.
 
+## Microservices migration — platform foundations (Phase 0)
+
+The monolith above is being carved into independently deployable services per
+[MICROSERVICES.md](MICROSERVICES.md) (target) and
+[MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) (route). **The monolith still
+serves all traffic** — Phase 0 only added the scaffolding around it:
+
+```
+src/backend/
+  api/                         ← legacy monolith (still serving; kept as reference)
+  tests/                       ← monolith tests
+  building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
+                                       idempotent-consumer base, Redis idempotency
+                                       store, UserReplica, identity-header helpers)
+  building-blocks/BuildingBlocks.Tests/
+  gateway/Gateway/             ← YARP API gateway (catch-all passthrough → monolith,
+                                  central JWT validation, X-User-* header injection)
+  gateway/Gateway.Tests/
+  Sellevate.sln                ← backend-wide solution (all of the above)
+```
+
+- **Event bus:** Apache Kafka (single-broker KRaft) for backend↔backend events.
+  Topic names + the `{ eventId, occurredAt, type, version, data }` envelope live in
+  `BuildingBlocks` (`Topics`, `EventEnvelope`). Consumers are idempotent (dedupe on
+  `eventId` via a Redis-backed `IIdempotencyStore`). Local broker: `localhost:9092`,
+  Kafka UI on `:8085`.
+- **API Gateway (YARP):** single entry point; validates the JWT once and injects
+  trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
+  stripped). In Phase 0 it transparently proxies every path to the monolith; later
+  phases flip route prefixes to extracted services one at a time (strangler fig).
+- **Data ownership:** the single `AppDbContext` (42 entities) is mapped to its future
+  owning services in [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md) (no code moved yet).
+
 ## EF Column Types
 
 | Property | Column type |

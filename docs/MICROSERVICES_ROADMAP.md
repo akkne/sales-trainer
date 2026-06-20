@@ -47,33 +47,41 @@ Rules:
 
 ---
 
-## Phase 0 — Platform foundations `[ ]`
+## Phase 0 — Platform foundations `[x]`
 Goal: the scaffolding every service needs, with the monolith still untouched.
 
-- [ ] **0.1** Create solution layout: every service in its **own folder under
-      `src/backend/`** (`src/backend/<service>/<Name>` for code +
-      `src/backend/<service>/<Name>.Tests` next to it — no shared test project), plus a
-      shared `src/backend/building-blocks` class library (envelope types, Kafka
-      producer/consumer base, idempotency store, user-replica entity, JWT helpers).
-      See MICROSERVICES.md §2.0 for the exact tree.
-- [ ] **0.2** Add **Kafka** (KRaft, single broker) to `docker-compose.infra.yml`
-      + `scripts/dev-infra.sh`; add Kafka UI for local debugging.
-- [ ] **0.3** Define the **event envelope** + topic-name constants in `BuildingBlocks`
-      (`{ eventId, occurredAt, type, version, data }`); pick serialization (JSON now,
-      note Avro/Schema-Registry as future).
-- [ ] **0.4** Implement a reusable **idempotent consumer** (dedupe on `eventId`,
-      per-service `processed_events` table or Redis set).
-- [ ] **0.5** Scaffold the **YARP gateway** service: passthrough route to the existing
-      monolith for ALL paths (no behaviour change yet), central JWT validation,
-      `X-User-Id`/`X-User-Role` header injection.
-- [ ] **0.6** Document the event catalogue + envelope in MICROSERVICES.md §4 (keep in
-      sync); add a Kafka section to [LOCAL_DEV.md](LOCAL_DEV.md) and
-      [ARCHITECTURE.md](ARCHITECTURE.md).
-- [ ] **0.7** Decompose the single `AppDbContext`: map each entity → owning service
-      (table in MICROSERVICES.md §2 / §5). No code move yet — just the ownership matrix
-      + identify every cross-feature reference to break.
+- [x] **0.1** Solution layout established: shared `src/backend/building-blocks/BuildingBlocks`
+      class library (event envelope, topic constants, Kafka publisher + idempotent-consumer
+      base, Redis idempotency store, `UserReplica`, identity-header helpers) with co-located
+      `BuildingBlocks.Tests`, plus a backend-wide `src/backend/Sellevate.sln` tying the
+      monolith, building-blocks and gateway together. Per-service folders
+      (`src/backend/<service>/<Name>` + `.Tests`) are created on each service's own branch
+      in its extraction phase (matches the branching strategy) — not pre-created here, so
+      the repo stays free of empty shells.
+- [x] **0.2** **Kafka** (KRaft, single broker, dual listeners for host + in-network clients)
+      + **Kafka UI** added to `docker-compose.infra.yml` and `docker-compose.yml`;
+      `scripts/dev-infra.sh` + `lib-local-env.sh` updated (`localhost:9092`, UI on `:8085`).
+- [x] **0.3** **Event envelope** (`{ eventId, occurredAt, type, version, data }`, payload as
+      opaque `JsonElement`) + topic-name constants (`Topics`) in `BuildingBlocks`.
+      Serialization: System.Text.Json (camelCase) now; Avro/Schema-Registry noted as future.
+- [x] **0.4** Reusable **idempotent consumer** (`KafkaConsumerBackgroundService`): manual
+      commit, per-message scope, check→handle→mark dedupe via `IIdempotencyStore`
+      (Redis-backed, TTL'd) — at-least-once with safe retry on handler failure.
+- [x] **0.5** **YARP gateway** (`src/backend/gateway/Gateway`) scaffolded: single catch-all
+      passthrough route to the monolith (no behaviour change), central JWT validation
+      (optional, so public routes pass through), and trusted `X-User-Id`/`X-User-Role`
+      injection (client-supplied copies stripped first). Dockerfile + `scripts/dev-gateway.sh`.
+- [x] **0.6** Event catalogue already in MICROSERVICES.md §4; added a Kafka + gateway section
+      to [LOCAL_DEV.md](LOCAL_DEV.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+- [x] **0.7** `AppDbContext` ownership matrix written: [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md)
+      maps all 42 entities → owning service and lists every cross-feature reference to break.
+      No code moved.
 
 **Commit checkpoints:** `feat: kafka + building blocks`, `feat: yarp gateway passthrough`.
+
+> **Branch note:** per the user's instruction this foundational work landed directly
+> (no `platform/foundations` branch was cut). Subsequent service-extraction phases
+> should still follow the per-service branching strategy above.
 
 ---
 
