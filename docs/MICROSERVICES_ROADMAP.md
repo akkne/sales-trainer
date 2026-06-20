@@ -309,8 +309,10 @@ See [LEARNING_SERVICE.md](LEARNING_SERVICE.md) for the implementation writeup.
 - [x] **8.4** Gateway flips `/skills/*`, `/skills`, `/skill-tree`, `/lessons/*`, `/lessons`,
       `/topics/*`, `/exercises/*`, `/reference/*`, `/reference`, `/techniques/*`,
       `/techniques`, `/daily-quote` and the learning `/admin/*` content routes to the
-      `learning` cluster. **The monolith catch-all now serves no remaining routes** (its code
-      stays as reference). `/profile/*` is not captured (owned by identity/gamification).
+      `learning` cluster. The monolith catch-all now serves only `/admin/users/*` (admin
+      user management — never extracted; Phase 9 must move it, naturally to identity-service,
+      before the monolith can be retired). Its code stays as reference. `/profile/*` is not
+      captured (owned by identity/gamification).
 - [x] **8.5** Tests (NUnit, offline/mocked): deterministic grading, AI grading via mocked
       `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing
       event-contract shapes, gateway route-flip config. Updated [API_CONTRACTS.md](API_CONTRACTS.md),

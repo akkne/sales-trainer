@@ -3,8 +3,9 @@
 > Phase 8 of the [microservices migration](MICROSERVICES_ROADMAP.md). Extracts the
 > content tree and the learner's progress through it out of the monolith
 > (`src/backend/api`) into an independently deployable `learning-service`. This is the
-> last and largest service; after its routes are flipped the monolith serves no
-> traffic (its code stays in the repo as reference, retired in Phase 9).
+> last and largest service; after its routes are flipped the monolith serves only the
+> `/admin/users/*` admin user-management routes (never extracted; Phase 9 moves them).
+> Its code stays in the repo as reference, retired in Phase 9.
 
 ## Bounded context
 
@@ -99,9 +100,15 @@ the `AiService:BaseUrl` option (`http://ai:8080` in compose).
 `/daily-quote`, and the learning `/admin/*` content routes (`/admin/skills`,
 `/admin/skill-stages`, `/admin/topics`, `/admin/lessons`, `/admin/exercises`,
 `/admin/exercise-type-prompts`, `/admin/reference`, `/admin/techniques`,
-`/admin/daily-quotes`, `/admin/seeder`). After this flip the monolith catch-all
-serves no remaining routes. `/profile/*` is intentionally NOT captured (owned by
-identity/gamification).
+`/admin/daily-quotes`, `/admin/seeder`). `/profile/*` is intentionally NOT captured
+(owned by identity/gamification).
+
+After this flip the only public route still served by the monolith catch-all is
+`/admin/users/*` (admin user management: list/detail, moderation rename, avatar
+reset, role change). It was never part of any service's scope — Identity owns the
+user aggregate but never took these admin routes. Phase 9 must move `/admin/users/*`
+(naturally to identity-service) before the monolith can be retired; until then the
+`monolith` cluster and its catch-all must stay in the gateway.
 
 ## Known limitations
 
