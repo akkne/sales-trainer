@@ -9,7 +9,38 @@
 > for backend↔backend · REST for frontend · YARP API Gateway · Redis-only for
 > Notifications & Analytics.
 >
-> **Order principle:** scaffold the platform first, then extract isolated services
+> ## Branching strategy
+
+Each service is built on **its own development branch**, branched from `main`, and
+merged back (PR → squash/merge) only when its phase is complete, green, and documented.
+Never commit a service's work directly to `main`.
+
+| Phase | Branch | Merges to |
+|---|---|---|
+| 0 — Platform | `platform/foundations` | `main` |
+| 1 — Analytics | `service/analytics` | `main` |
+| 2 — Identity | `service/identity` | `main` |
+| 3 — User replica | `platform/user-replica` | `main` |
+| 4 — Notifications | `service/notifications` | `main` |
+| 5 — Social | `service/social` | `main` |
+| 6 — AI Engine | `service/ai` | `main` |
+| 7 — Gamification | `service/gamification` | `main` |
+| 8 — Learning | `service/learning` | `main` |
+| 9 — Admin/retire | `chore/retire-monolith` | `main` |
+| 10 — Hardening | `chore/hardening` | `main` |
+
+Rules:
+- Branch off the latest `main` at the start of each phase: `git switch -c <branch> main`.
+- All of that phase's atomic-task commits land on its branch (Rule #4 still applies —
+  one working, tested commit per unit).
+- Open a PR when the phase's checklist is fully `[x]` and tests pass; merge to `main`,
+  then delete the branch.
+- Later phases branch off `main` *after* the previous phase has merged, so each service
+  branch starts from the newest shared state.
+
+---
+
+**Order principle:** scaffold the platform first, then extract isolated services
 > (low coupling) before the tangled core (Gamification ⇄ Learning ⇄ AI). Each phase
 > ends in a **working, committed, tested** state. The monolith keeps serving traffic
 > until each service's routes are flipped at the gateway (strangler fig).
@@ -213,6 +244,8 @@ Goal: the last and largest — content + progress; main event producer for Gamif
 ---
 
 ## Cross-phase rules
+- Each phase/service has its **own branch** (see Branching strategy above); merge to
+  `main` only when the phase is complete and green.
 - One commit = one working, tested unit (project Rule #4). Never commit failing tests.
 - Update the affected docs in the **same** phase that changes behaviour (Rule #1.4).
 - Each service: own folder under `src/backend/`, own DB, own EF migrations, own
