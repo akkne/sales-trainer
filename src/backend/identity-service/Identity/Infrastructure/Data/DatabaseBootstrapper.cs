@@ -2,14 +2,6 @@ using Npgsql;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
-/// <summary>
-/// Ensures the service's own Postgres database exists before EF migrations run.
-/// Database-per-service means Identity owns a database the shared Postgres instance does
-/// not create for it, and <c>EF Migrate()</c> can create tables but not the database
-/// itself. This connects to the <c>postgres</c> maintenance database and issues
-/// <c>CREATE DATABASE</c> once if the target is missing — idempotent and safe to run on
-/// every startup (including against an already-populated shared volume).
-/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)
@@ -18,9 +10,10 @@ public static class DatabaseBootstrapper
         var targetDatabase = builder.Database;
 
         if (string.IsNullOrWhiteSpace(targetDatabase))
+        {
             throw new InvalidOperationException("ConnectionStrings:Postgres must specify a Database.");
+        }
 
-        // Connect to the always-present maintenance DB to check/create the target.
         var adminConnectionString = new NpgsqlConnectionStringBuilder(connectionString) { Database = "postgres" }.ConnectionString;
 
         await using var connection = new NpgsqlConnection(adminConnectionString);
@@ -32,13 +25,21 @@ public static class DatabaseBootstrapper
             existsCommand.Parameters.AddWithValue("name", targetDatabase);
             var exists = await existsCommand.ExecuteScalarAsync(cancellationToken) is not null;
             if (exists)
+            {
                 return;
+            }
         }
 
-        // Database name comes from our own config, not user input; quote it defensively anyway.
         await using var createCommand = connection.CreateCommand();
         createCommand.CommandText = $"CREATE DATABASE \"{targetDatabase.Replace("\"", "\"\"")}\"";
-        await createCommand.ExecuteNonQueryAsync(cancellationToken);
-        logger.LogInformation("Created database {Database}", targetDatabase);
+        try
+        {
+            await createCommand.ExecuteNonQueryAsync(cancellationToken);
+            logger.LogInformation("Created database {Database}", targetDatabase);
+        }
+        catch (PostgresException postgresException) when (postgresException.SqlState == PostgresErrorCodes.DuplicateDatabase)
+        {
+            logger.LogInformation("Database {Database} already created concurrently; continuing", targetDatabase);
+        }
     }
 }

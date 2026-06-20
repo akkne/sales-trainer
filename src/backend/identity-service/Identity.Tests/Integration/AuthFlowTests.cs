@@ -61,11 +61,9 @@ public class AuthFlowTests
 
         await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Flow" });
 
-        // Not verified yet → 403.
         var blocked = await client.PostAsJsonAsync("/auth/login", new { email, password });
         blocked.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        // Read the code out of the email we just "sent".
         var emailMessage = Factory.EmailSender.SentMessages.Last(m => m.RecipientEmail == email);
         var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
 
@@ -74,7 +72,6 @@ public class AuthFlowTests
         var verified = await verify.Content.ReadFromJsonAsync<AuthTokenResult>();
         verified!.AccessToken.Should().NotBeNullOrEmpty();
 
-        // Now password login works.
         var login = await client.PostAsJsonAsync("/auth/login", new { email, password });
         login.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -106,9 +103,49 @@ public class AuthFlowTests
         var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
         await client.PostAsJsonAsync("/auth/verify-email", new { email, code });
 
-        // The verify response set the HttpOnly refresh cookie; refresh should rotate it.
         var refresh = await client.PostAsync("/auth/refresh", null);
         refresh.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task Refresh_WithReusedRevokedToken_RevokesEntireFamily()
+    {
+        var client = Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        {
+            HandleCookies = false
+        });
+        var email = UniqueEmail();
+        const string password = "Password123!";
+
+        await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Reuse" });
+        var emailMessage = Factory.EmailSender.SentMessages.Last(message => message.RecipientEmail == email);
+        var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
+
+        var verify = await client.PostAsJsonAsync("/auth/verify-email", new { email, code });
+        var firstRefreshToken = ExtractRefreshTokenCookie(verify);
+
+        var firstRefresh = await PostRefreshWithCookie(client, firstRefreshToken);
+        firstRefresh.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rotatedRefreshToken = ExtractRefreshTokenCookie(firstRefresh);
+
+        var reusedOldToken = await PostRefreshWithCookie(client, firstRefreshToken);
+        reusedOldToken.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var rotatedTokenAfterReuse = await PostRefreshWithCookie(client, rotatedRefreshToken);
+        rotatedTokenAfterReuse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private static string ExtractRefreshTokenCookie(HttpResponseMessage response)
+    {
+        var setCookie = response.Headers.GetValues("Set-Cookie").First(value => value.StartsWith("refreshToken="));
+        return setCookie["refreshToken=".Length..setCookie.IndexOf(';')];
+    }
+
+    private static Task<HttpResponseMessage> PostRefreshWithCookie(HttpClient client, string refreshToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        request.Headers.Add("Cookie", $"refreshToken={refreshToken}");
+        return client.SendAsync(request);
     }
 
     private sealed record RegistrationResult(string Email, bool RequiresEmailVerification);

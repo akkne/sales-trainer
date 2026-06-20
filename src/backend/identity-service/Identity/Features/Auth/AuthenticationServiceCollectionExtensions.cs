@@ -18,6 +18,7 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
         services.AddScoped<SuperAdminSeeder>();
         services.AddHostedService<ExpiredEmailVerificationCleanupService>();
+        services.AddHostedService<ExpiredRefreshTokenCleanupService>();
         return services;
     }
 }

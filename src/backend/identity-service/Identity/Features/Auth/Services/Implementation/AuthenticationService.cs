@@ -60,7 +60,17 @@ internal sealed class AuthenticationService(
 
         await PublishUserRegisteredAsync(newUser, cancellationToken);
 
-        await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, displayName, cancellationToken);
+        try
+        {
+            await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, displayName, cancellationToken);
+        }
+        catch (Exception verificationEmailException)
+        {
+            logger.LogError(
+                verificationEmailException,
+                "User {Email} UserId={UserId} registered but the verification email failed to send; client must use resend-code",
+                normalizedEmail, newUser.Id);
+        }
 
         logger.LogInformation(
             "User registered pending email verification {Email} UserId={UserId}", normalizedEmail, newUser.Id);
@@ -84,7 +94,9 @@ internal sealed class AuthenticationService(
 
         var isCodeValid = await emailVerificationService.VerifyCodeAsync(normalizedEmail, code, cancellationToken);
         if (!isCodeValid)
+        {
             throw new UnauthorizedAccessException(EmailVerificationConstants.InvalidCodeMessage);
+        }
 
         if (!user.IsEmailVerified)
         {
@@ -204,7 +216,9 @@ internal sealed class AuthenticationService(
         }
 
         if (isNewUser)
+        {
             await PublishUserRegisteredAsync(existingUser, cancellationToken);
+        }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == existingUser.Id && profile.IsOnboardingCompleted, cancellationToken);
@@ -220,9 +234,22 @@ internal sealed class AuthenticationService(
             .Include(token => token.User)
             .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
 
-        if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTime.UtcNow)
+        if (storedToken is null || storedToken.ExpiresAt < DateTime.UtcNow)
         {
             logger.LogWarning("Token refresh failed — invalid or expired refresh token");
+            throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+        }
+
+        if (storedToken.IsRevoked)
+        {
+            logger.LogWarning(
+                "Refresh-token reuse detected for UserId={UserId}; revoking all active refresh tokens",
+                storedToken.UserId);
+            await databaseContext.RefreshTokens
+                .Where(token => token.UserId == storedToken.UserId && !token.IsRevoked)
+                .ExecuteUpdateAsync(
+                    update => update.SetProperty(token => token.IsRevoked, true),
+                    cancellationToken);
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
         }
 
@@ -243,7 +270,10 @@ internal sealed class AuthenticationService(
         var storedToken = await databaseContext.RefreshTokens
             .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
 
-        if (storedToken is null) return;
+        if (storedToken is null)
+        {
+            return;
+        }
 
         storedToken.IsRevoked = true;
         await databaseContext.SaveChangesAsync(cancellationToken);

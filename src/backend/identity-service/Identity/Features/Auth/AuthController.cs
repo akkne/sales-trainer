@@ -34,8 +34,8 @@ public sealed class AuthController(
         var displayName = User.FindFirstValue("displayName");
         var role = User.FindFirstValue(ClaimTypes.Role);
 
-        var isOnboardingCompleted = userId is not null && await databaseContext.UserProfiles
-            .AnyAsync(profile => profile.UserId == Guid.Parse(userId) && profile.IsOnboardingCompleted, cancellationToken);
+        var isOnboardingCompleted = Guid.TryParse(userId, out var parsedUserId) && await databaseContext.UserProfiles
+            .AnyAsync(profile => profile.UserId == parsedUserId && profile.IsOnboardingCompleted, cancellationToken);
 
         return Ok(new
         {
@@ -166,7 +166,9 @@ public sealed class AuthController(
         var rawRefreshToken = Request.Cookies[RefreshTokenCookieName];
 
         if (string.IsNullOrEmpty(rawRefreshToken))
+        {
             return Unauthorized(new { message = "Refresh token missing." });
+        }
 
         try
         {
@@ -187,7 +189,9 @@ public sealed class AuthController(
         var rawRefreshToken = Request.Cookies[RefreshTokenCookieName];
 
         if (!string.IsNullOrEmpty(rawRefreshToken))
+        {
             await authenticationService.RevokeRefreshTokenAsync(rawRefreshToken, cancellationToken);
+        }
 
         Response.Cookies.Delete(RefreshTokenCookieName);
         return NoContent();

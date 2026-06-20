@@ -2,8 +2,6 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Serilog;
-using Serilog.Sinks.Grafana.Loki;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
@@ -13,6 +11,8 @@ using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Infrastructure.Email;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
+using Serilog;
+using Serilog.Sinks.Grafana.Loki;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,20 +36,21 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Identity");
 });
 
-// ── Persistence: the service's own Postgres database (identity-db) ─────────────
 builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
     databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-// ── Kafka producer (user.* events) ────────────────────────────────────────────
-// Identity only PRODUCES events, so it needs the publisher but no idempotency store /
-// Redis (those are for consumers). The domain-facing wrapper keeps topic names out of
-// the feature code.
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
 
-// ── AuthN/AuthZ: Identity is the sole JWT issuer and validates its own tokens ───
-var jwtSigningKey = builder.Configuration["Jwt:Key"]!;
+const int minimumJwtSigningKeyByteCount = 32;
+var jwtSigningKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key must be configured and at least 32 bytes (256 bits) long for HMAC-SHA256.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(jwtOptions =>
     {
@@ -74,8 +75,6 @@ builder.Services.AddAuthorization(authorizationOptions =>
         policy.RequireRole("SuperAdmin"));
 });
 
-// CORS for standalone local dev (when the frontend hits the service directly rather
-// than through the gateway). Behind the gateway requests are same-origin.
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
@@ -112,8 +111,6 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-// Liveness endpoint kept off any external dependency so it answers even if Postgres/
-// Kafka are momentarily down.
 application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "identity" }));
 
 application.MapControllers();
@@ -122,7 +119,6 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    // database-per-service: make sure identity-db exists, then run our own migrations.
     await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
         builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
 
@@ -140,13 +136,12 @@ using (var serviceScope = application.Services.CreateScope())
         var defaultAvatarSeeder = serviceScope.ServiceProvider.GetRequiredService<DefaultAvatarSeeder>();
         await defaultAvatarSeeder.SeedAsync();
     }
-    catch (Exception ex)
+    catch (Exception exception)
     {
-        startupLogger.LogWarning(ex, "Avatar storage init failed at startup; continuing without default avatars");
+        startupLogger.LogWarning(exception, "Avatar storage init failed at startup; continuing without default avatars");
     }
 }
 
 application.Run();
 
-// Exposed so the integration test host (WebApplicationFactory) can boot the service.
 public partial class Program { }
