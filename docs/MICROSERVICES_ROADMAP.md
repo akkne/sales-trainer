@@ -236,7 +236,7 @@ See [AI_SERVICE.md](AI_SERVICE.md) for the implementation writeup.
 
 ---
 
-## Phase 7 — Gamification Service (event-driven core) `[ ]`
+## Phase 7 — Gamification Service (event-driven core) `[>]`
 Goal: the flagship — XP/streaks/achievements/league, fed entirely by Kafka events.
 
 - [ ] **7.1** Scaffold `gamification-service` + `gamification-db`; migrate
