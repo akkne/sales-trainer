@@ -3,6 +3,10 @@
 Implemented 2026-06-15. Email/password registration now requires the user to confirm
 ownership of their address with a short numeric code before they can log in.
 
+> **Microservices migration:** this flow now runs in the extracted **Identity service**
+> (`/auth/*` flipped at the gateway), unchanged. The `EmailVerificationCodes` table moved to
+> the Identity service's own `identity-db`. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
 ## Flow
 
 1. `POST /auth/register` creates the user with `IsEmailVerified = false`, generates a
