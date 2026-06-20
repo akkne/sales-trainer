@@ -14,6 +14,14 @@ lives in exactly one service's own database, with the shared `User` replaced by 
 local `UserReplica` (see [BuildingBlocks](../src/backend/building-blocks)) everywhere
 it used to be foreign-keyed.
 
+> **Realized pattern (Phases 5–8):** this `UserReplica` design is the actual
+> cross-service pattern in use. Each relational domain service (gamification, ai,
+> social, learning) keeps its own `UserReplica` table, fed by an idempotent `user.*`
+> consumer; Redis-only services (Notifications, Analytics) consume `user.*` events
+> directly without a replica table. See
+> [MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) Phase 3 and
+> [DECISIONS.md](DECISIONS.md) (2026-06-21).
+
 ## Ownership matrix
 
 | Entity (`DbSet`) | Owning service | Store | Notes |

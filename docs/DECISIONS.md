@@ -4,6 +4,74 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-06-21 — Phase 3 (Shared User read-model replica) — resolved as satisfied/superseded
+
+- **Context:** [MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) Phase 3 ("Shared User
+  read-model replica") was still `[ ]`, but the established database-per-service pattern had
+  already realized it by the time the domain services were extracted (Phases 5–8). This entry
+  records the per-task verdict so the roadmap reflects reality rather than leaving a phantom
+  open phase.
+
+### Per-task verdict
+
+- **3.1 — UserReplica table + `user.*` consumer in BuildingBlocks, reusable by every service →
+  Satisfied.** The shared `UserReplica` entity lives in BuildingBlocks since Phase 0.1
+  ([src/backend/building-blocks/BuildingBlocks/Identity/UserReplica.cs](../src/backend/building-blocks/BuildingBlocks/Identity/UserReplica.cs)),
+  alongside the `user.*` topic constants
+  ([Eventing/Topics.cs](../src/backend/building-blocks/BuildingBlocks/Eventing/Topics.cs) lines 17–20)
+  and the reusable idempotent consumer base `KafkaConsumerBackgroundService` (Phase 0.4).
+  Every extracted domain service keeps **its own** replica table, fed by its own idempotent
+  `user.*` consumer (dedupe on `eventId`) plus its own EF config:
+  - gamification-service: [Identity/UserReplica.cs](../src/backend/gamification-service/Gamification/Identity/UserReplica.cs),
+    [Eventing/UserReplicaConsumer.cs](../src/backend/gamification-service/Gamification/Eventing/UserReplicaConsumer.cs),
+    [Infrastructure/Data/UserReplicaEntityConfiguration.cs](../src/backend/gamification-service/Gamification/Infrastructure/Data/UserReplicaEntityConfiguration.cs)
+  - ai-service: [Identity/UserReplica.cs](../src/backend/ai-service/Ai/Identity/UserReplica.cs),
+    [Eventing/UserReplicaConsumer.cs](../src/backend/ai-service/Ai/Eventing/UserReplicaConsumer.cs),
+    [Infrastructure/Data/UserReplicaEntityConfiguration.cs](../src/backend/ai-service/Ai/Infrastructure/Data/UserReplicaEntityConfiguration.cs)
+  - social-service: [Identity/UserReplica.cs](../src/backend/social-service/Social/Identity/UserReplica.cs),
+    [Eventing/UserReplicaConsumer.cs](../src/backend/social-service/Social/Eventing/UserReplicaConsumer.cs),
+    [Infrastructure/Data/UserReplicaEntityConfiguration.cs](../src/backend/social-service/Social/Infrastructure/Data/UserReplicaEntityConfiguration.cs)
+  - learning-service: [Identity/UserReplica.cs](../src/backend/learning-service/Learning/Identity/UserReplica.cs),
+    [Eventing/UserReplicaConsumer.cs](../src/backend/learning-service/Learning/Eventing/UserReplicaConsumer.cs),
+    [Infrastructure/Data/UserReplicaEntityConfiguration.cs](../src/backend/learning-service/Learning/Infrastructure/Data/UserReplicaEntityConfiguration.cs)
+
+  (notification-service and analytics-service are Redis-only with no relational store, so they
+  consume `user.*`/funnel events directly and need no `UserReplica` table — consistent with the
+  pattern.)
+
+- **3.2 — Wire the replica into the still-monolithic remaining features so they stop joining
+  Identity tables → Superseded by Phases 5–8 + Phase 9.** The strangler migration extracted
+  **all** domain services, each owning a local replica seeded from `user.*` events, and the
+  monolith is being retired in Phase 9 (kept only as reference). There are no remaining
+  monolithic features left to "wire onto the replica," so this task is superseded by the actual
+  extraction work rather than skipped arbitrarily.
+
+- **3.3 — Tests: replica seed / update / delete → Satisfied per-service.** Each service's replica
+  consumer is covered by that service's own test suite; the canonical explicit example is
+  [src/backend/social-service/Social.Tests/Unit/UserReplicaConsumerTests.cs](../src/backend/social-service/Social.Tests/Unit/UserReplicaConsumerTests.cs)
+  (seed on `user.registered`, idempotent re-seed, update on `user.updated`, delete on
+  `user.deleted`).
+
+### Alternative considered
+
+- **A single central User replica service** that every other service queries over REST/gRPC,
+  instead of each service holding its own copy. **Rejected:** it reintroduces a synchronous
+  cross-service dependency on a shared store — the exact coupling database-per-service exists to
+  remove (see [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md)). Database-per-service + a local
+  event-fed `UserReplica` per service is the locked decision.
+
+### Reusable-extraction assessment
+
+- Considered extracting a shared `UserReplicaConsumer` base / EF config into BuildingBlocks to
+  remove the near-identical per-service consumers. **Not done:** each consumer is bound to its
+  own `DbContext` type and its own per-service event DTOs
+  (e.g. [gamification IncomingIntegrationEvents.cs](../src/backend/gamification-service/Gamification/Eventing/IncomingIntegrationEvents.cs)),
+  so a shared base would require generics over `DbContext` plus shared event contracts, touching
+  every service's migrations. That exceeds the "removes real duplication at low risk" bar, so
+  this resolution is **documentation-only** (no code extracted).
+
+---
+
 ## 2026-06-15 — Email verification by code
 
 ### MailerSend as the email provider

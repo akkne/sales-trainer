@@ -145,17 +145,24 @@ See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) for the implementation writeup.
 
 ---
 
-## Phase 3 — Shared User read-model replica `[ ]`
+## Phase 3 — Shared User read-model replica `[x]`
 Goal: the pattern that makes database-per-service possible.
+Resolved as satisfied/superseded — see [DECISIONS.md](DECISIONS.md) (2026-06-21).
 
-- [ ] **3.1** Add a `UserReplica` table + `user.*` consumer to `BuildingBlocks`,
-      reusable by every downstream service.
-- [ ] **3.2** Wire the replica into the (still-monolithic) remaining features so they
+- [x] **3.1** Add a `UserReplica` table + `user.*` consumer to `BuildingBlocks`,
+      reusable by every downstream service. Done: shared `UserReplica` + `user.*` topics +
+      idempotent consumer base live in `BuildingBlocks` (Phase 0.1/0.4); each domain service
+      (gamification, ai, social, learning) keeps its own replica table fed by its own
+      `UserReplicaConsumer` + EF config (Redis-only services consume directly, no table).
+- [~] **3.2** Wire the replica into the (still-monolithic) remaining features so they
       stop joining Identity tables directly and read the replica instead — proves the
-      pattern before further splits.
-- [ ] **3.3** Tests: replica seed on `user.registered`, update, delete cascade.
+      pattern before further splits. **Superseded by Phases 5–8/9:** all domain features were
+      extracted into services (each owning a local replica) and the monolith is being retired
+      (Phase 9), so no remaining monolithic features exist to wire onto the replica.
+- [x] **3.3** Tests: replica seed on `user.registered`, update, delete cascade. Covered
+      per-service (canonical: `social-service/Social.Tests/Unit/UserReplicaConsumerTests.cs`).
 
-**Commit:** `feat: user read-model replica via kafka`.
+**Commit:** `docs: resolve Phase 3 user read-model replica (satisfied/superseded)`.
 
 ---
 
