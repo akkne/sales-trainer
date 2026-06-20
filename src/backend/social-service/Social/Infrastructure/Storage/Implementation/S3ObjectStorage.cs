@@ -1,6 +1,7 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Microsoft.Extensions.Options;
 using Sellevate.Social.Infrastructure.Configuration;
 using Sellevate.Social.Infrastructure.Storage.Abstract;
 
@@ -11,8 +12,10 @@ internal sealed class S3ObjectStorage : IObjectStorage
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
 
-    public S3ObjectStorage(S3Configuration configuration)
+    public S3ObjectStorage(IOptions<S3Configuration> options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        var configuration = options.Value;
         _bucket = configuration.Bucket;
         _client = new AmazonS3Client(
             new BasicAWSCredentials(configuration.AccessKey, configuration.SecretKey),

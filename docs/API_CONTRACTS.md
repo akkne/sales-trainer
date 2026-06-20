@@ -622,7 +622,7 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 | DELETE | /friends/{friendUserId} | — | 204 |
 | GET | /friends/search?query={q} | — | `UserSearchResultDto[]` |
 | GET | /friends/leaderboard | — | `FriendLeaderboardEntryDto[]` |
-| GET | /friends/activity | — | `FriendActivityDto[]` |
+| GET | /friends/activity | — | `FriendActivityDto[]` (returns `[]` until Gamification/Learning emit activity events) |
 | GET | /friends/profile/{userId} | — | `PublicProfileDto` |
 
 `FriendDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, avatarUrl}`
@@ -752,7 +752,7 @@ unknown labels are created on the fly as non-curated tags (slug = lowercased, wh
 
 Photos (up to 10) attach to a thread or a reply via a two-step flow: create the thread/reply
 with the existing JSON endpoints above, then upload images to its photo sub-resource. Stored in
-S3/MinIO (bucket `salestrainer-avatars`, key prefix `discuss/`) + the `DiscussPhotos` table.
+S3/MinIO (key prefix `discuss/`) + the `DiscussPhotos` table. Bucket: `salestrainer-avatars` in the monolith, `sellevate-social` in the extracted social-service.
 All require auth except the content GET.
 
 | Method | Path | Body | Response |

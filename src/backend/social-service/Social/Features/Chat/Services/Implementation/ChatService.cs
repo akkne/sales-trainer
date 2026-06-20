@@ -115,8 +115,7 @@ internal sealed class ChatService(
         if (!string.IsNullOrEmpty(beforeMessageId))
         {
             var beforeIndex = messages.FindIndex(message => message.Id == beforeMessageId);
-            if (beforeIndex > 0)
-                messages = messages.Take(beforeIndex).ToList();
+            messages = beforeIndex < 0 ? [] : messages.Take(beforeIndex).ToList();
         }
 
         return messages

@@ -310,14 +310,11 @@ internal sealed class FriendService(
             .ToList();
     }
 
-    public async Task<List<FriendActivityDto>> GetFriendActivityFeedAsync(
+    public Task<List<FriendActivityDto>> GetFriendActivityFeedAsync(
         Guid userId,
         int limit = 20,
-        CancellationToken cancellationToken = default)
-    {
-        await GetAcceptedFriendUserIdsAsync(userId, cancellationToken);
-        return [];
-    }
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(new List<FriendActivityDto>());
 
     private async Task<List<Guid>> GetAcceptedFriendUserIdsAsync(
         Guid userId,
