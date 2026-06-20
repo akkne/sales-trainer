@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
@@ -351,6 +350,6 @@ internal sealed class ExerciseService(
         Guid userId,
         Guid exerciseId,
         string transcript,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default) =>
         exerciseDialogService.StreamExerciseVoiceAsync(userId, exerciseId, transcript, cancellationToken);
 }
