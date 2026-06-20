@@ -17,6 +17,9 @@ src/backend/tests/bin/
 src/backend/tests/obj/
 src/SalesTrainer.Tests/bin/
 src/SalesTrainer.Tests/obj/
+# Per-service projects (building-blocks, gateway, future services) under src/backend
+src/backend/**/bin/
+src/backend/**/obj/
 
 # Environment files
 .env
