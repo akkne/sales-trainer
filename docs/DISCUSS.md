@@ -4,6 +4,13 @@ A community Q&A forum where salespeople create threads, post replies, upvote, an
 topics. Mirrors the design in `.design/new-design/js/screens-discuss.jsx`. Implemented as a
 vertical slice under `src/backend/api/Features/Discuss` and `src/frontend/features/discuss`.
 
+> **Microservices migration (Phase 5):** Discuss was extracted into the `social-service`
+> — see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md). The gateway flips `/discuss/*` and
+> `/admin/discuss/*` to that service (the monolith slice stays as reference). All Discuss
+> tables move to the `social` Postgres database, photos stay on S3/MinIO (bucket
+> `sellevate-social`), and author display names come from the local `UserReplica` (fed by
+> `user.*` events) rather than joining the `Users` table.
+
 ## Concept
 - **Threads** — a title + body authored by a user, with one or more tags.
 - **Replies** — answers to a thread. The thread author (or an admin) can mark one reply as the
