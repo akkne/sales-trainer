@@ -2,6 +2,16 @@
 
 Social layer for Sellevate: friendships, public profiles, user search, friend leaderboard, activity feed, and 1-to-1 chat.
 
+> **Microservices migration (Phase 5):** Friends + Chat were extracted into the
+> `social-service` — see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md). The gateway flips
+> `/friends/*` and `/chat/*` to that service (the monolith slice below stays as
+> reference). In the service, display names/avatars come from the local `UserReplica`
+> (fed by `user.*` events) instead of joining the `Users` table, and the
+> friend-request notifications are now the `friend.request.received` /
+> `friend.request.accepted` / `chat.message.sent` Kafka events consumed by the
+> notification-service. Leaderboard/profile/activity XP-and-achievement aggregates are
+> owned by Gamification/Learning (not yet extracted) and currently return `0`/empty.
+
 ---
 
 ## Database Schema

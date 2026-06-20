@@ -15,6 +15,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Notification Service](NOTIFICATION_SERVICE.md) | Phase 4: extracted `notification-service` (Redis-only); consumes 5 social/gamification events, per-user capped inbox + unread counter with 30-day TTL (replaces Hangfire cleanup job) |
 | [Data Ownership Matrix](DATA_OWNERSHIP.md) | Phase 0.7: every `AppDbContext` entity → owning service, plus cross-feature references to break |
 | [Identity Service](IDENTITY_SERVICE.md) | Phase 2: extracted identity microservice — sole JWT issuer, own `identity-db`, `user.*` Kafka events, gateway route flip |
+| [Social Service](SOCIAL_SERVICE.md) | Phase 5: extracted `social-service` (Friends, Discuss forum, Chat); Postgres `social` + shared Mongo `chat_conversations` + MinIO photos; produces `friend.request.received`/`friend.request.accepted`/`chat.message.sent`; `/friends/*`, `/discuss/*`, `/admin/discuss/*`, `/chat/*` flipped at the gateway |
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
@@ -71,6 +72,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md) | Phase 4: notification-service unit tests (event→inbox, unread count, mark-read, capping, TTL, mapper) + gateway route-flip |
 | [GAMIFICATION_SERVICE.md](TESTING/GAMIFICATION_SERVICE.md) | Phase 7: gamification-service unit tests (XP grant per event type, streak increment/reset/milestone, achievement unlock + idempotency, league rollover, outgoing event contracts) + gateway route-flip |
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
+| [SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md) | Phase 5: social-service unit tests (friend lifecycle + events, forum CRUD/voting/photos, chat friendship guard, `user.*` replica consumer, event contract) + gateway route-flip |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

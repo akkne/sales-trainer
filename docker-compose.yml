@@ -313,6 +313,43 @@ services:
       loki:
         condition: service_started
 
+  social:
+    build:
+      context: ./src/backend
+      dockerfile: social-service/Social/Dockerfile
+    pull_policy: build
+    # Localhost only — reached through the gateway over the docker network.
+    ports:
+      - "127.0.0.1:5006:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__Mongo=mongodb://mongo:27017
+      - ConnectionStrings__Redis=redis:6379
+      - Mongo__DatabaseName=sallevate
+      - Kafka__BootstrapServers=kafka:29092
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Jwt__Key=${JWT_KEY}
+      - Logging__Loki__Url=http://loki:3100
+      - Storage__S3__Endpoint=http://minio:9000
+      - Storage__S3__AccessKey=${MINIO_ROOT_USER}
+      - Storage__S3__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Storage__S3__Bucket=sellevate-social
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      loki:
+        condition: service_started
+
   gateway:
     build:
       context: ./src/backend
@@ -332,6 +369,7 @@ services:
       - ReverseProxy__Clusters__notification__Destinations__d1__Address=http://notification:8080/
       - ReverseProxy__Clusters__identity__Destinations__d1__Address=http://identity:8080/
       - ReverseProxy__Clusters__gamification__Destinations__d1__Address=http://gamification:8080/
+      - ReverseProxy__Clusters__social__Destinations__d1__Address=http://social:8080/
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
       - backend
@@ -340,6 +378,7 @@ services:
       - notification
       - identity
       - gamification
+      - social
       - kafka
       - loki
 

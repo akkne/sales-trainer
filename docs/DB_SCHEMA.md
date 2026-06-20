@@ -198,11 +198,18 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 
 ### `Friendships`
 
+> **Microservices (Phase 5):** owned by the **social-service** Postgres database
+> (`social`), along with all `Discuss*` tables and the `chat_conversations` Mongo
+> collection. The `social` database also holds a `UserReplicas` read-model table
+> (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` Kafka events.
+> `RequesterId`/`AddresseeId` (and Discuss `AuthorId`/`UserId`) are loose `Guid`s in the
+> social database — no cross-DB FK to `Users`. See [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md).
+
 | Column        | Type                       | Nullable | Notes                              |
 |---------------|----------------------------|----------|------------------------------------|
 | `Id`          | `uuid`                     | NOT NULL | PK                                 |
-| `RequesterId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who sent        |
-| `AddresseeId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who received    |
+| `RequesterId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who sent (loose `Guid` in `social`) |
+| `AddresseeId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who received (loose `Guid` in `social`) |
 | `Status`      | `integer`                  | NOT NULL | 0=Pending, 1=Accepted, 2=Declined |
 | `CreatedAt`   | `timestamp with time zone` | NOT NULL |                                    |
 | `AcceptedAt`  | `timestamp with time zone` | NULL     |                                    |
@@ -624,6 +631,7 @@ Skills
 | `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |
 | `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index`; backfills `DefaultAvatarIndex` for existing users via `abs(hashtext(Id::text)) % 6` |
 | `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
+| `InitialSocialSchema` (social-service) | 2026-06-21 | Standalone `social` database: `Friendships`, all `Discuss*` tables, and `UserReplicas` (read-model). Owned by social-service, not the monolith `AppDbContext`. |
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |

@@ -636,6 +636,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 ## Friends
 
+> Served by the **social-service** (Phase 5) — the gateway flips `/friends/*` and
+> `/chat/*` to the `social` cluster. Paths and DTO shapes are unchanged. The
+> leaderboard/profile/activity XP-and-achievement aggregate fields currently return
+> `0`/empty until Gamification/Learning are extracted (see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md)).
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /friends | — | `FriendDto[]` |
@@ -646,7 +651,7 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 | DELETE | /friends/{friendUserId} | — | 204 |
 | GET | /friends/search?query={q} | — | `UserSearchResultDto[]` |
 | GET | /friends/leaderboard | — | `FriendLeaderboardEntryDto[]` |
-| GET | /friends/activity | — | `FriendActivityDto[]` |
+| GET | /friends/activity | — | `FriendActivityDto[]` (returns `[]` until Gamification/Learning emit activity events) |
 | GET | /friends/profile/{userId} | — | `PublicProfileDto` |
 
 `FriendDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, avatarUrl}`
@@ -718,6 +723,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 ## Discuss (community forum)
 
+> Served by the **social-service** (Phase 5) — the gateway flips `/discuss/*` and
+> `/admin/discuss/*` to the `social` cluster. Paths and DTO shapes are unchanged; the
+> tables move to the `social` Postgres database and photos stay on S3/MinIO
+> (see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md)).
+
 All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are upvote-only
 (a row's existence = upvoted), de-duplicated by a unique `(userId, targetType, targetId)` index.
 
@@ -771,7 +781,7 @@ unknown labels are created on the fly as non-curated tags (slug = lowercased, wh
 
 Photos (up to 10) attach to a thread or a reply via a two-step flow: create the thread/reply
 with the existing JSON endpoints above, then upload images to its photo sub-resource. Stored in
-S3/MinIO (bucket `salestrainer-avatars`, key prefix `discuss/`) + the `DiscussPhotos` table.
+S3/MinIO (key prefix `discuss/`) + the `DiscussPhotos` table. Bucket: `salestrainer-avatars` in the monolith, `sellevate-social` in the extracted social-service.
 All require auth except the content GET.
 
 | Method | Path | Body | Response |

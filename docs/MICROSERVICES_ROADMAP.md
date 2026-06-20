@@ -189,19 +189,32 @@ See [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) for the implementation wr
 
 ---
 
-## Phase 5 — Social Service `[ ]`
+## Phase 5 — Social Service `[>]`
 Goal: user-to-user features; becomes a notification event producer.
+See [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md) for the implementation writeup.
 
-- [ ] **5.1** Scaffold `social-service` + `social-db` (Postgres) + `social-mongo`
-      (chat); migrate `Friendships`, all Discuss tables, `chat_conversations`.
-- [ ] **5.2** Move `Friends`, `Discuss`, `Chat` slices; use the `UserReplica` for
-      names/avatars; keep S3 for Discuss photos.
-- [ ] **5.3** Produce `friend.request.received/accepted`, `chat.message.sent`
-      (consumed by Notifications).
-- [ ] **5.4** Flip `/friends/*`, `/discuss/*`, `/chat/*`; stop routing to the monolith's
-      slices (leave their code in place as reference).
-- [ ] **5.5** Tests: friend lifecycle, forum CRUD/voting/photos, chat, event emission;
-      update [FRIENDS.md], [DISCUSS.md] + docs/TESTING.
+- [x] **5.1** Scaffolded `src/backend/social-service/Social` (+ `Social.Tests`) with its own
+      Postgres `social` database (`Friendships`, all Discuss tables; `DatabaseBootstrapper`
+      + EF migration `InitialSocialSchema`) and shared Mongo `chat_conversations`. Health
+      endpoint, Dockerfile, `scripts/dev-social.sh`, docker-compose wiring, Sellevate.sln
+      entries.
+- [x] **5.2** Moved `Friends`, `Discuss`, `Chat` slices; uses the local `UserReplica`
+      (seeded from `user.*` events) for names; keeps S3/MinIO for Discuss photos. Monolith
+      slices left in place as reference.
+- [x] **5.3** Produces `friend.request.received`, `friend.request.accepted`,
+      `chat.message.sent` (payload shapes match the notification-service consumer contract).
+- [x] **5.4** Gateway flips `/friends/*`, `/discuss/*`, `/chat/*`, `/admin/discuss/*` to the
+      `social` cluster; the monolith catch-all keeps the rest (its slices remain as reference).
+- [x] **5.5** Tests (NUnit, offline/mocked): friend lifecycle, forum CRUD/voting/photos,
+      chat, event emission, idempotency, route-flip config. Added
+      [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md) + [docs/TESTING/SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md);
+      updated [FRIENDS.md](FRIENDS.md), [DISCUSS.md](DISCUSS.md), [API_CONTRACTS.md](API_CONTRACTS.md),
+      [DB_SCHEMA.md](DB_SCHEMA.md).
+- [~] **Caveat (5.2):** the friends leaderboard / public-profile / activity-feed aggregates
+      (XP, streak, achievement count, average exercise score, recent XP/achievement activity)
+      are owned by Gamification/Learning (phases 7 & 8, not extracted yet), so Social returns
+      them as `0`/empty while serving identity fields (display name, avatar) truthfully via the
+      `UserReplica` — DTO shapes unchanged. Composed for real once those services exist.
 
 **Commit:** `feat: extract social-service`.
 
