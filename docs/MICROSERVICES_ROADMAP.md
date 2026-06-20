@@ -19,9 +19,12 @@
 ## Phase 0 — Platform foundations `[ ]`
 Goal: the scaffolding every service needs, with the monolith still untouched.
 
-- [ ] **0.1** Create solution layout `src/services/<name>` + shared `BuildingBlocks`
-      class library (envelope types, Kafka producer/consumer base, idempotency
-      store, user-replica entity, JWT helpers).
+- [ ] **0.1** Create solution layout: every service in its **own folder under
+      `src/backend/`** (`src/backend/<service>/<Name>` for code +
+      `src/backend/<service>/<Name>.Tests` next to it — no shared test project), plus a
+      shared `src/backend/building-blocks` class library (envelope types, Kafka
+      producer/consumer base, idempotency store, user-replica entity, JWT helpers).
+      See MICROSERVICES.md §2.0 for the exact tree.
 - [ ] **0.2** Add **Kafka** (KRaft, single broker) to `docker-compose.infra.yml`
       + `scripts/dev-infra.sh`; add Kafka UI for local debugging.
 - [ ] **0.3** Define the **event envelope** + topic-name constants in `BuildingBlocks`
@@ -212,7 +215,8 @@ Goal: the last and largest — content + progress; main event producer for Gamif
 ## Cross-phase rules
 - One commit = one working, tested unit (project Rule #4). Never commit failing tests.
 - Update the affected docs in the **same** phase that changes behaviour (Rule #1.4).
-- Each service: own DB, own EF migrations, own `.env`, own health endpoint.
+- Each service: own folder under `src/backend/`, own DB, own EF migrations, own
+  `.env`, own health endpoint, and its **own `*.Tests` project beside its code**.
 - All Kafka consumers idempotent (dedupe on `eventId`) — at-least-once delivery.
 - Keep [API_CONTRACTS.md](API_CONTRACTS.md) frontend paths stable; the gateway
   preserves them so the frontend never breaks mid-migration.

@@ -62,6 +62,49 @@
                             └──── Apache Kafka (event bus) ────┘
 ```
 
+### 2.0 Repository layout
+
+Every service lives in **its own folder under `src/backend/`**, and **each service
+carries its own tests folder next to its code** — there is no shared top-level test
+project. The legacy monolith (`src/backend/api`) and its shared `src/backend/tests`
+stay in place until retired in Phase 9.
+
+```
+src/backend/
+  api/                         ← legacy monolith (retired in Phase 9)
+  tests/                       ← legacy monolith tests (removed with the monolith)
+  building-blocks/             ← shared lib (event envelope, Kafka base, idempotency,
+                                  UserReplica, JWT helpers)
+  gateway/
+    Gateway/                   ← YARP gateway code
+    Gateway.Tests/             ← tests, next to the code
+  identity-service/
+    Identity/
+    Identity.Tests/
+  learning-service/
+    Learning/
+    Learning.Tests/
+  ai-service/
+    Ai/
+    Ai.Tests/
+  gamification-service/
+    Gamification/
+    Gamification.Tests/
+  social-service/
+    Social/
+    Social.Tests/
+  notification-service/
+    Notification/
+    Notification.Tests/
+  analytics-service/
+    Analytics/
+    Analytics.Tests/
+```
+
+Rule: a service is self-contained — `<service>/<Name>` (code) + `<service>/<Name>.Tests`
+(unit + integration tests for that service only). Cross-service contract tests, if any,
+live in `building-blocks`.
+
 ### 2.1 Identity Service — `identity-service`
 **Bounded context:** who the user is.
 - **Absorbs:** `Auth`, `Profile`, `Onboarding`, `Avatars`.
