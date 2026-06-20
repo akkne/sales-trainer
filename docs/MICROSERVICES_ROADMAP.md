@@ -136,19 +136,31 @@ Goal: the pattern that makes database-per-service possible.
 
 ---
 
-## Phase 4 — Notifications Service (Redis-only) `[ ]`
+## Phase 4 — Notifications Service (Redis-only) `[x]`
 Goal: pure Kafka consumer + thin REST; second Redis-as-primary store.
+See [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) for the implementation writeup.
 
-- [ ] **4.1** Scaffold `notification-service` with Redis (per-user capped list +
-      unread counter, 30-day TTL replacing the Hangfire cleanup job).
-- [ ] **4.2** Consume `achievement.unlocked`, `streak.milestone`,
-      `friend.request.received`, `friend.request.accepted`, `chat.message.sent`
-      (idempotent).
-- [ ] **4.3** Expose `/notifications/*` (list, unread count, mark-read).
-- [ ] **4.4** Flip routes at the gateway; stop routing to the monolith's slice
-      (leave its code in place as reference).
-- [ ] **4.5** Tests: event→inbox write, unread count, mark-read, TTL expiry; update
-      [NOTIFICATIONS.md] + docs/TESTING.
+- [x] **4.1** Scaffolded `src/backend/notification-service/Notification` (+ `Notification.Tests`)
+      with Redis as the primary store: per-user capped list `notifications:inbox:{userId}`
+      (`LPUSH`/`LTRIM`, default cap 100) + unread counter `notifications:unread:{userId}`,
+      both with a 30-day TTL that replaces the monolith's Hangfire `NotificationCleanupJob`
+      (no relational DB). Health endpoint, Dockerfile, `scripts/dev-notifications.sh`,
+      docker-compose wiring, added to `Sellevate.sln`.
+- [x] **4.2** Idempotent consumer (`NotificationEventConsumer`, dedupe on `eventId`) for
+      `achievement.unlocked`, `streak.milestone`, `friend.request.received`,
+      `friend.request.accepted`, `chat.message.sent`; each maps to a notification written
+      to the recipient's Redis inbox via `INotificationEventMapper`. (Producers ship in
+      Phases 5/7; consumers idle until then.)
+- [x] **4.3** Exposes `/notifications` (list, `?limit=&includeRead=`),
+      `/notifications/unread-count`, `/notifications/{id}/read`, `/notifications/read-all`
+      — contracts preserved from [API_CONTRACTS.md](API_CONTRACTS.md).
+- [x] **4.4** Gateway flips `/notifications/*` to the `notification` cluster; the
+      monolith slice stays in `src/backend/api` as reference.
+- [x] **4.5** Tests (NUnit, offline): event→inbox write, unread count, mark-read,
+      capping, retention/TTL, mapper (incl. unknown/blank → skip), route-flip config.
+      Added [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) +
+      [docs/TESTING/NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md); updated
+      [NOTIFICATIONS.md](NOTIFICATIONS.md) + [API_CONTRACTS.md](API_CONTRACTS.md).
 
 **Commit:** `feat: extract notification-service (redis)`.
 
