@@ -172,11 +172,27 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 
 ## Profile
 
+> **Microservices (Phase 7):** `/profile/achievements` is served by the extracted
+> **[gamification-service](GAMIFICATION_SERVICE.md)** through the gateway (more specific
+> than Identity's `/profile/*`); the response shape is unchanged. The streak/XP/skill
+> aggregates inside `GET /profile` (Identity) are composed from gamification's
+> `GET /gamification/progress` once Identity consumes it (Phase 2 caveat).
+
 | Method | Path | Response |
 |---|---|---|
 | GET | /profile | `UserProfileStatsDto` |
 | GET | /profile/achievements | `AchievementDto[]` |
 | PUT | /profile/persona | `{persona: string}` → 204 |
+
+### Gamification progress (Phase 7)
+
+Served by the gamification-service through the gateway.
+
+| Method | Path | Response |
+|---|---|---|
+| GET | /gamification/progress | `GamificationProgressDto` |
+
+`GamificationProgressDto`: `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, dailyXpAmount, weeklyXpAmount, dailyXpGoal, weeklyXpGoal}`
 
 `UserProfileStatsDto`: `{displayName, email, currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona?, avatarUrl}`
 
@@ -191,6 +207,13 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 ---
 
 ## League
+
+> **Microservices (Phase 7):** `/league` (and `/admin/leagues/*`, `/admin/gamification/*`)
+> are served by the extracted **[gamification-service](GAMIFICATION_SERVICE.md)** through
+> the gateway — paths and DTO shapes unchanged. League data is DB-backed on the
+> `gamification` Postgres database; participant display names/avatars come from a local
+> `UserReplica` (no join into Identity). The weekly closure job runs on the
+> gamification service's own Hangfire schema.
 
 | Method | Path | Response |
 |---|---|---|
@@ -300,6 +323,12 @@ All routes prefixed `/admin`. Unauthorized → 403.
 
 ### Gamification (XP)
 All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
+
+> **Microservices (Phase 7):** `/admin/gamification/*` is served by the
+> **[gamification-service](GAMIFICATION_SERVICE.md)** through the gateway — shapes
+> unchanged. On `PUT /admin/gamification/settings` the service additionally emits a
+> `gamification.dialog-weights.updated` Kafka event so the ai-service refreshes its
+> cached dialog scoring weights (replacing the old in-process read).
 
 | Method | Path | Body | Response |
 |---|---|---|---|

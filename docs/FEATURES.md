@@ -10,6 +10,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Microservices (target)](MICROSERVICES.md) | Target microservices architecture: 7 services + YARP gateway, DB-per-service, Kafka events, service catalogue & contracts |
 | [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [AI Engine Service](AI_SERVICE.md) | Phase 6: extracted `ai-service` (Dialog, Voice, Transcription, `/ai/evaluate`); Postgres+Mongo, `dialog.evaluated`, cached scoring weights |
+| [Gamification Service](GAMIFICATION_SERVICE.md) | Phase 7: extracted event-driven `gamification-service` (XP, streaks, achievements, league) on Postgres `gamification`; consumes `exercise.completed`/`dialog.evaluated`/`lesson.completed`/`skill.completed`, produces `xp.granted`/`achievement.unlocked`/`streak.milestone`/`gamification.dialog-weights.updated`; Hangfire streak-reset + weekly-league-closure jobs; `/gamification/*`, `/league/*`, `/profile/achievements`, `/admin/gamification/*`, `/admin/leagues/*` flipped at the gateway |
 | [Analytics Service](ANALYTICS_SERVICE.md) | Phase 1: extracted Redis-only `analytics-service` (tracking, presence, funnels); `/tracking/*` flipped at the gateway; consumes `user.registered`/`exercise.completed`/`xp.granted`; owns the product Prometheus metrics |
 | [Notification Service](NOTIFICATION_SERVICE.md) | Phase 4: extracted `notification-service` (Redis-only); consumes 5 social/gamification events, per-user capped inbox + unread counter with 30-day TTL (replaces Hangfire cleanup job) |
 | [Data Ownership Matrix](DATA_OWNERSHIP.md) | Phase 0.7: every `AppDbContext` entity → owning service, plus cross-feature references to break |
@@ -68,6 +69,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [MICROSERVICES_FOUNDATIONS.md](TESTING/MICROSERVICES_FOUNDATIONS.md) | Phase 0: building-blocks (envelope, idempotency, identity headers) + YARP gateway passthrough/anti-spoof tests |
 | [ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) | Phase 1: presence window math, usage-event counters, funnel event consumption, gateway route-flip config |
 | [NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md) | Phase 4: notification-service unit tests (event→inbox, unread count, mark-read, capping, TTL, mapper) + gateway route-flip |
+| [GAMIFICATION_SERVICE.md](TESTING/GAMIFICATION_SERVICE.md) | Phase 7: gamification-service unit tests (XP grant per event type, streak increment/reset/milestone, achievement unlock + idempotency, league rollover, outgoing event contracts) + gateway route-flip |
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | Feature checklists | Manual test checklists for each feature |
 
