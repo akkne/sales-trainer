@@ -4,6 +4,14 @@ Base URL: `http://localhost:5000` (dev) | `http://backend:8080` (docker internal
 
 All endpoints except those marked `[public]` require `Authorization: Bearer <accessToken>`.
 
+> **Microservices migration:** `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*` and
+> `/avatars/*` are now served by the extracted **Identity service** (gateway base URL
+> `http://localhost:5000`), not the monolith. Paths and request/response shapes are
+> unchanged. One transitional caveat: `GET /profile` returns the streak / XP / completed-
+> skill / average-score aggregates as **0** because those are owned by Gamification/Learning
+> (not extracted yet, roadmap phases 7 & 8); the identity fields (displayName, email,
+> persona, avatarUrl) are real. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
 ---
 
 ## Auth `[public]`

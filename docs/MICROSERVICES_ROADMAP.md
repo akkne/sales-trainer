@@ -103,20 +103,33 @@ proves the gateway + event pipeline end to end.
 
 ---
 
-## Phase 2 — Identity Service `[ ]`
+## Phase 2 — Identity Service `[x]`
 Goal: the identity root — must exist before others can own a User replica.
+See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) for the implementation writeup.
 
-- [ ] **2.1** Scaffold `identity-service` + `identity-db` (Postgres); migrate
-      `Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatars`.
-- [ ] **2.2** Move `Auth`, `Profile`, `Onboarding`, `Avatars` slices; preserve JWT
-      issuance (sole issuer) + Google OAuth + MailerSend + S3 avatar storage.
-- [ ] **2.3** Produce `user.registered` / `user.updated` / `user.deleted` /
-      `user.avatar.changed` on the relevant flows.
-- [ ] **2.4** Gateway validates JWT against Identity's signing key; flip `/auth/*`,
-      `/profile/*`, `/onboarding/*`, `/avatars/*`; stop routing to the monolith's
-      slices (leave their code in place as reference).
-- [ ] **2.5** Tests: register/login/refresh, email verification, OAuth, avatar upload,
-      event emission; update [EMAIL_VERIFICATION.md], [API_CONTRACTS.md], docs/TESTING.
+- [x] **2.1** Scaffolded `src/backend/identity-service/Identity` (+ `Identity.Tests`) with its
+      own `IdentityDbContext` and EF migration `InitialIdentitySchema` for `Users`,
+      `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatars`. Owns a
+      separate Postgres database `identity` (`DatabaseBootstrapper` creates it on startup).
+- [x] **2.2** Moved `Auth`, `Profile`, `Onboarding`, `Avatars` slices; JWT issuance (sole
+      issuer, same key/issuer/audience), Google OAuth, MailerSend and S3/MinIO avatar
+      storage preserved. The Hangfire cleanup cron became a `BackgroundService`. Monolith
+      slices left in place as reference.
+- [x] **2.3** Produces `user.registered` (email/Google/super-admin) and `user.avatar.changed`
+      (upload/reset) via `IUserEventPublisher` → shared Kafka publisher. `user.updated` /
+      `user.deleted` contracts + publisher methods exist but have no trigger yet (no
+      rename/delete-account endpoints) — wired for when those land.
+- [x] **2.4** Gateway flips `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*`
+      to the Identity cluster (`http://identity:8080`); the monolith catch-all keeps the
+      rest. Gateway already validates the shared JWT key, so tokens stay cross-valid.
+- [x] **2.5** Tests: register/login/refresh, email verification, persona/onboarding, avatar
+      upload + `user.*` event emission (unit InMemory + integration Testcontainers). Updated
+      [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md), [API_CONTRACTS.md](API_CONTRACTS.md),
+      [docs/TESTING/IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md).
+- [~] **Caveat (2.2/2.4):** `GET /profile` aggregates (streak/XP/skills/score) are owned by
+      Gamification/Learning (phases 7 & 8, not extracted yet), so Identity returns them as
+      `0` while serving identity fields truthfully — DTO shape unchanged. Composed for real
+      once those services exist.
 
 **Commit:** `feat: extract identity-service`.
 
