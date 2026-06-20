@@ -284,22 +284,46 @@ See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) for the implementation wr
 
 ---
 
-## Phase 8 — Learning Service `[ ]`
+## Phase 8 — Learning Service `[x]`
 Goal: the last and largest — content + progress; main event producer for Gamification.
+See [LEARNING_SERVICE.md](LEARNING_SERVICE.md) for the implementation writeup.
 
-- [ ] **8.1** Scaffold `learning-service` + `learning-db`; migrate the Skills/Topics/
-      Lessons/Exercises tree, progress records, attempts, `ExerciseTypePrompts`,
-      `ReferenceMaterials`, the Technique cluster, `DailyQuotes`.
-- [ ] **8.2** Move `SkillTree`, `Lessons`, `Exercises` (non-AI grading + orchestration),
-      `Reference`, `Techniques`, `DailyQuotes`; for AI types call AI's `POST /ai/evaluate`.
-- [ ] **8.3** Produce `exercise.completed`, `lesson.completed`, `skill.completed`,
-      `technique.mastery.changed` (consumed by Gamification/Analytics).
-- [ ] **8.4** Flip `/skills/*`, `/lessons/*`, `/exercises/*`, `/reference/*`,
-      `/techniques/*`, `/daily-quote`; **the monolith no longer serves any traffic**
-      (its code stays as a reference, not deleted).
-- [ ] **8.5** Tests: tree/progress, all exercise types (incl. AI path), technique
-      mastery, seeding, event emission; update [SKILLS_AND_EXERCISES.md],
-      [NEW_EXERCISE_TYPES.md], [SEEDER.md] + TESTING.
+- [x] **8.1** Scaffolded `src/backend/learning-service/Learning` (+ `Learning.Tests`) with its
+      own Postgres `learning` database (`DatabaseBootstrapper` + EF migration
+      `InitialLearningSchema`) covering `Skills`, `SkillStages`, `Topics`,
+      `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`,
+      `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`,
+      `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress` (plus a
+      local `UserReplica`). Health endpoint, Dockerfile, `scripts/dev-learning.sh`,
+      docker-compose wiring, `Sellevate.sln` entries (port 5008).
+- [x] **8.2** Moved `SkillTree`, `Lessons`, `Exercises` (deterministic grading +
+      orchestration), `Reference`, `Techniques`, `DailyQuotes`. Deterministic strategies run
+      locally; the 5 AI types call ai-service `POST /ai/evaluate`, passing the global
+      `ExerciseTypePrompt` text (owned by Learning) + raw content/answer. Monolith slices
+      left in place as reference.
+- [x] **8.3** Produces `exercise.completed` `{userId,exerciseType,score,isCorrect}`,
+      `lesson.completed` `{userId,lessonId,bestScore}`, `skill.completed` `{userId,skillId}`
+      (shapes verbatim-matching the gamification-service consumer) and
+      `technique.mastery.changed` `{userId,techniqueId,level,masteryPercent}`. Emitted on the
+      real grading/completion flow, replacing the monolith's direct XP/streak/achievement writes.
+- [x] **8.4** Gateway flips `/skills/*`, `/skills`, `/skill-tree`, `/lessons/*`, `/lessons`,
+      `/topics/*`, `/exercises/*`, `/reference/*`, `/reference`, `/techniques/*`,
+      `/techniques`, `/daily-quote` and the learning `/admin/*` content routes to the
+      `learning` cluster. **The monolith catch-all now serves no remaining routes** (its code
+      stays as reference). `/profile/*` is not captured (owned by identity/gamification).
+- [x] **8.5** Tests (NUnit, offline/mocked): deterministic grading, AI grading via mocked
+      `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing
+      event-contract shapes, gateway route-flip config. Updated [API_CONTRACTS.md](API_CONTRACTS.md),
+      [DB_SCHEMA.md](DB_SCHEMA.md), [SKILLS_AND_EXERCISES.md](SKILLS_AND_EXERCISES.md),
+      [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md), [SEEDER.md](SEEDER.md); added
+      [LEARNING_SERVICE.md](LEARNING_SERVICE.md) + [docs/TESTING/LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md).
+- [~] **Caveat (8.2):** `/exercises/{id}/chat` and `/exercises/{id}/voice/stream` (interactive
+      `ai_dialogue`) are served by Learning with the OpenAI chat + TTS pipeline ported from the
+      monolith to preserve the frontend contract; long-term this LLM/TTS compute belongs behind
+      a generic ai-service endpoint (out of Phase 8 scope).
+- [~] **Caveat (8.3):** `technique.mastery.changed` has a producer + contract but no trigger
+      yet — the monolith's `MarkTechniqueSeen` only records first-seen and never changes mastery
+      (behaviour preserved); wired for when a mastery-progression flow lands.
 
 **Commit:** `feat: extract learning-service`.
 

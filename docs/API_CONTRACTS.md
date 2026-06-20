@@ -56,6 +56,17 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 
 ## Skill Tree
 
+> **Microservices (Phase 8):** all learner + admin content routes below — `/skills/*`,
+> `/skill-tree`, `/lessons/*`, `/topics/*`, `/exercises/*`, `/reference/*`,
+> `/techniques/*`, `/daily-quote`, and the content `/admin/*` routes — are served by the
+> extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway. Paths and
+> shapes are unchanged. Two shape-preserving notes: the exercise-submission DTO returns
+> `xpEarned: 0` and an empty `newlyUnlockedAchievementKeys` (XP/achievements now belong
+> to gamification, granted asynchronously from the `exercise.completed` event), and
+> `/skill-tree` returns the streak/XP/goal aggregate fields as `0` (owned by
+> gamification). AI-graded exercise types are scored by the learning-service calling the
+> ai-service `POST /ai/evaluate`.
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /skill-tree | — | `SkillTreeResponseDto` |
