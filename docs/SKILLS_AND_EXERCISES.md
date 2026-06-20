@@ -341,3 +341,5 @@ Upsert-ключи те же, что у пошаговых сидеров (ски
 3. Создать уроки + упражнения (`seeder/lessons`) — урок: `Title`, `OrderInTopic`; упражнения: `Type`, `OrderInLesson`, `Content` (JSON по схеме типа), опц. `CustomAiPrompt`.
 4. Для AI-типов при необходимости задать глобальный промпт типа (`admin/exercise-type-prompts/{type}`).
 5. Проверить `Content` каждого упражнения по схеме из [NEW_EXERCISE_TYPES.md](NEW_EXERCISE_TYPES.md).
+
+> **Microservices (Phase 8):** the content described here is now owned and served by the extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway (Postgres `learning` DB). Paths, schemas and behaviour are unchanged. AI-graded exercise types are scored by the learning-service calling the ai-service `POST /ai/evaluate` (the learning-service still owns the `ExerciseTypePrompt` text and passes it in).

@@ -475,3 +475,5 @@ All AI-powered types expect the model to return:
 ```
 `rating` is 1–10 (defaults to 5 if missing); the platform computes
 `score = rating × 10`.
+
+> **Microservices (Phase 8):** the content described here is now owned and served by the extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway (Postgres `learning` DB). Paths, schemas and behaviour are unchanged. AI-graded exercise types are scored by the learning-service calling the ai-service `POST /ai/evaluate` (the learning-service still owns the `ExerciseTypePrompt` text and passes it in).

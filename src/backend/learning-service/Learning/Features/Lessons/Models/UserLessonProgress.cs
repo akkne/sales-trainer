@@ -1,0 +1,11 @@
+namespace Sellevate.Learning.Features.Lessons.Models;
+
+public sealed class UserLessonProgress
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public Guid LessonId { get; set; }
+    public string Status { get; set; } = "locked";
+    public int BestScore { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}

@@ -295,3 +295,5 @@ For the complete content schema and validation rules for each of the 10 exercise
 - `spot_mistake`, `rewrite`, `ai_dialogue`, `evaluate_call`, `free_text` — AI-evaluated types with `ai_prompt` field
 
 Each type is validated on import; exercises with invalid `content` are skipped and reported in the response `errors` array.
+
+> **Microservices (Phase 8):** the content described here is now owned and served by the extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway (Postgres `learning` DB). Paths, schemas and behaviour are unchanged. AI-graded exercise types are scored by the learning-service calling the ai-service `POST /ai/evaluate` (the learning-service still owns the `ExerciseTypePrompt` text and passes it in).

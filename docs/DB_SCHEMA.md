@@ -21,6 +21,16 @@ Last updated: 2026-06-12
 > fed by `lesson.completed`/`skill.completed`), and its own Hangfire schema. The
 > monolith's copies of these tables remain as reference until Phase 9. See
 > [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md).
+>
+> **`learning` (Phase 8)** — the last extraction. The `learning` database owns the
+> content tree and progress: `Skills`, `SkillStages`, `Topics`,
+> `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`,
+> `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`,
+> `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress` (schemas
+> ported verbatim from the monolith `AppDbContext`), plus a local `UserReplicas`
+> read-model fed by `user.*` events. Created by `DatabaseBootstrapper` + EF migration
+> `InitialLearningSchema`. The monolith's copies remain as reference until Phase 9. See
+> [LEARNING_SERVICE.md](LEARNING_SERVICE.md).
 
 ---
 
@@ -632,6 +642,7 @@ Skills
 | `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index`; backfills `DefaultAvatarIndex` for existing users via `abs(hashtext(Id::text)) % 6` |
 | `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
 | `InitialSocialSchema` (social-service) | 2026-06-21 | Standalone `social` database: `Friendships`, all `Discuss*` tables, and `UserReplicas` (read-model). Owned by social-service, not the monolith `AppDbContext`. |
+| `InitialLearningSchema` (learning-service) | 2026-06-21 | Standalone `learning` database: `Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`, `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress`, and `UserReplicas` (read-model). Owned by learning-service, not the monolith `AppDbContext`. |
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
