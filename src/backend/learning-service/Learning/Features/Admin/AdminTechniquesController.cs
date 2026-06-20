@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Techniques;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Infrastructure.Data;
@@ -11,13 +12,13 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
 public sealed class AdminTechniquesController(
     LearningDbContext databaseContext,
     ILogger<AdminTechniquesController> logger) : ControllerBase
 {
     [HttpGet("admin/techniques")]
-    public async Task<ActionResult<List<AdminTechniqueDto>>> GetAll(
+    public async Task<ActionResult<IReadOnlyList<AdminTechniqueDto>>> GetAll(
         [FromQuery] string? skill,
         [FromQuery] string? search,
         CancellationToken cancellationToken)

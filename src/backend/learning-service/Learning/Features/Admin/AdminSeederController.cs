@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.SkillTree.Models;
@@ -11,12 +12,12 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
 public sealed class AdminSeederController(LearningDbContext database, ILogger<AdminSeederController> logger) : ControllerBase
 {
     [HttpPost("admin/seeder/skills")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<SkillsImportResultDto>> ImportSkills(IFormFile file)
+    public async Task<ActionResult<SkillsImportResultDto>> ImportSkills(IFormFile file, CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
@@ -24,7 +25,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName);
+        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
         var state = new SkillsImportState();
 
         try
@@ -53,7 +54,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         }
         catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         logger.LogInformation(
@@ -96,7 +97,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/topics")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<TopicsImportResultDto>> ImportTopics(IFormFile file)
+    public async Task<ActionResult<TopicsImportResultDto>> ImportTopics(IFormFile file, CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
@@ -104,8 +105,8 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var skillsByIconicName = await database.Skills.ToDictionaryAsync(skill => skill.IconicName);
-        var existingTopics = await database.Topics.ToListAsync();
+        var skillsByIconicName = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
+        var existingTopics = await database.Topics.ToListAsync(cancellationToken);
         var state = new TopicsImportState();
 
         try
@@ -135,7 +136,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         }
         catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         logger.LogInformation(
@@ -177,7 +178,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/lessons")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons(IFormFile file)
+    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons(IFormFile file, CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
@@ -185,9 +186,9 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var topicsByIconicName = await database.Topics.ToDictionaryAsync(topic => topic.IconicName);
-        var allLessons = await database.Lessons.ToListAsync();
-        var allExercises = await database.Exercises.ToListAsync();
+        var topicsByIconicName = await database.Topics.ToDictionaryAsync(topic => topic.IconicName, cancellationToken);
+        var allLessons = await database.Lessons.ToListAsync(cancellationToken);
+        var allExercises = await database.Exercises.ToListAsync(cancellationToken);
         var state = new LessonsImportState();
 
         try
@@ -247,7 +248,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         }
         catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         logger.LogInformation(
@@ -263,7 +264,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/bundle")]
     [RequestSizeLimit(20 * 1024 * 1024)]
-    public async Task<ActionResult<BundleImportResultDto>> ImportBundle(IFormFile file)
+    public async Task<ActionResult<BundleImportResultDto>> ImportBundle(IFormFile file, CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
@@ -271,10 +272,10 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName);
-        var existingTopics = await database.Topics.ToListAsync();
-        var allLessons = await database.Lessons.ToListAsync();
-        var allExercises = await database.Exercises.ToListAsync();
+        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
+        var existingTopics = await database.Topics.ToListAsync(cancellationToken);
+        var allLessons = await database.Lessons.ToListAsync(cancellationToken);
+        var allExercises = await database.Exercises.ToListAsync(cancellationToken);
 
         var skillsState = new SkillsImportState();
         var topicsState = new TopicsImportState();
@@ -402,7 +403,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         }
         catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         logger.LogInformation(

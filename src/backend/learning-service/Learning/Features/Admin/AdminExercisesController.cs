@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Infrastructure.Data;
@@ -10,16 +11,16 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
 public sealed class AdminExercisesController(LearningDbContext database, ILogger<AdminExercisesController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons/{lessonId:guid}/exercises")]
-    public async Task<ActionResult<List<AdminExerciseDto>>> GetByLesson(Guid lessonId)
+    public async Task<ActionResult<IReadOnlyList<AdminExerciseDto>>> GetByLesson(Guid lessonId, CancellationToken cancellationToken = default)
     {
         var exercises = await database.Exercises
             .Where(exercise => exercise.LessonId == lessonId)
             .OrderBy(exercise => exercise.OrderInLesson)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var result = exercises.Select(exercise => new AdminExerciseDto(
             exercise.Id,
@@ -35,13 +36,13 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
 
     [HttpPost("admin/lessons/{lessonId:guid}/exercises")]
     public async Task<ActionResult<AdminExerciseDto>> Create(
-        Guid lessonId, [FromBody] CreateExerciseRequestDto requestDto)
+        Guid lessonId, [FromBody] CreateExerciseRequestDto requestDto, CancellationToken cancellationToken = default)
     {
         var contentErrors = ExerciseContentValidator.Validate(requestDto.Type, requestDto.Content);
         if (contentErrors.Count > 0)
             return BadRequest(new { message = string.Join(" ", contentErrors) });
 
-        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId);
+        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId, cancellationToken);
         if (!lessonExists) return NotFound();
 
         var now = DateTime.UtcNow;
@@ -58,7 +59,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         };
 
         database.Exercises.Add(exercise);
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Exercise created ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
             exercise.Id, lessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -70,9 +71,9 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
 
     [HttpPost("admin/lessons/{lessonId:guid}/exercises/import")]
     public async Task<ActionResult<ExercisesImportResultDto>> Import(
-        Guid lessonId, [FromBody] List<CreateExerciseRequestDto> items)
+        Guid lessonId, [FromBody] List<CreateExerciseRequestDto> items, CancellationToken cancellationToken = default)
     {
-        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId);
+        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId, cancellationToken);
         if (!lessonExists) return NotFound();
 
         if (items is null || items.Count == 0)
@@ -83,7 +84,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
 
         var existing = await database.Exercises
             .Where(exercise => exercise.LessonId == lessonId)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var now = DateTime.UtcNow;
         var created = 0;
@@ -138,7 +139,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
             }
         }
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "Exercises imported LessonId={LessonId} Created={Created} Updated={Updated} Errors={ErrorCount} by ActorId={ActorId}",
@@ -149,13 +150,13 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
 
     [HttpPut("admin/exercises/{id:guid}")]
     public async Task<ActionResult<AdminExerciseDto>> Update(
-        Guid id, [FromBody] CreateExerciseRequestDto requestDto)
+        Guid id, [FromBody] CreateExerciseRequestDto requestDto, CancellationToken cancellationToken = default)
     {
         var contentErrors = ExerciseContentValidator.Validate(requestDto.Type, requestDto.Content);
         if (contentErrors.Count > 0)
             return BadRequest(new { message = string.Join(" ", contentErrors) });
 
-        var exercise = await database.Exercises.FindAsync(id);
+        var exercise = await database.Exercises.FindAsync([id], cancellationToken);
         if (exercise is null) return NotFound();
 
         exercise.Type = requestDto.Type;
@@ -164,7 +165,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         exercise.CustomAiPrompt = requestDto.CustomAiPrompt;
         exercise.UpdatedAt = DateTime.UtcNow;
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Exercise updated ExerciseId={ExerciseId} Type={Type} by ActorId={ActorId}",
             id, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -175,13 +176,13 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
     }
 
     [HttpDelete("admin/exercises/{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken = default)
     {
-        var exercise = await database.Exercises.FindAsync(id);
+        var exercise = await database.Exercises.FindAsync([id], cancellationToken);
         if (exercise is null) return NotFound();
 
         database.Exercises.Remove(exercise);
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogWarning("Exercise deleted ExerciseId={ExerciseId} LessonId={LessonId} Type={Type} by ActorId={ActorId}",
             id, exercise.LessonId, exercise.Type, User.FindFirstValue(ClaimTypes.NameIdentifier));

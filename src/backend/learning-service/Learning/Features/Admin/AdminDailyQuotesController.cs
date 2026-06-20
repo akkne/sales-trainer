@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
@@ -21,13 +22,13 @@ public sealed record AdminDailyQuoteWriteRequestDto(
     string? Author);
 
 [ApiController]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
 public sealed class AdminDailyQuotesController(
     LearningDbContext databaseContext,
     ILogger<AdminDailyQuotesController> logger) : ControllerBase
 {
     [HttpGet("admin/daily-quotes")]
-    public async Task<ActionResult<List<AdminDailyQuoteDto>>> GetAll(
+    public async Task<ActionResult<IReadOnlyList<AdminDailyQuoteDto>>> GetAll(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         CancellationToken cancellationToken)

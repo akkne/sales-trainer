@@ -2,20 +2,22 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
 public sealed class AdminReferenceController(LearningDbContext database, ILogger<AdminReferenceController> logger) : ControllerBase
 {
     [HttpGet("admin/reference")]
-    public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetAll(
+    public async Task<ActionResult<IReadOnlyList<AdminReferenceMaterialDto>>> GetAll(
         [FromQuery] Guid? skillId,
         [FromQuery] string? category,
-        [FromQuery] string? search)
+        [FromQuery] string? search,
+        CancellationToken cancellationToken = default)
     {
         var query = from material in database.ReferenceMaterials
                     join skill in database.Skills on material.SkillId equals skill.Id
@@ -39,43 +41,43 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
             .OrderBy(pair => pair.skill.OrderInTree)
             .ThenBy(pair => pair.material.SortOrder)
             .ThenBy(pair => pair.material.Title)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Ok(results.Select(pair => MapToDto(pair.material, pair.skill.Title)).ToList());
     }
 
     [HttpGet("admin/reference/categories")]
-    public async Task<ActionResult<List<string>>> GetCategories()
+    public async Task<ActionResult<IReadOnlyList<string>>> GetCategories(CancellationToken cancellationToken = default)
     {
         var categories = await database.ReferenceMaterials
             .Where(material => material.Category != null)
             .Select(material => material.Category!)
             .Distinct()
             .OrderBy(category => category)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Ok(categories);
     }
 
     [HttpGet("admin/skills/{skillId:guid}/reference")]
-    public async Task<ActionResult<List<AdminReferenceMaterialDto>>> GetBySkill(Guid skillId)
+    public async Task<ActionResult<IReadOnlyList<AdminReferenceMaterialDto>>> GetBySkill(Guid skillId, CancellationToken cancellationToken = default)
     {
-        var skill = await database.Skills.FindAsync(skillId);
+        var skill = await database.Skills.FindAsync([skillId], cancellationToken);
         if (skill is null) return NotFound();
 
         var materials = await database.ReferenceMaterials
             .Where(material => material.SkillId == skillId)
             .OrderBy(material => material.SortOrder)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Ok(materials.Select(material => MapToDto(material, skill.Title)).ToList());
     }
 
     [HttpPost("admin/skills/{skillId:guid}/reference")]
     public async Task<ActionResult<AdminReferenceMaterialDto>> Create(
-        Guid skillId, [FromBody] CreateReferenceMaterialRequestDto requestDto)
+        Guid skillId, [FromBody] CreateReferenceMaterialRequestDto requestDto, CancellationToken cancellationToken = default)
     {
-        var skill = await database.Skills.FindAsync(skillId);
+        var skill = await database.Skills.FindAsync([skillId], cancellationToken);
         if (skill is null) return NotFound();
 
         var material = new ReferenceMaterial
@@ -90,7 +92,7 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
         };
 
         database.ReferenceMaterials.Add(material);
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Reference material created MaterialId={MaterialId} SkillId={SkillId} Title={Title} by ActorId={ActorId}",
             material.Id, skillId, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -100,12 +102,12 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
 
     [HttpPut("admin/reference/{id:guid}")]
     public async Task<ActionResult<AdminReferenceMaterialDto>> Update(
-        Guid id, [FromBody] CreateReferenceMaterialRequestDto requestDto)
+        Guid id, [FromBody] CreateReferenceMaterialRequestDto requestDto, CancellationToken cancellationToken = default)
     {
-        var material = await database.ReferenceMaterials.FindAsync(id);
+        var material = await database.ReferenceMaterials.FindAsync([id], cancellationToken);
         if (material is null) return NotFound();
 
-        var skill = await database.Skills.FindAsync(material.SkillId);
+        var skill = await database.Skills.FindAsync([material.SkillId], cancellationToken);
         if (skill is null) return NotFound();
 
         material.Title = requestDto.Title;
@@ -114,7 +116,7 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
         material.Category = requestDto.Category;
         material.Tags = requestDto.Tags;
 
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Reference material updated MaterialId={MaterialId} Title={Title} by ActorId={ActorId}",
             id, material.Title, User.FindFirstValue(ClaimTypes.NameIdentifier));
@@ -123,13 +125,13 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
     }
 
     [HttpDelete("admin/reference/{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken = default)
     {
-        var material = await database.ReferenceMaterials.FindAsync(id);
+        var material = await database.ReferenceMaterials.FindAsync([id], cancellationToken);
         if (material is null) return NotFound();
 
         database.ReferenceMaterials.Remove(material);
-        await database.SaveChangesAsync();
+        await database.SaveChangesAsync(cancellationToken);
 
         logger.LogWarning("Reference material deleted MaterialId={MaterialId} SkillId={SkillId} by ActorId={ActorId}",
             id, material.SkillId, User.FindFirstValue(ClaimTypes.NameIdentifier));
