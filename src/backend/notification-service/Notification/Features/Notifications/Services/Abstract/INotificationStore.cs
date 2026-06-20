@@ -1,0 +1,29 @@
+using Sellevate.Notification.Features.Notifications.Models;
+
+namespace Sellevate.Notification.Features.Notifications.Services.Abstract;
+
+public interface INotificationStore
+{
+    Task PrependAsync(
+        Guid recipientUserId,
+        NotificationRecord notification,
+        int inboxCapacity,
+        TimeSpan retention,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<NotificationRecord>> GetAllAsync(
+        Guid recipientUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> ReplaceAsync(
+        Guid recipientUserId,
+        NotificationRecord updatedNotification,
+        TimeSpan retention,
+        CancellationToken cancellationToken = default);
+
+    Task ReplaceAllAsync(
+        Guid recipientUserId,
+        IReadOnlyList<NotificationRecord> notifications,
+        TimeSpan retention,
+        CancellationToken cancellationToken = default);
+}
