@@ -7,6 +7,8 @@ All significant features, architectural decisions, and infrastructure docs.
 | Document | Description |
 |----------|-------------|
 | [Architecture](ARCHITECTURE.md) | Stack overview, folder structure, EF column types |
+| [Microservices (target)](MICROSERVICES.md) | Target microservices architecture: 7 services + YARP gateway, DB-per-service, Kafka events, service catalogue & contracts |
+| [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
