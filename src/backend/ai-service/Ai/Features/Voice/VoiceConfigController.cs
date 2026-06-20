@@ -10,7 +10,7 @@ namespace Sellevate.Ai.Features.Voice;
 [ApiController]
 [Route("dialog/voice")]
 [Authorize]
-public class VoiceConfigController : ControllerBase
+public sealed class VoiceConfigController : ControllerBase
 {
     private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
     private readonly ITtsRouter _ttsRouter;

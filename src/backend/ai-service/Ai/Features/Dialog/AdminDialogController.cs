@@ -11,7 +11,7 @@ namespace Sellevate.Ai.Features.Dialog;
 [ApiController]
 [Route("admin/dialog")]
 [Authorize(Policy = "RequireAdmin")]
-public class AdminDialogController : ControllerBase
+public sealed class AdminDialogController : ControllerBase
 {
     private readonly AiDbContext _dbContext;
     private readonly ILogger<AdminDialogController> _logger;
