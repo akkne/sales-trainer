@@ -607,6 +607,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 ## Friends
 
+> Served by the **social-service** (Phase 5) — the gateway flips `/friends/*` and
+> `/chat/*` to the `social` cluster. Paths and DTO shapes are unchanged. The
+> leaderboard/profile/activity XP-and-achievement aggregate fields currently return
+> `0`/empty until Gamification/Learning are extracted (see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md)).
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /friends | — | `FriendDto[]` |
@@ -688,6 +693,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 ---
 
 ## Discuss (community forum)
+
+> Served by the **social-service** (Phase 5) — the gateway flips `/discuss/*` and
+> `/admin/discuss/*` to the `social` cluster. Paths and DTO shapes are unchanged; the
+> tables move to the `social` Postgres database and photos stay on S3/MinIO
+> (see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md)).
 
 All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are upvote-only
 (a row's existence = upvoted), de-duplicated by a unique `(userId, targetType, targetId)` index.

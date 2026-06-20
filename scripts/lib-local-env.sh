@@ -27,6 +27,10 @@ LOCAL_FRONTEND_PORT="${LOCAL_FRONTEND_PORT:-3000}"
 LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5000}"
 # Port the locally-run Identity microservice listens on.
 LOCAL_IDENTITY_PORT="${LOCAL_IDENTITY_PORT:-5002}"
+# Port the locally-run Social microservice listens on.
+LOCAL_SOCIAL_PORT="${LOCAL_SOCIAL_PORT:-5006}"
+# Host port published by docker-compose.infra.yml for MinIO (S3 API).
+LOCAL_MINIO_PORT="${LOCAL_MINIO_PORT:-9000}"
 
 # Load secrets/infra credentials from the root .env into the environment.
 # Parsed line-by-line (not `source`d) so unquoted values with spaces — e.g.
@@ -90,6 +94,7 @@ export_gateway_env() {
   # to the monolith catch-all.
   export ReverseProxy__Clusters__monolith__Destinations__d1__Address="http://localhost:${LOCAL_BACKEND_PORT}/"
   export ReverseProxy__Clusters__identity__Destinations__d1__Address="http://localhost:${LOCAL_IDENTITY_PORT}/"
+  export ReverseProxy__Clusters__social__Destinations__d1__Address="http://localhost:${LOCAL_SOCIAL_PORT}/"
 }
 
 # Config overrides for running the Identity microservice on the host. It owns its own
@@ -111,4 +116,26 @@ export_identity_env() {
   export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
   export SuperAdmin__Password="${SUPERADMIN_PASSWORD}"
   export SuperAdmin__DisplayName="${SUPERADMIN_DISPLAY_NAME}"
+}
+
+# Config overrides for running the Social microservice on the host. It owns its own
+# Postgres database (social) on the shared local Postgres instance, reuses the shared
+# Mongo (chat_conversations) and MinIO (Discuss photos), keeps a local UserReplica from
+# user.* events, and produces friend.request.* / chat.message.sent to Kafka.
+export_social_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_SOCIAL_PORT}"
+
+  export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export ConnectionStrings__Mongo="mongodb://localhost:${LOCAL_MONGO_PORT}"
+  export ConnectionStrings__Redis="localhost:${LOCAL_REDIS_PORT}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
+
+  export Storage__S3__Endpoint="http://localhost:${LOCAL_MINIO_PORT}"
+  export Storage__S3__AccessKey="${MINIO_ROOT_USER}"
+  export Storage__S3__SecretKey="${MINIO_ROOT_PASSWORD}"
+  export Storage__S3__Bucket="sellevate-social"
 }
