@@ -27,6 +27,8 @@ LOCAL_FRONTEND_PORT="${LOCAL_FRONTEND_PORT:-3000}"
 LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5000}"
 # Port the locally-run Identity microservice listens on.
 LOCAL_IDENTITY_PORT="${LOCAL_IDENTITY_PORT:-5002}"
+# Port the locally-run Gamification microservice listens on.
+LOCAL_GAMIFICATION_PORT="${LOCAL_GAMIFICATION_PORT:-5007}"
 
 # Load secrets/infra credentials from the root .env into the environment.
 # Parsed line-by-line (not `source`d) so unquoted values with spaces — e.g.
@@ -90,6 +92,7 @@ export_gateway_env() {
   # to the monolith catch-all.
   export ReverseProxy__Clusters__monolith__Destinations__d1__Address="http://localhost:${LOCAL_BACKEND_PORT}/"
   export ReverseProxy__Clusters__identity__Destinations__d1__Address="http://localhost:${LOCAL_IDENTITY_PORT}/"
+  export ReverseProxy__Clusters__gamification__Destinations__d1__Address="http://localhost:${LOCAL_GAMIFICATION_PORT}/"
 }
 
 # Config overrides for running the Identity microservice on the host. It owns its own
@@ -111,4 +114,20 @@ export_identity_env() {
   export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
   export SuperAdmin__Password="${SUPERADMIN_PASSWORD}"
   export SuperAdmin__DisplayName="${SUPERADMIN_DISPLAY_NAME}"
+}
+
+# Config overrides for running the Gamification microservice on the host. It owns its
+# own Postgres database (gamification) on the shared local Postgres instance, consumes
+# learning/dialog/user events from Kafka and produces xp/achievement/streak events. Its
+# Hangfire jobs (streak reset, weekly league closure) run on the gamification database.
+export_gamification_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_GAMIFICATION_PORT}"
+
+  export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export ConnectionStrings__Redis="localhost:${LOCAL_REDIS_PORT}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
 }
