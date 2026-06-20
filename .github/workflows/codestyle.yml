@@ -1,0 +1,33 @@
+name: codestyle
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/identity-service/**"
+      - "scripts/codestyle-lint.*"
+      - "src/backend/.editorconfig"
+      - ".github/workflows/codestyle.yml"
+
+jobs:
+  codestyle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: CODESTYLE rules (comments, abbreviations)
+        run: python3 scripts/codestyle-lint.py src/backend/identity-service/Identity src/backend/identity-service/Identity.Tests
+
+      - name: Formatting and analyzers (dotnet format)
+        working-directory: src/backend/identity-service
+        run: |
+          dotnet format --verify-no-changes Identity/Sellevate.Identity.csproj
+          dotnet format --verify-no-changes Identity.Tests/Sellevate.Identity.Tests.csproj
+
+      - name: Build
+        working-directory: src/backend/identity-service
+        run: dotnet build Identity.Tests/Sellevate.Identity.Tests.csproj --configuration Release

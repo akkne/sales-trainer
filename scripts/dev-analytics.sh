@@ -7,7 +7,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-local-env.sh"
 
 load_root_env
 
-LOCAL_ANALYTICS_PORT="${LOCAL_ANALYTICS_PORT:-5004}"
+LOCAL_ANALYTICS_PORT="${LOCAL_ANALYTICS_PORT:-5005}"
 
 export ASPNETCORE_ENVIRONMENT="Development"
 export ASPNETCORE_URLS="http://localhost:${LOCAL_ANALYTICS_PORT}"

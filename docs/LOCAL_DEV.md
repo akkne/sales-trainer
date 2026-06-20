@@ -50,8 +50,22 @@ Open http://localhost:3000 (frontend) → talks to http://localhost:5001 (backen
 scripts/dev-infra.sh      # infra only (docker compose -f docker-compose.infra.yml up -d)
 scripts/dev-backend.sh    # backend on host, foreground (Ctrl-C to stop)
 scripts/dev-frontend.sh   # frontend on host, foreground
-scripts/dev-gateway.sh    # API gateway (YARP) on host, proxying to the backend (optional)
+scripts/dev-gateway.sh    # API gateway (YARP) on host, proxying to backend + identity (optional)
+scripts/dev-identity.sh   # Identity microservice on host, port 5002 (own identity-db) (optional)
+scripts/dev-notifications.sh # Notification microservice on host, port 5004 (Redis-only) (optional)
 ```
+
+> **Identity service (microservices Phase 2).** `scripts/dev-identity.sh` runs the
+> extracted Identity service on `http://localhost:5002` with its own Postgres database
+> `identity` (auto-created on first start) on the shared local Postgres. With the gateway
+> running, `/auth`, `/demo`, `/profile`, `/onboarding`, `/avatars` are proxied to it; the
+> monolith serves the rest. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
+> **Notification service (microservices Phase 4).** `scripts/dev-notifications.sh` runs the
+> extracted Notification service on `http://localhost:5004`, backed only by the shared local
+> Redis (no relational database). With the gateway running, `/notifications` and
+> `/notifications/*` are proxied to it; the monolith serves the rest. See
+> [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md).
 
 ## Files added by this profile
 

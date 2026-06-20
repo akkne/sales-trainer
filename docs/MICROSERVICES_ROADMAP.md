@@ -113,20 +113,33 @@ See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md) for the implementation writeup.
 
 ---
 
-## Phase 2 — Identity Service `[ ]`
+## Phase 2 — Identity Service `[x]`
 Goal: the identity root — must exist before others can own a User replica.
+See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) for the implementation writeup.
 
-- [ ] **2.1** Scaffold `identity-service` + `identity-db` (Postgres); migrate
-      `Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatars`.
-- [ ] **2.2** Move `Auth`, `Profile`, `Onboarding`, `Avatars` slices; preserve JWT
-      issuance (sole issuer) + Google OAuth + MailerSend + S3 avatar storage.
-- [ ] **2.3** Produce `user.registered` / `user.updated` / `user.deleted` /
-      `user.avatar.changed` on the relevant flows.
-- [ ] **2.4** Gateway validates JWT against Identity's signing key; flip `/auth/*`,
-      `/profile/*`, `/onboarding/*`, `/avatars/*`; stop routing to the monolith's
-      slices (leave their code in place as reference).
-- [ ] **2.5** Tests: register/login/refresh, email verification, OAuth, avatar upload,
-      event emission; update [EMAIL_VERIFICATION.md], [API_CONTRACTS.md], docs/TESTING.
+- [x] **2.1** Scaffolded `src/backend/identity-service/Identity` (+ `Identity.Tests`) with its
+      own `IdentityDbContext` and EF migration `InitialIdentitySchema` for `Users`,
+      `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatars`. Owns a
+      separate Postgres database `identity` (`DatabaseBootstrapper` creates it on startup).
+- [x] **2.2** Moved `Auth`, `Profile`, `Onboarding`, `Avatars` slices; JWT issuance (sole
+      issuer, same key/issuer/audience), Google OAuth, MailerSend and S3/MinIO avatar
+      storage preserved. The Hangfire cleanup cron became a `BackgroundService`. Monolith
+      slices left in place as reference.
+- [x] **2.3** Produces `user.registered` (email/Google/super-admin) and `user.avatar.changed`
+      (upload/reset) via `IUserEventPublisher` → shared Kafka publisher. `user.updated` /
+      `user.deleted` contracts + publisher methods exist but have no trigger yet (no
+      rename/delete-account endpoints) — wired for when those land.
+- [x] **2.4** Gateway flips `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*`
+      to the Identity cluster (`http://identity:8080`); the monolith catch-all keeps the
+      rest. Gateway already validates the shared JWT key, so tokens stay cross-valid.
+- [x] **2.5** Tests: register/login/refresh, email verification, persona/onboarding, avatar
+      upload + `user.*` event emission (unit InMemory + integration Testcontainers). Updated
+      [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md), [API_CONTRACTS.md](API_CONTRACTS.md),
+      [docs/TESTING/IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md).
+- [~] **Caveat (2.2/2.4):** `GET /profile` aggregates (streak/XP/skills/score) are owned by
+      Gamification/Learning (phases 7 & 8, not extracted yet), so Identity returns them as
+      `0` while serving identity fields truthfully — DTO shape unchanged. Composed for real
+      once those services exist.
 
 **Commit:** `feat: extract identity-service`.
 
@@ -146,19 +159,31 @@ Goal: the pattern that makes database-per-service possible.
 
 ---
 
-## Phase 4 — Notifications Service (Redis-only) `[ ]`
+## Phase 4 — Notifications Service (Redis-only) `[x]`
 Goal: pure Kafka consumer + thin REST; second Redis-as-primary store.
+See [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) for the implementation writeup.
 
-- [ ] **4.1** Scaffold `notification-service` with Redis (per-user capped list +
-      unread counter, 30-day TTL replacing the Hangfire cleanup job).
-- [ ] **4.2** Consume `achievement.unlocked`, `streak.milestone`,
-      `friend.request.received`, `friend.request.accepted`, `chat.message.sent`
-      (idempotent).
-- [ ] **4.3** Expose `/notifications/*` (list, unread count, mark-read).
-- [ ] **4.4** Flip routes at the gateway; stop routing to the monolith's slice
-      (leave its code in place as reference).
-- [ ] **4.5** Tests: event→inbox write, unread count, mark-read, TTL expiry; update
-      [NOTIFICATIONS.md] + docs/TESTING.
+- [x] **4.1** Scaffolded `src/backend/notification-service/Notification` (+ `Notification.Tests`)
+      with Redis as the primary store: per-user capped list `notifications:inbox:{userId}`
+      (`LPUSH`/`LTRIM`, default cap 100) + unread counter `notifications:unread:{userId}`,
+      both with a 30-day TTL that replaces the monolith's Hangfire `NotificationCleanupJob`
+      (no relational DB). Health endpoint, Dockerfile, `scripts/dev-notifications.sh`,
+      docker-compose wiring, added to `Sellevate.sln`.
+- [x] **4.2** Idempotent consumer (`NotificationEventConsumer`, dedupe on `eventId`) for
+      `achievement.unlocked`, `streak.milestone`, `friend.request.received`,
+      `friend.request.accepted`, `chat.message.sent`; each maps to a notification written
+      to the recipient's Redis inbox via `INotificationEventMapper`. (Producers ship in
+      Phases 5/7; consumers idle until then.)
+- [x] **4.3** Exposes `/notifications` (list, `?limit=&includeRead=`),
+      `/notifications/unread-count`, `/notifications/{id}/read`, `/notifications/read-all`
+      — contracts preserved from [API_CONTRACTS.md](API_CONTRACTS.md).
+- [x] **4.4** Gateway flips `/notifications/*` to the `notification` cluster; the
+      monolith slice stays in `src/backend/api` as reference.
+- [x] **4.5** Tests (NUnit, offline): event→inbox write, unread count, mark-read,
+      capping, retention/TTL, mapper (incl. unknown/blank → skip), route-flip config.
+      Added [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) +
+      [docs/TESTING/NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md); updated
+      [NOTIFICATIONS.md](NOTIFICATIONS.md) + [API_CONTRACTS.md](API_CONTRACTS.md).
 
 **Commit:** `feat: extract notification-service (redis)`.
 

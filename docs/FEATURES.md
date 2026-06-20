@@ -11,11 +11,14 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [AI Engine Service](AI_SERVICE.md) | Phase 6: extracted `ai-service` (Dialog, Voice, Transcription, `/ai/evaluate`); Postgres+Mongo, `dialog.evaluated`, cached scoring weights |
 | [Analytics Service](ANALYTICS_SERVICE.md) | Phase 1: extracted Redis-only `analytics-service` (tracking, presence, funnels); `/tracking/*` flipped at the gateway; consumes `user.registered`/`exercise.completed`/`xp.granted`; owns the product Prometheus metrics |
+| [Notification Service](NOTIFICATION_SERVICE.md) | Phase 4: extracted `notification-service` (Redis-only); consumes 5 social/gamification events, per-user capped inbox + unread counter with 30-day TTL (replaces Hangfire cleanup job) |
 | [Data Ownership Matrix](DATA_OWNERSHIP.md) | Phase 0.7: every `AppDbContext` entity → owning service, plus cross-feature references to break |
+| [Identity Service](IDENTITY_SERVICE.md) | Phase 2: extracted identity microservice — sole JWT issuer, own `identity-db`, `user.*` Kafka events, gateway route flip |
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Codestyle Enforcement](CODESTYLE_ENFORCEMENT.md) | PR CI gate for CODESTYLE.md — custom linter (no comments, no abbreviations) + `dotnet format` + `.editorconfig` |
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |
 | [Local Dev](LOCAL_DEV.md) | Run backend/frontend on the host (no image rebuilds) with infra in Docker — `scripts/dev-*.sh`, `docker-compose.infra.yml` |
 | [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |
@@ -64,6 +67,8 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [USER_AVATARS.md](TESTING/USER_AVATARS.md) | User avatar upload on own profile: hover overlay, file picker, cache-busting, fallback |
 | [MICROSERVICES_FOUNDATIONS.md](TESTING/MICROSERVICES_FOUNDATIONS.md) | Phase 0: building-blocks (envelope, idempotency, identity headers) + YARP gateway passthrough/anti-spoof tests |
 | [ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) | Phase 1: presence window math, usage-event counters, funnel event consumption, gateway route-flip config |
+| [NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md) | Phase 4: notification-service unit tests (event→inbox, unread count, mark-read, capping, TTL, mapper) + gateway route-flip |
+| [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

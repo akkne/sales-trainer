@@ -1,6 +1,14 @@
 # Notifications
 
-In-app notification system with a bell dropdown in the top app bar. Notifications are stored in PostgreSQL and polled from the frontend.
+In-app notification system with a bell dropdown in the top app bar.
+
+> **Microservices status (Phase 4):** notifications are now served by the standalone,
+> Redis-only `notification-service` — see [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md).
+> The gateway routes `/notifications/*` to that service; the monolith section below is
+> kept as the original behaviour reference (its code stays in `src/backend/api` but no
+> longer serves traffic for this slice). In the service, notifications live in Redis
+> (per-user capped list + unread counter, 30-day TTL) instead of PostgreSQL, and the
+> five triggers below arrive as Kafka events rather than in-process calls.
 
 ## Triggers
 
@@ -52,10 +60,15 @@ Notification creation happens after the primary operation succeeds; if the notif
 
 ## Cleanup
 
-Hangfire recurring job `notification-cleanup` registered in `Program.cs`:
+**Monolith (reference):** Hangfire recurring job `notification-cleanup` registered in
+`Program.cs`:
 - Cron: `30 0 * * *` (daily at 00:30 UTC)
 - Retention: 30 days
 - Deletes rows where `IsRead = true AND CreatedAt < now - 30 days`
+
+**Notification-service (current):** no Hangfire job. Each Redis inbox key carries a
+30-day TTL, so notifications expire passively; capacity capping (`LTRIM`, default 100)
+bounds per-user memory. See [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md).
 
 ## Frontend
 

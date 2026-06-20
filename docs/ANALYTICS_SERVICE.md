@@ -96,7 +96,7 @@ Flipped to the `analytics` cluster: `/tracking/*`, which covers:
 
 ## Running locally
 
-Infra (`scripts/dev-infra.sh`) then `scripts/dev-analytics.sh` (host, port 5004), or the
+Infra (`scripts/dev-infra.sh`) then `scripts/dev-analytics.sh` (host, port 5005), or the
 full Docker stack `docker compose up --build -d analytics gateway`. Health: `GET /healthz`.
 
 See [docs/TESTING/ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) for the test layout

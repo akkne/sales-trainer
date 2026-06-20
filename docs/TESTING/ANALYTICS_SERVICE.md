@@ -32,8 +32,8 @@ dotnet build src/backend/analytics-service/Analytics/Sellevate.Analytics.csproj
 
 1. `scripts/dev-infra.sh` then `scripts/dev-analytics.sh` (or
    `docker compose up --build -d analytics gateway`).
-2. `GET http://localhost:5004/healthz` → `{ "status": "ok", "service": "analytics" }`.
-3. `GET http://localhost:5004/metrics` → Prometheus exposition with the `app_*` series.
+2. `GET http://localhost:5005/healthz` → `{ "status": "ok", "service": "analytics" }`.
+3. `GET http://localhost:5005/metrics` → Prometheus exposition with the `app_*` series.
 4. Through the gateway (`http://localhost:5000`) with a valid Bearer token:
    - `POST /tracking/events` `{ "event": "page_view", "page": "tree" }` → `204`;
      `{ "event": "bogus", "page": "tree" }` → `400`.

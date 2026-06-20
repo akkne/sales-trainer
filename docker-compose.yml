@@ -58,6 +58,46 @@ services:
       minio:
         condition: service_healthy
 
+  # Identity microservice (Phase 2 extraction). Owns its own database (identity-db on
+  # the shared Postgres instance) and is the sole JWT issuer. The gateway flips
+  # /auth/*, /demo/*, /profile/*, /onboarding/*, /avatars/* to this service.
+  identity:
+    build:
+      context: ./src/backend
+      dockerfile: identity-service/Identity/Dockerfile
+    pull_policy: build
+    # Localhost only — reached through the gateway over the docker network.
+    ports:
+      - "127.0.0.1:5002:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Kafka__BootstrapServers=kafka:29092
+      - Logging__Loki__Url=http://loki:3100
+      - Jwt__Key=${JWT_KEY}
+      - Google__ClientId=${GOOGLE_CLIENT_ID}
+      - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
+      - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
+      - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
+      - SuperAdmin__Email=${SUPERADMIN_EMAIL}
+      - SuperAdmin__Password=${SUPERADMIN_PASSWORD}
+      - SuperAdmin__DisplayName=${SUPERADMIN_DISPLAY_NAME}
+      - Storage__S3__Endpoint=http://minio:9000
+      - Storage__S3__AccessKey=${MINIO_ROOT_USER}
+      - Storage__S3__SecretKey=${MINIO_ROOT_PASSWORD}
+      - Storage__S3__Bucket=salestrainer-avatars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      loki:
+        condition: service_started
+
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
@@ -205,7 +245,7 @@ services:
     pull_policy: build
     # Localhost only — reached through the gateway over the docker network.
     ports:
-      - "127.0.0.1:5004:8080"
+      - "127.0.0.1:5005:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
@@ -216,6 +256,30 @@ services:
       - Logging__Loki__Url=http://loki:3100
     depends_on:
       analytics-redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+      loki:
+        condition: service_started
+
+  notification:
+    build:
+      context: ./src/backend
+      dockerfile: notification-service/Notification/Dockerfile
+    pull_policy: build
+    # Localhost only — reached through the gateway over the docker network.
+    ports:
+      - "127.0.0.1:5004:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Redis=redis:6379
+      - Kafka__BootstrapServers=kafka:29092
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Jwt__Key=${JWT_KEY}
+      - Logging__Loki__Url=http://loki:3100
+    depends_on:
+      redis:
         condition: service_started
       kafka:
         condition: service_started
@@ -238,11 +302,15 @@ services:
       - ReverseProxy__Clusters__monolith__Destinations__d1__Address=http://backend:8080/
       - ReverseProxy__Clusters__ai__Destinations__d1__Address=http://ai:8080/
       - ReverseProxy__Clusters__analytics__Destinations__d1__Address=http://analytics:8080/
+      - ReverseProxy__Clusters__notification__Destinations__d1__Address=http://notification:8080/
+      - ReverseProxy__Clusters__identity__Destinations__d1__Address=http://identity:8080/
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
       - backend
       - ai
       - analytics
+      - notification
+      - identity
       - kafka
       - loki
 

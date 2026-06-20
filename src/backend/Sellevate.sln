@@ -31,6 +31,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Analytics", "anal
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Analytics.Tests", "analytics-service\Analytics.Tests\Sellevate.Analytics.Tests.csproj", "{2024C264-382D-417E-A8CC-EA991C646C03}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "notification-service", "notification-service", "{37B3B351-CE71-4540-8678-A41CA6993D45}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Notification", "notification-service\Notification\Sellevate.Notification.csproj", "{65D28951-F63F-44DC-9C05-CB977A53723B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Notification.Tests", "notification-service\Notification.Tests\Sellevate.Notification.Tests.csproj", "{F19126DC-0FFE-4871-BC63-9AAD117C34E7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "identity-service", "identity-service", "{16BD9ABB-6046-496C-A804-ACC96FB41C03}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Identity", "identity-service\Identity\Sellevate.Identity.csproj", "{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sellevate.Identity.Tests", "identity-service\Identity.Tests\Sellevate.Identity.Tests.csproj", "{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +92,22 @@ Global
 		{2024C264-382D-417E-A8CC-EA991C646C03}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2024C264-382D-417E-A8CC-EA991C646C03}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2024C264-382D-417E-A8CC-EA991C646C03}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65D28951-F63F-44DC-9C05-CB977A53723B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65D28951-F63F-44DC-9C05-CB977A53723B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65D28951-F63F-44DC-9C05-CB977A53723B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65D28951-F63F-44DC-9C05-CB977A53723B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F19126DC-0FFE-4871-BC63-9AAD117C34E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F19126DC-0FFE-4871-BC63-9AAD117C34E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F19126DC-0FFE-4871-BC63-9AAD117C34E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F19126DC-0FFE-4871-BC63-9AAD117C34E7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{F8C6E6DB-6C20-46D7-A6CA-781CCA8882F3} = {F79AA9C5-21DA-4A68-9509-8B7368C9F0CD}
@@ -90,5 +118,9 @@ Global
 		{3C968031-15D0-435A-9039-E6DF9C3698B8} = {8F5ECE14-9977-4AA4-BF38-A046174DDED4}
 		{16ECD340-C829-43A0-A5D6-39350918AAB0} = {1F22189C-8658-4A1D-B451-9A9E06FE5CE1}
 		{2024C264-382D-417E-A8CC-EA991C646C03} = {1F22189C-8658-4A1D-B451-9A9E06FE5CE1}
+		{65D28951-F63F-44DC-9C05-CB977A53723B} = {37B3B351-CE71-4540-8678-A41CA6993D45}
+		{F19126DC-0FFE-4871-BC63-9AAD117C34E7} = {37B3B351-CE71-4540-8678-A41CA6993D45}
+		{AE5BE73A-AE69-44CF-B3E7-1AD7B5FA79BB} = {16BD9ABB-6046-496C-A804-ACC96FB41C03}
+		{27F2D70A-8BF4-4B4A-BD57-EF09ED5EB72E} = {16BD9ABB-6046-496C-A804-ACC96FB41C03}
 	EndGlobalSection
 EndGlobal

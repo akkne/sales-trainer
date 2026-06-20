@@ -25,6 +25,8 @@ LOCAL_BACKEND_PORT="${LOCAL_BACKEND_PORT:-5001}"
 LOCAL_FRONTEND_PORT="${LOCAL_FRONTEND_PORT:-3000}"
 # Port the locally-run API gateway (YARP) listens on.
 LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5000}"
+# Port the locally-run Identity microservice listens on.
+LOCAL_IDENTITY_PORT="${LOCAL_IDENTITY_PORT:-5002}"
 
 # Load secrets/infra credentials from the root .env into the environment.
 # Parsed line-by-line (not `source`d) so unquoted values with spaces — e.g.
@@ -83,7 +85,30 @@ export_gateway_env() {
   export Jwt__Key="${JWT_KEY}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
-  # Proxy target = the host-run monolith (appsettings.Development.json already
-  # points here, but keep it explicit so a custom LOCAL_BACKEND_PORT is honored).
+  # Proxy targets = the host-run monolith + the host-run Identity service. Identity
+  # owns /auth, /demo, /profile, /onboarding, /avatars; everything else falls through
+  # to the monolith catch-all.
   export ReverseProxy__Clusters__monolith__Destinations__d1__Address="http://localhost:${LOCAL_BACKEND_PORT}/"
+  export ReverseProxy__Clusters__identity__Destinations__d1__Address="http://localhost:${LOCAL_IDENTITY_PORT}/"
+}
+
+# Config overrides for running the Identity microservice on the host. It owns its own
+# Postgres database (identity-db) on the shared local Postgres instance, issues JWTs
+# with the same key/issuer/audience as the monolith, and produces user.* events to Kafka.
+export_identity_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_IDENTITY_PORT}"
+
+  export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
+  export Google__ClientId="${GOOGLE_CLIENT_ID}"
+  export MailerSend__ApiToken="${MAILERSEND_API_TOKEN}"
+  export MailerSend__FromEmail="${MAILERSEND_FROM_EMAIL}"
+  export MailerSend__FromName="${MAILERSEND_FROM_NAME:-Sellevate}"
+  export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
+  export SuperAdmin__Password="${SUPERADMIN_PASSWORD}"
+  export SuperAdmin__DisplayName="${SUPERADMIN_DISPLAY_NAME}"
 }

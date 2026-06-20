@@ -4,6 +4,14 @@ Base URL: `http://localhost:5000` (dev) | `http://backend:8080` (docker internal
 
 All endpoints except those marked `[public]` require `Authorization: Bearer <accessToken>`.
 
+> **Microservices migration:** `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*` and
+> `/avatars/*` are now served by the extracted **Identity service** (gateway base URL
+> `http://localhost:5000`), not the monolith. Paths and request/response shapes are
+> unchanged. One transitional caveat: `GET /profile` returns the streak / XP / completed-
+> skill / average-score aggregates as **0** because those are owned by Gamification/Learning
+> (not extracted yet, roadmap phases 7 & 8); the identity fields (displayName, email,
+> persona, avatarUrl) are real. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
 ---
 
 ## Auth `[public]`
@@ -652,6 +660,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 ## Notifications
 
+> **Served by `notification-service` (Phase 4)** through the gateway — the paths and
+> contracts below are unchanged so the frontend is unaffected. Storage is Redis
+> (per-user capped list + unread counter), not PostgreSQL. See
+> [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md).
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /notifications?limit=20&includeRead=true | — | `NotificationDto[]` |
@@ -669,7 +682,8 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 - `actionUrl` is a relative frontend route (e.g. `/friends?tab=requests`, `/friends/chat/{conversationId}`, `/profile`)
 - `relatedEntityId` stores source-entity id as string (friendship id, conversation id, achievement key, etc.)
 - Marking a single notification as read is idempotent; already-read notifications return 204
-- Hangfire recurring job `notification-cleanup` deletes read notifications older than 30 days (daily at 00:30 UTC)
+- Retention is a **30-day Redis TTL** per inbox (replaces the monolith's `notification-cleanup` Hangfire job); inboxes are capped (default 100 per user)
+- Triggers arrive as Kafka events the service consumes (`achievement.unlocked`, `streak.milestone`, `friend.request.received`, `friend.request.accepted`, `chat.message.sent`)
 
 ---
 
