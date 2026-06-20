@@ -85,19 +85,29 @@ Goal: the scaffolding every service needs, with the monolith still untouched.
 
 ---
 
-## Phase 1 — Analytics Service (Redis-only) `[ ]`
+## Phase 1 — Analytics Service (Redis-only) `[x]`
 Goal: first real extraction. Most isolated, loss-tolerant, no relational data —
 proves the gateway + event pipeline end to end.
+See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md) for the implementation writeup.
 
-- [ ] **1.1** Scaffold `analytics-service` (ASP.NET Core 9) with its own Redis.
-- [ ] **1.2** Move `Metrics`/tracking/presence logic; expose `POST /tracking/events`,
-      presence ping; keep Prometheus exporter + existing Grafana dashboard wiring.
-- [ ] **1.3** Consume `user.registered` / `exercise.completed` / `xp.granted` for
-      funnels (idempotent; optional, loss-tolerant).
-- [ ] **1.4** Flip `/tracking/*` + presence routes at the gateway to the new service;
-      stop routing to the monolith's slice (leave its code in place as reference).
-- [ ] **1.5** Tests: presence window, counter increments, event consumption, route
-      flip; update [MONITORING.md](MONITORING.md) + docs/TESTING.
+- [x] **1.1** Scaffolded `src/backend/analytics-service/Analytics` (+ `Analytics.Tests`,
+      ASP.NET Core 9) with its own Redis (`analytics-redis`, host port 6380), `/healthz`,
+      Dockerfile, `scripts/dev-analytics.sh`, and wiring into `docker-compose.yml` /
+      `docker-compose.infra.yml`. No relational/Mongo store.
+- [x] **1.2** Moved the `Metrics`/tracking/presence logic; exposes `POST /tracking/events`
+      and `POST /tracking/presence/ping`. Prometheus exporter (`/metrics`) + the
+      product-metrics Grafana dashboard kept working (dashboard PromQL now matches the
+      `sellevate-analytics` job too). Monolith slices left in place as reference.
+- [x] **1.3** Consumes `user.registered` / `exercise.completed` / `xp.granted` for funnels
+      via the shared idempotent consumer base (dedupe on `eventId`); loss-tolerant.
+- [x] **1.4** Flipped `/tracking/*` (events + presence ping) at the gateway to the
+      `analytics` cluster; stopped routing that slice to the monolith (its code remains as
+      reference).
+- [x] **1.5** Tests (NUnit, offline/mocked): presence window math, usage-counter
+      increments, funnel event consumption, gateway route-flip config. Updated
+      [MONITORING.md](MONITORING.md) + [API_CONTRACTS.md](API_CONTRACTS.md); added
+      [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md) +
+      [docs/TESTING/ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md).
 
 **Commit:** `feat: extract analytics-service (redis)`.
 

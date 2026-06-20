@@ -773,10 +773,17 @@ DTO additions on the Discuss user endpoints above:
 
 ## Tracking / Usage Metrics
 
+> **Served by the analytics-service** (Phase 1). The gateway routes `/tracking/*` to the
+> analytics cluster; the monolith's `MetricsController` is left in place as reference but no
+> longer receives this traffic. Frontend paths are unchanged. See
+> [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md).
+
 | Method | Path | Auth | Body | Response |
 |---|---|---|---|---|
 | POST | /tracking/events | Bearer | `{event, page}` | `204` on success; `400` on unknown event/page; `401` if unauthenticated |
+| POST | /tracking/presence/ping | Bearer | _(none)_ | `204` on success; `401` if no resolvable user identity |
 
-- Feeds the Prometheus counters `app_page_views_total` / `app_events_total`. `event="page_view"` is recorded as a page view (uses only `page`); any other event uses both labels.
-- `event` and `page` are validated against a **server-side whitelist** (`Features/Metrics/Constants/TrackedEvents.cs`) to cap label cardinality — unknown values are rejected with `400`, never silently accepted.
-- All product metrics are scraped from the existing `/metrics` endpoint (job `sallevate-backend`); there is no read API for them — query them in Prometheus/Grafana. See [MONITORING.md](MONITORING.md).
+- `/tracking/events` feeds the Prometheus counters `app_page_views_total` / `app_events_total`. `event="page_view"` is recorded as a page view (uses only `page`); any other event uses both labels.
+- `event` and `page` are validated against a **server-side whitelist** (`analytics-service/Analytics/Features/Tracking/Constants/TrackedEvents.cs`) to cap label cardinality — unknown values are rejected with `400`, never silently accepted.
+- `/tracking/presence/ping` marks the caller present (Redis sorted set) and bumps `app_authenticated_requests_total`. Identity is taken from the gateway-injected `X-User-Id` header, falling back to the validated JWT subject.
+- All product metrics are scraped from the `/metrics` endpoint (jobs `sallevate-backend` + `sellevate-analytics`); there is no read API for them — query them in Prometheus/Grafana. See [MONITORING.md](MONITORING.md).

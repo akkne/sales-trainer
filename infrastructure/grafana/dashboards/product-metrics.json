@@ -14,7 +14,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "app_users_online{job=\"sallevate-backend\"}",
+          "expr": "app_users_online{job=~\"sallevate-backend|sellevate-analytics\"}",
           "legendFormat": "online"
         }
       ]
@@ -27,7 +27,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[1d])",
+          "expr": "increase(app_authenticated_requests_total{job=~\"sallevate-backend|sellevate-analytics\"}[1d])",
           "legendFormat": "today"
         }
       ]
@@ -40,7 +40,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[7d])",
+          "expr": "increase(app_authenticated_requests_total{job=~\"sallevate-backend|sellevate-analytics\"}[7d])",
           "legendFormat": "7d"
         }
       ]
@@ -53,7 +53,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "increase(app_registrations_total{job=\"sallevate-backend\"}[1d])",
+          "expr": "increase(app_registrations_total{job=~\"sallevate-backend|sellevate-analytics\"}[1d])",
           "legendFormat": "today"
         }
       ]
@@ -66,7 +66,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum by (page) (rate(app_page_views_total{job=\"sallevate-backend\"}[5m]))",
+          "expr": "sum by (page) (rate(app_page_views_total{job=~\"sallevate-backend|sellevate-analytics\"}[5m]))",
           "legendFormat": "{{page}}"
         }
       ]
@@ -79,7 +79,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum by (method) (rate(app_logins_total{job=\"sallevate-backend\"}[5m]))",
+          "expr": "sum by (method) (rate(app_logins_total{job=~\"sallevate-backend|sellevate-analytics\"}[5m]))",
           "legendFormat": "{{method}}"
         }
       ]
@@ -93,7 +93,7 @@
       "options": { "orientation": "horizontal", "displayMode": "gradient" },
       "targets": [
         {
-          "expr": "topk(10, sum by (event) (increase(app_events_total{job=\"sallevate-backend\"}[1d])))",
+          "expr": "topk(10, sum by (event) (increase(app_events_total{job=~\"sallevate-backend|sellevate-analytics\"}[1d])))",
           "legendFormat": "{{event}}",
           "instant": true
         }
@@ -107,7 +107,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "increase(app_authenticated_requests_total{job=\"sallevate-backend\"}[1d])",
+          "expr": "increase(app_authenticated_requests_total{job=~\"sallevate-backend|sellevate-analytics\"}[1d])",
           "legendFormat": "authenticated requests / 1d"
         }
       ]
