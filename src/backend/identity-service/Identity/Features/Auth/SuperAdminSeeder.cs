@@ -61,7 +61,6 @@ public sealed class SuperAdminSeeder(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Seed the same user into every other service's replica.
         await userEventPublisher.PublishRegisteredAsync(
             new UserRegisteredEvent(superAdmin.Id, superAdmin.Email, superAdmin.DisplayName, superAdmin.AvatarKey),
             cancellationToken);

@@ -3,11 +3,6 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
 
-/// <summary>
-/// Periodically deletes expired email-verification codes. The monolith ran this as a
-/// Hangfire daily cron; the Identity service has no Hangfire dependency, so it runs the
-/// same cleanup as a lightweight hosted service (once on startup, then every 24h).
-/// </summary>
 public sealed class ExpiredEmailVerificationCleanupService(
     IServiceScopeFactory scopeFactory,
     ILogger<ExpiredEmailVerificationCleanupService> logger) : BackgroundService
@@ -27,9 +22,9 @@ public sealed class ExpiredEmailVerificationCleanupService(
             {
                 break;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogError(ex, "ExpiredEmailVerificationCleanupService run failed; will retry next interval");
+                logger.LogError(exception, "ExpiredEmailVerificationCleanupService run failed; will retry next interval");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

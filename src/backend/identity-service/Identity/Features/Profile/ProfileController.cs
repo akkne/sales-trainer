@@ -18,7 +18,9 @@ public class ProfileController(IProfileService profileService) : ControllerBase
             ?? User.FindFirstValue("sub");
 
         if (!Guid.TryParse(rawUserId, out var userId))
+        {
             return Unauthorized();
+        }
 
         try
         {
@@ -38,13 +40,17 @@ public class ProfileController(IProfileService profileService) : ControllerBase
             ?? User.FindFirstValue("sub");
 
         if (!Guid.TryParse(rawUserId, out var userId))
+        {
             return Unauthorized();
+        }
 
         var validPersonas = new HashSet<string>
             { "sdr", "account_executive", "account_manager", "founder", "other" };
 
         if (!validPersonas.Contains(request.Persona))
+        {
             return BadRequest(new { message = "Invalid persona value." });
+        }
 
         await profileService.UpdatePersonaForUserAsync(userId, request.Persona);
         return NoContent();

@@ -19,7 +19,9 @@ public class OnboardingController(IOnboardingService onboardingService) : Contro
             ?? User.FindFirstValue("sub");
 
         if (!Guid.TryParse(rawUserId, out var userId))
+        {
             return Unauthorized();
+        }
 
         await onboardingService.CompleteOnboardingForUserAsync(
             userId,

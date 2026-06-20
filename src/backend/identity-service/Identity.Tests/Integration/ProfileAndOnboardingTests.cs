@@ -26,9 +26,6 @@ public class ProfileAndOnboardingTests
         var userId = Guid.NewGuid();
         var client = Factory.CreateAuthenticatedClient(userId, "p@test.com", "Persona User");
 
-        // GET /profile needs a User row to read identity fields from; the authenticated
-        // client's token is for a user that only exists in the JWT, so onboarding (which
-        // writes UserProfiles, keyed by the token's sub) is what we verify end-to-end here.
         var onboarding = await client.PostAsJsonAsync("/onboarding",
             new { salesType = "outbound", experienceLevel = "beginner", persona = "founder" });
         onboarding.StatusCode.Should().Be(HttpStatusCode.NoContent);

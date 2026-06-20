@@ -6,8 +6,6 @@ using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Tests.Helpers;
 using Testcontainers.PostgreSql;
 
-// Scoped to the Integration namespace so the Postgres testcontainer starts only for
-// integration tests; Unit tests must run without a docker daemon.
 namespace Sellevate.Identity.Tests.Integration;
 
 [SetUpFixture]
@@ -31,10 +29,9 @@ public class IntegrationTestSetup
 
         Factory = new TestWebApplicationFactory(Postgres.GetConnectionString());
 
-        // Touch the host so Program.cs runs Database.Migrate() + seeding on startup.
         using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        await db.Database.MigrateAsync();
+        var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        await database.Database.MigrateAsync();
     }
 
     [OneTimeTearDown]

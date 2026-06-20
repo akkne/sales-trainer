@@ -14,11 +14,11 @@ public class EmailVerificationServiceTests
 {
     private static EmailVerificationService Build(out RecordingEmailSender email, out Helpers.InMemoryHolder holder)
     {
-        var db = InMemoryDbContextFactory.Create();
+        var database = InMemoryDbContextFactory.Create();
         email = new RecordingEmailSender();
-        holder = new Helpers.InMemoryHolder(db);
+        holder = new Helpers.InMemoryHolder(database);
         var options = Options.Create(new EmailVerificationConfiguration());
-        return new EmailVerificationService(db, email, options, NullLogger<EmailVerificationService>.Instance);
+        return new EmailVerificationService(database, email, options, NullLogger<EmailVerificationService>.Instance);
     }
 
     [Test]

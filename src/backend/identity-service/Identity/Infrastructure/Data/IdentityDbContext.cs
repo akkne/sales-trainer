@@ -5,12 +5,6 @@ using Sellevate.Identity.Features.Onboarding.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
-/// <summary>
-/// The Identity service's own database context (Postgres <c>identity-db</c>). Owns the
-/// identity bounded context only — Users, refresh tokens, email-verification codes,
-/// user profiles and the default-avatar catalogue. No other service reaches into these
-/// tables; they consume <c>user.*</c> Kafka events into a local <c>UserReplica</c> instead.
-/// </summary>
 public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();

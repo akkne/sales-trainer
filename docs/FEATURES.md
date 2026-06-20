@@ -15,6 +15,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Codestyle Enforcement](CODESTYLE_ENFORCEMENT.md) | PR CI gate for CODESTYLE.md — custom linter (no comments, no abbreviations) + `dotnet format` + `.editorconfig` |
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |
 | [Local Dev](LOCAL_DEV.md) | Run backend/frontend on the host (no image rebuilds) with infra in Docker — `scripts/dev-*.sh`, `docker-compose.infra.yml` |
 | [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |

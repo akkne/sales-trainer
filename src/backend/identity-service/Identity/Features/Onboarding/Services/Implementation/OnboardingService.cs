@@ -18,7 +18,9 @@ internal sealed class OnboardingService(IdentityDbContext databaseContext) : IOn
             .FirstOrDefaultAsync(profile => profile.UserId == userId, cancellationToken);
 
         if (existingProfile is not null && existingProfile.IsOnboardingCompleted)
+        {
             return;
+        }
 
         if (existingProfile is null)
         {
@@ -30,7 +32,9 @@ internal sealed class OnboardingService(IdentityDbContext databaseContext) : IOn
         existingProfile.ExperienceLevel = experienceLevel;
         existingProfile.IsOnboardingCompleted = true;
         if (persona is not null)
+        {
             existingProfile.Persona = persona;
+        }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
     }

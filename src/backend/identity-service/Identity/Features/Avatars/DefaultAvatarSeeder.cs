@@ -6,7 +6,7 @@ using Sellevate.Identity.Infrastructure.Storage.Abstract;
 namespace Sellevate.Identity.Features.Avatars;
 
 public sealed class DefaultAvatarSeeder(
-    IdentityDbContext db,
+    IdentityDbContext database,
     IObjectStorage objectStorage,
     ILogger<DefaultAvatarSeeder> logger)
 {
@@ -41,21 +41,23 @@ public sealed class DefaultAvatarSeeder(
                 }
                 objectReady = true;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger.LogWarning(ex, "DefaultAvatarSeeder: object store unreachable while seeding {Key}, skipping index {Index}", objectKey, i);
+                logger.LogWarning(exception, "DefaultAvatarSeeder: object store unreachable while seeding {Key}, skipping index {Index}", objectKey, i);
                 objectReady = false;
             }
 
             if (!objectReady)
+            {
                 continue;
+            }
 
-            var existing = await db.DefaultAvatars
+            var existing = await database.DefaultAvatars
                 .FirstOrDefaultAsync(a => a.Index == i, cancellationToken);
 
             if (existing is null)
             {
-                db.DefaultAvatars.Add(new DefaultAvatar
+                database.DefaultAvatars.Add(new DefaultAvatar
                 {
                     Id = Guid.NewGuid(),
                     Index = i,
@@ -65,7 +67,7 @@ public sealed class DefaultAvatarSeeder(
             }
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
         logger.LogInformation("DefaultAvatarSeeder: completed seeding {Count} default avatars", DefaultAvatarCount);
     }
 }

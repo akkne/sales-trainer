@@ -4,7 +4,6 @@ using Sellevate.Identity.Infrastructure.Email.Models;
 
 namespace Sellevate.Identity.Tests.Helpers;
 
-/// <summary>Test double for <see cref="IEmailSender"/> that records every message instead of sending.</summary>
 public sealed class RecordingEmailSender : IEmailSender
 {
     public ConcurrentQueue<EmailMessage> SentMessages { get; } = new();

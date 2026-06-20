@@ -6,7 +6,6 @@ using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Tests.Helpers;
 
-/// <summary>Mints JWTs matching the Identity service's validation parameters for authenticated test calls.</summary>
 public static class JwtTestHelper
 {
     public const string JwtKey = "integration-tests-signing-key-which-is-long-enough-0123456789";

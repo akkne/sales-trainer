@@ -13,18 +13,17 @@ public class ProfileServiceTests
     [Test]
     public async Task GetProfileStats_ReturnsIdentityFields_AndZeroedCrossServiceAggregates()
     {
-        await using var db = InMemoryDbContextFactory.Create();
+        await using var database = InMemoryDbContextFactory.Create();
         var userId = Guid.NewGuid();
-        db.Users.Add(new User { Id = userId, Email = "a@b.com", DisplayName = "Alice" });
-        await db.SaveChangesAsync();
+        database.Users.Add(new User { Id = userId, Email = "a@b.com", DisplayName = "Alice" });
+        await database.SaveChangesAsync();
 
-        var service = new ProfileService(db);
+        var service = new ProfileService(database);
         var stats = await service.GetProfileStatsForUserAsync(userId);
 
         stats.DisplayName.Should().Be("Alice");
         stats.Email.Should().Be("a@b.com");
         stats.AvatarUrl.Should().Be($"/avatars/{userId}");
-        // Gamification/Learning own these; Identity returns zero until those services exist.
         stats.TotalXpAmount.Should().Be(0);
         stats.CurrentStreakDayCount.Should().Be(0);
         stats.CompletedSkillCount.Should().Be(0);
@@ -34,8 +33,8 @@ public class ProfileServiceTests
     [Test]
     public async Task GetProfileStats_Throws_WhenUserMissing()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var service = new ProfileService(db);
+        await using var database = InMemoryDbContextFactory.Create();
+        var service = new ProfileService(database);
 
         var act = async () => await service.GetProfileStatsForUserAsync(Guid.NewGuid());
         await act.Should().ThrowAsync<KeyNotFoundException>();
@@ -44,13 +43,13 @@ public class ProfileServiceTests
     [Test]
     public async Task UpdatePersona_CreatesProfileRow_WhenNoneExists()
     {
-        await using var db = InMemoryDbContextFactory.Create();
-        var service = new ProfileService(db);
+        await using var database = InMemoryDbContextFactory.Create();
+        var service = new ProfileService(database);
         var userId = Guid.NewGuid();
 
         await service.UpdatePersonaForUserAsync(userId, "founder");
 
-        var profile = await db.UserProfiles.SingleAsync(p => p.UserId == userId);
+        var profile = await database.UserProfiles.SingleAsync(p => p.UserId == userId);
         profile.Persona.Should().Be("founder");
         profile.IsOnboardingCompleted.Should().BeFalse();
     }

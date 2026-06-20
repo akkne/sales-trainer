@@ -37,10 +37,9 @@ public sealed class S3ObjectStorage : IObjectStorage
                 UseClientRegion = true
             }, cancellationToken);
         }
-        catch (AmazonS3Exception ex) when (
-            ex.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
+        catch (AmazonS3Exception amazonS3Exception) when (
+            amazonS3Exception.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
         {
-            // Bucket already exists — nothing to do.
         }
     }
 
@@ -75,7 +74,7 @@ public sealed class S3ObjectStorage : IObjectStorage
             await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
             return true;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception amazonS3Exception) when (amazonS3Exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -88,7 +87,7 @@ public sealed class S3ObjectStorage : IObjectStorage
             var metadata = await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
             return metadata.ETag;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception amazonS3Exception) when (amazonS3Exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return null;
         }

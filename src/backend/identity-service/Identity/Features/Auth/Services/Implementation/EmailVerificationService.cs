@@ -122,7 +122,10 @@ internal sealed class EmailVerificationService(
     {
         var codeBuilder = new StringBuilder(length);
         for (var position = 0; position < length; position++)
+        {
             codeBuilder.Append(RandomNumberGenerator.GetInt32(0, 10));
+        }
+
         return codeBuilder.ToString();
     }
 

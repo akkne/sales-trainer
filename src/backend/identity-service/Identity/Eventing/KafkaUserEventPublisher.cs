@@ -3,11 +3,6 @@ using Sellevate.BuildingBlocks.Messaging;
 
 namespace Sellevate.Identity.Eventing;
 
-/// <summary>
-/// Publishes <c>user.*</c> events via the shared Kafka <see cref="IEventPublisher"/>,
-/// mapping each to its canonical topic/type from <see cref="Topics"/> and keying by
-/// <c>userId</c> so all events for one user land on the same partition (ordered).
-/// </summary>
 internal sealed class KafkaUserEventPublisher(IEventPublisher eventPublisher) : IUserEventPublisher
 {
     public Task PublishRegisteredAsync(UserRegisteredEvent payload, CancellationToken cancellationToken = default) =>
