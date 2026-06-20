@@ -67,12 +67,15 @@
 Every service lives in **its own folder under `src/backend/`**, and **each service
 carries its own tests folder next to its code** — there is no shared top-level test
 project. The legacy monolith (`src/backend/api`) and its shared `src/backend/tests`
-stay in place until retired in Phase 9.
+**stay in the repo throughout the migration and are kept as a reference even after
+retirement** — services are carved out beside it and routes are flipped at the gateway,
+never by deleting monolith code. In Phase 9 the monolith is dropped from deploy/compose
+but its source is **not** deleted (kept for behaviour-parity reference).
 
 ```
 src/backend/
-  api/                         ← legacy monolith (retired in Phase 9)
-  tests/                       ← legacy monolith tests (removed with the monolith)
+  api/                         ← legacy monolith (kept as reference, not deleted)
+  tests/                       ← legacy monolith tests (kept as reference)
   building-blocks/             ← shared lib (event envelope, Kafka base, idempotency,
                                   UserReplica, JWT helpers)
   gateway/

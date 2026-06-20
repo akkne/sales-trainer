@@ -87,7 +87,7 @@ proves the gateway + event pipeline end to end.
 - [ ] **1.3** Consume `user.registered` / `exercise.completed` / `xp.granted` for
       funnels (idempotent; optional, loss-tolerant).
 - [ ] **1.4** Flip `/tracking/*` + presence routes at the gateway to the new service;
-      remove the slice from the monolith.
+      stop routing to the monolith's slice (leave its code in place as reference).
 - [ ] **1.5** Tests: presence window, counter increments, event consumption, route
       flip; update [MONITORING.md](MONITORING.md) + docs/TESTING.
 
@@ -105,7 +105,8 @@ Goal: the identity root — must exist before others can own a User replica.
 - [ ] **2.3** Produce `user.registered` / `user.updated` / `user.deleted` /
       `user.avatar.changed` on the relevant flows.
 - [ ] **2.4** Gateway validates JWT against Identity's signing key; flip `/auth/*`,
-      `/profile/*`, `/onboarding/*`, `/avatars/*`; remove slices from monolith.
+      `/profile/*`, `/onboarding/*`, `/avatars/*`; stop routing to the monolith's
+      slices (leave their code in place as reference).
 - [ ] **2.5** Tests: register/login/refresh, email verification, OAuth, avatar upload,
       event emission; update [EMAIL_VERIFICATION.md], [API_CONTRACTS.md], docs/TESTING.
 
@@ -136,7 +137,8 @@ Goal: pure Kafka consumer + thin REST; second Redis-as-primary store.
       `friend.request.received`, `friend.request.accepted`, `chat.message.sent`
       (idempotent).
 - [ ] **4.3** Expose `/notifications/*` (list, unread count, mark-read).
-- [ ] **4.4** Flip routes at the gateway; remove the slice from the monolith.
+- [ ] **4.4** Flip routes at the gateway; stop routing to the monolith's slice
+      (leave its code in place as reference).
 - [ ] **4.5** Tests: event→inbox write, unread count, mark-read, TTL expiry; update
       [NOTIFICATIONS.md] + docs/TESTING.
 
@@ -153,7 +155,8 @@ Goal: user-to-user features; becomes a notification event producer.
       names/avatars; keep S3 for Discuss photos.
 - [ ] **5.3** Produce `friend.request.received/accepted`, `chat.message.sent`
       (consumed by Notifications).
-- [ ] **5.4** Flip `/friends/*`, `/discuss/*`, `/chat/*`; remove slices from monolith.
+- [ ] **5.4** Flip `/friends/*`, `/discuss/*`, `/chat/*`; stop routing to the monolith's
+      slices (leave their code in place as reference).
 - [ ] **5.5** Tests: friend lifecycle, forum CRUD/voting/photos, chat, event emission;
       update [FRIENDS.md], [DISCUSS.md] + docs/TESTING.
 
@@ -210,7 +213,8 @@ Goal: the last and largest — content + progress; main event producer for Gamif
 - [ ] **8.3** Produce `exercise.completed`, `lesson.completed`, `skill.completed`,
       `technique.mastery.changed` (consumed by Gamification/Analytics).
 - [ ] **8.4** Flip `/skills/*`, `/lessons/*`, `/exercises/*`, `/reference/*`,
-      `/techniques/*`, `/daily-quote`; **the monolith is now empty.**
+      `/techniques/*`, `/daily-quote`; **the monolith no longer serves any traffic**
+      (its code stays as a reference, not deleted).
 - [ ] **8.5** Tests: tree/progress, all exercise types (incl. AI path), technique
       mastery, seeding, event emission; update [SKILLS_AND_EXERCISES.md],
       [NEW_EXERCISE_TYPES.md], [SEEDER.md] + TESTING.
@@ -224,12 +228,14 @@ Goal: the last and largest — content + progress; main event producer for Gamif
       (Learning admin, Gamification admin, Identity admin, …); gateway enforces role.
 - [ ] **9.2** Point the frontend admin panel at the per-service admin APIs (paths
       unchanged via the gateway).
-- [ ] **9.3** **Delete** the old monolith project; update `docker-compose.*`,
-      `scripts/dev-*.sh`, [DEPLOYMENT.md], [ARCHITECTURE.md], [LOCAL_DEV.md].
+- [ ] **9.3** **Retire** the monolith: remove it from `docker-compose.*` /
+      `scripts/dev-*.sh` and stop deploying it, but **keep `src/backend/api` + its tests
+      in the repo as a reference** (do NOT delete). Update [DEPLOYMENT.md],
+      [ARCHITECTURE.md], [LOCAL_DEV.md] to mark it reference-only.
 - [ ] **9.4** Tests: admin CRUD per service through the gateway; full smoke of all
       flipped routes; update [ADMIN_PANEL.md] + TESTING.
 
-**Commit:** `refactor: retire monolith, finalize microservices`.
+**Commit:** `refactor: retire monolith (kept as reference), finalize microservices`.
 
 ---
 
