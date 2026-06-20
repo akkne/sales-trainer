@@ -249,22 +249,36 @@ See [AI_SERVICE.md](AI_SERVICE.md) for the implementation writeup.
 
 ---
 
-## Phase 7 — Gamification Service (event-driven core) `[ ]`
+## Phase 7 — Gamification Service (event-driven core) `[x]`
 Goal: the flagship — XP/streaks/achievements/league, fed entirely by Kafka events.
+See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) for the implementation writeup.
 
-- [ ] **7.1** Scaffold `gamification-service` + `gamification-db`; migrate
-      `UserXpRecords`, `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`,
-      `StreakMilestones`, `Achievements`, `UserAchievements`, `Leagues`, `LeagueTiers`,
-      `LeagueMemberships`, `LeagueSettings`.
-- [ ] **7.2** Consume `exercise.completed`, `dialog.evaluated`, `lesson.completed`,
-      `skill.completed` → grant XP / update streaks / unlock achievements / update
-      league (idempotent, eventual consistency — **no cross-service transaction**).
-- [ ] **7.3** Produce `xp.granted`, `achievement.unlocked`, `streak.milestone`,
-      `gamification.dialog-weights.updated`.
-- [ ] **7.4** Move `StreakResetJob` + `WeeklyLeagueClosureJob` (Hangfire on its own DB);
-      expose `/gamification/*`, `/achievements/*`, `/league/*`; flip routes.
-- [ ] **7.5** Tests: XP grant from each event type, idempotency/dedupe, streak reset,
-      achievement unlock → notification, league rollover; update [DB_SCHEMA.md] + TESTING.
+- [x] **7.1** Scaffolded `src/backend/gamification-service/Gamification` (+ `Gamification.Tests`)
+      with its own Postgres `gamification` database (`DatabaseBootstrapper` + EF migration
+      `InitialGamificationSchema`) covering `UserXpRecords`, `UserStreaks`,
+      `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones`, `Achievements`,
+      `UserAchievements`, `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`
+      (plus a local `UserReplica` and a `UserLearningProgress` projection). Health endpoint,
+      Dockerfile, `scripts/dev-gamification.sh`, docker-compose wiring, `Sellevate.sln` entries.
+- [x] **7.2** Consumes `exercise.completed`, `dialog.evaluated`, `lesson.completed`,
+      `skill.completed` → grants XP / updates streaks / unlocks achievements / feeds the
+      league XP sync. Idempotent (dedupe on `eventId`), eventual consistency, **no
+      cross-service transaction**. (Learning producers arrive in Phase 8; consumers wired now.)
+- [x] **7.3** Produces `xp.granted` (`userId`/`amount`/`source`), `achievement.unlocked`
+      (`userId`/`achievementKey`/`title`), `streak.milestone` (`userId`/`dayCount`/`bonusXp`)
+      and `gamification.dialog-weights.updated` (`confidence`/`structure`/`objection`/`goal`/
+      `multiplier`, matching the ai-service §6.4 contract). The first three match the
+      already-built notification-service contracts verbatim.
+- [x] **7.4** Moved `StreakResetJob` + `WeeklyLeagueClosureJob` (Hangfire on the gamification
+      DB, same crons). Exposes `/gamification/progress`, `/profile/achievements`, `/league`
+      and the `/admin/gamification/*` + `/admin/leagues/*` CRUD; the gateway flips those routes
+      to the `gamification` cluster and stops routing them to the monolith (its code stays).
+- [x] **7.5** Tests (NUnit, offline/mocked): XP grant from each event type, idempotency/dedupe
+      (achievement re-eval + dedup contract), streak reset, achievement unlock → event
+      emission, league rollover, outgoing event-contract shapes, and gateway route-flip
+      config. Updated [DB_SCHEMA.md](DB_SCHEMA.md) + [API_CONTRACTS.md](API_CONTRACTS.md);
+      added [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) +
+      [docs/TESTING/GAMIFICATION_SERVICE.md](TESTING/GAMIFICATION_SERVICE.md).
 
 **Commit:** `feat: extract gamification-service (event-driven)`.
 

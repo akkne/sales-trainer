@@ -10,6 +10,18 @@ Last updated: 2026-06-12
 | MongoDB    | Chat messages and unstructured dialogue data |
 | Redis      | Cache, sessions, leaderboard rankings        |
 
+> **Microservices migration:** as each service is extracted it owns its own logical
+> Postgres database on the shared cluster, with its own EF migrations and
+> `DatabaseBootstrapper`. So far: `identity` (Phase 2), `ai` (Phase 6) and
+> **`gamification` (Phase 7)**. The `gamification` database owns `UserXpRecords`,
+> `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones`,
+> `Achievements`, `UserAchievements`, `Leagues`, `LeagueTiers`, `LeagueMemberships`,
+> `LeagueSettings` (schemas below, ported verbatim), plus a local `UserReplica`, a
+> `UserLearningProgress` projection (completed-lesson count + has-completed-any-skill,
+> fed by `lesson.completed`/`skill.completed`), and its own Hangfire schema. The
+> monolith's copies of these tables remain as reference until Phase 9. See
+> [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md).
+
 ---
 
 ## PostgreSQL
