@@ -12,7 +12,6 @@ using Sellevate.Identity.Features.Onboarding;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
-using Sellevate.Identity.Infrastructure.Email;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
@@ -105,7 +104,7 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowCredentials()));
 
 builder.Services.AddAvatarStorage(builder.Configuration);
-builder.Services.AddEmailServices(builder.Configuration);
+builder.Services.AddSellevateEmail(builder.Configuration);
 builder.Services.AddHttpClient();
 
 builder.Services

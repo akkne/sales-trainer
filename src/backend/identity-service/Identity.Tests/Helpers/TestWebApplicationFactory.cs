@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Models;
-using Sellevate.Identity.Infrastructure.Email.Abstract;
+using Sellevate.BuildingBlocks.Email.Abstract;
 
 namespace Sellevate.Identity.Tests.Helpers;
 

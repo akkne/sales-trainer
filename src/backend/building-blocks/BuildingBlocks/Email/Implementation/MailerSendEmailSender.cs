@@ -1,12 +1,18 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Sellevate.Identity.Infrastructure.Configuration;
-using Sellevate.Identity.Infrastructure.Email.Abstract;
-using Sellevate.Identity.Infrastructure.Email.Models;
+using Sellevate.BuildingBlocks.Email.Abstract;
+using Sellevate.BuildingBlocks.Email.Configuration;
+using Sellevate.BuildingBlocks.Email.Models;
 
-namespace Sellevate.Identity.Infrastructure.Email.Implementation;
+namespace Sellevate.BuildingBlocks.Email.Implementation;
 
+/// <summary>
+/// <see cref="IEmailSender"/> backed by the MailerSend transactional email API. When the
+/// API token is not configured (placeholder value) the sender logs and returns instead of
+/// throwing, so a missing credential never breaks a flow in local/dev.
+/// </summary>
 internal sealed class MailerSendEmailSender : IEmailSender
 {
     public const string HttpClientName = "MailerSend";

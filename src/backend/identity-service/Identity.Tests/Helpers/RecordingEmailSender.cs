@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using Sellevate.Identity.Infrastructure.Email.Abstract;
-using Sellevate.Identity.Infrastructure.Email.Models;
+using Sellevate.BuildingBlocks.Email.Abstract;
+using Sellevate.BuildingBlocks.Email.Models;
 
 namespace Sellevate.Identity.Tests.Helpers;
 

@@ -37,6 +37,11 @@ public static class Topics
     public const string FriendRequestReceived = "friend.request.received";
     public const string FriendRequestAccepted = "friend.request.accepted";
     public const string ChatMessageSent = "chat.message.sent";
+    public const string ChatMessageRead = "chat.message.read";
+    public const string DiscussReplyCreated = "discuss.reply.created";
+
+    // ── Gamification (produces) — league lifecycle ─────────────────────────
+    public const string LeagueUpdated = "league.updated";
 
     /// <summary>
     /// Suffix appended to a source topic to form its dead-letter topic. A message that

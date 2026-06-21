@@ -9,8 +9,8 @@ using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
-using Sellevate.Identity.Infrastructure.Email.Abstract;
-using Sellevate.Identity.Infrastructure.Email.Models;
+using Sellevate.BuildingBlocks.Email.Abstract;
+using Sellevate.BuildingBlocks.Email.Models;
 
 namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 
