@@ -23,6 +23,12 @@ internal sealed class KafkaGamificationEventPublisher(IOutboxWriter outboxWriter
         return Task.CompletedTask;
     }
 
+    public Task PublishLeagueUpdatedAsync(LeagueUpdatedEvent payload, CancellationToken cancellationToken = default)
+    {
+        outboxWriter.Enqueue(Topics.LeagueUpdated, payload.UserId.ToString(), Topics.LeagueUpdated, payload);
+        return Task.CompletedTask;
+    }
+
     public Task PublishDialogWeightsUpdatedAsync(GamificationDialogWeightsUpdatedEvent payload, CancellationToken cancellationToken = default)
     {
         outboxWriter.Enqueue(

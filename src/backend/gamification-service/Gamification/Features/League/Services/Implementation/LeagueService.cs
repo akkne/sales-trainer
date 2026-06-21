@@ -1,13 +1,20 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Gamification.Common.Constants;
+using Sellevate.Gamification.Eventing;
 using Sellevate.Gamification.Features.League.Models;
 using Sellevate.Gamification.Features.League.Services.Abstract;
 using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.League.Services.Implementation;
 
-internal sealed class LeagueService(GamificationDbContext databaseContext) : ILeagueService
+// eventPublisher is optional so unit tests can construct the service with just a DbContext; in
+// production DI always supplies the outbox-backed publisher.
+internal sealed class LeagueService(
+    GamificationDbContext databaseContext,
+    IGamificationEventPublisher? eventPublisher = null) : ILeagueService
 {
+    private const string OutcomeStayed = "stayed";
+
     private const int DefaultPeriodLengthDays = 7;
 
     private static readonly LeagueTier[] DefaultTiers =
@@ -187,6 +194,21 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
                     }
 
                     await GetOrJoinLeagueAsync(membership.UserId, nextLeague.Id, cancellationToken);
+
+                    // Stage a league-updated event in the outbox so it commits atomically with the
+                    // rollover transaction; the notification service emails the member from it.
+                    if (eventPublisher is not null)
+                    {
+                        await eventPublisher.PublishLeagueUpdatedAsync(
+                            new LeagueUpdatedEvent(
+                                membership.UserId,
+                                nextLeague.Id,
+                                league.Tier,
+                                nextTier,
+                                membership.PromotionOutcome ?? OutcomeStayed,
+                                membership.Rank),
+                            cancellationToken);
+                    }
                 }
             }
         }
