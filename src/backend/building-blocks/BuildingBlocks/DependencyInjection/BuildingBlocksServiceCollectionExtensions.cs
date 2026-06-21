@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sellevate.BuildingBlocks.Idempotency;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Outbox;
 
 namespace Sellevate.BuildingBlocks.DependencyInjection;
 
@@ -29,6 +30,7 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.AddSingleton<KafkaEventPublisher>();
         services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
+        services.AddSingleton<IOutboxEventForwarder>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
         return services;
     }

@@ -3,6 +3,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Eventing;
+using Sellevate.BuildingBlocks.Outbox;
 
 namespace Sellevate.BuildingBlocks.Messaging;
 
@@ -13,7 +14,7 @@ namespace Sellevate.BuildingBlocks.Messaging;
 /// Registered as a singleton — the underlying producer is thread-safe and pools
 /// its broker connections.
 /// </summary>
-public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher, IDisposable
+public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher, IOutboxEventForwarder, IDisposable
 {
     private const string DeadLetterReasonHeader = "x-dead-letter-reason";
     private const string DeadLetterAtHeader = "x-dead-letter-at";
@@ -75,6 +76,22 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
         _logger.LogWarning(
             "Dead-lettered message to {Topic} [partition {Partition}, offset {Offset}]: {Reason}",
             deadLetterTopic, result.Partition.Value, result.Offset.Value, failureReason);
+    }
+
+    public async Task ForwardAsync(
+        string topic,
+        string partitionKey,
+        string payload,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _producer.ProduceAsync(
+            topic,
+            new Message<string, string> { Key = partitionKey, Value = payload },
+            cancellationToken);
+
+        _logger.LogDebug(
+            "Forwarded outbox message to {Topic} [partition {Partition}, offset {Offset}]",
+            topic, result.Partition.Value, result.Offset.Value);
     }
 
     public void Dispose()

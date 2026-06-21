@@ -127,6 +127,17 @@ src/backend/
   trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
   stripped). The strangler-fig migration is finished: it routes every prefix to its
   owning service and has **no catch-all** (unknown routes return 404).
+- **Transactional outbox (Phase 10.3):** to make a state change and its event publish
+  atomic, a producer can write an `OutboxMessage` row in the *same* EF transaction as its
+  business change (`IOutboxWriter.Enqueue` stages the row; the caller's single
+  `SaveChangesAsync` commits both). A per-service `OutboxRelayBackgroundService` then polls
+  pending rows (`IOutboxStore`), forwards each stored envelope to Kafka verbatim
+  (`IOutboxEventForwarder`), and marks it dispatched — at-least-once with no lost events on
+  a crash between DB commit and Kafka produce. Shared building blocks live in
+  `BuildingBlocks/Outbox`; **gamification-service is the fully-wired reference** (table +
+  migration `AddOutboxMessages`, store/writer, relay; all four outgoing events route through
+  the outbox). Identity and Learning still publish directly (see roadmap 10.3) — the outbox
+  there is deferred, not wired, to keep those services stable.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

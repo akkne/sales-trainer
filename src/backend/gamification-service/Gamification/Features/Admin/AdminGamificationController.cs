@@ -62,7 +62,6 @@ public sealed class AdminGamificationController(
         settings.DialogWeightStructure = request.DialogWeightStructure;
         settings.DialogWeightObjection = request.DialogWeightObjection;
         settings.DialogWeightGoal = request.DialogWeightGoal;
-        await databaseContext.SaveChangesAsync(cancellationToken);
 
         await eventPublisher.PublishDialogWeightsUpdatedAsync(
             new GamificationDialogWeightsUpdatedEvent(
@@ -72,6 +71,8 @@ public sealed class AdminGamificationController(
                 settings.DialogWeightGoal,
                 settings.DialogXpMultiplier),
             cancellationToken);
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "Gamification settings updated DailyGoal={Daily} WeeklyGoal={Weekly} DialogMultiplier={Multiplier}",

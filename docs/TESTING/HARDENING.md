@@ -34,6 +34,22 @@ publisher:
 Config: `ConsumerResilienceSettings` binds from `Kafka:ConsumerResilience`
 (`MaxHandlerRetries`, `RetryDelayMilliseconds`, `DeadLetterEnabled`). Defaults: 3 / 500 / true.
 
+## 10.3 Transactional outbox (gamification)
+`BuildingBlocks.Tests/OutboxRelayProcessorTests.cs` — drives `OutboxRelayProcessor` with
+fake store + forwarder:
+- Forwards each pending message and marks it dispatched.
+- Stops at the first forward failure, leaving the rest pending (ordering + retry next tick).
+- Forwards the stored payload + key verbatim.
+
+`Gamification.Tests/Unit/GamificationOutboxTests.cs` — over an in-memory DbContext:
+- The publisher enqueues an outbox row the store reads back as pending (topic + key correct).
+- The relay processor forwards the row and the store then reports no pending.
+- The enqueued payload is a valid `EventEnvelope` matching the consumer contract.
+
+Atomicity (state row + outbox row commit together; relay-after-crash redelivery) needs a
+real Postgres and is covered only by the in-process unit seams here — full DB integration is
+out of scope for the offline sandbox.
+
 ## 10.4 Kafka schema contract tests
 `BuildingBlocks.Tests/EventContractCatalogTests.cs` asserts that every produced event's
 serialized JSON shape (camelCase field names) round-trips into the exact record the

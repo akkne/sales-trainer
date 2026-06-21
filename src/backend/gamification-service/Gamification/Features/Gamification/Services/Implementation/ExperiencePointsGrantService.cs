@@ -33,10 +33,10 @@ internal sealed class ExperiencePointsGrantService(
             EarnedAt = earnedAt ?? DateTime.UtcNow,
         });
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
-
         await eventPublisher.PublishExperiencePointsGrantedAsync(
             new ExperiencePointsGrantedEvent(userId, amount, source), cancellationToken);
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "Granted {Amount} XP to user {UserId} from {Source}", amount, userId, source);
