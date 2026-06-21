@@ -36,8 +36,8 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 ### identity-service
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| ID1 | 🔴 Critical | `/demo/token` mints production-valid JWTs and is not gated to non-production. | `[ ]` |
-| ID2 | 🔴 Critical | No unique index/constraint on `Users.Email` → duplicate-account race + full table scans. | `[ ]` |
+| ID1 | 🔴 Critical | `/demo/token` mints production-valid JWTs and is not gated to non-production. | `[x]` (returns 404 in Production) |
+| ID2 | 🔴 Critical | No unique index/constraint on `Users.Email` → duplicate-account race + full table scans. | `[x]` (unique index + migration + DbUpdateException→"Email already registered.") |
 | ID3 | 🟠 High | No global exception handler — service exceptions leak as raw 500s. | `[ ]` |
 | ID4 | 🟠 High | Refresh-token rotation not atomic (reuse-detection defeated under concurrency); no unique index on token. | `[ ]` |
 | ID5 | 🟠 High | Refresh tokens stored in plaintext (verification codes are hashed — inconsistent). | `[ ]` |
@@ -57,17 +57,17 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
 | SO1 | 🔴 Critical | Stored-XSS on anonymous photo `GET` (content-type from extension; mitigated by `nosniff`). | `[ ]` |
-| SO2 | 🟠 High | No length limits / sanitization on UGC (thread/reply/chat bodies). | `[ ]` |
-| SO3 | 🟠 High | Unbounded chat message growth in a single Mongo document (will hit 16MB BSON cap → hard failure). | `[ ]` |
-| SO4 | 🟠 High | Chat pagination done in-memory after loading whole conversation; `limit` unclamped. | `[ ]` |
+| SO2 | 🟠 High | No length limits / sanitization on UGC (thread/reply/chat bodies). | `[x]` (MaxLength on thread/reply/chat DTOs) |
+| SO3 | 🟠 High | Unbounded chat message growth in a single Mongo document (will hit 16MB BSON cap → hard failure). | `[ ]` (storage restructure deferred; TODO in code) |
+| SO4 | 🟠 High | Chat pagination done in-memory after loading whole conversation; `limit` unclamped. | `[x]` (limit clamped 1–100) |
 | SO5 | 🟠 High | Reciprocal-friendship race (directional unique index misses `(A,B)`/`(B,A)`). | `[ ]` |
 | SO6 | 🟡 Medium | Vote counter non-atomic drift; admin role from JWT not headers (S4); photo upload not transactional with S3; ILIKE wildcard injection; hot-score candidate cap. | `[ ]` |
 
 ### gamification-service
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| GA1 | 🔴 Critical | Event handlers non-atomic + no per-event idempotency → double XP on redelivery (= S5). | `[ ]` |
-| GA2 | 🟠 High | No unique constraint on `UserStreaks.UserId` → duplicate streak rows under concurrency. | `[ ]` |
+| GA1 | 🔴 Critical | Event handlers non-atomic + no per-event idempotency → double XP on redelivery (= S5). | `[x]` (DB-level idempotency: `SourceEventId` + unique filtered index + app-level guard) |
+| GA2 | 🟠 High | No unique constraint on `UserStreaks.UserId` → duplicate streak rows under concurrency. | `[x]` (unique index + race-tolerant get-or-create) |
 | GA3 | 🟠 High | Streak day computed in UTC — breaks streaks for non-UTC users. | `[ ]` |
 | GA4 | 🟠 High | No lock on league rollover (cron + admin endpoint race → duplicate next-week leagues). | `[ ]` |
 | GA5 | 🟠 High | `GET /league` performs writes (lazy create/join/sync) — race + unsafe GET. | `[ ]` |
@@ -76,10 +76,10 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 ### notification-service
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| NO1 | 🟠 High | Non-atomic Redis read-modify-write on inbox → lost updates / count drift. | `[ ]` |
+| NO1 | 🟠 High | Non-atomic Redis read-modify-write on inbox → lost updates / count drift. | `[x]` (Lua-script atomic mutations) |
 | NO2 | 🟠 High | Stored body built from untrusted event fields, no sanitization (XSS depends on frontend escaping). | `[ ]` |
 | NO3 | 🟠 High | Duplicate notifications on domain-event replay (idempotency keyed on transport id, not business key). | `[ ]` |
-| NO4 | 🟡 Medium | Dead unread-counter (written, never read); full-inbox scan per read; surrogate-pair truncation; no global exception handler. | `[ ]` |
+| NO4 | 🟡 Medium | Dead unread-counter (written, never read); full-inbox scan per read; surrogate-pair truncation; no global exception handler. | `[>]` (dead counter removed; truncation/handler still open) |
 
 ### analytics-service
 | # | Sev | Finding | Status |
@@ -91,11 +91,11 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 ### ai-service
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| AI1 | 🔴 Critical | Voice usage limit checked before stream, charged after, per wall-clock-second → bypassable (concurrent streams, no per-request cap). | `[ ]` |
-| AI2 | 🟠 High | No input-length cap on any LLM-bound text → unbounded prompt cost. | `[ ]` |
+| AI1 | 🔴 Critical | Voice usage limit checked before stream, charged after, per wall-clock-second → bypassable (concurrent streams, no per-request cap). | `[ ]` (needs Redis atomic-counter rework) |
+| AI2 | 🟠 High | No input-length cap on any LLM-bound text → unbounded prompt cost. | `[x]` (MaxLength on DTOs + raw-length guard on /ai/evaluate) |
 | AI3 | 🟠 High | Prompt injection: untrusted transcript concatenated into grader prompt (`[XP:N]` manipulation, clamped). | `[ ]` |
-| AI4 | 🟠 High | Provider API keys/error bodies can leak into logs and HTTP responses. | `[ ]` |
-| AI5 | 🟠 High | `ParseAiResponse` calls `GetBoolean()/GetInt32()` unguarded → 503 on malformed grader output; rating unclamped. | `[ ]` |
+| AI4 | 🟠 High | Provider API keys/error bodies can leak into logs and HTTP responses. | `[x]` (generic client errors; redacted+truncated server logs) |
+| AI5 | 🟠 High | `ParseAiResponse` calls `GetBoolean()/GetInt32()` unguarded → 503 on malformed grader output; rating unclamped. | `[x]` (type-safe extraction + clamp + graceful degrade) |
 | AI6 | 🟠 High | No retry/circuit-breaker on LLM calls; `TaskCanceledException` unmapped → 500. | `[ ]` |
 | AI7 | 🟡 Medium | Lost-update on `Messages` array (`Set` whole array, should `$push`); `/ai/evaluate` anonymous; `f5ai` magic-string routing; streaming `EndOfStream` anti-pattern. | `[ ]` |
 
