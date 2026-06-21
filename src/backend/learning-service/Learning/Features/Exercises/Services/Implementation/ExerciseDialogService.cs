@@ -6,6 +6,7 @@ using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
+using StackExchange.Redis;
 
 namespace Sellevate.Learning.Features.Exercises.Services.Implementation;
 
@@ -15,19 +16,29 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
     private readonly IOpenAiChatService _openAiChatService;
     private readonly ITtsRouter _ttsRouter;
     private readonly ILogger<ExerciseDialogService> _logger;
+    private readonly IDatabase _redis;
 
-    private static readonly Dictionary<string, List<ChatMessage>> ChatCache = new();
+    // TTL for dialog state: 24 hours is enough for any single practice session.
+    private static readonly TimeSpan ChatStateTtl = TimeSpan.FromHours(24);
 
     public ExerciseDialogService(
         LearningDbContext databaseContext,
         IOpenAiChatService openAiChatService,
         ITtsRouter ttsRouter,
-        ILogger<ExerciseDialogService> logger)
+        ILogger<ExerciseDialogService> logger,
+        IConnectionMultiplexer redisConnection)
     {
         _databaseContext = databaseContext;
         _openAiChatService = openAiChatService;
         _ttsRouter = ttsRouter;
         _logger = logger;
+        _redis = redisConnection.GetDatabase();
+    }
+
+    public async Task ValidateExerciseForVoiceAsync(Guid exerciseId, CancellationToken cancellationToken = default)
+    {
+        // Reuse the same DB lookup used by the stream; throws on missing/wrong type.
+        await BuildExerciseChatContextAsync(exerciseId, cancellationToken);
     }
 
     public async Task<ExerciseChatResponseDto> SendChatMessageAsync(
@@ -38,7 +49,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
     {
         var chatContext = await BuildExerciseChatContextAsync(exerciseId, cancellationToken);
         var cacheKey = BuildChatCacheKey(userId, exerciseId);
-        var messages = GetChatMessagesFromCache(cacheKey);
+        var messages = await GetChatMessagesFromCacheAsync(cacheKey);
 
         if (string.IsNullOrWhiteSpace(userMessage))
         {
@@ -55,7 +66,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         var turnNumber = messages.Count(m => m.Role == "user");
         if (turnNumber > chatContext.MaxTurns)
         {
-            SaveChatMessagesToCache(cacheKey, messages);
+            await SaveChatMessagesToCacheAsync(cacheKey, messages);
             return new ExerciseChatResponseDto(
                 Response: "Диалог завершён — достигнуто максимальное количество реплик.",
                 IsComplete: true,
@@ -68,7 +79,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         var aiResponse = await GenerateAiResponseAsync(chatContext.SystemPrompt, dialogHistory, cancellationToken);
         messages.Add(new ChatMessage("assistant", aiResponse.Response));
 
-        SaveChatMessagesToCache(cacheKey, messages);
+        await SaveChatMessagesToCacheAsync(cacheKey, messages);
 
         return new ExerciseChatResponseDto(
             Response: aiResponse.Response,
@@ -86,7 +97,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
     {
         var chatContext = await BuildExerciseChatContextAsync(exerciseId, cancellationToken);
         var cacheKey = BuildChatCacheKey(userId, exerciseId);
-        var messages = GetChatMessagesFromCache(cacheKey);
+        var messages = await GetChatMessagesFromCacheAsync(cacheKey);
 
         if (!string.IsNullOrWhiteSpace(transcript))
             messages.Add(new ChatMessage("user", transcript));
@@ -140,7 +151,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         }
 
         messages.Add(new ChatMessage("assistant", parseResult.Reply));
-        SaveChatMessagesToCache(cacheKey, messages);
+        await SaveChatMessagesToCacheAsync(cacheKey, messages);
 
         var maxTurnsReached = messages.Count(m => m.Role == "user") >= chatContext.MaxTurns;
         yield return new VoiceStreamChunk(
@@ -210,16 +221,32 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
             Timestamp = DateTime.UtcNow
         }).ToList();
 
-    private static List<ChatMessage> GetChatMessagesFromCache(string cacheKey)
+    private async Task<List<ChatMessage>> GetChatMessagesFromCacheAsync(string cacheKey)
     {
-        if (ChatCache.TryGetValue(cacheKey, out var messages))
-            return messages;
-        return new List<ChatMessage>();
+        try
+        {
+            var json = await _redis.StringGetAsync(cacheKey);
+            if (json.HasValue)
+                return JsonSerializer.Deserialize<List<ChatMessage>>(json!) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis read failed for key {CacheKey}; starting fresh dialog", cacheKey);
+        }
+        return [];
     }
 
-    private static void SaveChatMessagesToCache(string cacheKey, List<ChatMessage> messages)
+    private async Task SaveChatMessagesToCacheAsync(string cacheKey, List<ChatMessage> messages)
     {
-        ChatCache[cacheKey] = messages;
+        try
+        {
+            var json = JsonSerializer.Serialize(messages);
+            await _redis.StringSetAsync(cacheKey, json, ChatStateTtl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis write failed for key {CacheKey}; dialog state will not persist", cacheKey);
+        }
     }
 
     private async Task<AiChatResponse> GenerateAiResponseAsync(

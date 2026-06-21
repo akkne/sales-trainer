@@ -152,12 +152,99 @@ internal sealed class ExerciseService(
             .Select(exercise => new { exercise.Id, exercise.Type, exercise.OrderInLesson, exercise.SerializedContent })
             .ToListAsync(cancellationToken);
 
-        return rawExercises.Select(rawExercise => new ExerciseDto(
-            rawExercise.Id,
-            rawExercise.Type,
-            rawExercise.OrderInLesson,
-            JsonDocument.Parse(rawExercise.SerializedContent).RootElement))
-            .ToList();
+        return rawExercises.Select(rawExercise =>
+        {
+            var fullContent = JsonDocument.Parse(rawExercise.SerializedContent).RootElement;
+            var learnerContent = StripAnswerKeyFields(rawExercise.Type, fullContent);
+            return new ExerciseDto(
+                rawExercise.Id,
+                rawExercise.Type,
+                rawExercise.OrderInLesson,
+                learnerContent);
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Removes answer-key fields (is_correct, correct_position, is_mistake, category, ai_prompt)
+    /// from exercise content before sending it to learners, so they cannot trivially cheat.
+    /// </summary>
+    private static JsonElement StripAnswerKeyFields(string exerciseType, JsonElement content)
+    {
+        // Fields to strip at item/option level, keyed by exercise type.
+        // Top-level fields to remove are handled separately.
+        string[]? itemArrayProperty = null;
+        string[]? itemFieldsToStrip = null;
+        string[]? topLevelFieldsToStrip = null;
+
+        switch (exerciseType)
+        {
+            case ExerciseTypes.ChooseOption:
+            case ExerciseTypes.FillBlank:
+                itemArrayProperty = ["options"];
+                itemFieldsToStrip = ["is_correct"];
+                break;
+            case ExerciseTypes.Reorder:
+                itemArrayProperty = ["items"];
+                itemFieldsToStrip = ["correct_position"];
+                break;
+            case ExerciseTypes.Categorize:
+                itemArrayProperty = ["items"];
+                itemFieldsToStrip = ["category"];
+                break;
+            case ExerciseTypes.SpotMistake:
+                itemArrayProperty = ["dialogue"];
+                itemFieldsToStrip = ["is_mistake"];
+                break;
+            case ExerciseTypes.AiDialogue:
+                topLevelFieldsToStrip = ["ai_prompt"];
+                break;
+            default:
+                // No answer-key fields for theory_card, match_pairs, rewrite, free_text, evaluate_call.
+                return content;
+        }
+
+        // Rebuild as a plain dictionary so we can mutate freely.
+        var dict = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var prop in content.EnumerateObject())
+            dict[prop.Name] = prop.Value;
+
+        // Strip top-level fields.
+        if (topLevelFieldsToStrip is not null)
+        {
+            foreach (var field in topLevelFieldsToStrip)
+                dict.Remove(field);
+        }
+
+        // Strip per-item fields from a named array.
+        if (itemArrayProperty is not null && itemFieldsToStrip is not null)
+        {
+            foreach (var arrayProp in itemArrayProperty)
+            {
+                if (!dict.TryGetValue(arrayProp, out var arrayEl) ||
+                    arrayEl.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                var strippedItems = new List<Dictionary<string, JsonElement>>();
+                foreach (var item in arrayEl.EnumerateArray())
+                {
+                    var itemDict = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+                    foreach (var itemProp in item.EnumerateObject())
+                    {
+                        if (Array.IndexOf(itemFieldsToStrip, itemProp.Name) < 0)
+                            itemDict[itemProp.Name] = itemProp.Value;
+                    }
+                    strippedItems.Add(itemDict);
+                }
+
+                // Re-serialise the sanitised array back into a JsonElement.
+                var sanitisedJson = JsonSerializer.Serialize(new { array = strippedItems });
+                var sanitisedDoc = JsonDocument.Parse(sanitisedJson);
+                dict[arrayProp] = sanitisedDoc.RootElement.GetProperty("array");
+            }
+        }
+
+        var resultJson = JsonSerializer.Serialize(dict);
+        return JsonDocument.Parse(resultJson).RootElement;
     }
 
     public async Task<ExerciseSubmissionResultDto> SubmitExerciseAnswerAsync(
@@ -191,11 +278,15 @@ internal sealed class ExerciseService(
         };
 
         databaseContext.UserExerciseAttempts.Add(newAttempt);
+        // Persist the attempt first so UpdateLessonProgressAsync can count it
+        // when querying passed exercises (required for LE3 all-exercises-passed gate).
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
-        var lessonWasCompleted = false;
+        var (lessonWasCompleted, lessonBestScore) = (false, 0);
         if (evaluationResult.IsCorrect)
         {
-            lessonWasCompleted = await UpdateLessonProgressAsync(userId, exercise.LessonId, cancellationToken);
+            (lessonWasCompleted, lessonBestScore) = await UpdateLessonProgressAsync(
+                userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -207,7 +298,7 @@ internal sealed class ExerciseService(
         if (lessonWasCompleted)
         {
             await eventPublisher.PublishLessonCompletedAsync(
-                new LessonCompletedEvent(userId, exercise.LessonId, 100), cancellationToken);
+                new LessonCompletedEvent(userId, exercise.LessonId, lessonBestScore), cancellationToken);
 
             await PublishSkillCompletionIfFinishedAsync(userId, exercise.LessonId, cancellationToken);
         }
@@ -221,47 +312,85 @@ internal sealed class ExerciseService(
             NewlyUnlockedAchievementKeys: Array.Empty<string>());
     }
 
-    private async Task<bool> UpdateLessonProgressAsync(
+    /// <summary>
+    /// Updates lesson progress after a correct answer.
+    /// Lesson is marked complete only when the user has at least one correct attempt
+    /// for EVERY exercise in the lesson (all exercises passed).
+    /// BestScore = max(existing best, current score).
+    /// Returns (transitionedToCompleted, bestScore).
+    /// </summary>
+    private async Task<(bool TransitionedToCompleted, int BestScore)> UpdateLessonProgressAsync(
         Guid userId,
         Guid lessonId,
+        int currentScore,
         CancellationToken cancellationToken = default)
     {
+        // Count how many distinct exercises exist in this lesson.
+        var totalExercises = await databaseContext.Exercises
+            .Where(e => e.LessonId == lessonId)
+            .CountAsync(cancellationToken);
+
+        // Count how many distinct exercises the user has at least one correct attempt for.
+        var passedExercises = await databaseContext.UserExerciseAttempts
+            .Where(a => a.UserId == userId && a.IsCorrect)
+            .Join(databaseContext.Exercises,
+                attempt => attempt.ExerciseId,
+                exercise => exercise.Id,
+                (attempt, exercise) => exercise)
+            .Where(e => e.LessonId == lessonId)
+            .Select(e => e.Id)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        var allPassed = totalExercises > 0 && passedExercises >= totalExercises;
+
         var progressRecord = await databaseContext.UserLessonProgressRecords
             .FirstOrDefaultAsync(record => record.UserId == userId && record.LessonId == lessonId, cancellationToken);
 
         var transitionedToCompleted = false;
+        int bestScore;
 
         if (progressRecord is null)
         {
+            bestScore = currentScore;
+            var newStatus = allPassed ? LessonProgressStatuses.Completed : LessonProgressStatuses.Available;
             progressRecord = new UserLessonProgress
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 LessonId = lessonId,
-                Status = LessonProgressStatuses.Completed,
-                BestScore = 100,
-                CompletedAt = DateTime.UtcNow
+                Status = newStatus,
+                BestScore = bestScore,
+                CompletedAt = allPassed ? DateTime.UtcNow : null
             };
             databaseContext.UserLessonProgressRecords.Add(progressRecord);
-            transitionedToCompleted = true;
+            transitionedToCompleted = allPassed;
         }
-        else if (progressRecord.Status != LessonProgressStatuses.Completed)
+        else
         {
-            progressRecord.Status = LessonProgressStatuses.Completed;
-            progressRecord.BestScore = 100;
-            progressRecord.CompletedAt = DateTime.UtcNow;
-            transitionedToCompleted = true;
+            bestScore = Math.Max(progressRecord.BestScore, currentScore);
+            progressRecord.BestScore = bestScore;
+
+            if (allPassed && progressRecord.Status != LessonProgressStatuses.Completed)
+            {
+                progressRecord.Status = LessonProgressStatuses.Completed;
+                progressRecord.CompletedAt = DateTime.UtcNow;
+                transitionedToCompleted = true;
+            }
         }
 
-        var lesson = await databaseContext.Lessons
-            .FirstOrDefaultAsync(lessonRecord => lessonRecord.Id == lessonId, cancellationToken);
-
-        if (lesson is not null)
+        if (transitionedToCompleted)
         {
-            await UnlockNextLessonInTopicAsync(userId, lesson, cancellationToken);
+            var lesson = await databaseContext.Lessons
+                .FirstOrDefaultAsync(lessonRecord => lessonRecord.Id == lessonId, cancellationToken);
+
+            if (lesson is not null)
+            {
+                await UnlockNextLessonInTopicAsync(userId, lesson, cancellationToken);
+            }
         }
 
-        return transitionedToCompleted;
+        return (transitionedToCompleted, bestScore);
     }
 
     private async Task UnlockNextLessonInTopicAsync(
@@ -352,4 +481,7 @@ internal sealed class ExerciseService(
         string transcript,
         CancellationToken cancellationToken = default) =>
         exerciseDialogService.StreamExerciseVoiceAsync(userId, exerciseId, transcript, cancellationToken);
+
+    public Task ValidateExerciseForVoiceAsync(Guid exerciseId, CancellationToken cancellationToken = default) =>
+        exerciseDialogService.ValidateExerciseForVoiceAsync(exerciseId, cancellationToken);
 }

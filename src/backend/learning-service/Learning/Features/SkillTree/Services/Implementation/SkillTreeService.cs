@@ -48,39 +48,30 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             .ThenBy(skill => skill.Id)
             .ToListAsync(cancellationToken);
 
-        var topicsBySkill = await databaseContext.Topics
-            .GroupBy(topic => topic.SkillId)
-            .Select(group => new { SkillId = group.Key, TopicIds = group.Select(topic => topic.Id).ToList() })
-            .ToDictionaryAsync(entry => entry.SkillId, entry => entry.TopicIds, cancellationToken);
+        // Single query: lesson count per skill via topic join.
+        var lessonCountBySkill = await databaseContext.Topics
+            .Join(databaseContext.Lessons,
+                topic => topic.Id,
+                lesson => lesson.TopicId,
+                (topic, lesson) => new { topic.SkillId, lesson.Id })
+            .GroupBy(entry => entry.SkillId)
+            .Select(group => new { SkillId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(entry => entry.SkillId, entry => entry.Count, cancellationToken);
 
-        var lessonCountBySkill = new Dictionary<Guid, int>();
-        var completedLessonCountBySkill = new Dictionary<Guid, int>();
-
-        foreach (var skill in allSkills)
-        {
-            if (!topicsBySkill.TryGetValue(skill.Id, out var topicIds))
-            {
-                lessonCountBySkill[skill.Id] = 0;
-                completedLessonCountBySkill[skill.Id] = 0;
-                continue;
-            }
-
-            var totalLessons = await databaseContext.Lessons
-                .Where(lesson => topicIds.Contains(lesson.TopicId))
-                .CountAsync(cancellationToken);
-
-            var completedLessons = await databaseContext.UserLessonProgressRecords
-                .Where(progress => progress.UserId == userId && progress.Status == LessonProgressStatuses.Completed)
-                .Join(databaseContext.Lessons,
-                    progress => progress.LessonId,
-                    lesson => lesson.Id,
-                    (progress, lesson) => lesson)
-                .Where(lesson => topicIds.Contains(lesson.TopicId))
-                .CountAsync(cancellationToken);
-
-            lessonCountBySkill[skill.Id] = totalLessons;
-            completedLessonCountBySkill[skill.Id] = completedLessons;
-        }
+        // Single query: completed lesson count per skill for this user.
+        var completedLessonCountBySkill = await databaseContext.UserLessonProgressRecords
+            .Where(progress => progress.UserId == userId && progress.Status == LessonProgressStatuses.Completed)
+            .Join(databaseContext.Lessons,
+                progress => progress.LessonId,
+                lesson => lesson.Id,
+                (progress, lesson) => lesson)
+            .Join(databaseContext.Topics,
+                lesson => lesson.TopicId,
+                topic => topic.Id,
+                (lesson, topic) => new { topic.SkillId })
+            .GroupBy(entry => entry.SkillId)
+            .Select(group => new { SkillId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(entry => entry.SkillId, entry => entry.Count, cancellationToken);
 
         return allSkills.Select(skill =>
         {

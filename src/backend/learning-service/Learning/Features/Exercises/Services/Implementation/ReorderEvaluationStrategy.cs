@@ -14,19 +14,32 @@ internal sealed class ReorderEvaluationStrategy : IExerciseEvaluationStrategy
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var items = exerciseContent.GetProperty("items").EnumerateArray()
-            .Select((item, index) => new
+        if (!exerciseContent.TryGetProperty("items", out var itemsEl))
+            throw new ExerciseAnswerValidationException("Exercise content is missing 'items'.");
+
+        if (!userAnswer.TryGetProperty("order", out var orderEl))
+            throw new ExerciseAnswerValidationException("Answer must contain array field 'order'.");
+
+        var items = itemsEl.EnumerateArray()
+            .Select((item, index) =>
             {
-                Index = index,
-                CorrectPosition = item.GetProperty("correct_position").GetInt32()
+                if (!item.TryGetProperty("correct_position", out var posEl) || !posEl.TryGetInt32(out var pos))
+                    throw new ExerciseAnswerValidationException(
+                        "Each item in exercise content must have integer field 'correct_position'.");
+                return new { Index = index, CorrectPosition = pos };
             })
             .OrderBy(entry => entry.CorrectPosition)
             .Select(entry => entry.Index)
             .ToList();
 
-        var userOrder = userAnswer.GetProperty("order")
-            .EnumerateArray()
-            .Select(element => element.GetInt32())
+        var userOrder = orderEl.EnumerateArray()
+            .Select((element, i) =>
+            {
+                if (!element.TryGetInt32(out var val))
+                    throw new ExerciseAnswerValidationException(
+                        $"All elements in 'order' must be integers (element {i} is not).");
+                return val;
+            })
             .ToList();
 
         var isCorrect = items.Count == userOrder.Count &&

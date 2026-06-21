@@ -14,17 +14,31 @@ internal sealed class CategorizeEvaluationStrategy : IExerciseEvaluationStrategy
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
+        if (!exerciseContent.TryGetProperty("items", out var itemsEl))
+            throw new ExerciseAnswerValidationException("Exercise content is missing 'items'.");
+
+        if (!userAnswer.TryGetProperty("mapping", out var mappingEl))
+            throw new ExerciseAnswerValidationException("Answer must contain object field 'mapping'.");
+
         var correctMapping = new Dictionary<int, string>();
         var itemIndex = 0;
-        foreach (var item in exerciseContent.GetProperty("items").EnumerateArray())
+        foreach (var item in itemsEl.EnumerateArray())
         {
             correctMapping[itemIndex] = item.GetProperty("category").GetString() ?? "";
             itemIndex++;
         }
 
-        var userMapping = userAnswer.GetProperty("mapping")
+        var userMapping = mappingEl
             .EnumerateObject()
-            .ToDictionary(property => int.Parse(property.Name), property => property.Value.GetString() ?? "");
+            .ToDictionary(
+                property =>
+                {
+                    if (!int.TryParse(property.Name, out var idx))
+                        throw new ExerciseAnswerValidationException(
+                            $"'mapping' keys must be integer strings; got '{property.Name}'.");
+                    return idx;
+                },
+                property => property.Value.GetString() ?? "");
 
         var totalItems = correctMapping.Count;
         var correctCount = 0;

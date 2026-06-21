@@ -41,4 +41,11 @@ public interface IExerciseService
         Guid exerciseId,
         string transcript,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates that the exercise exists and supports voice streaming.
+    /// Throws <see cref="KeyNotFoundException"/> or <see cref="NotSupportedException"/>.
+    /// Call before committing HTTP 200 on the voice stream endpoint.
+    /// </summary>
+    Task ValidateExerciseForVoiceAsync(Guid exerciseId, CancellationToken cancellationToken = default);
 }

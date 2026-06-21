@@ -6,6 +6,7 @@ using Sellevate.Learning.Features.Exercises.Services.Abstract;
 namespace Sellevate.Learning.Features.Exercises.Services.Implementation;
 
 internal sealed class ChooseOptionEvaluationStrategy : IExerciseEvaluationStrategy
+
 {
     public string SupportedExerciseType => ExerciseTypes.ChooseOption;
 
@@ -14,8 +15,14 @@ internal sealed class ChooseOptionEvaluationStrategy : IExerciseEvaluationStrate
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var selectedIndex = userAnswer.GetProperty("selectedOptionIndex").GetInt32();
-        var options = exerciseContent.GetProperty("options").EnumerateArray().ToList();
+        if (!userAnswer.TryGetProperty("selectedOptionIndex", out var indexEl) || !indexEl.TryGetInt32(out var selectedIndex))
+            throw new ExerciseAnswerValidationException(
+                "Answer must contain integer field 'selectedOptionIndex'.");
+
+        if (!exerciseContent.TryGetProperty("options", out var optionsEl))
+            throw new ExerciseAnswerValidationException("Exercise content is missing 'options'.");
+
+        var options = optionsEl.EnumerateArray().ToList();
 
         var isCorrect = false;
         if (selectedIndex >= 0 && selectedIndex < options.Count)

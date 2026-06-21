@@ -14,18 +14,28 @@ internal sealed class MatchPairsEvaluationStrategy : IExerciseEvaluationStrategy
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var correctPairs = exerciseContent.GetProperty("pairs")
+        if (!exerciseContent.TryGetProperty("pairs", out var contentPairsEl))
+            throw new ExerciseAnswerValidationException("Exercise content is missing 'pairs'.");
+
+        if (!userAnswer.TryGetProperty("pairs", out var userPairsEl))
+            throw new ExerciseAnswerValidationException("Answer must contain array field 'pairs'.");
+
+        var correctPairs = contentPairsEl
             .EnumerateArray()
             .Select(pair => (
                 Left: pair.GetProperty("left").GetString() ?? "",
                 Right: pair.GetProperty("right").GetString() ?? ""))
             .ToHashSet();
 
-        var userPairs = userAnswer.GetProperty("pairs")
+        var userPairs = userPairsEl
             .EnumerateArray()
-            .Select(pair => (
-                Left: pair.GetProperty("left").GetString() ?? "",
-                Right: pair.GetProperty("right").GetString() ?? ""))
+            .Select((pair, i) =>
+            {
+                if (!pair.TryGetProperty("left", out var leftEl) || !pair.TryGetProperty("right", out var rightEl))
+                    throw new ExerciseAnswerValidationException(
+                        $"Each pair in answer must have 'left' and 'right' fields (pair {i} is invalid).");
+                return (Left: leftEl.GetString() ?? "", Right: rightEl.GetString() ?? "");
+            })
             .ToHashSet();
 
         var matchCount = userPairs.Count(pair => correctPairs.Contains(pair));
