@@ -32,7 +32,7 @@ public class FunnelEventRecorderTests
         var before = AppMetrics.ExercisesCompleted.Value;
         var envelope = EventEnvelope.Create(
             Topics.ExerciseCompleted,
-            new ExerciseCompletedEvent(Guid.NewGuid(), Guid.NewGuid()));
+            new ExerciseCompletedEvent(Guid.NewGuid(), "spot_mistake", 80, true));
 
         var wasRecorded = recorder.Record(envelope);
 
@@ -47,7 +47,7 @@ public class FunnelEventRecorderTests
         var before = AppMetrics.ExperiencePointsGranted.Value;
         var envelope = EventEnvelope.Create(
             Topics.XpGranted,
-            new ExperiencePointsGrantedEvent(Guid.NewGuid(), 42));
+            new ExperiencePointsGrantedEvent(Guid.NewGuid(), 42, "exercise"));
 
         var wasRecorded = recorder.Record(envelope);
 
