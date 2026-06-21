@@ -18,7 +18,7 @@ public sealed class StreakResetJobTests
     public void SetUp()
     {
         _databaseContext = GamificationDbContextFactory.CreateInMemory();
-        _streakResetJob = new StreakResetJob(_databaseContext, NullLogger<StreakResetJob>.Instance);
+        _streakResetJob = new StreakResetJob(_databaseContext, new FixedStreakClock(), NullLogger<StreakResetJob>.Instance);
     }
 
     [TearDown]

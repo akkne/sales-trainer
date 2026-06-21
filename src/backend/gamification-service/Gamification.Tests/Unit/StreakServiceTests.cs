@@ -26,7 +26,7 @@ public sealed class StreakServiceTests
         var settingsService = new GamificationSettingsService(_databaseContext);
         var grantService = new ExperiencePointsGrantService(
             _databaseContext, _eventPublisher, NullLogger<ExperiencePointsGrantService>.Instance);
-        _streakService = new StreakService(_databaseContext, settingsService, grantService, _eventPublisher);
+        _streakService = new StreakService(_databaseContext, settingsService, grantService, _eventPublisher, new FixedStreakClock());
     }
 
     [TearDown]

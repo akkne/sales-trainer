@@ -35,7 +35,7 @@ public sealed class XpGrantIdempotencyTests
         var settingsService = new GamificationSettingsService(_databaseContext);
         _grantService = new ExperiencePointsGrantService(
             _databaseContext, _eventPublisher, NullLogger<ExperiencePointsGrantService>.Instance);
-        var streakService = new StreakService(_databaseContext, settingsService, _grantService, _eventPublisher);
+        var streakService = new StreakService(_databaseContext, settingsService, _grantService, _eventPublisher, new FixedStreakClock());
         var achievementService = new AchievementService(_databaseContext, _eventPublisher);
         var learningProgressService = new LearningProgressService(_databaseContext);
 

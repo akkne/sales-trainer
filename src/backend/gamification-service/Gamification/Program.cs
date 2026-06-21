@@ -1,6 +1,7 @@
 using System.Text;
 using Hangfire;
 using Hangfire.PostgreSql;
+using Npgsql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -39,7 +40,17 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 });
 
 builder.Services.AddDbContext<GamificationDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+{
+    // Pin the Npgsql session timezone to UTC so that DateOnly.FromDateTime(timestamptz)
+    // comparisons in XP-sync queries always bucket dates consistently, regardless of
+    // the host OS timezone.
+    var connectionString = builder.Configuration.GetConnectionString("Postgres");
+    var npgsqlBuilder = new NpgsqlConnectionStringBuilder(connectionString)
+    {
+        Timezone = "UTC",
+    };
+    databaseOptions.UseNpgsql(npgsqlBuilder.ConnectionString);
+});
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
@@ -136,6 +147,10 @@ using (var serviceScope = application.Services.CreateScope())
 
     var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
     await achievementSeeder.SeedAsync();
+
+    // GA6(a): seed singleton settings rows so read-path getters never write.
+    var leagueSettingsSeeder = serviceScope.ServiceProvider.GetRequiredService<LeagueSettingsSeeder>();
+    await leagueSettingsSeeder.SeedAsync();
 }
 
 RecurringJob.AddOrUpdate<WeeklyLeagueClosureJob>(

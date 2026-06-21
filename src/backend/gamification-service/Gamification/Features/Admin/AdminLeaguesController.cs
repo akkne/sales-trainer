@@ -44,17 +44,36 @@ public sealed class AdminLeaguesController(
             query = query.Where(league => league.Tier == tier);
         }
 
-        var leagues = await query
+        // GA6(b): single group-join instead of a correlated subquery per row (N+1).
+        // Precompute a tier-order lookup with a stable fallback for unknown tiers.
+        var tierOrderMap = tierKeys
+            .Select((key, index) => (key, index))
+            .ToDictionary(pair => pair.key, pair => pair.index);
+
+        var leagueList = await query
             .OrderByDescending(league => league.WeekStartDate)
+            .Select(league => new { league.Id, league.Tier, league.WeekStartDate, league.WeekEndDate })
+            .ToListAsync(cancellationToken);
+
+        var leagueIds = leagueList.Select(l => l.Id).ToList();
+
+        // Load member counts in one query using GroupBy.
+        var memberCountByLeagueId = await databaseContext.LeagueMemberships
+            .Where(membership => leagueIds.Contains(membership.LeagueId)
+                && databaseContext.UserReplicas.Any(user => user.UserId == membership.UserId))
+            .GroupBy(membership => membership.LeagueId)
+            .Select(group => new { LeagueId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(entry => entry.LeagueId, entry => entry.Count, cancellationToken);
+
+        var leagues = leagueList
             .Select(league => new AdminLeagueListItemDto(
                 league.Id, league.Tier, league.WeekStartDate, league.WeekEndDate,
-                databaseContext.LeagueMemberships.Count(membership => membership.LeagueId == league.Id
-                    && databaseContext.UserReplicas.Any(user => user.UserId == membership.UserId))))
-            .ToListAsync(cancellationToken);
+                memberCountByLeagueId.GetValueOrDefault(league.Id, 0)))
+            .ToList();
 
         var ordered = leagues
             .OrderByDescending(league => league.WeekStartDate)
-            .ThenByDescending(league => tierKeys.IndexOf(league.Tier))
+            .ThenByDescending(league => tierOrderMap.GetValueOrDefault(league.Tier, -1))
             .ToList();
 
         return Ok(ordered);

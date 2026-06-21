@@ -11,11 +11,12 @@ internal sealed class StreakService(
     GamificationDbContext databaseContext,
     IGamificationSettingsService settingsService,
     IExperiencePointsGrantService experiencePointsGrantService,
-    IGamificationEventPublisher eventPublisher) : IStreakService
+    IGamificationEventPublisher eventPublisher,
+    IStreakClock streakClock) : IStreakService
 {
     public async Task RegisterActivityAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = streakClock.Today();
 
         var streak = await databaseContext.UserStreaks
             .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);

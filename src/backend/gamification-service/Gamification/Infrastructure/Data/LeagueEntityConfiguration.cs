@@ -11,6 +11,6 @@ public sealed class LeagueEntityConfiguration : IEntityTypeConfiguration<League>
         builder.ToTable("Leagues");
         builder.HasKey(league => league.Id);
         builder.Property(league => league.Tier).IsRequired();
-        builder.HasIndex(league => new { league.WeekStartDate, league.Tier });
+        builder.HasIndex(league => new { league.WeekStartDate, league.Tier }).IsUnique();
     }
 }

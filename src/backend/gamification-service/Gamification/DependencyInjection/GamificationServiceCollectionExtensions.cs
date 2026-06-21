@@ -16,6 +16,9 @@ public static class GamificationServiceCollectionExtensions
 {
     public static IServiceCollection AddGamificationServices(this IServiceCollection services)
     {
+        // IStreakClock is singleton: the timezone is read once from config and never changes.
+        services.AddSingleton<IStreakClock, StreakClock>();
+
         services.AddScoped<IGamificationEventPublisher, KafkaGamificationEventPublisher>();
         services.AddScoped<IOutboxWriter, GamificationOutboxWriter>();
         services.AddScoped<IOutboxStore, GamificationOutboxStore>();
@@ -32,6 +35,7 @@ public static class GamificationServiceCollectionExtensions
         services.AddScoped<AchievementSeeder>();
 
         services.AddScoped<ILeagueService, LeagueService>();
+        services.AddScoped<LeagueSettingsSeeder>();
 
         services.AddScoped<StreakResetJob>();
         services.AddScoped<WeeklyLeagueClosureJob>();

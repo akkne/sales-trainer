@@ -29,7 +29,7 @@ public sealed class GamificationEventHandlerTests
         var settingsService = new GamificationSettingsService(_databaseContext);
         var grantService = new ExperiencePointsGrantService(
             _databaseContext, _eventPublisher, NullLogger<ExperiencePointsGrantService>.Instance);
-        var streakService = new StreakService(_databaseContext, settingsService, grantService, _eventPublisher);
+        var streakService = new StreakService(_databaseContext, settingsService, grantService, _eventPublisher, new FixedStreakClock());
         var achievementService = new AchievementService(_databaseContext, _eventPublisher);
         var learningProgressService = new LearningProgressService(_databaseContext);
 
