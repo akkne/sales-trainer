@@ -404,7 +404,13 @@ API client). Unknown routes now return 404.
       TESTING/HARDENING.md.
 - [ ] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
       atomic DB-write + event-publish.
-- [ ] **10.4** Contract tests on Kafka schemas (and optional Schema Registry/Avro).
+- [x] **10.4** Contract tests on Kafka schemas. `EventContractCatalogTests` (in
+      BuildingBlocks.Tests) asserts the serialized wire shape (camelCase field names + JSON
+      types) of every one of the 16 topics in [MICROSERVICES.md](MICROSERVICES.md) §4.1, the
+      producer↔consumer contract for each cross-service pair, referencing the `Topics`
+      constants (no magic strings). Per-service `OutgoingEventContractTests` remain the
+      producer-side source of truth. Schema Registry/Avro noted as **future** (current
+      transport is System.Text.Json camelCase) — not implemented.
 - [ ] **10.5** k8s manifests / Helm chart per service (stretch).
 
 ---
