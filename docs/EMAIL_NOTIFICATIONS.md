@@ -9,6 +9,7 @@ service by a small OOP template subsystem.
 
 | Trigger | Event consumed | Email timing | Template |
 |---|---|---|---|
+| You just registered (onboarding) | `user.registered` | Immediate (after the user replica is populated) | `WelcomeEmailTemplate` |
 | Someone sends you a friend request | `friend.request.received` | Immediate (at notification creation) | `FriendRequestEmailTemplate` |
 | Someone accepts your friend request | `friend.request.accepted` | Immediate (at notification creation) | `FriendRequestAcceptedEmailTemplate` |
 | New direct message left unread | `chat.message.sent` (+ `chat.message.read` to cancel) | **Delayed** — only if still unread after the grace period (default 5 min) | `ChatMessageEmailTemplate` |
@@ -44,6 +45,13 @@ The notification service has **no database**, so it keeps a minimal user replica
 Identity's `user.registered`/`user.updated`/`user.deleted` events. `IUserDirectory` reads it;
 if a recipient has no replicated email the email is skipped (logged), never throwing.
 
+**Welcome email ordering.** The welcome email is the one type triggered from
+`UserReplicaConsumer` rather than `NotificationEventConsumer`: those two consumers share a Kafka
+group on **disjoint** topic sets, so `user.registered` can only be owned by one of them. The
+welcome notification is created *after* the replica upsert in the same handler, which guarantees
+the dispatcher can resolve the brand-new user's email. It is deduped on the user id, so a Kafka
+replay of `user.registered` re-upserts the replica but never re-welcomes.
+
 ## OOP HTML generation
 
 All rendering lives under `Features/Notifications/Emails/`:
@@ -54,9 +62,9 @@ All rendering lives under `Features/Notifications/Emails/`:
   `BuildTextBody`/`ActionLabel` for subclasses. Provides shared `GreetingHtml`/`Paragraph` helpers.
 - **`NotificationEmailLayout`** — the shared, inline-styled, client-safe HTML chrome (header,
   card, CTA button, footer) and the `Encode` helper. All untrusted text is HTML-encoded here.
-- **Concrete templates** — `FriendRequestEmailTemplate`, `FriendRequestAcceptedEmailTemplate`,
-  `ChatMessageEmailTemplate`, `DiscussReplyEmailTemplate`, `LeagueUpdatedEmailTemplate`, plus
-  `GenericNotificationEmailTemplate` as the fallback.
+- **Concrete templates** — `WelcomeEmailTemplate`, `FriendRequestEmailTemplate`,
+  `FriendRequestAcceptedEmailTemplate`, `ChatMessageEmailTemplate`, `DiscussReplyEmailTemplate`,
+  `LeagueUpdatedEmailTemplate`, plus `GenericNotificationEmailTemplate` as the fallback.
 - **`NotificationEmailRenderer`** — indexes templates by type, rewrites the notification's
   relative action path into an absolute frontend URL, and dispatches to the right template
   (falling back to generic for unmapped types).
@@ -93,6 +101,8 @@ are also read from configuration; secrets are injected from the environment.
 
 ## Producers
 
+- **Identity** — publishes `user.registered` on email and first-time Google sign-up; the
+  notification service both replicates the user and sends the welcome email off this event.
 - **Social** — publishes `friend.request.received` (recipient notified on new + reactivated
   requests), `friend.request.accepted` (requester notified when accepted),
   `discuss.reply.created` (thread author notified on a non-self reply) and

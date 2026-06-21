@@ -8,5 +8,6 @@ public enum NotificationType
     AchievementUnlocked = 4,
     StreakMilestone = 5,
     DiscussReplyReceived = 6,
-    LeagueUpdated = 7
+    LeagueUpdated = 7,
+    UserWelcome = 8
 }

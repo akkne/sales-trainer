@@ -20,6 +20,7 @@ public class NotificationEmailRendererTests
                 new ChatMessageEmailTemplate(),
                 new DiscussReplyEmailTemplate(),
                 new LeagueUpdatedEmailTemplate(),
+                new WelcomeEmailTemplate(),
             },
             new GenericNotificationEmailTemplate(),
             FrontendBaseUrl);
@@ -82,6 +83,18 @@ public class NotificationEmailRendererTests
 
         content.Subject.Should().Be("Your Sellevate league was updated");
         content.HtmlBody.Should().Contain("View league");
+    }
+
+    [Test]
+    public void Render_Welcome_UsesWelcomeTemplate()
+    {
+        var content = CreateRenderer().Render(Context(NotificationType.UserWelcome, actionUrl: "/"));
+
+        content.Subject.Should().Be("Welcome to Sellevate");
+        content.HtmlBody.Should().Contain("Welcome aboard");
+        content.HtmlBody.Should().Contain("Hi Alex,");
+        content.HtmlBody.Should().Contain("Start training");
+        content.HtmlBody.Should().Contain($"{FrontendBaseUrl}/");
     }
 
     [Test]
