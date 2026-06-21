@@ -17,5 +17,6 @@ public class UserEntityConfiguration : IEntityTypeConfiguration<User>
             .HasDefaultValue(0);
         builder.Property(u => u.IsEmailVerified)
             .HasDefaultValue(false);
+        builder.HasIndex(u => u.Email).IsUnique();
     }
 }

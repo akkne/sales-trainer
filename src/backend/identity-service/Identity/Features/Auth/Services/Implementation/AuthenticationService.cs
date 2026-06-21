@@ -56,7 +56,15 @@ internal sealed class AuthenticationService(
         };
 
         databaseContext.Users.Add(newUser);
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            logger.LogWarning("Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
+            throw new InvalidOperationException("Email already registered.");
+        }
 
         await PublishUserRegisteredAsync(newUser, cancellationToken);
 
