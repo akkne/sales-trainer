@@ -197,7 +197,7 @@ What it does, exactly:
 - **ai** ← `DialogBundles`, `DialogModes`
 - **gamification** ← `UserXpRecords`, `UserStreaks`, `Achievements`, `UserAchievements`, `Leagues`/tiers/memberships/settings, rewards, milestones
 - **social** ← `Friendships`, all `Discuss*`
-- **UserReplicas** ← seeded in ai/gamification/social/learning from monolith `Users` (UserId, DisplayName, AvatarKey)
+- **UserReplicas** ← seeded in ai/gamification/social/learning from monolith `Users` (UserId, Email, DisplayName, AvatarKey, UpdatedAt). Email + DisplayName are NOT NULL in every service's `UserReplicas`, so both come from the monolith row.
 
 Not copied on purpose: `Notifications` (now Redis), `OpenQuestionGlobalContexts`
 (not in any service schema), and content the services re-seed on startup

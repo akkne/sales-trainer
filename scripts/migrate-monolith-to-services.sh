@@ -253,6 +253,19 @@ if [[ "$DRY_RUN" == 1 ]]; then
     fi
   done
   printf '   UserReplicas    seed into: %s (from monolith Users)\n' "${REPLICA_DBS[*]}"
+  # Replica parity: the seed supplies exactly these columns; flag any NOT NULL
+  # column (without default) in a service's UserReplicas that we do NOT supply.
+  provided=" UserId Email DisplayName AvatarKey UpdatedAt "
+  for col in Id Email DisplayName AvatarKey; do
+    q "$MONOLITH_DB" "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='Users' AND column_name='$col'" | grep -q 1 \
+      || { drift=1; warn "  monolith Users is missing column '$col' needed for the UserReplicas seed"; }
+  done
+  for db in "${REPLICA_DBS[@]}"; do
+    while read -r req; do
+      [[ -z "$req" ]] && continue
+      [[ "$provided" == *" $req "* ]] || { drift=1; warn "  $db.UserReplicas requires column '$req' that the seed does not supply"; }
+    done < <(q "$db" "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='UserReplicas' AND is_nullable='NO' AND column_default IS NULL")
+  done
   if [[ "$drift" == 1 ]]; then
     warn "Schema drift detected above. Those tables need a column tweak before a real run; everything else is fine."
   else
@@ -303,8 +316,9 @@ for entry in "${MAPPING[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# Seed UserReplicas (UserId, DisplayName, AvatarKey, UpdatedAt) from monolith Users.
-# Streamed STDOUT->STDIN (no host temp files; works in both modes).
+# Seed UserReplicas (UserId, Email, DisplayName, AvatarKey, UpdatedAt) from monolith
+# Users. Each service's UserReplicas has Email + DisplayName as NOT NULL (max 320 /
+# 200); the monolith Users row supplies both. Streamed STDOUT->STDIN (no temp files).
 # ---------------------------------------------------------------------------
 log "=== Seeding UserReplicas projections ==="
 for db in "${REPLICA_DBS[@]}"; do
@@ -318,9 +332,9 @@ for db in "${REPLICA_DBS[@]}"; do
     fi
   fi
   psql_db "$MONOLITH_DB" -v ON_ERROR_STOP=1 \
-      -c "\copy (SELECT \"Id\", \"DisplayName\", \"AvatarKey\", now() FROM \"Users\") TO STDOUT WITH (FORMAT csv)" \
+      -c "\copy (SELECT \"Id\", \"Email\", \"DisplayName\", \"AvatarKey\", now() FROM \"Users\") TO STDOUT WITH (FORMAT csv)" \
     | psql_db "$db" -v ON_ERROR_STOP=1 \
-      -c "\copy \"UserReplicas\" (\"UserId\",\"DisplayName\",\"AvatarKey\",\"UpdatedAt\") FROM STDIN WITH (FORMAT csv)"
+      -c "\copy \"UserReplicas\" (\"UserId\",\"Email\",\"DisplayName\",\"AvatarKey\",\"UpdatedAt\") FROM STDIN WITH (FORMAT csv)"
   seeded=$(q "$db" "SELECT count(*) FROM \"UserReplicas\"")
   log "seed  UserReplicas -> $db ($seeded rows)"
 done
