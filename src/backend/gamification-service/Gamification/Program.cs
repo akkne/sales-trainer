@@ -155,15 +155,24 @@ using (var serviceScope = application.Services.CreateScope())
     await leagueSettingsSeeder.SeedAsync();
 }
 
-RecurringJob.AddOrUpdate<WeeklyLeagueClosureJob>(
-    HangfireJobIdentifiers.WeeklyLeagueClosure,
-    weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
-    HangfireJobIdentifiers.WeeklyLeagueClosureCron);
+// Use the DI-resolved IRecurringJobManager, not the static RecurringJob facade:
+// the static API reads JobStorage.Current, which is only set once the Hangfire
+// server has started — calling it here (before application.Run()) throws
+// "Current JobStorage instance has not been initialized yet".
+using (var recurringJobScope = application.Services.CreateScope())
+{
+    var recurringJobManager = recurringJobScope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
 
-RecurringJob.AddOrUpdate<StreakResetJob>(
-    HangfireJobIdentifiers.DailyStreakReset,
-    streakResetJob => streakResetJob.ExecuteAsync(),
-    HangfireJobIdentifiers.DailyStreakResetCron);
+    recurringJobManager.AddOrUpdate<WeeklyLeagueClosureJob>(
+        HangfireJobIdentifiers.WeeklyLeagueClosure,
+        weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
+        HangfireJobIdentifiers.WeeklyLeagueClosureCron);
+
+    recurringJobManager.AddOrUpdate<StreakResetJob>(
+        HangfireJobIdentifiers.DailyStreakReset,
+        streakResetJob => streakResetJob.ExecuteAsync(),
+        HangfireJobIdentifiers.DailyStreakResetCron);
+}
 
 application.Run();
 

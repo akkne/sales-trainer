@@ -140,8 +140,10 @@ foreach (var upstreamClientName in new[] { "OpenAI", "GoogleTts", "YandexTts" })
             // Retry: up to 2 retries on 5xx / 429 / timeout (total ≤ 3 attempts).
             options.Retry.MaxRetryAttempts = 2;
             options.Retry.Delay = TimeSpan.FromSeconds(1);
-            // Circuit breaker: open after 5 failures in a 30s window.
-            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+            // Circuit breaker: open after 5 failures in a 60s window. Polly requires
+            // SamplingDuration >= 2 x AttemptTimeout (2 x 30s), else it fails validation
+            // at host startup.
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
             options.CircuitBreaker.MinimumThroughput = 5;
             // Total timeout across all retries.
             options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(90);
