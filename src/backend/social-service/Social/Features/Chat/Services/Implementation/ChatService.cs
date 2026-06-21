@@ -102,6 +102,9 @@ internal sealed class ChatService(
         string? beforeMessageId = null,
         CancellationToken cancellationToken = default)
     {
+        // TODO SO3: restructure ChatConversation to a separate messages collection to avoid loading the full document here.
+        limit = Math.Clamp(limit, 1, 100);
+
         var conversation = await mongoContext.ChatConversations
             .Find(conversation => conversation.Id == conversationId)
             .FirstOrDefaultAsync(cancellationToken)
