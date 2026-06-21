@@ -48,7 +48,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 | [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
-| [Email Notifications](EMAIL_NOTIFICATIONS.md) | Opt-in email channel: unread direct message (delayed 5 min), discuss reply, league update; OOP HTML templates in notification-service; shared MailerSend transport in BuildingBlocks |
+| [Email Notifications](EMAIL_NOTIFICATIONS.md) | Opt-in email channel: welcome (on registration), friend request received/accepted, unread direct message (delayed 5 min), discuss reply, league update; OOP HTML templates in notification-service; shared MailerSend transport in BuildingBlocks |
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
@@ -149,7 +149,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Target latency: ≤700ms end-to-end
 
 ### Friends & Chat
-- Friend request system (send, accept, decline, remove)
+- Friend request system (send, accept, decline, cancel own pending request, remove)
 - Public profiles with stats and friendship status
 - User search by display name and email
 - Friend XP leaderboard
@@ -161,7 +161,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 ### Notifications
 - In-app bell with unread badge in top app bar
 - Dropdown panel with recent notifications and "Mark all as read"
-- Triggers: friend request received/accepted, chat message received, achievement unlocked, streak milestone
+- Triggers: welcome (on registration), friend request received/accepted, chat message received, achievement unlocked, streak milestone
 - 20s unread count polling, 30s list polling
 - Deep-links via actionUrl on notification activation
 - Hangfire daily cleanup job deletes read notifications older than 30 days

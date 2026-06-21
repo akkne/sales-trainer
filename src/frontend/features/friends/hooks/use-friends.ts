@@ -141,6 +141,20 @@ export function useDeclineFriendRequest() {
     });
 }
 
+export function useCancelFriendRequest() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (friendshipId: string) =>
+            apiClient.delete(`/friends/requests/${friendshipId}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
+            queryClient.invalidateQueries({ queryKey: ["userSearch"] });
+            queryClient.invalidateQueries({ queryKey: ["publicProfile"] });
+        },
+    });
+}
+
 export function useRemoveFriend() {
     const queryClient = useQueryClient();
 

@@ -6,6 +6,7 @@ import { GeoAvatar } from "@/shared/components/geo-avatar";
 import {
     useAcceptFriendRequest,
     useDeclineFriendRequest,
+    useCancelFriendRequest,
     type FriendRequest,
 } from "@/features/friends/hooks/use-friends";
 
@@ -24,6 +25,7 @@ interface FriendRequestCardProps {
 export function FriendRequestCard({ request }: FriendRequestCardProps) {
     const acceptMutation = useAcceptFriendRequest();
     const declineMutation = useDeclineFriendRequest();
+    const cancelMutation = useCancelFriendRequest();
 
     const isIncoming = request.direction === "incoming";
 
@@ -79,7 +81,17 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
                     </Button>
                 </div>
             ) : (
-                <span className="chip" style={{ flexShrink: 0 }}>Ожидание…</span>
+                <div className="row gap-2 items-center" style={{ flexShrink: 0 }}>
+                    <span className="chip">Ожидание…</span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={cancelMutation.isPending}
+                        onClick={() => cancelMutation.mutate(request.friendshipId)}
+                    >
+                        Отменить
+                    </Button>
+                </div>
             )}
         </div>
     );

@@ -13,7 +13,7 @@ provider, NSubstitute storage, and a recording event publisher):
 
 | Test fixture | Covers |
 |---|---|
-| `FriendServiceTests` | Friend request lifecycle (send/accept/decline/remove), self-request + duplicate guards, decline→re-send revival, direction reporting, friends list + public profile via `UserReplica`, and `friend.request.received` / `friend.request.accepted` event emission (incl. no accept-event on decline). |
+| `FriendServiceTests` | Friend request lifecycle (send/accept/decline/cancel/remove), self-request + duplicate guards, decline→re-send revival, cancel→re-send fresh request, requester-only + pending-only cancel guards (incl. unknown-request 404), direction reporting, friends list + public profile via `UserReplica`, and `friend.request.received` / `friend.request.accepted` event emission (incl. no accept-event on decline). |
 | `DiscussServiceTests` | Thread create (tag resolve + slug reuse), reply count/activity bump, vote toggle + double-upvote idempotency, accepted-reply author-only authorization, view-count increment, `unanswered` filtering, curated-tag duplicate-slug conflict, photo upload (S3 put + metadata), non-author upload forbidden, thread delete cascading votes/photos. |
 | `ChatServiceTests` | Friendship guard — chatting with a non-friend throws; an accepted friendship passes the guard. |
 | `UserReplicaConsumerTests` | `user.registered` seeds the replica, a second registration is idempotent on the row, `user.updated` updates, `user.deleted` removes. |

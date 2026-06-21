@@ -666,6 +666,7 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 | POST | /friends/requests | `{addresseeId}` | 201 `{friendshipId}` |
 | PUT | /friends/requests/{friendshipId}/accept | — | 204 |
 | PUT | /friends/requests/{friendshipId}/decline | — | 204 |
+| DELETE | /friends/requests/{friendshipId} | — | 204 (requester cancels own pending request) |
 | DELETE | /friends/{friendUserId} | — | 204 |
 | GET | /friends/search?query={q} | — | `UserSearchResultDto[]` |
 | GET | /friends/leaderboard | — | `FriendLeaderboardEntryDto[]` |
@@ -676,6 +677,8 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 `FriendRequestDto`: `{friendshipId, userId, displayName, persona?, direction, createdAt}`
 - `direction`: `"incoming"` | `"outgoing"`
+
+Request lifecycle: only the **addressee** may `accept`/`decline`; only the **requester** may `DELETE /friends/requests/{friendshipId}` to cancel a still-pending request. Decline keeps a `Declined` row (so the requester can later revive it by re-sending); cancel hard-deletes the row, returning the pair to the `none` state. Both `accept`/`decline`/`cancel` return `400` if the request is no longer pending and `404` if it does not exist; `cancel` returns `400` if the caller is not the requester. No event is emitted on decline or cancel.
 
 `PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus, avatarUrl}`
 - `friendshipStatus`: `"none"` | `"pending_outgoing"` | `"pending_incoming"` | `"friends"`

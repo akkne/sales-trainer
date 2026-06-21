@@ -10,6 +10,10 @@
 - [ ] Send another request — verify "already friends" error
 - [ ] Decline a friend request — verify it disappears from pending
 - [ ] After decline, resend request — verify it works (status resets to Pending)
+- [ ] Cancel an outgoing request from sender A — "Отменить" button on the outgoing row,
+      request disappears from A's outgoing list and B's incoming list
+- [ ] After cancel, A can send a fresh request to B (returns to none state)
+- [ ] Addressee B cannot cancel an incoming request (only A may); A cannot cancel after B accepts
 
 ### Friend Management
 - [ ] View friends list with stats (XP, streak, achievements)
@@ -57,6 +61,7 @@
 - [ ] Cannot accept request meant for another user (400 error)
 - [ ] Cannot chat with non-friend (400 error)
 - [ ] Cannot create duplicate friend request (400 error)
+- [ ] Cancel a non-pending or non-owned request returns 400; cancel a missing request returns 404
 - [ ] Navigation badge shows incoming request count
 
 ### Navigation

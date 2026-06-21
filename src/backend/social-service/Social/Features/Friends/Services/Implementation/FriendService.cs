@@ -205,6 +205,28 @@ internal sealed class FriendService(
         await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task CancelFriendRequestAsync(
+        Guid userId,
+        Guid friendshipId,
+        CancellationToken cancellationToken = default)
+    {
+        var friendship = await databaseContext.Friendships
+            .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
+            ?? throw new KeyNotFoundException("Friend request not found.");
+
+        if (friendship.RequesterId != userId)
+            throw new InvalidOperationException("Only the requester can cancel a friend request.");
+
+        if (friendship.Status != FriendshipStatus.Pending)
+            throw new InvalidOperationException("This friend request is no longer pending.");
+
+        // Withdrawing a pending request returns the pair to the "none" state, so we hard-delete
+        // the row rather than leaving a Declined tombstone behind (unlike decline, which keeps the
+        // record so the requester can later revive it). Either party may start fresh afterwards.
+        databaseContext.Friendships.Remove(friendship);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task RemoveFriendAsync(
         Guid userId,
         Guid friendUserId,

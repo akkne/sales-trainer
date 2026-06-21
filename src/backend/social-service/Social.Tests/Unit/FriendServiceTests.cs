@@ -109,6 +109,54 @@ public sealed class FriendServiceTests
     }
 
     [Test]
+    public async Task CancelFriendRequestAsync_by_requester_deletes_pending_request()
+    {
+        var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+
+        await _friendService.CancelFriendRequestAsync(RequesterId, friendship.Id);
+
+        _databaseContext.Friendships.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CancelFriendRequestAsync_by_addressee_throws()
+    {
+        var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+
+        var action = async () => await _friendService.CancelFriendRequestAsync(AddresseeId, friendship.Id);
+        await action.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task CancelFriendRequestAsync_when_not_pending_throws()
+    {
+        var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+        await _friendService.AcceptFriendRequestAsync(AddresseeId, friendship.Id);
+
+        var action = async () => await _friendService.CancelFriendRequestAsync(RequesterId, friendship.Id);
+        await action.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task CancelFriendRequestAsync_for_unknown_request_throws_not_found()
+    {
+        var action = async () => await _friendService.CancelFriendRequestAsync(RequesterId, Guid.NewGuid());
+        await action.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Test]
+    public async Task SendFriendRequestAsync_after_cancel_creates_fresh_pending_request()
+    {
+        var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+        await _friendService.CancelFriendRequestAsync(RequesterId, friendship.Id);
+
+        var resent = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+
+        resent.Status.Should().Be(FriendshipStatus.Pending);
+        _eventPublisher.FriendRequestReceivedEvents.Should().HaveCount(2);
+    }
+
+    [Test]
     public async Task SendFriendRequestAsync_after_decline_revives_pending_and_emits_event_again()
     {
         var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);

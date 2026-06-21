@@ -9,6 +9,7 @@ public interface IFriendService
     Task<Friendship> SendFriendRequestAsync(Guid requesterId, Guid addresseeId, CancellationToken cancellationToken = default);
     Task AcceptFriendRequestAsync(Guid userId, Guid friendshipId, CancellationToken cancellationToken = default);
     Task DeclineFriendRequestAsync(Guid userId, Guid friendshipId, CancellationToken cancellationToken = default);
+    Task CancelFriendRequestAsync(Guid userId, Guid friendshipId, CancellationToken cancellationToken = default);
     Task RemoveFriendAsync(Guid userId, Guid friendUserId, CancellationToken cancellationToken = default);
     Task<List<UserSearchResultDto>> SearchUsersAsync(Guid currentUserId, string query, CancellationToken cancellationToken = default);
     Task<PublicProfileDto> GetPublicProfileAsync(Guid viewerUserId, Guid targetUserId, CancellationToken cancellationToken = default);

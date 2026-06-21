@@ -100,6 +100,29 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         }
     }
 
+    [HttpDelete("requests/{friendshipId:guid}")]
+    public async Task<IActionResult> CancelFriendRequest(
+        Guid friendshipId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            await friendService.CancelFriendRequestAsync(userId, friendshipId, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
     [HttpDelete("{friendUserId:guid}")]
     public async Task<IActionResult> RemoveFriend(
         Guid friendUserId,
