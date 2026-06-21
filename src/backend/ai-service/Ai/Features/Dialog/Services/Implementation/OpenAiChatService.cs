@@ -194,8 +194,8 @@ endCall: true означает, что твой персонаж кладёт т
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, errorBody);
-            throw new HttpRequestException($"OpenAI stream returned {response.StatusCode}: {errorBody}");
+            _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(errorBody));
+            throw new HttpRequestException("AI provider error");
         }
 
         var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -402,7 +402,7 @@ endCall: true означает, что твой персонаж кладёт т
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, responseContent);
+            _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(responseContent));
 
             if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
                 throw new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance.");
@@ -413,7 +413,7 @@ endCall: true означает, что твой персонаж кладёт т
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 throw new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration.");
 
-            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
+            throw new HttpRequestException("AI provider error");
         }
 
         _logger.LogDebug("OpenAI API response: {Response}", responseContent);
@@ -458,6 +458,14 @@ endCall: true означает, что твой персонаж кладёт т
 
         logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
         throw new InvalidOperationException($"Unexpected API response format: {responseContent}");
+    }
+
+    private static string RedactAndTruncate(string body)
+    {
+        const int maxLength = 500;
+        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        return redacted.Length > maxLength ? redacted[..maxLength] + "…" : redacted;
     }
 
     private static string FormatConversationForFeedback(List<DialogMessage> messages)

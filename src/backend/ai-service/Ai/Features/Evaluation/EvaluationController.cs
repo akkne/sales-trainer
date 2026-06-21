@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Evaluation.Services.Abstract;
@@ -27,6 +28,12 @@ public sealed class EvaluationController : ControllerBase
             return BadRequest(new { message = "exerciseType is required." });
         }
 
+        var userAnswerJson = request.UserAnswer.GetRawText();
+        if (userAnswerJson.Length > 16000)
+        {
+            return BadRequest(new { message = "userAnswer exceeds maximum allowed size." });
+        }
+
         try
         {
             var result = await _evaluationService.EvaluateAsync(request, cancellationToken);
@@ -39,7 +46,12 @@ public sealed class EvaluationController : ControllerBase
         catch (InvalidOperationException invalidOperationException)
         {
             _logger.LogWarning(invalidOperationException, "Evaluation failed for exercise type {ExerciseType}", request.ExerciseType);
-            return StatusCode(503, new { message = invalidOperationException.Message });
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            _logger.LogWarning(httpRequestException, "AI provider error during evaluation for exercise type {ExerciseType}", request.ExerciseType);
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
     }
 }

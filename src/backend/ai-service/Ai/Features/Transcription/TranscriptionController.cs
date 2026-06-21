@@ -53,7 +53,7 @@ public sealed class TranscriptionController(
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "Whisper API call failed for file {FileName}", file.FileName);
-            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Ошибка при обращении к Whisper API.", detail = ex.Message });
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Ошибка при обращении к Whisper API." });
         }
     }
 }

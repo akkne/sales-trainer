@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -8,7 +9,8 @@ namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
 internal abstract class AiEvaluationStrategyBase(
     IHttpClientFactory httpClientFactory,
-    IOptions<OpenAiConfiguration> openAiOptions)
+    IOptions<OpenAiConfiguration> openAiOptions,
+    ILogger logger)
 {
     protected async Task<ExerciseEvaluationResult> EvaluateWithAiAsync(
         string userPrompt,
@@ -79,7 +81,8 @@ internal abstract class AiEvaluationStrategyBase(
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseBody}");
+            logger.LogError("OpenAI evaluation API error: {StatusCode} - {Body}", response.StatusCode, RedactAndTruncate(responseBody));
+            throw new HttpRequestException("AI provider error");
         }
 
         if (responseBody.Contains("\"error\""))
@@ -88,19 +91,17 @@ internal abstract class AiEvaluationStrategyBase(
             {
                 using var errorDocument = JsonDocument.Parse(responseBody);
                 if (errorDocument.RootElement.ValueKind == JsonValueKind.Object &&
-                    errorDocument.RootElement.TryGetProperty("error", out var errorElement))
+                    errorDocument.RootElement.TryGetProperty("error", out _))
                 {
-                    var errorMessage = errorElement.ValueKind == JsonValueKind.Object &&
-                                       errorElement.TryGetProperty("message", out var messageElement)
-                        ? messageElement.ToString()
-                        : errorElement.ToString();
-                    throw new HttpRequestException($"OpenAI API error: {errorMessage}. Full response: {responseBody}");
+                    logger.LogError("OpenAI evaluation returned error body: {Body}", RedactAndTruncate(responseBody));
+                    throw new HttpRequestException("AI provider error");
                 }
             }
             catch (JsonException)
             {
             }
         }
+
         var responseJson = JsonDocument.Parse(responseBody);
 
         string aiResponseText;
@@ -119,7 +120,8 @@ internal abstract class AiEvaluationStrategyBase(
         }
         else
         {
-            throw new InvalidOperationException($"Unexpected API response format: {responseBody}");
+            logger.LogError("Unexpected AI response format: {Body}", RedactAndTruncate(responseBody));
+            throw new InvalidOperationException("Unexpected AI response format");
         }
 
         return ParseAiResponse(aiResponseText);
@@ -131,14 +133,16 @@ internal abstract class AiEvaluationStrategyBase(
         {
             var aiResult = JsonDocument.Parse(aiResponseText).RootElement;
 
-            var passed = aiResult.TryGetProperty("passed", out var passedElement)
-                && passedElement.GetBoolean();
+            var passed = aiResult.TryGetProperty("passed", out var passedElement) && GetBooleanSafe(passedElement);
 
             var rating = aiResult.TryGetProperty("rating", out var ratingElement)
-                ? ratingElement.GetInt32() : 5;
+                ? GetInt32Safe(ratingElement, defaultValue: 5)
+                : 5;
+            rating = Math.Clamp(rating, 1, 10);
 
             var feedback = aiResult.TryGetProperty("feedback", out var feedbackElement)
-                ? feedbackElement.GetString() : null;
+                ? feedbackElement.GetString()
+                : null;
 
             var score = rating * 10;
             var isCorrect = passed || rating >= 8;
@@ -149,9 +153,40 @@ internal abstract class AiEvaluationStrategyBase(
                 Explanation: $"Оценка: {rating}/10",
                 AiFeedback: feedback);
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            throw new InvalidOperationException($"Failed to parse AI response: {aiResponseText}", exception);
+            // Degrade gracefully: return a failed-but-valid result rather than throwing into a 503
+            return new ExerciseEvaluationResult(
+                IsCorrect: false,
+                Score: 0,
+                Explanation: "Не удалось разобрать ответ AI",
+                AiFeedback: null);
         }
+    }
+
+    private static bool GetBooleanSafe(JsonElement element) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => bool.TryParse(element.GetString(), out var b) && b,
+            JsonValueKind.Number => element.TryGetInt32(out var n) && n != 0,
+            _ => false
+        };
+
+    private static int GetInt32Safe(JsonElement element, int defaultValue) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.Number => element.TryGetInt32(out var n) ? n : defaultValue,
+            JsonValueKind.String => int.TryParse(element.GetString(), out var n) ? n : defaultValue,
+            _ => defaultValue
+        };
+
+    private static string RedactAndTruncate(string body)
+    {
+        const int maxLength = 500;
+        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        return redacted.Length > maxLength ? redacted[..maxLength] + "…" : redacted;
     }
 }

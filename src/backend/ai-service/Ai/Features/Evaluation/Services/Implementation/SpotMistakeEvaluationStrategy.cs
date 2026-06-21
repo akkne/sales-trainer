@@ -9,8 +9,9 @@ namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
 internal sealed class SpotMistakeEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IOptions<OpenAiConfiguration> openAiOptions)
-    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions), IExerciseEvaluationStrategy
+    IOptions<OpenAiConfiguration> openAiOptions,
+    ILogger<SpotMistakeEvaluationStrategy> logger)
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, logger), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.SpotMistake;
 

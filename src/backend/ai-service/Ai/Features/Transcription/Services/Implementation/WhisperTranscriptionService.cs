@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Transcription.Models;
 using Sellevate.Ai.Features.Transcription.Services.Abstract;
@@ -49,9 +50,8 @@ internal sealed class WhisperTranscriptionService(
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogError("Whisper API returned {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
-            throw new InvalidOperationException(
-                $"Whisper API error {(int)response.StatusCode}: {errorBody}");
+            logger.LogError("Whisper API returned {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
+            throw new InvalidOperationException("AI provider error");
         }
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -69,6 +69,14 @@ internal sealed class WhisperTranscriptionService(
             detectedLanguage, text.Length);
 
         return new TranscriptionResult(text, detectedLanguage);
+    }
+
+    private static string RedactAndTruncate(string body)
+    {
+        const int maxLength = 500;
+        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
+        return redacted.Length > maxLength ? redacted[..maxLength] + "…" : redacted;
     }
 
     private static string GetMimeType(string fileName)

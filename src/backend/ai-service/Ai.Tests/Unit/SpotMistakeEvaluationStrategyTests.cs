@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
@@ -15,7 +16,7 @@ public class SpotMistakeEvaluationStrategyTests
     {
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         var options = Options.Create(new OpenAiConfiguration { ApiKey = "test-key" });
-        return new SpotMistakeEvaluationStrategy(httpClientFactory, options);
+        return new SpotMistakeEvaluationStrategy(httpClientFactory, options, NullLogger<SpotMistakeEvaluationStrategy>.Instance);
     }
 
     private const string Dialogue = """
