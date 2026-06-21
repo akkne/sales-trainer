@@ -196,7 +196,7 @@ See [NOTIFICATION_SERVICE.md](NOTIFICATION_SERVICE.md) for the implementation wr
 
 ---
 
-## Phase 5 — Social Service `[>]`
+## Phase 5 — Social Service `[x]`
 Goal: user-to-user features; becomes a notification event producer.
 See [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md) for the implementation writeup.
 
