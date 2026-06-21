@@ -3,8 +3,8 @@
 > **Microservices note (Phase 9):** the public API is now served by the **YARP
 > gateway**, which routes every path to its owning microservice (identity, learning,
 > gamification, ai, social, analytics, notification). The original monolith
-> (`src/backend/api`) is **retired** — it is no longer built or run as a container and
-> is kept in the repo as a reference only. In the Traefik prod overlay,
+> (`src/backend/api`) is **retired and removed from `main`** — it is preserved on the
+> `monolith-legacy` branch for rollback/reference. In the Traefik prod overlay,
 > `api.${DOMAIN}` now points at the `gateway` service; "backend" below refers to this
 > gateway + service mesh unless it explicitly says monolith.
 

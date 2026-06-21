@@ -15,10 +15,9 @@ services:
       - gateway
       - loki
 
-  # NOTE: the monolith (src/backend/api) is RETIRED (Phase 9). It no longer runs as a
-  # container — all routes were extracted into the per-service backends below and the
-  # gateway dropped its catch-all to the monolith. The code stays in the repo as a
-  # reference only. To run it ad-hoc for comparison, use `scripts/dev-backend.sh --force`.
+  # NOTE: the monolith (src/backend/api) has been REMOVED from main (kept on the
+  # `monolith-legacy` branch for rollback/reference). All routes were extracted into
+  # the per-service backends below and the gateway fans out to them.
 
   # Identity microservice (Phase 2 extraction). Owns its own database (identity-db on
   # the shared Postgres instance) and is the sole JWT issuer. The gateway flips

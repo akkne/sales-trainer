@@ -3,9 +3,9 @@
 #   1. infra in Docker (docker-compose.infra.yml)
 #   2. frontend (Next.js) on the host
 #
-# The monolith (src/backend/api) is retired (Phase 9) and is no longer launched here;
-# it is kept as a reference only (run scripts/dev-backend.sh --force to start it).
-# The frontend talks to the API gateway, which routes to the per-service backends.
+# The monolith (src/backend/api) has been removed from main (kept on the
+# `monolith-legacy` branch). The frontend talks to the API gateway, which routes
+# to the per-service backends.
 #
 # The frontend runs in the background; its logs go to logs/.
 # Stop everything with scripts/dev-down.sh.
