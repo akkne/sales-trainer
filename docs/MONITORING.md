@@ -58,8 +58,15 @@ monotonic counters: `increase(app_authenticated_requests_total[1d])` /
 - **`app_users_online`** — Redis sorted set `presence:online` (member = userId, score =
   last-seen unix sec), managed by `PresenceTracker`. Because Prometheus *pulls* gauges,
   `PresenceGaugeUpdaterService` (a `BackgroundService`, every 20s — faster than the 15s
-  scrape) prunes stale members and pushes the count into the gauge. **Tradeoff:** the
-  gauge is eventually-consistent to within one 20s tick.
+  scrape) reads the count from Redis and sets the gauge. Pruning of stale set members is
+  done on a separate slower cadence (every 5 min); `CountOnlineAsync` already filters by
+  the presence window so the gauge value is always accurate without pruning. **Tradeoff:**
+  the gauge is eventually-consistent to within one 20s tick.
+  **IMPORTANT — horizontal scaling:** every replica reads the same Redis data and will
+  produce the same gauge value. Always aggregate `app_users_online` with **`max()`**, not
+  `sum()`, across replicas — `sum()` multiplies the count by replica count.
+  Correct PromQL: `max(app_users_online)`. Each replica also applies a random startup
+  jitter (up to the 20s update interval) to spread Redis load across instances.
 - **`app_page_views_total` / `app_events_total`** — frontend posts to
   `POST /tracking/events` (analytics-service `TrackingController`), which validates and
   increments.

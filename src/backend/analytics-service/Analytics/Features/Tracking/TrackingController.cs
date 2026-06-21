@@ -32,8 +32,13 @@ public sealed class TrackingController : ControllerBase
     }
 
     [HttpPost(RouteConstants.TrackingEvents)]
-    public IActionResult TrackEvent([FromBody] TrackEventRequestDto request)
+    public IActionResult TrackEvent([FromBody] TrackEventRequestDto? request)
     {
+        if (request is null)
+        {
+            return BadRequest(new { message = ErrorMessages.MissingOrMalformedBody });
+        }
+
         if (!_usageEventRecorder.TryRecord(request))
         {
             return BadRequest(new { message = ErrorMessages.UnknownEventOrPage });
