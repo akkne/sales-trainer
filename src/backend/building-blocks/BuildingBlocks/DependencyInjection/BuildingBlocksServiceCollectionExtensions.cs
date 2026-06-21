@@ -30,6 +30,11 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.Configure<KafkaSettings>(configuration.GetSection(KafkaSettings.SectionName));
         services.Configure<ConsumerResilienceSettings>(configuration.GetSection(ConsumerResilienceSettings.SectionName));
         services.Configure<OutboxSettings>(configuration.GetSection(OutboxSettings.SectionName));
+
+        // Registered first so its StartAsync creates all topics before any consumer subscribes —
+        // otherwise a broker with auto-create disabled fails the consume loop with
+        // "Unknown topic or partition" and no events are ever delivered.
+        services.AddHostedService<KafkaTopicProvisioner>();
         services.AddSingleton<KafkaEventPublisher>();
         services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());

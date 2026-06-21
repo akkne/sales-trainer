@@ -52,4 +52,18 @@ public static class Topics
 
     /// <summary>Builds the dead-letter topic name for <paramref name="sourceTopic"/>.</summary>
     public static string DeadLetterFor(string sourceTopic) => sourceTopic + DeadLetterSuffix;
+
+    /// <summary>
+    /// All declared base topic names (excludes the <see cref="DeadLetterSuffix"/> helper and any
+    /// dead-letter companions). Reflected once from the <c>const string</c> fields so a newly
+    /// added topic is automatically picked up by the startup provisioner.
+    /// </summary>
+    public static IReadOnlyCollection<string> All { get; } = typeof(Topics)
+        .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+        .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        // Skip the ".dlt" suffix constant; real topic names never start with a dot.
+        .Where(value => !value.StartsWith('.'))
+        .Distinct()
+        .ToArray();
 }

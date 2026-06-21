@@ -250,6 +250,17 @@ a composition of those per-service admin APIs.
 per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once
 delivery → **consumers are idempotent** (dedupe on `eventId`).
 
+**Topic provisioning:** topics are **not** auto-created by the broker. Every service runs
+`KafkaTopicProvisioner` (a hosted service registered first by `AddSellevateEventing`) which
+creates all topics from `Topics.All` plus their `.dlt` companions on startup via an admin
+client (idempotent — "already exists" is success). This removes the dependency on the broker's
+`auto.create.topics.enable`: with it disabled (typical for managed/hardened brokers) a consumer
+subscribing to a missing topic otherwise fails the consume loop with *"Subscribed topic not
+available: … Unknown topic or partition"* and **no events are ever delivered** (e.g. no
+notification emails). Partition count / replication factor are configurable via
+`Kafka:TopicPartitions` / `Kafka:TopicReplicationFactor` (defaults 1/1 — raise RF on a
+multi-broker production cluster); set `Kafka:ProvisionTopics=false` to opt out.
+
 ### 4.2 Synchronous service-to-service REST (kept minimal)
 
 | Caller → Callee | Endpoint | Why sync (not event) |
