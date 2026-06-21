@@ -154,6 +154,17 @@ public sealed class AdminUsersController(
         }
 
         var previousRole = user.Role;
+
+        if (previousRole == UserRole.SuperAdmin && newRole != UserRole.SuperAdmin)
+        {
+            var superAdminCount = await database.Users
+                .CountAsync(u => u.Role == UserRole.SuperAdmin, cancellationToken);
+            if (superAdminCount <= 1)
+            {
+                return Conflict(new { message = "Cannot demote the last SuperAdmin." });
+            }
+        }
+
         user.Role = newRole;
         await database.SaveChangesAsync(cancellationToken);
 

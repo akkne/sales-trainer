@@ -9,6 +9,7 @@ using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Onboarding;
 using Sellevate.Identity.Features.Profile;
+using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Infrastructure.Email;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
@@ -101,12 +102,16 @@ builder.Services
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
 application.UseCors();
 
