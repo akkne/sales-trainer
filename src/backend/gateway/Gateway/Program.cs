@@ -52,9 +52,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ── YARP reverse proxy ───────────────────────────────────────────────────────
-// Routes/clusters come from the "ReverseProxy" config section. Phase 0 ships a
-// single catch-all route to the monolith, so behaviour is unchanged; later phases
-// add per-service routes here and flip prefixes off the monolith one at a time.
+// Routes/clusters come from the "ReverseProxy" config section. The monolith is
+// retired (Phase 9): every prefix is owned by a microservice cluster and there is
+// no catch-all, so an unknown route returns 404 instead of falling through.
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddTransforms(transformBuilderContext =>
@@ -70,8 +70,8 @@ var application = builder.Build();
 
 application.UseSerilogRequestLogging();
 
-// Lightweight liveness endpoint (kept off the proxy so it works even if the
-// monolith is down).
+// Lightweight liveness endpoint (kept off the proxy so it works even if a
+// downstream microservice is down).
 application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "gateway" }));
 
 application.UseAuthentication();
