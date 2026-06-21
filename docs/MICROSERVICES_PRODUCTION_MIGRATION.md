@@ -170,8 +170,15 @@ monolith DB into the right service DB and seeds the `UserReplicas` projections.
 It is **read-only on the monolith** and refuses to overwrite non-empty targets
 unless `--force`.
 
+> **No `psql`/`pg_dump` needed on the host.** The script auto-detects the running
+> `postgres` container and runs the Postgres tools *inside* it (so the client
+> version always matches the server — an older host `pg_dump` would refuse to dump
+> a newer server). Force the mode with `PG_MODE=docker` / `PG_MODE=host` if needed.
+> `--dry-run` also prints a **column-parity report**: if any monolith column is
+> missing in a service table, it's flagged there instead of failing mid-load.
+
 ```bash
-# Dry run first — shows the table→service plan and row counts, writes nothing:
+# Dry run first — shows the table→service plan, row counts, and column parity; writes nothing:
 ./scripts/migrate-monolith-to-services.sh --dry-run
 
 # Real run (PG host/port/creds + monolith DB name are read from .env):
