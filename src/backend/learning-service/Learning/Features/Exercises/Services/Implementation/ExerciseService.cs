@@ -303,6 +303,9 @@ internal sealed class ExerciseService(
             await PublishSkillCompletionIfFinishedAsync(userId, exercise.LessonId, cancellationToken);
         }
 
+        // Flush staged outbox rows (exercise/lesson/skill events) in one commit.
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
         return new ExerciseSubmissionResultDto(
             evaluationResult.IsCorrect,
             evaluationResult.Score,

@@ -89,10 +89,9 @@ public sealed class AvatarService(
 
         user.AvatarType = AvatarKind.Uploaded;
         user.AvatarKey = objectKey;
-        await database.SaveChangesAsync(cancellationToken);
-
         await userEventPublisher.PublishAvatarChangedAsync(
             new UserAvatarChangedEvent(userId, objectKey), cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
 
         return objectKey;
     }
@@ -123,9 +122,8 @@ public sealed class AvatarService(
 
         user.AvatarType = AvatarKind.Default;
         user.AvatarKey = null;
-        await database.SaveChangesAsync(cancellationToken);
-
         await userEventPublisher.PublishAvatarChangedAsync(
             new UserAvatarChangedEvent(userId, null), cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
     }
 }

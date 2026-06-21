@@ -1,3 +1,4 @@
+using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Exercises;
 using Sellevate.Learning.Features.Reference;
@@ -14,6 +15,9 @@ public static class LearningServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddScoped<ILearningEventPublisher, KafkaLearningEventPublisher>();
+        services.AddScoped<IOutboxWriter, LearningOutboxWriter>();
+        services.AddScoped<IOutboxStore, LearningOutboxStore>();
+        services.AddHostedService<OutboxRelayBackgroundService>();
 
         services.AddAiEvaluationClient(configuration);
 

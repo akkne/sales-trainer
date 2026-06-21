@@ -57,6 +57,7 @@ internal sealed class AuthenticationService(
         };
 
         databaseContext.Users.Add(newUser);
+        await PublishUserRegisteredAsync(newUser, cancellationToken);
         try
         {
             await databaseContext.SaveChangesAsync(cancellationToken);
@@ -66,8 +67,6 @@ internal sealed class AuthenticationService(
             logger.LogWarning("Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
             throw new InvalidOperationException("Email already registered.");
         }
-
-        await PublishUserRegisteredAsync(newUser, cancellationToken);
 
         try
         {
@@ -208,7 +207,6 @@ internal sealed class AuthenticationService(
             }
         }
 
-        var isNewUser = false;
         var displayName = string.IsNullOrWhiteSpace(googlePayload.Name)
             ? googlePayload.Email
             : googlePayload.Name;
@@ -227,8 +225,8 @@ internal sealed class AuthenticationService(
                 DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
             };
             databaseContext.Users.Add(existingUser);
+            await PublishUserRegisteredAsync(existingUser, cancellationToken);
             await databaseContext.SaveChangesAsync(cancellationToken);
-            isNewUser = true;
             logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
         else if (existingUser.GoogleId is null)
@@ -241,11 +239,6 @@ internal sealed class AuthenticationService(
         else
         {
             logger.LogInformation("Google login successful {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
-        }
-
-        if (isNewUser)
-        {
-            await PublishUserRegisteredAsync(existingUser, cancellationToken);
         }
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
