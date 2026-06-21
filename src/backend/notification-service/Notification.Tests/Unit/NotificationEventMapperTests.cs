@@ -77,6 +77,7 @@ public class NotificationEventMapperTests
         request.Should().NotBeNull();
         request!.NotificationType.Should().Be(NotificationType.FriendRequestAccepted);
         request.ActionUrl.Should().Be($"/friends/{accepterId}");
+        request.SendEmail.Should().BeTrue();
     }
 
     [Test]

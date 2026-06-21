@@ -14,8 +14,8 @@ Unit suite (NUnit, no external dependencies — runs offline against an in-memor
 | Test fixture | Covers |
 |---|---|
 | `NotificationServiceTests` | event→inbox write; unread count counts only unread; newest-first ordering + `limit`; `includeRead=false` filtering; mark-read drops the unread count + is idempotent for already-read; unknown id throws; mark-all-read; **inbox capping** at configured capacity; **retention applied as the Redis TTL**; **`SendEmail=true` dispatches an email, `false` does not, and a deduped replay does not email twice**. |
-| `NotificationEventMapperTests` | All events map to the correct `NotificationType`, body, `actionUrl` and `relatedEntityId`; chat preview is truncated to 160 chars; **friend-request, discuss-reply and league-update set `SendEmail=true`** (self-reply maps to `null`, chat keeps `SendEmail=false`); unknown topic and blank-name payloads map to `null` (so the consumer safely skips them — the idempotency basis). |
-| `NotificationEmailRendererTests` | Per-type template selection (friend-request/chat/discuss/league) and generic fallback for unmapped types; relative action paths resolve to absolute frontend URLs (and already-absolute URLs pass through); untrusted body is HTML-encoded; the CTA button is omitted when there is no action URL. |
+| `NotificationEventMapperTests` | All events map to the correct `NotificationType`, body, `actionUrl` and `relatedEntityId`; chat preview is truncated to 160 chars; **friend-request, friend-request-accepted, discuss-reply and league-update set `SendEmail=true`** (self-reply maps to `null`, chat keeps `SendEmail=false`); unknown topic and blank-name payloads map to `null` (so the consumer safely skips them — the idempotency basis). |
+| `NotificationEmailRendererTests` | Per-type template selection (friend-request/friend-request-accepted/chat/discuss/league) and generic fallback for unmapped types; relative action paths resolve to absolute frontend URLs (and already-absolute URLs pass through); untrusted body is HTML-encoded; the CTA button is omitted when there is no action URL. |
 | `NotificationRouteFlipTests` (gateway project) | `/notifications` and `/notifications/{**catch-all}` route to the `notification` cluster, not the monolith; the cluster has a destination. |
 
 > The Redis-backed delayed-chat scheduler (`RedisDelayedChatEmailScheduler`) and the
@@ -59,12 +59,15 @@ recipient has been replicated (a `user.registered` event seeded `notifications:u
 1. **Friend request** — publish `friend.request.received` (or send a friend request via the
    social service). The recipient receives an email "You have a new friend request" with a
    `View request` button linking to `{Frontend:Url}/friends?tab=requests`.
-2. **Discuss reply** — publish `discuss.reply.created` (or reply to a thread via the social
+2. **Friend request accepted** — publish `friend.request.accepted` (or accept a request via the
+   social service). The requester receives an email "Your friend request was accepted" with a
+   `View profile` button linking to `{Frontend:Url}/friends/{accepterId}`.
+3. **Discuss reply** — publish `discuss.reply.created` (or reply to a thread via the social
    service). The thread author receives an email "New reply to your discussion" with a
    `View discussion` button linking to `{Frontend:Url}/discuss/{threadId}`.
-3. **League update** — publish `league.updated` (or trigger the weekly rollover). The member
+4. **League update** — publish `league.updated` (or trigger the weekly rollover). The member
    receives "Your Sellevate league was updated" with the promoted/demoted/new-week wording.
-4. **Unread chat (delayed)** — set `NotificationEmail__ChatUnreadDelayMinutes` low (e.g. 1) and
+5. **Unread chat (delayed)** — set `NotificationEmail__ChatUnreadDelayMinutes` low (e.g. 1) and
    `DispatcherPollIntervalSeconds` to a few seconds. Publish `chat.message.sent`; wait past the
    delay → an email is sent. Repeat, but publish `chat.message.read` (or call
    `POST /chat/conversations/{id}/read`) before the delay → **no** email is sent.

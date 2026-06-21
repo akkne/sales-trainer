@@ -16,6 +16,7 @@ public class NotificationEmailRendererTests
             new INotificationEmailTemplate[]
             {
                 new FriendRequestEmailTemplate(),
+                new FriendRequestAcceptedEmailTemplate(),
                 new ChatMessageEmailTemplate(),
                 new DiscussReplyEmailTemplate(),
                 new LeagueUpdatedEmailTemplate(),
@@ -50,6 +51,18 @@ public class NotificationEmailRendererTests
         content.HtmlBody.Should().Contain("New friend request");
         content.HtmlBody.Should().Contain("View request");
         content.HtmlBody.Should().Contain($"{FrontendBaseUrl}/friends?tab=requests");
+    }
+
+    [Test]
+    public void Render_FriendRequestAccepted_UsesAcceptedTemplate()
+    {
+        var content = CreateRenderer().Render(
+            Context(NotificationType.FriendRequestAccepted, actionUrl: "/friends/abc"));
+
+        content.Subject.Should().Be("Your friend request was accepted");
+        content.HtmlBody.Should().Contain("Friend request accepted");
+        content.HtmlBody.Should().Contain("View profile");
+        content.HtmlBody.Should().Contain($"{FrontendBaseUrl}/friends/abc");
     }
 
     [Test]

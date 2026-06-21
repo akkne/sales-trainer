@@ -135,7 +135,8 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             NotificationTitles.FriendRequestAccepted,
             $"{payload.AccepterName} accepted your friend request.",
             actionUrl,
-            payload.AccepterId?.ToString());
+            payload.AccepterId?.ToString(),
+            SendEmail: true);
     }
 
     private static CreateNotificationRequest? MapChatMessageSent(EventEnvelope envelope)
