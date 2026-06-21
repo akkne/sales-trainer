@@ -13,8 +13,11 @@ namespace Sellevate.BuildingBlocks.Messaging;
 /// Registered as a singleton — the underlying producer is thread-safe and pools
 /// its broker connections.
 /// </summary>
-public sealed class KafkaEventPublisher : IEventPublisher, IDisposable
+public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher, IDisposable
 {
+    private const string DeadLetterReasonHeader = "x-dead-letter-reason";
+    private const string DeadLetterAtHeader = "x-dead-letter-at";
+
     private readonly IProducer<string, string> _producer;
     private readonly ILogger<KafkaEventPublisher> _logger;
 
@@ -49,6 +52,29 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDisposable
         _logger.LogDebug(
             "Published {EventType} ({EventId}) to {Topic} [partition {Partition}, offset {Offset}]",
             eventType, envelope.EventId, topic, result.Partition.Value, result.Offset.Value);
+    }
+
+    public async Task PublishAsync(
+        string deadLetterTopic,
+        string partitionKey,
+        string rawValue,
+        string failureReason,
+        CancellationToken cancellationToken = default)
+    {
+        var headers = new Headers
+        {
+            { DeadLetterReasonHeader, System.Text.Encoding.UTF8.GetBytes(failureReason) },
+            { DeadLetterAtHeader, System.Text.Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("O")) },
+        };
+
+        var result = await _producer.ProduceAsync(
+            deadLetterTopic,
+            new Message<string, string> { Key = partitionKey, Value = rawValue, Headers = headers },
+            cancellationToken);
+
+        _logger.LogWarning(
+            "Dead-lettered message to {Topic} [partition {Partition}, offset {Offset}]: {Reason}",
+            deadLetterTopic, result.Partition.Value, result.Offset.Value, failureReason);
     }
 
     public void Dispose()

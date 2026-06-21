@@ -75,6 +75,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | [SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md) | Phase 5: social-service unit tests (friend lifecycle + events, forum CRUD/voting/photos, chat friendship guard, `user.*` replica consumer, event contract) + gateway route-flip |
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
+| [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

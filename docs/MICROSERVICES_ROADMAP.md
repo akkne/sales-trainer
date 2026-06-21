@@ -394,7 +394,14 @@ API client). Unknown routes now return 404.
       `kafka-exporter` scrape job, and a Grafana dashboard
       `infrastructure/grafana/dashboards/kafka-consumer-lag.json` (consumer lag by
       group/topic + broker/service health). Docs: [MONITORING.md](MONITORING.md).
-- [ ] **10.2** Dead-letter topics + retry policy for poison events.
+- [x] **10.2** Dead-letter topics + retry policy for poison events. The shared consumer
+      base (`KafkaConsumerBackgroundService` → new testable `EventMessageProcessor`) now
+      runs a bounded in-process retry then publishes the poison message to `<topic>.dlt`
+      and commits, so it can't block the partition. Opt-in via strongly-typed
+      `ConsumerResilienceSettings` (`Kafka:ConsumerResilience`) with safe defaults
+      (3 retries / 500 ms / DLT on). Unit-tested (retry count, DLT publish, disabled path,
+      dedupe, unparseable). Applies to all consumers (shared base). Docs: ARCHITECTURE.md,
+      TESTING/HARDENING.md.
 - [ ] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
       atomic DB-write + event-publish.
 - [ ] **10.4** Contract tests on Kafka schemas (and optional Schema Registry/Avro).

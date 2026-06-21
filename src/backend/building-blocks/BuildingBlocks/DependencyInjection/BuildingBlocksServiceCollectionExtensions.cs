@@ -25,7 +25,10 @@ public static class BuildingBlocksServiceCollectionExtensions
     public static IServiceCollection AddSellevateEventing(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<KafkaSettings>(configuration.GetSection(KafkaSettings.SectionName));
-        services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+        services.Configure<ConsumerResilienceSettings>(configuration.GetSection(ConsumerResilienceSettings.SectionName));
+        services.AddSingleton<KafkaEventPublisher>();
+        services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
+        services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
         return services;
     }
