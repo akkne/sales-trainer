@@ -31,7 +31,7 @@ The frontend stays on Vercel. The only thing the frontend needs is that
 ## 1. Resource impact (how much bigger the box must be)
 
 **There is no GPU anywhere and that does not change.** All AI is external HTTP
-(OpenAI-compatible LLM, Whisper STT, Yandex/Google TTS). GPU need = **0 → 0**.
+(OpenAI-compatible LLM, Whisper STT, Yandex TTS). GPU need = **0 → 0**.
 
 The cost is **RAM**, then disk, then a bit of CPU. Going from 1 .NET process to
 8, plus adding a JVM (Kafka) and a second Redis, is the real jump.

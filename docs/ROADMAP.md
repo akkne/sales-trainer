@@ -1090,9 +1090,9 @@
 > и [VOICE_ROLEPLAY.md](VOICE_ROLEPLAY.md#buying-voice-api-access-from-russia)).
 
 ### Phase 36.1 — Stage A: cleanup & RUB-friendly providers
-- [x] `Voice:TtsProvider` config switch (yandex | google), default yandex (Voicer support removed 2026-06: queue-based ~10-35 s/task latency unusable for calls)
+- [x] `Voice:TtsProvider` config switch (yandex only — Google TTS removed 2026-06), default yandex (Voicer support removed 2026-06: queue-based ~10-35 s/task latency unusable for calls)
 - [x] Document RUB-friendly OpenAI / TTS / STT proxy gateways
-- [ ] Drop `IGoogleTtsService` if final decision is single-provider (post-test)
+- [x] Drop `IGoogleTtsService` (done 2026-06: single-provider = Yandex)
 - [x] Unit tests for TTS services (mocked HTTP)
 - [ ] Integration test for `POST /dialog/sessions/{id}/voice`
 

@@ -218,9 +218,6 @@ services:
       - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
       - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
       - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
-      - GoogleTts__ApiKey=${GOOGLE_TTS_API_KEY}
-      - GoogleTts__VoiceName=${GOOGLE_TTS_VOICE_NAME:-ru-RU-Wavenet-A}
-      - GoogleTts__LanguageCode=${GOOGLE_TTS_LANGUAGE_CODE:-ru-RU}
     depends_on:
       postgres:
         condition: service_healthy
@@ -380,9 +377,6 @@ services:
       - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
       - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
       - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
-      - GoogleTts__ApiKey=${GOOGLE_TTS_API_KEY}
-      - GoogleTts__VoiceName=${GOOGLE_TTS_VOICE_NAME:-ru-RU-Wavenet-A}
-      - GoogleTts__LanguageCode=${GOOGLE_TTS_LANGUAGE_CODE:-ru-RU}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100

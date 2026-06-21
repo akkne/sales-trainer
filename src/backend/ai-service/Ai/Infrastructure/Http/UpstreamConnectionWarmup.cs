@@ -4,7 +4,7 @@ using Sellevate.Ai.Infrastructure.Configuration;
 namespace Sellevate.Ai.Infrastructure.Http;
 
 /// <summary>
-/// Keeps TCP+TLS connections to upstream AI services (OpenAI, Yandex TTS, Google TTS)
+/// Keeps TCP+TLS connections to upstream AI services (OpenAI, Yandex TTS)
 /// warm, so the first dialog turn after an idle period does not pay the handshake
 /// cost (~100–300ms). A HEAD request is enough — any response means the connection
 /// is established and pooled.
@@ -16,20 +16,17 @@ internal sealed class UpstreamConnectionWarmup
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<OpenAiConfiguration> _openAiOptions;
     private readonly IOptions<YandexTtsConfiguration> _yandexTtsOptions;
-    private readonly IOptions<GoogleTtsConfiguration> _googleTtsOptions;
     private readonly ILogger<UpstreamConnectionWarmup> _logger;
 
     public UpstreamConnectionWarmup(
         IHttpClientFactory httpClientFactory,
         IOptions<OpenAiConfiguration> openAiOptions,
         IOptions<YandexTtsConfiguration> yandexTtsOptions,
-        IOptions<GoogleTtsConfiguration> googleTtsOptions,
         ILogger<UpstreamConnectionWarmup> logger)
     {
         _httpClientFactory = httpClientFactory;
         _openAiOptions = openAiOptions;
         _yandexTtsOptions = yandexTtsOptions;
-        _googleTtsOptions = googleTtsOptions;
         _logger = logger;
     }
 
@@ -41,8 +38,6 @@ internal sealed class UpstreamConnectionWarmup
             targets.Add(("OpenAI", _openAiOptions.Value.BaseUrl));
         if (IsApiKeyConfigured(_yandexTtsOptions.Value.ApiKey))
             targets.Add(("YandexTts", _yandexTtsOptions.Value.BaseUrl));
-        if (IsApiKeyConfigured(_googleTtsOptions.Value.ApiKey))
-            targets.Add(("GoogleTts", "https://texttospeech.googleapis.com"));
 
         return targets;
     }

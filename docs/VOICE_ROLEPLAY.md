@@ -117,13 +117,13 @@ early as possible; subsequent chunks split on sentence enders (`. ! ? \n`)
 only, keeping natural prosody.
 
 `TtsRouter` is the single source of truth for provider selection
-(`Voice:TtsProvider`, fallback order yandex → google) and for the
+(Yandex TTS is the sole supported provider) and for the
 "is voice configured" checks in both controllers. It is wrapped by
 `CachingTtsRouter`: audio for short phrases (≤80 chars) is cached in-process
 (`TtsAudioCache`, 32 MB size-bounded, 24h TTL), so repeated greetings and
 confirmations skip the provider round-trip entirely.
 
-Connections to OpenAI / Yandex TTS / Google TTS are kept warm:
+Connections to OpenAI / Yandex TTS are kept warm:
 the named HttpClients use `SocketsHttpHandler` with a 10-minute pooled idle
 timeout, and `UpstreamConnectionWarmupService` HEAD-pings each configured
 upstream every 4 minutes, so a dialog turn after an idle period does not pay
@@ -167,13 +167,11 @@ gets the reply as text, and the stream finishes normally with the final sentinel
 |-------|----------|------------------------------|-------------|
 | **STT** | Deepgram | Через ProxyAPI / VseGPT (есть deepgram-compatible бридж) или напрямую с зарубежной картой | `Deepgram:ApiKey` |
 | **STT (fallback)** | Web Speech API (браузер) | Бесплатно, не требует ключа | — |
-| **TTS (основной)** | Yandex SpeechKit v1 | Yandex Cloud, рубли (карта/счёт). Latency <1 c — реалистичный звонок | `YandexTts:ApiKey`, `Voice:TtsProvider=yandex` |
-| **TTS (alt)** | Google Cloud TTS | Google Cloud, иностранная карта | `GoogleTts:ApiKey`, `Voice:TtsProvider=google` |
+| **TTS** | Yandex SpeechKit v1 | Yandex Cloud, рубли (карта/счёт). Latency <1 c — реалистичный звонок | `YandexTts:ApiKey` |
 | **TTS (alt)** | SaluteSpeech (Сбер) | СБП, но минимум 15 000 ₽/мес для юрлиц | отклонено |
 | **LLM** | См. [AI_DIALOG.md](AI_DIALOG.md#buying-api-access-from-russia-rub-friendly-proxy-gateways) | — | `OpenAI:BaseUrl` |
 
-`Voice:TtsProvider` явно выбирает провайдер; если выбранный не сконфигурирован,
-`TtsRouter` фолбэчится в порядке yandex → google.
+Единственный поддерживаемый TTS-провайдер — Yandex SpeechKit. `TtsRouter` проверяет, что `YandexTts:ApiKey` задан; если нет — запрос завершается ошибкой.
 
 #### Как получить ключ Yandex SpeechKit
 
