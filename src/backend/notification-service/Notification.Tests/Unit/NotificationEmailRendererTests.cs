@@ -15,6 +15,7 @@ public class NotificationEmailRendererTests
         new(
             new INotificationEmailTemplate[]
             {
+                new FriendRequestEmailTemplate(),
                 new ChatMessageEmailTemplate(),
                 new DiscussReplyEmailTemplate(),
                 new LeagueUpdatedEmailTemplate(),
@@ -40,6 +41,18 @@ public class NotificationEmailRendererTests
     }
 
     [Test]
+    public void Render_FriendRequest_UsesFriendRequestTemplate()
+    {
+        var content = CreateRenderer().Render(
+            Context(NotificationType.FriendRequestReceived, actionUrl: "/friends?tab=requests"));
+
+        content.Subject.Should().Be("You have a new friend request");
+        content.HtmlBody.Should().Contain("New friend request");
+        content.HtmlBody.Should().Contain("View request");
+        content.HtmlBody.Should().Contain($"{FrontendBaseUrl}/friends?tab=requests");
+    }
+
+    [Test]
     public void Render_DiscussReply_UsesDiscussTemplate()
     {
         var content = CreateRenderer().Render(Context(NotificationType.DiscussReplyReceived, actionUrl: "/discuss/42"));
@@ -61,8 +74,8 @@ public class NotificationEmailRendererTests
     [Test]
     public void Render_UnmappedType_FallsBackToGenericTemplateUsingTitle()
     {
-        // FriendRequestReceived has no dedicated email template.
-        var content = CreateRenderer().Render(Context(NotificationType.FriendRequestReceived));
+        // AchievementUnlocked has no dedicated email template.
+        var content = CreateRenderer().Render(Context(NotificationType.AchievementUnlocked));
 
         content.Subject.Should().Be("Some title");
         content.HtmlBody.Should().Contain("Some title");

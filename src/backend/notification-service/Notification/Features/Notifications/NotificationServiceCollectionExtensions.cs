@@ -42,6 +42,7 @@ public static class NotificationServiceCollectionExtensions
         services.AddSingleton<IUserDirectory, RedisUserDirectory>();
 
         // OOP template set: one template per type plus a generic fallback, dispatched by the renderer.
+        services.AddSingleton<INotificationEmailTemplate, FriendRequestEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, ChatMessageEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, DiscussReplyEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, LeagueUpdatedEmailTemplate>();

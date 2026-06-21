@@ -9,11 +9,12 @@ service by a small OOP template subsystem.
 
 | Trigger | Event consumed | Email timing | Template |
 |---|---|---|---|
+| Someone sends you a friend request | `friend.request.received` | Immediate (at notification creation) | `FriendRequestEmailTemplate` |
 | New direct message left unread | `chat.message.sent` (+ `chat.message.read` to cancel) | **Delayed** — only if still unread after the grace period (default 5 min) | `ChatMessageEmailTemplate` |
 | Someone replies to your discussion thread | `discuss.reply.created` | Immediate (at notification creation) | `DiscussReplyEmailTemplate` |
 | Weekly league rollover (promoted/demoted/new week) | `league.updated` | Immediate | `LeagueUpdatedEmailTemplate` |
 
-Friend-request, achievement and streak notifications are **not** emailed (in-app only).
+Friend-request-accepted, achievement and streak notifications are **not** emailed (in-app only).
 
 ## Shared email transport
 
@@ -45,8 +46,9 @@ All rendering lives under `Features/Notifications/Emails/`:
   `BuildTextBody`/`ActionLabel` for subclasses. Provides shared `GreetingHtml`/`Paragraph` helpers.
 - **`NotificationEmailLayout`** — the shared, inline-styled, client-safe HTML chrome (header,
   card, CTA button, footer) and the `Encode` helper. All untrusted text is HTML-encoded here.
-- **Concrete templates** — `ChatMessageEmailTemplate`, `DiscussReplyEmailTemplate`,
-  `LeagueUpdatedEmailTemplate`, plus `GenericNotificationEmailTemplate` as the fallback.
+- **Concrete templates** — `FriendRequestEmailTemplate`, `ChatMessageEmailTemplate`,
+  `DiscussReplyEmailTemplate`, `LeagueUpdatedEmailTemplate`, plus `GenericNotificationEmailTemplate`
+  as the fallback.
 - **`NotificationEmailRenderer`** — indexes templates by type, rewrites the notification's
   relative action path into an absolute frontend URL, and dispatches to the right template
   (falling back to generic for unmapped types).
@@ -83,8 +85,9 @@ are also read from configuration; secrets are injected from the environment.
 
 ## Producers
 
-- **Social** — publishes `discuss.reply.created` (thread author notified on a non-self reply)
-  and `chat.message.read` (from the new read endpoint); already published `chat.message.sent`.
+- **Social** — publishes `friend.request.received` (recipient notified on new + reactivated
+  requests), `discuss.reply.created` (thread author notified on a non-self reply) and
+  `chat.message.read` (from the new read endpoint); already published `chat.message.sent`.
 - **Gamification** — publishes `league.updated` per member during the weekly rollover, staged
   in the transactional outbox so it commits atomically with the rollover.
 

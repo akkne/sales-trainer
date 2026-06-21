@@ -113,7 +113,8 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             NotificationTitles.FriendRequestReceived,
             $"{payload.RequesterName} sent you a friend request.",
             NotificationActionRoutes.FriendRequests,
-            payload.FriendshipId?.ToString());
+            payload.FriendshipId?.ToString(),
+            SendEmail: true);
     }
 
     private static CreateNotificationRequest? MapFriendRequestAccepted(EventEnvelope envelope)

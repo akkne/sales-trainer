@@ -60,6 +60,7 @@ public class NotificationEventMapperTests
         request.NotificationType.Should().Be(NotificationType.FriendRequestReceived);
         request.ActionUrl.Should().Be("/friends?tab=requests");
         request.Body.Should().Contain("Dana");
+        request.SendEmail.Should().BeTrue();
     }
 
     [Test]
