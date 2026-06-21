@@ -84,6 +84,7 @@ export function UserSearchBar() {
                                     <FriendshipButton
                                         userId={result.userId}
                                         friendshipStatus={result.friendshipStatus}
+                                        friendshipId={result.friendshipId ?? undefined}
                                     />
                                 </div>
                             ))}

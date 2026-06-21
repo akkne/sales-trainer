@@ -25,6 +25,7 @@ export interface UserSearchResult {
     displayName: string;
     persona: string | null;
     friendshipStatus: "none" | "pending_outgoing" | "pending_incoming" | "friends";
+    friendshipId?: string | null;
 }
 
 export interface PublicProfile {
@@ -37,6 +38,7 @@ export interface PublicProfile {
     averageExerciseScore: number;
     friendshipStatus: "none" | "pending_outgoing" | "pending_incoming" | "friends";
     avatarUrl?: string | null;
+    friendshipId?: string | null;
 }
 
 export interface FriendLeaderboardEntry {

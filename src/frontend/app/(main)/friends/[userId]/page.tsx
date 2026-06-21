@@ -127,6 +127,7 @@ export default function PublicProfilePage() {
                     <FriendshipButton
                         userId={profile.userId}
                         friendshipStatus={profile.friendshipStatus}
+                        friendshipId={profile.friendshipId ?? undefined}
                     />
 
                     {profile.friendshipStatus === "friends" && (

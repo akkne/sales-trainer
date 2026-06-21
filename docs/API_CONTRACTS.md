@@ -680,10 +680,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 Request lifecycle: only the **addressee** may `accept`/`decline`; only the **requester** may `DELETE /friends/requests/{friendshipId}` to cancel a still-pending request. Decline keeps a `Declined` row (so the requester can later revive it by re-sending); cancel hard-deletes the row, returning the pair to the `none` state. Both `accept`/`decline`/`cancel` return `400` if the request is no longer pending and `404` if it does not exist; `cancel` returns `400` if the caller is not the requester. No event is emitted on decline or cancel.
 
-`PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus, avatarUrl}`
+`PublicProfileDto`: `{userId, displayName, persona?, totalXpAmount, currentStreakDayCount, achievementCount, averageExerciseScore, friendshipStatus, avatarUrl, friendshipId?}`
 - `friendshipStatus`: `"none"` | `"pending_outgoing"` | `"pending_incoming"` | `"friends"`
+- `friendshipId`: the underlying friendship row id when one exists (`null` for `"none"` / self). Lets the UI cancel an outgoing request directly from the "request sent" button without first fetching `/friends/requests`.
 
-`UserSearchResultDto`: `{userId, displayName, persona?, friendshipStatus, avatarUrl}`
+`UserSearchResultDto`: `{userId, displayName, persona?, friendshipStatus, avatarUrl, friendshipId?}` (`friendshipId` as above)
 
 `FriendLeaderboardEntryDto`: `{userId, displayName, totalXpAmount, rank, isCurrentUser, avatarUrl}`
 

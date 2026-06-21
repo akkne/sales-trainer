@@ -9,5 +9,6 @@ public sealed record PublicProfileDto(
     int AchievementCount,
     double AverageExerciseScore,
     string FriendshipStatus,
-    string AvatarUrl
+    string AvatarUrl,
+    Guid? FriendshipId
 );

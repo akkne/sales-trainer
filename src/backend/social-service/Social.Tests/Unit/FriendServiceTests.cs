@@ -219,6 +219,27 @@ public sealed class FriendServiceTests
         profile.FriendshipStatus.Should().Be("friends");
         profile.TotalXpAmount.Should().Be(0);
         profile.AverageExerciseScore.Should().Be(0.0);
+        profile.FriendshipId.Should().Be(friendship.Id);
+    }
+
+    [Test]
+    public async Task GetPublicProfileAsync_exposes_friendship_id_for_pending_outgoing_so_ui_can_cancel()
+    {
+        var friendship = await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+
+        var profile = await _friendService.GetPublicProfileAsync(RequesterId, AddresseeId);
+
+        profile.FriendshipStatus.Should().Be("pending_outgoing");
+        profile.FriendshipId.Should().Be(friendship.Id);
+    }
+
+    [Test]
+    public async Task GetPublicProfileAsync_has_null_friendship_id_when_no_relation()
+    {
+        var profile = await _friendService.GetPublicProfileAsync(RequesterId, AddresseeId);
+
+        profile.FriendshipStatus.Should().Be("none");
+        profile.FriendshipId.Should().BeNull();
     }
 
     // SO5: reciprocal-pair deduplication

@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/shared/components/button";
 import type { ButtonSize, ButtonVariant } from "@/shared/components/button";
 import {
     useSendFriendRequest,
     useAcceptFriendRequest,
+    useCancelFriendRequest,
+    useRemoveFriend,
 } from "@/features/friends/hooks/use-friends";
 
 interface FriendshipButtonProps {
@@ -26,19 +29,47 @@ export function FriendshipButton({
 }: FriendshipButtonProps) {
     const sendRequestMutation = useSendFriendRequest();
     const acceptRequestMutation = useAcceptFriendRequest();
+    const cancelRequestMutation = useCancelFriendRequest();
+    const removeFriendMutation = useRemoveFriend();
+    const [hovered, setHovered] = useState(false);
 
     if (friendshipStatus === "friends") {
         return (
-            <Button variant="secondary" size={size} fullWidth={fullWidth} disabled>
-                Уже друзья
+            <Button
+                variant={hovered ? "destructive" : "secondary"}
+                size={size}
+                fullWidth={fullWidth}
+                iconLeft={hovered ? "close" : "check"}
+                loading={removeFriendMutation.isPending}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                onClick={() => removeFriendMutation.mutate(userId)}
+            >
+                {hovered ? "Удалить из друзей" : "Уже друзья"}
             </Button>
         );
     }
 
     if (friendshipStatus === "pending_outgoing") {
+        if (!friendshipId) {
+            return (
+                <Button variant="secondary" size={size} fullWidth={fullWidth} disabled>
+                    Запрос отправлен
+                </Button>
+            );
+        }
         return (
-            <Button variant="secondary" size={size} fullWidth={fullWidth} disabled>
-                Запрос отправлен
+            <Button
+                variant={hovered ? "destructive" : "secondary"}
+                size={size}
+                fullWidth={fullWidth}
+                iconLeft={hovered ? "close" : "check"}
+                loading={cancelRequestMutation.isPending}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                onClick={() => cancelRequestMutation.mutate(friendshipId)}
+            >
+                {hovered ? "Отменить запрос" : "Запрос отправлен"}
             </Button>
         );
     }

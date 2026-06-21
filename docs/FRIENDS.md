@@ -125,7 +125,8 @@ All endpoints require `Authorization: Bearer` token.
   "currentStreakDayCount": 0,
   "achievementCount": 0,
   "averageExerciseScore": 0.0,
-  "friendshipStatus": "none | pending_outgoing | pending_incoming | friends"
+  "friendshipStatus": "none | pending_outgoing | pending_incoming | friends",
+  "friendshipId": "guid?"
 }
 ```
 
@@ -135,9 +136,15 @@ All endpoints require `Authorization: Bearer` token.
   "userId": "guid",
   "displayName": "string",
   "persona": "string?",
-  "friendshipStatus": "none | pending_outgoing | pending_incoming | friends"
+  "friendshipStatus": "none | pending_outgoing | pending_incoming | friends",
+  "friendshipId": "guid?"
 }
 ```
+
+`friendshipId` is present whenever a friendship row exists between the viewer and the
+target (`null` for `none`/self). The UI uses it so the **"Запрос отправлен"** button can
+cancel the outgoing request and the **"Уже друзья"** button can end the friendship
+directly, without first loading `/friends/requests`.
 
 ### FriendLeaderboardEntryDto
 ```json
@@ -214,6 +221,15 @@ All endpoints require `Authorization: Bearer` token.
 - Stats grid: streak, XP, achievements, avg score
 - Friendship button (contextual)
 - "Написать" button if friends
+
+### Friendship button (`FriendshipButton`, used on public profile + search results)
+Contextual, hover-reveal states keyed off `friendshipStatus` (+ `friendshipId`):
+- `none` → "Добавить" → `POST /friends/requests`
+- `pending_incoming` → "Принять" → accept
+- `pending_outgoing` → "Запрос отправлен"; on hover turns destructive into
+  **"Отменить запрос"** → `DELETE /friends/requests/{friendshipId}` (cancel)
+- `friends` → "Уже друзья"; on hover turns destructive into **"Удалить из друзей"** →
+  `DELETE /friends/{userId}` (end friendship)
 
 ### Chat
 - Conversation list with last message preview

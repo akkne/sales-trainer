@@ -288,7 +288,8 @@ internal sealed class FriendService(
                     replica.DisplayName,
                     null,
                     friendshipStatus,
-                    AvatarUrls.For(replica.UserId));
+                    AvatarUrls.For(replica.UserId),
+                    friendship?.Id);
             })
             .ToList();
     }
@@ -321,7 +322,8 @@ internal sealed class FriendService(
             0,
             0.0,
             friendshipStatus,
-            AvatarUrls.For(targetReplica.UserId));
+            AvatarUrls.For(targetReplica.UserId),
+            viewerUserId == targetUserId ? null : existingFriendship?.Id);
     }
 
     public async Task<List<FriendLeaderboardEntryDto>> GetFriendLeaderboardAsync(
