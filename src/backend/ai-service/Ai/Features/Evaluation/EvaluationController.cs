@@ -7,6 +7,7 @@ namespace Sellevate.Ai.Features.Evaluation;
 
 [ApiController]
 [Route("ai")]
+[ServiceFilter(typeof(InternalServiceAuthFilter))]
 public sealed class EvaluationController : ControllerBase
 {
     private readonly IExerciseEvaluationService _evaluationService;

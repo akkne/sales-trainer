@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
+using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Voice;
 
@@ -14,17 +16,20 @@ public sealed class VoiceDialogController : ControllerBase
     private readonly IVoiceDialogService _voiceDialogService;
     private readonly ITtsRouter _ttsRouter;
     private readonly IVoiceUsageService _voiceUsageService;
+    private readonly IOptions<VoiceFeatureConfiguration> _voiceConfig;
     private readonly ILogger<VoiceDialogController> _logger;
 
     public VoiceDialogController(
         IVoiceDialogService voiceDialogService,
         ITtsRouter ttsRouter,
         IVoiceUsageService voiceUsageService,
+        IOptions<VoiceFeatureConfiguration> voiceConfig,
         ILogger<VoiceDialogController> logger)
     {
         _voiceDialogService = voiceDialogService;
         _ttsRouter = ttsRouter;
         _voiceUsageService = voiceUsageService;
+        _voiceConfig = voiceConfig;
         _logger = logger;
     }
 
@@ -66,9 +71,15 @@ public sealed class VoiceDialogController : ControllerBase
             return;
         }
 
+        // AI1: enforce server-side per-request cap before we even touch the gate.
+        var maxRequestSeconds = _voiceConfig.Value.MaxRecordingSeconds;
+        if (maxRequestSeconds <= 0) maxRequestSeconds = 60; // safety default
+
+        // AI1: atomically reserve usage in Redis; throws VoiceUsageLimitException if over limit.
+        int reservedSeconds;
         try
         {
-            await _voiceUsageService.EnsureWithinLimitsAsync(userId, cancellationToken);
+            reservedSeconds = await _voiceUsageService.ReserveSecondsAsync(userId, maxRequestSeconds, cancellationToken);
         }
         catch (VoiceUsageLimitException exception)
         {
@@ -89,10 +100,16 @@ public sealed class VoiceDialogController : ControllerBase
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
+        // AI1: cap the stream at MaxRecordingSeconds using a linked CancellationToken.
+        using var capCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        capCts.CancelAfter(TimeSpan.FromSeconds(maxRequestSeconds));
+        var capToken = capCts.Token;
+
         var streamStartedAt = DateTime.UtcNow;
+        var upstreamTimedOut = false;
         try
         {
-            await foreach (var chunk in _voiceDialogService.StreamVoiceMessageAsync(sessionId, userId, request.Transcript, cancellationToken))
+            await foreach (var chunk in _voiceDialogService.StreamVoiceMessageAsync(sessionId, userId, request.Transcript, capToken))
             {
                 var flags = (chunk.IsFinal ? 1u : 0u) | (chunk.IsStopSignal ? 2u : 0u);
                 var textBytes = System.Text.Encoding.UTF8.GetBytes(chunk.Text);
@@ -111,15 +128,43 @@ public sealed class VoiceDialogController : ControllerBase
         {
             _logger.LogWarning(exception, "Voice stream aborted for session {SessionId}", sessionId);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !capCts.IsCancellationRequested)
+        {
+            // AI6: client disconnected — not an error, just stop.
+            _logger.LogInformation("Voice stream cancelled by client for session {SessionId}", sessionId);
+        }
+        catch (OperationCanceledException) when (capCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // AI1: server-side cap fired — stream exceeded MaxRecordingSeconds.
+            _logger.LogInformation("Voice stream capped at {MaxSeconds}s for session {SessionId}", maxRequestSeconds, sessionId);
+        }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Voice stream cancelled by client for session {SessionId}", sessionId);
+            // Both tokens cancelled simultaneously or upstream timeout via Polly.
+            upstreamTimedOut = !cancellationToken.IsCancellationRequested;
+            if (upstreamTimedOut)
+                _logger.LogWarning("Voice stream upstream timeout for session {SessionId}", sessionId);
+            else
+                _logger.LogInformation("Voice stream cancelled for session {SessionId}", sessionId);
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is TaskCanceledException)
+        {
+            // AI6: Polly retry exhausted / upstream read timeout — distinct from client cancel.
+            upstreamTimedOut = true;
+            _logger.LogWarning(ex, "Voice stream upstream timeout (HttpRequestException) for session {SessionId}", sessionId);
         }
         finally
         {
             var elapsed = (int)Math.Ceiling((DateTime.UtcNow - streamStartedAt).TotalSeconds);
-            if (elapsed > 0)
-                await _voiceUsageService.RecordSessionSecondsAsync(sessionId, userId, elapsed, CancellationToken.None);
+            // AI1: refund the unused portion of the reservation; record only actual usage.
+            await _voiceUsageService.RefundReservationAsync(sessionId, userId, reservedSeconds, elapsed, CancellationToken.None);
+        }
+
+        // AI6: if the upstream timed out and we haven't written headers yet, return 504.
+        // (Headers are already sent for a streaming response, so we can only log.)
+        if (upstreamTimedOut)
+        {
+            _logger.LogWarning("Upstream LLM/TTS timeout on voice stream for session {SessionId} — client received partial response", sessionId);
         }
     }
 

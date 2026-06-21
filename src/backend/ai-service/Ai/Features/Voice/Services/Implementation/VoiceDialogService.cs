@@ -58,16 +58,18 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         if (!mode.VoiceEnabled)
             throw new InvalidOperationException($"Voice is not enabled for mode {session.ModeId}");
 
-        session.Messages.Add(new DialogMessage
+        var userMsg = new DialogMessage
         {
             Role = "user",
             Content = transcript,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = false
-        });
+        };
+        session.Messages.Add(userMsg);
+        // AI7a: Push the single user message instead of overwriting the whole array.
         await _mongoContext.DialogSessions.UpdateOneAsync(
             filter,
-            Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages),
+            Builders<DialogSession>.Update.Push(s => s.Messages, userMsg),
             cancellationToken: ct);
 
         var replyParser = new StreamingChatReplyParser();
@@ -124,16 +126,18 @@ internal sealed class VoiceDialogService : IVoiceDialogService
                 yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
         }
 
-        session.Messages.Add(new DialogMessage
+        var assistantMsg = new DialogMessage
         {
             Role = "assistant",
             Content = parseResult.Reply,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = parseResult.EndCall
-        });
+        };
+        session.Messages.Add(assistantMsg);
+        // AI7a: Push the single assistant message instead of overwriting the whole array.
         await _mongoContext.DialogSessions.UpdateOneAsync(
             filter,
-            Builders<DialogSession>.Update.Set(s => s.Messages, session.Messages),
+            Builders<DialogSession>.Update.Push(s => s.Messages, assistantMsg),
             cancellationToken: ct);
 
         _logger.LogInformation(

@@ -7,6 +7,9 @@ public static class EvaluationServiceCollectionExtensions
 {
     public static IServiceCollection AddEvaluationFeatureServices(this IServiceCollection services)
     {
+        // AI7b: register the service-to-service auth filter so it can be resolved by ServiceFilter.
+        services.AddScoped<InternalServiceAuthFilter>();
+
         services.AddScoped<IExerciseEvaluationStrategy, FreeTextEvaluationStrategy>();
         services.AddScoped<IExerciseEvaluationStrategy, AiDialogueEvaluationStrategy>();
         services.AddScoped<IExerciseEvaluationStrategy, SpotMistakeEvaluationStrategy>();
