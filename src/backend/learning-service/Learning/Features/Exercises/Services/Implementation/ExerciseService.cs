@@ -289,8 +289,9 @@ internal sealed class ExerciseService(
                 userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
         }
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
-
+        // Stage the exercise/lesson outbox rows BEFORE the commit so the progress mutations
+        // and their integration events are persisted in the SAME transaction (no lost events
+        // if the process crashes right after the business state commits).
         await eventPublisher.PublishExerciseCompletedAsync(
             new ExerciseCompletedEvent(userId, exercise.Type, evaluationResult.Score, evaluationResult.IsCorrect),
             cancellationToken);
@@ -299,12 +300,19 @@ internal sealed class ExerciseService(
         {
             await eventPublisher.PublishLessonCompletedAsync(
                 new LessonCompletedEvent(userId, exercise.LessonId, lessonBestScore), cancellationToken);
-
-            await PublishSkillCompletionIfFinishedAsync(userId, exercise.LessonId, cancellationToken);
         }
 
-        // Flush staged outbox rows (exercise/lesson/skill events) in one commit.
+        // Atomically commit lesson/skill progress + the exercise/lesson outbox rows.
         await databaseContext.SaveChangesAsync(cancellationToken);
+
+        if (lessonWasCompleted)
+        {
+            // Skill completion is decided by querying the now-committed lesson progress, so it
+            // must run after the commit above; its skill.completed outbox row is flushed below.
+            await PublishSkillCompletionIfFinishedAsync(userId, exercise.LessonId, cancellationToken);
+
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
 
         return new ExerciseSubmissionResultDto(
             evaluationResult.IsCorrect,
