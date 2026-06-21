@@ -1,5 +1,14 @@
 # Local Dev Profile (app on host, infra in Docker) — DEFAULT for development
 
+> **Microservices note (Phase 9):** the monolith (`src/backend/api`) is **retired**.
+> It is no longer part of the dev stack — `scripts/dev-up.sh` only starts the frontend
+> + infra, and the per-service backends + gateway are run individually
+> (`scripts/dev-gateway.sh`, `scripts/dev-identity.sh`, `scripts/dev-learning.sh`, …).
+> The frontend talks to the gateway (port **5000**), which routes each path to its
+> owning service. `scripts/dev-backend.sh` now only launches the reference monolith on
+> demand (`--force`); the references to "backend"/port 5001 below are that retired
+> monolith.
+
 This is the **default way to run SalesTrainer during development.** The
 full-Docker stack still exists (it's the production/deploy shape) but is no
 longer the default for local iteration.

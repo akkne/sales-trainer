@@ -338,17 +338,49 @@ See [LEARNING_SERVICE.md](LEARNING_SERVICE.md) for the implementation writeup.
 
 ---
 
-## Phase 9 — Admin distribution & monolith retirement `[ ]`
-- [ ] **9.1** Move each `Admin` CRUD endpoint into its owning service's `/admin/*`
-      (Learning admin, Gamification admin, Identity admin, …); gateway enforces role.
-- [ ] **9.2** Point the frontend admin panel at the per-service admin APIs (paths
-      unchanged via the gateway).
-- [ ] **9.3** **Retire** the monolith: remove it from `docker-compose.*` /
-      `scripts/dev-*.sh` and stop deploying it, but **keep `src/backend/api` + its tests
-      in the repo as a reference** (do NOT delete). Update [DEPLOYMENT.md],
-      [ARCHITECTURE.md], [LOCAL_DEV.md] to mark it reference-only.
-- [ ] **9.4** Tests: admin CRUD per service through the gateway; full smoke of all
-      flipped routes; update [ADMIN_PANEL.md] + TESTING.
+## Phase 9 — Admin distribution & monolith retirement `[x]`
+- [x] **9.1** Moved the last admin straggler — `/admin/users/*` (list, detail, rename,
+      avatar reset, role change [SuperAdmin]) — into **identity-service** (owns
+      Users/Roles), preserving paths + contracts; the service enforces
+      `RequireAdmin`/`RequireSuperAdmin` and the gateway injects trusted
+      `X-User-Id`/`X-User-Role`. All other admin CRUD was already in its owning service
+      from Phases 5–8 (learning/gamification/ai/social). `/admin/voice/usage` was already
+      owned by ai-service (Phase 6) — the roadmap's "voice-usage" straggler was a mislabel
+      of the already-flipped `/admin/voice/*` route. The monolith's admin controllers stay
+      as reference.
+- [x] **9.2** Frontend needs **no change**: it calls every `/admin/*` path through the
+      gateway base URL (`api.${DOMAIN}` / `localhost:5000`), which preserves paths. Verified
+      every frontend API path resolves to a service route (see the inventory below).
+- [x] **9.3** Retired the monolith: removed the `monolith` cluster + `{**catch-all}` route
+      from the gateway (unknown routes now 404), removed the `backend` service from
+      `docker-compose.yml`, pointed Traefik `api.${DOMAIN}` and Prometheus at the gateway,
+      and removed the monolith from `dev-up.sh`/`lib-local-env.sh` (`dev-backend.sh` is now a
+      `--force`-only launcher for the reference monolith). **`src/backend/api` + its tests stay
+      in the repo and the solution.** Updated DEPLOYMENT.md, ARCHITECTURE.md, LOCAL_DEV.md.
+- [x] **9.4** Tests: identity-service `/admin/users` CRUD + authz integration tests; gateway
+      route-flip test for `identity-admin-users`; a full smoke asserting every flipped
+      `/admin/*` route maps to its owning cluster; and assertions that no `monolith` cluster
+      or `{**catch-all}` route remains and an unknown route 404s. Updated
+      [ADMIN_PANEL.md](ADMIN_PANEL.md), [API_CONTRACTS.md](API_CONTRACTS.md),
+      [docs/TESTING/IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md).
+
+### Route inventory at retirement
+Every monolith HTTP route, and the service now serving it through the gateway:
+
+| Route prefix | Owning service (gateway cluster) |
+|---|---|
+| `/auth/*`, `/demo/*`, `/profile`, `/profile/persona`, `/onboarding`, `/avatars/*`, **`/admin/users/*`** | identity |
+| `/skills*`, `/skill-tree`, `/lessons*`, `/topics/*`, `/exercises/*`, `/reference*`, `/techniques*`, `/daily-quote`, `/admin/{skills,skill-stages,topics,lessons,exercises,exercise-type-prompts,reference,techniques,daily-quotes,seeder}/*` | learning |
+| `/league`, `/profile/achievements`, `/gamification/*`, `/admin/{gamification,leagues}/*` | gamification |
+| `/dialog/*`, `/transcription/*`, `/admin/{dialog,voice}/*` | ai |
+| `/friends/*`, `/discuss/*`, `/chat/*`, `/admin/discuss/*` | social |
+| `/tracking/*` | analytics |
+| `/notifications*` | notification |
+
+**Only straggler still on the monolith catch-all before Phase 9:** `/admin/users/*` →
+moved to identity. Everything else had already been flipped in Phases 1–8. After removing
+the catch-all, no frontend-used path is left unrouted (cross-checked against the frontend
+API client). Unknown routes now return 404.
 
 **Commit:** `refactor: retire monolith (kept as reference), finalize microservices`.
 

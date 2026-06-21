@@ -1,5 +1,13 @@
 # Deployment
 
+> **Microservices note (Phase 9):** the public API is now served by the **YARP
+> gateway**, which routes every path to its owning microservice (identity, learning,
+> gamification, ai, social, analytics, notification). The original monolith
+> (`src/backend/api`) is **retired** — it is no longer built or run as a container and
+> is kept in the repo as a reference only. In the Traefik prod overlay,
+> `api.${DOMAIN}` now points at the `gateway` service; "backend" below refers to this
+> gateway + service mesh unless it explicitly says monolith.
+
 There are two supported shapes:
 
 - **Option A — all-in-one server (current production).** Everything (frontend + backend + infra) runs via Docker Compose on a single EU cloud server behind Traefik with automatic HTTPS. See below.
@@ -13,7 +21,7 @@ There are two supported shapes:
 
 Files:
 - `docker-compose.yml` — base stack. All infra host ports are bound to `127.0.0.1` (Docker bypasses UFW, so they must not publish to `0.0.0.0`).
-- `docker-compose.prod.yml` — overlay that adds **Traefik** (reverse proxy) and routes `sellevate.site` → frontend, `api.sellevate.site` → backend, `grafana.sellevate.site` → Grafana, issuing Let's Encrypt certs automatically.
+- `docker-compose.prod.yml` — overlay that adds **Traefik** (reverse proxy) and routes `sellevate.site` → frontend, `api.sellevate.site` → the **gateway** (which fans out to the microservices), `grafana.sellevate.site` → Grafana, issuing Let's Encrypt certs automatically.
 
 > **Grafana** is published at `https://grafana.sellevate.site`, protected by Grafana's own login (anonymous + signup disabled). Set a strong `GRAFANA_ADMIN_PASSWORD` in the root `.env` before exposing it (the default `admin`/`admin` is a hole). Alternatively keep it private and reach it via SSH tunnel (`ssh -L 3001:localhost:3001 user@server` → http://localhost:3001) without the Traefik route.
 
@@ -42,8 +50,12 @@ The whole backend stack deploys via the root `docker-compose.yml`.
 
 ```bash
 # On the deploy host, with a filled-in root .env (see Environment variables below):
-docker compose up --build -d backend postgres mongo redis minio loki prometheus grafana
+docker compose up --build -d gateway identity learning gamification ai social analytics notification \
+  postgres mongo redis minio kafka loki prometheus grafana
 ```
+
+(The monolith `backend` service no longer exists in `docker-compose.yml`; the gateway
+plus the per-service backends serve all traffic.)
 
 (The `frontend` service in `docker-compose.yml` is **not** deployed in production — the frontend goes to Vercel. It stays in the file only for the local full-Docker workflow.)
 

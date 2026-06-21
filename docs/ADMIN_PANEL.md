@@ -19,7 +19,29 @@ Role is stored as an integer column on the `User` table and emitted as a `role` 
 | `RequireAdmin` | Admin OR SuperAdmin | All `/admin/*` endpoints except user management |
 | `RequireSuperAdmin` | SuperAdmin only | `PUT /admin/users/:id/role` |
 
-Policies are registered in `Program.cs`. Controllers use `[Authorize(Policy = "RequireAdmin")]`.
+Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireAdmin")]`.
+
+---
+
+## Admin distribution across microservices (Phase 9)
+
+Every `/admin/*` endpoint now lives in the **service that owns the data**, not in a
+central admin app. The frontend is unaffected: it calls the same paths through the
+API gateway, which routes each `/admin/*` prefix to its owning service and injects the
+trusted `X-User-Id`/`X-User-Role` headers. Each service registers its own
+`RequireAdmin`/`RequireSuperAdmin` policies and enforces them locally.
+
+| Admin prefix | Owning service |
+|---|---|
+| `/admin/users/*` | identity-service |
+| `/admin/skills`, `/admin/skill-stages`, `/admin/topics`, `/admin/lessons`, `/admin/exercises`, `/admin/exercise-type-prompts`, `/admin/reference`, `/admin/techniques`, `/admin/daily-quotes`, `/admin/seeder` | learning-service |
+| `/admin/gamification/*`, `/admin/leagues/*` | gamification-service |
+| `/admin/dialog/*`, `/admin/voice/*` | ai-service |
+| `/admin/discuss/*` | social-service |
+
+The monolith (`src/backend/api`) is retired — it no longer serves any `/admin/*`
+traffic and its controllers remain only as reference. The gateway has no
+`{**catch-all}` route, so an unknown route returns 404.
 
 ---
 
@@ -170,6 +192,8 @@ See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the XP 
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider, hasCustomAvatar, avatarUrl}`.
 `AdminUserDetailDto` adds activity stats: `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`.
 UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row opens a detail modal for moderation (rename, remove photo) and stats. Any admin can moderate; only SuperAdmins see the role selector.
+
+**Owned by identity-service** (`AdminUsersController` in `identity-service/Identity/Features/Admin`). The activity stats (streak/XP/skills/score) are owned by gamification/learning, so identity returns them as `0` until cross-service composition lands — the same caveat as `GET /profile`. The monolith's copy stays as reference only.
 
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |
