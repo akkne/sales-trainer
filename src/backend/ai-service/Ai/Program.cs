@@ -152,11 +152,13 @@ builder.Services.AddSingleton<UpstreamConnectionWarmup>();
 builder.Services.AddHostedService<UpstreamConnectionWarmupService>();
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
 application.UseCors();
 
