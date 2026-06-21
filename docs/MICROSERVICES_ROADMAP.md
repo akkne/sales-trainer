@@ -386,8 +386,14 @@ API client). Unknown routes now return 404.
 
 ---
 
-## Phase 10 — Hardening (optional, resume polish) `[ ]`
-- [ ] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
+## Phase 10 — Hardening (optional, resume polish) `[>]`
+- [x] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
+      Shared `BuildingBlocks.HealthChecks` helpers expose `/healthz` (liveness) + `/readyz`
+      (readiness: postgres/redis/kafka/mongo probes per service) uniformly across all 7
+      services + gateway. Added a `kafka-exporter` to both compose stacks + a Prometheus
+      `kafka-exporter` scrape job, and a Grafana dashboard
+      `infrastructure/grafana/dashboards/kafka-consumer-lag.json` (consumer lag by
+      group/topic + broker/service health). Docs: [MONITORING.md](MONITORING.md).
 - [ ] **10.2** Dead-letter topics + retry policy for poison events.
 - [ ] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
       atomic DB-write + event-publish.

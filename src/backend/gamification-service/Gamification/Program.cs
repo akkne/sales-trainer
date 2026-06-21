@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.DependencyInjection;
 using Sellevate.Gamification.Features.Achievements;
@@ -45,6 +46,14 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddGamificationServices();
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<GamificationDbContext>(
+        HealthCheckConstants.PostgresCheckName,
+        tags: [HealthCheckConstants.ReadinessTag]);
 
 builder.Services.AddHangfire(hangfireConfiguration =>
     hangfireConfiguration.UsePostgreSqlStorage(storageOptions =>
@@ -111,7 +120,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "gamification" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.DependencyInjection;
 using Sellevate.Learning.Infrastructure.Data;
@@ -40,6 +41,14 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddLearningServices(builder.Configuration);
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<LearningDbContext>(
+        HealthCheckConstants.PostgresCheckName,
+        tags: [HealthCheckConstants.ReadinessTag]);
 
 const int minimumJwtSigningKeyByteCount = 32;
 var jwtSigningKey = builder.Configuration["Jwt:Key"];
@@ -101,7 +110,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "learning" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

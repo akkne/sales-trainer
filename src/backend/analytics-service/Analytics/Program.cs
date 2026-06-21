@@ -5,6 +5,7 @@ using Prometheus;
 using Sellevate.Analytics;
 using Sellevate.Analytics.Common.Constants;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
@@ -36,6 +37,10 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddAnalyticsServices();
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
 
 const int minimumJwtSigningKeyByteCount = 32;
 var jwtSigningKey = builder.Configuration["Jwt:Key"];
@@ -90,7 +95,7 @@ application.UseHttpMetrics();
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet(RouteConstants.HealthEndpoint, () => Results.Ok(new { status = "ok", service = "analytics" }));
+application.MapSellevateHealthChecks();
 application.MapMetrics();
 application.MapControllers();
 

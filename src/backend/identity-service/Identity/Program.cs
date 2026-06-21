@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
@@ -42,6 +43,13 @@ builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
+
+builder.Services.AddSellevateHealthChecks()
+    .AddKafka();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<IdentityDbContext>(
+        HealthCheckConstants.PostgresCheckName,
+        tags: [HealthCheckConstants.ReadinessTag]);
 
 const int minimumJwtSigningKeyByteCount = 32;
 var jwtSigningKey = builder.Configuration["Jwt:Key"];
@@ -111,7 +119,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "identity" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

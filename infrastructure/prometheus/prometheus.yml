@@ -12,3 +12,8 @@ scrape_configs:
     static_configs:
       - targets: ['analytics:8080']
     metrics_path: /metrics
+
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    metrics_path: /metrics
