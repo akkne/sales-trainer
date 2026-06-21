@@ -200,10 +200,13 @@ live in `building-blocks`.
   `xp.granted` for product funnels. No durability guarantees needed.
 
 ### 2.8 API Gateway — `gateway` (YARP)
-- Single public entry point. Terminates TLS, validates the JWT once, injects the
-  trusted `X-User-Id`/`X-User-Role` headers downstream, and routes by path prefix
-  to the services above. Admin routes (`/admin/*`) are authorized here and fan out
-  to each owning service's admin endpoints.
+- Single public entry point. Terminates TLS, validates the JWT once, forwards
+  `X-User-Id`/`X-User-Role` headers downstream (stripping client copies), and routes by
+  path prefix to the services above. **Each service still re-validates the JWT and
+  authorizes off its claims** (shared signing key) — the gateway is not the sole
+  authorization authority, and the forwarded headers are defense-in-depth, not a trust
+  boundary the services rely on. Admin routes (`/admin/*`) fan out to each owning
+  service's admin endpoints, which enforce their own `[Authorize]` admin policy.
 
 ---
 

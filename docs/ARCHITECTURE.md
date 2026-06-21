@@ -123,10 +123,15 @@ src/backend/
   dead-letter topic suffix (`.dlt`) is the `Topics.DeadLetterSuffix` constant. DLT messages
   carry `x-dead-letter-reason` / `x-dead-letter-at` headers for diagnostics; replay is a
   manual operator action (re-produce the value onto the source topic).
-- **API Gateway (YARP):** single entry point; validates the JWT once and injects
-  trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
-  stripped). The strangler-fig migration is finished: it routes every prefix to its
-  owning service and has **no catch-all** (unknown routes return 404).
+- **API Gateway (YARP):** single entry point; validates the JWT once and forwards
+  `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are stripped).
+  **Authorization source of truth is the JWT itself:** every service independently
+  re-validates the bearer token (shared `Jwt:Key`/`Issuer`/`Audience`) and authorizes
+  off its claims via `[Authorize]` policies — defense-in-depth, so a service is never
+  open even if reached directly. The forwarded headers are a convenience/diagnostic
+  signal, **not** a trust boundary; services must not authorize off them. The
+  strangler-fig migration is finished: it routes every prefix to its owning service and
+  has **no catch-all** (unknown routes return 404).
 - **Transactional outbox (Phase 10.3):** to make a state change and its event publish
   atomic, a producer can write an `OutboxMessage` row in the *same* EF transaction as its
   business change (`IOutboxWriter.Enqueue` stages the row; the caller's single
