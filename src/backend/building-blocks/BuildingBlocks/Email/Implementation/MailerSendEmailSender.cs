@@ -32,14 +32,25 @@ internal sealed class MailerSendEmailSender : IEmailSender
         _logger = logger;
     }
 
+    /// <summary>The API token, trimmed of stray surrounding whitespace/newlines from env injection.</summary>
+    private string? ApiToken => _mailerSendOptions.Value.ApiToken?.Trim();
+
+    private static bool IsPlaceholder(string token) =>
+        token.StartsWith("INJECTED", StringComparison.OrdinalIgnoreCase)
+        || token.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A real MailerSend token is a single opaque string — internal whitespace means the
+    /// env value has extra content appended (e.g. from-email/name on the same line).</summary>
+    private static bool HasInternalWhitespace(string token) => token.Any(char.IsWhiteSpace);
+
     private bool IsConfigured
     {
         get
         {
-            var apiToken = _mailerSendOptions.Value.ApiToken;
+            var apiToken = ApiToken;
             return !string.IsNullOrWhiteSpace(apiToken)
-                && !apiToken.StartsWith("INJECTED", StringComparison.OrdinalIgnoreCase)
-                && !apiToken.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+                && !IsPlaceholder(apiToken)
+                && !HasInternalWhitespace(apiToken);
         }
     }
 
@@ -47,14 +58,29 @@ internal sealed class MailerSendEmailSender : IEmailSender
     {
         ArgumentNullException.ThrowIfNull(message);
         var configuration = _mailerSendOptions.Value;
+        var apiToken = ApiToken;
 
         if (!IsConfigured)
         {
-            _logger.LogWarning(
-                "MailerSend is not configured; skipping email to {RecipientEmail}. Subject: {Subject}. Body: {TextBody}",
-                message.RecipientEmail,
-                message.Subject,
-                message.TextBody);
+            // Distinguish a genuinely-unset placeholder (expected in local dev) from a malformed
+            // token (a real misconfiguration that would otherwise silently 401), so the prod
+            // symptom "emails don't arrive" maps to an actionable log line.
+            if (!string.IsNullOrWhiteSpace(apiToken) && HasInternalWhitespace(apiToken) && !IsPlaceholder(apiToken))
+            {
+                _logger.LogError(
+                    "MailerSend ApiToken contains whitespace — it likely has extra values appended " +
+                    "(e.g. the from-email/name on the same env line). Set MAILERSEND_API_TOKEN to the " +
+                    "token only. Skipping email to {RecipientEmail}.",
+                    message.RecipientEmail);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "MailerSend is not configured; skipping email to {RecipientEmail}. Subject: {Subject}. Body: {TextBody}",
+                    message.RecipientEmail,
+                    message.Subject,
+                    message.TextBody);
+            }
             return;
         }
 
@@ -73,7 +99,7 @@ internal sealed class MailerSendEmailSender : IEmailSender
         {
             Content = JsonContent.Create(requestPayload)
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration.ApiToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
 
         var response = await _httpClientFactory.CreateClient(HttpClientName)
             .SendAsync(request, cancellationToken);

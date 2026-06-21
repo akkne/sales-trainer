@@ -30,6 +30,13 @@ services.AddSellevateEmail(configuration);   // binds MailerSend config + IEmail
 HtmlBody, TextBody }`. When the API token is a placeholder the sender logs and no-ops, so
 local/dev runs without credentials. Identity (verification codes) and notification both consume it.
 
+**Token configuration.** `MAILERSEND_API_TOKEN` must be the API token **only**. The from-email
+and from-name have their own variables (`MAILERSEND_FROM_EMAIL` / `MAILERSEND_FROM_NAME`); do not
+append them to the token line. The sender trims surrounding whitespace, and treats a token that
+contains *internal* whitespace as misconfigured — it no-ops and logs an actionable **error**
+("ApiToken contains whitespace …") instead of silently 401-ing against MailerSend. This was a
+real prod outage: the token line had the from-email/name appended, so every send failed.
+
 ## Resolving the recipient's email (Redis user replica)
 
 The notification service has **no database**, so it keeps a minimal user replica in Redis
