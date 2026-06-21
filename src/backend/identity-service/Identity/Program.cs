@@ -16,6 +16,7 @@ using Sellevate.Identity.Infrastructure.Email;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,12 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
     databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
+// Required by AddSellevateEventing's idempotency store (RedisIdempotencyStore).
+// Without this the DI container fails validation at builder.Build() and the
+// service crashes on startup.
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
+
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
 builder.Services.AddScoped<IOutboxWriter, IdentityOutboxWriter>();
@@ -49,6 +56,7 @@ builder.Services.AddScoped<IOutboxStore, IdentityOutboxStore>();
 builder.Services.AddHostedService<OutboxRelayBackgroundService>();
 
 builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
     .AddKafka();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<IdentityDbContext>(
