@@ -3,21 +3,21 @@ using System.ComponentModel.DataAnnotations;
 namespace Sellevate.Identity.Features.Auth.Models;
 
 public sealed record RegisterRequestDto(
-    [property: Required, EmailAddress] string Email,
-    [property: Required, MinLength(8), MaxLength(128)] string Password,
-    [property: Required, MaxLength(100)] string DisplayName);
+    [Required, EmailAddress] string Email,
+    [Required, MinLength(8), MaxLength(128)] string Password,
+    [Required, MaxLength(100)] string DisplayName);
 
 public sealed record LoginRequestDto(
-    [property: Required, EmailAddress] string Email,
-    [property: Required] string Password);
+    [Required, EmailAddress] string Email,
+    [Required] string Password);
 
 public sealed record VerifyEmailRequestDto(
-    [property: Required, EmailAddress] string Email,
-    [property: Required] string Code);
+    [Required, EmailAddress] string Email,
+    [Required] string Code);
 
-public sealed record GoogleLoginRequestDto([property: Required] string IdToken);
+public sealed record GoogleLoginRequestDto([Required] string IdToken);
 
-public sealed record ResendVerificationCodeRequestDto([property: Required, EmailAddress] string Email);
+public sealed record ResendVerificationCodeRequestDto([Required, EmailAddress] string Email);
 
 public sealed record RegistrationResultDto(string Email, bool RequiresEmailVerification);
 
