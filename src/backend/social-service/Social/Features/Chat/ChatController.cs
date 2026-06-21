@@ -89,6 +89,29 @@ public sealed class ChatController(IChatService chatService) : ControllerBase
         }
     }
 
+    [HttpPost("conversations/{conversationId}/read")]
+    public async Task<IActionResult> MarkConversationRead(
+        string conversationId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            await chatService.MarkConversationReadAsync(userId, conversationId, cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
     private bool TryGetCurrentUserId(out Guid userId)
     {
         var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Social.Eventing;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
 using Sellevate.Social.Infrastructure.Data;
@@ -14,12 +15,18 @@ internal sealed partial class DiscussService : IDiscussService
 
     private readonly SocialDbContext _databaseContext;
     private readonly IObjectStorage _objectStorage;
+    private readonly ISocialEventPublisher _eventPublisher;
     private readonly ILogger<DiscussService> _logger;
 
-    public DiscussService(SocialDbContext databaseContext, IObjectStorage objectStorage, ILogger<DiscussService> logger)
+    public DiscussService(
+        SocialDbContext databaseContext,
+        IObjectStorage objectStorage,
+        ISocialEventPublisher eventPublisher,
+        ILogger<DiscussService> logger)
     {
         _databaseContext = databaseContext;
         _objectStorage = objectStorage;
+        _eventPublisher = eventPublisher;
         _logger = logger;
     }
 
@@ -251,6 +258,22 @@ internal sealed partial class DiscussService : IDiscussService
         await _databaseContext.SaveChangesAsync(cancellationToken);
 
         var authorNames = await ResolveAuthorNamesAsync([authorId], cancellationToken);
+
+        // Notify the thread author that someone replied to their discussion (never self-notify).
+        if (thread.AuthorId != authorId)
+        {
+            await _eventPublisher.PublishDiscussReplyCreatedAsync(
+                new DiscussReplyCreatedEvent(
+                    thread.AuthorId,
+                    authorId,
+                    authorNames.GetValueOrDefault(authorId, string.Empty),
+                    thread.Id,
+                    thread.Title,
+                    reply.Id,
+                    Preview(reply.Body)),
+                cancellationToken);
+        }
+
         return ToReplyDto(reply, authorNames, viewerHasUpvoted: false, photos: Array.Empty<DiscussPhotoDto>());
     }
 

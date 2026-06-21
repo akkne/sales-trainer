@@ -166,6 +166,36 @@ internal sealed class ChatService(
             .ToList();
     }
 
+    public async Task MarkConversationReadAsync(
+        Guid userId,
+        string conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        var conversation = await mongoContext.ChatConversations
+            .Find(conversation => conversation.Id == conversationId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException("Conversation not found.");
+
+        if (!conversation.ParticipantIds.Contains(userId))
+            throw new InvalidOperationException("You are not a participant in this conversation.");
+
+        var readAt = DateTime.UtcNow;
+
+        // Set only this participant's entry in the lastReadAt map (dotted field path), leaving
+        // the other participant's watermark untouched.
+        var updateDefinition = Builders<ChatConversation>.Update
+            .Set($"lastReadAt.{userId}", readAt);
+
+        await mongoContext.ChatConversations.UpdateOneAsync(
+            conversation => conversation.Id == conversationId,
+            updateDefinition,
+            cancellationToken: cancellationToken);
+
+        await eventPublisher.PublishChatMessageReadAsync(
+            new ChatMessageReadEvent(userId, ParseConversationId(conversation.Id), readAt),
+            cancellationToken);
+    }
+
     private async Task PublishChatMessageSentAsync(
         ChatConversation conversation,
         Guid senderId,

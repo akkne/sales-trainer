@@ -16,4 +16,12 @@ internal sealed class KafkaSocialEventPublisher(IEventPublisher eventPublisher) 
     public Task PublishChatMessageSentAsync(ChatMessageSentEvent payload, CancellationToken cancellationToken = default) =>
         eventPublisher.PublishAsync(
             Topics.ChatMessageSent, payload.RecipientId.ToString(), Topics.ChatMessageSent, payload, cancellationToken: cancellationToken);
+
+    public Task PublishChatMessageReadAsync(ChatMessageReadEvent payload, CancellationToken cancellationToken = default) =>
+        eventPublisher.PublishAsync(
+            Topics.ChatMessageRead, payload.ReaderUserId.ToString(), Topics.ChatMessageRead, payload, cancellationToken: cancellationToken);
+
+    public Task PublishDiscussReplyCreatedAsync(DiscussReplyCreatedEvent payload, CancellationToken cancellationToken = default) =>
+        eventPublisher.PublishAsync(
+            Topics.DiscussReplyCreated, payload.RecipientId.ToString(), Topics.DiscussReplyCreated, payload, cancellationToken: cancellationToken);
 }

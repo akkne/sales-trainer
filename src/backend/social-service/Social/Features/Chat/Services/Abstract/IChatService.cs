@@ -8,4 +8,5 @@ public interface IChatService
     Task<ChatMessageDto> SendMessageAsync(Guid senderId, string conversationId, string content, CancellationToken cancellationToken = default);
     Task<List<ChatMessageDto>> GetMessagesAsync(Guid userId, string conversationId, int limit = 50, string? beforeMessageId = null, CancellationToken cancellationToken = default);
     Task<List<ChatConversationSummaryDto>> GetConversationListAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task MarkConversationReadAsync(Guid userId, string conversationId, CancellationToken cancellationToken = default);
 }
