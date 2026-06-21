@@ -115,6 +115,18 @@ return count
             .ToList();
     }
 
+    public async Task<bool> ExistsAsync(
+        Guid recipientUserId,
+        NotificationType notificationType,
+        string? relatedEntityId,
+        CancellationToken cancellationToken = default)
+    {
+        var notifications = await GetAllAsync(recipientUserId, cancellationToken);
+        return notifications.Any(n =>
+            n.NotificationType == notificationType &&
+            n.RelatedEntityId == relatedEntityId);
+    }
+
     public async Task<bool> ReplaceAsync(
         Guid recipientUserId,
         NotificationRecord updatedNotification,

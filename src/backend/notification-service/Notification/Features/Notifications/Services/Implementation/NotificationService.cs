@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Sellevate.Notification.Common;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications.Models;
 using Sellevate.Notification.Features.Notifications.Services.Abstract;
@@ -32,14 +33,36 @@ internal sealed class NotificationService : INotificationService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Body);
 
+        // NO3: Domain-level idempotency — skip if a notification for the same
+        // recipient + type + relatedEntityId already exists. This prevents duplicate
+        // notifications when a domain event is replayed (e.g. Kafka redelivery).
+        if (await _notificationStore.ExistsAsync(
+                request.RecipientUserId,
+                request.NotificationType,
+                request.RelatedEntityId,
+                cancellationToken))
+        {
+            _logger.LogDebug(
+                "Skipping duplicate {NotificationType} notification for recipient {RecipientUserId} (relatedEntityId={RelatedEntityId})",
+                request.NotificationType, request.RecipientUserId, request.RelatedEntityId);
+            return;
+        }
+
+        // NO2: Strip control characters from untrusted event fields before persisting.
+        // The frontend MUST render Title and Body as plain text (not innerHTML).
+        var sanitizedTitle = InputSanitizer.StripControlCharacters(request.Title);
+        var sanitizedBody  = InputSanitizer.StripControlCharacters(request.Body);
+        // ActionUrl is validated to relative app paths only; external URLs are rejected.
+        var sanitizedActionUrl = InputSanitizer.SanitizeActionUrl(request.ActionUrl);
+
         var notification = new NotificationRecord
         {
             Id = Guid.NewGuid(),
             RecipientUserId = request.RecipientUserId,
             NotificationType = request.NotificationType,
-            Title = request.Title,
-            Body = request.Body,
-            ActionUrl = request.ActionUrl,
+            Title = sanitizedTitle,
+            Body = sanitizedBody,
+            ActionUrl = sanitizedActionUrl,
             RelatedEntityId = request.RelatedEntityId,
             IsRead = false,
             CreatedAt = DateTime.UtcNow,

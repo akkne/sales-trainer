@@ -180,4 +180,116 @@ public class NotificationServiceTests
         (await service.GetUnreadCountAsync(RecipientUserId)).Should().Be(0);
         (await store.GetAllAsync(RecipientUserId)).Should().OnlyContain(notification => notification.IsRead);
     }
+
+    // ── NO3: domain-level idempotency ─────────────────────────────────────────
+
+    [Test]
+    public async Task CreateAsync_SameDomainEvent_DoesNotCreateDuplicateNotification()
+    {
+        // Two calls with identical RecipientUserId + NotificationType + RelatedEntityId
+        // simulate the same domain event being replayed (e.g. Kafka redelivery).
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+        var request = BuildRequest(); // type=AchievementUnlocked, relatedEntityId="related-1"
+
+        await service.CreateAsync(request);
+        await service.CreateAsync(request); // replay — must be ignored
+
+        var stored = await store.GetAllAsync(RecipientUserId);
+        stored.Should().ContainSingle("second create with the same business key must be skipped");
+    }
+
+    [Test]
+    public async Task CreateAsync_DifferentRelatedEntityId_CreatesBothNotifications()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+
+        var first  = new CreateNotificationRequest(RecipientUserId, NotificationType.AchievementUnlocked, "T", "B", "/profile", "entity-1");
+        var second = new CreateNotificationRequest(RecipientUserId, NotificationType.AchievementUnlocked, "T", "B", "/profile", "entity-2");
+
+        await service.CreateAsync(first);
+        await service.CreateAsync(second);
+
+        (await store.GetAllAsync(RecipientUserId)).Should().HaveCount(2);
+    }
+
+    [Test]
+    public async Task CreateAsync_DifferentNotificationType_CreatesBothNotifications()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+
+        var first  = new CreateNotificationRequest(RecipientUserId, NotificationType.AchievementUnlocked, "T", "B", "/profile", "same-entity");
+        var second = new CreateNotificationRequest(RecipientUserId, NotificationType.StreakMilestone,     "T", "B", "/profile", "same-entity");
+
+        await service.CreateAsync(first);
+        await service.CreateAsync(second);
+
+        (await store.GetAllAsync(RecipientUserId)).Should().HaveCount(2);
+    }
+
+    // ── NO2: input sanitization ───────────────────────────────────────────────
+
+    [Test]
+    public async Task CreateAsync_ControlCharactersInTitleAndBody_AreStripped()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+        var request = new CreateNotificationRequest(
+            RecipientUserId,
+            NotificationType.StreakMilestone,
+            "Title withcontrols",
+            "Body\twith\rnewlines\n",
+            "/profile",
+            "entity-ctrl");
+
+        await service.CreateAsync(request);
+
+        var stored = await store.GetAllAsync(RecipientUserId);
+        stored.Should().ContainSingle();
+        stored[0].Title.Should().NotContainAny(" ", "");
+        stored[0].Body.Should().NotContainAny("\t", "\r", "\n");
+    }
+
+    [Test]
+    public async Task CreateAsync_RelativeActionUrl_IsPreserved()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+        var request = new CreateNotificationRequest(
+            RecipientUserId, NotificationType.AchievementUnlocked, "T", "B", "/profile", "e1");
+
+        await service.CreateAsync(request);
+
+        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().Be("/profile");
+    }
+
+    [Test]
+    public async Task CreateAsync_AbsoluteActionUrl_IsRejectedAndStoredAsNull()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+        var request = new CreateNotificationRequest(
+            RecipientUserId, NotificationType.AchievementUnlocked, "T", "B",
+            "https://evil.example.com/steal", "e-abs");
+
+        await service.CreateAsync(request);
+
+        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().BeNull();
+    }
+
+    [Test]
+    public async Task CreateAsync_JavascriptSchemeActionUrl_IsRejectedAndStoredAsNull()
+    {
+        var store = new InMemoryNotificationStore();
+        var service = CreateService(store);
+        var request = new CreateNotificationRequest(
+            RecipientUserId, NotificationType.AchievementUnlocked, "T", "B",
+            "javascript:alert(1)", "e-js");
+
+        await service.CreateAsync(request);
+
+        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().BeNull();
+    }
 }
