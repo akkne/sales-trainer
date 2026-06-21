@@ -52,10 +52,25 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-if [[ -f "$REPO_ROOT/.env" ]]; then
-  # shellcheck disable=SC1091
-  set -a; source "$REPO_ROOT/.env"; set +a
-fi
+
+# Read a single KEY from a docker-compose-style .env WITHOUT executing it.
+# (Sourcing breaks on values containing spaces / special chars, e.g.
+#  SUPERADMIN_DISPLAY_NAME=Super Morfov -> bash tries to run "Morfov".)
+# Returns the last matching line's value, with optional surrounding quotes stripped.
+dotenv_get() {
+  local key="$1" file="$2" val
+  [[ -f "$file" ]] || return 0
+  val="$(grep -E "^[[:space:]]*${key}=" "$file" | tail -n1)" || return 0
+  val="${val#*=}"
+  val="${val%\"}"; val="${val#\"}"          # strip matching double quotes
+  val="${val%\'}"; val="${val#\'}"          # strip matching single quotes
+  printf '%s' "$val"
+}
+
+# Only the values this script actually uses; existing env vars win over .env.
+POSTGRES_USER="${POSTGRES_USER:-$(dotenv_get POSTGRES_USER "$REPO_ROOT/.env")}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(dotenv_get POSTGRES_PASSWORD "$REPO_ROOT/.env")}"
+POSTGRES_DB="${POSTGRES_DB:-$(dotenv_get POSTGRES_DB "$REPO_ROOT/.env")}"
 
 PGHOST="${PGHOST:-127.0.0.1}"
 PGPORT="${PGPORT:-5433}"
