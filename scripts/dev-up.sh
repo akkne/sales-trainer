@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # One-shot LOCAL dev launcher:
 #   1. infra in Docker (docker-compose.infra.yml)
-#   2. backend (.NET) on the host
-#   3. frontend (Next.js) on the host
+#   2. frontend (Next.js) on the host
 #
-# Backend & frontend run in the background; their logs go to logs/.
+# The monolith (src/backend/api) is retired (Phase 9) and is no longer launched here;
+# it is kept as a reference only (run scripts/dev-backend.sh --force to start it).
+# The frontend talks to the API gateway, which routes to the per-service backends.
+#
+# The frontend runs in the background; its logs go to logs/.
 # Stop everything with scripts/dev-down.sh.
 set -euo pipefail
 
@@ -27,12 +30,7 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
-# 2) Backend (background)
-echo "==> Launching backend in background -> $LOG_DIR/backend.log"
-nohup "$SCRIPT_DIR/dev-backend.sh" > "$LOG_DIR/backend.log" 2>&1 &
-echo $! > "$PID_DIR/backend.pid"
-
-# 3) Frontend (background)
+# 2) Frontend (background)
 echo "==> Launching frontend in background -> $LOG_DIR/frontend.log"
 nohup "$SCRIPT_DIR/dev-frontend.sh" > "$LOG_DIR/frontend.log" 2>&1 &
 echo $! > "$PID_DIR/frontend.pid"
@@ -40,9 +38,11 @@ echo $! > "$PID_DIR/frontend.pid"
 cat <<EOF
 
 ==> Local dev stack starting.
-    Backend  : http://localhost:${LOCAL_BACKEND_PORT}   (logs: logs/backend.log)
     Frontend : http://localhost:${LOCAL_FRONTEND_PORT}   (logs: logs/frontend.log)
 
-    Tail logs:  tail -f logs/backend.log logs/frontend.log
+    The monolith is retired; start the per-service backends + gateway as needed
+    (scripts/dev-gateway.sh, scripts/dev-identity.sh, ...).
+
+    Tail logs:  tail -f logs/frontend.log
     Stop all :  scripts/dev-down.sh
 EOF
