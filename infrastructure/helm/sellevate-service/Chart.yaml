@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sellevate-service
+description: Generic Helm chart for a single Sellevate microservice (Deployment + Service + health probes + config/secrets refs). One release per service, parameterized via values-<service>.yaml.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,18 @@
+nameOverride: identity
+
+image:
+  repository: ghcr.io/sellevate/identity-service
+  tag: latest
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  Kafka__BootstrapServers: kafka:9092
+  Logging__Loki__Url: http://loki:3100
+
+envFromConfigMap: identity-config
+envFromSecret: identity-secrets
+
+service:
+  type: ClusterIP
+  port: 80

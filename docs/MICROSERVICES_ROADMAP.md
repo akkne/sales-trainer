@@ -386,7 +386,7 @@ API client). Unknown routes now return 404.
 
 ---
 
-## Phase 10 — Hardening (optional, resume polish) `[>]`
+## Phase 10 — Hardening (optional, resume polish) `[x]`
 - [x] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
       Shared `BuildingBlocks.HealthChecks` helpers expose `/healthz` (liveness) + `/readyz`
       (readiness: postgres/redis/kafka/mongo probes per service) uniformly across all 7
@@ -411,7 +411,14 @@ API client). Unknown routes now return 404.
       constants (no magic strings). Per-service `OutgoingEventContractTests` remain the
       producer-side source of truth. Schema Registry/Avro noted as **future** (current
       transport is System.Text.Json camelCase) — not implemented.
-- [ ] **10.5** k8s manifests / Helm chart per service (stretch).
+- [x] **10.5** k8s manifests / Helm chart per service (stretch). A single generic Helm
+      chart `infrastructure/helm/sellevate-service` (Deployment + Service + liveness
+      `/healthz` / readiness `/readyz` probes + ConfigMap/Secret refs) deploys any service
+      as its own release, with a `values/<service>.yaml` for all 8 releases. `gamification`
+      and `gateway` are the fully-worked references; the rest share the chart with
+      equivalent values. `helm lint` + `helm template` verified for all 8. Infra deps are
+      referenced via per-service ConfigMaps/Secrets (deployed separately). Docs:
+      DEPLOYMENT.md (Option C), infrastructure/helm/README.md.
 
 ---
 

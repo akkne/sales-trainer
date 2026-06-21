@@ -25,7 +25,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |
 | [Local Dev](LOCAL_DEV.md) | Run backend/frontend on the host (no image rebuilds) with infra in Docker — `scripts/dev-*.sh`, `docker-compose.infra.yml` |
 | [Configuration](CONFIGURATION.md) | Secrets in root .env, per-service config files, env var → appsettings mapping |
-| [Deployment](DEPLOYMENT.md) | Production deploy: frontend on Vercel (`sellevate.vercel.app`), backend + infra via Docker Compose, CORS allow-list, env vars |
+| [Deployment](DEPLOYMENT.md) | Production deploy: frontend on Vercel (`sellevate.vercel.app`), backend + infra via Docker Compose, CORS allow-list, env vars, optional Kubernetes/Helm (Option C) + health probes |
 | [Integrations](INTEGRATIONS.md) | External service integrations: MinIO/S3 object storage, endpoints, env keys |
 | [Monitoring & Product Metrics](MONITORING.md) | Usage metrics on Prometheus/Grafana: online users, visits/day/week, page views, UI events, logins/registrations — catalog, cardinality rules, dashboard |
 | [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
