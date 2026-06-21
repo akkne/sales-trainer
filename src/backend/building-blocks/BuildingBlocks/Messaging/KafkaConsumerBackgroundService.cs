@@ -17,9 +17,12 @@ namespace Sellevate.BuildingBlocks.Messaging;
 ///
 /// <para>
 /// Offsets are committed only after a message is successfully handled (or skipped
-/// as a duplicate), giving at-least-once delivery. A handler that throws is logged
-/// and the offset is NOT committed, so the message is redelivered — combined with
-/// idempotency this is the standard "process then commit" pattern.
+/// as a duplicate), giving at-least-once delivery. A handler that throws is retried
+/// in-process up to <see cref="ConsumerResilienceSettings.MaxHandlerRetries"/> times; if it
+/// still fails and dead-lettering is enabled, the original message is forwarded to
+/// <c>&lt;topic&gt;.dlt</c> and the offset is committed so a poison message can never block
+/// the partition. Combined with idempotency this is the standard "process, then commit"
+/// pattern with a bounded retry + dead-letter escape hatch.
 /// </para>
 /// </summary>
 public abstract class KafkaConsumerBackgroundService : BackgroundService
@@ -117,55 +120,23 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
         ConsumeResult<string, string> result,
         CancellationToken stoppingToken)
     {
-        EventEnvelope? envelope;
-        try
-        {
-            envelope = JsonSerializer.Deserialize<EventEnvelope>(result.Message.Value, EventEnvelope.JsonOptions);
-        }
-        catch (JsonException ex)
-        {
-            // A malformed message can never succeed on redelivery — commit past it.
-            Logger.LogError(ex, "Skipping unparseable message on {Topic}", result.Topic);
-            consumer.Commit(result);
-            return;
-        }
+        using var scope = _scopeFactory.CreateScope();
+        var deadLetterPublisher = scope.ServiceProvider.GetRequiredService<IDeadLetterPublisher>();
+        var resilience = scope.ServiceProvider.GetRequiredService<IOptions<ConsumerResilienceSettings>>().Value;
 
-        if (envelope is null)
+        var processor = new EventMessageProcessor(
+            _settings.ConsumerGroupId, _idempotencyStore, deadLetterPublisher, resilience, Logger);
+
+        var outcome = await processor.ProcessAsync(
+            result.Topic,
+            result.Message.Key,
+            result.Message.Value,
+            (envelope, cancellationToken) => HandleAsync(envelope, scope.ServiceProvider, cancellationToken),
+            stoppingToken);
+
+        if (outcome != MessageProcessingOutcome.Redeliver)
         {
             consumer.Commit(result);
-            return;
-        }
-
-        try
-        {
-            if (await _idempotencyStore.HasProcessedAsync(_settings.ConsumerGroupId, envelope.EventId, stoppingToken))
-            {
-                Logger.LogDebug(
-                    "Skipping duplicate event {EventId} ({Type}) in group '{Group}'",
-                    envelope.EventId, envelope.Type, _settings.ConsumerGroupId);
-            }
-            else
-            {
-                using var scope = _scopeFactory.CreateScope();
-                await HandleAsync(envelope, scope.ServiceProvider, stoppingToken);
-                // Mark only after a successful handle: a throwing handler leaves the
-                // event unmarked and uncommitted, so it is retried on redelivery.
-                await _idempotencyStore.MarkProcessedAsync(_settings.ConsumerGroupId, envelope.EventId, stoppingToken);
-            }
-
-            consumer.Commit(result);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // Do NOT commit: the message will be redelivered. Idempotency makes the
-            // retry safe even if the handler partially succeeded.
-            Logger.LogError(
-                ex, "Handler failed for event {EventId} ({Type}); will redeliver",
-                envelope.EventId, envelope.Type);
         }
     }
 }

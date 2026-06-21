@@ -12,9 +12,11 @@ using Sellevate.Ai.Features.Evaluation;
 using Sellevate.Ai.Features.Transcription;
 using Sellevate.Ai.Features.Voice;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.HealthChecks;
 using Sellevate.Ai.Infrastructure.Http;
 using Sellevate.Ai.Infrastructure.Mongo;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
@@ -59,6 +61,17 @@ builder.Services.AddScoped<IDialogEventPublisher, KafkaDialogEventPublisher>();
 builder.Services.AddSingleton<IDialogScoringWeightsProvider, DialogScoringWeightsProvider>();
 builder.Services.AddHostedService<GamificationDialogWeightsConsumer>();
 builder.Services.AddHostedService<UserReplicaConsumer>();
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AiDbContext>(
+        HealthCheckConstants.PostgresCheckName,
+        tags: [HealthCheckConstants.ReadinessTag])
+    .AddCheck<MongoHealthCheck>(
+        HealthCheckConstants.MongoCheckName,
+        tags: [HealthCheckConstants.ReadinessTag]);
 
 const int minimumJwtSigningKeyByteCount = 32;
 var jwtSigningKey = builder.Configuration["Jwt:Key"];
@@ -141,7 +154,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "ai" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

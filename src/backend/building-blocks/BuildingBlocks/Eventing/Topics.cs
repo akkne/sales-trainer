@@ -38,4 +38,14 @@ public static class Topics
     public const string FriendRequestReceived = "friend.request.received";
     public const string FriendRequestAccepted = "friend.request.accepted";
     public const string ChatMessageSent = "chat.message.sent";
+
+    /// <summary>
+    /// Suffix appended to a source topic to form its dead-letter topic. A message that
+    /// still fails after the configured retries is published to <c>&lt;topic&gt;.dlt</c>
+    /// so it can be inspected/replayed without blocking the partition.
+    /// </summary>
+    public const string DeadLetterSuffix = ".dlt";
+
+    /// <summary>Builds the dead-letter topic name for <paramref name="sourceTopic"/>.</summary>
+    public static string DeadLetterFor(string sourceTopic) => sourceTopic + DeadLetterSuffix;
 }

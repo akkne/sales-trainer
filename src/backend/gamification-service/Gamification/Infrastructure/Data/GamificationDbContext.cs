@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Gamification.Features.Achievements.Models;
 using Sellevate.Gamification.Features.Gamification.Models;
 using Sellevate.Gamification.Features.League.Models;
@@ -25,6 +26,7 @@ public sealed class GamificationDbContext : DbContext
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<LeagueSettings> LeagueSettings => Set<LeagueSettings>();
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,5 +43,6 @@ public sealed class GamificationDbContext : DbContext
         modelBuilder.ApplyConfiguration(new LeagueMembershipEntityConfiguration());
         modelBuilder.ApplyConfiguration(new LeagueSettingsEntityConfiguration());
         modelBuilder.ApplyConfiguration(new UserReplicaEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new OutboxMessageEntityConfiguration());
     }
 }

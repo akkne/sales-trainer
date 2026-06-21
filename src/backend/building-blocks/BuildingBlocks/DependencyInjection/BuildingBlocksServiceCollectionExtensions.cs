@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sellevate.BuildingBlocks.Idempotency;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Outbox;
 
 namespace Sellevate.BuildingBlocks.DependencyInjection;
 
@@ -12,8 +13,10 @@ namespace Sellevate.BuildingBlocks.DependencyInjection;
 public static class BuildingBlocksServiceCollectionExtensions
 {
     /// <summary>
-    /// Binds <see cref="KafkaSettings"/> from the <c>Kafka</c> config section and registers
-    /// the singleton <see cref="IEventPublisher"/> and <see cref="IIdempotencyStore"/>.
+    /// Binds <see cref="KafkaSettings"/> (<c>Kafka</c>), <see cref="ConsumerResilienceSettings"/>
+    /// (<c>Kafka:ConsumerResilience</c>) and <see cref="OutboxSettings"/> (<c>Outbox</c>) from
+    /// configuration and registers the singleton <see cref="IEventPublisher"/> and
+    /// <see cref="IIdempotencyStore"/>.
     ///
     /// <para>
     /// Requires the host to have already registered an
@@ -25,7 +28,12 @@ public static class BuildingBlocksServiceCollectionExtensions
     public static IServiceCollection AddSellevateEventing(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<KafkaSettings>(configuration.GetSection(KafkaSettings.SectionName));
-        services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+        services.Configure<ConsumerResilienceSettings>(configuration.GetSection(ConsumerResilienceSettings.SectionName));
+        services.Configure<OutboxSettings>(configuration.GetSection(OutboxSettings.SectionName));
+        services.AddSingleton<KafkaEventPublisher>();
+        services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
+        services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
+        services.AddSingleton<IOutboxEventForwarder>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
         return services;
     }

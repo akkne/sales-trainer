@@ -1,0 +1,18 @@
+nameOverride: social
+
+image:
+  repository: ghcr.io/sellevate/social-service
+  tag: latest
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  Kafka__BootstrapServers: kafka:9092
+  Logging__Loki__Url: http://loki:3100
+
+envFromConfigMap: social-config
+envFromSecret: social-secrets
+
+service:
+  type: ClusterIP
+  port: 80

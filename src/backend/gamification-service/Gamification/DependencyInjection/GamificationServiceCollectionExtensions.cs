@@ -1,3 +1,4 @@
+using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Gamification.Eventing;
 using Sellevate.Gamification.Features.Achievements;
 using Sellevate.Gamification.Features.Achievements.Services.Abstract;
@@ -16,6 +17,9 @@ public static class GamificationServiceCollectionExtensions
     public static IServiceCollection AddGamificationServices(this IServiceCollection services)
     {
         services.AddScoped<IGamificationEventPublisher, KafkaGamificationEventPublisher>();
+        services.AddScoped<IOutboxWriter, GamificationOutboxWriter>();
+        services.AddScoped<IOutboxStore, GamificationOutboxStore>();
+        services.AddHostedService<OutboxRelayBackgroundService>();
 
         services.AddScoped<IGamificationSettingsService, GamificationSettingsService>();
         services.AddScoped<IExperiencePointsGrantService, ExperiencePointsGrantService>();

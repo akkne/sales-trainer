@@ -77,5 +77,7 @@ internal sealed class StreakService(
 
         await eventPublisher.PublishStreakMilestoneAsync(
             new StreakMilestoneEvent(userId, streakDayCount, bonusExperiencePoints), cancellationToken);
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 }

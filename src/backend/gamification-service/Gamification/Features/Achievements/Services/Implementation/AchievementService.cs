@@ -109,14 +109,14 @@ internal sealed class AchievementService(
             return Array.Empty<string>();
         }
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
-
         foreach (var unlockedAchievement in newlyUnlockedAchievements)
         {
             await eventPublisher.PublishAchievementUnlockedAsync(
                 new AchievementUnlockedEvent(userId, unlockedAchievement.Key, unlockedAchievement.Title),
                 cancellationToken);
         }
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         return newlyUnlockedKeys;
     }

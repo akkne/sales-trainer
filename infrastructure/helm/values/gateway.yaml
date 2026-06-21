@@ -1,0 +1,31 @@
+nameOverride: gateway
+
+image:
+  repository: ghcr.io/sellevate/gateway
+  tag: latest
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  Logging__Loki__Url: http://loki:3100
+
+envFromConfigMap: gateway-config
+envFromSecret: gateway-secrets
+
+service:
+  type: LoadBalancer
+  port: 80
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3

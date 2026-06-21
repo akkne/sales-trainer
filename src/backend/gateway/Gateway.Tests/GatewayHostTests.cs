@@ -23,7 +23,7 @@ public class GatewayHostTests
     public void TearDown() => _factory.Dispose();
 
     [Test]
-    public async Task Healthz_returns_ok_without_a_running_monolith()
+    public async Task Healthz_returns_healthy_without_a_running_monolith()
     {
         var client = _factory.CreateClient();
 
@@ -31,9 +31,8 @@ public class GatewayHostTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<HealthResponse>();
-        body!.Status.Should().Be("ok");
-        body.Service.Should().Be("gateway");
+        body!.Status.Should().Be("Healthy");
     }
 
-    private sealed record HealthResponse(string Status, string Service);
+    private sealed record HealthResponse(string Status);
 }

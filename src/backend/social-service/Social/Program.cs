@@ -7,7 +7,9 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.Social.Eventing;
+using Sellevate.Social.Infrastructure.HealthChecks;
 using Sellevate.Social.Features.Discuss;
 using Sellevate.Social.Features.Friends;
 using Sellevate.Social.Infrastructure.Configuration;
@@ -57,6 +59,17 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddScoped<ISocialEventPublisher, KafkaSocialEventPublisher>();
 builder.Services.AddHostedService<UserReplicaConsumer>();
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<SocialDbContext>(
+        HealthCheckConstants.PostgresCheckName,
+        tags: [HealthCheckConstants.ReadinessTag])
+    .AddCheck<MongoHealthCheck>(
+        HealthCheckConstants.MongoCheckName,
+        tags: [HealthCheckConstants.ReadinessTag]);
 
 builder.Services.AddSocialObjectStorage(builder.Configuration);
 
@@ -123,7 +136,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "social" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

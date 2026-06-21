@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications;
 using Serilog;
@@ -35,6 +36,10 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddNotificationServices(builder.Configuration);
+
+builder.Services.AddSellevateHealthChecks()
+    .AddRedis()
+    .AddKafka();
 
 const int minimumJwtSigningKeyByteCount = 32;
 var jwtSigningKey = builder.Configuration["Jwt:Key"];
@@ -88,7 +93,7 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
-application.MapGet(RouteConstants.HealthCheck, () => Results.Ok(new { status = "ok", service = "notification" }));
+application.MapSellevateHealthChecks();
 
 application.MapControllers();
 

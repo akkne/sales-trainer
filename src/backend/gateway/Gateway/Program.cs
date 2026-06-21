@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
+using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.Gateway;
 using Yarp.ReverseProxy.Transforms;
 
@@ -51,6 +52,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+builder.Services.AddSellevateHealthChecks();
+
 // ── YARP reverse proxy ───────────────────────────────────────────────────────
 // Routes/clusters come from the "ReverseProxy" config section. The monolith is
 // retired (Phase 9): every prefix is owned by a microservice cluster and there is
@@ -70,9 +73,7 @@ var application = builder.Build();
 
 application.UseSerilogRequestLogging();
 
-// Lightweight liveness endpoint (kept off the proxy so it works even if a
-// downstream microservice is down).
-application.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "gateway" }));
+application.MapSellevateHealthChecks();
 
 application.UseAuthentication();
 application.UseAuthorization();

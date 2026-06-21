@@ -1,0 +1,18 @@
+nameOverride: notification
+
+image:
+  repository: ghcr.io/sellevate/notification-service
+  tag: latest
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  Kafka__BootstrapServers: kafka:9092
+  Logging__Loki__Url: http://loki:3100
+
+envFromConfigMap: notification-config
+envFromSecret: notification-secrets
+
+service:
+  type: ClusterIP
+  port: 80

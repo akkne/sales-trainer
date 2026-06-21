@@ -386,13 +386,53 @@ API client). Unknown routes now return 404.
 
 ---
 
-## Phase 10 — Hardening (optional, resume polish) `[ ]`
-- [ ] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
-- [ ] **10.2** Dead-letter topics + retry policy for poison events.
-- [ ] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
-      atomic DB-write + event-publish.
-- [ ] **10.4** Contract tests on Kafka schemas (and optional Schema Registry/Avro).
-- [ ] **10.5** k8s manifests / Helm chart per service (stretch).
+## Phase 10 — Hardening (optional, resume polish) `[x]` (10.3 partial `[~]`)
+- [x] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
+      Shared `BuildingBlocks.HealthChecks` helpers expose `/healthz` (liveness) + `/readyz`
+      (readiness: postgres/redis/kafka/mongo probes per service) uniformly across all 7
+      services + gateway. Added a `kafka-exporter` to both compose stacks + a Prometheus
+      `kafka-exporter` scrape job, and a Grafana dashboard
+      `infrastructure/grafana/dashboards/kafka-consumer-lag.json` (consumer lag by
+      group/topic + broker/service health). Docs: [MONITORING.md](MONITORING.md).
+- [x] **10.2** Dead-letter topics + retry policy for poison events. The shared consumer
+      base (`KafkaConsumerBackgroundService` → new testable `EventMessageProcessor`) now
+      runs a bounded in-process retry then publishes the poison message to `<topic>.dlt`
+      and commits, so it can't block the partition. Opt-in via strongly-typed
+      `ConsumerResilienceSettings` (`Kafka:ConsumerResilience`) with safe defaults
+      (3 retries / 500 ms / DLT on). Unit-tested (retry count, DLT publish, disabled path,
+      dedupe, unparseable). Applies to all consumers (shared base). Docs: ARCHITECTURE.md,
+      TESTING/HARDENING.md.
+- [~] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
+      atomic DB-write + event-publish. **Partial — gamification done well, identity/learning
+      deferred.** Shared outbox building blocks (`BuildingBlocks/Outbox`: `OutboxMessage`,
+      `IOutboxWriter`/`IOutboxStore`/`IOutboxEventForwarder`, testable `OutboxRelayProcessor`
+      + `OutboxRelayBackgroundService`, `OutboxSettings`) plus a fully-wired
+      **gamification-service** outbox: `OutboxMessages` table + EF migration
+      `AddOutboxMessages`, store/writer over `GamificationDbContext`, relay hosted service,
+      and all four outgoing events (`xp.granted`, `achievement.unlocked`, `streak.milestone`,
+      `gamification.dialog-weights.updated`) enqueued in the same transaction as the business
+      write. Unit-tested (relay forward/mark/stop-on-failure; gamification enqueue→pending→
+      dispatch + envelope contract). **Reason for deferring Identity & Learning:** each needs
+      its own table + EF migration + publisher rewiring, and true atomicity can only be
+      verified against a real Postgres (no Testcontainers in this offline sandbox); per the
+      "clean partial beats a broken sweep" rule, one fully-correct + tested service is shipped
+      and the other two are left publishing directly (stable, unchanged) rather than
+      half-wired. Docs: ARCHITECTURE.md, TESTING/HARDENING.md.
+- [x] **10.4** Contract tests on Kafka schemas. `EventContractCatalogTests` (in
+      BuildingBlocks.Tests) asserts the serialized wire shape (camelCase field names + JSON
+      types) of every one of the 16 topics in [MICROSERVICES.md](MICROSERVICES.md) §4.1, the
+      producer↔consumer contract for each cross-service pair, referencing the `Topics`
+      constants (no magic strings). Per-service `OutgoingEventContractTests` remain the
+      producer-side source of truth. Schema Registry/Avro noted as **future** (current
+      transport is System.Text.Json camelCase) — not implemented.
+- [x] **10.5** k8s manifests / Helm chart per service (stretch). A single generic Helm
+      chart `infrastructure/helm/sellevate-service` (Deployment + Service + liveness
+      `/healthz` / readiness `/readyz` probes + ConfigMap/Secret refs) deploys any service
+      as its own release, with a `values/<service>.yaml` for all 8 releases. `gamification`
+      and `gateway` are the fully-worked references; the rest share the chart with
+      equivalent values. `helm lint` + `helm template` verified for all 8. Infra deps are
+      referenced via per-service ConfigMaps/Secrets (deployed separately). Docs:
+      DEPLOYMENT.md (Option C), infrastructure/helm/README.md.
 
 ---
 

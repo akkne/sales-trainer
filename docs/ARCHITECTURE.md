@@ -112,10 +112,32 @@ src/backend/
   `BuildingBlocks` (`Topics`, `EventEnvelope`). Consumers are idempotent (dedupe on
   `eventId` via a Redis-backed `IIdempotencyStore`). Local broker: `localhost:9092`,
   Kafka UI on `:8085`.
+- **Poison-message handling (Phase 10.2):** the shared idempotent consumer base
+  (`KafkaConsumerBackgroundService` → `EventMessageProcessor`) retries a failing handler
+  a bounded number of times in-process, then — if dead-lettering is enabled — forwards the
+  original message to `<topic>.dlt` (e.g. `exercise.completed.dlt`) and commits the offset,
+  so a single poison message can never block its partition. The policy is opt-in via the
+  strongly-typed `ConsumerResilienceSettings` (config section `Kafka:ConsumerResilience`)
+  with safe defaults: 3 retries, 500 ms linear back-off, dead-lettering on. Set
+  `DeadLetterEnabled=false` to fall back to the previous redeliver-forever behaviour. The
+  dead-letter topic suffix (`.dlt`) is the `Topics.DeadLetterSuffix` constant. DLT messages
+  carry `x-dead-letter-reason` / `x-dead-letter-at` headers for diagnostics; replay is a
+  manual operator action (re-produce the value onto the source topic).
 - **API Gateway (YARP):** single entry point; validates the JWT once and injects
   trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
   stripped). The strangler-fig migration is finished: it routes every prefix to its
   owning service and has **no catch-all** (unknown routes return 404).
+- **Transactional outbox (Phase 10.3):** to make a state change and its event publish
+  atomic, a producer can write an `OutboxMessage` row in the *same* EF transaction as its
+  business change (`IOutboxWriter.Enqueue` stages the row; the caller's single
+  `SaveChangesAsync` commits both). A per-service `OutboxRelayBackgroundService` then polls
+  pending rows (`IOutboxStore`), forwards each stored envelope to Kafka verbatim
+  (`IOutboxEventForwarder`), and marks it dispatched — at-least-once with no lost events on
+  a crash between DB commit and Kafka produce. Shared building blocks live in
+  `BuildingBlocks/Outbox`; **gamification-service is the fully-wired reference** (table +
+  migration `AddOutboxMessages`, store/writer, relay; all four outgoing events route through
+  the outbox). Identity and Learning still publish directly (see roadmap 10.3) — the outbox
+  there is deferred, not wired, to keep those services stable.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

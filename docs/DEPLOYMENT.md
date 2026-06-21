@@ -44,6 +44,30 @@ Vercel cannot host the .NET server or the stateful infra, so only the frontend l
 
 ---
 
+## Option C — Kubernetes via Helm (Phase 10.5, optional)
+
+A generic Helm chart at `infrastructure/helm/sellevate-service` deploys any one service or
+the gateway as its own release, parameterized by `infrastructure/helm/values/<service>.yaml`
+(one each for `gateway`, `identity`, `learning`, `gamification`, `ai`, `social`,
+`analytics`, `notification`). Each release renders a Deployment + Service with
+`livenessProbe` → `/healthz` and `readinessProbe` → `/readyz` (the shared Phase 10.1
+endpoints), pulling config/secrets from a per-service ConfigMap + Secret. Infra deps
+(Postgres/Mongo/Redis/Kafka, Loki/Prometheus/Grafana) are deployed separately and
+referenced through those ConfigMaps/Secrets. `gamification` and `gateway` are the
+fully-worked references; the others share the same chart with equivalent values. See
+[infrastructure/helm/README.md](../infrastructure/helm/README.md) for install/validate
+commands. This is an alternative to the Docker Compose shapes above, not the current
+production deployment.
+
+### Health probes
+Every service and the gateway expose `/healthz` (liveness — process up) and `/readyz`
+(readiness — dependencies reachable, with a per-check breakdown). Use `/healthz` for
+liveness probes and load-balancer "is the process alive" checks, and `/readyz` for
+readiness gating so traffic only reaches a pod once its Postgres/Redis/Kafka/Mongo
+dependencies are up. See [MONITORING.md](MONITORING.md#health-checks-phase-101).
+
+---
+
 ## 1. Backend + infra — Docker Compose
 
 The whole backend stack deploys via the root `docker-compose.yml`.

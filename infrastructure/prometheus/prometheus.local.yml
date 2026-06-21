@@ -16,3 +16,8 @@ scrape_configs:
       # listening on host port 5005.
       - targets: ['host.docker.internal:5005']
     metrics_path: /metrics
+
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    metrics_path: /metrics

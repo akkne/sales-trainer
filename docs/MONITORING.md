@@ -111,3 +111,56 @@ panel renders whichever service currently emits the metric):
 No new metric needed — it reuses `app_events_total`.
 
 See also testing: [TESTING/METRICS.md](TESTING/METRICS.md).
+
+## Health checks (Phase 10.1)
+Every service and the gateway expose two consistently-named endpoints, wired by the
+shared `BuildingBlocks.HealthChecks` helpers (`AddSellevateHealthChecks()` +
+`MapSellevateHealthChecks()`):
+
+- **`/healthz` — liveness.** Returns `200` with `{ "status": "Healthy", "checks": [] }`
+  whenever the process is up. No dependency is probed, so a slow/unreachable dependency
+  never makes the process look dead (and never restarts a healthy pod).
+- **`/readyz` — readiness.** Runs only the dependency probes tagged `ready` and returns
+  `200` when all are healthy, `503` otherwise, with a per-check breakdown:
+  `{ "status": "...", "checks": [{ "name": "postgres", "status": "Healthy" }, ...] }`.
+
+Probes per service (each added with the shared check-name constants —
+`postgres`, `redis`, `kafka`, `mongo`):
+
+| Service | Liveness | Readiness probes |
+|---|---|---|
+| identity | yes | postgres, kafka |
+| learning | yes | postgres, redis, kafka |
+| gamification | yes | postgres, redis, kafka |
+| ai | yes | postgres, mongo, redis, kafka |
+| social | yes | postgres, mongo, redis, kafka |
+| analytics | yes | redis, kafka |
+| notification | yes | redis, kafka |
+| gateway | yes | (none — it only proxies) |
+
+The Postgres probe reuses EF Core's `AddDbContextCheck`; Redis pings the shared
+`IConnectionMultiplexer`; Kafka requests cluster metadata via a short-lived admin client;
+Mongo runs the `ping` admin command. These map directly to k8s `livenessProbe` /
+`readinessProbe` (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+
+## Kafka consumer-lag dashboard (Phase 10.1)
+`infrastructure/grafana/dashboards/kafka-consumer-lag.json` (uid `sellevate-kafka-health`)
+visualizes consumer lag and broker/service health. Lag metrics come from a
+**kafka-exporter** (`danielqsj/kafka-exporter`) added to both compose stacks and scraped
+by Prometheus under the `kafka-exporter` job (port `9308`).
+
+| Panel | PromQL |
+|---|---|
+| Kafka Brokers Up | `kafka_brokers` |
+| Kafka Exporter Up | `up{job="kafka-exporter"}` |
+| Total Consumer Lag | `sum(kafka_consumergroup_lag)` |
+| Scraped Service Targets Up | `count(up{job=~"sellevate-.*"} == 1)` |
+| Consumer Lag by Group | `sum by (consumergroup) (kafka_consumergroup_lag)` |
+| Consumer Lag by Topic | `sum by (topic) (kafka_consumergroup_lag)` |
+| Topic Message Production Rate | `sum by (topic) (rate(kafka_topic_partition_current_offset[5m]))` |
+| Service & Exporter Targets | `up{job=~"sellevate-.*\|kafka-exporter"}` |
+
+Each service's Kafka consumer group id is its service name (`KafkaSettings.ConsumerGroupId`),
+so the "by group" panel reads as per-service lag. Rising lag on one group means that
+service's consumer is falling behind (or stuck on a poison message — see the DLQ policy in
+[ARCHITECTURE.md](ARCHITECTURE.md)).

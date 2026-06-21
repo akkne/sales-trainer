@@ -1,0 +1,32 @@
+nameOverride: gamification
+
+image:
+  repository: ghcr.io/sellevate/gamification-service
+  tag: latest
+
+env:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  Kafka__BootstrapServers: kafka:9092
+  Logging__Loki__Url: http://loki:3100
+
+envFromConfigMap: gamification-config
+envFromSecret: gamification-secrets
+
+service:
+  type: ClusterIP
+  port: 80
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
