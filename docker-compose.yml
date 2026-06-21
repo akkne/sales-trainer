@@ -39,6 +39,13 @@ services:
       - Kafka__BootstrapServers=kafka:29092
       - Logging__Loki__Url=http://loki:3100
       - Jwt__Key=${JWT_KEY}
+      # --- Identity tunables (override in .env; defaults are the in-code values) ---
+      - Jwt__AccessTokenLifetimeMinutes=${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-15}
+      - Jwt__RefreshTokenLifetimeDays=${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-30}
+      - Jwt__DemoTokenLifetimeHours=${JWT_DEMO_TOKEN_LIFETIME_HOURS:-2}
+      - EmailVerification__CodeLifetimeMinutes=${EMAIL_VERIFICATION_CODE_LIFETIME_MINUTES:-10}
+      - EmailVerification__MaximumVerificationAttempts=${EMAIL_VERIFICATION_MAX_ATTEMPTS:-5}
+      - EmailVerification__ResendCooldownSeconds=${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:-60}
       - Google__ClientId=${GOOGLE_CLIENT_ID}
       - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
       - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
@@ -192,8 +199,26 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
+      # --- AI tunables (override in .env; defaults are the in-code values) ---
+      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
+      - OpenAI__OpenQuestionModel=${OPENAI_OPEN_QUESTION_MODEL:-gpt-4.1}
+      - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
+      - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
+      - OpenAI__MaximumFeedbackTokenCount=${OPENAI_MAX_TOKENS_FEEDBACK:-1500}
+      - OpenAI__MaximumOpenQuestionTokenCount=${OPENAI_MAX_TOKENS_OPEN_QUESTION:-300}
+      - Whisper__Model=${WHISPER_MODEL:-whisper-1}
+      - Whisper__Language=${WHISPER_LANGUAGE:-ru}
+      - Voice__TtsProvider=${TTS_PROVIDER:-yandex}
+      - Voice__Enabled=${VOICE_ENABLED:-true}
+      - Voice__DailyLimitMinutes=${VOICE_DAILY_LIMIT_MINUTES:-30}
+      - Voice__MonthlyLimitMinutes=${VOICE_MONTHLY_LIMIT_MINUTES:-300}
       - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
+      - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
+      - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
+      - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
       - GoogleTts__ApiKey=${GOOGLE_TTS_API_KEY}
+      - GoogleTts__VoiceName=${GOOGLE_TTS_VOICE_NAME:-ru-RU-Wavenet-A}
+      - GoogleTts__LanguageCode=${GOOGLE_TTS_LANGUAGE_CODE:-ru-RU}
     depends_on:
       postgres:
         condition: service_healthy
@@ -246,6 +271,9 @@ services:
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
+      # --- Notification tunables (override in .env; defaults are the in-code values) ---
+      - NotificationStorage__InboxCapacity=${NOTIFICATION_INBOX_CAPACITY:-100}
+      - NotificationStorage__RetentionDays=${NOTIFICATION_RETENTION_DAYS:-30}
     depends_on:
       redis:
         condition: service_started
@@ -271,6 +299,8 @@ services:
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
+      # --- Gamification tunables (override in .env; default is the in-code value) ---
+      - Gamification__StreakTimezone=${GAMIFICATION_STREAK_TIMEZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
@@ -336,6 +366,21 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
+      # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
+      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
+      - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
+      - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
+      - Voice__TtsProvider=${TTS_PROVIDER:-yandex}
+      - Voice__Enabled=${VOICE_ENABLED:-true}
+      - Voice__DailyLimitMinutes=${VOICE_DAILY_LIMIT_MINUTES:-30}
+      - Voice__MonthlyLimitMinutes=${VOICE_MONTHLY_LIMIT_MINUTES:-300}
+      - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
+      - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
+      - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
+      - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
+      - GoogleTts__ApiKey=${GOOGLE_TTS_API_KEY}
+      - GoogleTts__VoiceName=${GOOGLE_TTS_VOICE_NAME:-ru-RU-Wavenet-A}
+      - GoogleTts__LanguageCode=${GOOGLE_TTS_LANGUAGE_CODE:-ru-RU}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
