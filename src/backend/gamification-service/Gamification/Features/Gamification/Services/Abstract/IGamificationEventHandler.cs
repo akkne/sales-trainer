@@ -2,9 +2,9 @@ namespace Sellevate.Gamification.Features.Gamification.Services.Abstract;
 
 public interface IGamificationEventHandler
 {
-    Task HandleExerciseCompletedAsync(Guid userId, string exerciseType, bool isCorrect, CancellationToken cancellationToken = default);
+    Task HandleExerciseCompletedAsync(Guid userId, string exerciseType, bool isCorrect, Guid? sourceEventId = null, CancellationToken cancellationToken = default);
 
-    Task HandleDialogEvaluatedAsync(Guid userId, int experiencePointsEarned, CancellationToken cancellationToken = default);
+    Task HandleDialogEvaluatedAsync(Guid userId, int experiencePointsEarned, Guid? sourceEventId = null, CancellationToken cancellationToken = default);
 
     Task HandleLessonCompletedAsync(Guid userId, CancellationToken cancellationToken = default);
 

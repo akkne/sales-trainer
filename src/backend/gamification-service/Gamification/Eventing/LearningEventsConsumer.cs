@@ -39,7 +39,7 @@ internal sealed class LearningEventsConsumer : KafkaConsumerBackgroundService
                 }
 
                 await eventHandler.HandleExerciseCompletedAsync(
-                    payload.UserId, payload.ExerciseType, payload.IsCorrect, cancellationToken);
+                    payload.UserId, payload.ExerciseType, payload.IsCorrect, envelope.EventId, cancellationToken);
                 break;
             }
 

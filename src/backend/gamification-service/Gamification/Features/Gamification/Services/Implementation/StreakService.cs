@@ -31,7 +31,31 @@ internal sealed class StreakService(
                 LastActivityDate = today,
             };
             databaseContext.UserStreaks.Add(streak);
-            await databaseContext.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await databaseContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+            {
+                // Another process concurrently inserted a streak for this user.
+                // Detach the failed entry and re-read the winner.
+                var entry = databaseContext.ChangeTracker.Entries<UserStreak>()
+                    .FirstOrDefault(e => e.Entity.UserId == userId);
+                if (entry is not null)
+                {
+                    entry.State = EntityState.Detached;
+                }
+
+                streak = await databaseContext.UserStreaks
+                    .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);
+
+                if (streak is null)
+                {
+                    return;
+                }
+            }
+
             await AwardMilestoneIfReachedAsync(userId, streak.CurrentStreakDayCount, cancellationToken);
             return;
         }
@@ -62,6 +86,14 @@ internal sealed class StreakService(
             .Where(record => record.UserId == userId)
             .Select(record => (int?)record.CurrentStreakDayCount)
             .FirstOrDefaultAsync(cancellationToken) ?? 0;
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException ex)
+    {
+        var inner = ex.InnerException;
+        return inner is not null &&
+               (inner.GetType().Name == "PostgresException" || inner.GetType().FullName?.Contains("Npgsql") == true) &&
+               inner.Message.Contains("23505");
     }
 
     private async Task AwardMilestoneIfReachedAsync(Guid userId, int streakDayCount, CancellationToken cancellationToken)

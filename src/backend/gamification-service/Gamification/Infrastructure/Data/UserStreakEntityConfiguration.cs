@@ -10,6 +10,6 @@ public sealed class UserStreakEntityConfiguration : IEntityTypeConfiguration<Use
     {
         builder.ToTable("UserStreaks");
         builder.HasKey(streak => streak.Id);
-        builder.HasIndex(streak => streak.UserId);
+        builder.HasIndex(streak => streak.UserId).IsUnique();
     }
 }

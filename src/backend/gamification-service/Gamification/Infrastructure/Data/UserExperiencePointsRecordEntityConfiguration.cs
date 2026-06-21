@@ -11,6 +11,10 @@ public sealed class UserExperiencePointsRecordEntityConfiguration : IEntityTypeC
         builder.ToTable("UserXpRecords");
         builder.HasKey(record => record.Id);
         builder.Property(record => record.Source).IsRequired();
+        builder.Property(record => record.SourceEventId).IsRequired(false);
         builder.HasIndex(record => record.UserId);
+        builder.HasIndex(record => record.SourceEventId)
+            .IsUnique()
+            .HasFilter("\"SourceEventId\" IS NOT NULL");
     }
 }
