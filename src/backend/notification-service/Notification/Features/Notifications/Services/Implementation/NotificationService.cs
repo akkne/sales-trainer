@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using Sellevate.Notification.Common;
 using Sellevate.Notification.Common.Constants;
+using Sellevate.Notification.Features.Notifications.Emails;
 using Sellevate.Notification.Features.Notifications.Models;
 using Sellevate.Notification.Features.Notifications.Services.Abstract;
 using Sellevate.Notification.Infrastructure.Configuration;
@@ -10,19 +11,23 @@ namespace Sellevate.Notification.Features.Notifications.Services.Implementation;
 internal sealed class NotificationService : INotificationService
 {
     private readonly INotificationStore _notificationStore;
+    private readonly INotificationEmailDispatcher _emailDispatcher;
     private readonly NotificationStorageConfiguration _storageConfiguration;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
         INotificationStore notificationStore,
+        INotificationEmailDispatcher emailDispatcher,
         IOptions<NotificationStorageConfiguration> storageConfiguration,
         ILogger<NotificationService> logger)
     {
         ArgumentNullException.ThrowIfNull(notificationStore);
+        ArgumentNullException.ThrowIfNull(emailDispatcher);
         ArgumentNullException.ThrowIfNull(storageConfiguration);
         ArgumentNullException.ThrowIfNull(logger);
 
         _notificationStore = notificationStore;
+        _emailDispatcher = emailDispatcher;
         _storageConfiguration = storageConfiguration.Value;
         _logger = logger;
     }
@@ -85,6 +90,19 @@ internal sealed class NotificationService : INotificationService
         _logger.LogInformation(
             "Stored {NotificationType} notification for recipient {RecipientUserId}",
             request.NotificationType, request.RecipientUserId);
+
+        // Email is an opt-in side channel: only types flagged SendEmail are delivered by email at
+        // creation time (chat keeps this false — its email is handled on the delayed unread path).
+        if (request.SendEmail)
+        {
+            await _emailDispatcher.DispatchAsync(
+                request.RecipientUserId,
+                request.NotificationType,
+                sanitizedTitle,
+                sanitizedBody,
+                sanitizedActionUrl,
+                cancellationToken);
+        }
     }
 
     // A notification is deduplicatable only when its relatedEntityId uniquely identifies the

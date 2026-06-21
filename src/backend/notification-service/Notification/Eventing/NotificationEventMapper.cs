@@ -55,6 +55,8 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.FriendRequestReceived => MapFriendRequestReceived(envelope),
             Topics.FriendRequestAccepted => MapFriendRequestAccepted(envelope),
             Topics.ChatMessageSent => MapChatMessageSent(envelope),
+            Topics.DiscussReplyCreated => MapDiscussReplyCreated(envelope),
+            Topics.LeagueUpdated => MapLeagueUpdated(envelope),
             _ => null
         };
     }
@@ -160,5 +162,81 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             $"{payload.SenderName}: {preview}",
             actionUrl,
             payload.ConversationId?.ToString());
+        // SendEmail stays false: the unread-chat email is dispatched on a delayed path,
+        // not at notification-creation time (see DelayedChatEmailScheduler).
+    }
+
+    private static CreateNotificationRequest? MapDiscussReplyCreated(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DiscussReplyCreatedEvent>();
+        if (payload is null
+            || payload.RecipientId == Guid.Empty
+            || string.IsNullOrWhiteSpace(payload.ReplyAuthorName))
+        {
+            return null;
+        }
+
+        // Never notify someone about their own reply to their own thread.
+        if (payload.RecipientId == payload.ReplyAuthorId)
+        {
+            return null;
+        }
+
+        var threadTitle = string.IsNullOrWhiteSpace(payload.ThreadTitle)
+            ? "your discussion"
+            : $"\"{payload.ThreadTitle.Trim()}\"";
+        var preview = TruncateOnRuneBoundary(payload.Preview ?? string.Empty, ChatPreviewMaximumLength);
+        var body = string.IsNullOrWhiteSpace(preview)
+            ? $"{payload.ReplyAuthorName} replied to {threadTitle}."
+            : $"{payload.ReplyAuthorName} replied to {threadTitle}: {preview}";
+
+        return new CreateNotificationRequest(
+            payload.RecipientId,
+            NotificationType.DiscussReplyReceived,
+            NotificationTitles.DiscussReplyReceived,
+            body,
+            NotificationActionRoutes.DiscussThread(payload.ThreadId),
+            // Dedupe on the reply id — a Kafka replay of the same reply is collapsed, while
+            // distinct replies (even from the same author) remain separate notifications.
+            payload.ReplyId.ToString(),
+            SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapLeagueUpdated(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<LeagueUpdatedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var newTier = FormatTier(payload.NewTier);
+        var body = payload.Outcome switch
+        {
+            "promoted" => $"You were promoted to the {newTier} league. Keep it up!",
+            "demoted" => $"You dropped to the {newTier} league. Time for a comeback!",
+            _ => $"A new league week has started. You're in the {newTier} league."
+        };
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.LeagueUpdated,
+            NotificationTitles.LeagueUpdated,
+            body,
+            NotificationActionRoutes.League,
+            // Dedupe on the resulting league id — one notification per user per weekly rollover,
+            // while replays of the same rollover event are collapsed.
+            payload.LeagueId.ToString(),
+            SendEmail: true);
+    }
+
+    private static string FormatTier(string? tierKey)
+    {
+        if (string.IsNullOrWhiteSpace(tierKey))
+        {
+            return "new";
+        }
+
+        return char.ToUpperInvariant(tierKey[0]) + tierKey[1..].ToLowerInvariant();
     }
 }
