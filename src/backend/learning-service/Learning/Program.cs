@@ -93,11 +93,13 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowCredentials()));
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
 application.UseCors();
 

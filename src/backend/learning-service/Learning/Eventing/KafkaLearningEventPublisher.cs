@@ -16,8 +16,4 @@ internal sealed class KafkaLearningEventPublisher(IEventPublisher eventPublisher
     public Task PublishSkillCompletedAsync(SkillCompletedEvent payload, CancellationToken cancellationToken = default) =>
         eventPublisher.PublishAsync(
             Topics.SkillCompleted, payload.UserId.ToString(), Topics.SkillCompleted, payload, cancellationToken: cancellationToken);
-
-    public Task PublishTechniqueMasteryChangedAsync(TechniqueMasteryChangedEvent payload, CancellationToken cancellationToken = default) =>
-        eventPublisher.PublishAsync(
-            Topics.TechniqueMasteryChanged, payload.UserId.ToString(), Topics.TechniqueMasteryChanged, payload, cancellationToken: cancellationToken);
 }

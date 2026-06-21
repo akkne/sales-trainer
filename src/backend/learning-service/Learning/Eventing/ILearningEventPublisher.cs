@@ -7,6 +7,4 @@ public interface ILearningEventPublisher
     Task PublishLessonCompletedAsync(LessonCompletedEvent payload, CancellationToken cancellationToken = default);
 
     Task PublishSkillCompletedAsync(SkillCompletedEvent payload, CancellationToken cancellationToken = default);
-
-    Task PublishTechniqueMasteryChangedAsync(TechniqueMasteryChangedEvent payload, CancellationToken cancellationToken = default);
 }
