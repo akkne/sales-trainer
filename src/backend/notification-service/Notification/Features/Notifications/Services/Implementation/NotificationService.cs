@@ -36,7 +36,13 @@ internal sealed class NotificationService : INotificationService
         // NO3: Domain-level idempotency — skip if a notification for the same
         // recipient + type + relatedEntityId already exists. This prevents duplicate
         // notifications when a domain event is replayed (e.g. Kafka redelivery).
-        if (await _notificationStore.ExistsAsync(
+        //
+        // Only applied to single-occurrence-per-entity types: the relatedEntityId must
+        // uniquely identify the originating domain fact (friendshipId, achievement,
+        // streak day). Chat messages are deliberately excluded — they share the
+        // conversationId as relatedEntityId, so every message is a distinct notification
+        // and must never be deduped. Requests without a relatedEntityId are not deduped.
+        if (IsDeduplicatable(request) && await _notificationStore.ExistsAsync(
                 request.RecipientUserId,
                 request.NotificationType,
                 request.RelatedEntityId,
@@ -80,6 +86,13 @@ internal sealed class NotificationService : INotificationService
             "Stored {NotificationType} notification for recipient {RecipientUserId}",
             request.NotificationType, request.RecipientUserId);
     }
+
+    // A notification is deduplicatable only when its relatedEntityId uniquely identifies the
+    // originating domain fact. Chat messages reuse the conversationId across every message, so
+    // they are inherently repeatable and must not be collapsed.
+    private static bool IsDeduplicatable(CreateNotificationRequest request) =>
+        !string.IsNullOrWhiteSpace(request.RelatedEntityId)
+        && request.NotificationType != NotificationType.ChatMessageReceived;
 
     public async Task<IReadOnlyList<NotificationDto>> GetRecentAsync(
         Guid recipientUserId,

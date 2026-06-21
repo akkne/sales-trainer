@@ -19,21 +19,29 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
         if (string.IsNullOrEmpty(value))
             return value;
 
+        // Reserve one rune for the ellipsis so the returned string (including "…") never
+        // exceeds maxRunes — keeps the total within the documented preview budget.
         var runeCount = 0;
         var charIndex = 0;
+        var ellipsisCutIndex = -1;
         while (charIndex < value.Length)
         {
             Rune.DecodeFromUtf16(value.AsSpan(charIndex), out _, out var charsConsumed);
-            if (runeCount == maxRunes)
+            if (runeCount == maxRunes - 1)
             {
-                // We are past the limit — truncation needed
-                return string.Concat(value.AsSpan(0, charIndex), "…");
+                ellipsisCutIndex = charIndex;
             }
+
             runeCount++;
             charIndex += charsConsumed;
         }
 
-        return value;
+        if (runeCount <= maxRunes)
+        {
+            return value;
+        }
+
+        return string.Concat(value.AsSpan(0, ellipsisCutIndex), "…");
     }
 
     public CreateNotificationRequest? Map(EventEnvelope envelope)

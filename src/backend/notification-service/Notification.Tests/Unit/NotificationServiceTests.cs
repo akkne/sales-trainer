@@ -27,8 +27,10 @@ public class NotificationServiceTests
         return new NotificationService(store, configuration, NullLogger<NotificationService>.Instance);
     }
 
-    private static CreateNotificationRequest BuildRequest(NotificationType type = NotificationType.AchievementUnlocked) =>
-        new(RecipientUserId, type, "Title", "Body", "/profile", "related-1");
+    private static CreateNotificationRequest BuildRequest(
+        NotificationType type = NotificationType.AchievementUnlocked,
+        string relatedEntityId = "related-1") =>
+        new(RecipientUserId, type, "Title", "Body", "/profile", relatedEntityId);
 
     [Test]
     public async Task CreateAsync_WritesNotificationIntoRecipientInbox()
@@ -76,7 +78,9 @@ public class NotificationServiceTests
 
         for (var created = 0; created < 10; created++)
         {
-            await service.CreateAsync(BuildRequest());
+            // Distinct relatedEntityId per notification — these are genuinely different
+            // notifications, not domain-event replays, so they are not deduplicated.
+            await service.CreateAsync(BuildRequest(relatedEntityId: $"related-{created}"));
         }
 
         store.CapacityFor(RecipientUserId).Should().Be(3);
@@ -87,8 +91,8 @@ public class NotificationServiceTests
     {
         var store = new InMemoryNotificationStore();
         var service = CreateService(store);
-        await service.CreateAsync(BuildRequest());
-        await service.CreateAsync(BuildRequest());
+        await service.CreateAsync(BuildRequest(relatedEntityId: "related-1"));
+        await service.CreateAsync(BuildRequest(relatedEntityId: "related-2"));
 
         var unreadCount = await service.GetUnreadCountAsync(RecipientUserId);
 
