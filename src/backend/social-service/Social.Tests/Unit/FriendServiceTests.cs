@@ -172,4 +172,37 @@ public sealed class FriendServiceTests
         profile.TotalXpAmount.Should().Be(0);
         profile.AverageExerciseScore.Should().Be(0.0);
     }
+
+    // SO5: reciprocal-pair deduplication
+    [Test]
+    public async Task SendFriendRequestAsync_when_reciprocal_pending_exists_throws()
+    {
+        // Addressee sends first (B→A direction)
+        await _friendService.SendFriendRequestAsync(AddresseeId, RequesterId);
+
+        // Requester tries to send A→B — must be rejected as "already exists"
+        var action = async () => await _friendService.SendFriendRequestAsync(RequesterId, AddresseeId);
+        await action.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already exists*");
+    }
+
+    // SO6b: ILIKE wildcard characters in search query must not cause unintended matches
+    [Test]
+    public async Task SearchUsersAsync_with_wildcard_characters_does_not_match_all_users()
+    {
+        // A query of "%" without escaping would match every display name.
+        // With escaping it should return no results because no display name literally contains "%".
+        var results = await _friendService.SearchUsersAsync(RequesterId, "%");
+
+        results.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task SearchUsersAsync_with_underscore_does_not_match_all_users()
+    {
+        // "_" without escaping matches any single character — would match "Requester" / "Addressee".
+        var results = await _friendService.SearchUsersAsync(RequesterId, "_");
+
+        results.Should().BeEmpty();
+    }
 }

@@ -144,9 +144,24 @@ public sealed class DiscussController : ControllerBase
         var content = await _discussService.GetPhotoContentAsync(photoId, cancellationToken);
         if (content == null) return NotFound();
 
+        // Ensure we only serve with a known-safe image content-type.
+        // Anything not in the allow-list is served as opaque binary to prevent MIME sniffing exploitation.
+        var safeContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/png", "image/jpeg", "image/webp"
+        };
+        var servedContentType = safeContentTypes.Contains(content.Value.ContentType)
+            ? content.Value.ContentType
+            : "application/octet-stream";
+
+        // Defense-in-depth headers for this anonymous, public endpoint.
         Response.Headers["Cache-Control"] = "public, max-age=60";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File(content.Value.Content, content.Value.ContentType);
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+        Response.Headers["X-Frame-Options"] = "DENY";
+        Response.Headers["Content-Disposition"] = $"inline; filename=\"photo-{photoId}.bin\"";
+
+        return File(content.Value.Content, servedContentType);
     }
 
     [HttpGet("tags")]

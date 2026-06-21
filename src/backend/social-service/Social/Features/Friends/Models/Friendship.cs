@@ -8,4 +8,9 @@ public sealed class Friendship
     public FriendshipStatus Status { get; set; } = FriendshipStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AcceptedAt { get; set; }
+
+    // Computed (stored) columns — populated by the database, never set by application code.
+    // They enforce that (A,B) and (B,A) cannot coexist via a unique index on (LowId, HighId).
+    public Guid CanonicalLowId { get; private set; }
+    public Guid CanonicalHighId { get; private set; }
 }

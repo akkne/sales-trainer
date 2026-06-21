@@ -39,6 +39,7 @@ internal sealed partial class DiscussService
         var keyPrefix = ResolveObjectKeyPrefix(ownerType);
         var nextOrderIndex = existingCount;
         var createdAt = DateTime.UtcNow;
+        var uploadedKeys = new List<string>(validatedFiles.Count);
 
         foreach (var (file, validation) in validatedFiles)
         {
@@ -46,6 +47,7 @@ internal sealed partial class DiscussService
             var objectKey = $"{keyPrefix}/{ownerId}/{photoId}{validation.Extension}";
 
             await _objectStorage.PutAsync(objectKey, file.Content, validation.ContentType, cancellationToken);
+            uploadedKeys.Add(objectKey);
 
             _databaseContext.DiscussPhotos.Add(new DiscussPhoto
             {
@@ -62,7 +64,17 @@ internal sealed partial class DiscussService
             nextOrderIndex += 1;
         }
 
-        await _databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            // DB write failed — best-effort delete all objects already written to S3
+            foreach (var key in uploadedKeys)
+                await DeleteObjectBestEffortAsync(key, cancellationToken);
+            throw;
+        }
 
         var photos = await LoadOrderedPhotosAsync(ownerType, ownerId, cancellationToken);
         return (DiscussPhotoUploadStatus.Success, photos);

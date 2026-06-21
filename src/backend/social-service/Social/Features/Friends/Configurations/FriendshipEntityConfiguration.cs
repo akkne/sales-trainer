@@ -21,6 +21,22 @@ public sealed class FriendshipEntityConfiguration : IEntityTypeConfiguration<Fri
         builder.HasIndex(friendship => new { friendship.RequesterId, friendship.AddresseeId })
             .IsUnique();
 
+        // Canonical-pair index: ensures (A,B) and (B,A) cannot coexist even under concurrent inserts.
+        // Stored as computed expression LEAST(id,id), GREATEST(id,id) at the DB level.
+        builder.HasIndex(friendship => new { friendship.CanonicalLowId, friendship.CanonicalHighId })
+            .IsUnique()
+            .HasDatabaseName("IX_Friendships_CanonicalPair");
+
+        builder.Property(friendship => friendship.CanonicalLowId)
+            .HasComputedColumnSql(
+                "LEAST(\"RequesterId\", \"AddresseeId\")",
+                stored: true);
+
+        builder.Property(friendship => friendship.CanonicalHighId)
+            .HasComputedColumnSql(
+                "GREATEST(\"RequesterId\", \"AddresseeId\")",
+                stored: true);
+
         builder.HasIndex(friendship => friendship.RequesterId);
         builder.HasIndex(friendship => friendship.AddresseeId);
 

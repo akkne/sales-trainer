@@ -36,7 +36,13 @@ internal static class ImageContentValidator
             return ImageContentValidationResult.Invalid;
 
         var header = new byte[HeaderLength];
-        var headerBytesRead = await content.ReadAsync(header.AsMemory(0, HeaderLength), cancellationToken);
+        // ReadAtLeastAsync loops internally until minimumBytes are read or EOF.
+        // throwOnEndOfStream: false → returns the actual bytes read when stream ends early.
+        var headerBytesRead = await content.ReadAtLeastAsync(
+            header.AsMemory(0, HeaderLength),
+            minimumBytes: HeaderLength,
+            throwOnEndOfStream: false,
+            cancellationToken);
         if (content.CanSeek)
             content.Seek(0, SeekOrigin.Begin);
 

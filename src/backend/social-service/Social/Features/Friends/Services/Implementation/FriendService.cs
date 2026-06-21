@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Eventing;
 using Sellevate.Social.Features.Friends.Models;
@@ -146,7 +147,17 @@ internal sealed class FriendService(
         };
 
         databaseContext.Friendships.Add(friendship);
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            // A concurrent request inserted the reciprocal pair (B,A) at the same instant.
+            // The canonical-pair unique index caught it — treat as "already exists".
+            throw new InvalidOperationException(
+                "A friend request already exists between you and this user.", ex);
+        }
 
         await PublishFriendRequestReceivedAsync(friendship, cancellationToken);
 
@@ -219,13 +230,14 @@ internal sealed class FriendService(
         if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
             return [];
 
-        var searchPattern = $"%{query}%";
+        var escapedQuery = query.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var searchPattern = $"%{escapedQuery}%";
 
         var matchingReplicas = await databaseContext.UserReplicas
             .Where(replica =>
                 replica.UserId != currentUserId &&
-                (EF.Functions.ILike(replica.DisplayName, searchPattern) ||
-                 EF.Functions.ILike(replica.Email, searchPattern)))
+                (EF.Functions.ILike(replica.DisplayName, searchPattern, "\\") ||
+                 EF.Functions.ILike(replica.Email, searchPattern, "\\")))
             .Take(MaximumSearchResultCount)
             .ToListAsync(cancellationToken);
 
@@ -410,4 +422,8 @@ internal sealed class FriendService(
             _ => StatusNone
         };
     }
+
+    // PostgreSQL error code 23505 = unique_violation
+    private static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: "23505" };
 }

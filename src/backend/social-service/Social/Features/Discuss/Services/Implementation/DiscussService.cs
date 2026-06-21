@@ -41,9 +41,12 @@ internal sealed partial class DiscussService : IDiscussService
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var pattern = $"%{query.Search.Trim()}%";
+            var escapedSearch = query.Search.Trim()
+                .Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+            var pattern = $"%{escapedSearch}%";
             filtered = filtered.Where(thread =>
-                EF.Functions.ILike(thread.Title, pattern) || EF.Functions.ILike(thread.Body, pattern));
+                EF.Functions.ILike(thread.Title, pattern, "\\") ||
+                EF.Functions.ILike(thread.Body, pattern, "\\"));
         }
 
         var sort = (query.Sort ?? "hot").ToLowerInvariant();
@@ -286,18 +289,32 @@ internal sealed partial class DiscussService : IDiscussService
                 TargetId = targetId,
                 CreatedAt = DateTime.UtcNow
             });
-            if (thread != null) thread.UpvoteCount += 1; else reply!.UpvoteCount += 1;
-            await _databaseContext.SaveChangesAsync(cancellationToken);
         }
         else if (!upvote && existing != null)
         {
             _databaseContext.DiscussVotes.Remove(existing);
-            if (thread != null) thread.UpvoteCount = Math.Max(0, thread.UpvoteCount - 1);
-            else reply!.UpvoteCount = Math.Max(0, reply.UpvoteCount - 1);
+        }
+
+        // Recompute the vote count from the DiscussVotes table within the same transaction
+        // to avoid read-then-write drift under concurrent votes.
+        // The pending Add/Remove above is reflected by SaveChangesAsync below.
+        await _databaseContext.SaveChangesAsync(cancellationToken);
+
+        var count = await _databaseContext.DiscussVotes
+            .CountAsync(v => v.TargetType == targetType && v.TargetId == targetId, cancellationToken);
+
+        // Keep the denormalised counter in sync with the authoritative vote count.
+        if (thread != null)
+        {
+            thread.UpvoteCount = count;
+            await _databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        else if (reply != null)
+        {
+            reply.UpvoteCount = count;
             await _databaseContext.SaveChangesAsync(cancellationToken);
         }
 
-        var count = thread?.UpvoteCount ?? reply!.UpvoteCount;
         return new VoteResultDto(count, upvote);
     }
 
