@@ -45,8 +45,10 @@ public sealed class NotificationEmailRenderer : INotificationEmailRenderer
             return null;
         }
 
-        // Already absolute (defensive — notifications normally carry relative app paths).
-        if (Uri.TryCreate(actionPath, UriKind.Absolute, out _))
+        // Already a fully-qualified URL (defensive — notifications normally carry relative paths).
+        // Detect by scheme rather than Uri.TryCreate(Absolute), which treats a Unix-style
+        // "/path" as an absolute file:// URI and would wrongly skip the rewrite.
+        if (actionPath.Contains("://", StringComparison.Ordinal))
         {
             return actionPath;
         }

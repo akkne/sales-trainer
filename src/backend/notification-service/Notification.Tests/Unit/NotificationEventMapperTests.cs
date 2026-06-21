@@ -167,6 +167,90 @@ public class NotificationEventMapperTests
         request.Body.IsNormalized().Should().BeTrue("truncated string must not contain unpaired surrogates");
     }
 
+    // ── Discuss reply ────────────────────────────────────────────────────────
+
+    [Test]
+    public void Map_DiscussReplyCreated_FlagsEmailAndLinksToThread()
+    {
+        var threadAuthorId = Guid.NewGuid();
+        var replyAuthorId = Guid.NewGuid();
+        var threadId = Guid.NewGuid();
+        var replyId = Guid.NewGuid();
+        var envelope = EventEnvelope.Create(
+            Topics.DiscussReplyCreated,
+            new DiscussReplyCreatedEvent(
+                threadAuthorId, replyAuthorId, "Pat", threadId, "How to close deals", replyId, "Try mirroring"));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.RecipientUserId.Should().Be(threadAuthorId);
+        request.NotificationType.Should().Be(NotificationType.DiscussReplyReceived);
+        request.SendEmail.Should().BeTrue();
+        request.ActionUrl.Should().Be($"/discuss/{threadId}");
+        request.RelatedEntityId.Should().Be(replyId.ToString());
+        request.Body.Should().Contain("Pat");
+        request.Body.Should().Contain("How to close deals");
+    }
+
+    [Test]
+    public void Map_DiscussReplyCreated_SelfReply_ReturnsNull()
+    {
+        var sameUser = Guid.NewGuid();
+        var envelope = EventEnvelope.Create(
+            Topics.DiscussReplyCreated,
+            new DiscussReplyCreatedEvent(
+                sameUser, sameUser, "Me", Guid.NewGuid(), "My thread", Guid.NewGuid(), "self note"));
+
+        _mapper.Map(envelope).Should().BeNull();
+    }
+
+    // ── League updated ───────────────────────────────────────────────────────
+
+    [Test]
+    public void Map_LeagueUpdated_Promoted_FlagsEmailWithTierInBody()
+    {
+        var userId = Guid.NewGuid();
+        var leagueId = Guid.NewGuid();
+        var envelope = EventEnvelope.Create(
+            Topics.LeagueUpdated,
+            new LeagueUpdatedEvent(userId, leagueId, "silver", "gold", "promoted", 2));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.RecipientUserId.Should().Be(userId);
+        request.NotificationType.Should().Be(NotificationType.LeagueUpdated);
+        request.SendEmail.Should().BeTrue();
+        request.ActionUrl.Should().Be("/league");
+        request.RelatedEntityId.Should().Be(leagueId.ToString());
+        request.Body.Should().Contain("promoted");
+        request.Body.Should().Contain("Gold");
+    }
+
+    [Test]
+    public void Map_LeagueUpdated_Demoted_MentionsDrop()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.LeagueUpdated,
+            new LeagueUpdatedEvent(Guid.NewGuid(), Guid.NewGuid(), "gold", "silver", "demoted", 25));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.Body.Should().Contain("Silver");
+    }
+
+    [Test]
+    public void Map_ChatMessageSent_DoesNotFlagEmail()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.ChatMessageSent,
+            new ChatMessageSentEvent(Guid.NewGuid(), "Lena", "hi", Guid.NewGuid()));
+
+        _mapper.Map(envelope)!.SendEmail.Should().BeFalse();
+    }
+
     [Test]
     public void Map_ChatMessageSent_EmptyPreview_ProducesBodyWithSenderNameOnly()
     {

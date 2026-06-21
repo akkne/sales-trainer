@@ -15,6 +15,7 @@ public sealed class DiscussServiceTests
 {
     private SocialDbContext _databaseContext = null!;
     private IObjectStorage _objectStorage = null!;
+    private RecordingSocialEventPublisher _eventPublisher = null!;
     private DiscussService _discussService = null!;
 
     private static readonly Guid AuthorId = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -25,7 +26,9 @@ public sealed class DiscussServiceTests
     {
         _databaseContext = TestSocialDatabaseFactory.CreateInMemory();
         _objectStorage = Substitute.For<IObjectStorage>();
-        _discussService = new DiscussService(_databaseContext, _objectStorage, NullLogger<DiscussService>.Instance);
+        _eventPublisher = new RecordingSocialEventPublisher();
+        _discussService = new DiscussService(
+            _databaseContext, _objectStorage, _eventPublisher, NullLogger<DiscussService>.Instance);
 
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, AuthorId, "Author");
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, ViewerId, "Viewer");
@@ -66,6 +69,31 @@ public sealed class DiscussServiceTests
         reply.Should().NotBeNull();
         var stored = await _databaseContext.DiscussThreads.FindAsync(thread.Id);
         stored!.ReplyCount.Should().Be(1);
+    }
+
+    [Test]
+    public async Task AddReplyAsync_byAnotherUser_publishesDiscussReplyCreatedToThreadAuthor()
+    {
+        var thread = await _discussService.CreateThreadAsync(AuthorId, "Closing deals", "Body", []);
+
+        await _discussService.AddReplyAsync(thread.Id, ViewerId, "Great point");
+
+        _eventPublisher.DiscussReplyCreatedEvents.Should().ContainSingle();
+        var published = _eventPublisher.DiscussReplyCreatedEvents[0];
+        published.RecipientId.Should().Be(AuthorId);
+        published.ReplyAuthorId.Should().Be(ViewerId);
+        published.ThreadId.Should().Be(thread.Id);
+        published.ThreadTitle.Should().Be("Closing deals");
+    }
+
+    [Test]
+    public async Task AddReplyAsync_byThreadAuthor_doesNotPublishEvent()
+    {
+        var thread = await _discussService.CreateThreadAsync(AuthorId, "Title", "Body", []);
+
+        await _discussService.AddReplyAsync(thread.Id, AuthorId, "Self reply");
+
+        _eventPublisher.DiscussReplyCreatedEvents.Should().BeEmpty();
     }
 
     [Test]

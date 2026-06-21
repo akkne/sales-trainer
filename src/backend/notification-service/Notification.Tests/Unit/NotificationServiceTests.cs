@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
+using Sellevate.Notification.Features.Notifications.Emails;
 using Sellevate.Notification.Features.Notifications.Models;
 using Sellevate.Notification.Features.Notifications.Services.Implementation;
 using Sellevate.Notification.Infrastructure.Configuration;
@@ -13,10 +14,29 @@ public class NotificationServiceTests
 {
     private static readonly Guid RecipientUserId = Guid.NewGuid();
 
+    /// <summary>Captures dispatch calls so tests can assert whether an email was triggered.</summary>
+    private sealed class RecordingEmailDispatcher : INotificationEmailDispatcher
+    {
+        public List<(Guid Recipient, NotificationType Type, string Title, string Body, string? ActionUrl)> Dispatched { get; } = [];
+
+        public Task DispatchAsync(
+            Guid recipientUserId,
+            NotificationType notificationType,
+            string title,
+            string body,
+            string? actionUrl,
+            CancellationToken cancellationToken = default)
+        {
+            Dispatched.Add((recipientUserId, notificationType, title, body, actionUrl));
+            return Task.CompletedTask;
+        }
+    }
+
     private static NotificationService CreateService(
         InMemoryNotificationStore store,
         int inboxCapacity = 100,
-        int retentionDays = 30)
+        int retentionDays = 30,
+        INotificationEmailDispatcher? emailDispatcher = null)
     {
         var configuration = Options.Create(new NotificationStorageConfiguration
         {
@@ -24,7 +44,11 @@ public class NotificationServiceTests
             RetentionDays = retentionDays
         });
 
-        return new NotificationService(store, configuration, NullLogger<NotificationService>.Instance);
+        return new NotificationService(
+            store,
+            emailDispatcher ?? new RecordingEmailDispatcher(),
+            configuration,
+            NullLogger<NotificationService>.Instance);
     }
 
     private static CreateNotificationRequest BuildRequest(
@@ -231,6 +255,53 @@ public class NotificationServiceTests
         await service.CreateAsync(second);
 
         (await store.GetAllAsync(RecipientUserId)).Should().HaveCount(2);
+    }
+
+    // ── Email side channel ────────────────────────────────────────────────────
+
+    [Test]
+    public async Task CreateAsync_WithSendEmailTrue_DispatchesEmail()
+    {
+        var store = new InMemoryNotificationStore();
+        var dispatcher = new RecordingEmailDispatcher();
+        var service = CreateService(store, emailDispatcher: dispatcher);
+        var request = new CreateNotificationRequest(
+            RecipientUserId, NotificationType.LeagueUpdated, "League", "You were promoted",
+            "/league", "league-1", SendEmail: true);
+
+        await service.CreateAsync(request);
+
+        dispatcher.Dispatched.Should().ContainSingle();
+        dispatcher.Dispatched[0].Type.Should().Be(NotificationType.LeagueUpdated);
+        dispatcher.Dispatched[0].Recipient.Should().Be(RecipientUserId);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithSendEmailFalse_DoesNotDispatchEmail()
+    {
+        var store = new InMemoryNotificationStore();
+        var dispatcher = new RecordingEmailDispatcher();
+        var service = CreateService(store, emailDispatcher: dispatcher);
+
+        await service.CreateAsync(BuildRequest()); // SendEmail defaults to false
+
+        dispatcher.Dispatched.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateAsync_DeduplicatedReplay_DoesNotDispatchEmailTwice()
+    {
+        var store = new InMemoryNotificationStore();
+        var dispatcher = new RecordingEmailDispatcher();
+        var service = CreateService(store, emailDispatcher: dispatcher);
+        var request = new CreateNotificationRequest(
+            RecipientUserId, NotificationType.DiscussReplyReceived, "Reply", "Sam replied",
+            "/discuss/1", "reply-1", SendEmail: true);
+
+        await service.CreateAsync(request);
+        await service.CreateAsync(request); // replay — deduped, must not email again
+
+        dispatcher.Dispatched.Should().ContainSingle();
     }
 
     // ── NO2: input sanitization ───────────────────────────────────────────────
