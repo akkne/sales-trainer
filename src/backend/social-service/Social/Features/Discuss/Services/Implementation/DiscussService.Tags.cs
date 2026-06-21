@@ -23,11 +23,11 @@ internal sealed partial class DiscussService
         if (limit < 1) limit = 10;
 
         return await _databaseContext.DiscussTags
-            .Select(tag => new PopularTagDto(tag.Slug, tag.Name, tag.ThreadTags.Count))
-            .Where(dto => dto.ThreadCount > 0)
-            .OrderByDescending(dto => dto.ThreadCount)
-            .ThenBy(dto => dto.Name)
+            .Where(tag => tag.ThreadTags.Count > 0)
+            .OrderByDescending(tag => tag.ThreadTags.Count)
+            .ThenBy(tag => tag.Name)
             .Take(limit)
+            .Select(tag => new PopularTagDto(tag.Slug, tag.Name, tag.ThreadTags.Count))
             .ToListAsync(cancellationToken);
     }
 
