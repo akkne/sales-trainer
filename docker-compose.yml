@@ -12,51 +12,13 @@ services:
     env_file:
       - ./src/frontend/.env.production
     depends_on:
-      - backend
+      - gateway
       - loki
 
-  backend:
-    build: ./src/backend/api
-    pull_policy: build
-    # Bound to localhost only: Traefik proxies api.<domain> to this over the docker network.
-    ports:
-      - "127.0.0.1:5001:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      # Secrets interpolated from the root .env; everything else lives in appsettings*.json
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      # CORS allow-list: comma-separated origins (local dev + deployed Vercel frontend)
-      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
-      - Jwt__Key=${JWT_KEY}
-      - Google__ClientId=${GOOGLE_CLIENT_ID}
-      - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
-      - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
-      - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
-      - OpenAI__ApiKey=${OPENAI_API_KEY}
-      - OpenAI__BaseUrl=${OPENAI_BASE_URL}
-      - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
-      - Deepgram__ApiKey=${DEEPGRAM_API_KEY}
-      - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
-      - SuperAdmin__Email=${SUPERADMIN_EMAIL}
-      - SuperAdmin__Password=${SUPERADMIN_PASSWORD}
-      - SuperAdmin__DisplayName=${SUPERADMIN_DISPLAY_NAME}
-      - Storage__S3__Endpoint=http://minio:9000
-      - Storage__S3__AccessKey=${MINIO_ROOT_USER}
-      - Storage__S3__SecretKey=${MINIO_ROOT_PASSWORD}
-      - Storage__S3__Bucket=salestrainer-avatars
-    volumes:
-      - ./src/backend/api/appsettings.Development.json:/app/appsettings.Development.json:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-      loki:
-        condition: service_started
-      minio:
-        condition: service_healthy
+  # NOTE: the monolith (src/backend/api) is RETIRED (Phase 9). It no longer runs as a
+  # container — all routes were extracted into the per-service backends below and the
+  # gateway dropped its catch-all to the monolith. The code stays in the repo as a
+  # reference only. To run it ad-hoc for comparison, use `scripts/dev-backend.sh --force`.
 
   # Identity microservice (Phase 2 extraction). Owns its own database (identity-db on
   # the shared Postgres instance) and is the sole JWT issuer. The gateway flips
@@ -199,9 +161,6 @@ services:
     depends_on:
       - kafka
 
-  # API Gateway (YARP). Single public entry point; in Phase 0 it transparently
-  # proxies every path to the monolith. Not yet wired into the frontend/Traefik —
-  # the monolith still serves traffic directly until routes are flipped per service.
   ai:
     build:
       context: ./src/backend
@@ -394,7 +353,6 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
-      - ReverseProxy__Clusters__monolith__Destinations__d1__Address=http://backend:8080/
       - ReverseProxy__Clusters__ai__Destinations__d1__Address=http://ai:8080/
       - ReverseProxy__Clusters__analytics__Destinations__d1__Address=http://analytics:8080/
       - ReverseProxy__Clusters__notification__Destinations__d1__Address=http://notification:8080/
@@ -404,7 +362,6 @@ services:
       - ReverseProxy__Clusters__learning__Destinations__d1__Address=http://learning:8080/
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
-      - backend
       - ai
       - analytics
       - notification
@@ -438,7 +395,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
     depends_on:
-      - backend
+      - gateway
 
   grafana:
     image: grafana/grafana:11.6.0

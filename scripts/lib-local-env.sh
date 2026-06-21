@@ -57,8 +57,9 @@ load_root_env() {
   done < "$env_file"
 }
 
-# Export the config overrides the backend needs to reach infra on localhost.
-# Mirrors the env block in docker-compose.yml, but with host ports + localhost.
+# Export the config overrides the (retired, reference-only) monolith needs to reach
+# infra on localhost. The monolith no longer serves traffic — kept only so the
+# src/backend/api reference still builds/runs if explicitly invoked.
 export_backend_env() {
   export ASPNETCORE_ENVIRONMENT="Development"
   export ASPNETCORE_URLS="http://localhost:${LOCAL_BACKEND_PORT}"
@@ -79,8 +80,7 @@ export_backend_env() {
   export SuperAdmin__Password="${SUPERADMIN_PASSWORD}"
   export SuperAdmin__DisplayName="${SUPERADMIN_DISPLAY_NAME}"
 
-  # Kafka broker (host listener). The monolith does not consume/produce yet, but
-  # extracted services started on the host will read this.
+  # Kafka broker (host listener).
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
 }
 
@@ -93,10 +93,8 @@ export_gateway_env() {
   export Jwt__Key="${JWT_KEY}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
-  # Proxy targets = the host-run monolith + the host-run Identity service. Identity
-  # owns /auth, /demo, /profile, /onboarding, /avatars; everything else falls through
-  # to the monolith catch-all.
-  export ReverseProxy__Clusters__monolith__Destinations__d1__Address="http://localhost:${LOCAL_BACKEND_PORT}/"
+  # Proxy targets = the extracted microservices run on the host. The monolith has been
+  # retired (no catch-all): every route is owned by a service, and unknown routes 404.
   export ReverseProxy__Clusters__identity__Destinations__d1__Address="http://localhost:${LOCAL_IDENTITY_PORT}/"
   export ReverseProxy__Clusters__gamification__Destinations__d1__Address="http://localhost:${LOCAL_GAMIFICATION_PORT}/"
   export ReverseProxy__Clusters__social__Destinations__d1__Address="http://localhost:${LOCAL_SOCIAL_PORT}/"

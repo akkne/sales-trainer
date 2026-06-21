@@ -4,7 +4,7 @@
 #
 # Requires in the root .env:
 #   DOMAIN      - base domain (default: sellevate.site). Routes DOMAIN -> frontend,
-#                 api.DOMAIN -> backend, grafana.DOMAIN -> Grafana.
+#                 api.DOMAIN -> gateway, grafana.DOMAIN -> Grafana.
 #   ACME_EMAIL  - email for Let's Encrypt notifications
 #   FRONTEND_URL=https://<DOMAIN>  (backend CORS allow-list)
 # DNS A records for $DOMAIN and *.$DOMAIN must point to this server,
@@ -35,7 +35,7 @@ services:
       - letsencrypt:/letsencrypt
     depends_on:
       - frontend
-      - backend
+      - gateway
 
   frontend:
     labels:
@@ -45,7 +45,9 @@ services:
       - "traefik.http.routers.frontend.tls.certresolver=le"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
-  backend:
+  # api.DOMAIN -> the YARP gateway, the single public API entry point. The monolith
+  # is retired; the gateway routes every path to its owning microservice.
+  gateway:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN:-sellevate.site}`)"

@@ -41,6 +41,7 @@ a Kafka broker, while still asserting the right email/`user.*` event would be pr
 | `VerifyEmail_WithWrongCode_IsUnauthorized` | 401 |
 | `Refresh_RotatesToken_ViaCookie` | refresh cookie rotation 200 |
 | `ProfileAndOnboardingTests` | `/profile` needs auth; onboarding + persona update; invalid persona 400; unknown avatar 404 |
+| `AdminUsersTests` (Phase 9) | `/admin/users` authz (anon 401, User 403, Admin 200); detail 404 for unknown; rename updates name + rejects <2 chars; role change forbidden for Admin, allowed for SuperAdmin, rejects unknown role |
 
 The verification code is recovered from the recorded email body (`TestCodeExtractor`),
 since only its hash is persisted.

@@ -421,6 +421,13 @@ All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
 XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the league's week start — a direct `WeeklyXpAmount` write would be erased by the next XP sync, while a correction record survives every re-sync and stays auditable.
 
 ### Users (`RequireAdmin`; role change requires `RequireSuperAdmin`)
+
+> Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
+> Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
+> shapes are unchanged. The `AdminUserDetailDto` activity stats (streak/XP/skills/score)
+> are owned by gamification/learning, so identity returns them as `0` for now — same
+> caveat as `GET /profile`.
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/users | — | `AdminUserDto[]` |

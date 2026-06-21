@@ -83,21 +83,26 @@ Backend auto-runs `db.Database.Migrate()` on startup.
 
 ## Microservices migration — platform foundations (Phase 0)
 
-The monolith above is being carved into independently deployable services per
+The monolith above has been carved into independently deployable services per
 [MICROSERVICES.md](MICROSERVICES.md) (target) and
-[MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) (route). **The monolith still
-serves all traffic** — Phase 0 only added the scaffolding around it:
+[MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) (route). **The migration is
+complete (Phase 9): the monolith is retired** — every route is owned by a service and
+the gateway no longer has a catch-all to the monolith. `src/backend/api` is kept in the
+repo and the solution as a reference only (not built or run as a container):
 
 ```
 src/backend/
-  api/                         ← legacy monolith (still serving; kept as reference)
-  tests/                       ← monolith tests
+  api/                         ← RETIRED monolith (reference only; not deployed)
+  tests/                       ← monolith tests (reference only)
+  {identity,learning,gamification,ai,social,analytics,notification}-service/
+                               ← the extracted services, each with its own DB + tests
   building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
                                        idempotent-consumer base, Redis idempotency
                                        store, UserReplica, identity-header helpers)
   building-blocks/BuildingBlocks.Tests/
-  gateway/Gateway/             ← YARP API gateway (catch-all passthrough → monolith,
-                                  central JWT validation, X-User-* header injection)
+  gateway/Gateway/             ← YARP API gateway (per-service routing, no catch-all:
+                                  unknown routes 404; central JWT validation,
+                                  X-User-* header injection)
   gateway/Gateway.Tests/
   Sellevate.sln                ← backend-wide solution (all of the above)
 ```
@@ -109,10 +114,11 @@ src/backend/
   Kafka UI on `:8085`.
 - **API Gateway (YARP):** single entry point; validates the JWT once and injects
   trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
-  stripped). In Phase 0 it transparently proxies every path to the monolith; later
-  phases flip route prefixes to extracted services one at a time (strangler fig).
-- **Data ownership:** the single `AppDbContext` (42 entities) is mapped to its future
-  owning services in [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md) (no code moved yet).
+  stripped). The strangler-fig migration is finished: it routes every prefix to its
+  owning service and has **no catch-all** (unknown routes return 404).
+- **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
+  database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
+  own schema + EF migrations.
 
 ## EF Column Types
 
