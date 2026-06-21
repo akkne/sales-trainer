@@ -109,16 +109,21 @@ Run **before** touching anything. The migration is read-only on the monolith DB,
 but back up regardless.
 
 ```bash
-# On the server, from the repo root (adjust container/creds to your stack):
-TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p ~/backups/$TS
+# On the server, from the repo root. .env vars are NOT in your shell, so read them
+# from .env first (cut -f2- keeps values that contain '='):
+cd ~/sellevate
+PG_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)
+PG_DB=$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-)
+PG_CID=$(docker compose ps -q postgres 2>/dev/null)
+MONGO_CID=$(docker compose ps -q mongo 2>/dev/null)
+TS=$(date +%Y%m%d-%H%M%S); mkdir -p ~/backups/$TS
 
-# Postgres (the monolith DB)
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+# Postgres (the monolith DB). Plain `docker exec` avoids compose var-warnings.
+docker exec "$PG_CID" pg_dump -U "$PG_USER" -d "$PG_DB" \
   | gzip > ~/backups/$TS/monolith-pg.sql.gz
 
 # Mongo
-docker compose exec -T mongo mongodump --archive --db=sallevate \
+docker exec "$MONGO_CID" mongodump --archive --db=sallevate \
   | gzip > ~/backups/$TS/mongo-sallevate.archive.gz
 
 # Snapshot the whole VM too if Timeweb offers it (one click = cheapest rollback).
@@ -145,9 +150,10 @@ On first start each relational service runs `DatabaseBootstrapper.EnsureDatabase
 minute the databases `identity`, `learning`, `gamification`, `ai`, `social` exist —
 **empty** — next to the still-present monolith `sallevate` DB on the same Postgres.
 
-Verify:
+Verify (read the DB user from .env — it's not in your shell):
 ```bash
-docker compose exec -T postgres psql -U "$POSTGRES_USER" -d postgres -c "\l"
+docker exec "$(docker compose ps -q postgres 2>/dev/null)" \
+  psql -U "$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)" -d postgres -c '\l'
 # expect: sallevate (monolith) + identity, learning, gamification, ai, social
 ```
 
