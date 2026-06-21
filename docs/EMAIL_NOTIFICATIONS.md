@@ -38,6 +38,16 @@ contains *internal* whitespace as misconfigured — it no-ops and logs an action
 ("ApiToken contains whitespace …") instead of silently 401-ing against MailerSend. This was a
 real prod outage: the token line had the from-email/name appended, so every send failed.
 
+**Every mailing service needs the MailerSend env vars.** Because the no-op-on-placeholder
+behavior is silent (a `warning`, not an error), a service that calls `AddSellevateEmail` but is
+*missing* `MailerSend__ApiToken` / `MailerSend__FromEmail` / `MailerSend__FromName` in its
+container keeps the appsettings placeholder `"INJECTED_FROM_ENV"` and quietly mails nothing.
+This bit prod: friend-request emails never went out because only the **identity** container had
+the MailerSend block in `docker-compose.yml` — the **notification** container (the one that
+actually mails friend/discussion notifications) did not. The three vars are now injected into
+the notification service too. When adding any new mailing service, wire the same three vars into
+its container env in `docker-compose.yml` *and* any production manifest.
+
 ## Resolving the recipient's email (Redis user replica)
 
 The notification service has **no database**, so it keeps a minimal user replica in Redis

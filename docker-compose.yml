@@ -270,6 +270,11 @@ services:
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
+      # Notification e-mails go out through MailerSend — without these the sender
+      # stays at the "INJECTED_FROM_ENV" placeholder and silently no-ops every send.
+      - MailerSend__ApiToken=${MAILERSEND_API_TOKEN}
+      - MailerSend__FromEmail=${MAILERSEND_FROM_EMAIL}
+      - MailerSend__FromName=${MAILERSEND_FROM_NAME:-Sellevate}
       # --- Notification tunables (override in .env; defaults are the in-code values) ---
       - NotificationStorage__InboxCapacity=${NOTIFICATION_INBOX_CAPACITY:-100}
       - NotificationStorage__RetentionDays=${NOTIFICATION_RETENTION_DAYS:-30}
