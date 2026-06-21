@@ -120,28 +120,45 @@ builder.Services
     .AddVoiceFeatureServices(builder.Configuration)
     .AddEvaluationFeatureServices();
 
+// AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
+// HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.
 foreach (var upstreamClientName in new[] { "OpenAI", "GoogleTts", "YandexTts" })
 {
     builder.Services.AddHttpClient(upstreamClientName)
         .ConfigureHttpClient(client =>
-            client.Timeout = TimeSpan.FromSeconds(30))
+            client.Timeout = TimeSpan.FromSeconds(90)) // outer timeout > Polly total; Polly controls per-attempt
         .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
         {
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(10),
             PooledConnectionLifetime = TimeSpan.FromMinutes(30),
         })
-        .SetHandlerLifetime(TimeSpan.FromMinutes(30));
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30))
+        .AddStandardResilienceHandler(options =>
+        {
+            // Per-attempt timeout (replaces flat 30s).
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+            // Retry: up to 2 retries on 5xx / 429 / timeout (total ≤ 3 attempts).
+            options.Retry.MaxRetryAttempts = 2;
+            options.Retry.Delay = TimeSpan.FromSeconds(1);
+            // Circuit breaker: open after 5 failures in a 30s window.
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
+            options.CircuitBreaker.MinimumThroughput = 5;
+            // Total timeout across all retries.
+            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(90);
+        });
 }
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<UpstreamConnectionWarmup>();
 builder.Services.AddHostedService<UpstreamConnectionWarmupService>();
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
 application.UseCors();
 

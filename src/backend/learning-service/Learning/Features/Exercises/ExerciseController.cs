@@ -4,6 +4,7 @@ using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 
+
 namespace Sellevate.Learning.Features.Exercises;
 
 [ApiController]
@@ -52,6 +53,10 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
             var submissionResult = await exerciseService.SubmitExerciseAnswerAsync(
                 userId, exerciseId, submitRequest.Answer, cancellationToken);
             return Ok(submissionResult);
+        }
+        catch (ExerciseAnswerValidationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
         }
         catch (KeyNotFoundException exception)
         {
@@ -106,6 +111,25 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         if (!User.TryResolveUserId(out var userId))
         {
             Response.StatusCode = 401;
+            return;
+        }
+
+        // Validate exercise exists and is ai_dialogue BEFORE committing 200 —
+        // once we write status 200 we can no longer return a proper error code.
+        try
+        {
+            await exerciseService.ValidateExerciseForVoiceAsync(exerciseId, cancellationToken);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            Response.StatusCode = 404;
+            await Response.WriteAsJsonAsync(new { message = exception.Message }, cancellationToken);
+            return;
+        }
+        catch (NotSupportedException exception)
+        {
+            Response.StatusCode = 400;
+            await Response.WriteAsJsonAsync(new { message = exception.Message }, cancellationToken);
             return;
         }
 

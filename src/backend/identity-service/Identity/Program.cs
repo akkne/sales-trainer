@@ -2,13 +2,15 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
-using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Onboarding;
 using Sellevate.Identity.Features.Profile;
+using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Infrastructure.Email;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
@@ -40,9 +42,11 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
     databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
-builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
+builder.Services.AddScoped<IOutboxWriter, IdentityOutboxWriter>();
+builder.Services.AddScoped<IOutboxStore, IdentityOutboxStore>();
+builder.Services.AddHostedService<OutboxRelayBackgroundService>();
 
 builder.Services.AddSellevateHealthChecks()
     .AddKafka();
@@ -101,12 +105,16 @@ builder.Services
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
 application.UseCors();
 

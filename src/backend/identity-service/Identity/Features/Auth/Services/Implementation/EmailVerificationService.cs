@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -142,13 +143,14 @@ internal sealed class EmailVerificationService(
         int lifetimeMinutes)
     {
         var recipientName = string.IsNullOrWhiteSpace(displayName) ? email : displayName;
+        var escapedRecipientName = WebUtility.HtmlEncode(recipientName);
         var textBody =
             $"Hi {recipientName},\n\n" +
             $"Your Sellevate verification code is {code}.\n" +
             $"It expires in {lifetimeMinutes} minutes.\n\n" +
             "If you did not create an account, you can ignore this email.";
         var htmlBody =
-            $"<p>Hi {recipientName},</p>" +
+            $"<p>Hi {escapedRecipientName},</p>" +
             $"<p>Your Sellevate verification code is <strong style=\"font-size:20px;letter-spacing:2px\">{code}</strong>.</p>" +
             $"<p>It expires in {lifetimeMinutes} minutes.</p>" +
             "<p>If you did not create an account, you can ignore this email.</p>";

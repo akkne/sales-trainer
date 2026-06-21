@@ -10,6 +10,66 @@ internal sealed class RedisNotificationStore : INotificationStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    // Atomically prepend a new item, trim the list to capacity, and refresh the TTL.
+    // KEYS[1] = inbox key
+    // ARGV[1] = serialized notification
+    // ARGV[2] = max capacity (minimum 1)
+    // ARGV[3] = TTL in seconds
+    private const string PrependLua = @"
+redis.call('LPUSH', KEYS[1], ARGV[1])
+redis.call('LTRIM', KEYS[1], 0, math.max(tonumber(ARGV[2]) - 1, 0))
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+return 1
+";
+
+    // Atomically replace a single list element identified by its JSON id field, then refresh TTL.
+    // KEYS[1] = inbox key
+    // ARGV[1] = notification id (string)
+    // ARGV[2] = replacement JSON
+    // ARGV[3] = TTL in seconds
+    // Returns 1 if replaced, 0 if not found.
+    private const string ReplaceOneLua = @"
+local entries = redis.call('LRANGE', KEYS[1], 0, -1)
+for i, entry in ipairs(entries) do
+    local ok, rec = pcall(cjson.decode, entry)
+    if ok and rec and tostring(rec['id']) == ARGV[1] then
+        redis.call('LSET', KEYS[1], i - 1, ARGV[2])
+        redis.call('EXPIRE', KEYS[1], ARGV[3])
+        return 1
+    end
+end
+return 0
+";
+
+    // Atomically replace multiple list elements by id, then refresh TTL.
+    // KEYS[1] = inbox key
+    // ARGV[1] = TTL in seconds
+    // ARGV[2..N] = replacement JSON items (each has an 'id' field)
+    // Returns number of replacements made.
+    private const string ReplaceAllLua = @"
+local entries = redis.call('LRANGE', KEYS[1], 0, -1)
+local replacements = {}
+for i = 2, #ARGV do
+    local ok, rec = pcall(cjson.decode, ARGV[i])
+    if ok and rec then
+        replacements[tostring(rec['id'])] = ARGV[i]
+    end
+end
+local count = 0
+for i, entry in ipairs(entries) do
+    local ok, rec = pcall(cjson.decode, entry)
+    if ok and rec then
+        local replacement = replacements[tostring(rec['id'])]
+        if replacement then
+            redis.call('LSET', KEYS[1], i - 1, replacement)
+            count = count + 1
+        end
+    end
+end
+redis.call('EXPIRE', KEYS[1], ARGV[1])
+return count
+";
+
     private readonly IConnectionMultiplexer _connectionMultiplexer;
 
     public RedisNotificationStore(IConnectionMultiplexer connectionMultiplexer)
@@ -30,11 +90,15 @@ internal sealed class RedisNotificationStore : INotificationStore
         var database = _connectionMultiplexer.GetDatabase();
         var inboxKey = RedisKeys.Inbox(recipientUserId);
 
-        await database.ListLeftPushAsync(inboxKey, Serialize(notification));
-        await database.ListTrimAsync(inboxKey, 0, Math.Max(1, inboxCapacity) - 1);
-        await database.KeyExpireAsync(inboxKey, retention);
-
-        await RefreshUnreadCounterAsync(database, recipientUserId, inboxKey, retention);
+        await database.ScriptEvaluateAsync(
+            PrependLua,
+            keys: [(RedisKey)inboxKey],
+            values:
+            [
+                Serialize(notification),
+                Math.Max(1, inboxCapacity),
+                (long)retention.TotalSeconds,
+            ]);
     }
 
     public async Task<IReadOnlyList<NotificationRecord>> GetAllAsync(
@@ -51,6 +115,18 @@ internal sealed class RedisNotificationStore : INotificationStore
             .ToList();
     }
 
+    public async Task<bool> ExistsAsync(
+        Guid recipientUserId,
+        NotificationType notificationType,
+        string? relatedEntityId,
+        CancellationToken cancellationToken = default)
+    {
+        var notifications = await GetAllAsync(recipientUserId, cancellationToken);
+        return notifications.Any(n =>
+            n.NotificationType == notificationType &&
+            n.RelatedEntityId == relatedEntityId);
+    }
+
     public async Task<bool> ReplaceAsync(
         Guid recipientUserId,
         NotificationRecord updatedNotification,
@@ -61,23 +137,18 @@ internal sealed class RedisNotificationStore : INotificationStore
 
         var database = _connectionMultiplexer.GetDatabase();
         var inboxKey = RedisKeys.Inbox(recipientUserId);
-        var entries = await database.ListRangeAsync(inboxKey);
 
-        for (var position = 0; position < entries.Length; position++)
-        {
-            var record = Deserialize(entries[position]);
-            if (record is null || record.Id != updatedNotification.Id)
-            {
-                continue;
-            }
+        var result = await database.ScriptEvaluateAsync(
+            ReplaceOneLua,
+            keys: [(RedisKey)inboxKey],
+            values:
+            [
+                updatedNotification.Id.ToString(),
+                Serialize(updatedNotification),
+                (long)retention.TotalSeconds,
+            ]);
 
-            await database.ListSetByIndexAsync(inboxKey, position, Serialize(updatedNotification));
-            await database.KeyExpireAsync(inboxKey, retention);
-            await RefreshUnreadCounterAsync(database, recipientUserId, inboxKey, retention);
-            return true;
-        }
-
-        return false;
+        return (long)result == 1;
     }
 
     public async Task ReplaceAllAsync(
@@ -88,42 +159,22 @@ internal sealed class RedisNotificationStore : INotificationStore
     {
         ArgumentNullException.ThrowIfNull(notifications);
 
+        if (notifications.Count == 0)
+            return;
+
         var database = _connectionMultiplexer.GetDatabase();
         var inboxKey = RedisKeys.Inbox(recipientUserId);
-        var entries = await database.ListRangeAsync(inboxKey);
 
-        for (var position = 0; position < entries.Length; position++)
-        {
-            var existing = Deserialize(entries[position]);
-            if (existing is null)
-            {
-                continue;
-            }
+        // ARGV[1] = TTL, ARGV[2..N] = serialized replacement items
+        var args = new RedisValue[1 + notifications.Count];
+        args[0] = (long)retention.TotalSeconds;
+        for (var i = 0; i < notifications.Count; i++)
+            args[i + 1] = Serialize(notifications[i]);
 
-            var replacement = notifications.FirstOrDefault(notification => notification.Id == existing.Id);
-            if (replacement is not null)
-            {
-                await database.ListSetByIndexAsync(inboxKey, position, Serialize(replacement));
-            }
-        }
-
-        await database.KeyExpireAsync(inboxKey, retention);
-        await RefreshUnreadCounterAsync(database, recipientUserId, inboxKey, retention);
-    }
-
-    private static async Task RefreshUnreadCounterAsync(
-        IDatabase database,
-        Guid recipientUserId,
-        RedisKey inboxKey,
-        TimeSpan retention)
-    {
-        var entries = await database.ListRangeAsync(inboxKey);
-        var unreadCount = entries
-            .Select(entry => Deserialize(entry))
-            .Count(record => record is { IsRead: false });
-
-        var unreadKey = RedisKeys.UnreadCount(recipientUserId);
-        await database.StringSetAsync(unreadKey, unreadCount, retention);
+        await database.ScriptEvaluateAsync(
+            ReplaceAllLua,
+            keys: [(RedisKey)inboxKey],
+            values: args);
     }
 
     private static RedisValue Serialize(NotificationRecord notification) =>

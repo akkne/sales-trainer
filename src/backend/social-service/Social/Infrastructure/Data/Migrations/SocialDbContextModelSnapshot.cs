@@ -253,6 +253,14 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.Property<Guid>("AddresseeId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("CanonicalHighId")
+                        .HasColumnType("uuid")
+                        .HasComputedColumnSql("GREATEST(\"RequesterId\", \"AddresseeId\")", stored: true);
+
+                    b.Property<Guid>("CanonicalLowId")
+                        .HasColumnType("uuid")
+                        .HasComputedColumnSql("LEAST(\"RequesterId\", \"AddresseeId\")", stored: true);
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -265,6 +273,10 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AddresseeId");
+
+                    b.HasIndex("CanonicalLowId", "CanonicalHighId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Friendships_CanonicalPair");
 
                     b.HasIndex("RequesterId");
 

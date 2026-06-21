@@ -57,28 +57,10 @@ public sealed class OutgoingEventContractTests
     }
 
     [Test]
-    public void TechniqueMasteryChangedPayload_ExposesCatalogueFields()
-    {
-        var userId = Guid.NewGuid();
-        var techniqueId = Guid.NewGuid();
-        var payload = new TechniqueMasteryChangedEvent(userId, techniqueId, 2, 60);
-
-        var json = JsonSerializer.Serialize(payload, EventEnvelope.JsonOptions);
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-
-        root.GetProperty("userId").GetGuid().Should().Be(userId);
-        root.GetProperty("techniqueId").GetGuid().Should().Be(techniqueId);
-        root.GetProperty("level").GetInt32().Should().Be(2);
-        root.GetProperty("masteryPercent").GetInt32().Should().Be(60);
-    }
-
-    [Test]
     public void ExerciseCompletedEnvelope_UsesTheCanonicalTopicName()
     {
         Topics.ExerciseCompleted.Should().Be("exercise.completed");
         Topics.LessonCompleted.Should().Be("lesson.completed");
         Topics.SkillCompleted.Should().Be("skill.completed");
-        Topics.TechniqueMasteryChanged.Should().Be("technique.mastery.changed");
     }
 }

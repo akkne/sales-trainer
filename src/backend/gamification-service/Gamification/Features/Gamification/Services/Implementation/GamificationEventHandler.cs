@@ -15,13 +15,14 @@ internal sealed class GamificationEventHandler(
         Guid userId,
         string exerciseType,
         bool isCorrect,
+        Guid? sourceEventId = null,
         CancellationToken cancellationToken = default)
     {
         if (isCorrect)
         {
             var baseExperiencePoints = await settingsService.GetExerciseBaseExperiencePointsAsync(exerciseType, cancellationToken);
             await experiencePointsGrantService.GrantAsync(
-                userId, baseExperiencePoints, ExperiencePointsSources.Exercise, cancellationToken: cancellationToken);
+                userId, baseExperiencePoints, ExperiencePointsSources.Exercise, sourceEventId: sourceEventId, cancellationToken: cancellationToken);
         }
 
         await streakService.RegisterActivityAsync(userId, cancellationToken);
@@ -31,12 +32,13 @@ internal sealed class GamificationEventHandler(
     public async Task HandleDialogEvaluatedAsync(
         Guid userId,
         int experiencePointsEarned,
+        Guid? sourceEventId = null,
         CancellationToken cancellationToken = default)
     {
         if (experiencePointsEarned > 0)
         {
             await experiencePointsGrantService.GrantAsync(
-                userId, experiencePointsEarned, ExperiencePointsSources.Dialog, cancellationToken: cancellationToken);
+                userId, experiencePointsEarned, ExperiencePointsSources.Dialog, sourceEventId: sourceEventId, cancellationToken: cancellationToken);
         }
 
         await streakService.RegisterActivityAsync(userId, cancellationToken);

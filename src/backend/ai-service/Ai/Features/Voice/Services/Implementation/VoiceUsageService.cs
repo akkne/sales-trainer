@@ -8,6 +8,7 @@ using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.Ai.Infrastructure.Mongo;
+using StackExchange.Redis;
 
 namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 
@@ -15,18 +16,39 @@ internal sealed class VoiceUsageService : IVoiceUsageService
 {
     private readonly MongoDbContext _mongoContext;
     private readonly AiDbContext _dbContext;
-    private readonly IOptions<VoiceUsageLimitsConfiguration> _voiceUsageLimitsOptions;
+    private readonly IDatabase _redis;
+    private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
     private readonly ILogger<VoiceUsageService> _logger;
+
+    // AI1: Lua script for atomic check-and-increment.
+    // Returns the new counter value on success, or -1 if the limit would be exceeded.
+    private const string ReserveLuaScript = @"
+local key   = KEYS[1]
+local limit = tonumber(ARGV[1])
+local delta = tonumber(ARGV[2])
+local ttl   = tonumber(ARGV[3])
+local cur   = redis.call('GET', key)
+local val   = cur and tonumber(cur) or 0
+if limit > 0 and val + delta > limit then
+    return -1
+end
+local newval = redis.call('INCRBY', key, delta)
+if ttl > 0 then
+    redis.call('EXPIREAT', key, ttl)
+end
+return newval";
 
     public VoiceUsageService(
         MongoDbContext mongoContext,
         AiDbContext dbContext,
-        IOptions<VoiceUsageLimitsConfiguration> voiceUsageLimitsOptions,
+        IConnectionMultiplexer connectionMultiplexer,
+        IOptions<VoiceFeatureConfiguration> voiceFeatureOptions,
         ILogger<VoiceUsageService> logger)
     {
         _mongoContext = mongoContext;
         _dbContext = dbContext;
-        _voiceUsageLimitsOptions = voiceUsageLimitsOptions;
+        _redis = connectionMultiplexer.GetDatabase();
+        _voiceFeatureOptions = voiceFeatureOptions;
         _logger = logger;
     }
 
@@ -39,7 +61,7 @@ internal sealed class VoiceUsageService : IVoiceUsageService
         var dailyUsedSeconds = await SumSecondsAsync(userId, dayStart, cancellationToken);
         var monthlyUsedSeconds = await SumSecondsAsync(userId, monthStart, cancellationToken);
 
-        var limits = _voiceUsageLimitsOptions.Value;
+        var limits = _voiceFeatureOptions.Value;
 
         return new VoiceUsageDto
         {
@@ -50,13 +72,91 @@ internal sealed class VoiceUsageService : IVoiceUsageService
         };
     }
 
-    public async Task EnsureWithinLimitsAsync(Guid userId, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public async Task<int> ReserveSecondsAsync(Guid userId, int maxSeconds, CancellationToken cancellationToken = default)
     {
-        var usage = await GetUsageAsync(userId, cancellationToken);
-        if (usage.DailyExceeded)
-            throw new VoiceUsageLimitException("daily", usage.DailyUsedSeconds, usage.DailyLimitSeconds);
-        if (usage.MonthlyExceeded)
-            throw new VoiceUsageLimitException("monthly", usage.MonthlyUsedSeconds, usage.MonthlyLimitSeconds);
+        var config = _voiceFeatureOptions.Value;
+        var dailyLimit = config.DailyLimitMinutes * 60;
+        var monthlyLimit = config.MonthlyLimitMinutes * 60;
+
+        var now = DateTime.UtcNow;
+
+        // Day window key expires at next UTC midnight.
+        var dayEnd = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc).AddDays(1);
+        var dayKey = RedisKey(userId, "day", now.Year, now.Month, now.Day);
+        var dayTtlUnix = (long)(dayEnd - DateTime.UnixEpoch).TotalSeconds;
+
+        // Month window key expires at start of next month.
+        var monthEnd = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+        var monthKey = RedisKey(userId, "month", now.Year, now.Month);
+        var monthTtlUnix = (long)(monthEnd - DateTime.UnixEpoch).TotalSeconds;
+
+        // Atomic daily reservation via Lua.
+        var dayResult = (long)await _redis.ScriptEvaluateAsync(
+            ReserveLuaScript,
+            new RedisKey[] { dayKey },
+            new RedisValue[] { dailyLimit, maxSeconds, dayTtlUnix });
+
+        if (dayResult < 0)
+        {
+            var rawDay = await _redis.StringGetAsync(dayKey);
+            var usedDaily = rawDay.HasValue ? (int)rawDay : 0;
+            _logger.LogInformation("Voice daily limit exceeded for user {UserId}: ~{Used}s / {Limit}s", userId, usedDaily, dailyLimit);
+            throw new VoiceUsageLimitException("daily", usedDaily, dailyLimit);
+        }
+
+        // Atomic monthly reservation via Lua.
+        var monthResult = (long)await _redis.ScriptEvaluateAsync(
+            ReserveLuaScript,
+            new RedisKey[] { monthKey },
+            new RedisValue[] { monthlyLimit, maxSeconds, monthTtlUnix });
+
+        if (monthResult < 0)
+        {
+            // Roll back the daily reservation already made.
+            await _redis.StringDecrementAsync(dayKey, maxSeconds);
+            var rawMonth = await _redis.StringGetAsync(monthKey);
+            var usedMonthly = rawMonth.HasValue ? (int)rawMonth : 0;
+            _logger.LogInformation("Voice monthly limit exceeded for user {UserId}: ~{Used}s / {Limit}s", userId, usedMonthly, monthlyLimit);
+            throw new VoiceUsageLimitException("monthly", usedMonthly, monthlyLimit);
+        }
+
+        _logger.LogDebug("Reserved {Seconds}s for user {UserId} — day={Day}, month={Month}",
+            maxSeconds, userId, dayResult, monthResult);
+
+        return maxSeconds;
+    }
+
+    /// <inheritdoc/>
+    public async Task RefundReservationAsync(
+        string sessionId,
+        Guid userId,
+        int reservedSeconds,
+        int actualSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        // Clamp actual to reserved (can't exceed what was reserved).
+        var billable = Math.Min(actualSeconds, reservedSeconds);
+        var refund = reservedSeconds - billable;
+
+        var now = DateTime.UtcNow;
+        if (refund > 0)
+        {
+            // Return unused portion to Redis so concurrent streams have accurate headroom.
+            var dayKey = RedisKey(userId, "day", now.Year, now.Month, now.Day);
+            var monthKey = RedisKey(userId, "month", now.Year, now.Month);
+
+            await Task.WhenAll(
+                _redis.StringDecrementAsync(dayKey, refund),
+                _redis.StringDecrementAsync(monthKey, refund));
+
+            _logger.LogDebug("Refunded {Refund}s for user {UserId} (reserved={Reserved}, actual={Actual})",
+                refund, userId, reservedSeconds, actualSeconds);
+        }
+
+        // Durable Mongo accounting for what was actually used.
+        if (billable > 0)
+            await RecordSessionSecondsAsync(sessionId, userId, billable, cancellationToken);
     }
 
     public async Task RecordSessionSecondsAsync(string sessionId, Guid userId, int seconds, CancellationToken cancellationToken = default)
@@ -143,7 +243,7 @@ internal sealed class VoiceUsageService : IVoiceUsageService
             }
         }
 
-        var limits = _voiceUsageLimitsOptions.Value;
+        var limits = _voiceFeatureOptions.Value;
 
         return new AdminVoiceUsageDto
         {
@@ -175,4 +275,7 @@ internal sealed class VoiceUsageService : IVoiceUsageService
         if (document == null) return 0;
         return document["total"].ToInt32();
     }
+
+    private static string RedisKey(Guid userId, string window, params int[] parts)
+        => $"voice:{userId}:{window}:{string.Join(":", parts)}";
 }

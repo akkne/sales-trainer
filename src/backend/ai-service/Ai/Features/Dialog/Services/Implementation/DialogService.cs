@@ -171,7 +171,11 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(aiMessage);
 
-        var updateDefinition = Builders<DialogSession>.Update.Set(sessionRecord => sessionRecord.Messages, session.Messages);
+        // AI7a: PushEach appends only the new messages — avoids lost-update when concurrent reads
+        // hold a stale Messages list and then overwrite the whole array with Set.
+        var updateDefinition = Builders<DialogSession>.Update.PushEach(
+            sessionRecord => sessionRecord.Messages,
+            new[] { userMessage, aiMessage });
         await _mongoContext.DialogSessions.UpdateOneAsync(
             Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
             updateDefinition,

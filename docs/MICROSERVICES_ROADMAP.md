@@ -386,7 +386,7 @@ API client). Unknown routes now return 404.
 
 ---
 
-## Phase 10 — Hardening (optional, resume polish) `[x]` (10.3 partial `[~]`)
+## Phase 10 — Hardening (optional, resume polish) `[x]`
 - [x] **10.1** Per-service health checks + Kafka consumer-lag dashboards in Grafana.
       Shared `BuildingBlocks.HealthChecks` helpers expose `/healthz` (liveness) + `/readyz`
       (readiness: postgres/redis/kafka/mongo probes per service) uniformly across all 7
@@ -402,22 +402,28 @@ API client). Unknown routes now return 404.
       (3 retries / 500 ms / DLT on). Unit-tested (retry count, DLT publish, disabled path,
       dedupe, unparseable). Applies to all consumers (shared base). Docs: ARCHITECTURE.md,
       TESTING/HARDENING.md.
-- [~] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
-      atomic DB-write + event-publish. **Partial — gamification done well, identity/learning
-      deferred.** Shared outbox building blocks (`BuildingBlocks/Outbox`: `OutboxMessage`,
+- [x] **10.3** Outbox pattern in producers (Learning, Identity, Gamification) for
+      atomic DB-write + event-publish. **All three relational producers fully wired.** Shared
+      outbox building blocks (`BuildingBlocks/Outbox`: `OutboxMessage`,
       `IOutboxWriter`/`IOutboxStore`/`IOutboxEventForwarder`, testable `OutboxRelayProcessor`
-      + `OutboxRelayBackgroundService`, `OutboxSettings`) plus a fully-wired
-      **gamification-service** outbox: `OutboxMessages` table + EF migration
-      `AddOutboxMessages`, store/writer over `GamificationDbContext`, relay hosted service,
-      and all four outgoing events (`xp.granted`, `achievement.unlocked`, `streak.milestone`,
-      `gamification.dialog-weights.updated`) enqueued in the same transaction as the business
-      write. Unit-tested (relay forward/mark/stop-on-failure; gamification enqueue→pending→
-      dispatch + envelope contract). **Reason for deferring Identity & Learning:** each needs
-      its own table + EF migration + publisher rewiring, and true atomicity can only be
-      verified against a real Postgres (no Testcontainers in this offline sandbox); per the
-      "clean partial beats a broken sweep" rule, one fully-correct + tested service is shipped
-      and the other two are left publishing directly (stable, unchanged) rather than
-      half-wired. Docs: ARCHITECTURE.md, TESTING/HARDENING.md.
+      + `OutboxRelayBackgroundService`, `OutboxSettings`). Each service now has its own
+      `OutboxMessages` table + EF migration `AddOutboxMessages`, a store/writer over its own
+      `DbContext`, and a relay hosted service; every outgoing event is staged via
+      `IOutboxWriter.Enqueue` and committed in the same `SaveChangesAsync` as the business write:
+      - **gamification** (original reference): `xp.granted`, `achievement.unlocked`,
+        `streak.milestone`, `gamification.dialog-weights.updated`.
+      - **identity**: `user.registered` / `user.avatar.changed` (+ `user.updated`/`user.deleted`
+        contracts) — enqueue moved before the business save in `SuperAdminSeeder`,
+        `AuthenticationService` (email + Google registration), and `AvatarService`. Added an
+        `IdentityDbContextFactory` for design-time migrations.
+      - **learning**: `exercise.completed`, `lesson.completed`, `skill.completed` — the three
+        events are enqueued then flushed in a single trailing `SaveChangesAsync` after the
+        skill-completion query (which needs committed progress).
+      Unit-tested per service (`GamificationOutboxTests`, `KafkaUserEventPublisherTests`,
+      `LearningOutboxTests`: enqueue→pending→dispatch + envelope contract) plus the shared
+      `OutboxRelayProcessorTests` (forward/mark/stop-on-failure). Full DB-level atomicity
+      (commit-together + relay-after-crash redelivery) still needs a real Postgres to verify
+      end-to-end (no Testcontainers offline). Docs: ARCHITECTURE.md, TESTING/HARDENING.md.
 - [x] **10.4** Contract tests on Kafka schemas. `EventContractCatalogTests` (in
       BuildingBlocks.Tests) asserts the serialized wire shape (camelCase field names + JSON
       types) of every one of the 16 topics in [MICROSERVICES.md](MICROSERVICES.md) §4.1, the

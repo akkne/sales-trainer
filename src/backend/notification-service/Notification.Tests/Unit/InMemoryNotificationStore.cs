@@ -48,6 +48,20 @@ internal sealed class InMemoryNotificationStore : INotificationStore
         return Task.FromResult(result);
     }
 
+    public Task<bool> ExistsAsync(
+        Guid recipientUserId,
+        NotificationType notificationType,
+        string? relatedEntityId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_inboxesByRecipient.TryGetValue(recipientUserId, out var inbox))
+            return Task.FromResult(false);
+
+        return Task.FromResult(inbox.Any(n =>
+            n.NotificationType == notificationType &&
+            n.RelatedEntityId == relatedEntityId));
+    }
+
     public Task<bool> ReplaceAsync(
         Guid recipientUserId,
         NotificationRecord updatedNotification,

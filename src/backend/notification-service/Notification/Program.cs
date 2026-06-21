@@ -31,8 +31,18 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Notification");
 });
 
+// NO4c: Validate the Redis connection string explicitly so the startup error is
+// descriptive rather than a NullReferenceException from the ! operator.
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:Redis must be configured. " +
+        "Set it in appsettings.json, environment variables (ConnectionStrings__Redis), or secrets.");
+}
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
+    ConnectionMultiplexer.Connect(redisConnectionString));
 
 builder.Services.AddSellevateEventing(builder.Configuration);
 builder.Services.AddNotificationServices(builder.Configuration);
@@ -79,9 +89,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// NO4b: Global structured error responses using RFC 7807 ProblemDetails.
+builder.Services.AddProblemDetails();
+
 var application = builder.Build();
 
 application.UseSerilogRequestLogging();
+application.UseExceptionHandler(); // NO4b: converts unhandled exceptions to ProblemDetails responses
 application.UseCors();
 
 if (application.Environment.IsDevelopment())

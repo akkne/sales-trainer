@@ -1,13 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Gamification.Features.Gamification.Services.Abstract;
 using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Gamification;
 
-public sealed class StreakResetJob(GamificationDbContext databaseContext, ILogger<StreakResetJob> logger)
+public sealed class StreakResetJob(
+    GamificationDbContext databaseContext,
+    IStreakClock streakClock,
+    ILogger<StreakResetJob> logger)
 {
     public async Task ExecuteAsync()
     {
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var yesterday = streakClock.Today().AddDays(-1);
 
         var staleStreaks = await databaseContext.UserStreaks
             .Where(streak => streak.CurrentStreakDayCount > 0

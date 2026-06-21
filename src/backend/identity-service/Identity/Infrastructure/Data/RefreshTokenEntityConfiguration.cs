@@ -11,7 +11,7 @@ public class RefreshTokenEntityConfiguration : IEntityTypeConfiguration<RefreshT
         builder.ToTable("RefreshTokens");
         builder.HasKey(refreshToken => refreshToken.Id);
         builder.Property(refreshToken => refreshToken.Token).IsRequired();
-        builder.HasIndex(refreshToken => refreshToken.Token);
+        builder.HasIndex(refreshToken => refreshToken.Token).IsUnique();
         builder.HasOne(refreshToken => refreshToken.User)
             .WithMany()
             .HasForeignKey(refreshToken => refreshToken.UserId)

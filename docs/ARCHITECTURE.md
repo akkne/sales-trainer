@@ -123,10 +123,15 @@ src/backend/
   dead-letter topic suffix (`.dlt`) is the `Topics.DeadLetterSuffix` constant. DLT messages
   carry `x-dead-letter-reason` / `x-dead-letter-at` headers for diagnostics; replay is a
   manual operator action (re-produce the value onto the source topic).
-- **API Gateway (YARP):** single entry point; validates the JWT once and injects
-  trusted `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are
-  stripped). The strangler-fig migration is finished: it routes every prefix to its
-  owning service and has **no catch-all** (unknown routes return 404).
+- **API Gateway (YARP):** single entry point; validates the JWT once and forwards
+  `X-User-Id` / `X-User-Role` headers downstream (client-supplied copies are stripped).
+  **Authorization source of truth is the JWT itself:** every service independently
+  re-validates the bearer token (shared `Jwt:Key`/`Issuer`/`Audience`) and authorizes
+  off its claims via `[Authorize]` policies — defense-in-depth, so a service is never
+  open even if reached directly. The forwarded headers are a convenience/diagnostic
+  signal, **not** a trust boundary; services must not authorize off them. The
+  strangler-fig migration is finished: it routes every prefix to its owning service and
+  has **no catch-all** (unknown routes return 404).
 - **Transactional outbox (Phase 10.3):** to make a state change and its event publish
   atomic, a producer can write an `OutboxMessage` row in the *same* EF transaction as its
   business change (`IOutboxWriter.Enqueue` stages the row; the caller's single
@@ -134,10 +139,15 @@ src/backend/
   pending rows (`IOutboxStore`), forwards each stored envelope to Kafka verbatim
   (`IOutboxEventForwarder`), and marks it dispatched — at-least-once with no lost events on
   a crash between DB commit and Kafka produce. Shared building blocks live in
-  `BuildingBlocks/Outbox`; **gamification-service is the fully-wired reference** (table +
-  migration `AddOutboxMessages`, store/writer, relay; all four outgoing events route through
-  the outbox). Identity and Learning still publish directly (see roadmap 10.3) — the outbox
-  there is deferred, not wired, to keep those services stable.
+  `BuildingBlocks/Outbox`; **gamification, identity and learning are all fully wired** — each
+  has its own `OutboxMessages` table + `AddOutboxMessages` migration, per-service store/writer,
+  and relay hosted service, with every outgoing event routed through the outbox. (Gamification
+  was the original reference; identity's `user.*` and learning's
+  `exercise/lesson/skill.completed` producers were converted in the same way — the enqueue is
+  staged before the business `SaveChangesAsync` so state + event commit atomically.) These three
+  were the named scope of roadmap 10.3 (the producers whose events drive cross-service state).
+  Other producers (social, ai) still publish directly and can adopt the same shared building
+  blocks if/when their events need the same guarantee.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

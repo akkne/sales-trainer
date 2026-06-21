@@ -123,6 +123,44 @@ public sealed class EventMessageProcessorTests
         deadLetterPublisher.Published.Should().BeEmpty();
     }
 
+    [Test]
+    public async Task ProcessAsync_WhenSchemaVersionAboveSupported_DeadLettersWithoutRunningHandler()
+    {
+        var idempotencyStore = new FakeIdempotencyStore();
+        var deadLetterPublisher = new FakeDeadLetterPublisher();
+        var processor = NewProcessor(idempotencyStore, deadLetterPublisher, NewResilience(maxRetries: 3));
+        var envelope = EventEnvelope.Create(
+            "exercise.completed", new { userId = Guid.NewGuid() }, version: EventMessageProcessor.MaxSupportedVersion + 1);
+        var raw = JsonSerializer.Serialize(envelope, EventEnvelope.JsonOptions);
+        var handlerCalled = false;
+
+        var outcome = await processor.ProcessAsync(
+            Topic, "user-1", raw, (_, _) => { handlerCalled = true; return Task.CompletedTask; }, CancellationToken.None);
+
+        outcome.Should().Be(MessageProcessingOutcome.DeadLettered);
+        handlerCalled.Should().BeFalse();
+        deadLetterPublisher.Published.Should().ContainSingle();
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenSchemaVersionSupported_RunsHandler()
+    {
+        var idempotencyStore = new FakeIdempotencyStore();
+        var deadLetterPublisher = new FakeDeadLetterPublisher();
+        var processor = NewProcessor(idempotencyStore, deadLetterPublisher, NewResilience(maxRetries: 3));
+        var envelope = EventEnvelope.Create(
+            "exercise.completed", new { userId = Guid.NewGuid() }, version: EventMessageProcessor.MaxSupportedVersion);
+        var raw = JsonSerializer.Serialize(envelope, EventEnvelope.JsonOptions);
+        var handlerCalled = false;
+
+        var outcome = await processor.ProcessAsync(
+            Topic, "user-1", raw, (_, _) => { handlerCalled = true; return Task.CompletedTask; }, CancellationToken.None);
+
+        outcome.Should().Be(MessageProcessingOutcome.Commit);
+        handlerCalled.Should().BeTrue();
+        deadLetterPublisher.Published.Should().BeEmpty();
+    }
+
     private static EventMessageProcessor NewProcessor(
         IIdempotencyStore idempotencyStore,
         IDeadLetterPublisher deadLetterPublisher,

@@ -65,11 +65,9 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         }
         else
         {
-            currentLeague = await databaseContext.Leagues
-                .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == userTier, cancellationToken)
-                ?? await CreateLeagueForWeekAsync(weekStart, weekEnd, userTier, cancellationToken);
-
-            await JoinLeagueAsync(userId, currentLeague.Id, cancellationToken);
+            // GA5: use idempotent helpers that tolerate concurrent first-hits via unique-violation catch.
+            currentLeague = await GetOrCreateLeagueForWeekAsync(weekStart, weekEnd, userTier, cancellationToken);
+            await GetOrJoinLeagueAsync(userId, currentLeague.Id, cancellationToken);
         }
 
         await SyncWeeklyExperiencePointsForLeagueAsync(
@@ -119,12 +117,37 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
 
     public async Task CloseCurrentLeagueAndCreateNextAsync(CancellationToken cancellationToken = default)
     {
-        var settings = await GetSettingsAsync(cancellationToken);
-        var weekStart = settings.CurrentPeriodStartDate!.Value;
-        var currentEnd = DateOnly.FromDateTime(settings.CurrentPeriodEndsAt!.Value.UtcDateTime);
+        // GA4: re-check inside a transaction so concurrent calls (cron + admin endpoint)
+        // cannot both advance the period. The unique index on Leagues(WeekStartDate, Tier)
+        // provides the final safety net at the DB level.
+        await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
+
+        // Re-read settings with a fresh query inside the transaction to get the current state.
+        var settings = await databaseContext.LeagueSettings.FirstOrDefaultAsync(cancellationToken);
+        if (settings is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        if (settings.CurrentPeriodEndsAt is null || settings.CurrentPeriodStartDate is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var weekStart = settings.CurrentPeriodStartDate.Value;
+        var currentEnd = DateOnly.FromDateTime(settings.CurrentPeriodEndsAt.Value.UtcDateTime);
         var periodLength = settings.PeriodLengthDays > 0 ? settings.PeriodLengthDays : DefaultPeriodLengthDays;
         var nextWeekStart = currentEnd.AddDays(1);
         var nextWeekEnd = nextWeekStart.AddDays(periodLength - 1);
+
+        // Guard: if the period has already been advanced by a concurrent call, bail out.
+        if (settings.CurrentPeriodStartDate.Value >= nextWeekStart)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return;
+        }
 
         var leaguesToClose = await databaseContext.Leagues
             .Where(league => league.WeekStartDate == weekStart)
@@ -159,27 +182,11 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
 
                     if (!nextWeekLeaguesByTier.TryGetValue(nextTier, out var nextLeague))
                     {
-                        nextLeague = await databaseContext.Leagues
-                            .FirstOrDefaultAsync(leagueRecord => leagueRecord.WeekStartDate == nextWeekStart && leagueRecord.Tier == nextTier, cancellationToken)
-                            ?? await CreateLeagueForWeekAsync(nextWeekStart, nextWeekEnd, nextTier, cancellationToken);
+                        nextLeague = await GetOrCreateLeagueForWeekAsync(nextWeekStart, nextWeekEnd, nextTier, cancellationToken);
                         nextWeekLeaguesByTier[nextTier] = nextLeague;
                     }
 
-                    var alreadyJoined = await databaseContext.LeagueMemberships
-                        .AnyAsync(existing => existing.UserId == membership.UserId && existing.LeagueId == nextLeague.Id, cancellationToken);
-                    if (alreadyJoined)
-                    {
-                        continue;
-                    }
-
-                    databaseContext.LeagueMemberships.Add(new LeagueMembership
-                    {
-                        Id = Guid.NewGuid(),
-                        UserId = membership.UserId,
-                        LeagueId = nextLeague.Id,
-                        WeeklyXpAmount = 0,
-                        Rank = 0,
-                    });
+                    await GetOrJoinLeagueAsync(membership.UserId, nextLeague.Id, cancellationToken);
                 }
             }
         }
@@ -187,6 +194,7 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         settings.CurrentPeriodStartDate = nextWeekStart;
         settings.CurrentPeriodEndsAt = EndOfDay(nextWeekEnd);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task RolloverIfDueAsync(CancellationToken cancellationToken = default)
@@ -211,30 +219,29 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
             league.Id, league.WeekStartDate, league.WeekEndDate, cancellationToken);
     }
 
+    /// <summary>
+    /// GA6(a): Read-only getter — does not write. Settings are seeded once at startup
+    /// via <see cref="LeagueSettingsSeeder"/>. Returns defaults if missing (in-memory/test scenarios).
+    /// </summary>
     public async Task<LeagueSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         var settings = await databaseContext.LeagueSettings.FirstOrDefaultAsync(cancellationToken);
-        if (settings is null)
+        if (settings is not null)
         {
-            settings = new LeagueSettings();
-            databaseContext.LeagueSettings.Add(settings);
+            return settings;
         }
 
-        if (settings.PeriodLengthDays <= 0)
-        {
-            settings.PeriodLengthDays = DefaultPeriodLengthDays;
-        }
-
-        if (settings.CurrentPeriodStartDate is null || settings.CurrentPeriodEndsAt is null)
+        // Fallback for in-memory/test scenarios where seeder hasn't run.
+        var fallback = new LeagueSettings();
+        if (fallback.CurrentPeriodStartDate is null || fallback.CurrentPeriodEndsAt is null)
         {
             var start = GetCurrentWeekStart();
-            var end = start.AddDays(settings.PeriodLengthDays - 1);
-            settings.CurrentPeriodStartDate = start;
-            settings.CurrentPeriodEndsAt = EndOfDay(end);
+            var end = start.AddDays(fallback.PeriodLengthDays - 1);
+            fallback.CurrentPeriodStartDate = start;
+            fallback.CurrentPeriodEndsAt = EndOfDay(end);
         }
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
-        return settings;
+        return fallback;
     }
 
     private async Task<IReadOnlyList<LeagueTier>> LoadTiersAsync(CancellationToken cancellationToken)
@@ -247,12 +254,24 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         return tiers.Count > 0 ? tiers : DefaultTiers;
     }
 
-    private async Task<Models.League> CreateLeagueForWeekAsync(
+    /// <summary>
+    /// GA4+GA5: idempotent league creation. If two concurrent callers race, the unique
+    /// index on Leagues(WeekStartDate, Tier) causes one to get a unique-violation;
+    /// we catch it and re-read the winner.
+    /// </summary>
+    private async Task<Models.League> GetOrCreateLeagueForWeekAsync(
         DateOnly weekStart,
         DateOnly weekEnd,
         string tier,
         CancellationToken cancellationToken = default)
     {
+        var existing = await databaseContext.Leagues
+            .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
         var newLeague = new Models.League
         {
             Id = Guid.NewGuid(),
@@ -262,15 +281,44 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         };
 
         databaseContext.Leagues.Add(newLeague);
-        await databaseContext.SaveChangesAsync(cancellationToken);
-        return newLeague;
+
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+            return newLeague;
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            // Concurrent caller created the league first; detach and re-read.
+            var entry = databaseContext.ChangeTracker.Entries<Models.League>()
+                .FirstOrDefault(e => e.Entity.Id == newLeague.Id);
+            if (entry is not null)
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return await databaseContext.Leagues
+                .FirstAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        }
     }
 
-    private async Task<LeagueMembership> JoinLeagueAsync(
+    /// <summary>
+    /// GA4+GA5: idempotent join. If two concurrent callers race, the unique index on
+    /// LeagueMemberships(UserId, LeagueId) causes one to get a unique-violation;
+    /// we catch it and re-read the winner.
+    /// </summary>
+    private async Task<LeagueMembership> GetOrJoinLeagueAsync(
         Guid userId,
         Guid leagueId,
         CancellationToken cancellationToken = default)
     {
+        var existing = await databaseContext.LeagueMemberships
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
         var newMembership = new LeagueMembership
         {
             Id = Guid.NewGuid(),
@@ -281,8 +329,24 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         };
 
         databaseContext.LeagueMemberships.Add(newMembership);
-        await databaseContext.SaveChangesAsync(cancellationToken);
-        return newMembership;
+
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+            return newMembership;
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            var entry = databaseContext.ChangeTracker.Entries<LeagueMembership>()
+                .FirstOrDefault(e => e.Entity.Id == newMembership.Id);
+            if (entry is not null)
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return await databaseContext.LeagueMemberships
+                .FirstAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+        }
     }
 
     private async Task SyncWeeklyExperiencePointsForLeagueAsync(
@@ -318,6 +382,14 @@ internal sealed class LeagueService(GamificationDbContext databaseContext) : ILe
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException ex)
+    {
+        var inner = ex.InnerException;
+        return inner is not null &&
+               (inner.GetType().Name == "PostgresException" || inner.GetType().FullName?.Contains("Npgsql") == true) &&
+               inner.Message.Contains("23505");
     }
 
     private static string GetNextTierForOutcome(List<string> tierOrder, string currentTier, string? outcome)

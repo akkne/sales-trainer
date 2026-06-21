@@ -10,11 +10,19 @@ namespace Sellevate.Identity.Features.Auth;
 
 [ApiController]
 [Route("demo")]
-public sealed class DemoTokenController(IOptions<JwtConfiguration> jwtOptions) : ControllerBase
+public sealed class DemoTokenController(
+    IOptions<JwtConfiguration> jwtOptions,
+    IWebHostEnvironment environment) : ControllerBase
 {
     [HttpPost("token")]
     public IActionResult IssueDemoToken()
     {
+        if (environment.IsProduction())
+        {
+            return NotFound();
+        }
+
+
         var demoUserId = Guid.NewGuid();
         var signingKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtOptions.Value.Key));

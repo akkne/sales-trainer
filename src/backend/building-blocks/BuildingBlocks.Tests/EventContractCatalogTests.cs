@@ -108,20 +108,6 @@ public sealed class EventContractCatalogTests
     }
 
     [Test]
-    public void TechniqueMasteryChanged_LearningProducer_HasStableShape()
-    {
-        Topics.TechniqueMasteryChanged.Should().Be("technique.mastery.changed");
-        var userId = Guid.NewGuid();
-        var techniqueId = Guid.NewGuid();
-        var root = Serialize(new { userId, techniqueId, level = 2, masteryPercent = 60 });
-
-        root.GetProperty("userId").GetGuid().Should().Be(userId);
-        root.GetProperty("techniqueId").GetGuid().Should().Be(techniqueId);
-        root.GetProperty("level").GetInt32().Should().Be(2);
-        root.GetProperty("masteryPercent").GetInt32().Should().Be(60);
-    }
-
-    [Test]
     public void DialogEvaluated_AiProducer_MatchesGamificationConsumer()
     {
         Topics.DialogEvaluated.Should().Be("dialog.evaluated");

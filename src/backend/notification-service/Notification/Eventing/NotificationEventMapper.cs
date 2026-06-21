@@ -1,3 +1,4 @@
+using System.Text;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications.Models;
@@ -7,6 +8,41 @@ namespace Sellevate.Notification.Eventing;
 internal sealed class NotificationEventMapper : INotificationEventMapper
 {
     private const int ChatPreviewMaximumLength = 160;
+
+    /// <summary>
+    /// Truncates <paramref name="value"/> to at most <paramref name="maxRunes"/> Unicode
+    /// scalar values (runes), appending "…" when truncation occurs. This avoids splitting
+    /// a surrogate pair that would result from a naive <c>value[..n]</c> slice.
+    /// </summary>
+    private static string TruncateOnRuneBoundary(string value, int maxRunes)
+    {
+        if (string.IsNullOrEmpty(value))
+            return value;
+
+        // Reserve one rune for the ellipsis so the returned string (including "…") never
+        // exceeds maxRunes — keeps the total within the documented preview budget.
+        var runeCount = 0;
+        var charIndex = 0;
+        var ellipsisCutIndex = -1;
+        while (charIndex < value.Length)
+        {
+            Rune.DecodeFromUtf16(value.AsSpan(charIndex), out _, out var charsConsumed);
+            if (runeCount == maxRunes - 1)
+            {
+                ellipsisCutIndex = charIndex;
+            }
+
+            runeCount++;
+            charIndex += charsConsumed;
+        }
+
+        if (runeCount <= maxRunes)
+        {
+            return value;
+        }
+
+        return string.Concat(value.AsSpan(0, ellipsisCutIndex), "…");
+    }
 
     public CreateNotificationRequest? Map(EventEnvelope envelope)
     {
@@ -111,11 +147,11 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             ? NotificationActionRoutes.ChatConversation(conversationId)
             : null;
 
-        var preview = payload.Preview ?? string.Empty;
-        if (preview.Length > ChatPreviewMaximumLength)
-        {
-            preview = preview[..ChatPreviewMaximumLength];
-        }
+        // NO4a: truncate on a rune (Unicode scalar value) boundary so we never split a
+        // surrogate pair. String.Length counts UTF-16 code units, not grapheme clusters,
+        // so a naive [..160] can produce an ill-formed string when a supplementary
+        // character (emoji, rare CJK, etc.) straddles the cut point.
+        var preview = TruncateOnRuneBoundary(payload.Preview ?? string.Empty, ChatPreviewMaximumLength);
 
         return new CreateNotificationRequest(
             payload.RecipientId,

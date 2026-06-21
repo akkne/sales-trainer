@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Net;
 using System.Text;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
@@ -56,9 +57,16 @@ internal sealed class AuthenticationService(
         };
 
         databaseContext.Users.Add(newUser);
-        await databaseContext.SaveChangesAsync(cancellationToken);
-
         await PublishUserRegisteredAsync(newUser, cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            logger.LogWarning("Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
+            throw new InvalidOperationException("Email already registered.");
+        }
 
         try
         {
@@ -176,14 +184,32 @@ internal sealed class AuthenticationService(
         var googlePayload = await GoogleJsonWebSignature.ValidateAsync(
             googleIdToken, validationSettings);
 
+        if (!googlePayload.EmailVerified)
+        {
+            logger.LogWarning("Google login rejected — email not verified by Google {Email}", googlePayload.Email);
+            throw new UnauthorizedAccessException("Google account email is not verified.");
+        }
+
         logger.LogInformation("Google login attempt {Email}", googlePayload.Email);
 
+        // First try to find by GoogleId; only fall back to email match when the local account is also email-verified.
         var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject, cancellationToken)
-            ?? await databaseContext.Users
+            .FirstOrDefaultAsync(user => user.GoogleId == googlePayload.Subject, cancellationToken);
+
+        if (existingUser is null)
+        {
+            var emailMatchedUser = await databaseContext.Users
                 .FirstOrDefaultAsync(user => user.Email == googlePayload.Email, cancellationToken);
 
-        var isNewUser = false;
+            if (emailMatchedUser is not null && emailMatchedUser.IsEmailVerified)
+            {
+                existingUser = emailMatchedUser;
+            }
+        }
+
+        var displayName = string.IsNullOrWhiteSpace(googlePayload.Name)
+            ? googlePayload.Email
+            : googlePayload.Name;
 
         if (existingUser is null)
         {
@@ -192,15 +218,15 @@ internal sealed class AuthenticationService(
             {
                 Id = newGoogleUserId,
                 Email = googlePayload.Email,
-                DisplayName = googlePayload.Name,
+                DisplayName = displayName,
                 GoogleId = googlePayload.Subject,
                 CreatedAt = DateTime.UtcNow,
                 IsEmailVerified = true,
                 DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
             };
             databaseContext.Users.Add(existingUser);
+            await PublishUserRegisteredAsync(existingUser, cancellationToken);
             await databaseContext.SaveChangesAsync(cancellationToken);
-            isNewUser = true;
             logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
         else if (existingUser.GoogleId is null)
@@ -215,11 +241,6 @@ internal sealed class AuthenticationService(
             logger.LogInformation("Google login successful {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
         }
 
-        if (isNewUser)
-        {
-            await PublishUserRegisteredAsync(existingUser, cancellationToken);
-        }
-
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == existingUser.Id && profile.IsOnboardingCompleted, cancellationToken);
 
@@ -230,9 +251,12 @@ internal sealed class AuthenticationService(
         string rawRefreshToken,
         CancellationToken cancellationToken = default)
     {
+        var tokenHash = ComputeTokenHash(rawRefreshToken);
+
+        // Load the token regardless of IsRevoked so we can detect reuse.
         var storedToken = await databaseContext.RefreshTokens
             .Include(token => token.User)
-            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
+            .FirstOrDefaultAsync(token => token.Token == tokenHash, cancellationToken);
 
         if (storedToken is null || storedToken.ExpiresAt < DateTime.UtcNow)
         {
@@ -240,8 +264,16 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
         }
 
-        if (storedToken.IsRevoked)
+        // Atomic conditional revocation: only succeeds if the row is still NOT revoked.
+        var affected = await databaseContext.RefreshTokens
+            .Where(token => token.Id == storedToken.Id && !token.IsRevoked)
+            .ExecuteUpdateAsync(
+                update => update.SetProperty(token => token.IsRevoked, true),
+                cancellationToken);
+
+        if (affected == 0)
         {
+            // Reuse detected — revoke the whole family.
             logger.LogWarning(
                 "Refresh-token reuse detected for UserId={UserId}; revoking all active refresh tokens",
                 storedToken.UserId);
@@ -252,9 +284,6 @@ internal sealed class AuthenticationService(
                     cancellationToken);
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");
         }
-
-        storedToken.IsRevoked = true;
-        await databaseContext.SaveChangesAsync(cancellationToken);
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == storedToken.UserId && profile.IsOnboardingCompleted, cancellationToken);
@@ -267,8 +296,10 @@ internal sealed class AuthenticationService(
         string rawRefreshToken,
         CancellationToken cancellationToken = default)
     {
+        var tokenHash = ComputeTokenHash(rawRefreshToken);
+
         var storedToken = await databaseContext.RefreshTokens
-            .FirstOrDefaultAsync(token => token.Token == rawRefreshToken, cancellationToken);
+            .FirstOrDefaultAsync(token => token.Token == tokenHash, cancellationToken);
 
         if (storedToken is null)
         {
@@ -297,7 +328,7 @@ internal sealed class AuthenticationService(
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            Token = rawRefreshToken,
+            Token = ComputeTokenHash(rawRefreshToken),
             ExpiresAt = DateTime.UtcNow.AddDays(jwtOptions.Value.RefreshTokenLifetimeDays),
             IsRevoked = false
         };
@@ -345,5 +376,11 @@ internal sealed class AuthenticationService(
     {
         var randomBytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(randomBytes);
+    }
+
+    private static string ComputeTokenHash(string rawToken)
+    {
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
+        return Convert.ToHexString(hashBytes);
     }
 }

@@ -8,8 +8,9 @@ namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
 internal sealed class RewriteEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
-    IOptions<OpenAiConfiguration> openAiOptions)
-    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions), IExerciseEvaluationStrategy
+    IOptions<OpenAiConfiguration> openAiOptions,
+    ILogger<RewriteEvaluationStrategy> logger)
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, logger), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.Rewrite;
 

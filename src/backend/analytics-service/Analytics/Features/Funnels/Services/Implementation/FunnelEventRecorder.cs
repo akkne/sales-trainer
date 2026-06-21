@@ -45,6 +45,13 @@ internal sealed class FunnelEventRecorder : IFunnelEventRecorder
                     return false;
                 }
 
+                // Guard: negative or zero amounts would throw in Prometheus Counter.Inc() and
+                // send the message to the DLQ. Treat them as ignored (not poison).
+                if (payload.Amount <= 0)
+                {
+                    return false;
+                }
+
                 AppMetrics.ExperiencePointsGranted.Inc(payload.Amount);
                 return true;
             }

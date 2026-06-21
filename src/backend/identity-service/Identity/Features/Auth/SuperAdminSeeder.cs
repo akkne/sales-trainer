@@ -59,11 +59,11 @@ public sealed class SuperAdminSeeder(
         };
         databaseContext.Users.Add(superAdmin);
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
-
         await userEventPublisher.PublishRegisteredAsync(
             new UserRegisteredEvent(superAdmin.Id, superAdmin.Email, superAdmin.DisplayName, superAdmin.AvatarKey),
             cancellationToken);
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("SuperAdmin user created successfully {Email}", normalizedEmail);
     }

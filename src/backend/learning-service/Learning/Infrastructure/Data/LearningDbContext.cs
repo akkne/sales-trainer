@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -31,6 +32,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();
     public DbSet<UserTechniqueProgress> UserTechniqueProgressRecords => Set<UserTechniqueProgress>();
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

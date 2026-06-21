@@ -23,7 +23,6 @@ public static class Topics
     public const string ExerciseCompleted = "exercise.completed";
     public const string LessonCompleted = "lesson.completed";
     public const string SkillCompleted = "skill.completed";
-    public const string TechniqueMasteryChanged = "technique.mastery.changed";
 
     // ── AI Engine (produces) ───────────────────────────────────────────────
     public const string DialogEvaluated = "dialog.evaluated";

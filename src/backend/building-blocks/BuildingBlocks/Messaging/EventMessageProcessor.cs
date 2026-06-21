@@ -14,6 +14,14 @@ namespace Sellevate.BuildingBlocks.Messaging;
 /// </summary>
 public sealed class EventMessageProcessor
 {
+    /// <summary>
+    /// Highest <see cref="EventEnvelope.Version"/> this consumer knows how to deserialize. The
+    /// envelope is frozen at v1; a higher version means a producer evolved the payload schema and
+    /// this consumer was not yet updated, so the message is dead-lettered rather than silently
+    /// mis-deserialized into the v1 contract.
+    /// </summary>
+    public const int MaxSupportedVersion = 1;
+
     private readonly string _consumerGroupId;
     private readonly IIdempotencyStore _idempotencyStore;
     private readonly IDeadLetterPublisher _deadLetterPublisher;
@@ -63,6 +71,16 @@ public sealed class EventMessageProcessor
                 "Skipping duplicate event {EventId} ({Type}) in group '{Group}'",
                 envelope.EventId, envelope.Type, _consumerGroupId);
             return MessageProcessingOutcome.Commit;
+        }
+
+        if (envelope.Version > MaxSupportedVersion)
+        {
+            var versionError = new NotSupportedException(
+                $"Event {envelope.Type} carries schema version {envelope.Version}, but this consumer supports at most v{MaxSupportedVersion}.");
+            _logger.LogError(
+                versionError, "Unsupported schema version {Version} for event {EventId} ({Type}); dead-lettering",
+                envelope.Version, envelope.EventId, envelope.Type);
+            return await DeadLetterAsync(topic, key, rawValue, envelope, versionError, cancellationToken);
         }
 
         var handlerError = await RunHandlerWithRetriesAsync(envelope, handler, cancellationToken);

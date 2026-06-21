@@ -117,4 +117,69 @@ public class NotificationEventMapperTests
 
         request.Should().BeNull();
     }
+
+    // ── NO4a: surrogate-safe (rune-boundary) truncation ──────────────────────
+
+    [Test]
+    public void Map_ChatMessageSent_PreviewExactlyAtLimit_IsNotTruncated()
+    {
+        // 160 ASCII characters — must come through without an ellipsis.
+        var recipientId    = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var exactPreview   = new string('x', 160);
+
+        var envelope = EventEnvelope.Create(
+            Topics.ChatMessageSent,
+            new ChatMessageSentEvent(recipientId, "A", exactPreview, conversationId));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        // Body = "A: " + 160 'x' — no ellipsis
+        request!.Body.Should().EndWith("x");
+        request.Body.Should().NotEndWith("…");
+    }
+
+    [Test]
+    public void Map_ChatMessageSent_PreviewOverLimitWithMultibyteChar_TruncatesOnRuneBoundary()
+    {
+        // Build a preview where the 160th rune position is occupied by a supplementary
+        // character (U+1F600 GRINNING FACE) that takes 2 UTF-16 code units.
+        // A naive [..160] slice would land inside the surrogate pair and produce an
+        // ill-formed string; the rune-aware truncation must stop before it.
+        var recipientId    = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        // 159 ASCII chars + one emoji (2 code units) = 161 code units total, 160 runes.
+        // Then append more text so the total exceeds 160 runes → truncation triggers.
+        var emoji   = char.ConvertFromUtf32(0x1F600); // 2 UTF-16 code units
+        var preview = new string('a', 159) + emoji + new string('b', 10); // 170 runes
+
+        var envelope = EventEnvelope.Create(
+            Topics.ChatMessageSent,
+            new ChatMessageSentEvent(recipientId, "S", preview, conversationId));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        // Must end with the ellipsis and must be a valid (well-formed) string.
+        request!.Body.Should().EndWith("…");
+        request.Body.IsNormalized().Should().BeTrue("truncated string must not contain unpaired surrogates");
+    }
+
+    [Test]
+    public void Map_ChatMessageSent_EmptyPreview_ProducesBodyWithSenderNameOnly()
+    {
+        var recipientId    = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var envelope = EventEnvelope.Create(
+            Topics.ChatMessageSent,
+            new ChatMessageSentEvent(recipientId, "Zara", string.Empty, conversationId));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.Body.Should().Be("Zara: ");
+    }
 }

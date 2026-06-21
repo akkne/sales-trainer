@@ -31,6 +31,6 @@ internal sealed class DialogEvaluatedConsumer : KafkaConsumerBackgroundService
         }
 
         var eventHandler = scopedServices.GetRequiredService<IGamificationEventHandler>();
-        await eventHandler.HandleDialogEvaluatedAsync(payload.UserId, payload.XpEarned, cancellationToken);
+        await eventHandler.HandleDialogEvaluatedAsync(payload.UserId, payload.XpEarned, envelope.EventId, cancellationToken);
     }
 }

@@ -228,10 +228,17 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SourceEventId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SourceEventId")
+                        .IsUnique()
+                        .HasFilter("\"SourceEventId\" IS NOT NULL");
 
                     b.HasIndex("UserId");
 
@@ -258,7 +265,8 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
                     b.ToTable("UserStreaks", (string)null);
                 });
@@ -281,7 +289,8 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WeekStartDate", "Tier");
+                    b.HasIndex("WeekStartDate", "Tier")
+                        .IsUnique();
 
                     b.ToTable("Leagues", (string)null);
                 });
