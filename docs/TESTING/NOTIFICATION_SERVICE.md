@@ -13,9 +13,14 @@ Unit suite (NUnit, no external dependencies — runs offline against an in-memor
 
 | Test fixture | Covers |
 |---|---|
-| `NotificationServiceTests` | event→inbox write; unread count counts only unread; newest-first ordering + `limit`; `includeRead=false` filtering; mark-read drops the unread count + is idempotent for already-read; unknown id throws; mark-all-read; **inbox capping** at configured capacity; **retention applied as the Redis TTL**. |
-| `NotificationEventMapperTests` | All five events map to the correct `NotificationType`, body, `actionUrl` and `relatedEntityId`; chat preview is truncated to 160 chars; unknown topic and blank-name payloads map to `null` (so the consumer safely skips them — the idempotency basis). |
+| `NotificationServiceTests` | event→inbox write; unread count counts only unread; newest-first ordering + `limit`; `includeRead=false` filtering; mark-read drops the unread count + is idempotent for already-read; unknown id throws; mark-all-read; **inbox capping** at configured capacity; **retention applied as the Redis TTL**; **`SendEmail=true` dispatches an email, `false` does not, and a deduped replay does not email twice**. |
+| `NotificationEventMapperTests` | All events map to the correct `NotificationType`, body, `actionUrl` and `relatedEntityId`; chat preview is truncated to 160 chars; **discuss-reply and league-update set `SendEmail=true`** (self-reply maps to `null`, chat keeps `SendEmail=false`); unknown topic and blank-name payloads map to `null` (so the consumer safely skips them — the idempotency basis). |
+| `NotificationEmailRendererTests` | Per-type template selection (chat/discuss/league) and generic fallback for unmapped types; relative action paths resolve to absolute frontend URLs (and already-absolute URLs pass through); untrusted body is HTML-encoded; the CTA button is omitted when there is no action URL. |
 | `NotificationRouteFlipTests` (gateway project) | `/notifications` and `/notifications/{**catch-all}` route to the `notification` cluster, not the monolith; the cluster has a destination. |
+
+> The Redis-backed delayed-chat scheduler (`RedisDelayedChatEmailScheduler`) and the
+> `DelayedChatEmailDispatcherService` background loop require a live Redis and are exercised
+> via the manual checklist below rather than offline unit tests.
 
 The gateway route-flip tests live with the gateway suite:
 
@@ -45,3 +50,18 @@ dotnet build src/backend/notification-service/Notification/Sellevate.Notificatio
 5. Re-publish the **same** event (same `eventId`) → no duplicate appears (idempotency).
 6. Inspect Redis: `notifications:inbox:{userId}` (list, capped at 100) and
    `notifications:unread:{userId}` both carry a ~30-day TTL (`TTL <key>`).
+
+## Manual checklist — email (requires infra + a real MailerSend token)
+
+Set `MailerSend__ApiToken` / `MailerSend__FromEmail` in the environment, and ensure the
+recipient has been replicated (a `user.registered` event seeded `notifications:user:{userId}`).
+
+1. **Discuss reply** — publish `discuss.reply.created` (or reply to a thread via the social
+   service). The thread author receives an email "New reply to your discussion" with a
+   `View discussion` button linking to `{Frontend:Url}/discuss/{threadId}`.
+2. **League update** — publish `league.updated` (or trigger the weekly rollover). The member
+   receives "Your Sellevate league was updated" with the promoted/demoted/new-week wording.
+3. **Unread chat (delayed)** — set `NotificationEmail__ChatUnreadDelayMinutes` low (e.g. 1) and
+   `DispatcherPollIntervalSeconds` to a few seconds. Publish `chat.message.sent`; wait past the
+   delay → an email is sent. Repeat, but publish `chat.message.read` (or call
+   `POST /chat/conversations/{id}/read`) before the delay → **no** email is sent.

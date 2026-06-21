@@ -697,6 +697,11 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 | POST | /chat/conversations | `{friendUserId}` | `ChatConversationSummaryDto` |
 | GET | /chat/conversations/{id}/messages?limit=50&before={msgId} | — | `ChatMessageDto[]` |
 | POST | /chat/conversations/{id}/messages | `{content}` | `ChatMessageDto` |
+| POST | /chat/conversations/{id}/read | — | `204 No Content` |
+
+`POST /chat/conversations/{id}/read` records the caller's read watermark on the conversation
+(`lastReadAt[userId]`) and publishes `chat.message.read`, which cancels any pending
+unread-message email for that conversation (see [EMAIL_NOTIFICATIONS.md](EMAIL_NOTIFICATIONS.md)).
 
 `ChatConversationSummaryDto`: `{conversationId, friendUserId, friendDisplayName, lastMessagePreview?, lastMessageAt?}`
 

@@ -242,6 +242,9 @@ a composition of those per-service admin APIs.
 | `friend.request.received` | Social | Notifications | recipientId, requesterName |
 | `friend.request.accepted` | Social | Notifications | recipientId, accepterName |
 | `chat.message.sent` | Social | Notifications | recipientId, senderName, preview |
+| `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
+| `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
+| `league.updated` | Gamification | Notifications | userId, leagueId, previousTier, newTier, outcome, rank |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
 per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once

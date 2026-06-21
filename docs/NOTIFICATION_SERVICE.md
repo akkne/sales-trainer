@@ -8,16 +8,19 @@
 
 ## Bounded context
 
-Everything behind the notification bell:
+Everything behind the notification bell — plus an opt-in **email** side channel:
 
-- **Consume** the five integration events that should notify a user.
+- **Consume** the integration events that should notify a user.
 - **Store** each user's recent notifications and unread count.
 - **Serve** the thin REST surface the frontend bell/panel already calls.
+- **Email** the recipient for selected notification types (see
+  [EMAIL_NOTIFICATIONS.md](EMAIL_NOTIFICATIONS.md)).
 
 There is **no relational database**. Redis is the primary store (per-user capped
-list + unread counter, both with a 30-day TTL). The TTL replaces the monolith's
-Hangfire `NotificationCleanupJob` — expired notifications simply fall out of Redis,
-so there is no scheduled cleanup to run.
+list + unread counter, both with a 30-day TTL; plus a small Redis user replica and the
+delayed-email bookkeeping). The TTL replaces the monolith's Hangfire
+`NotificationCleanupJob` — expired notifications simply fall out of Redis, so there is
+no scheduled cleanup to run.
 
 ## Layout
 
@@ -66,13 +69,15 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
 
 - **Produces:** nothing.
 - **Consumes (idempotent, dedupe on `eventId`):**
-  `achievement.unlocked`, `streak.milestone`, `friend.request.received`,
-  `friend.request.accepted`, `chat.message.sent`. Each maps to a notification written
-  to the recipient's Redis inbox via `INotificationEventMapper`. Unmappable or
-  malformed payloads are skipped (logged), never crash the consumer.
-
-Producers ship in later phases (Social = Phase 5, Gamification = Phase 7); until then
-the consumers idle with no traffic, which is expected.
+  - `NotificationEventConsumer` — `achievement.unlocked`, `streak.milestone`,
+    `friend.request.received`, `friend.request.accepted`, `chat.message.sent`,
+    `chat.message.read`, `discuss.reply.created`, `league.updated`. Each maps to a
+    notification written to the recipient's Redis inbox via `INotificationEventMapper`.
+    `discuss.reply.created` and `league.updated` also email immediately; `chat.message.sent`
+    schedules a delayed unread-email and `chat.message.read` cancels it. Unmappable or
+    malformed payloads are skipped (logged), never crash the consumer.
+  - `UserReplicaConsumer` — `user.registered`/`user.updated`/`user.deleted`, projecting a
+    minimal `{ email, displayName }` replica into Redis so recipients can be addressed by email.
 
 ## Routes (through the gateway, paths preserved)
 

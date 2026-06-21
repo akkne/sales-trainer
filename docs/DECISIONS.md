@@ -148,3 +148,46 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
   name, and inline cache / `nosniff` headers like `AvatarsController` — rather than the strict
   letter of [CODESTYLE.md](CODESTYLE.md).
 - **Why:** Keeps the slice internally consistent with the code it lives next to.
+
+## Email notifications
+
+### Shared email transport in BuildingBlocks (not duplicated per service)
+
+- **Decision:** Move the MailerSend email stack (`IEmailSender`, `EmailMessage`,
+  `MailerSendEmailSender`, `MailerSendConfiguration`) out of the identity service into
+  `Sellevate.BuildingBlocks.Email`, exposed via `AddSellevateEmail()`. Alternative considered:
+  copy the sender into the notification service.
+- **Why:** Two services now send transactional email (identity verification codes, notification
+  emails); one shared implementation avoids divergent MailerSend wiring and config drift.
+- **Trade-off:** BuildingBlocks gains an HTTP/email concern, but it already references
+  `Microsoft.AspNetCore.App` (so `IHttpClientFactory`/`AddHttpClient` are available).
+
+### Redis user replica in the notification service (no database)
+
+- **Decision:** Resolve a recipient's email/display name from a Redis-backed user replica
+  (`notifications:user:{userId}`) fed by `UserReplicaConsumer`, rather than introducing EF/Postgres
+  or a synchronous call to identity.
+- **Why:** The notification service is deliberately Redis-only; a Redis projection keeps that
+  property and matches the `UserReplica` pattern other services use (just without EF).
+- **Trade-off:** Eventually consistent — a brand-new user with no replicated email yet is simply
+  not emailed (logged, never throws).
+
+### Delayed unread-chat email via a Redis sorted set + watermark
+
+- **Decision:** Implement "email if a message is unread after 5 minutes" with a Redis sorted set
+  of pending emails (scored by due time) plus a per-(recipient, conversation) read watermark, polled
+  by a background dispatcher. A `chat.message.read` event updates the watermark; the dispatcher
+  skips messages read before they came due. Alternative considered: Hangfire delayed jobs.
+- **Why:** Keeps the service Redis-only (no Hangfire/DB), and a watermark is simpler and more
+  replay-safe than scheduling + cancelling individual jobs.
+- **Trade-off:** Delivery is approximate to within one poll interval (default 30s); acceptable for
+  a "you missed a message" email.
+
+### OOP email templates (template-method) over inline HTML strings
+
+- **Decision:** Generate notification email HTML inside the notification service via a template
+  hierarchy — `NotificationEmailTemplate` (abstract) + per-type subclasses + a shared
+  `NotificationEmailLayout` and a `NotificationEmailRenderer` that selects by `NotificationType`.
+- **Why:** Adding an email for a new type is one small subclass; the shared, client-safe chrome and
+  HTML-encoding live in one place. Matches the request to "use OOP and separate helpers".
+- **Trade-off:** More files than a single string builder, but each is small and isolated.

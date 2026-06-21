@@ -48,6 +48,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
 | [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
 | [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
+| [Email Notifications](EMAIL_NOTIFICATIONS.md) | Opt-in email channel: unread direct message (delayed 5 min), discuss reply, league update; OOP HTML templates in notification-service; shared MailerSend transport in BuildingBlocks |
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
