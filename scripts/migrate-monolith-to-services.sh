@@ -137,10 +137,15 @@ fi
 
 if [[ "$PG_MODE" == "docker" ]]; then
   container_running || die "PG_MODE=docker but container '$PG_CONTAINER' is not running (compose file: $COMPOSE_FILE)."
+  # Resolve the container id ONCE, then use plain `docker exec` for every call.
+  # (Using `docker compose exec` re-parses the compose file each time, which spams
+  #  "variable is not set" warnings for any unset ${VAR} in docker-compose.yml.)
+  PG_CID="$($DC ps -q "$PG_CONTAINER" 2>/dev/null | head -n1)"
+  [[ -n "$PG_CID" ]] || die "could not resolve container id for service '$PG_CONTAINER'"
   PG_CONN="-h 127.0.0.1 -p $PG_INNER_PORT -U $PGUSER"
-  # run psql/pg_dump INSIDE the container; -T = no TTY so pipes/stdin work; -e passes the password in.
-  psql_db()   { local db="$1"; shift; $DC exec -T -e PGPASSWORD="$PGPASSWORD" "$PG_CONTAINER" psql    $PG_CONN -d "$db" "$@"; }
-  pgdump_db() { local db="$1"; shift; $DC exec -T -e PGPASSWORD="$PGPASSWORD" "$PG_CONTAINER" pg_dump $PG_CONN -d "$db" "$@"; }
+  # -i forwards stdin so the COPY/dump pipes work; -e passes the password in.
+  psql_db()   { local db="$1"; shift; docker exec -i -e PGPASSWORD="$PGPASSWORD" "$PG_CID" psql    $PG_CONN -d "$db" "$@"; }
+  pgdump_db() { local db="$1"; shift; docker exec -i -e PGPASSWORD="$PGPASSWORD" "$PG_CID" pg_dump $PG_CONN -d "$db" "$@"; }
   log "Postgres access: docker exec into '$PG_CONTAINER' (client version matches server)"
 else
   host_tools_present || die "PG_MODE=host but psql/pg_dump are not installed. Install postgresql-client-17 or run with the postgres container up (PG_MODE=docker)."
