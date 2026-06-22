@@ -1,0 +1,20 @@
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+out
+
+# Local env files (dev-only) — must never leak into the build context.
+# .env.local has higher priority than .env.production at build time and
+# would otherwise bake NEXT_PUBLIC_API_URL=http://localhost:5001 into the bundle.
+.env*.local
+
+# Git
+.git
+.gitignore
+
+# Misc
+.DS_Store
+npm-debug.log*
+README.md
