@@ -71,5 +71,5 @@ logs/
 !src/frontend/app/api/logs/**
 .playwright-mcp/
 
-# Personal interview-prep notes (not tracked)
 docs/АРХИТЕКТУРА_МИКРОСЕРВИСОВ.md
+RESUME_PROJECT.txt
