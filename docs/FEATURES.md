@@ -34,6 +34,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
 | [UI Current State](UI_CURRENT_STATE.md) | Exhaustive baseline snapshot of all screens, elements, and visual tokens for the redesign |
+| [Redesign Baseline](REDESIGN_BASELINE.md) | Function-only product surface (features, exercises, dialog internals, routes, page contents) for a free redesign — no visual/implementation details |
 | [Handbook Redesign](HANDBOOK_REDESIGN.md) | Implemented 2026-04-21 — Technique domain with per-user mastery + structured dialog/case/coach blocks |
 | [Mobile Responsive Testing](TESTING/MOBILE_RESPONSIVE.md) | Breakpoints + manual phone checklist for the full mobile adaptation (user-facing screens + admin drawer) |
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
