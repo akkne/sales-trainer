@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useState, useDeferredValue } from "react";
+import { useEffect, useState, useDeferredValue, useCallback } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
-import { GeoAvatar } from "@/shared/components/geo-avatar";
-import { StatTile } from "@/shared/components/stat-tile";
 import { Skeleton } from "@/shared/components/skeleton";
 import {
     useTechniques,
@@ -15,32 +12,49 @@ import {
     useMarkTechniqueSeen,
     type TechniqueCard,
     type TechniqueDetail,
+    type TechniqueCoach,
 } from "@/features/skills/hooks/use-techniques";
 
 /**
- * Technique bodies are stored with escape sequences (`\n`, `\t`) instead of real
- * whitespace, and CommonMark collapses single newlines into spaces. Convert the
- * escapes to real whitespace and turn every newline into a hard break so the
- * formatting renders as authored.
+ * Normalise escape sequences stored in technique bodies so ReactMarkdown
+ * renders them correctly (see original implementation for rationale).
  */
 function normalizeMarkdown(raw: string): string {
-    const INDENT = "    ";
+    const INDENT = "    ";
     return raw
-        .replace(/\\t/g, INDENT) // literal "\t"
-        .replace(/\\r\\n|\\n|\\r/g, "\n") // literal "\n" / "\r\n"
-        .replace(/\t/g, INDENT) // real tab
-        .replace(/\r\n|\r/g, "\n") // normalise real CRLF
-        .replace(/\n/g, "  \n"); // newline -> markdown hard break
+        .replace(/\\t/g, INDENT)
+        .replace(/\\r\\n|\\n|\\r/g, "\n")
+        .replace(/\t/g, INDENT)
+        .replace(/\r\n|\r/g, "\n")
+        .replace(/\n/g, "  \n");
 }
 
-function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; masteryPercent: number }) {
+/* ── Shared helpers ── */
+
+function difficultyBadgeClass(difficulty: number): string {
+    if (difficulty <= 1) return "badge badge-easy";
+    if (difficulty === 2) return "badge badge-medium";
+    return "badge badge-hard";
+}
+
+function difficultyLabel(name: string): string {
+    return name || "—";
+}
+
+function MasteryRing({
+    masteryLevel,
+    masteryPercent,
+}: {
+    masteryLevel: number;
+    masteryPercent: number;
+}) {
     const radius = 24;
     const circumference = 2 * Math.PI * radius;
     const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
     const display = masteryLevel > 0 ? `L${masteryLevel}` : "—";
     return (
-        <div className="mastery-ring">
-            <svg width="56" height="56" viewBox="0 0 56 56">
+        <div className="mastery-ring" aria-label={`Мастерство: уровень ${masteryLevel}, ${masteryPercent}%`}>
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
                 <circle cx="28" cy="28" r={radius} fill="none" stroke="var(--line)" strokeWidth="4" />
                 <circle
                     cx="28"
@@ -53,6 +67,7 @@ function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; m
                     strokeDasharray={circumference}
                     strokeDashoffset={circumference * (1 - fraction)}
                     transform="rotate(-90 28 28)"
+                    style={{ transition: "stroke-dashoffset 0.4s ease" }}
                 />
             </svg>
             <span>{display}</span>
@@ -60,11 +75,54 @@ function MasteryRing({ masteryLevel, masteryPercent }: { masteryLevel: number; m
     );
 }
 
+function MasteryRingSm({
+    masteryLevel,
+    masteryPercent,
+}: {
+    masteryLevel: number;
+    masteryPercent: number;
+}) {
+    const radius = 12;
+    const circumference = 2 * Math.PI * radius;
+    const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
+    const display = masteryLevel > 0 ? `L${masteryLevel}` : "—";
+    return (
+        <div className="mastery-ring-sm" aria-label={`Уровень ${masteryLevel}`}>
+            <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r={radius} fill="none" stroke="var(--line)" strokeWidth="3" />
+                <circle
+                    cx="16"
+                    cy="16"
+                    r={radius}
+                    fill="none"
+                    stroke="var(--primary)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - fraction)}
+                    transform="rotate(-90 16 16)"
+                />
+            </svg>
+            <span>{display}</span>
+        </div>
+    );
+}
+
+function CoachInitials(name: string): string {
+    return name
+        .split(" ")
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? "")
+        .join("");
+}
+
+/* ── Main page ── */
+
 export default function GuidebookPage() {
     const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
     const [searchInput, setSearchInput] = useState("");
     const [activeTags, setActiveTags] = useState<string[]>([]);
-    const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+    const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
     const deferredSearch = useDeferredValue(searchInput);
 
@@ -75,338 +133,474 @@ export default function GuidebookPage() {
         tags: activeTags,
     });
 
-    const { data: expandedDetail } = useTechnique(expandedSlug);
+    const { data: detail } = useTechnique(selectedSlug);
     const markSeen = useMarkTechniqueSeen();
 
     useEffect(() => {
-        if (!expandedSlug) return;
-        const expandedCard = cards.find((card) => card.slug === expandedSlug);
-        if (expandedCard?.isNew) {
-            markSeen.mutate(expandedSlug);
+        if (!selectedSlug) return;
+        const card = cards.find((c) => c.slug === selectedSlug);
+        if (card?.isNew) {
+            markSeen.mutate(selectedSlug);
         }
-    }, [expandedSlug, cards, markSeen]);
-
-    function toggleExpand(slug: string) {
-        setExpandedSlug((previous) => (previous === slug ? null : slug));
-    }
+    }, [selectedSlug, cards, markSeen]);
 
     const skills = meta?.skills ?? [];
-    const totalCount = meta?.totalCount ?? 0;
-    const userCounts = meta?.userCounts ?? { mastered: 0, master: 0, unseen: 0 };
 
-    function toggleActiveTag(tag: string) {
-        setActiveTags((current) =>
-            current.includes(tag) ? current.filter((existing) => existing !== tag) : [...current, tag]
+    const toggleTag = useCallback((tag: string) => {
+        setActiveTags((prev) =>
+            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
         );
-    }
+    }, []);
+
+    const selectCard = useCallback(
+        (slug: string) => setSelectedSlug((prev) => (prev === slug ? null : slug)),
+        []
+    );
+
+    const closePanel = useCallback(() => setSelectedSlug(null), []);
+
+    const selectedCard = cards.find((c) => c.slug === selectedSlug) ?? null;
 
     return (
-        <div className="page">
-            <div className="container">
-                <div className="hero-head">
-                    <div className="hh-left">
-                        <span className="eyebrow">
-                            Справочник
-                            <span className="dot">·</span>
-                            <span>{totalCount} техник</span>
-                        </span>
-                        <h1 className="h1 hh-title">Коллекция.</h1>
-                        <p className="lead" style={{ textWrap: "pretty" }}>
-                            Не каталог — коллекция. Каждая техника живёт с уровнем мастерства, примером диалога и
-                            кейсом.
-                        </p>
-                    </div>
-                    <div className="hero-stats">
-                        <StatTile
-                            label="Освоено"
-                            value={`${userCounts.mastered}`}
-                            unit={`/${totalCount}`}
-                            icon={<Icon name="check" size="sm" />}
-                            tone="success"
-                        />
-                        <StatTile
-                            label="Мастер"
-                            value={`${userCounts.master}`}
-                            icon={<Icon name="trophy" size="sm" />}
-                            tone="amber"
-                        />
-                        <StatTile
-                            label="Новых"
-                            value={`${userCounts.unseen}`}
-                            icon={<Icon name="sparkle" size="sm" />}
-                            tone="violet"
-                        />
-                    </div>
-                </div>
+        <div className="page" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Header — always visible, outside the scrolling area */}
+            <div className="ref-header">
+                <h1 className="ref-title">Справочник техник</h1>
+                <p className="ref-subtitle">
+                    {meta?.totalCount ?? 0} техник · освоено {meta?.userCounts.mastered ?? 0}
+                </p>
 
-                <div className="gb-tools">
-                    <div className="field-wrap has-ic" style={{ maxWidth: 360 }}>
-                        <Icon name="search" className="lead-ic" />
+                <div className="ref-tools">
+                    {/* Search */}
+                    <div className="ref-search-wrap">
+                        <span className="ref-search-ic" aria-hidden="true">
+                            <Icon name="search" size="sm" />
+                        </span>
                         <input
-                            className="field"
+                            className="ref-search"
                             placeholder="Техника, тег, навык…"
                             value={searchInput}
-                            onChange={(event) => setSearchInput(event.target.value)}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            aria-label="Поиск техник"
                         />
                     </div>
-                    <div className="row gap-2 wrap">
+
+                    {/* Skill filter chips */}
+                    <div className="ref-tags" role="group" aria-label="Фильтр по навыкам">
                         <button
-                            className={"chip" + (selectedSkill === null ? " solid" : "")}
+                            className={"ref-tag" + (selectedSkill === null ? " active" : "")}
                             onClick={() => setSelectedSkill(null)}
-                            style={{ cursor: "pointer", height: 34 }}
                         >
                             Все
                         </button>
                         {skills.map((skill) => (
                             <button
                                 key={skill.iconicName}
-                                className={"chip" + (selectedSkill === skill.iconicName ? " solid" : "")}
+                                className={"ref-tag" + (selectedSkill === skill.iconicName ? " active" : "")}
                                 onClick={() => setSelectedSkill(skill.iconicName)}
-                                style={{ cursor: "pointer", height: 34 }}
                             >
                                 {skill.title}
-                                <span style={{ opacity: 0.6 }}>{skill.techniqueCount}</span>
+                                <span style={{ opacity: 0.5, marginLeft: 4 }}>{skill.techniqueCount}</span>
                             </button>
                         ))}
+                    </div>
+
+                    {/* Active tag filters */}
+                    {activeTags.length > 0 && (
+                        <div className="ref-active-tags">
+                            {activeTags.map((tag) => (
+                                <button
+                                    key={tag}
+                                    className="ref-active-tag"
+                                    onClick={() => toggleTag(tag)}
+                                    aria-label={`Убрать фильтр: ${tag}`}
+                                >
+                                    #{tag}
+                                    <Icon name="close" size="xs" />
+                                </button>
+                            ))}
+                            <button className="ref-clear-tags" onClick={() => setActiveTags([])}>
+                                Очистить
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Two-panel layout */}
+            <div className="ref-layout">
+                {/* Left: cards grid */}
+                <div className="ref-main">
+                    <div className="ref-main-scroll">
+                        {isLoading ? (
+                            <div className="ref-grid">
+                                {[1, 2, 3, 4, 5, 6].map((i) => (
+                                    <Skeleton key={i} height={160} rounded={15} />
+                                ))}
+                            </div>
+                        ) : cards.length === 0 ? (
+                            <div className="ref-empty">
+                                <Icon name="search" size="lg" color="var(--ink-4)" />
+                                <p>Ничего не найдено</p>
+                                <span>Попробуйте другой запрос или навык</span>
+                            </div>
+                        ) : (
+                            <div className="ref-grid">
+                                {cards.map((card) => (
+                                    <TechniqueCardItem
+                                        key={card.id}
+                                        card={card}
+                                        isSelected={selectedSlug === card.slug}
+                                        activeTags={activeTags}
+                                        onSelect={() => selectCard(card.slug)}
+                                        onTagClick={toggleTag}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {activeTags.length > 0 && (
-                    <div className="row gap-2 wrap" style={{ marginBottom: 18 }}>
-                        {activeTags.map((tag) => (
-                            <button
-                                key={tag}
-                                className="chip primary"
-                                onClick={() => toggleActiveTag(tag)}
-                                style={{ cursor: "pointer", height: 34 }}
-                                aria-label={`Убрать фильтр по тегу ${tag}`}
-                            >
-                                #{tag}
-                                <Icon name="close" size="xs" />
-                            </button>
-                        ))}
-                        <button
-                            onClick={() => setActiveTags([])}
-                            className="eyebrow muted"
-                            style={{ background: "none", border: "none", cursor: "pointer" }}
-                        >
-                            Очистить
-                        </button>
-                    </div>
-                )}
-
-                {isLoading ? (
-                    <div className="gb-grid">
-                        {[1, 2, 3, 4].map((i) => (
-                            <Skeleton key={i} height={150} rounded={20} />
-                        ))}
-                    </div>
-                ) : cards.length === 0 ? (
-                    <div className="empty">
-                        <span className="ic">
-                            <Icon name="search" size="lg" color="var(--ink-3)" />
-                        </span>
-                        <p className="h4">Ничего не найдено</p>
-                        <p className="body muted">Попробуй другой запрос или навык</p>
-                    </div>
-                ) : (
-                    <div className="gb-grid">
-                        {cards.map((card) => (
-                            <TechniqueCardView
-                                key={card.id}
-                                card={card}
-                                isExpanded={expandedSlug === card.slug}
-                                detail={expandedSlug === card.slug ? expandedDetail ?? null : null}
-                                onToggle={() => toggleExpand(card.slug)}
-                                onTagClick={toggleActiveTag}
-                                activeTags={activeTags}
-                            />
-                        ))}
-                    </div>
+                {/* Right: detail panel — rendered only when a card is selected */}
+                {selectedSlug && (
+                    <DetailPanel
+                        card={selectedCard}
+                        detail={detail ?? null}
+                        onClose={closePanel}
+                    />
                 )}
             </div>
         </div>
     );
 }
 
-function TechniqueCardView({
+/* ── Technique card ── */
+
+function TechniqueCardItem({
     card,
-    isExpanded,
-    detail,
-    onToggle,
-    onTagClick,
+    isSelected,
     activeTags,
+    onSelect,
+    onTagClick,
 }: {
     card: TechniqueCard;
-    isExpanded: boolean;
-    detail: TechniqueDetail | null;
-    onToggle: () => void;
-    onTagClick: (tag: string) => void;
+    isSelected: boolean;
     activeTags: string[];
+    onSelect: () => void;
+    onTagClick: (tag: string) => void;
 }) {
     return (
-        <div className={"card gb-card" + (isExpanded ? " open" : "")}>
-            <button className="gb-top" onClick={onToggle}>
-                <MasteryRing masteryLevel={card.masteryLevel} masteryPercent={card.masteryPercent} />
+        <article
+            className={"ref-card" + (isSelected ? " selected" : "")}
+            onClick={onSelect}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
+            tabIndex={0}
+            role="button"
+            aria-pressed={isSelected}
+            aria-label={card.name}
+        >
+            <div className="ref-card-inner">
+                {/* Badges row */}
+                <div className="ref-card-badges">
+                    <span className={difficultyBadgeClass(card.difficulty)}>
+                        {difficultyLabel(card.difficultyName)}
+                    </span>
+                    {card.isNew && <span className="badge badge-new">NEW</span>}
+                    {/* Small mastery ring on card */}
+                    <MasteryRingSm
+                        masteryLevel={card.masteryLevel}
+                        masteryPercent={card.masteryPercent}
+                    />
+                </div>
 
-                <div className="grow" style={{ textAlign: "left" }}>
-                    <div className="row gap-2 wrap" style={{ marginBottom: 8 }}>
-                        {card.primarySkillTitle && <span className="chip">{card.primarySkillTitle}</span>}
-                        {card.tags.slice(0, 2).map((tag) => (
+                {/* Name */}
+                <div className="ref-card-name">{card.name}</div>
+
+                {/* Description */}
+                <div className="ref-card-desc">{card.summary}</div>
+
+                {/* Hashtag chips */}
+                {card.tags.length > 0 && (
+                    <div className="ref-card-hashtags">
+                        {card.tags.slice(0, 3).map((tag) => (
                             <span
                                 key={tag}
                                 className={"chip" + (activeTags.includes(tag) ? " primary" : "")}
-                                onClick={(event) => {
-                                    event.stopPropagation();
+                                style={{ cursor: "pointer", fontSize: 11 }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
                                     onTagClick(tag);
                                 }}
-                                style={{
-                                    background: activeTags.includes(tag) ? undefined : "transparent",
-                                    cursor: "pointer",
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.stopPropagation();
+                                        onTagClick(tag);
+                                    }
                                 }}
+                                aria-label={`Фильтр по тегу ${tag}`}
                             >
                                 #{tag}
                             </span>
                         ))}
-                        {card.isNew && (
-                            <span
-                                className="badge"
-                                style={{ background: "var(--violet-soft)", color: "var(--violet)" }}
-                            >
-                                Новое
-                            </span>
-                        )}
                     </div>
-                    <h3 className="h3">{card.name}</h3>
-                    <p className="body" style={{ marginTop: 6, textWrap: "pretty" }}>
-                        {card.summary}
-                    </p>
-                </div>
+                )}
+            </div>
 
-                <div className="gb-right">
-                    <span className="stat-label">Уровень</span>
-                    <span style={{ color: "var(--primary)", fontWeight: 700, fontSize: 14 }}>
-                        {card.difficultyName}
-                    </span>
-                    <Icon
-                        name={isExpanded ? "chevron-up" : "chevron-down"}
-                        style={{ color: "var(--ink-4)", marginTop: 6 }}
-                    />
-                </div>
-            </button>
+            {/* Footer */}
+            <div className="ref-card-footer">
+                <span className="ref-card-skill">
+                    {card.primarySkillTitle ?? "Техника"}
+                </span>
+                <span className="ref-card-read">
+                    Читать →
+                </span>
+            </div>
+        </article>
+    );
+}
 
-            {isExpanded && (
-                <TechniqueBody card={card} detail={detail} />
-            )}
+/* ── Detail panel ── */
+
+function DetailPanel({
+    card,
+    detail,
+    onClose,
+}: {
+    card: TechniqueCard | null;
+    detail: TechniqueDetail | null;
+    onClose: () => void;
+}) {
+    const data = detail?.card ?? card;
+
+    return (
+        <aside className="ref-panel" aria-label="Детали техники">
+            {/* Panel header */}
+            <div className="ref-panel-head">
+                <span className="ref-panel-eyebrow">Техника</span>
+                <button
+                    className="ref-panel-close"
+                    onClick={onClose}
+                    aria-label="Закрыть панель"
+                >
+                    <Icon name="close" size="sm" />
+                </button>
+            </div>
+
+            <div className="ref-panel-scroll">
+                {!data ? (
+                    /* Loading skeleton */
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <Skeleton height={24} rounded={8} />
+                        <Skeleton height={40} rounded={8} />
+                        <Skeleton height={80} rounded={8} />
+                        <Skeleton height={120} rounded={8} />
+                    </div>
+                ) : (
+                    <>
+                        {/* Pills row: difficulty + NEW + skill */}
+                        <div className="ref-panel-pills">
+                            <span className={difficultyBadgeClass(data.difficulty)}>
+                                {difficultyLabel(data.difficultyName)}
+                            </span>
+                            {data.isNew && <span className="badge badge-new">NEW</span>}
+                            {data.primarySkillTitle && (
+                                <span
+                                    className="chip"
+                                    style={{
+                                        background: "var(--primary-soft)",
+                                        color: "var(--primary-strong)",
+                                        border: "1px solid var(--primary-tint-border-2)",
+                                    }}
+                                >
+                                    {data.primarySkillTitle}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Technique name */}
+                        <div className="ref-panel-name">{data.name}</div>
+
+                        {/* Mastery ring block */}
+                        <div className="ref-panel-mastery">
+                            <MasteryRing
+                                masteryLevel={data.masteryLevel}
+                                masteryPercent={data.masteryPercent}
+                            />
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span className="ref-panel-mastery-label">Уровень мастерства</span>
+                                <span className="ref-panel-mastery-level">
+                                    {data.masteryLevel > 0 ? `Уровень ${data.masteryLevel}` : "Не начато"}
+                                </span>
+                                <span className="ref-panel-mastery-pct">{data.masteryPercent}%</span>
+                            </div>
+                        </div>
+
+                        {/* Hashtags */}
+                        {data.tags.length > 0 && (
+                            <div className="ref-panel-hashtags">
+                                {data.tags.map((tag) => (
+                                    <span key={tag} className="chip" style={{ fontSize: 11 }}>
+                                        #{tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* How it works */}
+                        {detail?.body && (
+                            <section>
+                                <p className="ref-section-label">Как это работает</p>
+                                <div className="ref-body-text">
+                                    <ReactMarkdown>{normalizeMarkdown(detail.body)}</ReactMarkdown>
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Example dialogue */}
+                        {detail && detail.dialogTurns.length > 0 && (
+                            <section>
+                                <p className="ref-section-label">Пример диалога</p>
+                                <div className="ref-dlg-box">
+                                    {detail.dialogTurns.map((turn) => {
+                                        const isOut = turn.side === "me";
+                                        const speaker = isOut ? "Вы" : "Клиент";
+                                        const anno = turn.annotations.map((a) => a.label).join(" · ");
+                                        return (
+                                            <div
+                                                key={turn.orderIndex}
+                                                className={"ref-bubble-wrap " + (isOut ? "out" : "in")}
+                                            >
+                                                <div className="ref-bubble-speaker">{speaker}</div>
+                                                <div className={"ref-bubble " + (isOut ? "out" : "in")}>
+                                                    {turn.text}
+                                                </div>
+                                                {anno && (
+                                                    <div className="ref-anno">
+                                                        <span style={{ opacity: 0.6 }}>↳</span>
+                                                        {anno}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Case study */}
+                        {detail?.case && (
+                            <section>
+                                <p className="ref-section-label">Кейс</p>
+                                <div className="ref-case-text">
+                                    <strong style={{ color: "var(--ink-heading)" }}>
+                                        {detail.case.title}
+                                    </strong>
+                                    {" · "}
+                                    {detail.case.body}
+                                </div>
+                                {detail.case.metrics && (
+                                    <CaseMetrics metrics={detail.case.metrics} />
+                                )}
+                            </section>
+                        )}
+
+                        {/* Coach */}
+                        {detail?.coach && (
+                            <>
+                                <div className="ref-divider" />
+                                <CoachBlock
+                                    coach={detail.coach}
+                                    practiceSlug={data.primarySkillIconicName}
+                                />
+                            </>
+                        )}
+
+                        {/* Fallback practice link when no coach block */}
+                        {!detail?.coach && data.primarySkillIconicName && (
+                            <Link href={`/skill/${data.primarySkillIconicName}`} style={{ display: "block" }}>
+                                <button className="ref-practice-btn">
+                                    Практиковать технику →
+                                </button>
+                            </Link>
+                        )}
+                    </>
+                )}
+            </div>
+        </aside>
+    );
+}
+
+/* ── Case metrics tiles ── */
+
+function CaseMetrics({ metrics }: { metrics: Record<string, unknown> }) {
+    const entries = Object.entries(metrics).slice(0, 4);
+    if (entries.length === 0) return null;
+    return (
+        <div className="ref-metrics">
+            {entries.map(([key, value]) => (
+                <div key={key} className="ref-metric-tile">
+                    <span className="ref-metric-value">{String(value)}</span>
+                    <span className="ref-metric-label">{key}</span>
+                </div>
+            ))}
         </div>
     );
 }
 
-function TechniqueBody({ card, detail }: { card: TechniqueCard; detail: TechniqueDetail | null }) {
+/* ── Coach block ── */
+
+function CoachBlock({
+    coach,
+    practiceSlug,
+}: {
+    coach: TechniqueCoach;
+    practiceSlug: string | null;
+}) {
     return (
-        <div className="gb-body">
-            <div className="hr" style={{ margin: "0 0 20px" }} />
-
-            {detail?.body && (
-                <div className="body" style={{ color: "var(--ink)" }}>
-                    <ReactMarkdown>{normalizeMarkdown(detail.body)}</ReactMarkdown>
+        <div className="ref-coach">
+            {/* Identity */}
+            <div className="ref-coach-identity">
+                <div className="ref-coach-avatar" aria-hidden="true">
+                    {CoachInitials(coach.name)}
                 </div>
-            )}
+                <div>
+                    <div className="ref-coach-name">{coach.name}</div>
+                    <div className="ref-coach-role">{coach.role}</div>
+                </div>
+            </div>
 
-            {detail && detail.dialogTurns.length > 0 && (
-                <>
-                    <span className="eyebrow muted" style={{ display: "block", margin: "20px 0 12px" }}>
-                        Пример диалога
-                    </span>
-                    <div className="dlg-example">
-                        {detail.dialogTurns.map((turn) => {
-                            const anno = turn.annotations.map((a) => a.label).join(" · ");
-                            return (
-                                <div
-                                    key={turn.orderIndex}
-                                    className={"dx " + (turn.side === "me" ? "out" : "in")}
-                                >
-                                    {turn.text}
-                                    {anno && <span className="anno">[{anno}]</span>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </>
-            )}
+            {/* Quote */}
+            <blockquote className="ref-coach-quote" style={{ margin: 0 }}>
+                "{coach.quote}"
+            </blockquote>
 
-            {detail?.case && (
-                <div className="case-box">
-                    <b>{detail.case.title}</b> · {detail.case.body}
-                    {detail.case.metrics && (
-                        <div className="case-metrics">
-                            {Object.entries(detail.case.metrics)
-                                .map(([key, value]) => `${key}: ${String(value)}`)
-                                .join(" · ")}
+            {/* Challenges */}
+            {coach.challenges.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {coach.challenges.map((challenge, idx) => (
+                        <div key={idx} className="ref-coach-challenge">
+                            <span className="ref-coach-challenge-icon">→</span>
+                            <span>{challenge.label}</span>
                         </div>
-                    )}
+                    ))}
                 </div>
             )}
 
-            {detail?.coach && (
-                <div
-                    style={{
-                        background: "var(--ink)",
-                        color: "var(--bg)",
-                        borderRadius: "var(--r-md)",
-                        padding: 20,
-                        marginTop: 20,
-                    }}
-                >
-                    <div className="row gap-3" style={{ alignItems: "center", marginBottom: 14 }}>
-                        <GeoAvatar seed={detail.coach.avatarSeed} size={44} />
-                        <div>
-                            <div className="h4" style={{ fontSize: 14 }}>
-                                {detail.coach.name}
-                            </div>
-                            <span className="eyebrow muted" style={{ color: "var(--ink-4)" }}>
-                                {detail.coach.role}
-                            </span>
-                        </div>
-                    </div>
-                    <p className="body" style={{ color: "var(--ink-2)" }}>
-                        {detail.coach.quote}
-                    </p>
-                    {detail.coach.challenges.length > 0 && (
-                        <div className="col gap-2" style={{ marginTop: 14 }}>
-                            <span className="eyebrow muted" style={{ color: "var(--ink-4)" }}>
-                                Практика
-                                <span className="dot">·</span>
-                                <span>{detail.coach.challenges.length} микро-вызова</span>
-                            </span>
-                            {detail.coach.challenges.map((challenge, index) => (
-                                <div
-                                    key={index}
-                                    className="small"
-                                    style={{
-                                        padding: "8px 12px",
-                                        borderRadius: "var(--r-sm)",
-                                        background: "var(--ink-2)",
-                                        color: "var(--bg)",
-                                        fontFamily: "var(--font-mono)",
-                                    }}
-                                >
-                                    {challenge.label}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {card.primarySkillIconicName && (
-                <div className="row gap-2 wrap" style={{ marginTop: 20 }}>
-                    <Link href={`/skill/${card.primarySkillIconicName}`}>
-                        <Button variant="ghost" size="md">
-                            Связанный навык →
-                        </Button>
-                    </Link>
-                </div>
+            {/* Practice button — deep links to Practice (dialog) screen */}
+            {practiceSlug ? (
+                <Link href={`/skill/${practiceSlug}`} style={{ display: "block" }}>
+                    <button className="ref-practice-btn">
+                        Практиковать технику
+                    </button>
+                </Link>
+            ) : (
+                <Link href="/dialog" style={{ display: "block" }}>
+                    <button className="ref-practice-btn">
+                        Практиковать технику
+                    </button>
+                </Link>
             )}
         </div>
     );

@@ -78,7 +78,7 @@ verification is collected into a checklist for the user.
 - [ ] **P4 — Screen restyles** (each sub-phase = its own CSS + commit + verifier)
   - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data).
   - [x] 4.2 Practice ✅ mentor banner + bundle grid (Chat/Call) + recent sessions + mode select; tsc clean, vitest 78/78. Mode-count number + dialog stats omitted (no data); difficulty inferred from sortOrder.
-  - [ ] 4.3 Reference (`guidebook` + `reference/[id]`)
+  - [x] 4.3 Reference ✅ card grid + 392px slide-in detail panel (example bubbles, metric tiles, coach); MasteryRing kept (sm on card, full in panel); tsc clean, vitest 78/78. Hardcoded quick-tags + old stat-tiles omitted (data contract).
   - [ ] 4.4 Friends (`friends` + chat + `friends/[userId]` public profile)
   - [ ] 4.5 Discuss (`discuss` + `discuss/[threadId]`)
   - [ ] 4.6 Profile + **new `/settings` route** (split settings out of profile; preserve theme/logout/admin/email/password)
