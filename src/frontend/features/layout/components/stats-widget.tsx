@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
 import { Card } from "@/shared/components/card";
 import { Progress } from "@/shared/components/progress";
@@ -118,40 +117,6 @@ export function StatsWidget({
                 )}
             </Card>
 
-            {/* League card */}
-            <Link href="/league" style={{ textDecoration: "none", color: "inherit" }}>
-                <Card padding={20} hover>
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                        }}
-                    >
-                        <div className="eyebrow muted">Лига</div>
-                        <span
-                            className="badge"
-                            style={{ background: "var(--amber-soft)", color: "var(--amber)" }}
-                        >
-                            Серебро
-                        </span>
-                    </div>
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginTop: 10,
-                        }}
-                    >
-                        <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
-                            Вы на <b style={{ color: "var(--ink)" }}>4 месте</b> · до повышения{" "}
-                            <b style={{ color: "var(--primary)" }}>+120 XP</b>
-                        </span>
-                        <Icon name="chevron-right" size="sm" color="var(--ink-4)" />
-                    </div>
-                </Card>
-            </Link>
         </div>
     );
 }

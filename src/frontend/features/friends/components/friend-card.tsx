@@ -45,10 +45,6 @@ export function FriendCard({ friend, onChatClick }: FriendCardProps) {
                             <span className="num">{friend.currentStreakDayCount}</span>
                         </span>
                     )}
-                    <span className="row gap-1">
-                        <Icon name="trophy" size={14} style={{ color: "var(--amber)" }} />
-                        <span className="num">{friend.achievementCount}</span>
-                    </span>
                 </div>
             </Link>
 

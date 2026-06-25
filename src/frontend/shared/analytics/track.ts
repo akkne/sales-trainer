@@ -13,7 +13,6 @@ import { apiClient } from "@/shared/api/api-client";
 
 export type TrackedPage =
     | "tree"
-    | "league"
     | "dialog"
     | "profile"
     | "guidebook"
@@ -34,7 +33,6 @@ export type TrackedEvent =
     | "open_technique"
     | "send_message"
     | "add_friend"
-    | "open_league"
     | "edit_profile";
 
 const PAGE_VIEW_EVENT = "page_view";

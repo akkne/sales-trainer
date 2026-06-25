@@ -5,7 +5,6 @@ import type { IconName } from "@/shared/components/icon";
 import { useFriendActivity } from "@/features/friends/hooks/use-friends";
 
 const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {
-    earned_achievement: { icon: "trophy", color: "var(--amber)" },
     earned_xp: { icon: "bolt", color: "var(--primary)" },
     completed_lesson: { icon: "check", color: "var(--primary)" },
     streak_milestone: { icon: "flame", color: "var(--flame)" },

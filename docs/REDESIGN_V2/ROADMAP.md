@@ -67,7 +67,7 @@ verification is collected into a checklist for the user.
     Friends→`/friends`, Discuss→`/discuss`, Settings (bottom)→`/settings`.
     Friend-request unread dot on Friends item. **No League nav item.** Mobile variant.
 
-- [ ] **P3 — Gamification removal (leagues + achievements UI)**
+- [x] **P3 — Gamification removal (leagues + achievements UI)** ✅ verified (tsc no new errors, vitest 78/78 after dropping 5 AchievementToast tests). League mini-card + analytics removed (page kept); achievements grid/toast/friend-count/activity removed; `achievement-toast.tsx`, its test, and `use-achievements.ts` deleted; notification-meta achievement entry kept for graceful backend notifications.
   - League: remove `StatsWidget` league mini-card (`stats-widget.tsx`); remove league entries
     from `analytics/track.ts` + `use-page-view-tracker.ts`. (`/league` page stays.)
   - Achievements: remove grid in `profile/page.tsx`; remove toast mount + capture in

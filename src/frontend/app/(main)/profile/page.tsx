@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useProfile } from "@/features/profile/hooks/use-profile";
-import { useAchievements } from "@/features/achievements/hooks/use-achievements";
 import { useLogout } from "@/features/auth/hooks/use-auth";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useThemeStore } from "@/shared/stores/theme-store";
@@ -35,7 +34,6 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: IconName }[] = [
 
 export default function ProfilePage() {
     const { data: profileStats, isLoading: profileLoading } = useProfile();
-    const { data: achievements } = useAchievements();
     const { data: allSkills, isLoading: skillsLoading } = useSkills();
     const logoutMutation = useLogout();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
@@ -83,7 +81,6 @@ export default function ProfilePage() {
         updateEnrolledMutation.mutate(Array.from(next));
     }
 
-    const unlockedAchievements = achievements?.filter((a) => a.isUnlocked) ?? [];
     const personaLabel = profileStats.persona
         ? PERSONA_LABELS[profileStats.persona] ?? profileStats.persona
         : null;
@@ -178,18 +175,6 @@ export default function ProfilePage() {
                             {profileStats.email}
                         </p>
                     </div>
-                    <span
-                        className="badge"
-                        style={{
-                            background: "var(--surface-2)",
-                            color: "var(--ink-2)",
-                            padding: "8px 14px",
-                            fontSize: 13,
-                        }}
-                    >
-                        <Icon name="trophy" size={16} style={{ color: "var(--amber)" }} />
-                        {unlockedAchievements.length} достижений
-                    </span>
                 </div>
 
                 {uploadError && (
@@ -283,32 +268,6 @@ export default function ProfilePage() {
                             )}
                         </div>
                     )}
-
-                {/* Achievements */}
-                {achievements && achievements.length > 0 && (
-                    <div className="card card-pad" style={{ marginTop: 16 }}>
-                        <div className="row between" style={{ marginBottom: 18 }}>
-                            <h4 className="h4">Достижения</h4>
-                            <span className="num small">
-                                {unlockedAchievements.length} / {achievements.length}
-                            </span>
-                        </div>
-                        <div className="ach-grid">
-                            {achievements.map((a) => (
-                                <div
-                                    key={a.achievementId}
-                                    className={"ach" + (a.isUnlocked ? " on" : "")}
-                                    title={`${a.title}: ${a.description}`}
-                                >
-                                    <span className="ach-ic" style={{ fontSize: 22 }}>
-                                        {a.iconEmoji}
-                                    </span>
-                                    <span className="ach-name">{a.title}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 </div>
                 <div>

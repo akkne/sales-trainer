@@ -108,12 +108,6 @@ export default function PublicProfilePage() {
                         icon={<Icon name="bolt" size="xs" />}
                     />
                     <StatTile
-                        label="Достижения"
-                        value={profile.achievementCount}
-                        tone="olive"
-                        icon={<Icon name="trophy" size="xs" />}
-                    />
-                    <StatTile
                         label="Средний балл"
                         value={profile.averageExerciseScore}
                         unit="%"

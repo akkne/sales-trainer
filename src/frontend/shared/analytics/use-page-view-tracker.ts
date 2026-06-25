@@ -16,7 +16,6 @@ function resolvePage(pathname: string): TrackedPage {
 
     switch (firstSegment) {
         case "tree":
-        case "league":
         case "dialog":
         case "profile":
         case "guidebook":

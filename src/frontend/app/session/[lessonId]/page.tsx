@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     useExercisesForLesson,
@@ -8,7 +8,6 @@ import {
     type ExerciseSubmissionResult,
     type ExerciseData,
 } from "@/features/exercise/hooks/use-lesson";
-import { useAchievements } from "@/features/achievements/hooks/use-achievements";
 import { ExerciseTypes } from "@/features/exercise/types/exercise-types";
 import { ChooseOptionExercise } from "@/features/exercise/components/choose-option-exercise";
 import { FillBlankExercise } from "@/features/exercise/components/fill-blank-exercise";
@@ -22,7 +21,6 @@ import { EvaluateCallExercise } from "@/features/exercise/components/evaluate-ca
 import { FreeTextExercise } from "@/features/exercise/components/free-text-exercise";
 import { TheoryLessonPlayer } from "@/features/exercise/components/theory-lesson-player";
 import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
-import { AchievementToastQueue, type AchievementToastData } from "@/shared/components/achievement-toast";
 import { Icon } from "@/shared/components/icon";
 import { Button } from "@/shared/components/button";
 import { Progress } from "@/shared/components/progress";
@@ -57,15 +55,12 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     const router = useRouter();
     const { data: exercises, isLoading } = useExercisesForLesson(lessonId);
     const submitExerciseMutation = useSubmitExercise();
-    const { data: allAchievements } = useAchievements();
-
     const sessionStartTimeRef = useRef<number>(Date.now());
     const sessionEndTimeRef = useRef<number>(0);
     const [lastSubmissionResult, setLastSubmissionResult] = useState<ExerciseSubmissionResult | null>(null);
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
-    const [toastQueue, setToastQueue] = useState<AchievementToastData[]>([]);
     const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
     const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
 
@@ -97,20 +92,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                     if (isPassing) {
                         setTotalXpEarned((prev) => prev + result.xpEarned);
                         setCorrectAnswerCount((prev) => prev + 1);
-                        if (result.newlyUnlockedAchievementKeys?.length && allAchievements) {
-                            const newToasts = result.newlyUnlockedAchievementKeys
-                                .map((key) => allAchievements.find((a) => a.key === key))
-                                .filter(Boolean)
-                                .map((a) => ({
-                                    key: a!.key,
-                                    iconEmoji: a!.iconEmoji,
-                                    title: a!.title,
-                                    description: a!.description,
-                                }));
-                            if (newToasts.length > 0) {
-                                setToastQueue((prev) => [...prev, ...newToasts]);
-                            }
-                        }
                     } else {
                         if (currentQueued.attemptNumber < MAX_RETRY_ATTEMPTS) {
                             const retryEntry: QueuedExercise = {
@@ -125,10 +106,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
             }
         );
     }
-
-    const dismissToast = useCallback((key: string) => {
-        setToastQueue((prev) => prev.filter((t) => t.key !== key));
-    }, []);
 
     function recordSessionEnd() {
         sessionEndTimeRef.current = Date.now();
@@ -186,8 +163,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
     return (
         <div className="session">
-            <AchievementToastQueue queue={toastQueue} onDismiss={dismissToast} />
-
             {/* Header */}
             <div className="session-top">
                 <button
