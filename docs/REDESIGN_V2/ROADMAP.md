@@ -55,19 +55,19 @@ verification is collected into a checklist for the user.
     cards (resting + violet-lift hover), chips/badges (difficulty, status, hashtag, NEW, count),
     inputs/search, toggle switch, stat tile, progress bar, segmented control, avatar gradients.
 
-- [ ] **P2 — Screen-level CSS classes** (all into `globals.css`, before touching screens)
-  - `.rail*` nav rail; `.path*` 3-col + lessons timeline + FAB; `.practice*`/bundle/mentor/recent;
-    `.ref*` grid + 392px detail panel + example bubbles + metric tiles + coach; `.friends*` grid +
-    online dot + 330px chat/activity rail; `.discuss*` feed + upvote + segmented + sidebar;
-    `.profile*` cover/identity/stat tiles/enrolled/voice-quota; `.settings*` cards/toggle/danger;
-    plus session/dialog/voice/auth restyle helpers. Responsive blocks.
+> **CSS note:** there is no separate "all screen CSS up front" pass. Each shell/screen
+> phase below **owns the CSS classes it needs** (added to `globals.css` alongside its
+> markup). Phases run sequentially, so there's no `globals.css` contention. P1 already
+> shipped the shared token + base-component layer everything builds on.
 
-- [ ] **P3 — App shell: left nav rail**
-  - Replace `top-app-bar.tsx` + `bottom-nav.tsx` usage with a new `nav-rail.tsx`
-    (`features/layout/components/`). Update `(main)/layout.tsx` to the rail + framed shell.
+- [x] **P2 — App shell: left nav rail** ✅ verified (tsc no new errors, vitest 83/83). NavRail (desktop) + restyled BottomNav (mobile, no League); NotificationBell kept in rail; minimal `/settings` route created; `top-app-bar.tsx` now dead code (delete later). No literal device-frame (full-viewport adaptation).
+  - Add a new `nav-rail.tsx` (`features/layout/components/`) + its `.rail*` CSS; replace
+    `top-app-bar.tsx` + `bottom-nav.tsx` usage in `(main)/layout.tsx` with the rail + framed
+    shell. Avatar→`/profile`, Path→`/tree`, Practice→`/dialog`, Reference→`/guidebook`,
+    Friends→`/friends`, Discuss→`/discuss`, Settings (bottom)→`/settings`.
     Friend-request unread dot on Friends item. **No League nav item.** Mobile variant.
 
-- [ ] **P4 — Gamification removal (leagues + achievements UI)**
+- [ ] **P3 — Gamification removal (leagues + achievements UI)**
   - League: remove `StatsWidget` league mini-card (`stats-widget.tsx`); remove league entries
     from `analytics/track.ts` + `use-page-view-tracker.ts`. (`/league` page stays.)
   - Achievements: remove grid in `profile/page.tsx`; remove toast mount + capture in
@@ -75,18 +75,18 @@ verification is collected into a checklist for the user.
     remove `earned_achievement` in `friend-activity-feed.tsx`; delete `achievement-toast.tsx`
     + `__tests__/AchievementToast.test.tsx`; clean dead imports/hooks.
 
-- [ ] **P5 — Screen restyles** (each sub-phase = its own commit + verifier)
-  - [ ] 5.1 Path / `tree`
-  - [ ] 5.2 Practice (`dialog` list + `dialog/[bundleId]` mode select)
-  - [ ] 5.3 Reference (`guidebook` + `reference/[id]`)
-  - [ ] 5.4 Friends (`friends` + chat + `friends/[userId]` public profile)
-  - [ ] 5.5 Discuss (`discuss` + `discuss/[threadId]`)
-  - [ ] 5.6 Profile + **new `/settings` route** (split settings out of profile; preserve theme/logout/admin/email/password)
-  - [ ] 5.7 Session / Exercise player (`session/[lessonId]` + exercise components)
-  - [ ] 5.8 Dialog text chat + Voice call (`dialog/[bundleId]/[modeId]` + voice)
-  - [ ] 5.9 Auth: login / register / onboarding / verify-email
+- [ ] **P4 — Screen restyles** (each sub-phase = its own CSS + commit + verifier)
+  - [ ] 4.1 Path / `tree`
+  - [ ] 4.2 Practice (`dialog` list + `dialog/[bundleId]` mode select)
+  - [ ] 4.3 Reference (`guidebook` + `reference/[id]`)
+  - [ ] 4.4 Friends (`friends` + chat + `friends/[userId]` public profile)
+  - [ ] 4.5 Discuss (`discuss` + `discuss/[threadId]`)
+  - [ ] 4.6 Profile + **new `/settings` route** (split settings out of profile; preserve theme/logout/admin/email/password)
+  - [ ] 4.7 Session / Exercise player (`session/[lessonId]` + exercise components)
+  - [ ] 4.8 Dialog text chat + Voice call (`dialog/[bundleId]/[modeId]` + voice)
+  - [ ] 4.9 Auth: login / register / onboarding / verify-email
 
-- [ ] **P6 — Final QA pass**
+- [ ] **P5 — Final QA pass**
   - Full tester: `tsc` + `vitest` + `eslint` clean; grep no league/achievement leakage in
     user shell; route + nav audit; build check; assemble manual-visual checklist for the user.
 

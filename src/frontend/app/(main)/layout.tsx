@@ -1,5 +1,5 @@
+import { NavRail } from "@/features/layout/components/nav-rail";
 import { BottomNav } from "@/features/layout/components/bottom-nav";
-import { TopAppBar } from "@/features/layout/components/top-app-bar";
 
 export default function MainLayout({
     children,
@@ -7,16 +7,16 @@ export default function MainLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className="min-h-screen has-bottom-nav" style={{ background: "var(--bg)" }}>
-            {/* Top navigation (desktop always visible, mobile shows hamburger menu) */}
-            <TopAppBar />
+        <div className="shell">
+            {/* Left nav rail — desktop only (hidden on mobile via CSS) */}
+            <NavRail />
 
-            {/* Main content area */}
-            <main>
+            {/* Scrollable content area */}
+            <main className="shell-content has-bottom-nav">
                 {children}
             </main>
 
-            {/* Mobile bottom navigation */}
+            {/* Mobile bottom navigation — hidden on desktop via CSS */}
             <BottomNav />
         </div>
     );
