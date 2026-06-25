@@ -38,6 +38,8 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Handbook Redesign](HANDBOOK_REDESIGN.md) | Implemented 2026-04-21 — Technique domain with per-user mastery + structured dialog/case/coach blocks |
 | [Mobile Responsive Testing](TESTING/MOBILE_RESPONSIVE.md) | Breakpoints + manual phone checklist for the full mobile adaptation (user-facing screens + admin drawer) |
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
+| [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes leagues + achievements from UI; phase status |
+| [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
 
 ## Feature Documentation
 
