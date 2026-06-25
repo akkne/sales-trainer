@@ -2,16 +2,9 @@
 
 import Link from "next/link";
 import { useProfile } from "@/features/profile/hooks/use-profile";
-import { useLogout } from "@/features/auth/hooks/use-auth";
 import { useAuthStore } from "@/shared/stores/auth-store";
-import { useThemeStore } from "@/shared/stores/theme-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
-import { Icon } from "@/shared/components/icon";
-import type { IconName } from "@/shared/components/icon";
-import { UserAvatar } from "@/shared/components/user-avatar";
 import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
-import { StatTile } from "@/shared/components/stat-tile";
-import { Progress } from "@/shared/components/progress";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
@@ -24,42 +17,35 @@ const PERSONA_LABELS: Record<string, string> = {
     other: "Другое",
 };
 
-type Theme = "light" | "dark" | "system";
-
-const THEME_OPTIONS: { value: Theme; label: string; icon: IconName }[] = [
-    { value: "light", label: "Светлая", icon: "sun" },
-    { value: "dark", label: "Тёмная", icon: "moon" },
-    { value: "system", label: "Системная", icon: "settings" },
-];
+/** Derive user initials from display name (up to 2 chars). */
+function initials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export default function ProfilePage() {
     const { data: profileStats, isLoading: profileLoading } = useProfile();
     const { data: allSkills, isLoading: skillsLoading } = useSkills();
-    const logoutMutation = useLogout();
     const updateEnrolledMutation = useUpdateEnrolledSkills();
     const { data: voiceUsage } = useVoiceUsage();
     const { authenticatedUser } = useAuthStore();
-    const { theme, setTheme } = useThemeStore();
     const { version, uploading, uploadError, fileInputRef, openFilePicker, handleFileChange } =
         useAvatarUpload();
-    const isAdmin =
-        authenticatedUser?.role === "Admin" || authenticatedUser?.role === "SuperAdmin";
 
     if (profileLoading) {
         return (
-            <div className="page">
-                <div className="app-backdrop" />
-                <div className="center" style={{ minHeight: "60vh" }}>
-                    <div
-                        style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: "50%",
-                            border: "3px solid var(--line-2)",
-                            borderTopColor: "var(--primary)",
-                            animation: "spin 0.8s linear infinite",
-                        }}
-                    />
+            <div className="pv2-scroll">
+                <div className="pv2-cover" />
+                <div className="pv2-inner">
+                    <div style={{ padding: "0 28px" }}>
+                        <div
+                            className="pv2-skeleton"
+                            style={{ width: 94, height: 94, borderRadius: 22, marginTop: -42 }}
+                        />
+                        <div className="pv2-skeleton" style={{ width: 180, height: 22, marginTop: 14, borderRadius: 8 }} />
+                        <div className="pv2-skeleton" style={{ width: 120, height: 14, marginTop: 8, borderRadius: 6 }} />
+                    </div>
                 </div>
             </div>
         );
@@ -85,74 +71,54 @@ export default function ProfilePage() {
         ? PERSONA_LABELS[profileStats.persona] ?? profileStats.persona
         : null;
 
+    // Compute total lessons done from enrolled skills
+    const totalLessonsDone = (allSkills ?? []).reduce(
+        (sum, s) => sum + (s.completedLessonCount ?? 0),
+        0
+    );
+
+    // Avatar URL with cache-bust
+    const avatarSrc =
+        version > 0 && profileStats.avatarUrl
+            ? `${profileStats.avatarUrl}?v=${version}`
+            : profileStats.avatarUrl;
+
+    const hasVoiceQuota =
+        voiceUsage &&
+        (voiceUsage.dailyLimitSeconds > 0 || voiceUsage.monthlyLimitSeconds > 0);
+
     return (
-        <div className="page">
-            <div className="app-backdrop" />
-            <div className="container" style={{ maxWidth: 1320 }}>
-                {/* Header */}
-                <div className="profile-head">
-                    <div
-                        style={{
-                            flexShrink: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 6,
-                        }}
-                    >
-                        <div style={{ position: "relative" }}>
-                            <UserAvatar
-                                avatarUrl={
-                                    version > 0 && profileStats.avatarUrl
-                                        ? `${profileStats.avatarUrl}?v=${version}`
-                                        : profileStats.avatarUrl
-                                }
-                                seed={profileStats.displayName}
-                                size={88}
-                                circle
-                            />
-                            {uploading && (
-                                <div
-                                    style={{
-                                        position: "absolute",
-                                        inset: 0,
-                                        borderRadius: "50%",
-                                        background: "rgba(0,0,0,0.45)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        pointerEvents: "none",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            width: 24,
-                                            height: 24,
-                                            borderRadius: "50%",
-                                            border: "2.5px solid rgba(255,255,255,0.4)",
-                                            borderTopColor: "#fff",
-                                            animation: "spin 0.8s linear infinite",
-                                        }}
-                                    />
-                                </div>
-                            )}
+        <div className="pv2-scroll">
+            {/* Cover band */}
+            <div className="pv2-cover" />
+
+            <div className="pv2-inner">
+                {/* Identity row */}
+                <div className="pv2-identity">
+                    {/* Avatar with ring */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                        <div className="pv2-avatar-ring">
+                            <div className="pv2-avatar-inner">
+                                {avatarSrc ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={avatarSrc} alt={profileStats.displayName} />
+                                ) : (
+                                    initials(profileStats.displayName)
+                                )}
+                                {uploading && (
+                                    <div className="pv2-avatar-overlay">
+                                        <div className="pv2-spinner" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <button
                             type="button"
                             onClick={uploading ? undefined : openFilePicker}
                             disabled={uploading}
-                            className="small"
-                            style={{
-                                background: "none",
-                                border: "none",
-                                padding: 0,
-                                cursor: uploading ? "wait" : "pointer",
-                                color: "var(--primary)",
-                                textDecoration: "underline",
-                                fontSize: 11,
-                            }}
+                            className="pv2-avatar-edit"
                         >
-                            {uploading ? "Загрузка…" : "Обновить фото профиля"}
+                            {uploading ? "Загрузка…" : "Обновить фото"}
                         </button>
                         <input
                             ref={fileInputRef}
@@ -162,378 +128,271 @@ export default function ProfilePage() {
                             onChange={handleFileChange}
                         />
                     </div>
-                    <div className="grow">
-                        <div className="row gap-3 wrap" style={{ alignItems: "center" }}>
-                            <h1 className="h1" style={{ fontSize: 36 }}>
-                                {profileStats.displayName}
-                            </h1>
-                            {personaLabel && (
-                                <span className="chip primary">{personaLabel}</span>
-                            )}
+
+                    {/* Name / persona / email */}
+                    <div className="pv2-identity-meta">
+                        <div className="pv2-identity-name">{profileStats.displayName}</div>
+                        <div className="pv2-identity-sub">
+                            {[personaLabel, profileStats.email].filter(Boolean).join(" · ")}
                         </div>
-                        <p className="small" style={{ marginTop: 4 }}>
-                            {profileStats.email}
-                        </p>
-                    </div>
-                </div>
-
-                {uploadError && (
-                    <p
-                        className="small"
-                        style={{ marginTop: 8, color: "var(--heart)", textAlign: "center" }}
-                    >
-                        {uploadError}
-                    </p>
-                )}
-
-                {/* Stats grid */}
-                <div className="profile-stats">
-                    <StatTile
-                        icon={<Icon name="flame" size={18} />}
-                        tone="flame"
-                        label="Стрик"
-                        value={profileStats.currentStreakDayCount}
-                        unit=" дн"
-                    />
-                    <StatTile
-                        icon={<Icon name="bolt" size={18} />}
-                        tone="primary"
-                        label="Всего XP"
-                        value={profileStats.totalXpAmount.toLocaleString("ru")}
-                    />
-                    <StatTile
-                        icon={<Icon name="trophy" size={18} />}
-                        tone="success"
-                        label="Рекорд"
-                        value={profileStats.longestStreakDayCount}
-                        unit=" дн"
-                    />
-                    <StatTile
-                        icon={<Icon name="target" size={18} />}
-                        tone="amber"
-                        label="Точность"
-                        value={profileStats.averageExerciseScore}
-                        unit="%"
-                    />
-                </div>
-
-                {/* Two-column body on desktop */}
-                <div className="profile-grid">
-                <div>
-
-                {/* Skills progress */}
-                <div className="card card-pad" style={{ marginTop: 16 }}>
-                    <div className="row between">
-                        <h4 className="h4">Навыки пройдено</h4>
-                        <span className="num small">
-                            {profileStats.completedSkillCount} / {profileStats.totalSkillCount}
-                        </span>
-                    </div>
-                    <div style={{ marginTop: 14 }}>
-                        <Progress
-                            value={profileStats.completedSkillCount}
-                            max={Math.max(1, profileStats.totalSkillCount)}
-                        />
-                    </div>
-                </div>
-
-                {/* Voice minutes */}
-                {voiceUsage &&
-                    (voiceUsage.dailyLimitSeconds > 0 ||
-                        voiceUsage.monthlyLimitSeconds > 0) && (
-                        <div className="card card-pad" style={{ marginTop: 16 }}>
-                            <div className="row gap-3" style={{ marginBottom: 18 }}>
-                                <span
-                                    className="itile flame"
-                                    style={{ width: 40, height: 40 }}
-                                >
-                                    <Icon name="mic" size={20} />
-                                </span>
-                                <h4 className="h4">Голосовые звонки</h4>
-                            </div>
-                            {voiceUsage.dailyLimitSeconds > 0 && (
-                                <VoiceQuotaBar
-                                    label="Сегодня"
-                                    usedSeconds={voiceUsage.dailyUsedSeconds}
-                                    limitSeconds={voiceUsage.dailyLimitSeconds}
-                                />
-                            )}
-                            {voiceUsage.monthlyLimitSeconds > 0 && (
-                                <VoiceQuotaBar
-                                    label="В этом месяце"
-                                    usedSeconds={voiceUsage.monthlyUsedSeconds}
-                                    limitSeconds={voiceUsage.monthlyLimitSeconds}
-                                    style={{ marginTop: 14 }}
-                                />
-                            )}
-                        </div>
-                    )}
-
-                </div>
-                <div>
-
-                {/* My Skills */}
-                <div className="card card-pad" style={{ marginTop: 16 }}>
-                    <div className="row between" style={{ marginBottom: 18 }}>
-                        <h4 className="h4">Мои навыки</h4>
-                        <span className="small">Включи навыки для изучения</span>
-                    </div>
-
-                    {skillsLoading ? (
-                        <div className="col gap-3">
-                            {[1, 2, 3].map((i) => (
-                                <div
-                                    key={i}
-                                    style={{
-                                        height: 64,
-                                        borderRadius: "var(--r-md)",
-                                        background: "var(--surface-2)",
-                                        animation: "pulse 1.5s ease-in-out infinite",
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    ) : !allSkills || allSkills.length === 0 ? (
-                        <div className="empty">
-                            <span className="itile" style={{ width: 48, height: 48 }}>
-                                <Icon name="book" size="lg" />
-                            </span>
-                            <p className="body" style={{ marginTop: 12 }}>
-                                Навыки ещё не добавлены
+                        {uploadError && (
+                            <p style={{ fontSize: 11, color: "var(--heart)", marginTop: 4 }}>
+                                {uploadError}
                             </p>
-                            <p className="small">Попросите администратора добавить навыки</p>
-                        </div>
-                    ) : (
-                        <div className="col gap-2">
-                            {allSkills.map((skill) => {
-                                const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
-                                const isEnrolled = enrolledSlugs.has(skill.slug);
-                                const isSaving = updateEnrolledMutation.isPending;
+                        )}
+                    </div>
 
-                                return (
-                                    <SkillToggle
-                                        key={skill.skillId}
-                                        title={skill.title}
-                                        subtitle={
-                                            isAlwaysOn
-                                                ? "Базовый — всегда включён"
-                                                : isEnrolled
-                                                ? `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`
-                                                : "Нажми, чтобы добавить"
-                                        }
-                                        isAlwaysOn={isAlwaysOn}
-                                        isEnrolled={isEnrolled}
-                                        disabled={isAlwaysOn || isSaving}
-                                        onClick={() => toggleEnrollment(skill.slug)}
+                    {/* No edit-profile button: no edit-profile flow exists in the app */}
+                </div>
+
+                {/* 4 Stat tiles */}
+                <div className="pv2-stats">
+                    {/* Точность */}
+                    <div className="pv2-stat">
+                        <div className="pv2-stat-ic green">
+                            {/* target / crosshair icon */}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div className="pv2-stat-label">Точность</div>
+                            <div className="pv2-stat-value">
+                                {profileStats.averageExerciseScore}
+                                <small>%</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Рекорд */}
+                    <div className="pv2-stat">
+                        <div className="pv2-stat-ic amber">
+                            {/* trophy */}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M6 9H3a1 1 0 0 0-1 1v1a5 5 0 0 0 5 5"/><path d="M18 9h3a1 1 0 0 1 1 1v1a5 5 0 0 1-5 5"/><path d="M7 21h10"/><path d="M12 17v4"/><path d="M7 4h10l-1 9a5 5 0 0 1-8 0L7 4z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div className="pv2-stat-label">Рекорд</div>
+                            <div className="pv2-stat-value">
+                                {profileStats.longestStreakDayCount}
+                                <small>дн</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Навыков пройдено */}
+                    <div className="pv2-stat">
+                        <div className="pv2-stat-ic violet">
+                            {/* check circle */}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div className="pv2-stat-label">Навыков</div>
+                            <div className="pv2-stat-value">{profileStats.completedSkillCount}</div>
+                        </div>
+                    </div>
+
+                    {/* Уроков пройдено */}
+                    <div className="pv2-stat">
+                        <div className="pv2-stat-ic blue">
+                            {/* book */}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div className="pv2-stat-label">Уроков</div>
+                            <div className="pv2-stat-value">{totalLessonsDone}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Two-column body */}
+                <div className="pv2-body">
+                    {/* Left: Записанные навыки (enrolled skills with toggle) */}
+                    <div className="pv2-card">
+                        <div className="pv2-card-head">
+                            <span className="pv2-card-title">Записанные навыки</span>
+                            <Link href="/tree" className="pv2-manage-link">
+                                Управление
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="m9 18 6-6-6-6"/>
+                                </svg>
+                            </Link>
+                        </div>
+
+                        {skillsLoading ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="pv2-skeleton" style={{ height: 52, borderRadius: 8 }} />
+                                ))}
+                            </div>
+                        ) : !allSkills || allSkills.length === 0 ? (
+                            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
+                                Навыки ещё не добавлены. Обратитесь к администратору.
+                            </p>
+                        ) : (
+                            <div>
+                                {allSkills.map((skill) => {
+                                    const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
+                                    const isEnrolled = enrolledSlugs.has(skill.slug);
+                                    const isSaving = updateEnrolledMutation.isPending;
+                                    const pct =
+                                        skill.totalLessonCount > 0
+                                            ? Math.round(
+                                                  (skill.completedLessonCount /
+                                                      skill.totalLessonCount) *
+                                                      100
+                                              )
+                                            : 0;
+                                    const isDone = pct === 100;
+
+                                    return (
+                                        <div key={skill.skillId} className="pv2-skill-row">
+                                            <div className="pv2-skill-row-head">
+                                                {/* Toggle button wraps name */}
+                                                <button
+                                                    type="button"
+                                                    className="pv2-skill-toggle"
+                                                    onClick={() => toggleEnrollment(skill.slug)}
+                                                    disabled={isAlwaysOn || isSaving}
+                                                    aria-label={
+                                                        isAlwaysOn
+                                                            ? `${skill.title} — базовый навык, всегда включён`
+                                                            : isEnrolled
+                                                            ? `Отписаться от ${skill.title}`
+                                                            : `Записаться на ${skill.title}`
+                                                    }
+                                                >
+                                                    <span className="pv2-skill-name">{skill.title}</span>
+                                                    <div
+                                                        className={`pv2-switch ${
+                                                            isAlwaysOn
+                                                                ? "always"
+                                                                : isEnrolled
+                                                                ? "on"
+                                                                : "off"
+                                                        }`}
+                                                    />
+                                                </button>
+                                            </div>
+                                            {/* Progress bar — only shown when enrolled */}
+                                            {(isEnrolled || isAlwaysOn) && (
+                                                <>
+                                                    <div className="pv2-skill-bar">
+                                                        <div
+                                                            className={`pv2-skill-fill${isDone ? " done" : ""}`}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                        <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                                                            {isAlwaysOn
+                                                                ? "Базовый — всегда включён"
+                                                                : `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`}
+                                                        </span>
+                                                        <span className="pv2-skill-pct">{pct}%</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {!isEnrolled && !isAlwaysOn && (
+                                                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                                                    Нажми, чтобы добавить
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {updateEnrolledMutation.isError && (
+                            <p style={{ fontSize: 12, color: "var(--heart)", marginTop: 10, textAlign: "center" }}>
+                                Не удалось сохранить. Попробуй ещё раз.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Right: Голосовые минуты */}
+                    <div className="pv2-card">
+                        <div className="pv2-card-head">
+                            <span className="pv2-card-title">Голосовые минуты</span>
+                        </div>
+
+                        {!hasVoiceQuota ? (
+                            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
+                                Голосовые звонки не ограничены.
+                            </p>
+                        ) : (
+                            <div className="pv2-quota-row">
+                                {voiceUsage.dailyLimitSeconds > 0 && (
+                                    <VoiceBar
+                                        label="Сегодня"
+                                        usedSeconds={voiceUsage.dailyUsedSeconds}
+                                        limitSeconds={voiceUsage.dailyLimitSeconds}
+                                        tone="violet"
+                                        resetNote="Сбрасывается ежедневно"
                                     />
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {updateEnrolledMutation.isError && (
-                        <p
-                            className="small"
-                            style={{ marginTop: 12, color: "var(--heart)", textAlign: "center" }}
-                        >
-                            Не удалось сохранить изменения. Попробуй ещё раз.
-                        </p>
-                    )}
-
-                    <p className="small" style={{ marginTop: 12, textAlign: "center" }}>
-                        Выбранные навыки доступны на вкладке{" "}
-                        <Link href="/tree" style={{ color: "var(--primary)", fontWeight: 700 }}>
-                            Путь
-                        </Link>
-                    </p>
-                </div>
-
-                {/* Theme */}
-                <div className="card card-pad" style={{ marginTop: 16 }}>
-                    <span className="eyebrow muted">Тема оформления</span>
-                    <div className="theme-grid" style={{ marginTop: 14 }}>
-                        {THEME_OPTIONS.map((option) => (
-                            <button
-                                key={option.value}
-                                className={"theme-opt" + (theme === option.value ? " active" : "")}
-                                onClick={() => setTheme(option.value)}
-                            >
-                                <Icon name={option.icon} size={22} />
-                                <span>{option.label}</span>
-                            </button>
-                        ))}
+                                )}
+                                {voiceUsage.monthlyLimitSeconds > 0 && (
+                                    <VoiceBar
+                                        label="В этом месяце"
+                                        usedSeconds={voiceUsage.monthlyUsedSeconds}
+                                        limitSeconds={voiceUsage.monthlyLimitSeconds}
+                                        tone="green"
+                                        resetNote="Сбрасывается ежемесячно"
+                                    />
+                                )}
+                            </div>
+                        )}
                     </div>
-                </div>
-
-                {/* Admin */}
-                {isAdmin && (
-                    <Link
-                        href="/admin/skills"
-                        className="card card-pad logout-row"
-                        style={{ marginTop: 16 }}
-                    >
-                        <span className="itile primary" style={{ width: 40, height: 40 }}>
-                            <Icon name="settings" size={20} />
-                        </span>
-                        <div className="grow" style={{ textAlign: "left" }}>
-                            <div className="h4">Панель администратора</div>
-                            <div className="small">Управление контентом</div>
-                        </div>
-                        <Icon name="chevron-right" style={{ color: "var(--ink-4)" }} />
-                    </Link>
-                )}
-
-                {/* Logout */}
-                <button
-                    className="card card-pad logout-row"
-                    style={{ marginTop: 16 }}
-                    onClick={() => logoutMutation.mutate()}
-                    disabled={logoutMutation.isPending}
-                >
-                    <span className="itile heart" style={{ width: 40, height: 40 }}>
-                        <Icon name="arrow-left" size={20} />
-                    </span>
-                    <div className="grow" style={{ textAlign: "left" }}>
-                        <div className="h4" style={{ color: "var(--heart)" }}>
-                            Выйти из аккаунта
-                        </div>
-                        <div className="small">Завершить сессию</div>
-                    </div>
-                    <Icon name="chevron-right" style={{ color: "var(--ink-4)" }} />
-                </button>
-
-                </div>
                 </div>
             </div>
         </div>
     );
 }
 
-function VoiceQuotaBar({
+function VoiceBar({
     label,
     usedSeconds,
     limitSeconds,
-    style,
+    tone,
+    resetNote,
 }: {
     label: string;
     usedSeconds: number;
     limitSeconds: number;
-    style?: React.CSSProperties;
+    tone: "violet" | "green";
+    resetNote: string;
 }) {
-    const usedMinutes = Math.round(usedSeconds / 60);
-    const limitMinutes = Math.round(limitSeconds / 60);
-    const percent = Math.min(100, Math.round((usedSeconds / limitSeconds) * 100));
-    const isNearLimit = percent >= 80;
+    const usedMin = Math.round(usedSeconds / 60);
+    const limitMin = Math.round(limitSeconds / 60);
+    const pct = Math.min(100, Math.round((usedSeconds / limitSeconds) * 100));
     const isExceeded = usedSeconds >= limitSeconds;
-    const tone = isExceeded ? "rust" : isNearLimit ? "rust" : "olive";
+    const fillClass = isExceeded ? "red" : tone;
 
     return (
-        <div className="quota" style={style}>
-            <div className="row between small" style={{ marginBottom: 8 }}>
+        <div className="pv2-quota-item">
+            <div className="pv2-quota-head">
                 <span>{label}</span>
-                <span className="num" style={isExceeded ? { color: "var(--heart)" } : undefined}>
-                    {usedMinutes} / {limitMinutes} мин
+                <span className={`pv2-quota-num${isExceeded ? " exceeded" : ""}`}>
+                    {usedMin} / {limitMin} мин
                 </span>
             </div>
-            <Progress value={usedSeconds} max={Math.max(1, limitSeconds)} tone={tone} height={5} />
-            {isExceeded && (
-                <p className="small" style={{ color: "var(--heart)", marginTop: 6 }}>
+            <div className="pv2-quota-bar">
+                <div className={`pv2-quota-fill ${fillClass}`} style={{ width: `${pct}%` }} />
+            </div>
+            {isExceeded ? (
+                <span className="pv2-quota-note warn">
                     Лимит исчерпан — звонки откроются{" "}
                     {label === "Сегодня" ? "завтра" : "в следующем месяце"}
-                </p>
+                </span>
+            ) : (
+                <span className="pv2-quota-note">{resetNote}</span>
             )}
         </div>
-    );
-}
-
-function SkillToggle({
-    title,
-    subtitle,
-    isAlwaysOn,
-    isEnrolled,
-    disabled,
-    onClick,
-}: {
-    title: string;
-    subtitle: string;
-    isAlwaysOn: boolean;
-    isEnrolled: boolean;
-    disabled: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            className="row between gap-3"
-            style={{
-                padding: "12px 16px",
-                borderRadius: "var(--r-md)",
-                textAlign: "left",
-                width: "100%",
-                cursor: isAlwaysOn ? "default" : "pointer",
-                transition: "all var(--transition)",
-                border: isEnrolled ? "1.5px solid var(--primary)" : "1px solid var(--line)",
-                background: isEnrolled
-                    ? "var(--primary-soft)"
-                    : isAlwaysOn
-                    ? "var(--surface-2)"
-                    : "var(--surface)",
-                opacity: isAlwaysOn ? 0.7 : 1,
-            }}
-        >
-            <div className="grow" style={{ minWidth: 0 }}>
-                <p
-                    className="body"
-                    style={{
-                        fontWeight: 700,
-                        color: isEnrolled
-                            ? "var(--primary)"
-                            : isAlwaysOn
-                            ? "var(--ink-3)"
-                            : "var(--ink)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    {title}
-                </p>
-                <p className="small" style={{ marginTop: 2 }}>
-                    {subtitle}
-                </p>
-            </div>
-            <div
-                style={{
-                    width: 44,
-                    height: 24,
-                    borderRadius: 999,
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    padding: 2,
-                    transition: "background var(--transition)",
-                    background:
-                        isAlwaysOn
-                            ? "var(--line-2)"
-                            : isEnrolled
-                            ? "var(--primary)"
-                            : "var(--line)",
-                }}
-            >
-                <div
-                    style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: "50%",
-                        background: "#fff",
-                        boxShadow: "var(--sh-1)",
-                        transition: "transform var(--transition)",
-                        transform:
-                            isAlwaysOn || isEnrolled ? "translateX(20px)" : "translateX(0)",
-                    }}
-                />
-            </div>
-        </button>
     );
 }
