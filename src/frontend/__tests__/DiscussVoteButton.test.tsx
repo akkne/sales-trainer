@@ -4,10 +4,9 @@ import { VoteButton } from "@/features/discuss/components/vote-button";
 import { formatTimeAgo, pluralizeRu } from "@/features/discuss/lib/format";
 
 describe("VoteButton", () => {
-    it("renders the vote count and votes label", () => {
+    it("renders the vote count", () => {
         render(<VoteButton count={47} active={false} onToggle={vi.fn()} />);
         expect(screen.getByText("47")).toBeTruthy();
-        expect(screen.getByText("голосов")).toBeTruthy();
     });
 
     it("calls onToggle when clicked", () => {

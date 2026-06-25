@@ -9,7 +9,7 @@ interface VoteButtonProps {
     disabled?: boolean;
 }
 
-/** The upvote column used on threads and replies (mirrors the .dsc-vote design). */
+/** Upvote column — up-chevron + bold count. Used on thread rows and replies. */
 export function VoteButton({ count, active, onToggle, disabled }: VoteButtonProps) {
     return (
         <div className="dsc-vote">
@@ -25,10 +25,9 @@ export function VoteButton({ count, active, onToggle, disabled }: VoteButtonProp
                 aria-pressed={active}
                 aria-label={active ? "Убрать голос" : "Проголосовать"}
             >
-                <Icon name="arrow-up" size={20} />
+                <Icon name="chevron-up" size={16} />
             </button>
             <b className="num">{count}</b>
-            <span className="dsc-vote-l">голосов</span>
         </div>
     );
 }
