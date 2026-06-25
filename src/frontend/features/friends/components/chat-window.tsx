@@ -8,8 +8,124 @@ import {
     useSendChatMessage,
     useConversations,
 } from "@/features/friends/hooks/use-chat";
-import { ChatBubble } from "./chat-bubble";
-import { ChatInput } from "./chat-input";
+import { RailChatBubble } from "./chat-bubble";
+import { RailChatInput } from "./chat-input";
+
+// ─── Rail chat view (330px right rail, V2 design) ───────────────────────────
+
+interface RailChatViewProps {
+    conversationId: string;
+    onBack: () => void;
+}
+
+export function RailChatView({ conversationId, onBack }: RailChatViewProps) {
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // useChatMessages already has refetchInterval for live-feel polling — preserved as-is.
+    const { data: messages, isLoading } = useChatMessages(conversationId);
+    const sendMutation = useSendChatMessage();
+    const { data: conversations } = useConversations();
+
+    const conversation = conversations?.find(
+        (c) => c.conversationId === conversationId,
+    );
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages?.length]);
+
+    function handleSend(content: string) {
+        sendMutation.mutate({ conversationId, content });
+    }
+
+    return (
+        <>
+            {/* Rail header */}
+            <div className="frd-rail-head">
+                <button
+                    className="frd-rail-back"
+                    onClick={onBack}
+                    aria-label="Назад к активности"
+                >
+                    <Icon name="arrow-left" size={16} />
+                </button>
+
+                {conversation && (
+                    <GeoAvatar seed={conversation.friendDisplayName} size={30} />
+                )}
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p
+                        className="frd-rail-title"
+                        style={{ fontSize: 14, marginBottom: 0 }}
+                    >
+                        {conversation?.friendDisplayName ?? "Чат"}
+                    </p>
+                    {/* Online status omitted — presence not tracked by backend */}
+                </div>
+            </div>
+
+            {/* Message thread */}
+            <div className="frd-chat-msgs">
+                {isLoading ? (
+                    <div
+                        style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: "50%",
+                                border: "2px solid var(--primary)",
+                                borderTopColor: "transparent",
+                                animation: "spin 0.8s linear infinite",
+                            }}
+                        />
+                    </div>
+                ) : messages && messages.length > 0 ? (
+                    <>
+                        {messages.map((message) => (
+                            <RailChatBubble key={message.id} message={message} />
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </>
+                ) : (
+                    <div
+                        style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <p
+                            style={{
+                                fontSize: 13,
+                                color: "var(--ink-4)",
+                                textAlign: "center",
+                            }}
+                        >
+                            Напишите первое сообщение!
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Composer */}
+            <RailChatInput
+                onSend={handleSend}
+                disabled={sendMutation.isPending}
+            />
+        </>
+    );
+}
+
+// ─── Legacy full-page ChatWindow (kept for chats-pane / deep-link routes) ───
 
 interface ChatWindowProps {
     conversationId: string;
@@ -73,7 +189,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                 ) : messages && messages.length > 0 ? (
                     <>
                         {messages.map((message) => (
-                            <ChatBubble key={message.id} message={message} />
+                            <RailChatBubble key={message.id} message={message} />
                         ))}
                         <div ref={messagesEndRef} />
                     </>
@@ -86,7 +202,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                 )}
             </div>
 
-            <ChatInput
+            <RailChatInput
                 onSend={handleSendMessage}
                 disabled={sendMessageMutation.isPending}
             />

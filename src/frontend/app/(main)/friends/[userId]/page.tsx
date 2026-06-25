@@ -2,9 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
-import { UserAvatar } from "@/shared/components/user-avatar";
-import { Chip } from "@/shared/components/chip";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { StatTile } from "@/shared/components/stat-tile";
 import { usePublicProfile } from "@/features/friends/hooks/use-friends";
 import { useCreateConversation } from "@/features/friends/hooks/use-chat";
@@ -15,7 +13,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Other",
+    other: "Другое",
 };
 
 export default function PublicProfilePage() {
@@ -27,85 +25,86 @@ export default function PublicProfilePage() {
     function handleChatClick() {
         createConversationMutation.mutate(params.userId, {
             onSuccess: (conversation) => {
-                router.push(`/friends?tab=chats&conv=${conversation.conversationId}`);
+                router.push(`/friends?conv=${conversation.conversationId}`);
             },
         });
     }
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[50vh]">
-                <div
-                    className="w-10 h-10 rounded-full border-4 border-t-transparent animate-spin"
-                    style={{ borderColor: "var(--ink)", borderTopColor: "transparent" }}
-                />
+            <div className="frd-profile">
+                <div className="frd-profile-cover" />
+                <div className="frd-profile-body" style={{ paddingTop: 56 }}>
+                    <div
+                        className="frd-skeleton"
+                        style={{ height: 22, width: 160, borderRadius: 8, marginBottom: 8 }}
+                    />
+                    <div
+                        className="frd-skeleton"
+                        style={{ height: 14, width: 100, borderRadius: 6 }}
+                    />
+                </div>
             </div>
         );
     }
 
     if (!profile) {
         return (
-            <div className="max-w-4xl mx-auto px-4 py-8 text-center">
-                <p className="text-ink-4">Пользователь не найден</p>
+            <div className="frd-profile">
+                <div className="frd-empty" style={{ paddingTop: 80 }}>
+                    <div className="frd-empty-icon">
+                        <Icon name="user" size={20} />
+                    </div>
+                    <p className="frd-empty-title">Пользователь не найден</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-bg pb-20">
-            {/* Header band */}
-            <div className="bg-surface border-b border-line px-6 py-5 md:px-8">
-                <div className="max-w-4xl mx-auto">
-                    <button
-                        onClick={() => router.back()}
-                        className="flex items-center gap-1 text-ink-4 hover:text-ink transition-colors mb-4"
-                    >
-                        <Icon name="arrow-left" size="md" />
-                        <span className="text-sm font-medium">Назад</span>
-                    </button>
+        <div className="frd-profile">
+            {/* Back button */}
+            <div style={{ padding: "14px 28px 0" }}>
+                <button
+                    onClick={() => router.back()}
+                    className="frd-rail-back"
+                    style={{ width: "auto", padding: "0 12px", borderRadius: 9, gap: 6, display: "inline-flex", alignItems: "center", height: 32, fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}
+                    aria-label="Назад"
+                >
+                    <Icon name="arrow-left" size={15} />
+                    Назад
+                </button>
+            </div>
 
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-mono tracking-[2px] uppercase text-indigo">
-                            ПРОФИЛЬ
-                        </span>
-                    </div>
+            {/* Cover band */}
+            <div className="frd-profile-cover" style={{ margin: "14px 0 0" }} />
 
-                    <div className="flex items-center gap-4">
-                        <UserAvatar avatarUrl={profile.avatarUrl} seed={profile.displayName} size={64} circle />
-                        <div className="min-w-0 flex-1">
-                            <h1 className="text-2xl font-medium tracking-tight text-ink truncate">
-                                {profile.displayName}
-                            </h1>
-                            {profile.persona && (
-                                <div className="mt-2">
-                                    <Chip tone="indigo" icon={<Icon name="star" size="xs" />}>
-                                        {PERSONA_LABELS[profile.persona] ?? profile.persona}
-                                    </Chip>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+            {/* Identity row — pulled up over the cover */}
+            <div className="frd-profile-identity">
+                <div className="frd-profile-avatar-ring">
+                    <GeoAvatar seed={profile.displayName} size={86} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0, paddingTop: 48 }}>
+                    <p className="frd-profile-name">{profile.displayName}</p>
+                    {profile.persona && (
+                        <p className="frd-profile-role">
+                            {PERSONA_LABELS[profile.persona] ?? profile.persona}
+                        </p>
+                    )}
                 </div>
             </div>
 
-            <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
-                {/* Stats grid */}
-                <h3 className="text-xs font-mono tracking-[1px] uppercase text-ink-4 mb-3">
-                    Показатели
-                </h3>
-                <div className="grid grid-cols-2 gap-3 mb-6">
+            {/* Body */}
+            <div className="frd-profile-body">
+                {/* Stats grid — 2-up; no achievement count (removed in P3) */}
+                <p className="frd-profile-section">Показатели</p>
+                <div className="frd-profile-stats">
                     <StatTile
-                        label="Стрик"
+                        label="Лучший стрик"
                         value={profile.currentStreakDayCount}
                         unit="дн"
                         tone="rust"
                         icon={<Icon name="flame" size="xs" />}
-                    />
-                    <StatTile
-                        label="Всего XP"
-                        value={profile.totalXpAmount}
-                        tone="indigo"
-                        icon={<Icon name="bolt" size="xs" />}
                     />
                     <StatTile
                         label="Средний балл"
@@ -117,23 +116,40 @@ export default function PublicProfilePage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-3">
+                <p className="frd-profile-section" style={{ marginTop: 24 }}>Действия</p>
+                <div className="frd-profile-actions">
                     <FriendshipButton
                         userId={profile.userId}
                         friendshipStatus={profile.friendshipStatus}
                         friendshipId={profile.friendshipId ?? undefined}
+                        fullWidth
                     />
 
                     {profile.friendshipStatus === "friends" && (
-                        <Button
-                            variant="secondary"
-                            fullWidth
-                            iconLeft="message"
-                            loading={createConversationMutation.isPending}
+                        <button
                             onClick={handleChatClick}
+                            disabled={createConversationMutation.isPending}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 8,
+                                height: 40,
+                                background: "var(--surface-3)",
+                                border: "1px solid var(--line)",
+                                borderRadius: 10,
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: "var(--ink-3)",
+                                cursor: "pointer",
+                                transition: "background var(--transition)",
+                                width: "100%",
+                            }}
+                            aria-label="Написать сообщение"
                         >
-                            Написать
-                        </Button>
+                            <Icon name="message" size={16} />
+                            {createConversationMutation.isPending ? "…" : "Написать"}
+                        </button>
                     )}
                 </div>
             </div>

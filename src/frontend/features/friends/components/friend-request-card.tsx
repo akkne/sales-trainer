@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/shared/components/button";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
 import {
     useAcceptFriendRequest,
@@ -15,7 +14,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Other",
+    other: "Другое",
 };
 
 interface FriendRequestCardProps {
@@ -29,70 +28,67 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
 
     const isIncoming = request.direction === "incoming";
 
+    const subLabel = isIncoming
+        ? (PERSONA_LABELS[request.persona ?? ""] ?? request.persona ?? "хочет добавить тебя в друзья")
+        : "отправлен запрос в друзья";
+
     return (
-        <div className="card card-pad friend-row">
+        <div className="frd-req-card">
+            {/* Gradient avatar */}
             <Link
                 href={`/friends/${request.userId}`}
                 style={{ flexShrink: 0 }}
                 aria-label={request.displayName}
             >
-                <GeoAvatar seed={request.displayName} size={48} />
+                <GeoAvatar seed={request.displayName} size={44} />
             </Link>
 
-            <div className="grow" style={{ minWidth: 0 }}>
+            {/* Name + sub label */}
+            <div className="frd-req-meta">
                 <Link
                     href={`/friends/${request.userId}`}
-                    className="h4"
-                    style={{
-                        display: "block",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        textDecoration: "none",
-                        color: "inherit",
-                    }}
+                    style={{ textDecoration: "none", color: "inherit" }}
                 >
-                    {request.displayName}
+                    <p className="frd-req-name">{request.displayName}</p>
                 </Link>
-                <div className="small">
-                    {isIncoming
-                        ? PERSONA_LABELS[request.persona ?? ""] ?? request.persona ?? "хочет добавить тебя в друзья"
-                        : "отправлен запрос в друзья"}
-                </div>
+                <p className="frd-req-sub">{subLabel}</p>
             </div>
 
-            {isIncoming ? (
-                <div className="row gap-2" style={{ flexShrink: 0 }}>
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        loading={acceptMutation.isPending}
-                        onClick={() => acceptMutation.mutate(request.friendshipId)}
-                    >
-                        Принять
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={declineMutation.isPending}
-                        onClick={() => declineMutation.mutate(request.friendshipId)}
-                    >
-                        Отклонить
-                    </Button>
-                </div>
-            ) : (
-                <div className="row gap-2 items-center" style={{ flexShrink: 0 }}>
-                    <span className="chip">Ожидание…</span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={cancelMutation.isPending}
-                        onClick={() => cancelMutation.mutate(request.friendshipId)}
-                    >
-                        Отменить
-                    </Button>
-                </div>
-            )}
+            {/* Actions */}
+            <div className="frd-req-actions">
+                {isIncoming ? (
+                    <>
+                        <button
+                            className="frd-req-accept"
+                            disabled={acceptMutation.isPending}
+                            onClick={() => acceptMutation.mutate(request.friendshipId)}
+                            aria-label="Принять запрос"
+                        >
+                            {acceptMutation.isPending ? "…" : "Принять"}
+                        </button>
+                        <button
+                            className="frd-req-decline"
+                            disabled={declineMutation.isPending}
+                            onClick={() => declineMutation.mutate(request.friendshipId)}
+                            aria-label="Отклонить запрос"
+                        >
+                            {declineMutation.isPending ? "…" : "Отклонить"}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <span className="frd-req-pending-chip">Ожидание…</span>
+                        <button
+                            className="frd-req-decline"
+                            disabled={cancelMutation.isPending}
+                            onClick={() => cancelMutation.mutate(request.friendshipId)}
+                            aria-label="Отменить запрос"
+                        >
+                            {cancelMutation.isPending ? "…" : "Отменить"}
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
     );
 }

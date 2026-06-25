@@ -1,14 +1,7 @@
 "use client";
 
-import { Icon } from "@/shared/components/icon";
-import type { IconName } from "@/shared/components/icon";
 import { useFriendActivity } from "@/features/friends/hooks/use-friends";
-
-const ACTIVITY_CONFIG: Record<string, { icon: IconName; color: string }> = {
-    earned_xp: { icon: "bolt", color: "var(--primary)" },
-    completed_lesson: { icon: "check", color: "var(--primary)" },
-    streak_milestone: { icon: "flame", color: "var(--flame)" },
-};
+import { Icon } from "@/shared/components/icon";
 
 function formatRelativeTime(dateString: string): string {
     const now = new Date();
@@ -19,68 +12,68 @@ function formatRelativeTime(dateString: string): string {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMinutes < 1) return "только что";
-    if (diffMinutes < 60) return `${diffMinutes} мин назад`;
-    if (diffHours < 24) return `${diffHours} ч назад`;
-    if (diffDays < 7) return `${diffDays} д назад`;
+    if (diffMinutes < 60) return `${diffMinutes} мин`;
+    if (diffHours < 24) return `${diffHours} ч`;
+    if (diffDays < 7) return `${diffDays} д`;
     return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+/** Derive initials from a display name for the activity avatar */
+function initials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
 }
 
 export function FriendActivityFeed() {
     const { data: activities, isLoading } = useFriendActivity();
 
-    if (isLoading) {
-        return (
-            <>
-                <span className="eyebrow muted">Активность друзей</span>
-                <div className="col gap-2" style={{ marginTop: 14 }}>
-                    {[1, 2, 3].map((index) => (
-                        <div key={index} style={{ height: 40, borderRadius: 12, background: "var(--surface-2)" }} />
-                    ))}
-                </div>
-            </>
-        );
-    }
-
-    if (!activities || activities.length === 0) {
-        return (
-            <>
-                <span className="eyebrow muted">Активность друзей</span>
-                <p className="small" style={{ marginTop: 14 }}>Пока тихо. Активность друзей появится здесь.</p>
-            </>
-        );
-    }
-
     return (
         <>
-            <span className="eyebrow muted">Активность друзей</span>
-            <div className="col" style={{ marginTop: 14 }}>
-                {activities.slice(0, 10).map((activity, index) => {
-                    const config = ACTIVITY_CONFIG[activity.activityType] ?? {
-                        icon: "info" as IconName,
-                        color: "var(--ink-3)",
-                    };
+            {/* Rail header */}
+            <div className="frd-rail-head">
+                <p className="frd-rail-title">Активность</p>
+            </div>
 
-                    return (
+            <div className="frd-activity-scroll">
+                {isLoading ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {[1, 2, 3, 4].map((i) => (
+                            <div
+                                key={i}
+                                className="frd-skeleton"
+                                style={{ height: 40, borderRadius: 10 }}
+                            />
+                        ))}
+                    </div>
+                ) : !activities || activities.length === 0 ? (
+                    <div className="frd-empty">
+                        <div className="frd-empty-icon">
+                            <Icon name="users" size={18} />
+                        </div>
+                        <p className="frd-empty-title">Пока тихо</p>
+                        <p className="frd-empty-sub">
+                            Активность друзей появится здесь
+                        </p>
+                    </div>
+                ) : (
+                    activities.slice(0, 15).map((activity, index) => (
                         <div
                             key={`${activity.userId}-${activity.occurredAt}-${index}`}
-                            className="act-row"
+                            className="frd-act-row"
                         >
-                            <span
-                                className="itile"
-                                style={{ width: 32, height: 32, background: "var(--surface-2)", color: config.color }}
-                            >
-                                <Icon name={config.icon} size={17} />
+                            <div className="frd-act-avatar">
+                                {initials(activity.displayName)}
+                            </div>
+                            <span className="frd-act-body">
+                                <b>{activity.displayName}</b> {activity.description}
                             </span>
-                            <span className="grow small">
-                                <b style={{ color: "var(--ink)" }}>{activity.displayName}</b>{" "}
-                                {activity.description}
-                            </span>
-                            <span className="small" style={{ color: "var(--ink-4)", flexShrink: 0 }}>
+                            <span className="frd-act-time">
                                 {formatRelativeTime(activity.occurredAt)}
                             </span>
                         </div>
-                    );
-                })}
+                    ))
+                )}
             </div>
         </>
     );

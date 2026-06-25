@@ -13,29 +13,22 @@ function formatMessageTime(dateString: string): string {
     });
 }
 
-export function ChatBubble({ message }: ChatBubbleProps) {
+/** V2 rail bubble — violet for own messages, #F1F1F4 for theirs. */
+export function RailChatBubble({ message }: ChatBubbleProps) {
     return (
-        <div className={`flex ${message.isOwn ? "justify-end" : "justify-start"}`}>
-            <div
-                className={`max-w-[75%] px-4 py-3 text-sm leading-relaxed ${
-                    message.isOwn
-                        ? "rounded-2xl rounded-tr-sm"
-                        : "rounded-2xl rounded-tl-sm"
-                }`}
-                style={
-                    message.isOwn
-                        ? { background: "var(--ink)", color: "var(--bg)" }
-                        : { background: "var(--bg-2)", color: "var(--ink)" }
-                }
-            >
-                <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                <p
-                    className="text-[10px] mt-1.5 font-mono"
-                    style={{ color: message.isOwn ? "var(--ink-4)" : "var(--ink-4)" }}
-                >
-                    {formatMessageTime(message.sentAt)}
+        <div className={`frd-bubble-wrap ${message.isOwn ? "own" : "them"}`}>
+            <div className={`frd-bubble ${message.isOwn ? "own" : "them"}`}>
+                <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>
+                    {message.content}
                 </p>
+                <span className="frd-bubble-time">
+                    {formatMessageTime(message.sentAt)}
+                </span>
             </div>
         </div>
     );
 }
+
+// Legacy export alias kept so chats-pane / conversation-card can still import ChatBubble
+// if they reference it. The rail view uses RailChatBubble directly.
+export { RailChatBubble as ChatBubble };

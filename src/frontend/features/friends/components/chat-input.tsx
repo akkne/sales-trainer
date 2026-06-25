@@ -8,44 +8,47 @@ interface ChatInputProps {
     disabled?: boolean;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
-    const [inputValue, setInputValue] = useState("");
+/** V2 rail chat composer — token-based, matches design §3.4 composer spec. */
+export function RailChatInput({ onSend, disabled }: ChatInputProps) {
+    const [value, setValue] = useState("");
 
     function handleSend() {
-        const trimmedValue = inputValue.trim();
-        if (!trimmedValue) return;
-        onSend(trimmedValue);
-        setInputValue("");
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        onSend(trimmed);
+        setValue("");
     }
 
-    function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-        if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
+    function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
             handleSend();
         }
     }
 
     return (
-        <div className="flex items-end gap-3 px-4 py-3 bg-surface border-t border-line">
+        <div className="frd-composer">
             <textarea
-                value={inputValue}
-                onChange={(event) => setInputValue(event.target.value)}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Написать сообщение..."
+                placeholder="Написать сообщение…"
                 rows={1}
                 disabled={disabled}
-                className="flex-1 resize-none bg-bg-2 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 max-h-32 overflow-y-auto border border-line"
-                style={{ "--tw-ring-color": "var(--indigo)" } as React.CSSProperties}
+                className="frd-composer-input"
+                aria-label="Сообщение"
             />
             <button
                 onClick={handleSend}
-                disabled={disabled || !inputValue.trim()}
-                className="p-3 rounded-xl text-white disabled:opacity-40 transition-opacity hover:opacity-90 shrink-0"
-                style={{ background: "var(--indigo)", boxShadow: "var(--sh-2)" }}
+                disabled={disabled || !value.trim()}
+                className="frd-composer-send"
                 aria-label="Отправить"
             >
-                <Icon name="send" size="md" />
+                <Icon name="send" size={16} />
             </button>
         </div>
     );
 }
+
+// Legacy alias for any existing import of ChatInput
+export { RailChatInput as ChatInput };

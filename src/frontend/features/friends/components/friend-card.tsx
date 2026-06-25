@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/shared/components/icon";
-import { UserAvatar } from "@/shared/components/user-avatar";
+import { GeoAvatar } from "@/shared/components/geo-avatar";
 import type { Friend } from "@/features/friends/hooks/use-friends";
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -10,7 +10,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Other",
+    other: "Другое",
 };
 
 interface FriendCardProps {
@@ -19,42 +19,39 @@ interface FriendCardProps {
 }
 
 export function FriendCard({ friend, onChatClick }: FriendCardProps) {
+    // Online presence is not tracked by the backend — omit the live dot
+    // (the status dot slot is reserved for when presence is available).
+    const focusLine = friend.persona
+        ? (PERSONA_LABELS[friend.persona] ?? friend.persona)
+        : null;
+
     return (
-        <div className="card card-pad lift friend-row">
-            <Link href={`/friends/${friend.userId}`} style={{ flexShrink: 0 }} aria-label={friend.displayName}>
-                <UserAvatar avatarUrl={friend.avatarUrl} seed={friend.displayName} size={48} circle />
-            </Link>
-
-            <Link href={`/friends/${friend.userId}`} className="grow" style={{ minWidth: 0, textDecoration: "none", color: "inherit" }}>
-                <div className="h4" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {friend.displayName}
+        <div className="frd-card">
+            {/* Top row: avatar + message button */}
+            <div className="frd-card-top">
+                <div className="frd-card-avatar-wrap">
+                    <Link href={`/friends/${friend.userId}`} aria-label={friend.displayName}>
+                        <GeoAvatar seed={friend.displayName} size={44} />
+                    </Link>
+                    {/* Status dot — omitted (no presence data); add .online/.offline when available */}
                 </div>
-                {friend.persona && (
-                    <div className="small" style={{ color: "var(--ink-4)" }}>
-                        {PERSONA_LABELS[friend.persona] ?? friend.persona}
-                    </div>
-                )}
-                <div className="row gap-3 small" style={{ marginTop: 3 }}>
-                    <span className="row gap-1">
-                        <Icon name="bolt" size={14} style={{ color: "var(--primary)" }} />
-                        <span className="num">{friend.totalXpAmount.toLocaleString("ru")}</span>
-                    </span>
-                    {friend.currentStreakDayCount > 0 && (
-                        <span className="row gap-1">
-                            <Icon name="flame" size={14} style={{ color: "var(--flame)" }} />
-                            <span className="num">{friend.currentStreakDayCount}</span>
-                        </span>
-                    )}
-                </div>
-            </Link>
+                <button
+                    className="frd-card-msg-btn"
+                    onClick={() => onChatClick(friend.userId)}
+                    aria-label={`Написать ${friend.displayName}`}
+                >
+                    <Icon name="message" size={16} />
+                </button>
+            </div>
 
-            <button
-                onClick={() => onChatClick(friend.userId)}
-                className="icon-btn"
-                aria-label="Написать"
+            {/* Name + focus line */}
+            <Link
+                href={`/friends/${friend.userId}`}
+                style={{ textDecoration: "none", color: "inherit" }}
             >
-                <Icon name="message" size={18} />
-            </button>
+                <p className="frd-card-name">{friend.displayName}</p>
+                {focusLine && <p className="frd-card-sub">{focusLine}</p>}
+            </Link>
         </div>
     );
 }

@@ -3,96 +3,91 @@
 import { useState, useDeferredValue } from "react";
 import { Icon } from "@/shared/components/icon";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
-import { useUserSearch, useSendFriendRequest } from "@/features/friends/hooks/use-friends";
+import { useUserSearch } from "@/features/friends/hooks/use-friends";
 import { FriendshipButton } from "./friendship-button";
 
-export function UserSearchBar() {
+/**
+ * Standalone search input that renders inline (no wrapper div with relative
+ * positioning — that is handled by .frd-search-wrap in the parent page).
+ */
+export function FriendSearchBar() {
     const [searchInput, setSearchInput] = useState("");
     const deferredQuery = useDeferredValue(searchInput);
     const { data: searchResults, isLoading } = useUserSearch(deferredQuery);
 
+    const showDropdown = deferredQuery.length >= 2;
+
     return (
         <div style={{ position: "relative" }}>
-            <div className="field-wrap has-ic">
-                <Icon name="search" className="lead-ic" />
-                <input
-                    type="text"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder="Найти пользователя…"
-                    className="field"
-                />
-            </div>
+            {/* Search field */}
+            <span className="frd-search-ic">
+                <Icon name="search" size={16} />
+            </span>
+            <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Найти людей по имени…"
+                className="frd-search"
+                aria-label="Поиск пользователей"
+                autoComplete="off"
+            />
 
-            {deferredQuery.length >= 2 && (
-                <div
-                    className="card"
-                    style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 8,
-                        overflow: "hidden",
-                        maxHeight: 320,
-                        overflowY: "auto",
-                        zIndex: 20,
-                        boxShadow: "var(--sh-3)",
-                    }}
-                >
+            {/* Results dropdown */}
+            {showDropdown && (
+                <div className="frd-search-results">
                     {isLoading ? (
-                        <div style={{ padding: 16, textAlign: "center" }}>
+                        <div
+                            style={{
+                                padding: 16,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
                             <div
                                 style={{
-                                    width: 24,
-                                    height: 24,
+                                    width: 20,
+                                    height: 20,
                                     borderRadius: "50%",
                                     border: "2px solid var(--primary)",
                                     borderTopColor: "transparent",
-                                    margin: "0 auto",
                                     animation: "spin 0.8s linear infinite",
                                 }}
                             />
                         </div>
                     ) : searchResults && searchResults.length > 0 ? (
-                        <div>
-                            {searchResults.map((result) => (
-                                <div
-                                    key={result.userId}
-                                    className="row gap-3"
-                                    style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}
-                                >
-                                    <GeoAvatar seed={result.displayName} size={36} />
-                                    <div className="grow" style={{ minWidth: 0 }}>
-                                        <p
-                                            className="h4"
-                                            style={{
-                                                fontSize: 14,
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            {result.displayName}
+                        searchResults.map((result) => (
+                            <div key={result.userId} className="frd-search-row">
+                                <GeoAvatar seed={result.displayName} size={36} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p
+                                        style={{
+                                            fontSize: 14,
+                                            fontWeight: 700,
+                                            color: "var(--ink-heading)",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                        }}
+                                    >
+                                        {result.displayName}
+                                    </p>
+                                    {result.persona && (
+                                        <p style={{ fontSize: 12, color: "var(--ink-4)", marginTop: 1 }}>
+                                            {result.persona}
                                         </p>
-                                        {result.persona && (
-                                            <p className="small" style={{ color: "var(--ink-4)" }}>
-                                                {result.persona}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <FriendshipButton
-                                        userId={result.userId}
-                                        friendshipStatus={result.friendshipStatus}
-                                        friendshipId={result.friendshipId ?? undefined}
-                                    />
+                                    )}
                                 </div>
-                            ))}
-                        </div>
+                                <FriendshipButton
+                                    userId={result.userId}
+                                    friendshipStatus={result.friendshipStatus}
+                                    friendshipId={result.friendshipId ?? undefined}
+                                />
+                            </div>
+                        ))
                     ) : (
-                        <p className="small" style={{ padding: 16, textAlign: "center", color: "var(--ink-4)" }}>
-                            Никого не найдено
-                        </p>
+                        <p className="frd-search-empty">Никого не найдено</p>
                     )}
                 </div>
             )}

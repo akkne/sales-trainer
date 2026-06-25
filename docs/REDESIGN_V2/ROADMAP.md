@@ -79,7 +79,7 @@ verification is collected into a checklist for the user.
   - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data).
   - [x] 4.2 Practice ✅ mentor banner + bundle grid (Chat/Call) + recent sessions + mode select; tsc clean, vitest 78/78. Mode-count number + dialog stats omitted (no data); difficulty inferred from sortOrder.
   - [x] 4.3 Reference ✅ card grid + 392px slide-in detail panel (example bubbles, metric tiles, coach); MasteryRing kept (sm on card, full in panel); tsc clean, vitest 78/78. Hardcoded quick-tags + old stat-tiles omitted (data contract).
-  - [ ] 4.4 Friends (`friends` + chat + `friends/[userId]` public profile)
+  - [x] 4.4 Friends ✅ main list (requests + friend grid) + 330px Activity/Chat rail; public profile restyled. Leaderboard tab UNMOUNTED (component kept) per design+gamification removal; online-dot omitted (no backend presence); chat polling + deep-links preserved. tsc clean, vitest 78/78.
   - [ ] 4.5 Discuss (`discuss` + `discuss/[threadId]`)
   - [ ] 4.6 Profile + **new `/settings` route** (split settings out of profile; preserve theme/logout/admin/email/password)
   - [ ] 4.7 Session / Exercise player (`session/[lessonId]` + exercise components)
