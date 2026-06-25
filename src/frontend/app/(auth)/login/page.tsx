@@ -18,17 +18,12 @@ export default function LoginPage() {
 
     return (
         <div className="auth">
-            <div className="app-backdrop" />
-            <div className="auth-card card fade-up">
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+            <div className="auth-card fade-up">
+                <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h2 className="h2" style={{ textAlign: "center", margin: "16px 0 6px" }}>
-                    С возвращением
-                </h2>
-                <p className="small" style={{ textAlign: "center", marginBottom: 26 }}>
-                    Войди и продолжи прокачивать навык
-                </p>
+                <h1 className="auth-heading">С возвращением</h1>
+                <p className="auth-sub">Войди и продолжи прокачивать навык</p>
 
                 <form onSubmit={handleSubmit} className="col gap-3">
                     <input
@@ -49,7 +44,7 @@ export default function LoginPage() {
                     />
 
                     {loginMutation.isError && (
-                        <p className="small" style={{ color: "var(--heart)" }}>
+                        <p className="auth-error">
                             {loginMutation.error?.message ?? "Ошибка входа"}
                         </p>
                     )}
@@ -58,7 +53,7 @@ export default function LoginPage() {
                         type="submit"
                         disabled={loginMutation.isPending}
                         className="btn btn-dark btn-block btn-lg"
-                        style={{ marginTop: 6 }}
+                        style={{ marginTop: 4 }}
                     >
                         {loginMutation.isPending ? "Входим..." : "Войти"}
                     </button>
@@ -70,11 +65,9 @@ export default function LoginPage() {
 
                 <GoogleLoginButton />
 
-                <p className="small" style={{ textAlign: "center", marginTop: 22 }}>
+                <p className="auth-footer" style={{ marginTop: 22 }}>
                     Нет аккаунта?{" "}
-                    <Link href="/register" style={{ color: "var(--primary)", fontWeight: 700 }}>
-                        Создать
-                    </Link>
+                    <Link href="/register">Создать</Link>
                 </p>
             </div>
         </div>

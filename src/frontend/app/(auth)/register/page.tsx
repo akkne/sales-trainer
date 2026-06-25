@@ -19,17 +19,12 @@ export default function RegisterPage() {
 
     return (
         <div className="auth">
-            <div className="app-backdrop" />
-            <div className="auth-card card fade-up">
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+            <div className="auth-card fade-up">
+                <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h2 className="h2" style={{ textAlign: "center", margin: "16px 0 6px" }}>
-                    Создай аккаунт
-                </h2>
-                <p className="small" style={{ textAlign: "center", marginBottom: 26 }}>
-                    Пара секунд — и первый урок твой
-                </p>
+                <h1 className="auth-heading">Создай аккаунт</h1>
+                <p className="auth-sub">Пара секунд — и первый урок твой</p>
 
                 <form onSubmit={handleSubmit} className="col gap-3">
                     <input
@@ -59,7 +54,7 @@ export default function RegisterPage() {
                     />
 
                     {registerMutation.isError && (
-                        <p className="small" style={{ color: "var(--heart)" }}>
+                        <p className="auth-error">
                             {registerMutation.error?.message ?? "Ошибка регистрации"}
                         </p>
                     )}
@@ -68,7 +63,7 @@ export default function RegisterPage() {
                         type="submit"
                         disabled={registerMutation.isPending}
                         className="btn btn-dark btn-block btn-lg"
-                        style={{ marginTop: 6 }}
+                        style={{ marginTop: 4 }}
                     >
                         {registerMutation.isPending ? "Создаём..." : "Зарегистрироваться"}
                     </button>
@@ -80,11 +75,9 @@ export default function RegisterPage() {
 
                 <GoogleLoginButton />
 
-                <p className="small" style={{ textAlign: "center", marginTop: 22 }}>
+                <p className="auth-footer" style={{ marginTop: 22 }}>
                     Уже есть аккаунт?{" "}
-                    <Link href="/login" style={{ color: "var(--primary)", fontWeight: 700 }}>
-                        Войти
-                    </Link>
+                    <Link href="/login">Войти</Link>
                 </p>
             </div>
         </div>

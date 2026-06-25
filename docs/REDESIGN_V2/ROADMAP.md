@@ -84,7 +84,7 @@ verification is collected into a checklist for the user.
   - [x] 4.6 Profile + /settings ✅ profile: dark cover + 4 stat tiles + enrolled-skills (enrollment toggles kept, base always-on) + voice quota. Settings: Appearance/Account(email read-only, admin)/Logout. Theme+logout+admin moved off profile. Omitted edit-profile/password-change/notif-prefs (no backend). tsc clean, vitest 78/78.
   - [x] 4.7 Session/Exercise ✅ V2 shell (violet gradient progress, no hearts indicator), all 10 exercise types get chipMap chips + V2 bubbles, result banner (ok/warn/bad tones), completion stats XP/accuracy/time. Confirmed hearts never existed in completion props. tsc clean, vitest 78/78, no tests touched.
   - [x] 4.8 Dialog chat + Voice ✅ V2 chat (history sidebar, asymmetric bubbles, typing dots, feedback modal) + voice (state-ring colors per pipeline state, mic hero, transcript, quota, all states). State machine untouched (restyle only); fixed interrupted-bubble class; removed dead code. tsc clean, vitest 78/78.
-  - [ ] 4.9 Auth: login / register / onboarding / verify-email
+  - [x] 4.9 Auth ✅ login/register/onboarding/verify-email on V2 (centered cards, 6-box code input w/ paste+auto-advance, wizard progress pills). Google OAuth + 4-step state machine + skip + resend cooldown preserved. tsc clean, vitest 78/78.
 
 - [ ] **P5 — Final QA pass**
   - Full tester: `tsc` + `vitest` + `eslint` clean; grep no league/achievement leakage in

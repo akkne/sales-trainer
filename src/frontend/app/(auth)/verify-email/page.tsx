@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     readPendingVerificationEmail,
     useResendVerificationCode,
@@ -11,13 +11,17 @@ import { ApiError } from "@/shared/api/api-client";
 import { Wordmark } from "@/shared/components/wordmark";
 
 const RESEND_COOLDOWN_SECONDS = 60;
+const CODE_LENGTH = 6;
 
 export default function VerifyEmailPage() {
     const [email, setEmail] = useState("");
-    const [code, setCode] = useState("");
+    const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(""));
     const [cooldownSeconds, setCooldownSeconds] = useState(0);
+    const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
     const verifyEmailMutation = useVerifyEmail();
     const resendCodeMutation = useResendVerificationCode();
+
+    const code = digits.join("");
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage is client-only; reading after mount avoids an SSR hydration mismatch
@@ -26,9 +30,36 @@ export default function VerifyEmailPage() {
 
     useEffect(() => {
         if (cooldownSeconds <= 0) return;
-        const timeoutId = setTimeout(() => setCooldownSeconds((seconds) => seconds - 1), 1000);
+        const timeoutId = setTimeout(() => setCooldownSeconds((s) => s - 1), 1000);
         return () => clearTimeout(timeoutId);
     }, [cooldownSeconds]);
+
+    function handleDigitChange(index: number, value: string) {
+        const digit = value.replace(/\D/g, "").slice(-1);
+        const next = [...digits];
+        next[index] = digit;
+        setDigits(next);
+        if (digit && index < CODE_LENGTH - 1) {
+            inputRefs.current[index + 1]?.focus();
+        }
+    }
+
+    function handleDigitKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+        if (event.key === "Backspace" && !digits[index] && index > 0) {
+            inputRefs.current[index - 1]?.focus();
+        }
+    }
+
+    function handleDigitPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+        event.preventDefault();
+        const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, CODE_LENGTH);
+        if (!pasted) return;
+        const next = Array(CODE_LENGTH).fill("");
+        for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
+        setDigits(next);
+        const focusIndex = Math.min(pasted.length, CODE_LENGTH - 1);
+        inputRefs.current[focusIndex]?.focus();
+    }
 
     function handleSubmit(event: React.FormEvent) {
         event.preventDefault();
@@ -52,15 +83,12 @@ export default function VerifyEmailPage() {
     if (!email) {
         return (
             <div className="auth">
-                <div className="app-backdrop" />
-                <div className="auth-card card fade-up">
-                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+                <div className="auth-card fade-up">
+                    <div className="auth-wordmark">
                         <Wordmark size={28} />
                     </div>
-                    <h2 className="h2" style={{ textAlign: "center", margin: "16px 0 6px" }}>
-                        Подтверждение почты
-                    </h2>
-                    <p className="small" style={{ textAlign: "center", marginBottom: 26 }}>
+                    <h1 className="auth-heading">Подтверждение почты</h1>
+                    <p className="auth-sub">
                         Начни с регистрации — мы пришлём код на твою почту.
                     </p>
                     <Link href="/register" className="btn btn-dark btn-block btn-lg">
@@ -73,63 +101,59 @@ export default function VerifyEmailPage() {
 
     return (
         <div className="auth">
-            <div className="app-backdrop" />
-            <div className="auth-card card fade-up">
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+            <div className="auth-card fade-up">
+                <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h2 className="h2" style={{ textAlign: "center", margin: "16px 0 6px" }}>
-                    Подтверди почту
-                </h2>
-                <p className="small" style={{ textAlign: "center", marginBottom: 26 }}>
-                    Мы отправили код на {email}
+                <h1 className="auth-heading">Подтверди почту</h1>
+                <p className="auth-sub">
+                    Мы отправили код на{" "}
+                    <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>{email}</span>
                 </p>
 
-                <form onSubmit={handleSubmit} className="col gap-3">
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        placeholder="Код из письма"
-                        value={code}
-                        onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-                        required
-                        maxLength={6}
-                        className="field"
-                    />
+                <form onSubmit={handleSubmit}>
+                    <div className="auth-code-row" role="group" aria-label="Код подтверждения">
+                        {digits.map((d, i) => (
+                            <input
+                                key={i}
+                                ref={(el) => { inputRefs.current[i] = el; }}
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete={i === 0 ? "one-time-code" : "off"}
+                                maxLength={1}
+                                value={d}
+                                onChange={(e) => handleDigitChange(i, e.target.value)}
+                                onKeyDown={(e) => handleDigitKeyDown(i, e)}
+                                onPaste={i === 0 ? handleDigitPaste : undefined}
+                                className={`auth-code-box${d ? " filled" : ""}`}
+                                aria-label={`Цифра ${i + 1}`}
+                            />
+                        ))}
+                    </div>
 
                     {verifyEmailMutation.isError && (
-                        <p className="small" style={{ color: "var(--heart)" }}>
+                        <p className="auth-error" style={{ textAlign: "center", marginTop: 10 }}>
                             {verifyEmailMutation.error?.message ?? "Неверный код"}
                         </p>
                     )}
 
                     <button
                         type="submit"
-                        disabled={verifyEmailMutation.isPending}
+                        disabled={verifyEmailMutation.isPending || code.length < CODE_LENGTH}
                         className="btn btn-dark btn-block btn-lg"
-                        style={{ marginTop: 6 }}
+                        style={{ marginTop: 20 }}
                     >
                         {verifyEmailMutation.isPending ? "Проверяем..." : "Подтвердить"}
                     </button>
                 </form>
 
-                <p className="small" style={{ textAlign: "center", marginTop: 22 }}>
+                <p className="auth-footer" style={{ marginTop: 22 }}>
                     Не пришёл код?{" "}
                     <button
                         type="button"
                         onClick={handleResend}
                         disabled={cooldownSeconds > 0 || resendCodeMutation.isPending}
-                        className="link-button"
-                        style={{
-                            color: "var(--primary)",
-                            opacity: cooldownSeconds > 0 ? 0.5 : 1,
-                            fontWeight: 700,
-                            background: "none",
-                            border: "none",
-                            cursor: cooldownSeconds > 0 ? "default" : "pointer",
-                            padding: 0,
-                        }}
+                        className="auth-link"
                     >
                         {cooldownSeconds > 0
                             ? `Отправить ещё раз (${cooldownSeconds})`
@@ -137,10 +161,8 @@ export default function VerifyEmailPage() {
                     </button>
                 </p>
 
-                <p className="small" style={{ textAlign: "center", marginTop: 10 }}>
-                    <Link href="/login" style={{ color: "var(--primary)", fontWeight: 700 }}>
-                        Вернуться ко входу
-                    </Link>
+                <p className="auth-footer" style={{ marginTop: 10 }}>
+                    <Link href="/login">Вернуться ко входу</Link>
                 </p>
             </div>
         </div>
