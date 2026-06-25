@@ -86,9 +86,26 @@ verification is collected into a checklist for the user.
   - [x] 4.8 Dialog chat + Voice ✅ V2 chat (history sidebar, asymmetric bubbles, typing dots, feedback modal) + voice (state-ring colors per pipeline state, mic hero, transcript, quota, all states). State machine untouched (restyle only); fixed interrupted-bubble class; removed dead code. tsc clean, vitest 78/78.
   - [x] 4.9 Auth ✅ login/register/onboarding/verify-email on V2 (centered cards, 6-box code input w/ paste+auto-advance, wizard progress pills). Google OAuth + 4-step state machine + skip + resend cooldown preserved. tsc clean, vitest 78/78.
 
-- [ ] **P5 — Final QA pass**
-  - Full tester: `tsc` + `vitest` + `eslint` clean; grep no league/achievement leakage in
-    user shell; route + nav audit; build check; assemble manual-visual checklist for the user.
+- [x] **4.10 (added) — Skill detail + course map** ✅ `/skill/[id]` + `/skill/[id]/map` restyled to V2 (reuse `.path-*` classes — missed in 4.1, and the guidebook links to them). tsc clean, vitest 78/78.
+
+- [x] **P5 — Final QA pass** ✅ code-reviewer verdict APPROVE (0 Critical/High); tsc no new errors; vitest 78/78; redesign-introduced eslint errors fixed (remaining 4 are pre-existing: geo-avatar immutability, reorder/session impure-in-render, admin setState-in-effect — all predate this work). No league/achievement leakage in the user shell (only `/admin/*`, the kept `/league` page, and backend-facing data fields remain). Dead `top-app-bar.tsx` + `sidebar.tsx` deleted. LOW fixes applied (verify-email OTP autofill, friends `conv` back/forward sync). **App not auto-run (>60s rule) — manual-visual checklist below.**
+
+## Manual visual checklist (run the app, then verify)
+
+Run `scripts/dev-up.sh` (or `scripts/dev-frontend.sh`) → http://localhost:3000. Hot-reload picks up these changes. Walk through:
+1. **Shell** — left nav rail (avatar→profile, Путь, Практика, Справочник, Друзья, Обсуждения, Настройки + bell). No Лига. Mobile: bottom nav (no Лига). Light + dark theme.
+2. **Path `/tree`** — 3-col accordion + lessons timeline + FAB + overview; selecting a skill auto-opens its stage.
+3. **Skill `/skill/[id]` + `/map`** — match the Path look; lesson nav works.
+4. **Session `/session/[id]`** — all 10 exercise types render w/ chips; submit → result banner; completion stats; retry + skip + keyboard.
+5. **Practice `/dialog`** — mentor banner, bundle cards (Чат/Звонок), recent sessions, mode select.
+6. **Dialog chat + voice** — bubbles, typing dots, feedback modal; voice states + mic + transcript + quota.
+7. **Reference `/guidebook` + `/reference/[id]`** — card grid + 392px detail panel + mastery ring + coach.
+8. **Friends `/friends`** — requests + grid + Activity/Chat rail; chat deep-links; no Лидерборд tab.
+9. **Discuss `/discuss` + thread** — segmented sort, upvote, badges, sidebar; vote/new/reply/accept/images.
+10. **Profile `/profile`** — cover + 4 stat tiles + enrolled-skills toggles + voice quota; no achievements grid.
+11. **Settings `/settings`** — Appearance Light/Dark, account (email/admin), logout.
+12. **Auth** — login/register/onboarding(4 steps)/verify-email(6-box code); Google OAuth.
+13. **`/league` by direct URL** — still works (absent from nav).
 
 ---
 

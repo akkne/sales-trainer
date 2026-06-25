@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useCallback, useState } from "react";
+import { Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { useFriends, useFriendRequests } from "@/features/friends/hooks/use-friends";
@@ -28,10 +28,8 @@ function FriendsPageContent() {
     const router = useRouter();
     const searchInputRef = useRef<HTMLDivElement>(null);
 
-    // Rail chat state: which conversation is open (null = show activity feed)
-    const [railConvId, setRailConvId] = useState<string | null>(
-        searchParams.get("conv") ?? null,
-    );
+    // Rail chat: derive open conversation from URL param so back/forward works automatically
+    const railConvId = searchParams.get("conv") ?? null;
 
     const { data: friends, isLoading: friendsLoading } = useFriends();
     const { data: requests } = useFriendRequests();
@@ -58,20 +56,17 @@ function FriendsPageContent() {
         // First check if conversation already exists
         const existing = conversations?.find((c) => c.friendUserId === friendUserId);
         if (existing) {
-            setRailConvId(existing.conversationId);
             syncConvParam(existing.conversationId);
             return;
         }
         createConversationMutation.mutate(friendUserId, {
             onSuccess: (conversation) => {
-                setRailConvId(conversation.conversationId);
                 syncConvParam(conversation.conversationId);
             },
         });
     }
 
     function handleCloseChat() {
-        setRailConvId(null);
         syncConvParam(null);
     }
 

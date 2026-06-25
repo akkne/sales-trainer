@@ -573,7 +573,7 @@ function CoachBlock({
 
             {/* Quote */}
             <blockquote className="ref-coach-quote" style={{ margin: 0 }}>
-                "{coach.quote}"
+                &laquo;{coach.quote}&raquo;
             </blockquote>
 
             {/* Challenges */}

@@ -35,7 +35,19 @@ export default function VerifyEmailPage() {
     }, [cooldownSeconds]);
 
     function handleDigitChange(index: number, value: string) {
-        const digit = value.replace(/\D/g, "").slice(-1);
+        const cleaned = value.replace(/\D/g, "");
+        if (cleaned.length > 1) {
+            // Browser autofill delivers the full OTP to the first box — distribute it
+            const next = [...digits];
+            for (let i = 0; i < cleaned.length && index + i < CODE_LENGTH; i++) {
+                next[index + i] = cleaned[i];
+            }
+            setDigits(next);
+            const focusIndex = Math.min(index + cleaned.length, CODE_LENGTH - 1);
+            inputRefs.current[focusIndex]?.focus();
+            return;
+        }
+        const digit = cleaned;
         const next = [...digits];
         next[index] = digit;
         setDigits(next);

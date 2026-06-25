@@ -133,7 +133,7 @@ export function MatchPairsExercise({
                             const isSelected = selectedLeft === item;
 
                             let bgColor = isSelected ? "var(--ink)" : isConnected ? PAIR_BG_COLORS[pairIdx! % PAIR_BG_COLORS.length] : "var(--bg-2)";
-                            let textColor = isSelected ? "var(--bg)" : "var(--ink)";
+                            const textColor = isSelected ? "var(--bg)" : "var(--ink)";
                             let borderColor = isSelected ? "var(--ink)" : isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--line)";
 
                             if (isAnswered) {
@@ -188,7 +188,7 @@ export function MatchPairsExercise({
                             const isAvailable = selectedLeft && !isConnected;
 
                             let bgColor = isConnected ? PAIR_BG_COLORS[pairIdx! % PAIR_BG_COLORS.length] : "var(--bg-2)";
-                            let textColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--ink)";
+                            const textColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--ink)";
                             let borderColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--line)";
 
                             if (isAnswered) {

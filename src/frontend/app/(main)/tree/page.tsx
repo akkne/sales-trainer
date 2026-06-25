@@ -105,10 +105,6 @@ function PathStageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen,
     const meta = getStageMeta(stageKey, stages);
     const [open, setOpen] = useState(defaultOpen);
 
-    useEffect(() => {
-        if (defaultOpen) setOpen(true);
-    }, [defaultOpen]);
-
     const completedCount = skills.filter(
         (s) => s.totalLessonCount > 0 && s.completedLessonCount === s.totalLessonCount
     ).length;
@@ -222,7 +218,7 @@ function PathLeftColumn({
                         const containsSelected = stageSkills.some((s) => s.slug === selectedSkill?.slug);
                         return (
                             <PathStageGroup
-                                key={stageKey}
+                                key={stageKey + (containsSelected ? ":open" : "")}
                                 stageKey={stageKey}
                                 skills={stageSkills}
                                 selectedSlug={selectedSkill?.slug}
