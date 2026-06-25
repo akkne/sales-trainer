@@ -4,6 +4,40 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useDialogBundles, useDialogModes } from "@/features/dialog/hooks/use-dialog";
 import { Icon } from "@/shared/components/icon";
+import { Skeleton } from "@/shared/components";
+import { trackEvent } from "@/shared/analytics/track";
+
+// ── Avatar seeding (mirrors dialog/page.tsx) ───────────────────────────────
+const AVATAR_PALETTE: [string, string][] = [
+    ["#6C5BD9", "#9B8CF0"],
+    ["#4C8DF6", "#7FB0FA"],
+    ["#E16BA0", "#F09BC2"],
+    ["#2FB36F", "#73D6A0"],
+    ["#F0863C", "#F7B07A"],
+    ["#1E9FB0", "#6FCBD6"],
+    ["#8A5BD9", "#B79BFF"],
+];
+
+function hashSeed(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+
+function ava(seed: string): { from: string; to: string } {
+    const [from, to] = AVATAR_PALETTE[hashSeed(seed) % AVATAR_PALETTE.length];
+    return { from, to };
+}
+
+function initials(title: string): string {
+    return title
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? "")
+        .join("");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function BundleModesPage() {
     const params = useParams();
@@ -13,16 +47,35 @@ export default function BundleModesPage() {
     const { data: bundles } = useDialogBundles();
     const { data: modes, isLoading, error } = useDialogModes(bundleId);
 
-    const currentBundle = bundles?.find((bundle) => bundle.id === bundleId);
+    const currentBundle = bundles?.find((b) => b.id === bundleId);
+    const bundleColors = ava(bundleId);
+    const bundleAbbr = currentBundle ? initials(currentBundle.title) : "ДМ";
 
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (isLoading) {
         return (
-            <div className="row center" style={{ minHeight: "60vh" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            <div className="page">
+                <div className="container">
+                    <Skeleton width={120} height={14} style={{ margin: "22px 0 18px" }} />
+                    <div className="mode-select-header">
+                        <Skeleton width={56} height={56} rounded={12} />
+                        <div style={{ flex: 1 }}>
+                            <Skeleton width={80} height={11} style={{ marginBottom: 6 }} />
+                            <Skeleton width={200} height={20} style={{ marginBottom: 8 }} />
+                            <Skeleton width={320} height={14} />
+                        </div>
+                    </div>
+                    <div className="mode-grid">
+                        {[1, 2, 3].map((i) => (
+                            <Skeleton key={i} height={160} rounded={14} />
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
 
+    // ── Error ─────────────────────────────────────────────────────────────────
     if (error) {
         return (
             <div className="page container">
@@ -37,29 +90,43 @@ export default function BundleModesPage() {
         );
     }
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="page">
             <div className="container">
-                <button className="back-link" onClick={() => router.push("/dialog")}>
-                    <Icon name="chevron-left" size={20} />
-                    Назад к диалогам
+                {/* ── Back link ── */}
+                <button
+                    className="back-link"
+                    onClick={() => router.push("/dialog")}
+                    aria-label="Назад к практике"
+                >
+                    <Icon name="chevron-left" size={18} />
+                    Назад
                 </button>
 
-                <div className="row gap-4 wrap" style={{ padding: "24px 0 12px" }}>
-                    <span className="itile primary" style={{ width: 72, height: 72, fontSize: 36 }}>
-                        {currentBundle?.iconEmoji || "💬"}
-                    </span>
+                {/* ── Bundle header ── */}
+                <div className="mode-select-header">
+                    <div
+                        className="mode-select-icon"
+                        style={{
+                            background: `linear-gradient(135deg, ${bundleColors.from}, ${bundleColors.to})`,
+                        }}
+                        aria-hidden="true"
+                    >
+                        {bundleAbbr}
+                    </div>
                     <div>
-                        <span className="eyebrow">Выбери режим</span>
-                        <h1 className="h1" style={{ margin: "8px 0 6px", fontSize: "clamp(28px, 3.6vw, 44px)" }}>
-                            {currentBundle?.title || "Режимы практики"}
+                        <p className="mode-select-eyebrow">Выбери режим</p>
+                        <h1 className="mode-select-title">
+                            {currentBundle?.title ?? "Режимы практики"}
                         </h1>
                         {currentBundle?.description && (
-                            <p className="lead">{currentBundle.description}</p>
+                            <p className="mode-select-desc">{currentBundle.description}</p>
                         )}
                     </div>
                 </div>
 
+                {/* ── Modes grid ── */}
                 {(!modes || modes.length === 0) ? (
                     <div className="empty">
                         <div className="ic">
@@ -69,22 +136,33 @@ export default function BundleModesPage() {
                         <p className="small">Администратор ещё не настроил сценарии</p>
                     </div>
                 ) : (
-                    <div className="mode-grid">
+                    <div className="mode-grid" role="list">
                         {modes.map((mode) => (
-                            <div key={mode.id} className="card card-pad mode-card">
-                                <h3 className="h3">{mode.title}</h3>
-                                <p className="body" style={{ margin: "8px 0 20px", flex: 1 }}>
-                                    {mode.description}
-                                </p>
-                                <div className="row gap-3">
-                                    <Link href={`/dialog/${bundleId}/${mode.id}`} className="btn btn-outline">
-                                        <Icon name="message" size={18} />
+                            <div key={mode.id} className="mode-card" role="listitem">
+                                <h3 className="mode-card-title">{mode.title}</h3>
+                                <p className="mode-card-desc">{mode.description}</p>
+
+                                <div className="mode-card-footer">
+                                    <Link
+                                        href={`/dialog/${bundleId}/${mode.id}`}
+                                        className="bundle-btn-chat"
+                                        style={{ flex: 1 }}
+                                        onClick={() => trackEvent("start_dialog", "dialog")}
+                                        aria-label={`Начать текстовый чат: ${mode.title}`}
+                                    >
+                                        <Icon name="message" size={15} />
                                         Чат
                                     </Link>
                                     {mode.voiceEnabled && (
-                                        <Link href={`/dialog/${bundleId}/${mode.id}/voice`} className="btn btn-success grow">
-                                            <Icon name="phone" size={18} />
-                                            Позвонить
+                                        <Link
+                                            href={`/dialog/${bundleId}/${mode.id}/voice`}
+                                            className="bundle-btn-call"
+                                            style={{ flex: 1 }}
+                                            onClick={() => trackEvent("start_dialog", "dialog")}
+                                            aria-label={`Начать голосовой звонок: ${mode.title}`}
+                                        >
+                                            <Icon name="phone" size={15} />
+                                            Звонок
                                         </Link>
                                     )}
                                 </div>
@@ -92,7 +170,8 @@ export default function BundleModesPage() {
                         ))}
                     </div>
                 )}
-                <div style={{ height: 60 }} />
+
+                <div style={{ height: 48 }} />
             </div>
         </div>
     );
