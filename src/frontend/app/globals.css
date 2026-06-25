@@ -1158,34 +1158,134 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .field-wrap .lead-ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-4); pointer-events: none; }
 .field-wrap.has-ic .field { padding-left: 44px; }
 
-/* ════════ TREE ════════ */
+/* ════════ TREE (V2 Path screen) ════════ */
 .stat-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .stat-2x2 .stat { min-width: 0; }
 .stat-2x2 .stat-num { font-size: 22px; }
-.tree-grid-a { display: grid; grid-template-columns: minmax(290px, 360px) minmax(0, 1fr) minmax(320px, 400px); gap: clamp(22px, 2vw, 36px); padding: 28px 0 40px; align-items: start; }
-.tree-center { overflow: hidden; }
-.lp-scroll { max-height: 640px; overflow-y: auto; padding: 30px 24px 40px; }
 
-.stage-head { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; padding: 11px 8px; border-radius: var(--r-xs); color: var(--ink); cursor: pointer; }
-.stage-head:hover { background: var(--surface-2); }
-.stage-head .chev { color: var(--ink-4); transition: transform var(--transition); flex: none; }
-.stage-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.stage-name { font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.02em; text-transform: uppercase; font-weight: 700; flex: 1; text-align: left; }
-.stage-ratio { font-size: 12px; color: var(--ink-4); font-weight: 600; }
-.stage-skills { padding: 2px 0 8px 12px; }
-.skill-row { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; padding: 9px 10px; border-radius: var(--r-xs); color: var(--ink-2); text-align: left; cursor: pointer; }
-.skill-row:hover { background: var(--surface-2); color: var(--ink); }
-.skill-row.active { background: var(--primary-soft); color: var(--primary); }
-.skill-ic { width: 30px; height: 30px; border-radius: 9px; background: var(--surface-2); display: grid; place-items: center; flex: none; }
-.skill-row.active .skill-ic { background: var(--surface); color: var(--primary); }
-.skill-name { font-size: 14px; font-weight: 600; flex: 1; }
+/* 3-column grid: [256px left] [flex center] [300px right] */
+.path-grid { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; height: 100%; overflow: hidden; }
 
-.skill-band { display: flex; align-items: center; justify-content: space-between; gap: 18px 32px; flex-wrap: wrap; }
-.skill-band.stacked { flex-direction: column; align-items: stretch; gap: 16px; }
-.skill-band-prog { min-width: 240px; flex: 1; max-width: 320px; }
+/* ── Left categories column ── */
+.path-left { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
+.path-left-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 16px 14px; border-bottom: 1px solid var(--line-2); flex: none; }
+.path-left-title { font-size: 15.5px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; }
+.path-stage-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--surface-3); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 9px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.path-stage-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex: none; }
+.path-left-scroll { flex: 1; overflow-y: auto; padding: 8px 10px 24px; }
 
-/* lesson path serpentine */
+/* Stage accordion */
+.path-stage { margin-bottom: 2px; }
+.path-stage-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; padding: 9px 8px; border-radius: 8px; cursor: pointer; transition: background var(--transition); }
+.path-stage-head:hover { background: var(--surface-3); }
+.path-stage-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.path-stage-chev { color: var(--ink-4); transition: transform var(--transition); flex: none; display: inline-flex; }
+.path-stage-chev.open { transform: rotate(180deg); }
+.path-stage-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.path-stage-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); flex: 1; text-align: left; }
+.path-stage-badge { background: var(--bg-2); color: var(--ink-4); font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 1px 6px; }
+.path-stage-skills { padding: 2px 0 6px 8px; }
+
+/* Skill rows in accordion */
+.path-skill-row { display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: 1px solid transparent; padding: 7px 9px; border-radius: 9px; cursor: pointer; text-align: left; transition: background var(--transition), border-color var(--transition), box-shadow var(--transition); }
+.path-skill-row:hover { background: var(--surface-2); }
+.path-skill-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.path-skill-row.active { background: #F5F3FD; border-color: #E2DCF7; box-shadow: 0 1px 2px rgba(108,91,217,.08); }
+.path-skill-node { width: 17px; height: 17px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 9px; }
+.path-skill-node.done { background: #34C36B; color: #fff; }
+.path-skill-node.in-progress { background: var(--primary); }
+.path-skill-node.available { background: var(--surface); border: 2px solid #DEDEE4; }
+.path-skill-name { font-size: 13.5px; font-weight: 600; color: var(--ink-2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path-skill-row.active .path-skill-name { color: #3A2E8C; font-weight: 700; }
+.path-skill-now { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--primary); background: var(--primary-soft); border-radius: 4px; padding: 1px 5px; flex: none; }
+
+/* ── Center column ── */
+.path-center { display: flex; flex-direction: column; background: var(--surface-2); overflow: hidden; position: relative; }
+.path-center-scroll { flex: 1; overflow-y: auto; padding: 22px 24px 96px; }
+
+/* Breadcrumb */
+.path-breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.path-bc-stage { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.path-bc-chev { color: var(--ink-4); display: inline-flex; }
+.path-bc-skill { display: inline-flex; align-items: center; background: #EDEAFB; color: var(--primary); font-size: 12px; font-weight: 700; border-radius: var(--r-pill); padding: 3px 10px; }
+.path-bc-meta { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
+
+/* Skill header card */
+.path-skill-header { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px 22px; box-shadow: var(--sh-1); margin-bottom: 20px; }
+.path-skill-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.path-skill-header-title { font-size: 21px; font-weight: 800; color: var(--ink-heading); letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 6px; }
+.path-skill-summary { font-size: 13px; color: var(--ink-3); line-height: 1.55; margin: 0; }
+.path-skill-status { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 3px 8px; white-space: nowrap; flex: none; }
+.path-skill-status.done { background: var(--success-soft); color: var(--success); }
+.path-skill-status.in-progress { background: var(--primary-soft); color: var(--primary); }
+.path-skill-status.available { background: var(--surface-3); color: var(--ink-4); }
+.path-prog-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 8px; }
+.path-prog-pct { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
+.path-prog-bar { flex: 1; height: 8px; background: #EFEFF2; border-radius: 8px; overflow: hidden; }
+.path-prog-fill { height: 100%; background: linear-gradient(90deg,#6C5BD9,#9B8CF0); border-radius: 8px; transition: width 0.4s ease; }
+.path-prog-fill.complete { background: #34C36B; }
+
+/* 4-cell stat grid */
+.path-stat-grid { display: grid; grid-template-columns: repeat(4,1fr); margin-top: 16px; border: 1px solid #EFEFF2; border-radius: 10px; overflow: hidden; }
+.path-stat-cell { padding: 12px 14px; border-right: 1px solid #EFEFF2; }
+.path-stat-cell:last-child { border-right: none; }
+.path-stat-label { font-size: 11px; font-weight: 600; color: var(--ink-4); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+.path-stat-val { font-size: 17px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; }
+
+/* ── Lessons timeline ── */
+.path-timeline { position: relative; }
+.path-tl-line { position: absolute; left: 18px; top: 0; bottom: 0; width: 2px; background: var(--line); z-index: 0; }
+.path-tl-item { position: relative; display: flex; gap: 16px; padding: 0 0 16px 0; }
+.path-tl-item:last-child { padding-bottom: 0; }
+.path-tl-node-col { width: 36px; flex: none; display: flex; flex-direction: column; align-items: center; z-index: 1; padding-top: 2px; }
+.path-tl-node { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; border: none; flex: none; position: relative; }
+.path-tl-node.done { background: #34C36B; color: #fff; }
+.path-tl-node.in-progress { background: var(--primary); color: #fff; box-shadow: 0 0 0 4px rgba(108,91,217,.16); }
+.path-tl-node.available { background: var(--surface); color: var(--ink-4); border: 2px solid #DEDEE4; }
+.path-tl-node.locked { background: var(--surface-3); color: var(--ink-4); }
+@media (prefers-reduced-motion: no-preference) {
+  .path-tl-node.in-progress { animation: pathNodeGlow 2.4s ease-in-out infinite; }
+}
+@keyframes pathNodeGlow {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(108,91,217,.16); }
+  50% { box-shadow: 0 0 0 7px rgba(108,91,217,.08); }
+}
+.path-tl-card { flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--sh-1); transition: border-color var(--transition), box-shadow var(--transition); min-width: 0; }
+.path-tl-card:hover { border-color: var(--primary-tint-border); box-shadow: 0 4px 16px rgba(108,91,217,.10); }
+.path-tl-card.active { border-color: #E2DCF7; box-shadow: 0 4px 16px rgba(108,91,217,.10); }
+.path-tl-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.path-tl-eyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); }
+.path-tl-status { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 7px; }
+.path-tl-status.done { background: var(--success-soft); color: var(--success); }
+.path-tl-status.in-progress { background: var(--primary-soft); color: var(--primary); }
+.path-tl-status.available { background: var(--surface-3); color: var(--ink-4); }
+.path-tl-action { margin-left: auto; flex: none; }
+.path-tl-title { font-size: 15px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; margin: 0 0 8px; line-height: 1.3; }
+.path-tl-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.path-tl-chip { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 7px; }
+
+/* ── Floating action bar (FAB) ── */
+.path-fab { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1C1C20; border-radius: 14px; box-shadow: 0 12px 34px rgba(20,20,40,.28); padding: 12px 18px 12px 16px; display: flex; align-items: center; gap: 14px; z-index: 20; min-width: 320px; max-width: calc(100% - 32px); }
+.path-fab-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.path-fab-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #8E8E98; margin-bottom: 2px; }
+.path-fab-lesson { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.path-fab-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background var(--transition); flex: none; }
+.path-fab-btn:hover { background: var(--primary-strong); }
+.path-fab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── Right overview panel ── */
+.path-right { border-left: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
+.path-right-head { display: flex; align-items: center; gap: 10px; padding: 18px 16px 14px; border-bottom: 1px solid var(--line-2); flex: none; }
+.path-right-icon { width: 30px; height: 30px; border-radius: 8px; background: var(--surface-3); display: grid; place-items: center; color: var(--ink-3); flex: none; }
+.path-right-title { font-size: 15.5px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; }
+.path-right-scroll { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
+.path-overview-section { margin-bottom: 22px; }
+.path-overview-label { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 10px; }
+.path-overview-body { font-size: 13px; color: var(--ink-3); line-height: 1.6; }
+
+/* lesson path serpentine (kept for LessonPath component used in other contexts) */
 .lesson-path { display: flex; flex-direction: column; gap: 8px; position: relative; max-width: 680px; margin: 0 auto; }
+.lp-scroll { max-height: 640px; overflow-y: auto; padding: 30px 24px 40px; }
 .lp-row { display: flex; padding: 0 30px; }
 .lp-node-wrap { position: relative; display: flex; align-items: center; gap: 16px; }
 .lp-row.right .lp-node-wrap { flex-direction: row-reverse; }
@@ -1204,6 +1304,11 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .lp-trophy { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; color: var(--ink-4); }
 .lp-trophy .ic { width: 72px; height: 72px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; border: 2px dashed var(--line-2); }
 .lp-trophy span { font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 700; }
+
+/* old skill-band classes (kept for other pages that may reference them) */
+.skill-band { display: flex; align-items: center; justify-content: space-between; gap: 18px 32px; flex-wrap: wrap; }
+.skill-band.stacked { flex-direction: column; align-items: stretch; gap: 16px; }
+.skill-band-prog { min-width: 240px; flex: 1; max-width: 320px; }
 
 .goal-card { background: var(--surface); }
 .tip-card { background: var(--surface-2); }
@@ -1459,6 +1564,12 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
 
 /* ════════ Responsive ════════ */
 @media (max-width: 1000px) {
+  /* Path V2 3-col → stack */
+  .path-grid { grid-template-columns: 1fr; height: auto; }
+  .path-left { border-right: none; border-bottom: 1px solid var(--line-2); max-height: 280px; }
+  .path-right { border-left: none; border-top: 1px solid var(--line-2); order: 3; }
+  .path-center-scroll { padding-bottom: 120px; }
+  /* legacy (kept for safety) */
   .tree-grid-a { grid-template-columns: 1fr; }
   .tree-grid-a aside:last-child { order: 3; }
   .league-grid, .friends-grid, .gb-grid, .dsc-grid, .profile-grid { grid-template-columns: 1fr; }

@@ -76,7 +76,7 @@ verification is collected into a checklist for the user.
     + `__tests__/AchievementToast.test.tsx`; clean dead imports/hooks.
 
 - [ ] **P4 — Screen restyles** (each sub-phase = its own CSS + commit + verifier)
-  - [ ] 4.1 Path / `tree`
+  - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data).
   - [ ] 4.2 Practice (`dialog` list + `dialog/[bundleId]` mode select)
   - [ ] 4.3 Reference (`guidebook` + `reference/[id]`)
   - [ ] 4.4 Friends (`friends` + chat + `friends/[userId]` public profile)

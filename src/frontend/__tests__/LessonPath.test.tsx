@@ -17,9 +17,8 @@ function makeLesson(
 ): LessonSummary {
     return {
         title: "Test Lesson",
-        sortOrder: 1,
-        difficultyLevel: 1,
-        xpReward: 10,
+        orderInTopic: 1,
+        kind: "practice",
         status: "locked",
         bestScore: 0,
         ...overrides,
@@ -95,8 +94,8 @@ describe("LessonPath", () => {
 
     it("only one popover open at a time", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available", sortOrder: 1 }),
-            makeLesson({ lessonId: "l2", title: "Урок 2", status: "available", sortOrder: 2 }),
+            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available", orderInTopic: 1 }),
+            makeLesson({ lessonId: "l2", title: "Урок 2", status: "available", orderInTopic: 2 }),
         ];
         render(<LessonPath lessons={lessons} />);
         const btns = screen.getAllByRole("button");
