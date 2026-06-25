@@ -24,9 +24,9 @@ const TONE_STYLES: Record<
     Tone,
     { footClass: string; tileBg: string; tileColor: string; title: string; icon: IconName; btnClass: string }
 > = {
-    good: { footClass: " ok", tileBg: "var(--success-soft)", tileColor: "var(--success)", title: "Верно!", icon: "check", btnClass: "btn-success" },
-    warn: { footClass: " bad", tileBg: "var(--amber-soft)", tileColor: "var(--amber)", title: "Почти", icon: "warning", btnClass: "btn-danger" },
-    bad: { footClass: " bad", tileBg: "var(--heart-soft)", tileColor: "var(--heart)", title: "Не совсем", icon: "warning", btnClass: "btn-danger" },
+    good: { footClass: " ok",   tileBg: "var(--success-soft)", tileColor: "var(--success)", title: "Верно!",     icon: "check",   btnClass: "btn-success" },
+    warn: { footClass: " warn", tileBg: "var(--amber-soft)",   tileColor: "var(--amber)",   title: "Почти",      icon: "warning", btnClass: "btn-danger"  },
+    bad:  { footClass: " bad",  tileBg: "var(--heart-soft)",   tileColor: "var(--heart)",   title: "Не совсем",  icon: "warning", btnClass: "btn-danger"  },
 };
 
 export function ExerciseResultBanner({
@@ -68,61 +68,60 @@ export function ExerciseResultBanner({
             }}
         >
             <div
-                className="container session-foot-inner"
-                style={{ flexDirection: "column", gap: detailed ? 14 : 0, width: "100%" }}
+                className="session-foot-inner"
+                style={{ flexDirection: "column", gap: detailed ? 12 : 0 }}
             >
-                <div className="row between wrap gap-4 grow">
-                    <div className="row gap-3" style={{ minWidth: 0 }}>
+                {/* Main row: icon+title left, score+XP+continue right */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, width: "100%" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                         <span
-                            className="itile"
-                            style={{ width: 44, height: 44, background: t.tileBg, color: t.tileColor, flex: "none" }}
+                            style={{
+                                width: 42, height: 42, borderRadius: 12,
+                                background: t.tileBg, color: t.tileColor,
+                                display: "grid", placeItems: "center", flex: "none",
+                            }}
                         >
-                            <Icon name={t.icon} size={22} />
+                            <Icon name={t.icon} size={20} />
                         </span>
                         <div style={{ minWidth: 0 }}>
-                            <div className="h4">{t.title}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink-heading)" }}>{t.title}</div>
                             <div
-                                className="small"
                                 style={{
-                                    marginTop: 2,
-                                    maxWidth: 520,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
+                                    marginTop: 2, fontSize: 13, color: "var(--ink-3)",
+                                    maxWidth: 480,
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                                 }}
                             >
-                                {detailed ? "Оценка AI" : compactSubtitle}
+                                {detailed ? "Разбор от AI ↓" : compactSubtitle}
                             </div>
                         </div>
                     </div>
 
-                    <div className="row gap-3" style={{ flex: "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
                         {ratingOutOfTen !== null && (
                             <div
                                 aria-label={`Оценка ${ratingOutOfTen} из 10`}
                                 style={{
-                                    display: "inline-flex",
-                                    alignItems: "baseline",
-                                    gap: 2,
-                                    padding: "6px 10px",
+                                    display: "inline-flex", alignItems: "baseline", gap: 2,
+                                    padding: "5px 10px",
                                     background: "var(--surface)",
-                                    border: `1px solid ${t.tileColor}`,
-                                    borderRadius: 10,
-                                    fontFamily: "var(--font-mono)",
+                                    border: `1.5px solid ${t.tileColor}`,
+                                    borderRadius: 9,
                                     color: t.tileColor,
                                 }}
                             >
-                                <span style={{ fontSize: 16, fontWeight: 600 }}>{ratingOutOfTen}</span>
-                                <span style={{ fontSize: 11, opacity: 0.7 }}>/10</span>
+                                <span style={{ fontSize: 15, fontWeight: 700 }}>{ratingOutOfTen}</span>
+                                <span style={{ fontSize: 11, opacity: 0.65 }}>/10</span>
                             </div>
                         )}
                         {isCorrect && xpEarned > 0 && (
                             <span
                                 style={{
-                                    fontFamily: "var(--font-mono)",
-                                    fontSize: 13,
-                                    fontWeight: 500,
+                                    fontSize: 13, fontWeight: 600,
                                     color: t.tileColor,
+                                    padding: "4px 9px",
+                                    background: t.tileBg,
+                                    borderRadius: 8,
                                 }}
                             >
                                 +{xpEarned} XP
@@ -130,29 +129,33 @@ export function ExerciseResultBanner({
                         )}
                         <button className={"btn btn-lg " + t.btnClass} onClick={onContinue}>
                             Дальше
-                            <Icon name="arrow-right" size={18} />
+                            <Icon name="arrow-right" size={17} />
                         </button>
                     </div>
                 </div>
 
+                {/* AI feedback card */}
                 {detailed && (
                     <div
-                        className="card card-pad"
-                        style={{ width: "100%" }}
+                        style={{
+                            width: "100%",
+                            background: "var(--surface)",
+                            border: `1px solid ${t.tileColor}`,
+                            borderRadius: 12,
+                            padding: "12px 16px",
+                        }}
                     >
-                        <div className="row gap-2" style={{ marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                             <Icon name="sparkle" size="xs" style={{ color: t.tileColor }} />
-                            <span className="eyebrow">Разбор ответа</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: t.tileColor }}>
+                                Разбор ответа
+                            </span>
                         </div>
                         <div
                             ref={scrollerRef}
                             style={{
-                                fontSize: 13,
-                                lineHeight: 1.55,
-                                color: "var(--ink-2)",
-                                whiteSpace: "pre-wrap",
-                                maxHeight: 160,
-                                overflowY: "auto",
+                                fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)",
+                                whiteSpace: "pre-wrap", maxHeight: 140, overflowY: "auto",
                                 WebkitMaskImage: isScrollable
                                     ? "linear-gradient(to bottom, black calc(100% - 24px), transparent 100%)"
                                     : undefined,

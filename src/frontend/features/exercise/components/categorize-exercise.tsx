@@ -94,6 +94,7 @@ export function CategorizeExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div><span className="ex-chip ex-chip--categorize">Категоризация</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Распределите реплики по типам:"}
             </h2>

@@ -141,6 +141,9 @@ export function AiDialogueExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
+            {/* Exercise type chip */}
+            <div><span className="ex-chip ex-chip--dialogue">Диалог с AI</span></div>
+
             {/* Persona header */}
             <div
                 style={{

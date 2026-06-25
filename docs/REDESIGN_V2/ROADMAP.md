@@ -82,7 +82,7 @@ verification is collected into a checklist for the user.
   - [x] 4.4 Friends ✅ main list (requests + friend grid) + 330px Activity/Chat rail; public profile restyled. Leaderboard tab UNMOUNTED (component kept) per design+gamification removal; online-dot omitted (no backend presence); chat polling + deep-links preserved. tsc clean, vitest 78/78.
   - [x] 4.5 Discuss ✅ feed + 44px upvote col + segmented sort + 264px sidebar (community/tags/top-authors); thread detail restyled, all mutations (vote/new/reply/accept/pin/images) preserved. "% решённых"=— (not in API). 1 test updated. tsc clean, vitest 78/78.
   - [x] 4.6 Profile + /settings ✅ profile: dark cover + 4 stat tiles + enrolled-skills (enrollment toggles kept, base always-on) + voice quota. Settings: Appearance/Account(email read-only, admin)/Logout. Theme+logout+admin moved off profile. Omitted edit-profile/password-change/notif-prefs (no backend). tsc clean, vitest 78/78.
-  - [ ] 4.7 Session / Exercise player (`session/[lessonId]` + exercise components)
+  - [x] 4.7 Session/Exercise ✅ V2 shell (violet gradient progress, no hearts indicator), all 10 exercise types get chipMap chips + V2 bubbles, result banner (ok/warn/bad tones), completion stats XP/accuracy/time. Confirmed hearts never existed in completion props. tsc clean, vitest 78/78, no tests touched.
   - [ ] 4.8 Dialog text chat + Voice call (`dialog/[bundleId]/[modeId]` + voice)
   - [ ] 4.9 Auth: login / register / onboarding / verify-email
 

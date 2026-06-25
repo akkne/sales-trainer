@@ -40,26 +40,18 @@ export function FreeTextExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* Exercise type chip */}
+            <div><span className="ex-chip ex-chip--free">Свободный ответ</span></div>
+
+            {/* Context bubble — client speech */}
             {content.situation && (
-                <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
-                    <GeoAvatar seed="client" size={56} />
+                <div style={{ display: "flex", gap: 14, marginBottom: 4 }}>
+                    <GeoAvatar seed="client" size={48} />
                     <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
-                            <span style={{ fontSize: 13, fontWeight: 500 }}>Клиент</span>
-                            <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>prospect</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Клиент</span>
                         </div>
-                        <div
-                            style={{
-                                position: "relative",
-                                background: "var(--surface)",
-                                border: "1px solid var(--line)",
-                                borderRadius: "4px 14px 14px 14px",
-                                padding: "14px 18px",
-                                fontSize: 15,
-                                lineHeight: 1.5,
-                                boxShadow: "var(--sh-1)",
-                            }}
-                        >
+                        <div className="ex-bubble-client">
                             {content.situation}
                         </div>
                     </div>

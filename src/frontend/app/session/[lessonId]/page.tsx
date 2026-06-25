@@ -22,8 +22,6 @@ import { FreeTextExercise } from "@/features/exercise/components/free-text-exerc
 import { TheoryLessonPlayer } from "@/features/exercise/components/theory-lesson-player";
 import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
 import { Icon } from "@/shared/components/icon";
-import { Button } from "@/shared/components/button";
-import { Progress } from "@/shared/components/progress";
 
 const PASSING_SCORE_THRESHOLD = 7;
 const MAX_RETRY_ATTEMPTS = 2;
@@ -163,18 +161,21 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
     return (
         <div className="session">
-            {/* Header */}
+            {/* Header: ✕ close + violet gradient progress bar */}
             <div className="session-top">
                 <button
                     className="icon-btn"
                     onClick={() => router.back()}
                     aria-label="Выйти"
+                    style={{ flex: "none" }}
                 >
-                    <Icon name="close" size={22} />
+                    <Icon name="close" size={20} />
                 </button>
 
                 <div className="grow">
-                    <Progress value={progressPercent} max={100} tone="indigo" height={8} />
+                    <div className="session-prog-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="session-prog-fill" style={{ width: `${progressPercent}%` }} />
+                    </div>
                 </div>
             </div>
 
@@ -339,40 +340,50 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
     return (
         <div className="complete">
             <Confetti />
-            <div className="complete-inner fade-up">
+            <div className="complete-inner">
+                {/* Animated success ring */}
                 <div className="check-circle">
-                    <Icon name="check" size={56} color="#fff" />
+                    <Icon name="check" size={44} color="#fff" />
                 </div>
-                <span className="eyebrow" style={{ justifyContent: "center" }}>
+
+                {/* Eyebrow + heading */}
+                <div
+                    className="eyebrow"
+                    style={{ justifyContent: "center", marginBottom: 8 }}
+                >
                     {eyebrow}
-                </span>
-                <h1 className="h1" style={{ margin: "12px 0 30px" }}>
+                </div>
+                <h1 className="h1" style={{ margin: "0 0 28px", fontSize: 26, letterSpacing: "-0.02em" }}>
                     {heading}
                 </h1>
+
+                {/* Stat grid — XP / accuracy / time (NO hearts) */}
                 <div className="complete-stats">
                     <div className="cs">
-                        <Icon name="bolt" size={24} style={{ color: "var(--primary)" }} />
-                        <b className="num">+{xp}</b>
-                        <span>XP</span>
+                        <Icon name="bolt" size={22} style={{ color: "var(--primary)" }} />
+                        <b>+{xp}</b>
+                        <span>XP заработано</span>
                     </div>
                     {accuracyPercent !== undefined && (
                         <div className="cs">
-                            <Icon name="target" size={24} style={{ color: "var(--success)" }} />
-                            <b className="num">{accuracyPercent}%</b>
+                            <Icon name="target" size={22} style={{ color: "var(--success)" }} />
+                            <b>{accuracyPercent}%</b>
                             <span>точность</span>
                         </div>
                     )}
                     {durationSeconds > 0 && (
                         <div className="cs">
-                            <Icon name="clock" size={24} style={{ color: "var(--violet)" }} />
-                            <b className="num">{formatSessionDuration(durationSeconds)}</b>
+                            <Icon name="clock" size={22} style={{ color: "var(--violet)" }} />
+                            <b>{formatSessionDuration(durationSeconds)}</b>
                             <span>время</span>
                         </div>
                     )}
                 </div>
+
+                {/* Primary CTA */}
                 <button
                     className="btn btn-primary btn-lg btn-block"
-                    style={{ marginTop: 30 }}
+                    style={{ marginTop: 28 }}
                     onClick={onBack}
                 >
                     Вернуться к пути

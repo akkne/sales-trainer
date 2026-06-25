@@ -92,6 +92,7 @@ export function MatchPairsExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div><span className="ex-chip ex-chip--match">Сопоставление</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Сопоставьте пары:"}
             </h2>

@@ -54,6 +54,7 @@ export function EvaluateCallExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div><span className="ex-chip ex-chip--evaluate">Оценить звонок</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 Оцените звонок по критериям:
             </h2>

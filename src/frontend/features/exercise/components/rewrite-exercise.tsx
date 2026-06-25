@@ -40,6 +40,7 @@ export function RewriteExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div><span className="ex-chip ex-chip--rewrite">Переписать</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
                 {content.instruction || "Перепишите реплику лучше:"}
             </h2>

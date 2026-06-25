@@ -37,7 +37,7 @@ export function ExerciseActionFooter({
                 paddingBottom: "max(18px, env(safe-area-inset-bottom))",
             }}
         >
-            <div className="container session-foot-inner between grow">
+            <div className="session-foot-inner between grow">
                 {onSkip ? (
                     <button className="btn btn-ghost" onClick={onSkip} disabled={isSubmitting}>
                         Пропустить
