@@ -40,32 +40,18 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
     };
 
     return (
-        <div className="flex flex-col items-center gap-3">
+        <div className="vmb-wrap">
             <button
                 onClick={handleClick}
                 disabled={isProcessing || isPlaying}
-                className={`
-                    relative w-20 h-20 rounded-full flex items-center justify-center
-                    transition-all duration-200 border
-                    ${isActive
-                        ? "bg-rust border-rust text-white"
-                        : "bg-surface border-line hover:bg-bg-2 text-ink-2"
-                    }
-                    ${(isProcessing || isPlaying) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                    active:translate-y-px
-                `}
-                style={{ boxShadow: "var(--sh-2)" }}
+                className={"vmb" + (isActive ? " vmb-active" : "") + (isProcessing || isPlaying ? " vmb-disabled" : "")}
+                aria-label={statusText[state]}
             >
-                {isSpeaking && (
-                    <div className="absolute inset-0 rounded-full animate-ping bg-rust opacity-30" />
-                )}
-
-                {isListening && (
-                    <div className="absolute inset-0 rounded-full animate-pulse bg-rust opacity-20" />
-                )}
+                {isSpeaking && <span className="vmb-ring vmb-ring-ping" aria-hidden="true" />}
+                {isListening && <span className="vmb-ring vmb-ring-pulse" aria-hidden="true" />}
 
                 {isProcessing ? (
-                    <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span className="vmb-spinner" aria-hidden="true" />
                 ) : isPlaying ? (
                     <Icon name="bell" size="xl" />
                 ) : (
@@ -73,7 +59,7 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
                 )}
             </button>
 
-            <span className={`text-sm font-medium ${isActive ? "text-rust" : "text-ink-3"}`}>
+            <span className={"vmb-label" + (isActive ? " vmb-label-active" : "")}>
                 {statusText[state]}
             </span>
         </div>

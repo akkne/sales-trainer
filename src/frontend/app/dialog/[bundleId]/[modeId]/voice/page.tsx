@@ -314,44 +314,6 @@ export default function VoiceCallPage() {
     const personaSeed = `${currentMode?.id ?? "persona"}-${currentMode?.title ?? ""}`;
     const isCallActive = callStatus === "connected" || callStatus === "dialing";
 
-    const isActive = voiceState !== "idle" && voiceState !== "error";
-    const isSpeaking = voiceState === "speaking";
-    const isProcessing = voiceState === "processing";
-    const isPlaying = voiceState === "playing";
-    const isListening = voiceState === "listening";
-    const isInitializing = voiceState === "initializing";
-
-    const handleMicClick = () => {
-        if (isActive) {
-            stopVoice();
-        } else {
-            startVoice();
-        }
-    };
-
-    const getStatusInfo = (): { text: string; icon: string; color: string } => {
-        switch (voiceState) {
-            case "idle":
-                return { text: "Tap to start", icon: "mic_off", color: "text-on-surface-variant" };
-            case "initializing":
-                return { text: "Starting...", icon: "mic", color: "text-primary" };
-            case "listening":
-                return { text: "Listening...", icon: "mic", color: "text-primary" };
-            case "speaking":
-                return { text: "Listening...", icon: "mic", color: "text-primary" };
-            case "processing":
-                return { text: "Processing...", icon: "sync", color: "text-secondary" };
-            case "playing":
-                return { text: "AI speaking...", icon: "volume_up", color: "text-tertiary" };
-            case "error":
-                return { text: "Error", icon: "error", color: "text-error" };
-            default:
-                return { text: "", icon: "mic", color: "text-on-surface-variant" };
-        }
-    };
-
-    const statusInfo = getStatusInfo();
-
     if (!isVoiceAvailable && currentMode) {
         return (
             <div className="voice">
@@ -378,35 +340,36 @@ export default function VoiceCallPage() {
         <div className="voice">
             {/* Top bar */}
             <div className="voice-top">
-                <button className="back-link plain" onClick={handleClose}>
+                <button className="back-link plain" onClick={handleClose} aria-label="К сценариям">
                     <Icon name="chevron-left" size="sm" />
                     К сценариям
                 </button>
 
-                <div className="voice-status" style={{ color: callStatus === "connected" ? "var(--success)" : "var(--ink-2)" }}>
+                {/* Center: status dot + mono status label / live timer */}
+                <div
+                    className="voice-status"
+                    style={{ color: callStatus === "connected" ? "var(--success)" : "var(--ink-2)" }}
+                >
                     <span
-                        className="vdot"
-                        style={{
-                            background: callStatus === "connected" ? "var(--success)" : "var(--ink-4)",
-                            animation: callStatus === "connected" ? "blink 1.4s ease-in-out infinite" : "none",
-                        }}
+                        className={"vdot" + (callStatus === "connected" ? " live" : "")}
+                        style={{ background: callStatus === "connected" ? "var(--success)" : "var(--ink-4)" }}
                     />
                     <span className="num">
-                        {callStatus === "idle" && "ОЖИДАНИЕ"}
-                        {callStatus === "dialing" && "ВЫЗОВ"}
+                        {callStatus === "idle"      && "ОЖИДАНИЕ"}
+                        {callStatus === "dialing"   && "ВЫЗОВ"}
                         {callStatus === "connected" && formatTime(sessionTimer)}
-                        {callStatus === "ended" && "ЗАВЕРШЁН"}
+                        {callStatus === "ended"     && "ЗАВЕРШЁН"}
                     </span>
                 </div>
 
+                {/* Right: voice quota */}
                 <div style={{ minWidth: 100, display: "flex", justifyContent: "flex-end" }}>
                     {usage && usage.dailyLimitSeconds > 0 && (
                         <div
-                            className="voice-quota num"
-                            style={usage.dailyExceeded ? { color: "var(--heart)" } : undefined}
+                            className={"voice-quota num" + (usage.dailyExceeded ? " exceeded" : "")}
                             title={`Сегодня: ${Math.round(usage.dailyUsedSeconds / 60)} / ${Math.round(usage.dailyLimitSeconds / 60)} мин · В месяце: ${Math.round(usage.monthlyUsedSeconds / 60)} / ${Math.round(usage.monthlyLimitSeconds / 60)} мин`}
                         >
-                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН СЕГОДНЯ
+                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН
                         </div>
                     )}
                 </div>
@@ -414,32 +377,37 @@ export default function VoiceCallPage() {
 
             {/* Call stage */}
             <div className="voice-stage">
+                {/* Avatar + state ring — ring color and pulse driven by describePipeline() */}
                 <div
                     className={"voice-avatar" + (info.pulse ? " pulse" : "")}
                     style={{ "--ring": info.ringColor } as React.CSSProperties}
                 >
-                    <div className="va-ring" style={{ borderColor: info.ringColor }} />
+                    <div className="va-ring" />
                     <GeoAvatar seed={personaSeed} size={156} style={{ borderRadius: "50%" }} />
                 </div>
 
                 <span className="eyebrow">{currentBundle?.title ?? "Сценарий"}</span>
-                <h1 className="h1" style={{ margin: "10px 0 6px", fontSize: "clamp(28px, 3.6vw, 44px)" }}>
+                <h1 className="h1" style={{ margin: "10px 0 6px", fontSize: "clamp(26px, 3.6vw, 42px)" }}>
                     {currentMode?.title ?? "Собеседник"}
                 </h1>
                 {currentMode?.description && (
                     <p className="lead" style={{ maxWidth: 480 }}>{currentMode.description}</p>
                 )}
 
-                {/* Live subtitles */}
+                {/* Live transcript bubbles */}
                 {(subtitles.length > 0 || (isCallActive && currentTranscript)) && (
                     <div className="transcript" ref={subtitleScrollRef}>
                         {subtitles.map((entry, index) => (
                             <div
                                 key={index}
-                                className={"tr-bubble " + (entry.role === "user" ? "user" : "ai") + (entry.interrupted ? " interim" : "")}
+                                className={
+                                    "tr-bubble " +
+                                    (entry.role === "user" ? "user" : "ai") +
+                                    (entry.interrupted ? " interrupted" : "")
+                                }
                             >
                                 <span className="tr-role">
-                                    {entry.role === "user" ? "Вы" : currentMode?.title ?? "Собеседник"}
+                                    {entry.role === "user" ? "Вы" : (currentMode?.title ?? "Собеседник")}
                                     {entry.interrupted && (
                                         <span style={{ color: "var(--amber)", marginLeft: 6 }}>· прервано</span>
                                     )}
@@ -447,43 +415,46 @@ export default function VoiceCallPage() {
                                 <p>{entry.text}</p>
                             </div>
                         ))}
-                        {/* Interim line: what the recognizer hears right now, before the phrase is committed */}
-                        {isCallActive &&
-                            currentTranscript &&
-                            (voiceState === "speaking" || voiceState === "listening") && (
-                                <div className="tr-bubble user interim">
-                                    <span className="tr-role">Вы</span>
-                                    <p>{currentTranscript}</p>
-                                </div>
-                            )}
+                        {/* Interim line — what the recognizer hears before the phrase is committed */}
+                        {isCallActive && currentTranscript && (voiceState === "speaking" || voiceState === "listening") && (
+                            <div className="tr-bubble user interim">
+                                <span className="tr-role">Вы</span>
+                                <p>{currentTranscript}</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* State pill */}
                 <div className="state-pill" style={{ marginTop: subtitles.length > 0 ? 0 : 24 }}>
-                    <span className="pdot" style={{ background: info.ringColor }} />
+                    <span
+                        className={"pdot" + (info.pulse ? " live" : "")}
+                        style={{ background: info.ringColor }}
+                    />
                     {info.label}
                 </div>
-                <p className="small voice-hint" style={{ minHeight: 38 }}>{info.hint}</p>
+                <p className="voice-hint" style={{ minHeight: 38 }}>{info.hint}</p>
 
+                {/* Error alert */}
                 {error && (
-                    <span className="badge" style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "10px 16px", fontSize: 13 }}>
+                    <span
+                        className="badge"
+                        role="alert"
+                        style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "10px 16px", fontSize: 13, borderRadius: "var(--r-xs)", display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
                         <Icon name="warning" size="sm" />
                         {error}
                     </span>
                 )}
 
+                {/* Completing spinner */}
                 {isCompleting && (
-                    <div className="row gap-2 small" style={{ marginTop: 10 }}>
+                    <div className="row gap-2 small" style={{ marginTop: 10, color: "var(--ink-3)" }}>
                         <span
                             style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: "50%",
-                                border: "2px solid var(--primary)",
-                                borderTopColor: "transparent",
-                                animation: "spin 0.8s linear infinite",
-                                display: "inline-block",
+                                width: 14, height: 14, borderRadius: "50%",
+                                border: "2px solid var(--primary)", borderTopColor: "transparent",
+                                animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none",
                             }}
                         />
                         Готовим разбор…
@@ -491,7 +462,7 @@ export default function VoiceCallPage() {
                 )}
             </div>
 
-            {/* Call controls */}
+            {/* Call controls footer */}
             <div className="voice-foot">
                 {!isCallActive && !feedback && (
                     <button

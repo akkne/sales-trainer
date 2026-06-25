@@ -356,10 +356,10 @@ export default function ChatPage() {
                 )}
                 <main className="dc-main">
                     <div className="dc-head">
-                        <h1 className="h4">Загрузка...</h1>
+                        <span className="dc-head-title">Загрузка...</span>
                     </div>
                     <div className="row center grow">
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", border: "4px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
                     </div>
                 </main>
             </div>
@@ -381,7 +381,7 @@ export default function ChatPage() {
                 )}
                 <main className="dc-main">
                     <div className="dc-head">
-                        <h1 className="h4">Ошибка</h1>
+                        <span className="dc-head-title">Ошибка</span>
                     </div>
                     <div className="col center grow" style={{ padding: 16 }}>
                         <div className="empty" style={{ padding: "20px 0 0" }}>
@@ -424,21 +424,21 @@ export default function ChatPage() {
                         <Icon name="grid" size="md" />
                     </button>
 
-                    <span className="itile primary" style={{ width: 42, height: 42 }}>
-                        <Icon name="sparkle" size={21} />
+                    <span className="itile primary" style={{ width: 36, height: 36, borderRadius: "50%", flex: "none" }}>
+                        <Icon name="sparkle" size={18} />
                     </span>
-                    <div className="grow" style={{ minWidth: 0 }}>
-                        <div className="h4" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="dc-head-title">
                             {currentMode?.title || "AI Собеседник"}
                         </div>
-                        <div className="small" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div className="dc-head-sub">
                             {currentBundle?.title || "Тренировка диалога"} · текстовый режим
                         </div>
                     </div>
 
                     {/* Timer */}
                     {sessionId && (
-                        <span className="chip num" style={{ flex: "none" }}>
+                        <span className="chip num" style={{ flex: "none", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                             <Icon name="clock" size="sm" />
                             {formatTime(sessionTimer)}
                         </span>
@@ -449,7 +449,7 @@ export default function ChatPage() {
                         <button
                             className="btn btn-sm"
                             onClick={handleEndSession}
-                            style={{ background: "var(--heart-soft)", color: "var(--heart)", flex: "none" }}
+                            style={{ background: "var(--heart-soft)", color: "var(--heart)", flex: "none", borderColor: "transparent" }}
                         >
                             <Icon name="close" size="sm" />
                             Завершить
@@ -464,25 +464,23 @@ export default function ChatPage() {
 
                 {/* Status bar */}
                 {(isSending || isCompleting || voiceState !== "idle") && (
-                    <div style={{ padding: "8px 16px", background: "var(--surface-2)", borderBottom: "1px solid var(--line)" }}>
-                        <p className="small row center gap-2" style={{ margin: 0 }}>
-                            {isCompleting && (
-                                <>
-                                    <span style={{ width: 16, height: 16, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
-                                    Формируем обратную связь...
-                                </>
-                            )}
-                            {isSending && !isCompleting && (
-                                <>
-                                    <span style={{ width: 16, height: 16, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
-                                    AI думает...
-                                </>
-                            )}
-                            {voiceState === "listening" && "🎙️ Слушаю..."}
-                            {voiceState === "speaking" && "🗣️ Говорите..."}
-                            {voiceState === "processing" && "⏳ Обработка речи..."}
-                            {voiceState === "playing" && "🔊 AI отвечает..."}
-                        </p>
+                    <div className="dc-status-bar" role="status" aria-live="polite">
+                        {isCompleting && (
+                            <>
+                                <span style={{ width: 14, height: 14, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none" }} />
+                                Формируем обратную связь...
+                            </>
+                        )}
+                        {isSending && !isCompleting && (
+                            <>
+                                <span style={{ width: 14, height: 14, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none" }} />
+                                AI думает...
+                            </>
+                        )}
+                        {!isSending && !isCompleting && voiceState === "listening" && "Слушаю..."}
+                        {!isSending && !isCompleting && voiceState === "speaking" && "Говорите..."}
+                        {!isSending && !isCompleting && voiceState === "processing" && "Обработка речи..."}
+                        {!isSending && !isCompleting && voiceState === "playing" && "AI отвечает..."}
                     </div>
                 )}
 
@@ -507,20 +505,22 @@ export default function ChatPage() {
 
                         {isSending && (
                             <div className="dc-msg ai">
-                                <span className="itile primary" style={{ width: 34, height: 34, borderRadius: "50%" }}>
+                                <span className="dc-avatar" aria-hidden="true">
                                     <Icon name="sparkle" size="sm" />
                                 </span>
-                                <div className="dc-bubble typing">
-                                    <span />
-                                    <span />
-                                    <span />
+                                <div className="dc-bubble-wrap">
+                                    <div className="dc-bubble typing">
+                                        <span />
+                                        <span />
+                                        <span />
+                                    </div>
                                 </div>
                             </div>
                         )}
 
                         {error && sessionId && (
                             <div className="row center">
-                                <span className="badge" style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "8px 16px", fontSize: 13 }}>
+                                <span className="badge" style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "8px 16px", fontSize: 13, borderRadius: "var(--r-xs)" }}>
                                     <Icon name="warning" size="sm" />
                                     {error}
                                 </span>
@@ -532,22 +532,22 @@ export default function ChatPage() {
                 </div>
 
                 {/* Input area */}
-                <div className="dc-input" style={{ flexDirection: "column", alignItems: "stretch", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
+                <div className="dc-input">
                     {voiceError && (
-                        <div className="row center gap-2 small" style={{ color: "var(--heart)", marginBottom: 4 }}>
+                        <div className="row center gap-2 small" style={{ color: "var(--heart)" }}>
                             <Icon name="warning" size="sm" />
                             {voiceError}
                         </div>
                     )}
 
                     {currentTranscript && (
-                        <div className="small" style={{ textAlign: "center", fontStyle: "italic", background: "var(--surface-2)", borderRadius: 999, padding: "8px 16px", marginBottom: 4 }}>
+                        <div className="dc-interim">
                             «{currentTranscript}»
                         </div>
                     )}
 
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
-                        <button className="btn btn-dark btn-block" onClick={handleShowFeedback} style={{ marginBottom: 4 }}>
+                        <button className="btn btn-dark btn-block" onClick={handleShowFeedback}>
                             <Icon name="book" size="sm" />
                             Показать обратную связь
                         </button>
