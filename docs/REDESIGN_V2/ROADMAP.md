@@ -47,7 +47,7 @@ verification is collected into a checklist for the user.
 
 ## Phases
 
-- [ ] **P1 — Tokens + fonts + base components**
+- [x] **P1 — Tokens + fonts + base components** ✅ verified (vitest 83/83; tsc clean except pre-existing stale `.next` validator noise for nonexistent admin/open-question route)
   - `app/globals.css` `:root` + `[data-theme="dark"]`: replace palette with V2 tokens
     (violet primary, new ink/surface/border scale, radii 22/16/14/11/9, new shadows).
   - `app/layout.tsx`: swap Google Fonts to Hanken Grotesk 400–800; remove Manrope/Unbounded.
