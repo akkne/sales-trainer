@@ -5,47 +5,47 @@ import { renderHook, act } from "@testing-library/react";
 function computeCountdown(weekEndDate: string, now: number): string {
     const endMs = new Date(weekEndDate).getTime();
     const diffMs = endMs - now;
-    if (diffMs <= 0) return "Неделя завершена";
+    if (diffMs <= 0) return "Week ended";
     const totalHours = Math.floor(diffMs / 3_600_000);
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
-    if (days > 0) return `${days}д ${hours}ч`;
+    if (days > 0) return `${days}d ${hours}h`;
     const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
-    return `${hours}ч ${minutes}м`;
+    return `${hours}h ${minutes}m`;
 }
 
 describe("computeCountdown", () => {
-    it("returns 'Неделя завершена' when end date is in the past", () => {
+    it("returns 'Week ended' when end date is in the past", () => {
         const past = new Date(Date.now() - 3_600_000).toISOString();
-        expect(computeCountdown(past, Date.now())).toBe("Неделя завершена");
+        expect(computeCountdown(past, Date.now())).toBe("Week ended");
     });
 
-    it("returns 'Неделя завершена' when end date equals now", () => {
+    it("returns 'Week ended' when end date equals now", () => {
         const now = Date.now();
-        expect(computeCountdown(new Date(now).toISOString(), now)).toBe("Неделя завершена");
+        expect(computeCountdown(new Date(now).toISOString(), now)).toBe("Week ended");
     });
 
     it("returns days and hours when more than 24h remaining", () => {
         const now = Date.now();
         const future = new Date(now + 2 * 24 * 3_600_000 + 3 * 3_600_000).toISOString();
-        expect(computeCountdown(future, now)).toBe("2д 3ч");
+        expect(computeCountdown(future, now)).toBe("2d 3h");
     });
 
     it("returns hours and minutes when less than 24h remaining", () => {
         const now = Date.now();
         const future = new Date(now + 5 * 3_600_000 + 30 * 60_000).toISOString();
-        expect(computeCountdown(future, now)).toBe("5ч 30м");
+        expect(computeCountdown(future, now)).toBe("5h 30m");
     });
 
-    it("returns 1д 0ч when exactly 24h remaining", () => {
+    it("returns 1d 0h when exactly 24h remaining", () => {
         const now = Date.now();
         const future = new Date(now + 24 * 3_600_000).toISOString();
-        expect(computeCountdown(future, now)).toBe("1д 0ч");
+        expect(computeCountdown(future, now)).toBe("1d 0h");
     });
 
-    it("returns 0ч Xм for sub-hour remaining", () => {
+    it("returns 0h Xm for sub-hour remaining", () => {
         const now = Date.now();
         const future = new Date(now + 45 * 60_000).toISOString();
-        expect(computeCountdown(future, now)).toBe("0ч 45м");
+        expect(computeCountdown(future, now)).toBe("0h 45m");
     });
 });

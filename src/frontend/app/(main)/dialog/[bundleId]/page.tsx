@@ -49,7 +49,7 @@ export default function BundleModesPage() {
 
     const currentBundle = bundles?.find((b) => b.id === bundleId);
     const bundleColors = ava(bundleId);
-    const bundleAbbr = currentBundle ? initials(currentBundle.title) : "ДМ";
+    const bundleAbbr = currentBundle ? initials(currentBundle.title) : "DM";
 
     // ── Loading ───────────────────────────────────────────────────────────────
     if (isLoading) {
@@ -83,7 +83,7 @@ export default function BundleModesPage() {
                     <div className="ic" style={{ background: "var(--heart-soft)", color: "var(--heart)" }}>
                         <Icon name="close" size="lg" />
                     </div>
-                    <h1 className="h3" style={{ marginBottom: 8 }}>Ошибка загрузки</h1>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>Failed to load</h1>
                     <p className="small">{error.message}</p>
                 </div>
             </div>
@@ -98,10 +98,10 @@ export default function BundleModesPage() {
                 <button
                     className="back-link"
                     onClick={() => router.push("/dialog")}
-                    aria-label="Назад к практике"
+                    aria-label="Back to practice"
                 >
                     <Icon name="chevron-left" size={18} />
-                    Назад
+                    Back
                 </button>
 
                 {/* ── Bundle header ── */}
@@ -116,9 +116,9 @@ export default function BundleModesPage() {
                         {bundleAbbr}
                     </div>
                     <div>
-                        <p className="mode-select-eyebrow">Выбери режим</p>
+                        <p className="mode-select-eyebrow">Choose a mode</p>
                         <h1 className="mode-select-title">
-                            {currentBundle?.title ?? "Режимы практики"}
+                            {currentBundle?.title ?? "Practice modes"}
                         </h1>
                         {currentBundle?.description && (
                             <p className="mode-select-desc">{currentBundle.description}</p>
@@ -132,8 +132,8 @@ export default function BundleModesPage() {
                         <div className="ic">
                             <Icon name="message" size="lg" />
                         </div>
-                        <p className="h4" style={{ marginBottom: 4 }}>Режимы пока не добавлены</p>
-                        <p className="small">Администратор ещё не настроил сценарии</p>
+                        <p className="h4" style={{ marginBottom: 4 }}>No modes added yet</p>
+                        <p className="small">The administrator hasn't configured scenarios yet</p>
                     </div>
                 ) : (
                     <div className="mode-grid" role="list">
@@ -148,10 +148,10 @@ export default function BundleModesPage() {
                                         className="bundle-btn-chat"
                                         style={{ flex: 1 }}
                                         onClick={() => trackEvent("start_dialog", "dialog")}
-                                        aria-label={`Начать текстовый чат: ${mode.title}`}
+                                        aria-label={`Start text chat: ${mode.title}`}
                                     >
                                         <Icon name="message" size={15} />
-                                        Чат
+                                        Chat
                                     </Link>
                                     {mode.voiceEnabled && (
                                         <Link
@@ -159,10 +159,10 @@ export default function BundleModesPage() {
                                             className="bundle-btn-call"
                                             style={{ flex: 1 }}
                                             onClick={() => trackEvent("start_dialog", "dialog")}
-                                            aria-label={`Начать голосовой звонок: ${mode.title}`}
+                                            aria-label={`Start voice call: ${mode.title}`}
                                         >
                                             <Icon name="phone" size={15} />
-                                            Звонок
+                                            Call
                                         </Link>
                                     )}
                                 </div>

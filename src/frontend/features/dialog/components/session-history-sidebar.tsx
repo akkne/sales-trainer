@@ -21,11 +21,11 @@ function formatSessionDate(dateString: string): string {
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - sessionDate.getTime()) / TimingConstants.oneDayMs);
 
-    if (diffDays === 0) return "Сегодня";
-    if (diffDays === 1) return "Вчера";
-    if (diffDays < 7) return `${diffDays} дн. назад`;
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} d ago`;
 
-    return sessionDate.toLocaleDateString("ru-RU", {
+    return sessionDate.toLocaleDateString("en-GB", {
         day: "numeric",
         month: "short",
     });
@@ -74,9 +74,9 @@ export function SessionHistorySidebar({
                 <div className="dc-side-top">
                     <button className="btn btn-dark btn-sm" onClick={onNewChat}>
                         <Icon name="plus" size="sm" />
-                        Новый диалог
+                        New dialogue
                     </button>
-                    <button className="icon-btn" onClick={onClose} aria-label="Закрыть" style={{ flex: "none" }}>
+                    <button className="icon-btn" onClick={onClose} aria-label="Close" style={{ flex: "none" }}>
                         <Icon name="close" size="md" />
                     </button>
                 </div>
@@ -87,7 +87,7 @@ export function SessionHistorySidebar({
                             <div className="ic" style={{ width: 48, height: 48, marginBottom: 12 }}>
                                 <Icon name="message" size="lg" />
                             </div>
-                            <p className="small">Нет истории диалогов</p>
+                            <p className="small">No dialogue history</p>
                         </div>
                     ) : (
                         Array.from(groupedSessions.entries()).map(([dateLabel, dateSessions]) => (
@@ -114,7 +114,7 @@ export function SessionHistorySidebar({
                                                 <span
                                                     onClick={(e) => handleDeleteClick(e, session.id)}
                                                     role="button"
-                                                    aria-label="Удалить чат"
+                                                    aria-label="Delete chat"
                                                     style={{ color: "var(--ink-4)", display: "inline-flex", padding: 2 }}
                                                 >
                                                     <Icon name="delete" size="sm" />
@@ -141,7 +141,7 @@ export function SessionHistorySidebar({
                 <div style={{ padding: 12, borderTop: "1px solid var(--line)" }}>
                     <Link href="/dialog" className="back-link" style={{ width: "100%", justifyContent: "center" }}>
                         <Icon name="arrow-left" size="sm" />
-                        К выбору навыка
+                        Back to skills
                     </Link>
                 </div>
             </aside>

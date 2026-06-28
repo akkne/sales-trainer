@@ -4,13 +4,13 @@ import { ChooseOptionExercise } from "@/features/exercise/components/choose-opti
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
 
 const CONTENT = {
-    situation: "Клиент говорит: «Слишком дорого»",
+    situation: "Client says: \"That's too expensive\"",
     options: [
-        { text: "Понял, снизим цену", is_correct: false },
-        { text: "Давайте разберём ценность", is_correct: true },
-        { text: "Ок, до свидания", is_correct: false },
+        { text: "Understood, we'll lower the price", is_correct: false },
+        { text: "Let's walk through the value", is_correct: true },
+        { text: "OK, goodbye", is_correct: false },
     ],
-    explanation: "Возражение по цене — повод раскрыть ценность.",
+    explanation: "A price objection is an opportunity to reveal value.",
 };
 
 function makeResult(overrides: Partial<ExerciseSubmissionResult> = {}): ExerciseSubmissionResult {
@@ -47,7 +47,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        const submitButton = screen.getByText("Проверить").closest("button")!;
+        const submitButton = screen.getByText("Check").closest("button")!;
         expect(submitButton.disabled).toBe(true);
 
         fireEvent.click(screen.getByText(CONTENT.options[1].text));
@@ -64,7 +64,7 @@ describe("ChooseOptionExercise", () => {
             />
         );
         fireEvent.click(screen.getByText(CONTENT.options[2].text));
-        fireEvent.click(screen.getByText("Проверить"));
+        fireEvent.click(screen.getByText("Check"));
         expect(onSubmit).toHaveBeenCalledWith({ selectedOptionIndex: 2 });
     });
 
@@ -76,7 +76,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        expect(screen.queryByText("Пропустить")).toBeNull();
+        expect(screen.queryByText("Skip")).toBeNull();
 
         rerender(
             <ChooseOptionExercise
@@ -86,7 +86,7 @@ describe("ChooseOptionExercise", () => {
                 isSubmitting={false}
             />
         );
-        expect(screen.getByText("Пропустить")).toBeTruthy();
+        expect(screen.getByText("Skip")).toBeTruthy();
     });
 
     it("locks options after a result is submitted", () => {

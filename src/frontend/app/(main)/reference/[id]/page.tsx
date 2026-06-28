@@ -41,12 +41,12 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-4)")}
                 >
                     <Icon name="chevron-left" size="sm" />
-                    Назад
+                    Back
                 </button>
 
                 {/* Page title */}
                 <h1 className="ref-title" style={{ marginBottom: 20 }}>
-                    Техники
+                    Techniques
                 </h1>
 
                 {/* Content */}
@@ -59,7 +59,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                 ) : !referenceMaterials?.length ? (
                     <div className="ref-empty">
                         <Icon name="search" size="lg" color="var(--ink-4)" />
-                        <p>Материалы пока не добавлены</p>
+                        <p>No materials added yet</p>
                     </div>
                 ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

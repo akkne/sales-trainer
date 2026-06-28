@@ -39,10 +39,10 @@ function useCountdown(periodEndsAt: string) {
 // (e.g. a tier deleted after a league was created). Tier name and color are now
 // admin-configured and delivered with the league payload.
 const TIER_CONFIG: Record<string, { label: string; color: string }> = {
-    bronze: { label: "Бронза", color: "#c47b3f" },
-    silver: { label: "Серебро", color: "#9aa3ad" },
-    gold: { label: "Золото", color: "#e3b23c" },
-    diamond: { label: "Алмаз", color: "#4cc6e8" },
+    bronze: { label: "Bronze", color: "#c47b3f" },
+    silver: { label: "Silver", color: "#9aa3ad" },
+    gold: { label: "Gold", color: "#e3b23c" },
+    diamond: { label: "Diamond", color: "#4cc6e8" },
 };
 
 export default function LeaguePage() {
@@ -75,7 +75,7 @@ export default function LeaguePage() {
     if (isError) {
         return (
             <div className="page" style={{ padding: "60px 24px" }}>
-                <ErrorState title="Не удалось загрузить лигу" onRetry={() => refetch()} />
+                <ErrorState title="Couldn't load the league" onRetry={() => refetch()} />
             </div>
         );
     }
@@ -87,8 +87,8 @@ export default function LeaguePage() {
                     <div className="ic">
                         <Icon name="trophy" size="lg" />
                     </div>
-                    <h1 className="h3" style={{ marginBottom: 8 }}>Лига ещё не сформирована</h1>
-                    <p className="small">Заработай первые XP — и попадёшь в еженедельный рейтинг.</p>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>League not formed yet</h1>
+                    <p className="small">Earn your first XP — and you'll appear in the weekly ranking.</p>
                 </div>
             </div>
         );
@@ -112,27 +112,27 @@ export default function LeaguePage() {
                 <div className="hero-head">
                     <div className="hh-left fade-up">
                         <span className="eyebrow">
-                            Арена<span className="dot">·</span>
-                            <span>Неделя</span>
+                            Arena<span className="dot">·</span>
+                            <span>Week</span>
                         </span>
                         <h1 className="h1 hh-title">
-                            Лига <span style={{ color: tierInfo.color }}>{tierInfo.label}</span>
+                            <span style={{ color: tierInfo.color }}>{tierInfo.label}</span> League
                         </h1>
                         <p className="lead">
-                            Топ-{PROMOTION_ZONE_SIZE} поднимаются выше, нижние {DEMOTION_ZONE_SIZE} вылетают.
-                            Займи место до конца недели.
+                            Top {PROMOTION_ZONE_SIZE} move up, the bottom {DEMOTION_ZONE_SIZE} drop out.
+                            Secure your spot before the week ends.
                         </p>
                     </div>
                     <div className="hero-stats fade-up">
                         <StatTile
-                            label="Твоё место"
+                            label="Your rank"
                             value={`#${leagueData.currentUserRank}`}
                             icon={<Icon name="trophy" size="xs" />}
                             tone="amber"
                         />
                         <StatTile
-                            label="Твой XP"
-                            value={currentUserXp.toLocaleString("ru")}
+                            label="Your XP"
+                            value={currentUserXp.toLocaleString("en")}
                             icon={<Icon name="bolt" size="xs" />}
                             tone="primary"
                         />
@@ -143,21 +143,21 @@ export default function LeaguePage() {
                     {/* Left column */}
                     <div className="col gap-4">
                         <div className="card card-pad countdown">
-                            <span className="eyebrow muted">До конца недели</span>
+                            <span className="eyebrow muted">Until end of week</span>
                             <div className="cd-row">
                                 <div className="cd-unit">
                                     <b className="num">{String(countdown.days).padStart(2, "0")}</b>
-                                    <span>дней</span>
+                                    <span>days</span>
                                 </div>
                                 <span className="cd-sep">:</span>
                                 <div className="cd-unit">
                                     <b className="num">{String(countdown.hours).padStart(2, "0")}</b>
-                                    <span>часов</span>
+                                    <span>hours</span>
                                 </div>
                                 <span className="cd-sep">:</span>
                                 <div className="cd-unit">
                                     <b className="num">{String(countdown.mins).padStart(2, "0")}</b>
-                                    <span>минут</span>
+                                    <span>minutes</span>
                                 </div>
                             </div>
                         </div>
@@ -167,11 +167,11 @@ export default function LeaguePage() {
                                 <Icon name="bolt" />
                             </span>
                             <div className="grow">
-                                <h4 className="h4">Ускорь продвижение</h4>
-                                <p className="small">Пройди урок, чтобы заработать XP и подняться выше.</p>
+                                <h4 className="h4">Accelerate your climb</h4>
+                                <p className="small">Complete a lesson to earn XP and move up the ranking.</p>
                             </div>
                             <Link href="/tree" className="btn btn-primary">
-                                Учиться
+                                Learn
                                 <Icon name="play" size={16} />
                             </Link>
                         </div>
@@ -181,7 +181,7 @@ export default function LeaguePage() {
                     <div className="card lb-card">
                         <div className="lb-head">
                             <span>#</span>
-                            <span>Участник</span>
+                            <span>Participant</span>
                             <span>XP</span>
                         </div>
                         {leagueData.participantsByRank.map((participant, idx) => {
@@ -204,13 +204,13 @@ export default function LeaguePage() {
                                     {showPromoBoundary && (
                                         <div className="lb-divider promo">
                                             <Icon name="arrow-up" size={14} />
-                                            Зона повышения
+                                            Promotion zone
                                         </div>
                                     )}
                                     {showDemoBoundary && (
                                         <div className="lb-divider demote">
                                             <Icon name="chevron-down" size={14} />
-                                            Зона вылета
+                                            Drop zone
                                         </div>
                                     )}
 
@@ -223,7 +223,7 @@ export default function LeaguePage() {
                                             <span className="lb-name">
                                                 {participant.displayName}
                                                 {participant.isCurrentUser && (
-                                                    <span className="you-tag"> · ты</span>
+                                                    <span className="you-tag"> · you</span>
                                                 )}
                                             </span>
                                         </div>

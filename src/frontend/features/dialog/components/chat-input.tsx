@@ -9,7 +9,7 @@ interface ChatInputProps {
     placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Введите сообщение…" }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Type a message…" }: ChatInputProps) {
     const [inputValue, setInputValue] = useState("");
 
     const handleSubmit = (submitEvent: FormEvent) => {
@@ -32,13 +32,13 @@ export function ChatInput({ onSend, disabled, placeholder = "Введите со
                 disabled={disabled}
                 placeholder={placeholder}
                 className="field"
-                aria-label="Сообщение"
+                aria-label="Message"
                 style={disabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
             />
             <button
                 type="submit"
                 disabled={!canSend}
-                aria-label="Отправить"
+                aria-label="Send"
                 className={"btn " + (canSend ? "btn-primary" : "btn-soft")}
                 style={{ width: 44, height: 44, padding: 0, flex: "none", ...(canSend ? {} : { opacity: 0.45, cursor: "not-allowed", boxShadow: "none" }) }}
             >

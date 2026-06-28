@@ -14,12 +14,12 @@ interface ExerciseActionFooterProps {
 
 /**
  * Shared pre-submit footer for exercises, styled with the .session-foot tokens.
- * Renders an optional "Пропустить" ghost button and the primary submit button.
+ * Renders an optional "Skip" ghost button and the primary submit button.
  */
 export function ExerciseActionFooter({
     onSkip,
     onSubmit,
-    submitLabel = "Проверить",
+    submitLabel = "Check",
     canSubmit,
     isSubmitting,
     keyboardHint,
@@ -40,7 +40,7 @@ export function ExerciseActionFooter({
             <div className="session-foot-inner between grow">
                 {onSkip ? (
                     <button className="btn btn-ghost" onClick={onSkip} disabled={isSubmitting}>
-                        Пропустить
+                        Skip
                     </button>
                 ) : (
                     <span />

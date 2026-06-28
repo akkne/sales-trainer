@@ -92,9 +92,9 @@ export function MatchPairsExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--match">Сопоставление</span></div>
+            <div><span className="ex-chip ex-chip--match">Match pairs</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                {content.instruction || "Сопоставьте пары:"}
+                {content.instruction || "Match the pairs:"}
             </h2>
 
             <div
@@ -125,7 +125,7 @@ export function MatchPairsExercise({
                                 marginBottom: 4,
                             }}
                         >
-                            Возражение
+                            Objection
                         </div>
                         {leftItems.map((item) => {
                             const isConnected = connectedLefts.has(item);
@@ -180,7 +180,7 @@ export function MatchPairsExercise({
                                 marginBottom: 4,
                             }}
                         >
-                            Техника
+                            Technique
                         </div>
                         {rightItems.map((item) => {
                             const isConnected = connectedRights.has(item);
@@ -237,7 +237,7 @@ export function MatchPairsExercise({
                             fontFamily: "var(--font-mono)",
                         }}
                     >
-                        ↺ Сбросить
+                        ↺ Reset
                     </button>
                 )}
             </div>
@@ -258,7 +258,7 @@ export function MatchPairsExercise({
                     onSubmit={() => onSubmit({ pairs: userPairs })}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
-                    keyboardHint="Enter — проверить"
+                    keyboardHint="Enter — check"
                 />
             )}
         </div>

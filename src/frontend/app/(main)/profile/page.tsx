@@ -13,8 +13,8 @@ const PERSONA_LABELS: Record<string, string> = {
     sdr: "SDR",
     account_executive: "Account Executive",
     account_manager: "Account Manager",
-    founder: "Основатель",
-    other: "Другое",
+    founder: "Founder",
+    other: "Other",
 };
 
 /** Derive user initials from display name (up to 2 chars). */
@@ -118,7 +118,7 @@ export default function ProfilePage() {
                             disabled={uploading}
                             className="pv2-avatar-edit"
                         >
-                            {uploading ? "Загрузка…" : "Обновить фото"}
+                            {uploading ? "Loading…" : "Update photo"}
                         </button>
                         <input
                             ref={fileInputRef}
@@ -147,7 +147,7 @@ export default function ProfilePage() {
 
                 {/* 4 Stat tiles */}
                 <div className="pv2-stats">
-                    {/* Точность */}
+                    {/* Accuracy */}
                     <div className="pv2-stat">
                         <div className="pv2-stat-ic green">
                             {/* target / crosshair icon */}
@@ -156,7 +156,7 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Точность</div>
+                            <div className="pv2-stat-label">Accuracy</div>
                             <div className="pv2-stat-value">
                                 {profileStats.averageExerciseScore}
                                 <small>%</small>
@@ -164,7 +164,7 @@ export default function ProfilePage() {
                         </div>
                     </div>
 
-                    {/* Рекорд */}
+                    {/* Best streak */}
                     <div className="pv2-stat">
                         <div className="pv2-stat-ic amber">
                             {/* trophy */}
@@ -173,15 +173,15 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Рекорд</div>
+                            <div className="pv2-stat-label">Best streak</div>
                             <div className="pv2-stat-value">
                                 {profileStats.longestStreakDayCount}
-                                <small>дн</small>
+                                <small>d</small>
                             </div>
                         </div>
                     </div>
 
-                    {/* Навыков пройдено */}
+                    {/* Skills completed */}
                     <div className="pv2-stat">
                         <div className="pv2-stat-ic violet">
                             {/* check circle */}
@@ -190,12 +190,12 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Навыков</div>
+                            <div className="pv2-stat-label">Skills</div>
                             <div className="pv2-stat-value">{profileStats.completedSkillCount}</div>
                         </div>
                     </div>
 
-                    {/* Уроков пройдено */}
+                    {/* Lessons completed */}
                     <div className="pv2-stat">
                         <div className="pv2-stat-ic blue">
                             {/* book */}
@@ -204,7 +204,7 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Уроков</div>
+                            <div className="pv2-stat-label">Lessons</div>
                             <div className="pv2-stat-value">{totalLessonsDone}</div>
                         </div>
                     </div>
@@ -212,12 +212,12 @@ export default function ProfilePage() {
 
                 {/* Two-column body */}
                 <div className="pv2-body">
-                    {/* Left: Записанные навыки (enrolled skills with toggle) */}
+                    {/* Left: Enrolled skills with toggle */}
                     <div className="pv2-card">
                         <div className="pv2-card-head">
-                            <span className="pv2-card-title">Записанные навыки</span>
+                            <span className="pv2-card-title">Enrolled skills</span>
                             <Link href="/tree" className="pv2-manage-link">
-                                Управление
+                                Manage
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m9 18 6-6-6-6"/>
                                 </svg>
@@ -232,7 +232,7 @@ export default function ProfilePage() {
                             </div>
                         ) : !allSkills || allSkills.length === 0 ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                                Навыки ещё не добавлены. Обратитесь к администратору.
+                                No skills added yet. Contact your administrator.
                             </p>
                         ) : (
                             <div>
@@ -261,10 +261,10 @@ export default function ProfilePage() {
                                                     disabled={isAlwaysOn || isSaving}
                                                     aria-label={
                                                         isAlwaysOn
-                                                            ? `${skill.title} — базовый навык, всегда включён`
+                                                            ? `${skill.title} — core skill, always on`
                                                             : isEnrolled
-                                                            ? `Отписаться от ${skill.title}`
-                                                            : `Записаться на ${skill.title}`
+                                                            ? `Unenroll from ${skill.title}`
+                                                            : `Enroll in ${skill.title}`
                                                     }
                                                 >
                                                     <span className="pv2-skill-name">{skill.title}</span>
@@ -291,8 +291,8 @@ export default function ProfilePage() {
                                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                                                         <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
                                                             {isAlwaysOn
-                                                                ? "Базовый — всегда включён"
-                                                                : `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`}
+                                                                ? "Core — always on"
+                                                                : `${skill.completedLessonCount}/${skill.totalLessonCount} lessons`}
                                                         </span>
                                                         <span className="pv2-skill-pct">{pct}%</span>
                                                     </div>
@@ -300,7 +300,7 @@ export default function ProfilePage() {
                                             )}
                                             {!isEnrolled && !isAlwaysOn && (
                                                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                                                    Нажми, чтобы добавить
+                                                    Tap to add
                                                 </span>
                                             )}
                                         </div>
@@ -311,39 +311,39 @@ export default function ProfilePage() {
 
                         {updateEnrolledMutation.isError && (
                             <p style={{ fontSize: 12, color: "var(--heart)", marginTop: 10, textAlign: "center" }}>
-                                Не удалось сохранить. Попробуй ещё раз.
+                                Couldn't save. Please try again.
                             </p>
                         )}
                     </div>
 
-                    {/* Right: Голосовые минуты */}
+                    {/* Right: Voice minutes */}
                     <div className="pv2-card">
                         <div className="pv2-card-head">
-                            <span className="pv2-card-title">Голосовые минуты</span>
+                            <span className="pv2-card-title">Voice minutes</span>
                         </div>
 
                         {!hasVoiceQuota ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                                Голосовые звонки не ограничены.
+                                Voice calls are unlimited.
                             </p>
                         ) : (
                             <div className="pv2-quota-row">
                                 {voiceUsage.dailyLimitSeconds > 0 && (
                                     <VoiceBar
-                                        label="Сегодня"
+                                        label="Today"
                                         usedSeconds={voiceUsage.dailyUsedSeconds}
                                         limitSeconds={voiceUsage.dailyLimitSeconds}
                                         tone="violet"
-                                        resetNote="Сбрасывается ежедневно"
+                                        resetNote="Resets daily"
                                     />
                                 )}
                                 {voiceUsage.monthlyLimitSeconds > 0 && (
                                     <VoiceBar
-                                        label="В этом месяце"
+                                        label="This month"
                                         usedSeconds={voiceUsage.monthlyUsedSeconds}
                                         limitSeconds={voiceUsage.monthlyLimitSeconds}
                                         tone="green"
-                                        resetNote="Сбрасывается ежемесячно"
+                                        resetNote="Resets monthly"
                                     />
                                 )}
                             </div>
@@ -379,7 +379,7 @@ function VoiceBar({
             <div className="pv2-quota-head">
                 <span>{label}</span>
                 <span className={`pv2-quota-num${isExceeded ? " exceeded" : ""}`}>
-                    {usedMin} / {limitMin} мин
+                    {usedMin} / {limitMin} min
                 </span>
             </div>
             <div className="pv2-quota-bar">
@@ -387,8 +387,8 @@ function VoiceBar({
             </div>
             {isExceeded ? (
                 <span className="pv2-quota-note warn">
-                    Лимит исчерпан — звонки откроются{" "}
-                    {label === "Сегодня" ? "завтра" : "в следующем месяце"}
+                    Limit reached — calls resume{" "}
+                    {label === "Today" ? "tomorrow" : "next month"}
                 </span>
             ) : (
                 <span className="pv2-quota-note">{resetNote}</span>

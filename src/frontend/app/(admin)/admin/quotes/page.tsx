@@ -10,11 +10,11 @@ import {
 } from "@/features/admin/hooks/use-admin";
 
 const MONTH_NAMES = [
-    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
 ];
 
-const WEEKDAY_NAMES = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function toIsoDate(year: number, month: number, day: number): string {
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -207,7 +207,7 @@ export default function AdminQuotesPage() {
                                     className="mt-1 w-full border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 resize-y"
                                     value={formText}
                                     onChange={(e) => setFormText(e.target.value)}
-                                    placeholder="Цитата дня..."
+                                    placeholder="Quote of the day..."
                                 />
                             </label>
                             <label className="block">

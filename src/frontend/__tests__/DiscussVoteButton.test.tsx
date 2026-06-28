@@ -32,18 +32,18 @@ describe("VoteButton", () => {
 describe("discuss format helpers", () => {
     it("formatTimeAgo returns hours for a few-hours-old date", () => {
         const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-        expect(formatTimeAgo(threeHoursAgo)).toBe("3 ч");
+        expect(formatTimeAgo(threeHoursAgo)).toBe("3 h");
     });
 
-    it("formatTimeAgo returns 'только что' for now", () => {
-        expect(formatTimeAgo(new Date().toISOString())).toBe("только что");
+    it("formatTimeAgo returns 'just now' for now", () => {
+        expect(formatTimeAgo(new Date().toISOString())).toBe("just now");
     });
 
-    it("pluralizeRu picks the correct Russian plural form", () => {
-        expect(pluralizeRu(1, "тема", "темы", "тем")).toBe("тема");
-        expect(pluralizeRu(3, "тема", "темы", "тем")).toBe("темы");
-        expect(pluralizeRu(11, "тема", "темы", "тем")).toBe("тем");
-        expect(pluralizeRu(22, "тема", "темы", "тем")).toBe("темы");
-        expect(pluralizeRu(25, "тема", "темы", "тем")).toBe("тем");
+    it("pluralizeRu picks the correct English plural form", () => {
+        expect(pluralizeRu(1, "thread", "threads", "threads")).toBe("thread");
+        expect(pluralizeRu(3, "thread", "threads", "threads")).toBe("threads");
+        expect(pluralizeRu(11, "thread", "threads", "threads")).toBe("threads");
+        expect(pluralizeRu(22, "thread", "threads", "threads")).toBe("threads");
+        expect(pluralizeRu(25, "thread", "threads", "threads")).toBe("threads");
     });
 });

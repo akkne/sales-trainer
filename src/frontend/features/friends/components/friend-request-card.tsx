@@ -14,7 +14,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Другое",
+    other: "Other",
 };
 
 interface FriendRequestCardProps {
@@ -29,8 +29,8 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
     const isIncoming = request.direction === "incoming";
 
     const subLabel = isIncoming
-        ? (PERSONA_LABELS[request.persona ?? ""] ?? request.persona ?? "хочет добавить тебя в друзья")
-        : "отправлен запрос в друзья";
+        ? (PERSONA_LABELS[request.persona ?? ""] ?? request.persona ?? "wants to add you as a friend")
+        : "friend request sent";
 
     return (
         <div className="frd-req-card">
@@ -62,29 +62,29 @@ export function FriendRequestCard({ request }: FriendRequestCardProps) {
                             className="frd-req-accept"
                             disabled={acceptMutation.isPending}
                             onClick={() => acceptMutation.mutate(request.friendshipId)}
-                            aria-label="Принять запрос"
+                            aria-label="Accept request"
                         >
-                            {acceptMutation.isPending ? "…" : "Принять"}
+                            {acceptMutation.isPending ? "…" : "Accept"}
                         </button>
                         <button
                             className="frd-req-decline"
                             disabled={declineMutation.isPending}
                             onClick={() => declineMutation.mutate(request.friendshipId)}
-                            aria-label="Отклонить запрос"
+                            aria-label="Decline request"
                         >
-                            {declineMutation.isPending ? "…" : "Отклонить"}
+                            {declineMutation.isPending ? "…" : "Decline"}
                         </button>
                     </>
                 ) : (
                     <>
-                        <span className="frd-req-pending-chip">Ожидание…</span>
+                        <span className="frd-req-pending-chip">Pending…</span>
                         <button
                             className="frd-req-decline"
                             disabled={cancelMutation.isPending}
                             onClick={() => cancelMutation.mutate(request.friendshipId)}
-                            aria-label="Отменить запрос"
+                            aria-label="Cancel request"
                         >
-                            {cancelMutation.isPending ? "…" : "Отменить"}
+                            {cancelMutation.isPending ? "…" : "Cancel"}
                         </button>
                     </>
                 )}

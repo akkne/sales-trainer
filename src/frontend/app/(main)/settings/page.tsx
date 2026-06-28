@@ -15,7 +15,7 @@ type Theme = "light" | "dark";
 const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
     {
         value: "light",
-        label: "Светлая",
+        label: "Light",
         icon: (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="4"/>
@@ -25,7 +25,7 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = 
     },
     {
         value: "dark",
-        label: "Тёмная",
+        label: "Dark",
         icon: (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -53,14 +53,14 @@ export default function SettingsPage() {
             <div className="stg-inner">
                 {/* Header */}
                 <div className="stg-header">
-                    <h1 className="stg-title">Настройки</h1>
-                    <p className="stg-sub">Управляй внешним видом и аккаунтом</p>
+                    <h1 className="stg-title">Settings</h1>
+                    <p className="stg-sub">Manage appearance and account</p>
                 </div>
 
                 {/* Appearance */}
                 <div className="stg-card">
-                    <p className="stg-card-title">Внешний вид</p>
-                    <div className="stg-seg" role="group" aria-label="Тема оформления">
+                    <p className="stg-card-title">Appearance</p>
+                    <div className="stg-seg" role="group" aria-label="Theme">
                         {THEME_OPTIONS.map((opt) => (
                             <button
                                 key={opt.value}
@@ -78,7 +78,7 @@ export default function SettingsPage() {
 
                 {/* Account */}
                 <div className="stg-card">
-                    <p className="stg-card-title">Аккаунт</p>
+                    <p className="stg-card-title">Account</p>
 
                     {/* Email — read-only: no email-change flow in the app */}
                     <div className="stg-row">
@@ -88,7 +88,7 @@ export default function SettingsPage() {
                                 {authenticatedUser?.email ?? "—"}
                             </p>
                         </div>
-                        {/* "Изменить" omitted: no email-change flow exists */}
+                        {/* "Change" omitted: no email-change flow exists */}
                     </div>
 
                     {/* Password — omitted: no password-change flow exists in the frontend */}
@@ -97,11 +97,11 @@ export default function SettingsPage() {
                     {isAdmin && (
                         <div className="stg-row">
                             <div className="stg-row-body">
-                                <p className="stg-row-label">Панель администратора</p>
-                                <p className="stg-row-sub">Управление контентом и пользователями</p>
+                                <p className="stg-row-label">Admin panel</p>
+                                <p className="stg-row-sub">Manage content and users</p>
                             </div>
                             <Link href="/admin/skills" className="stg-row-action">
-                                Открыть
+                                Open
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m9 18 6-6-6-6"/>
                                 </svg>
@@ -120,7 +120,7 @@ export default function SettingsPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                     </svg>
-                    {logoutMutation.isPending ? "Выход…" : "Выйти из аккаунта"}
+                    {logoutMutation.isPending ? "Logging out…" : "Log out"}
                 </button>
             </div>
         </div>

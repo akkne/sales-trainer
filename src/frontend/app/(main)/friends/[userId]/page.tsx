@@ -13,7 +13,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Другое",
+    other: "Other",
 };
 
 export default function PublicProfilePage() {
@@ -55,7 +55,7 @@ export default function PublicProfilePage() {
                     <div className="frd-empty-icon">
                         <Icon name="user" size={20} />
                     </div>
-                    <p className="frd-empty-title">Пользователь не найден</p>
+                    <p className="frd-empty-title">User not found</p>
                 </div>
             </div>
         );
@@ -69,10 +69,10 @@ export default function PublicProfilePage() {
                     onClick={() => router.back()}
                     className="frd-rail-back"
                     style={{ width: "auto", padding: "0 12px", borderRadius: 9, gap: 6, display: "inline-flex", alignItems: "center", height: 32, fontSize: 13, fontWeight: 600, color: "var(--ink-3)" }}
-                    aria-label="Назад"
+                    aria-label="Back"
                 >
                     <Icon name="arrow-left" size={15} />
-                    Назад
+                    Back
                 </button>
             </div>
 
@@ -97,17 +97,17 @@ export default function PublicProfilePage() {
             {/* Body */}
             <div className="frd-profile-body">
                 {/* Stats grid — 2-up; no achievement count (removed in P3) */}
-                <p className="frd-profile-section">Показатели</p>
+                <p className="frd-profile-section">Stats</p>
                 <div className="frd-profile-stats">
                     <StatTile
-                        label="Лучший стрик"
+                        label="Best streak"
                         value={profile.currentStreakDayCount}
-                        unit="дн"
+                        unit="d"
                         tone="rust"
                         icon={<Icon name="flame" size="xs" />}
                     />
                     <StatTile
-                        label="Средний балл"
+                        label="Average score"
                         value={profile.averageExerciseScore}
                         unit="%"
                         tone="neutral"
@@ -116,7 +116,7 @@ export default function PublicProfilePage() {
                 </div>
 
                 {/* Actions */}
-                <p className="frd-profile-section" style={{ marginTop: 24 }}>Действия</p>
+                <p className="frd-profile-section" style={{ marginTop: 24 }}>Actions</p>
                 <div className="frd-profile-actions">
                     <FriendshipButton
                         userId={profile.userId}
@@ -145,10 +145,10 @@ export default function PublicProfilePage() {
                                 transition: "background var(--transition)",
                                 width: "100%",
                             }}
-                            aria-label="Написать сообщение"
+                            aria-label="Message"
                         >
                             <Icon name="message" size={16} />
-                            {createConversationMutation.isPending ? "…" : "Написать"}
+                            {createConversationMutation.isPending ? "…" : "Message"}
                         </button>
                     )}
                 </div>

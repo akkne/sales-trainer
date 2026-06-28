@@ -94,9 +94,9 @@ export function CategorizeExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--categorize">Категоризация</span></div>
+            <div><span className="ex-chip ex-chip--categorize">Categorize</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                {content.instruction || "Распределите реплики по типам:"}
+                {content.instruction || "Sort the lines by type:"}
             </h2>
 
             {/* Unplaced items */}
@@ -119,7 +119,7 @@ export function CategorizeExercise({
                             marginBottom: 8,
                         }}
                     >
-                        ЕЩЁ НЕ РАСПРЕДЕЛЕНО
+                        NOT SORTED YET
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {unplacedItems.map((item) => (
@@ -267,7 +267,7 @@ export function CategorizeExercise({
                     onSubmit={() => onSubmit({ mapping })}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
-                    keyboardHint="Enter — проверить"
+                    keyboardHint="Enter — check"
                 />
             )}
         </div>

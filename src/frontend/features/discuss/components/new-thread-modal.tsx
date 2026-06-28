@@ -29,7 +29,7 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
         }
         uploadThreadPhotos.mutate(selectedFiles, {
             onSuccess: () => onClose(createdThreadId),
-            onError: () => setError("Тема создана, но фото не загрузились. Закройте окно, чтобы открыть тему."),
+            onError: () => setError("Thread created, but photos failed to upload. Close this window to open the thread."),
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the thread id is set
     }, [createdThreadId]);
@@ -50,7 +50,7 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
 
     const submit = async () => {
         if (!title.trim() || !body.trim()) {
-            setError("Заполните заголовок и текст темы");
+            setError("Please fill in the title and body");
             return;
         }
         setError(null);
@@ -58,7 +58,7 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
             const created = await createThread.mutateAsync({ title, body, tags: selectedTags });
             setCreatedThreadId(created.id);
         } catch (submitError) {
-            setError(submitError instanceof Error ? submitError.message : "Не удалось создать тему");
+            setError(submitError instanceof Error ? submitError.message : "Failed to create thread");
         }
     };
 
@@ -70,30 +70,30 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
         <div className="dsc-modal-backdrop" onClick={closeModal}>
             <div className="card card-pad dsc-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="row between" style={{ marginBottom: 16 }}>
-                    <h2 className="h3">Новая тема</h2>
-                    <button className="icon-btn" onClick={closeModal} aria-label="Закрыть">
+                    <h2 className="h3">New thread</h2>
+                    <button className="icon-btn" onClick={closeModal} aria-label="Close">
                         <Icon name="close" size="md" />
                     </button>
                 </div>
 
                 <div className="col" style={{ gap: 14 }}>
                     <TextInput
-                        label="Заголовок"
-                        placeholder="Например: Как обходить секретаря?"
+                        label="Title"
+                        placeholder="E.g.: How do you get past the gatekeeper?"
                         value={title}
                         maxLength={300}
                         onChange={(event) => setTitle(event.target.value)}
                     />
                     <Textarea
-                        label="Текст"
-                        placeholder="Опишите вопрос или поделитесь скриптом…"
+                        label="Body"
+                        placeholder="Describe your question or share a script…"
                         value={body}
                         rows={6}
                         onChange={(event) => setBody(event.target.value)}
                     />
 
                     <div className="col" style={{ gap: 8 }}>
-                        <label className="text-sm font-medium text-ink">Теги</label>
+                        <label className="text-sm font-medium text-ink">Tags</label>
                         <div className="row gap-2 wrap">
                             {(curatedTags ?? []).map((tag) => (
                                 <button
@@ -120,7 +120,7 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
                         </div>
                         <div className="row gap-2" style={{ marginTop: 4 }}>
                             <TextInput
-                                placeholder="Свой тег…"
+                                placeholder="Custom tag…"
                                 value={customTag}
                                 maxLength={60}
                                 onChange={(event) => setCustomTag(event.target.value)}
@@ -132,22 +132,22 @@ export function NewThreadModal({ onClose }: { onClose: (createdId?: string) => v
                                 }}
                             />
                             <Button variant="outline" size="md" onClick={addCustomTag} iconLeft="plus">
-                                Добавить
+                                Add
                             </Button>
                         </div>
                     </div>
 
                     <div className="col" style={{ gap: 8 }}>
-                        <label className="text-sm font-medium text-ink">Фото</label>
+                        <label className="text-sm font-medium text-ink">Photos</label>
                         <PhotoPicker files={selectedFiles} onChange={setSelectedFiles} disabled={isBusy} />
                     </div>
 
                     {error && <p className="text-xs text-bad">{error}</p>}
 
                     <div className="row gap-2" style={{ justifyContent: "flex-end", marginTop: 8 }}>
-                        <Button variant="ghost" disabled={isBusy} onClick={closeModal}>Отмена</Button>
+                        <Button variant="ghost" disabled={isBusy} onClick={closeModal}>Cancel</Button>
                         <Button variant="primary" loading={isBusy} onClick={submit} iconLeft="check">
-                            Опубликовать
+                            Post
                         </Button>
                     </div>
                 </div>

@@ -8,6 +8,7 @@ import { useThemeStore } from "@/shared/stores/theme-store";
 import { EnvironmentConfiguration } from "@/config/environment";
 import { TimingConstants } from "@/shared/constants/timing-constants";
 import { usePageViewTracker } from "@/shared/analytics/use-page-view-tracker";
+import { Toaster } from "@/features/notifications/components/toaster";
 
 function AuthInitializer() {
     useInitAuth();
@@ -53,6 +54,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
                 <AuthInitializer />
                 <ThemeInitializer />
                 <PageViewTracker />
+                <Toaster />
                 {children}
             </QueryClientProvider>
         </GoogleOAuthProvider>

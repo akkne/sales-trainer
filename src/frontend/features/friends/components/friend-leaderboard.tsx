@@ -23,7 +23,7 @@ export function FriendLeaderboard() {
                 <div className="ic">
                     <Icon name="trophy" size="lg" />
                 </div>
-                <p className="small">Добавь друзей, чтобы соревноваться</p>
+                <p className="small">Add friends to compete</p>
             </div>
         );
     }
@@ -32,7 +32,7 @@ export function FriendLeaderboard() {
         <div className="card lb-card">
             <div className="lb-head">
                 <span>#</span>
-                <span>Друг</span>
+                <span>Friend</span>
                 <span>XP</span>
             </div>
 
@@ -48,10 +48,10 @@ export function FriendLeaderboard() {
                         <UserAvatar avatarUrl={entry.avatarUrl} seed={entry.displayName} size={36} circle />
                         <span className="lb-name">
                             {entry.displayName}
-                            {entry.isCurrentUser && <span className="you-tag"> · ты</span>}
+                            {entry.isCurrentUser && <span className="you-tag"> · you</span>}
                         </span>
                     </div>
-                    <span className="num lb-xp">{entry.totalXpAmount.toLocaleString("ru")}</span>
+                    <span className="num lb-xp">{entry.totalXpAmount.toLocaleString("en")}</span>
                 </div>
             ))}
         </div>

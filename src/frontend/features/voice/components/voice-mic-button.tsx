@@ -30,13 +30,13 @@ export function VoiceMicButton({ state, isAvailable, onStart, onStop }: VoiceMic
     };
 
     const statusText: Record<VoicePipelineState, string> = {
-        idle: "Нажмите для голоса",
-        initializing: "Инициализация...",
-        listening: "Слушаю...",
-        speaking: "Говорите...",
-        processing: "Обработка...",
-        playing: "AI отвечает...",
-        error: "Ошибка",
+        idle: "Tap for voice",
+        initializing: "Initializing...",
+        listening: "Listening...",
+        speaking: "Speak...",
+        processing: "Processing...",
+        playing: "AI is replying...",
+        error: "Error",
     };
 
     return (

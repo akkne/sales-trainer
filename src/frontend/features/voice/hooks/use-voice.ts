@@ -108,8 +108,8 @@ export function useVoice(options: UseVoiceOptions) {
                 const limit = Math.round(((body.limitSeconds as number) ?? 0) / 60);
                 throw new Error(
                     period === "monthly"
-                        ? `Месячный лимит звонков (${limit} мин) исчерпан`
-                        : `Дневной лимит звонков (${limit} мин) исчерпан`,
+                        ? `Monthly call limit (${limit} min) reached`
+                        : `Daily call limit (${limit} min) reached`,
                 );
             }
             if (!response.ok) {

@@ -61,7 +61,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
             try {
                 await uploadReplyPhotos.mutateAsync({ replyId: createdReply.id, files: filesToUpload });
             } catch {
-                setReplyError("Ответ опубликован, но фото не загрузились");
+                setReplyError("Reply posted, but photos failed to upload");
             }
         }
     };
@@ -79,8 +79,8 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
         return (
             <div className="page container" style={{ paddingTop: 60 }}>
                 <ErrorState
-                    title="Тема не найдена"
-                    message={error?.message ?? "Возможно, она была удалена"}
+                    title="Thread not found"
+                    message={error?.message ?? "It may have been deleted"}
                     onRetry={() => refetch()}
                 />
             </div>
@@ -94,7 +94,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                 {/* Back link */}
                 <Link href="/discuss" className="dsc-detail-back">
                     <Icon name="chevron-left" size={16} />
-                    К обсуждениям
+                    Discussions
                 </Link>
 
                 {/* ── Thread ── */}
@@ -113,9 +113,9 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                     <div className="dsc-detail-body">
                         {/* Badges */}
                         <div className="dsc-badges">
-                            {thread.isPinned && <span className="dsc-badge pinned">Закреплено</span>}
-                            {thread.isSolved && <span className="dsc-badge solved">Решено</span>}
-                            {thread.isHot    && <span className="dsc-badge hot">Горячее</span>}
+                            {thread.isPinned && <span className="dsc-badge pinned">Pinned</span>}
+                            {thread.isSolved && <span className="dsc-badge solved">Solved</span>}
+                            {thread.isHot    && <span className="dsc-badge hot">Hot</span>}
                         </div>
 
                         <h1 className="dsc-detail-title">{thread.title}</h1>
@@ -145,7 +145,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                                 size={22}
                                 circle
                             />
-                            <span className="dsc-detail-meta-name">{thread.authorName || "Аноним"}</span>
+                            <span className="dsc-detail-meta-name">{thread.authorName || "Anonymous"}</span>
                             <span className="dsc-detail-sep">·</span>
                             <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
                                 {formatTimeAgo(thread.createdAt)}
@@ -157,8 +157,8 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                 {/* ── Replies heading ── */}
                 <h2 className="dsc-replies-heading">
                     {thread.replyCount === 1
-                        ? "1 ответ"
-                        : `${thread.replyCount} ответов`}
+                        ? "1 reply"
+                        : `${thread.replyCount} replies`}
                 </h2>
 
                 {/* ── Replies ── */}
@@ -184,7 +184,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                             <div className="dsc-reply-body">
                                 {reply.isAccepted && (
                                     <div className="dsc-accepted-badge">
-                                        <Icon name="check" size={11} /> Лучший ответ
+                                        <Icon name="check" size={11} /> Best answer
                                     </div>
                                 )}
                                 <p className="dsc-reply-text">{reply.body}</p>
@@ -202,7 +202,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                                         size={20}
                                         circle
                                     />
-                                    <span className="dsc-reply-meta-name">{reply.authorName || "Аноним"}</span>
+                                    <span className="dsc-reply-meta-name">{reply.authorName || "Anonymous"}</span>
                                     <span style={{ color: "var(--ink-4)" }}>·</span>
                                     <span style={{ fontSize: 12, color: "var(--ink-4)" }}>
                                         {formatTimeAgo(reply.createdAt)}
@@ -216,7 +216,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                                             }
                                         >
                                             <Icon name={reply.isAccepted ? "close" : "check"} size={12} />
-                                            {reply.isAccepted ? "Снять отметку" : "Отметить решением"}
+                                            {reply.isAccepted ? "Unmark" : "Mark as solution"}
                                         </button>
                                     )}
                                 </div>
@@ -226,16 +226,16 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
 
                     {thread.replies.length === 0 && (
                         <p style={{ fontSize: 13, color: "var(--ink-3)", padding: "12px 0" }}>
-                            Ответов пока нет — будьте первым.
+                            No replies yet — be the first.
                         </p>
                     )}
                 </div>
 
                 {/* ── Reply composer ── */}
                 <div className="dsc-composer">
-                    <span className="dsc-composer-label">Ваш ответ</span>
+                    <span className="dsc-composer-label">Your reply</span>
                     <Textarea
-                        placeholder="Поделитесь опытом или скриптом…"
+                        placeholder="Share your experience or script…"
                         value={replyBody}
                         rows={4}
                         onChange={(event) => setReplyBody(event.target.value)}
@@ -254,7 +254,7 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
                             disabled={!replyBody.trim()}
                             onClick={submitReply}
                         >
-                            Ответить
+                            Reply
                         </Button>
                     </div>
                 </div>

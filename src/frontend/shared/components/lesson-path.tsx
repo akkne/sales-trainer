@@ -63,12 +63,12 @@ function LessonNode({
                     style={{ background: cfg.bg, color: cfg.color, boxShadow: cfg.shadow }}
                     onClick={isLocked ? undefined : onTogglePopover}
                     disabled={isLocked}
-                    title={`Урок ${index + 1} · ${lesson.title}`}
+                    title={`Lesson ${index + 1} · ${lesson.title}`}
                 >
                     <Icon name={cfg.icon} size={28} />
                 </button>
                 <div className="lp-meta">
-                    <span className="lp-type">{isTheory ? "Теория" : `Урок ${index + 1}`}</span>
+                    <span className="lp-type">{isTheory ? "Theory" : `Lesson ${index + 1}`}</span>
                     <span className="lp-title" style={isLocked ? { color: "var(--ink-4)" } : undefined}>
                         {lesson.title}
                     </span>
@@ -92,7 +92,7 @@ function LessonNode({
                         }}
                     >
                         <div className="row between" style={{ marginBottom: 8 }}>
-                            <span className="eyebrow">Урок {index + 1}</span>
+                            <span className="eyebrow">Lesson {index + 1}</span>
                             {isCompleted && (
                                 <Chip tone="olive" size="sm">
                                     ✓
@@ -107,11 +107,11 @@ function LessonNode({
                         <div className="row gap-4 small num" style={{ marginBottom: 14 }}>
                             {isTheory ? (
                                 <span className="row gap-1">
-                                    <Icon name="book" size={13} /> Теория
+                                    <Icon name="book" size={13} /> Theory
                                 </span>
                             ) : (
                                 <span className="row gap-1">
-                                    <Icon name="layers" size={13} /> 6 упр.
+                                    <Icon name="layers" size={13} /> 6 ex.
                                 </span>
                             )}
                             <span className="row gap-1">
@@ -126,7 +126,7 @@ function LessonNode({
                                 fullWidth
                                 iconRightName="arrow-right"
                             >
-                                {isCompleted ? "Повторить" : isTheory ? "Читать" : "Продолжить"}
+                                {isCompleted ? "Practice again" : isTheory ? "Read" : "Continue"}
                             </Button>
                         </Link>
                     </div>
@@ -166,7 +166,7 @@ export function LessonPath({ lessons }: LessonPathProps) {
                     <span className="ic">
                         <Icon name="trophy" size={26} />
                     </span>
-                    <span>Босс навыка</span>
+                    <span>Skill boss</span>
                 </div>
             </div>
         </div>

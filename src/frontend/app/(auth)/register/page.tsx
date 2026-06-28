@@ -23,13 +23,13 @@ export default function RegisterPage() {
                 <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h1 className="auth-heading">Создай аккаунт</h1>
-                <p className="auth-sub">Пара секунд — и первый урок твой</p>
+                <h1 className="auth-heading">Create account</h1>
+                <p className="auth-sub">Just a few seconds — and your first lesson awaits</p>
 
                 <form onSubmit={handleSubmit} className="col gap-3">
                     <input
                         type="text"
-                        placeholder="Ваше имя"
+                        placeholder="Your name"
                         value={displayName}
                         onChange={(event) => setDisplayName(event.target.value)}
                         required
@@ -45,7 +45,7 @@ export default function RegisterPage() {
                     />
                     <input
                         type="password"
-                        placeholder="Пароль"
+                        placeholder="Password"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         required
@@ -55,7 +55,7 @@ export default function RegisterPage() {
 
                     {registerMutation.isError && (
                         <p className="auth-error">
-                            {registerMutation.error?.message ?? "Ошибка регистрации"}
+                            {registerMutation.error?.message ?? "Sign-up failed"}
                         </p>
                     )}
 
@@ -65,19 +65,19 @@ export default function RegisterPage() {
                         className="btn btn-dark btn-block btn-lg"
                         style={{ marginTop: 4 }}
                     >
-                        {registerMutation.isPending ? "Создаём..." : "Зарегистрироваться"}
+                        {registerMutation.isPending ? "Creating..." : "Sign up"}
                     </button>
                 </form>
 
                 <div className="auth-or">
-                    <span>или</span>
+                    <span>or</span>
                 </div>
 
                 <GoogleLoginButton />
 
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    Уже есть аккаунт?{" "}
-                    <Link href="/login">Войти</Link>
+                    Already have an account?{" "}
+                    <Link href="/login">Log in</Link>
                 </p>
             </div>
         </div>

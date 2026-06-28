@@ -9,7 +9,7 @@ interface TheoryCardViewProps {
 /**
  * Renders a single theory card according to its `layout`. Pure presentation —
  * no answer, no grading. The dialogue layout reuses the exact bubble markup/styles
- * from the Guidebook (Справочник): `.dlg-example` with `.dx .in` (client) / `.dx .out` (me).
+ * from the Guidebook: `.dlg-example` with `.dx .in` (client) / `.dx .out` (me).
  */
 export function TheoryCardView({ content }: TheoryCardViewProps) {
     switch (content.layout) {

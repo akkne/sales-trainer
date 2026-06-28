@@ -54,9 +54,9 @@ export function EvaluateCallExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--evaluate">Оценить звонок</span></div>
+            <div><span className="ex-chip ex-chip--evaluate">Evaluate the call</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                Оцените звонок по критериям:
+                Rate the call by criteria:
             </h2>
 
             {/* Transcript toggle */}
@@ -87,7 +87,7 @@ export function EvaluateCallExercise({
                 >
                     <span>
                         <Icon name="phone" size="sm" style={{ verticalAlign: -2, marginRight: 8 }} />
-                        Транскрипт звонка
+                        Call transcript
                     </span>
                     <Icon name={showTranscript ? "chevron-up" : "chevron-down"} size="sm" />
                 </button>
@@ -177,12 +177,12 @@ export function EvaluateCallExercise({
             {!isAnswered && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <label style={{ fontWeight: 500, fontSize: 14 }}>
-                        Общий комментарий (опционально):
+                        Overall comment (optional):
                     </label>
                     <textarea
                         value={overallComment}
                         onChange={(e) => setOverallComment(e.target.value)}
-                        placeholder="Ваши наблюдения о звонке..."
+                        placeholder="Your observations about the call..."
                         style={{
                             width: "100%",
                             padding: 16,
@@ -213,7 +213,7 @@ export function EvaluateCallExercise({
                 <ExerciseActionFooter
                     onSkip={onSkip}
                     onSubmit={() => onSubmit({ ratings, overallComment: overallComment || undefined })}
-                    submitLabel="Отправить оценку"
+                    submitLabel="Submit rating"
                     canSubmit={allRated}
                     isSubmitting={isSubmitting}
                 />

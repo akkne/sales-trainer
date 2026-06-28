@@ -113,7 +113,7 @@ export default function ChatPage() {
                 autoCompleteSession(session.id);
             }
         } catch (sessionError) {
-            setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
+            setError(sessionError instanceof Error ? sessionError.message : "Session start error");
         } finally {
             setIsLoading(false);
         }
@@ -150,7 +150,7 @@ export default function ChatPage() {
                 setMessages([]);
                 refetchSessions();
             } catch (sessionError) {
-                setError(sessionError instanceof Error ? sessionError.message : "Ошибка запуска сессии");
+                setError(sessionError instanceof Error ? sessionError.message : "Session start error");
                 setIsLoading(false);
                 return;
             } finally {
@@ -178,7 +178,7 @@ export default function ChatPage() {
                 autoCompleteSession(currentSessionId);
             }
         } catch (sendError) {
-            setError(sendError instanceof Error ? sendError.message : "Ошибка отправки");
+            setError(sendError instanceof Error ? sendError.message : "Send error");
         } finally {
             setIsSending(false);
         }
@@ -194,7 +194,7 @@ export default function ChatPage() {
             refetchSessions();
             queryClient.invalidateQueries({ queryKey: ["profile"] });
         } catch (completeError) {
-            setError(completeError instanceof Error ? completeError.message : "Ошибка завершения");
+            setError(completeError instanceof Error ? completeError.message : "Completion error");
         } finally {
             setIsCompleting(false);
         }
@@ -250,7 +250,7 @@ export default function ChatPage() {
                 setIsEnded(true);
             }
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : "Ошибка загрузки сессии");
+            setError(loadError instanceof Error ? loadError.message : "Session load error");
         } finally {
             setIsLoading(false);
         }
@@ -282,7 +282,7 @@ export default function ChatPage() {
                 setSessionFeedbackData(null);
             }
         } catch (deleteError) {
-            setError(deleteError instanceof Error ? deleteError.message : "Ошибка удаления");
+            setError(deleteError instanceof Error ? deleteError.message : "Delete error");
         }
     };
 
@@ -356,7 +356,7 @@ export default function ChatPage() {
                 )}
                 <main className="dc-main">
                     <div className="dc-head">
-                        <span className="dc-head-title">Загрузка...</span>
+                        <span className="dc-head-title">Loading...</span>
                     </div>
                     <div className="row center grow">
                         <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
@@ -381,7 +381,7 @@ export default function ChatPage() {
                 )}
                 <main className="dc-main">
                     <div className="dc-head">
-                        <span className="dc-head-title">Ошибка</span>
+                        <span className="dc-head-title">Error</span>
                     </div>
                     <div className="col center grow" style={{ padding: 16 }}>
                         <div className="empty" style={{ padding: "20px 0 0" }}>
@@ -390,7 +390,7 @@ export default function ChatPage() {
                             </div>
                             <p className="body" style={{ color: "var(--heart)", fontWeight: 600, marginBottom: 20 }}>{error}</p>
                             <button className="btn btn-outline" onClick={handleClose}>
-                                Вернуться
+                                Go back
                             </button>
                         </div>
                     </div>
@@ -418,7 +418,7 @@ export default function ChatPage() {
                     <button
                         className="icon-btn"
                         onClick={() => setShowSidebar(!showSidebar)}
-                        aria-label="История диалогов"
+                        aria-label="Dialogue history"
                         style={{ flex: "none" }}
                     >
                         <Icon name="grid" size="md" />
@@ -429,10 +429,10 @@ export default function ChatPage() {
                     </span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                         <div className="dc-head-title">
-                            {currentMode?.title || "AI Собеседник"}
+                            {currentMode?.title || "AI Counterpart"}
                         </div>
                         <div className="dc-head-sub">
-                            {currentBundle?.title || "Тренировка диалога"} · текстовый режим
+                            {currentBundle?.title || "Dialogue practice"} · text mode
                         </div>
                     </div>
 
@@ -452,12 +452,12 @@ export default function ChatPage() {
                             style={{ background: "var(--heart-soft)", color: "var(--heart)", flex: "none", borderColor: "transparent" }}
                         >
                             <Icon name="close" size="sm" />
-                            Завершить
+                            Finish
                         </button>
                     )}
 
                     {/* Close button */}
-                    <button className="icon-btn" onClick={handleClose} aria-label="Закрыть" style={{ flex: "none" }}>
+                    <button className="icon-btn" onClick={handleClose} aria-label="Close" style={{ flex: "none" }}>
                         <Icon name="close" size="md" />
                     </button>
                 </div>
@@ -468,19 +468,19 @@ export default function ChatPage() {
                         {isCompleting && (
                             <>
                                 <span style={{ width: 14, height: 14, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none" }} />
-                                Формируем обратную связь...
+                                Generating feedback...
                             </>
                         )}
                         {isSending && !isCompleting && (
                             <>
                                 <span style={{ width: 14, height: 14, border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none" }} />
-                                AI думает...
+                                AI is thinking...
                             </>
                         )}
-                        {!isSending && !isCompleting && voiceState === "listening" && "Слушаю..."}
-                        {!isSending && !isCompleting && voiceState === "speaking" && "Говорите..."}
-                        {!isSending && !isCompleting && voiceState === "processing" && "Обработка речи..."}
-                        {!isSending && !isCompleting && voiceState === "playing" && "AI отвечает..."}
+                        {!isSending && !isCompleting && voiceState === "listening" && "Listening..."}
+                        {!isSending && !isCompleting && voiceState === "speaking" && "Speak..."}
+                        {!isSending && !isCompleting && voiceState === "processing" && "Processing speech..."}
+                        {!isSending && !isCompleting && voiceState === "playing" && "AI is replying..."}
                     </div>
                 )}
 
@@ -492,9 +492,9 @@ export default function ChatPage() {
                                 <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
                                     <Icon name="phone" size="xl" />
                                 </div>
-                                <p className="h4" style={{ marginBottom: 8 }}>Начните разговор</p>
+                                <p className="h4" style={{ marginBottom: 8 }}>Start the conversation</p>
                                 <p className="small" style={{ maxWidth: 320, margin: "0 auto" }}>
-                                    Представьтесь и скажите свой опеннер — вы звоните клиенту первым
+                                    Introduce yourself and deliver your opener — you are calling the prospect first
                                 </p>
                             </div>
                         )}
@@ -549,7 +549,7 @@ export default function ChatPage() {
                     {isSessionCompleted && sessionFeedbackData && !feedback && (
                         <button className="btn btn-dark btn-block" onClick={handleShowFeedback}>
                             <Icon name="book" size="sm" />
-                            Показать обратную связь
+                            Show feedback
                         </button>
                     )}
 
@@ -568,7 +568,7 @@ export default function ChatPage() {
                         <ChatInput
                             onSend={handleSendMessage}
                             disabled={isSending || isCompleting || isEnded || !!feedback}
-                            placeholder={isEnded || feedback ? "Диалог завершён" : "Введите сообщение…"}
+                            placeholder={isEnded || feedback ? "Dialogue finished" : "Type a message…"}
                         />
                     )}
                 </div>

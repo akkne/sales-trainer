@@ -179,7 +179,7 @@ export default function AdminBundleModesPage() {
                                 value={formData.title}
                                 onChange={(changeEvent) => setFormData({ ...formData, title: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
-                                placeholder="Обход секретаря"
+                                placeholder="Secretary bypass"
                             />
                         </div>
                         <div>
@@ -235,7 +235,7 @@ export default function AdminBundleModesPage() {
                                 onChange={(changeEvent) => setFormData({ ...formData, description: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 rows={2}
-                                placeholder="Описание режима..."
+                                placeholder="Mode description..."
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -247,7 +247,7 @@ export default function AdminBundleModesPage() {
                                 onChange={(changeEvent) => setFormData({ ...formData, chatSystemPrompt: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30 font-mono text-sm"
                                 rows={10}
-                                placeholder="Ты — секретарь крупной компании..."
+                                placeholder="You are a secretary at a large company..."
                             />
                             <p className="text-xs text-ink-3 mt-1">
                                 AI will add [DIALOG_END] when conversation should end.
@@ -262,7 +262,7 @@ export default function AdminBundleModesPage() {
                                 onChange={(changeEvent) => setFormData({ ...formData, feedbackSystemPrompt: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30 font-mono text-sm"
                                 rows={8}
-                                placeholder="Проанализируй диалог менеджера..."
+                                placeholder="Analyse the manager's dialogue..."
                             />
                             <p className="text-xs text-ink-3 mt-1">
                                 AI will add [XP:number] at the end (0-100 based on performance).

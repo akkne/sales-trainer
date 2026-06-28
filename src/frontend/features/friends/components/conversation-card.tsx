@@ -17,11 +17,11 @@ function formatConversationTime(dateString: string | null): string {
     const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
 
     if (diffDays === 0) {
-        return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     }
-    if (diffDays === 1) return "вчера";
-    if (diffDays < 7) return `${diffDays} д назад`;
-    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    if (diffDays === 1) return "yesterday";
+    if (diffDays < 7) return `${diffDays} d ago`;
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 export function ConversationCard({ conversation, isActive, onSelect }: ConversationCardProps) {

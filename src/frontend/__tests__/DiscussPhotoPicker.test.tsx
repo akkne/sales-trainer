@@ -43,7 +43,7 @@ describe("PhotoPicker", () => {
         const files = Array.from({ length: 10 }, (_, index) => makePngFile(`photo-${index}.png`));
         render(<PhotoPicker files={files} onChange={vi.fn()} />);
 
-        const addButton = screen.getByText("Добавить фото").closest("button");
+        const addButton = screen.getByText("Add photo").closest("button");
         expect(addButton?.disabled).toBe(true);
     });
 });

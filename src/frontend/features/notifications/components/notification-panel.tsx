@@ -47,35 +47,35 @@ export function NotificationPanel({ isOpen, onRequestClose }: NotificationPanelP
             />
             <div
                 role="dialog"
-                aria-label="Уведомления"
-                className="fixed top-14 right-0 left-0 md:absolute md:top-full md:right-0 md:left-auto md:mt-2 md:w-96 z-50 bg-surface border border-line rounded-none md:rounded-2xl shadow-lg overflow-hidden max-h-[80vh] flex flex-col"
+                aria-label="Notifications"
+                className="fixed top-14 right-0 left-0 md:absolute md:top-full md:right-0 md:left-auto md:mt-2 md:w-96 z-50 bg-surface border border-line rounded-[var(--r-md)] md:rounded-[var(--r-lg)] shadow-lg overflow-hidden max-h-[80vh] flex flex-col"
             >
                 <header className="flex items-center justify-between px-4 py-3 border-b border-line bg-bg-2">
-                    <h2 className="text-sm font-semibold text-ink">Уведомления</h2>
+                    <h2 className="text-sm font-semibold text-ink">Notifications</h2>
                     <button
                         type="button"
                         onClick={handleMarkAllAsRead}
                         disabled={!hasUnread || markAllAsReadMutation.isPending}
                         className="text-xs font-medium text-indigo disabled:text-ink-3 disabled:cursor-not-allowed hover:underline"
                     >
-                        Прочитать всё
+                        Mark all read
                     </button>
                 </header>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto" aria-live="polite" aria-atomic="false">
                     {isLoading && (
                         <p className="px-4 py-8 text-center text-sm text-ink-3">
-                            Загрузка...
+                            Loading...
                         </p>
                     )}
                     {isError && (
                         <p className="px-4 py-8 text-center text-sm text-bad">
-                            Не удалось загрузить уведомления
+                            Couldn't load notifications
                         </p>
                     )}
                     {!isLoading && !isError && (notifications?.length ?? 0) === 0 && (
                         <p className="px-4 py-8 text-center text-sm text-ink-3">
-                            Пока нет уведомлений
+                            No notifications yet
                         </p>
                     )}
                     {notifications?.map((notification) => (

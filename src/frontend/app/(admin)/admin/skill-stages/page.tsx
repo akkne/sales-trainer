@@ -93,7 +93,7 @@ export default function AdminSkillStagesPage() {
                     Funnel stages used to group skills on the tree. They run from the lowest order
                     (shown first) to the highest. The key is permanent — it is stored on every skill —
                     while label, accent color, and order are editable. Unassigned skills fall back to a
-                    generic “Другое” bucket.
+                    generic “Other” bucket.
                 </p>
             </div>
 
@@ -209,7 +209,7 @@ export default function AdminSkillStagesPage() {
                         Label
                         <input
                             value={newStage.label}
-                            placeholder="Переговоры"
+                            placeholder="Negotiation"
                             onChange={(e) => setNewStage({ ...newStage, label: e.target.value })}
                             className="block mt-1 w-48 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         />

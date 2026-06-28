@@ -99,12 +99,12 @@ export default function VerifyEmailPage() {
                     <div className="auth-wordmark">
                         <Wordmark size={28} />
                     </div>
-                    <h1 className="auth-heading">Подтверждение почты</h1>
+                    <h1 className="auth-heading">Verify your email</h1>
                     <p className="auth-sub">
-                        Начни с регистрации — мы пришлём код на твою почту.
+                        Start by signing up — we'll send a code to your email.
                     </p>
                     <Link href="/register" className="btn btn-dark btn-block btn-lg">
-                        К регистрации
+                        To sign up
                     </Link>
                 </div>
             </div>
@@ -117,14 +117,14 @@ export default function VerifyEmailPage() {
                 <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h1 className="auth-heading">Подтверди почту</h1>
+                <h1 className="auth-heading">Verify your email</h1>
                 <p className="auth-sub">
-                    Мы отправили код на{" "}
+                    We sent a code to{" "}
                     <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>{email}</span>
                 </p>
 
                 <form onSubmit={handleSubmit}>
-                    <div className="auth-code-row" role="group" aria-label="Код подтверждения">
+                    <div className="auth-code-row" role="group" aria-label="Verification code">
                         {digits.map((d, i) => (
                             <input
                                 key={i}
@@ -138,14 +138,14 @@ export default function VerifyEmailPage() {
                                 onKeyDown={(e) => handleDigitKeyDown(i, e)}
                                 onPaste={i === 0 ? handleDigitPaste : undefined}
                                 className={`auth-code-box${d ? " filled" : ""}`}
-                                aria-label={`Цифра ${i + 1}`}
+                                aria-label={`Digit ${i + 1}`}
                             />
                         ))}
                     </div>
 
                     {verifyEmailMutation.isError && (
                         <p className="auth-error" style={{ textAlign: "center", marginTop: 10 }}>
-                            {verifyEmailMutation.error?.message ?? "Неверный код"}
+                            {verifyEmailMutation.error?.message ?? "Invalid code"}
                         </p>
                     )}
 
@@ -155,12 +155,12 @@ export default function VerifyEmailPage() {
                         className="btn btn-dark btn-block btn-lg"
                         style={{ marginTop: 20 }}
                     >
-                        {verifyEmailMutation.isPending ? "Проверяем..." : "Подтвердить"}
+                        {verifyEmailMutation.isPending ? "Verifying..." : "Verify"}
                     </button>
                 </form>
 
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    Не пришёл код?{" "}
+                    Didn't get the code?{" "}
                     <button
                         type="button"
                         onClick={handleResend}
@@ -168,13 +168,13 @@ export default function VerifyEmailPage() {
                         className="auth-link"
                     >
                         {cooldownSeconds > 0
-                            ? `Отправить ещё раз (${cooldownSeconds})`
-                            : "Отправить ещё раз"}
+                            ? `Resend (${cooldownSeconds})`
+                            : "Resend"}
                     </button>
                 </p>
 
                 <p className="auth-footer" style={{ marginTop: 10 }}>
-                    <Link href="/login">Вернуться ко входу</Link>
+                    <Link href="/login">Back to login</Link>
                 </p>
             </div>
         </div>

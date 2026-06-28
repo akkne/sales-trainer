@@ -32,17 +32,17 @@ export function RailChatInput({ onSend, disabled }: ChatInputProps) {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Написать сообщение…"
+                placeholder="Write a message…"
                 rows={1}
                 disabled={disabled}
                 className="frd-composer-input"
-                aria-label="Сообщение"
+                aria-label="Message"
             />
             <button
                 onClick={handleSend}
                 disabled={disabled || !value.trim()}
                 className="frd-composer-send"
-                aria-label="Отправить"
+                aria-label="Send"
             >
                 <Icon name="send" size={16} />
             </button>

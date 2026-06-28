@@ -26,11 +26,11 @@ const VISUAL_META_BY_TYPE: Record<NotificationTypeKey, NotificationVisualMeta> =
     },
     AchievementUnlocked: {
         iconName: "trophy",
-        iconColorClassName: "text-amber-500",
+        iconColorClassName: "text-amber",
     },
     StreakMilestone: {
         iconName: "flame",
-        iconColorClassName: "text-bad",
+        iconColorClassName: "text-flame",
     },
 };
 
@@ -43,14 +43,14 @@ export function formatRelativeTimestamp(isoTimestamp: string, nowDate: Date = ne
     const differenceMilliseconds = nowDate.getTime() - createdAtDate.getTime();
     const differenceMinutes = Math.floor(differenceMilliseconds / 60000);
 
-    if (differenceMinutes < 1) return "только что";
-    if (differenceMinutes < 60) return `${differenceMinutes} мин назад`;
+    if (differenceMinutes < 1) return "just now";
+    if (differenceMinutes < 60) return `${differenceMinutes} min ago`;
 
     const differenceHours = Math.floor(differenceMinutes / 60);
-    if (differenceHours < 24) return `${differenceHours} ч назад`;
+    if (differenceHours < 24) return `${differenceHours} h ago`;
 
     const differenceDays = Math.floor(differenceHours / 24);
-    if (differenceDays < 7) return `${differenceDays} д назад`;
+    if (differenceDays < 7) return `${differenceDays} d ago`;
 
-    return createdAtDate.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    return createdAtDate.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }

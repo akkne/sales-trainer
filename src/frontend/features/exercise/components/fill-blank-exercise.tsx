@@ -55,14 +55,14 @@ export function FillBlankExercise({
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {/* Exercise type chip */}
-            <div><span className="ex-chip ex-chip--blank">Заполнить пробел</span></div>
+            <div><span className="ex-chip ex-chip--blank">Fill the blank</span></div>
 
             {/* Context bubble */}
             <div style={{ display: "flex", gap: 14, marginBottom: 4 }}>
                 <GeoAvatar seed="client" size={48} />
                 <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Клиент</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Client</span>
                     </div>
                     <div className="ex-bubble-client">
                         {content.before}
@@ -71,7 +71,7 @@ export function FillBlankExercise({
             </div>
 
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                Дополните реплику:
+                Complete the line:
             </h2>
 
             {/* Fill blank sentence */}
@@ -155,7 +155,7 @@ export function FillBlankExercise({
                     }}
                     canSubmit={selectedOptionIndex !== null}
                     isSubmitting={isSubmitting}
-                    keyboardHint="1–4 выбрать · Enter — проверить"
+                    keyboardHint="1–4 select · Enter — check"
                 />
             )}
         </div>

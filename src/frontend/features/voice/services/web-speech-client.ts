@@ -81,7 +81,7 @@ export class WebSpeechClient {
     async start(): Promise<void> {
         if (!isWebSpeechSupported()) {
             this.setState("error");
-            this.options.onError?.(new Error("Web Speech API не поддерживается в этом браузере"));
+            this.options.onError?.(new Error("Web Speech API is not supported in this browser"));
             return;
         }
 
@@ -89,14 +89,14 @@ export class WebSpeechClient {
             await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch {
             this.setState("error");
-            this.options.onError?.(new Error("Нет доступа к микрофону"));
+            this.options.onError?.(new Error("Microphone access denied"));
             return;
         }
 
         const recognition = this.createRecognition();
         if (!recognition) {
             this.setState("error");
-            this.options.onError?.(new Error("Web Speech API не поддерживается"));
+            this.options.onError?.(new Error("Web Speech API is not supported"));
             return;
         }
 
@@ -107,7 +107,7 @@ export class WebSpeechClient {
             this.recognition.start();
         } catch (error) {
             this.setState("error");
-            this.options.onError?.(error instanceof Error ? error : new Error("Не удалось запустить распознавание"));
+            this.options.onError?.(error instanceof Error ? error : new Error("Failed to start recognition"));
         }
     }
 
@@ -199,7 +199,7 @@ export class WebSpeechClient {
             if (event.error === "no-speech" || event.error === "aborted") return;
 
             this.setState("error");
-            this.options.onError?.(new Error(`Ошибка распознавания: ${event.error}`));
+            this.options.onError?.(new Error(`Recognition error: ${event.error}`));
         };
 
         recognition.onend = () => {

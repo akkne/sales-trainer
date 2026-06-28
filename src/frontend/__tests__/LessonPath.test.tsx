@@ -28,43 +28,43 @@ function makeLesson(
 describe("LessonPath", () => {
     it("renders lesson titles", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "completed" }),
-            makeLesson({ lessonId: "l2", title: "Второй звонок", status: "available" }),
-            makeLesson({ lessonId: "l3", title: "Третий звонок", status: "locked" }),
+            makeLesson({ lessonId: "l1", title: "First Call", status: "completed" }),
+            makeLesson({ lessonId: "l2", title: "Second Call", status: "available" }),
+            makeLesson({ lessonId: "l3", title: "Third Call", status: "locked" }),
         ];
         render(<LessonPath lessons={lessons} />);
-        expect(screen.getByText("Первый звонок")).toBeTruthy();
-        expect(screen.getByText("Второй звонок")).toBeTruthy();
-        expect(screen.getByText("Третий звонок")).toBeTruthy();
+        expect(screen.getByText("First Call")).toBeTruthy();
+        expect(screen.getByText("Second Call")).toBeTruthy();
+        expect(screen.getByText("Third Call")).toBeTruthy();
     });
 
     it("popover is hidden initially", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available" }),
+            makeLesson({ lessonId: "l1", title: "First Call", status: "available" }),
         ];
         render(<LessonPath lessons={lessons} />);
-        expect(screen.queryByText("Продолжить")).toBeNull();
+        expect(screen.queryByText("Continue")).toBeNull();
     });
 
     it("clicking an active node shows popover", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Мой урок", status: "available" }),
+            makeLesson({ lessonId: "l1", title: "My Lesson", status: "available" }),
         ];
         render(<LessonPath lessons={lessons} />);
         // Click the node circle (role=button)
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        expect(screen.getByText("Продолжить")).toBeTruthy();
+        expect(screen.getByText("Continue")).toBeTruthy();
     });
 
     it("popover contains link to /session/[lessonId]", () => {
         const lessons = [
-            makeLesson({ lessonId: "abc123", title: "Урок", status: "available" }),
+            makeLesson({ lessonId: "abc123", title: "My Lesson", status: "available" }),
         ];
         render(<LessonPath lessons={lessons} />);
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        const link = screen.getByText("Продолжить").closest("a");
+        const link = screen.getByText("Continue").closest("a");
         expect(link?.getAttribute("href")).toBe("/session/abc123");
     });
 
@@ -75,9 +75,9 @@ describe("LessonPath", () => {
         render(<LessonPath lessons={lessons} />);
         const nodeBtn = screen.getAllByRole("button")[0];
         fireEvent.click(nodeBtn);
-        expect(screen.getByText("Продолжить")).toBeTruthy();
+        expect(screen.getByText("Continue")).toBeTruthy();
         fireEvent.click(nodeBtn);
-        expect(screen.queryByText("Продолжить")).toBeNull();
+        expect(screen.queryByText("Continue")).toBeNull();
     });
 
     it("locked nodes do not show popover on click", () => {
@@ -89,20 +89,20 @@ describe("LessonPath", () => {
         const btns = screen.getAllByRole("button");
         expect(btns[0]).toHaveProperty("disabled", true);
         fireEvent.click(btns[0]);
-        expect(screen.queryByText("Продолжить")).toBeNull();
+        expect(screen.queryByText("Continue")).toBeNull();
     });
 
     it("only one popover open at a time", () => {
         const lessons = [
-            makeLesson({ lessonId: "l1", title: "Первый звонок", status: "available", orderInTopic: 1 }),
-            makeLesson({ lessonId: "l2", title: "Урок 2", status: "available", orderInTopic: 2 }),
+            makeLesson({ lessonId: "l1", title: "First Call", status: "available", orderInTopic: 1 }),
+            makeLesson({ lessonId: "l2", title: "Lesson 2", status: "available", orderInTopic: 2 }),
         ];
         render(<LessonPath lessons={lessons} />);
         const btns = screen.getAllByRole("button");
         fireEvent.click(btns[0]);
-        expect(screen.queryAllByText("Продолжить")).toHaveLength(1);
+        expect(screen.queryAllByText("Continue")).toHaveLength(1);
         fireEvent.click(btns[1]);
         // First closes, second opens — still only 1
-        expect(screen.queryAllByText("Продолжить")).toHaveLength(1);
+        expect(screen.queryAllByText("Continue")).toHaveLength(1);
     });
 });

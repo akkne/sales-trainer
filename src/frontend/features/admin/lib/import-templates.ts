@@ -18,30 +18,30 @@ const THEORY_LESSON_EXERCISES = [
     {
         type: "theory_card",
         orderInLesson: 1,
-        content: { layout: "text", title: "Зачем нужна разведка", body: "Перед звонком собери минимум информации о клиенте.\nЭто повышает доверие и экономит время." },
+        content: { layout: "text", title: "Why research matters", body: "Before the call, gather at least basic information about the prospect.\nThis builds trust and saves time." },
     },
     {
         type: "theory_card",
         orderInLesson: 2,
-        content: { layout: "bullets", title: "Что выяснить заранее", items: ["Сфера и размер компании", "Кто принимает решение", "Возможная проблема, которую решаем"] },
+        content: { layout: "bullets", title: "What to find out beforehand", items: ["Industry and company size", "Who the decision-maker is", "The problem we can solve"] },
     },
     {
         type: "theory_card",
         orderInLesson: 3,
         content: {
             layout: "dialogue",
-            title: "Уточнение вместо скидки",
+            title: "Clarifying question instead of a discount",
             turns: [
-                { side: "them", text: "Это слишком дорого." },
-                { side: "me", text: "Подскажите, дорого относительно чего?", annotations: ["уточнение"] },
-                { side: "them", text: "У конкурентов дешевле." },
+                { side: "them", text: "This is too expensive." },
+                { side: "me", text: "Expensive compared to what?", annotations: ["clarification"] },
+                { side: "them", text: "Competitors are cheaper." },
             ],
         },
     },
     {
         type: "theory_card",
         orderInLesson: 4,
-        content: { layout: "quote", text: "Люди покупают у тех, кому доверяют.", author: "Зиг Зиглар" },
+        content: { layout: "quote", text: "People buy from those they trust.", author: "Zig Ziglar" },
     },
 ];
 
@@ -93,7 +93,7 @@ export const LESSONS_TEMPLATE = [
     {
         // Theory lesson: every exercise is a theory_card → played as swipeable story cards.
         topicIconicName: "cold-calling-basics",
-        title: "Теория: подготовка к звонку",
+        title: "Theory: preparing for the call",
         orderInTopic: 2,
         exercises: THEORY_LESSON_EXERCISES,
     },
@@ -168,7 +168,7 @@ export const BUNDLE_TEMPLATE = {
                         },
                         {
                             // Theory lesson: all theory_card → swipeable story cards.
-                            title: "Теория: подготовка к звонку",
+                            title: "Theory: preparing for the call",
                             orderInTopic: 3,
                             exercises: THEORY_LESSON_EXERCISES,
                         },

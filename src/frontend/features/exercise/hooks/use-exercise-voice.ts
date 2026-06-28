@@ -21,7 +21,7 @@ interface UseExerciseVoiceOptions {
 /**
  * Voice pipeline for ai_dialog exercises. Reuses the same STT/VAD/audio
  * services as live calls, but streams from the exercise voice endpoint
- * (`/exercises/{id}/voice/stream`) instead of a dialog session.
+ * (`/exercises/{id}/voice/stream`) instead of a dialogue session.
  */
 export function useExerciseVoice(options: UseExerciseVoiceOptions) {
     const { exerciseId, onTranscript, onAiResponse, onError } = options;
@@ -108,8 +108,8 @@ export function useExerciseVoice(options: UseExerciseVoiceOptions) {
                 const limit = Math.round(((body.limitSeconds as number) ?? 0) / 60);
                 throw new Error(
                     period === "monthly"
-                        ? `Месячный лимит голоса (${limit} мин) исчерпан`
-                        : `Дневной лимит голоса (${limit} мин) исчерпан`,
+                        ? `Monthly voice limit (${limit} min) reached`
+                        : `Daily voice limit (${limit} min) reached`,
                 );
             }
             if (!response.ok) {

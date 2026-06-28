@@ -53,7 +53,7 @@ function MasteryRing({
     const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
     const display = masteryLevel > 0 ? `L${masteryLevel}` : "—";
     return (
-        <div className="mastery-ring" aria-label={`Мастерство: уровень ${masteryLevel}, ${masteryPercent}%`}>
+        <div className="mastery-ring" aria-label={`Mastery: level ${masteryLevel}, ${masteryPercent}%`}>
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
                 <circle cx="28" cy="28" r={radius} fill="none" stroke="var(--line)" strokeWidth="4" />
                 <circle
@@ -87,7 +87,7 @@ function MasteryRingSm({
     const fraction = Math.max(0, Math.min(1, masteryPercent / 100));
     const display = masteryLevel > 0 ? `L${masteryLevel}` : "—";
     return (
-        <div className="mastery-ring-sm" aria-label={`Уровень ${masteryLevel}`}>
+        <div className="mastery-ring-sm" aria-label={`Level ${masteryLevel}`}>
             <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
                 <circle cx="16" cy="16" r={radius} fill="none" stroke="var(--line)" strokeWidth="3" />
                 <circle
@@ -165,9 +165,9 @@ export default function GuidebookPage() {
         <div className="page" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* Header — always visible, outside the scrolling area */}
             <div className="ref-header">
-                <h1 className="ref-title">Справочник техник</h1>
+                <h1 className="ref-title">Technique guidebook</h1>
                 <p className="ref-subtitle">
-                    {meta?.totalCount ?? 0} техник · освоено {meta?.userCounts.mastered ?? 0}
+                    {meta?.totalCount ?? 0} techniques · mastered {meta?.userCounts.mastered ?? 0}
                 </p>
 
                 <div className="ref-tools">
@@ -178,20 +178,20 @@ export default function GuidebookPage() {
                         </span>
                         <input
                             className="ref-search"
-                            placeholder="Техника, тег, навык…"
+                            placeholder="Technique, tag, skill…"
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
-                            aria-label="Поиск техник"
+                            aria-label="Search techniques"
                         />
                     </div>
 
                     {/* Skill filter chips */}
-                    <div className="ref-tags" role="group" aria-label="Фильтр по навыкам">
+                    <div className="ref-tags" role="group" aria-label="Filter by skill">
                         <button
                             className={"ref-tag" + (selectedSkill === null ? " active" : "")}
                             onClick={() => setSelectedSkill(null)}
                         >
-                            Все
+                            All
                         </button>
                         {skills.map((skill) => (
                             <button
@@ -213,14 +213,14 @@ export default function GuidebookPage() {
                                     key={tag}
                                     className="ref-active-tag"
                                     onClick={() => toggleTag(tag)}
-                                    aria-label={`Убрать фильтр: ${tag}`}
+                                    aria-label={`Remove filter: ${tag}`}
                                 >
                                     #{tag}
                                     <Icon name="close" size="xs" />
                                 </button>
                             ))}
                             <button className="ref-clear-tags" onClick={() => setActiveTags([])}>
-                                Очистить
+                                Clear
                             </button>
                         </div>
                     )}
@@ -241,8 +241,8 @@ export default function GuidebookPage() {
                         ) : cards.length === 0 ? (
                             <div className="ref-empty">
                                 <Icon name="search" size="lg" color="var(--ink-4)" />
-                                <p>Ничего не найдено</p>
-                                <span>Попробуйте другой запрос или навык</span>
+                                <p>Nothing found</p>
+                                <span>Try a different query or skill</span>
                             </div>
                         ) : (
                             <div className="ref-grid">
@@ -339,7 +339,7 @@ function TechniqueCardItem({
                                         onTagClick(tag);
                                     }
                                 }}
-                                aria-label={`Фильтр по тегу ${tag}`}
+                                aria-label={`Filter by tag ${tag}`}
                             >
                                 #{tag}
                             </span>
@@ -351,10 +351,10 @@ function TechniqueCardItem({
             {/* Footer */}
             <div className="ref-card-footer">
                 <span className="ref-card-skill">
-                    {card.primarySkillTitle ?? "Техника"}
+                    {card.primarySkillTitle ?? "Technique"}
                 </span>
                 <span className="ref-card-read">
-                    Читать →
+                    Read →
                 </span>
             </div>
         </article>
@@ -375,14 +375,14 @@ function DetailPanel({
     const data = detail?.card ?? card;
 
     return (
-        <aside className="ref-panel" aria-label="Детали техники">
+        <aside className="ref-panel" aria-label="Technique details">
             {/* Panel header */}
             <div className="ref-panel-head">
-                <span className="ref-panel-eyebrow">Техника</span>
+                <span className="ref-panel-eyebrow">Technique</span>
                 <button
                     className="ref-panel-close"
                     onClick={onClose}
-                    aria-label="Закрыть панель"
+                    aria-label="Close panel"
                 >
                     <Icon name="close" size="sm" />
                 </button>
@@ -429,9 +429,9 @@ function DetailPanel({
                                 masteryPercent={data.masteryPercent}
                             />
                             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                                <span className="ref-panel-mastery-label">Уровень мастерства</span>
+                                <span className="ref-panel-mastery-label">Mastery level</span>
                                 <span className="ref-panel-mastery-level">
-                                    {data.masteryLevel > 0 ? `Уровень ${data.masteryLevel}` : "Не начато"}
+                                    {data.masteryLevel > 0 ? `Level ${data.masteryLevel}` : "Not started"}
                                 </span>
                                 <span className="ref-panel-mastery-pct">{data.masteryPercent}%</span>
                             </div>
@@ -451,7 +451,7 @@ function DetailPanel({
                         {/* How it works */}
                         {detail?.body && (
                             <section>
-                                <p className="ref-section-label">Как это работает</p>
+                                <p className="ref-section-label">How it works</p>
                                 <div className="ref-body-text">
                                     <ReactMarkdown>{normalizeMarkdown(detail.body)}</ReactMarkdown>
                                 </div>
@@ -461,11 +461,11 @@ function DetailPanel({
                         {/* Example dialogue */}
                         {detail && detail.dialogTurns.length > 0 && (
                             <section>
-                                <p className="ref-section-label">Пример диалога</p>
+                                <p className="ref-section-label">Example dialogue</p>
                                 <div className="ref-dlg-box">
                                     {detail.dialogTurns.map((turn) => {
                                         const isOut = turn.side === "me";
-                                        const speaker = isOut ? "Вы" : "Клиент";
+                                        const speaker = isOut ? "You" : "Prospect";
                                         const anno = turn.annotations.map((a) => a.label).join(" · ");
                                         return (
                                             <div
@@ -492,7 +492,7 @@ function DetailPanel({
                         {/* Case study */}
                         {detail?.case && (
                             <section>
-                                <p className="ref-section-label">Кейс</p>
+                                <p className="ref-section-label">Case study</p>
                                 <div className="ref-case-text">
                                     <strong style={{ color: "var(--ink-heading)" }}>
                                         {detail.case.title}
@@ -521,7 +521,7 @@ function DetailPanel({
                         {!detail?.coach && data.primarySkillIconicName && (
                             <Link href={`/skill/${data.primarySkillIconicName}`} style={{ display: "block" }}>
                                 <button className="ref-practice-btn">
-                                    Практиковать технику →
+                                    Practise technique →
                                 </button>
                             </Link>
                         )}
@@ -592,13 +592,13 @@ function CoachBlock({
             {practiceSlug ? (
                 <Link href={`/skill/${practiceSlug}`} style={{ display: "block" }}>
                     <button className="ref-practice-btn">
-                        Практиковать технику
+                        Practise technique
                     </button>
                 </Link>
             ) : (
                 <Link href="/dialog" style={{ display: "block" }}>
                     <button className="ref-practice-btn">
-                        Практиковать технику
+                        Practise technique
                     </button>
                 </Link>
             )}

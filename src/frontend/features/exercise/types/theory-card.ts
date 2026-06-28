@@ -7,7 +7,7 @@
 export type TheoryCardLayout = "text" | "dialogue" | "bullets" | "quote";
 
 // A dialogue turn. "me" = salesperson (right bubble), "them" = client (left bubble).
-// Same side semantics as the Guidebook (Справочник) dialogue renderer.
+// Same side semantics as the Guidebook dialogue renderer.
 export interface TheoryDialogueTurn {
     side: "me" | "them";
     text: string;

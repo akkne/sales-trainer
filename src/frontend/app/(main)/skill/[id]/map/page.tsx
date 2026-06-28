@@ -37,10 +37,10 @@ function lessonNodeClass(status: LessonSummary["status"]) {
     return "path-tl-node locked";
 }
 function lessonStatusLabel(status: LessonSummary["status"]) {
-    if (status === "completed") return "Пройден";
-    if (status === "in_progress") return "В процессе";
-    if (status === "available") return "Доступен";
-    return "Заблокирован";
+    if (status === "completed") return "Completed";
+    if (status === "in_progress") return "In progress";
+    if (status === "available") return "Available";
+    return "Locked";
 }
 function lessonStatusClass(status: LessonSummary["status"]) {
     if (status === "completed") return "path-tl-status done";
@@ -48,15 +48,15 @@ function lessonStatusClass(status: LessonSummary["status"]) {
     return "path-tl-status available";
 }
 function lessonActionLabel(lesson: LessonSummary) {
-    if (lesson.status === "completed") return "Повторить";
-    if (lesson.status === "in_progress") return "Продолжить";
-    return "Начать";
+    if (lesson.status === "completed") return "Review";
+    if (lesson.status === "in_progress") return "Continue";
+    return "Start";
 }
 
 function Spinner() {
     return (
         <div
-            aria-label="Загрузка"
+            aria-label="Loading"
             style={{
                 width: 36,
                 height: 36,
@@ -104,7 +104,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                 {/* Back link */}
                 <Link href={`/skill/${skillSlug}`} className="skill-back-link">
                     <Icon name="arrow-left" size={14} />
-                    Назад к урокам
+                    Back to lessons
                 </Link>
 
                 {/* Header card with circular progress */}
@@ -153,7 +153,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                             {skillTitle}
                         </h1>
                         <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 10px" }}>
-                            {completedCount} из {totalCount} уроков пройдено
+                            {completedCount} of {totalCount} lessons completed
                         </p>
 
                         {/* Inline progress bar (secondary, under the ring) */}
@@ -174,14 +174,14 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                 </div>
 
                 {/* Section label */}
-                <div className="map-section-label">Путь обучения</div>
+                <div className="map-section-label">Learning path</div>
 
                 {/* Lesson timeline */}
                 {lessons.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-4)" }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>📂</div>
-                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Уроки ещё не добавлены</p>
-                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Попроси администратора добавить уроки</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No lessons added yet</p>
+                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Ask your administrator to add lessons</p>
                     </div>
                 ) : (
                     <div className="path-timeline" role="list">
@@ -201,7 +201,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                     <div className="path-tl-node-col">
                                         <div
                                             className={lessonNodeClass(lesson.status)}
-                                            aria-label={`Урок ${i + 1}: ${lessonStatusLabel(lesson.status)}`}
+                                            aria-label={`Lesson ${i + 1}: ${lessonStatusLabel(lesson.status)}`}
                                         >
                                             {lesson.status === "completed" ? "✓" : i + 1}
                                         </div>
@@ -210,7 +210,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                     {/* Card */}
                                     <div className={"path-tl-card" + (lesson.status === "in_progress" ? " active" : "")}>
                                         <div className="path-tl-card-top">
-                                            <span className="path-tl-eyebrow">УРОК {i + 1}</span>
+                                            <span className="path-tl-eyebrow">LESSON {i + 1}</span>
                                             <span className={lessonStatusClass(lesson.status)}>
                                                 {lessonStatusLabel(lesson.status)}
                                             </span>
@@ -233,7 +233,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                                             className="btn btn-secondary"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
                                                         >
-                                                            Повторить
+                                                            Review
                                                         </button>
                                                     </Link>
                                                 </span>
@@ -244,7 +244,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
 
                                         <div className="path-tl-chips">
                                             <span className="path-tl-chip" style={chipStyle(chipKind)}>
-                                                {chipKind === "theory" ? "Теория" : "Практика"}
+                                                {chipKind === "theory" ? "Theory" : "Practice"}
                                             </span>
                                         </div>
                                     </div>
@@ -257,13 +257,13 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
 
             {/* Floating action bar */}
             {fabLesson && (
-                <div className="path-fab" role="complementary" aria-label="Быстрый старт">
+                <div className="path-fab" role="complementary" aria-label="Quick start">
                     <div className="path-fab-text">
-                        <span className="path-fab-eyebrow">Начать новый урок</span>
+                        <span className="path-fab-eyebrow">Start next lesson</span>
                         <span className="path-fab-lesson">{fabLesson.title}</span>
                     </div>
                     <Link href={`/session/${fabLesson.lessonId}`}>
-                        <button className="path-fab-btn">Начать →</button>
+                        <button className="path-fab-btn">Start →</button>
                     </Link>
                 </div>
             )}

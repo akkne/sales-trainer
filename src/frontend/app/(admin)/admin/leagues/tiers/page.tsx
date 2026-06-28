@@ -204,7 +204,7 @@ export default function AdminLeagueTiersPage() {
                         Name
                         <input
                             value={newTier.name}
-                            placeholder="Платина"
+                            placeholder="Platinum"
                             onChange={(e) => setNewTier({ ...newTier, name: e.target.value })}
                             className="block mt-1 w-40 text-sm border border-line rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo/30"
                         />

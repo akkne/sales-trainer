@@ -45,7 +45,7 @@ export function RailChatView({ conversationId, onBack }: RailChatViewProps) {
                 <button
                     className="frd-rail-back"
                     onClick={onBack}
-                    aria-label="Назад к активности"
+                    aria-label="Back to activity"
                 >
                     <Icon name="arrow-left" size={16} />
                 </button>
@@ -59,7 +59,7 @@ export function RailChatView({ conversationId, onBack }: RailChatViewProps) {
                         className="frd-rail-title"
                         style={{ fontSize: 14, marginBottom: 0 }}
                     >
-                        {conversation?.friendDisplayName ?? "Чат"}
+                        {conversation?.friendDisplayName ?? "Chat"}
                     </p>
                     {/* Online status omitted — presence not tracked by backend */}
                 </div>
@@ -110,7 +110,7 @@ export function RailChatView({ conversationId, onBack }: RailChatViewProps) {
                                 textAlign: "center",
                             }}
                         >
-                            Напишите первое сообщение!
+                            Send the first message!
                         </p>
                     </div>
                 )}
@@ -162,7 +162,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                         type="button"
                         onClick={onBack}
                         className="p-1 rounded-full hover:bg-bg-2 transition-colors"
-                        aria-label="Назад"
+                        aria-label="Back"
                     >
                         <Icon name="arrow-left" size="md" className="text-ink" />
                     </button>
@@ -174,7 +174,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                 />
 
                 <h2 className="font-medium text-ink truncate">
-                    {currentConversation?.friendDisplayName ?? "Чат"}
+                    {currentConversation?.friendDisplayName ?? "Chat"}
                 </h2>
             </div>
 
@@ -196,7 +196,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                 ) : (
                     <div className="flex items-center justify-center flex-1">
                         <p className="text-sm text-ink-4">
-                            Напишите первое сообщение!
+                            Send the first message!
                         </p>
                     </div>
                 )}

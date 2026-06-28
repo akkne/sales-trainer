@@ -37,7 +37,7 @@ function formatMinutes(seconds: number): string {
 function formatLastCall(value: string | null): string {
     if (!value) return "—";
     const date = new Date(value);
-    return date.toLocaleString("ru-RU", {
+    return date.toLocaleString("en-GB", {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -54,11 +54,11 @@ export default function AdminVoiceUsagePage() {
                 <div>
                     <h1 className="text-2xl font-bold text-ink">Voice Usage</h1>
                     <p className="text-sm text-ink-3 mt-1">
-                        Минуты голосовых звонков по пользователям
+                        Voice call minutes by user
                         {data && data.dailyLimitSeconds > 0 && (
                             <>
-                                {" "}· лимит {Math.round(data.dailyLimitSeconds / 60)} мин/день,{" "}
-                                {Math.round(data.monthlyLimitSeconds / 60)} мин/месяц
+                                {" "}· limit {Math.round(data.dailyLimitSeconds / 60)} min/day,{" "}
+                                {Math.round(data.monthlyLimitSeconds / 60)} min/month
                             </>
                         )}
                     </p>
@@ -67,7 +67,7 @@ export default function AdminVoiceUsagePage() {
                     onClick={() => refetch()}
                     className="px-4 py-2 rounded-xl bg-surface border border-line text-sm text-ink hover:bg-bg-2 transition-colors"
                 >
-                    Обновить
+                    Refresh
                 </button>
             </div>
 
@@ -82,7 +82,7 @@ export default function AdminVoiceUsagePage() {
             {isError && (
                 <div className="bg-bad-soft text-bad rounded-xl px-4 py-3 text-sm flex items-center gap-2">
                     <Icon name="warning" size="sm" />
-                    Не удалось загрузить статистику. Попробуйте обновить.
+                    Couldn't load stats. Try refreshing.
                 </div>
             )}
 
@@ -91,7 +91,7 @@ export default function AdminVoiceUsagePage() {
                     <div className="w-14 h-14 rounded-full bg-bg-2 flex items-center justify-center mx-auto mb-3">
                         <Icon name="mic" size="lg" className="text-ink-4" />
                     </div>
-                    Голосовых звонков ещё не было
+                    No voice calls yet
                 </div>
             )}
 
@@ -100,12 +100,12 @@ export default function AdminVoiceUsagePage() {
                     <table className="w-full text-sm min-w-[640px]">
                         <thead>
                             <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-4">
-                                <th className="px-4 py-3 font-medium">Пользователь</th>
-                                <th className="px-4 py-3 font-medium text-right">Сегодня, мин</th>
-                                <th className="px-4 py-3 font-medium text-right">Месяц, мин</th>
-                                <th className="px-4 py-3 font-medium text-right">Всего, мин</th>
-                                <th className="px-4 py-3 font-medium text-right">Звонков</th>
-                                <th className="px-4 py-3 font-medium text-right">Последний звонок</th>
+                                <th className="px-4 py-3 font-medium">User</th>
+                                <th className="px-4 py-3 font-medium text-right">Today, min</th>
+                                <th className="px-4 py-3 font-medium text-right">This month, min</th>
+                                <th className="px-4 py-3 font-medium text-right">Total, min</th>
+                                <th className="px-4 py-3 font-medium text-right">Calls</th>
+                                <th className="px-4 py-3 font-medium text-right">Last call</th>
                             </tr>
                         </thead>
                         <tbody>

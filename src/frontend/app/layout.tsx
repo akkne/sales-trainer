@@ -4,7 +4,7 @@ import { AppProviders } from "./providers";
 
 export const metadata: Metadata = {
     title: "Sellevate",
-    description: "Тренажёр навыков продаж",
+    description: "Sales skills trainer",
 };
 
 export const viewport = {
@@ -19,7 +19,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="ru" className="h-full antialiased">
+        <html lang="en" className="h-full antialiased">
             <head>
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

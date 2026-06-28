@@ -24,13 +24,13 @@ const LESSONS_TEMPLATE = JSON.stringify([
                 type: "choose_option",
                 orderInLesson: 1,
                 content: {
-                    situation: "Клиент говорит: 'Это слишком дорого'",
+                    situation: "The prospect says: 'This is too expensive'",
                     options: [
-                        { text: "Да, понимаю. Могу предложить скидку.", is_correct: false },
-                        { text: "Скажите, дорого относительно чего?", is_correct: true },
-                        { text: "Это лучшая цена на рынке.", is_correct: false }
+                        { text: "I understand. I can offer a discount.", is_correct: false },
+                        { text: "Expensive compared to what, exactly?", is_correct: true },
+                        { text: "This is the best price on the market.", is_correct: false }
                     ],
-                    explanation: "Лучше уточнить причину возражения, чем сразу снижать цену."
+                    explanation: "It's better to clarify the objection than to immediately lower the price."
                 },
                 customAiPrompt: null
             }

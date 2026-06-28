@@ -114,7 +114,7 @@ export function AiDialogueExercise({
             console.error("Failed to send message:", error);
             setMessages(prev => [...prev, {
                 role: "assistant",
-                content: "Понял вас. Что ещё хотели обсудить?"
+                content: "Got it. What else did you want to discuss?"
             }]);
         } finally {
             setIsSending(false);
@@ -142,7 +142,7 @@ export function AiDialogueExercise({
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
             {/* Exercise type chip */}
-            <div><span className="ex-chip ex-chip--dialogue">Диалог с AI</span></div>
+            <div><span className="ex-chip ex-chip--dialogue">AI dialogue</span></div>
 
             {/* Persona header */}
             <div
@@ -171,7 +171,7 @@ export function AiDialogueExercise({
             {mode === null && !isAnswered && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <p style={{ fontSize: 14, color: "var(--ink-2)", margin: 0 }}>
-                        Вы звоните первым. Выберите, как вести диалог:
+                        You call first. Choose how to run the dialogue:
                     </p>
                     <div style={{ display: "flex", gap: 12 }}>
                         <button
@@ -179,8 +179,8 @@ export function AiDialogueExercise({
                             style={modeChoiceStyle}
                         >
                             <Icon name="send" size="lg" />
-                            <span style={{ fontWeight: 600 }}>Текст</span>
-                            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Писать реплики</span>
+                            <span style={{ fontWeight: 600 }}>Text</span>
+                            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Type your lines</span>
                         </button>
                         <button
                             onClick={() => { setVoiceError(null); setMode("voice"); }}
@@ -192,9 +192,9 @@ export function AiDialogueExercise({
                             }}
                         >
                             <Icon name="mic" size="lg" />
-                            <span style={{ fontWeight: 600 }}>Голос</span>
+                            <span style={{ fontWeight: 600 }}>Voice</span>
                             <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                                {voice.isVoiceAvailable ? "Говорить вслух" : "Недоступно"}
+                                {voice.isVoiceAvailable ? "Speak aloud" : "Unavailable"}
                             </span>
                         </button>
                     </div>
@@ -220,7 +220,7 @@ export function AiDialogueExercise({
                 >
                     {messages.length === 0 && (
                         <p style={{ fontSize: 13, color: "var(--ink-4)", textAlign: "center", margin: "auto" }}>
-                            {mode === "voice" ? "Нажмите на микрофон и начните разговор" : "Напишите первую реплику"}
+                            {mode === "voice" ? "Tap the mic and start the conversation" : "Write your first line"}
                         </p>
                     )}
                     {messages.map((message, idx) => (
@@ -257,7 +257,7 @@ export function AiDialogueExercise({
                                     fontSize: 14,
                                 }}
                             >
-                                <span style={{ opacity: 0.7 }}>Печатает...</span>
+                                <span style={{ opacity: 0.7 }}>Typing...</span>
                             </div>
                         </div>
                     )}
@@ -273,7 +273,7 @@ export function AiDialogueExercise({
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Ваша реплика…"
+                        placeholder="Your line…"
                         disabled={isSending}
                         autoFocus
                         style={{
@@ -319,7 +319,7 @@ export function AiDialogueExercise({
 
             {mode !== null && !isAnswered && !canComplete && (
                 <p style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", margin: 0 }}>
-                    Ещё {minTurns - userTurnCount} реплик до возможности завершить
+                    {minTurns - userTurnCount} more line{minTurns - userTurnCount === 1 ? "" : "s"} before you can finish
                 </p>
             )}
 
@@ -357,7 +357,7 @@ export function AiDialogueExercise({
                     >
                         {onSkip && (
                             <Button variant="ghost" onClick={onSkip} disabled={isSubmitting}>
-                                ПРОПУСТИТЬ
+                                SKIP
                             </Button>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
@@ -369,7 +369,7 @@ export function AiDialogueExercise({
                                 loading={isSubmitting}
                                 iconRightName="arrow-right"
                             >
-                                ЗАВЕРШИТЬ ДИАЛОГ
+                                FINISH DIALOGUE
                             </Button>
                         </div>
                     </div>

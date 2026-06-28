@@ -47,7 +47,7 @@ export function BundleCard({ bundle }: BundleCardProps) {
                 {/* Status pill */}
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-olive bg-olive-soft px-2 py-0.5 rounded-full mb-1">
                     <Icon name="check" size="sm" />
-                    Доступно
+                    Available
                 </span>
 
                 <h3 className="font-semibold text-base text-ink mb-1 truncate">
@@ -61,7 +61,7 @@ export function BundleCard({ bundle }: BundleCardProps) {
                 <div className="flex items-center gap-3 text-xs text-ink-4">
                     <span className="flex items-center gap-1">
                         <Icon name="layers" size="sm" />
-                        Сценарии
+                        Scenarios
                     </span>
                 </div>
             </div>

@@ -11,7 +11,7 @@ const MAX_SEGMENTS = 8;
 
 interface TheoryLessonPlayerProps {
     cards: TheoryCardContent[];
-    /** Called once when the learner finishes the last card ("Завершить"). */
+    /** Called once when the learner finishes the last card ("Finish"). */
     onComplete: () => void;
     /** True while the completion submission is in flight. */
     isCompleting: boolean;
@@ -20,7 +20,7 @@ interface TheoryLessonPlayerProps {
 
 /**
  * Stories-style player for a theory lesson: swipe/tap through the cards, a progress
- * indicator on top, and a "Завершить" button on the last card. Reaching the end is
+ * indicator on top, and a "Finish" button on the last card. Reaching the end is
  * what marks the lesson complete (handled by the caller via onComplete).
  */
 export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: TheoryLessonPlayerProps) {
@@ -46,7 +46,7 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
         <div className="session theory-session">
             {/* Header: exit + progress indicator */}
             <div className="session-top">
-                <button className="icon-btn" onClick={onExit} aria-label="Выйти">
+                <button className="icon-btn" onClick={onExit} aria-label="Exit">
                     <Icon name="close" size={22} />
                 </button>
 
@@ -78,8 +78,8 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
 
             {/* Card body with tap zones (left = back, right = forward) */}
             <div className="session-body theory-body">
-                <button className="theory-tap theory-tap-left" onClick={goPrev} aria-label="Назад" disabled={currentIndex === 0} />
-                <button className="theory-tap theory-tap-right" onClick={goNext} aria-label="Далее" />
+                <button className="theory-tap theory-tap-left" onClick={goPrev} aria-label="Back" disabled={currentIndex === 0} />
+                <button className="theory-tap theory-tap-right" onClick={goNext} aria-label="Next" />
 
                 <div key={currentIndex} className="exercise fade-up theory-card-wrap">
                     <TheoryCardView content={cards[currentIndex]} />
@@ -92,12 +92,12 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
                     className="btn btn-ghost"
                     onClick={goPrev}
                     disabled={currentIndex === 0}
-                    aria-label="Назад"
+                    aria-label="Back"
                 >
                     <Icon name="arrow-left" size={18} />
                 </button>
                 <button className="btn btn-primary btn-lg grow" onClick={goNext} disabled={isCompleting}>
-                    {isLast ? (isCompleting ? "Сохранение…" : "Завершить") : "Далее"}
+                    {isLast ? (isCompleting ? "Saving…" : "Finish") : "Next"}
                     {!isLast && <Icon name="arrow-right" size={18} />}
                     {isLast && !isCompleting && <Icon name="check" size={18} />}
                 </button>

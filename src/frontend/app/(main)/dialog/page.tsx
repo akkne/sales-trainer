@@ -48,7 +48,7 @@ function inferDifficulty(bundle: DialogBundle, index: number): Difficulty {
 
 function DifficultyBadge({ level }: { level: Difficulty }) {
     return <span className={`badge-${level}`}>{
-        level === "easy" ? "Легко" : level === "medium" ? "Средне" : "Сложно"
+        level === "easy" ? "Easy" : level === "medium" ? "Medium" : "Hard"
     }</span>;
 }
 
@@ -56,27 +56,27 @@ function DifficultyBadge({ level }: { level: Difficulty }) {
 function relativeTime(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60_000);
-    if (mins < 1) return "только что";
-    if (mins < 60) return `${mins} мин назад`;
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} min ago`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs} ч назад`;
+    if (hrs < 24) return `${hrs} h ago`;
     const days = Math.floor(hrs / 24);
-    return `${days} д назад`;
+    return `${days} d ago`;
 }
 
 function sessionKind(session: DialogSessionSummary): string {
     // voiceEnabled is on the mode, not summary — infer from modeTitle heuristic
     const t = session.modeId.toLowerCase();
     return t.includes("voice") || t.includes("голос") || t.includes("call")
-        ? "Голосовой звонок"
-        : "Текстовый чат";
+        ? "Voice call"
+        : "Text chat";
 }
 
 // ── NPC mentor static data ────────────────────────────────────────────────────
 const NPC_MENTOR = {
-    initials: "СС",
-    name: "Скептик Сергей",
-    blurb: "«Хочешь, позвоню и попробую развалить твою лучшую продажу? Пять минут на подготовку.»",
+    initials: "SS",
+    name: "Skeptical Sam",
+    blurb: "«Want me to call and try to tear apart your best pitch? Five minutes to prepare.»",
     // no dedicated route yet — challenge goes to the first bundle's voice mode
 };
 
@@ -114,7 +114,7 @@ export default function DialogPage() {
         return (
             <div className="page" style={{ padding: "60px 24px" }}>
                 <ErrorState
-                    title="Ошибка загрузки"
+                    title="Failed to load"
                     message={bundlesError.message}
                     onRetry={() => refetch()}
                 />
@@ -130,8 +130,8 @@ export default function DialogPage() {
                     <div className="ic">
                         <Icon name="message" size="lg" />
                     </div>
-                    <h1 className="h3" style={{ marginBottom: 8 }}>Практика диалогов пока недоступна</h1>
-                    <p className="small">Функция находится в разработке или не настроена</p>
+                    <h1 className="h3" style={{ marginBottom: 8 }}>Dialogue practice is not available yet</h1>
+                    <p className="small">This feature is under development or not configured</p>
                 </div>
             </div>
         );
@@ -150,9 +150,9 @@ export default function DialogPage() {
             <div className="container">
                 {/* ── Page header ── */}
                 <div className="practice-header">
-                    <h1 className="practice-title">Практика</h1>
+                    <h1 className="practice-title">Practice</h1>
                     <p className="practice-subtitle">
-                        Интерактивные сценарии для отработки техник продаж с AI-клиентом
+                        Interactive scenarios for practising sales techniques with an AI prospect
                     </p>
                 </div>
 
@@ -163,7 +163,7 @@ export default function DialogPage() {
                         {NPC_MENTOR.initials}
                     </div>
                     <div className="mentor-banner-body">
-                        <div className="mentor-banner-eyebrow">Ведущий ментор</div>
+                        <div className="mentor-banner-eyebrow">Featured mentor</div>
                         <p className="mentor-banner-name">{NPC_MENTOR.name}</p>
                         <p className="mentor-banner-blurb">{NPC_MENTOR.blurb}</p>
                     </div>
@@ -171,16 +171,16 @@ export default function DialogPage() {
                         <button
                             className="mentor-banner-btn"
                             onClick={() => firstBundleId && router.push(`/dialog/${firstBundleId}`)}
-                            aria-label="Начать голосовой звонок со Скептиком Сергеем"
+                            aria-label="Start a voice call with Skeptical Sam"
                         >
                             <Icon name="mic" size={16} />
-                            Начать голосовой звонок
+                            Start voice call
                         </button>
                     </div>
                 </div>
 
                 {/* ── Dialog bundles ── */}
-                <p className="practice-section-label">Диалоговые модули</p>
+                <p className="practice-section-label">Dialogue modules</p>
                 <div className="bundle-grid" role="list">
                     {bundles.map((bundle, idx) => {
                         const { from, to } = ava(bundle.id);
@@ -212,7 +212,7 @@ export default function DialogPage() {
                                             {bundle.skillTitle}
                                         </span>
                                     )}
-                                    <span className="bundle-modes-count">режимы →</span>
+                                    <span className="bundle-modes-count">modes →</span>
                                 </div>
 
                                 {/* footer: Chat + Call buttons */}
@@ -220,20 +220,20 @@ export default function DialogPage() {
                                     <Link
                                         href={`/dialog/${bundle.id}`}
                                         className="bundle-btn-chat"
-                                        aria-label={`Открыть текстовый чат: ${bundle.title}`}
+                                        aria-label={`Open text chat: ${bundle.title}`}
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         <Icon name="message" size={15} />
-                                        Чат
+                                        Chat
                                     </Link>
                                     <Link
                                         href={`/dialog/${bundle.id}`}
                                         className="bundle-btn-call"
-                                        aria-label={`Открыть голосовой звонок: ${bundle.title}`}
+                                        aria-label={`Open voice call: ${bundle.title}`}
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         <Icon name="phone" size={15} />
-                                        Звонок
+                                        Call
                                     </Link>
                                 </div>
                             </article>
@@ -244,7 +244,7 @@ export default function DialogPage() {
                 {/* ── Recent sessions (only if data exists) ── */}
                 {recentSessions.length > 0 && (
                     <div className="practice-sessions">
-                        <p className="practice-section-label">Недавние сессии</p>
+                        <p className="practice-section-label">Recent sessions</p>
                         <div className="sessions-card" role="list">
                             {recentSessions.map((session) => {
                                 const { from, to } = ava(session.bundleId);
@@ -266,7 +266,7 @@ export default function DialogPage() {
                                             <p className="session-mode-title">{session.modeTitle}</p>
                                             <p className="session-meta">
                                                 {session.bundleTitle}
-                                                {msgCount > 0 && ` · ${msgCount} сообщений`}
+                                                {msgCount > 0 && ` · ${msgCount} ${msgCount === 1 ? "message" : "messages"}`}
                                                 {` · ${kind}`}
                                             </p>
                                         </div>
@@ -274,9 +274,9 @@ export default function DialogPage() {
                                         <Link
                                             href={`/dialog/${session.bundleId}`}
                                             className="session-open-link"
-                                            aria-label={`Открыть сессию: ${session.modeTitle}`}
+                                            aria-label={`Open session: ${session.modeTitle}`}
                                         >
-                                            Открыть →
+                                            Open →
                                         </Link>
                                     </div>
                                 );

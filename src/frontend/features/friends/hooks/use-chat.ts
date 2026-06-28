@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { TimingConstants } from "@/shared/constants/timing-constants";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface ChatConversationSummary {
     conversationId: string;
@@ -38,9 +39,7 @@ export function useCreateConversation() {
         onError: (error) => {
             const message = (error as Error).message;
             clientLogger.warn("Failed to open chat", { error: message });
-            if (typeof window !== "undefined") {
-                window.alert(`Не удалось открыть чат: ${message}`);
-            }
+            toast.error(`Couldn't open chat: ${message}`);
         },
     });
 }
@@ -70,9 +69,7 @@ export function useSendChatMessage() {
                 conversationId: variables.conversationId,
                 error: message,
             });
-            if (typeof window !== "undefined") {
-                window.alert(`Не удалось отправить сообщение: ${message}`);
-            }
+            toast.error(`Couldn't send message: ${message}`);
         },
     });
 }

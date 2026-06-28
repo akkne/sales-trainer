@@ -34,7 +34,7 @@ interface SkeletonListProps {
 /** Vertical stack of pulsing card placeholders — default loading state for lists. */
 export function SkeletonList({ count = 3, rowHeight = 72, gap = 12, className = "" }: SkeletonListProps) {
     return (
-        <div className={`flex flex-col ${className}`} style={{ gap }} aria-label="Загрузка...">
+        <div className={`flex flex-col ${className}`} style={{ gap }} aria-label="Loading...">
             {Array.from({ length: count }, (_, index) => (
                 <Skeleton key={index} height={rowHeight} rounded={16} />
             ))}

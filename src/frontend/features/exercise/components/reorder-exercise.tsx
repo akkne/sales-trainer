@@ -87,9 +87,9 @@ export function ReorderExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--reorder">Порядок</span></div>
+            <div><span className="ex-chip ex-chip--reorder">Reorder</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                {content.instruction || "Расставьте элементы в правильном порядке:"}
+                {content.instruction || "Put the items in the correct order:"}
             </h2>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -216,7 +216,7 @@ export function ReorderExercise({
                     onSubmit={() => onSubmit({ order: orderedIndices })}
                     canSubmit={true}
                     isSubmitting={isSubmitting}
-                    keyboardHint="↑↓ порядок · Enter — проверить"
+                    keyboardHint="↑↓ reorder · Enter — check"
                 />
             )}
         </div>

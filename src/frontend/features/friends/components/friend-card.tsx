@@ -10,7 +10,7 @@ const PERSONA_LABELS: Record<string, string> = {
     account_executive: "Account Executive",
     account_manager: "Account Manager",
     founder: "Founder",
-    other: "Другое",
+    other: "Other",
 };
 
 interface FriendCardProps {
@@ -38,7 +38,7 @@ export function FriendCard({ friend, onChatClick }: FriendCardProps) {
                 <button
                     className="frd-card-msg-btn"
                     onClick={() => onChatClick(friend.userId)}
-                    aria-label={`Написать ${friend.displayName}`}
+                    aria-label={`Message ${friend.displayName}`}
                 >
                     <Icon name="message" size={16} />
                 </button>

@@ -42,24 +42,24 @@ interface StateInfo {
 function describePipeline(state: VoicePipelineState, callStatus: CallStatus): StateInfo {
     if (callStatus === "idle") {
         return {
-            label: "Готов к звонку",
-            hint: "Нажмите «Позвонить», чтобы соединиться с собеседником",
+            label: "Ready to call",
+            hint: "Press «Call» to connect with your counterpart",
             ringColor: "var(--line-strong)",
             pulse: false,
         };
     }
     if (callStatus === "dialing" || state === "initializing") {
         return {
-            label: "Соединение…",
-            hint: "Гудки. Собеседник вот-вот возьмёт трубку",
+            label: "Connecting…",
+            hint: "Ringing. Your counterpart is about to pick up",
             ringColor: "var(--primary)",
             pulse: true,
         };
     }
     if (callStatus === "ended") {
         return {
-            label: "Звонок завершён",
-            hint: "Готовим разбор разговора",
+            label: "Call ended",
+            hint: "Preparing the breakdown…",
             ringColor: "var(--line-strong)",
             pulse: false,
         };
@@ -67,42 +67,42 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
     switch (state) {
         case "listening":
             return {
-                label: "На связи · слушаю вас",
-                hint: "Говорите свободно — я отвечу, как только сделаете паузу",
+                label: "Connected · listening",
+                hint: "Speak freely — I'll reply as soon as you pause",
                 ringColor: "var(--success)",
                 pulse: false,
             };
         case "speaking":
             return {
-                label: "Слышу вас",
-                hint: "Продолжайте — фиксирую реплику",
+                label: "Hearing you",
+                hint: "Keep going — capturing your line",
                 ringColor: "var(--success)",
                 pulse: true,
             };
         case "processing":
             return {
-                label: "Думаю над ответом…",
-                hint: "Готовлю реплику собеседника",
+                label: "Thinking…",
+                hint: "Preparing the counterpart's line",
                 ringColor: "var(--amber)",
                 pulse: true,
             };
         case "playing":
             return {
-                label: "Собеседник говорит",
-                hint: "Прерывайте, когда захотите ответить",
+                label: "Counterpart is speaking",
+                hint: "Interrupt whenever you want to reply",
                 ringColor: "var(--flame)",
                 pulse: true,
             };
         case "error":
             return {
-                label: "Помехи на линии",
-                hint: "Попробуйте позвонить ещё раз",
+                label: "Connection trouble",
+                hint: "Try calling again",
                 ringColor: "var(--heart)",
                 pulse: false,
             };
         default:
             return {
-                label: "На линии",
+                label: "On the line",
                 hint: "",
                 ringColor: "var(--primary)",
                 pulse: false,
@@ -195,7 +195,7 @@ export default function VoiceCallPage() {
                 setSessionId(null);
             }
         } catch (error) {
-            setError(error instanceof Error ? error.message : "Не удалось завершить звонок");
+            setError(error instanceof Error ? error.message : "Failed to end the call");
         } finally {
             setIsCompleting(false);
         }
@@ -322,13 +322,13 @@ export default function VoiceCallPage() {
                         <span className="itile heart" style={{ width: 72, height: 72, margin: "0 auto 20px" }}>
                             <Icon name="mic" size="lg" />
                         </span>
-                        <h1 className="h3" style={{ marginBottom: 8 }}>Голосовой режим недоступен</h1>
+                        <h1 className="h3" style={{ marginBottom: 8 }}>Voice mode unavailable</h1>
                         <p className="small" style={{ marginBottom: 24 }}>
-                            Этот сценарий не поддерживает звонки, либо браузер не умеет распознавать речь.
-                            Попробуйте Chrome или Edge на десктопе.
+                            This scenario does not support calls, or your browser cannot recognise speech.
+                            Try Chrome or Edge on desktop.
                         </p>
                         <button className="btn btn-dark" onClick={handleClose}>
-                            Назад
+                            Back
                         </button>
                     </div>
                 </div>
@@ -340,9 +340,9 @@ export default function VoiceCallPage() {
         <div className="voice">
             {/* Top bar */}
             <div className="voice-top">
-                <button className="back-link plain" onClick={handleClose} aria-label="К сценариям">
+                <button className="back-link plain" onClick={handleClose} aria-label="Back to scenarios">
                     <Icon name="chevron-left" size="sm" />
-                    К сценариям
+                    Scenarios
                 </button>
 
                 {/* Center: status dot + mono status label / live timer */}
@@ -355,10 +355,10 @@ export default function VoiceCallPage() {
                         style={{ background: callStatus === "connected" ? "var(--success)" : "var(--ink-4)" }}
                     />
                     <span className="num">
-                        {callStatus === "idle"      && "ОЖИДАНИЕ"}
-                        {callStatus === "dialing"   && "ВЫЗОВ"}
+                        {callStatus === "idle"      && "IDLE"}
+                        {callStatus === "dialing"   && "CALLING"}
                         {callStatus === "connected" && formatTime(sessionTimer)}
-                        {callStatus === "ended"     && "ЗАВЕРШЁН"}
+                        {callStatus === "ended"     && "ENDED"}
                     </span>
                 </div>
 
@@ -367,9 +367,9 @@ export default function VoiceCallPage() {
                     {usage && usage.dailyLimitSeconds > 0 && (
                         <div
                             className={"voice-quota num" + (usage.dailyExceeded ? " exceeded" : "")}
-                            title={`Сегодня: ${Math.round(usage.dailyUsedSeconds / 60)} / ${Math.round(usage.dailyLimitSeconds / 60)} мин · В месяце: ${Math.round(usage.monthlyUsedSeconds / 60)} / ${Math.round(usage.monthlyLimitSeconds / 60)} мин`}
+                            title={`Today: ${Math.round(usage.dailyUsedSeconds / 60)} / ${Math.round(usage.dailyLimitSeconds / 60)} min · This month: ${Math.round(usage.monthlyUsedSeconds / 60)} / ${Math.round(usage.monthlyLimitSeconds / 60)} min`}
                         >
-                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} МИН
+                            {Math.round(usage.dailyUsedSeconds / 60)}/{Math.round(usage.dailyLimitSeconds / 60)} MIN
                         </div>
                     )}
                 </div>
@@ -386,9 +386,9 @@ export default function VoiceCallPage() {
                     <GeoAvatar seed={personaSeed} size={156} style={{ borderRadius: "50%" }} />
                 </div>
 
-                <span className="eyebrow">{currentBundle?.title ?? "Сценарий"}</span>
+                <span className="eyebrow">{currentBundle?.title ?? "Scenario"}</span>
                 <h1 className="h1" style={{ margin: "10px 0 6px", fontSize: "clamp(26px, 3.6vw, 42px)" }}>
-                    {currentMode?.title ?? "Собеседник"}
+                    {currentMode?.title ?? "Counterpart"}
                 </h1>
                 {currentMode?.description && (
                     <p className="lead" style={{ maxWidth: 480 }}>{currentMode.description}</p>
@@ -407,9 +407,9 @@ export default function VoiceCallPage() {
                                 }
                             >
                                 <span className="tr-role">
-                                    {entry.role === "user" ? "Вы" : (currentMode?.title ?? "Собеседник")}
+                                    {entry.role === "user" ? "You" : (currentMode?.title ?? "Counterpart")}
                                     {entry.interrupted && (
-                                        <span style={{ color: "var(--amber)", marginLeft: 6 }}>· прервано</span>
+                                        <span style={{ color: "var(--amber)", marginLeft: 6 }}>· interrupted</span>
                                     )}
                                 </span>
                                 <p>{entry.text}</p>
@@ -418,7 +418,7 @@ export default function VoiceCallPage() {
                         {/* Interim line — what the recognizer hears before the phrase is committed */}
                         {isCallActive && currentTranscript && (voiceState === "speaking" || voiceState === "listening") && (
                             <div className="tr-bubble user interim">
-                                <span className="tr-role">Вы</span>
+                                <span className="tr-role">You</span>
                                 <p>{currentTranscript}</p>
                             </div>
                         )}
@@ -457,7 +457,7 @@ export default function VoiceCallPage() {
                                 animation: "spin 0.8s linear infinite", display: "inline-block", flex: "none",
                             }}
                         />
-                        Готовим разбор…
+                        Preparing the breakdown…
                     </div>
                 )}
             </div>
@@ -469,24 +469,24 @@ export default function VoiceCallPage() {
                         className="btn btn-success btn-lg voice-cta"
                         onClick={handlePickUp}
                         disabled={isCompleting}
-                        aria-label="Позвонить"
+                        aria-label="Call"
                         style={isCompleting ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                     >
                         <Icon name="phone" size="md" />
-                        {callStatus === "ended" ? "Позвонить ещё раз" : "Позвонить"}
+                        {callStatus === "ended" ? "Call again" : "Call"}
                     </button>
                 )}
 
                 {isCallActive && (
-                    <button className="btn btn-danger btn-lg voice-cta" onClick={handleHangUp} aria-label="Положить трубку">
+                    <button className="btn btn-danger btn-lg voice-cta" onClick={handleHangUp} aria-label="Hang up">
                         <Icon name="phone" size="md" style={{ transform: "rotate(135deg)" }} />
-                        Положить трубку
+                        Hang up
                     </button>
                 )}
 
                 {feedback && (
                     <button className="btn btn-primary btn-lg voice-cta" onClick={handleCloseFeedback}>
-                        Закрыть разбор
+                        Close breakdown
                     </button>
                 )}
             </div>

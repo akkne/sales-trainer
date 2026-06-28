@@ -36,6 +36,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [UI Current State](UI_CURRENT_STATE.md) | Exhaustive baseline snapshot of all screens, elements, and visual tokens for the redesign |
 | [Redesign Baseline](REDESIGN_BASELINE.md) | Function-only product surface (features, exercises, dialog internals, routes, page contents) for a free redesign — no visual/implementation details |
 | [Handbook Redesign](HANDBOOK_REDESIGN.md) | Implemented 2026-04-21 — Technique domain with per-user mastery + structured dialog/case/coach blocks |
+| [Frontend English & Toasts](FRONTEND_ENGLISH_TOASTS.md) | Implemented 2026-06-28 — full RU→EN UI translation (no i18n framework, English-only) + new Zustand/Framer-Motion toast system replacing `window.alert()`; notification-center styling fixes |
 | [Mobile Responsive Testing](TESTING/MOBILE_RESPONSIVE.md) | Breakpoints + manual phone checklist for the full mobile adaptation (user-facing screens + admin drawer) |
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
 | [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes leagues + achievements from UI; phase status |

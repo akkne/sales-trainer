@@ -49,7 +49,7 @@ export function PhotoGallery({ photos, canDelete = false, onDelete, deleteDisabl
                         {canDelete && onDelete && (
                             <button
                                 type="button"
-                                aria-label="Удалить фото"
+                                aria-label="Delete photo"
                                 disabled={deleteDisabled}
                                 onClick={() => onDelete(photo.id)}
                                 style={{

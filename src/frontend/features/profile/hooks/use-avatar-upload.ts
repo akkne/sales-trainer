@@ -44,7 +44,7 @@ export function useAvatarUpload(): UseAvatarUploadReturn {
             await queryClient.invalidateQueries({ queryKey: ["profile"] });
         } catch (err) {
             setUploadError(
-                err instanceof Error ? err.message : "Не удалось загрузить фото"
+                err instanceof Error ? err.message : "Failed to upload photo"
             );
         } finally {
             setUploading(false);

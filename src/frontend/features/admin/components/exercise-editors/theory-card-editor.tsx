@@ -110,7 +110,7 @@ function DialogueEditor({ content, onChange }: { content: Extract<TheoryCardCont
                             <option value="them">them</option>
                             <option value="me">me</option>
                         </select>
-                        <input className={inputCls} value={turn.text} onChange={(e) => update(i, { text: e.target.value })} placeholder="Реплика" />
+                        <input className={inputCls} value={turn.text} onChange={(e) => update(i, { text: e.target.value })} placeholder="Line" />
                         <button type="button" onClick={() => remove(i)} className="text-xs text-bad shrink-0">×</button>
                     </div>
                 ))}

@@ -199,7 +199,7 @@ export default function AdminDialogPage() {
                                 value={formData.title}
                                 onChange={(changeEvent) => setFormData({ ...formData, title: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
-                                placeholder="Холодные звонки"
+                                placeholder="Cold calls"
                             />
                         </div>
                         <div>
@@ -234,7 +234,7 @@ export default function AdminDialogPage() {
                                 onChange={(changeEvent) => setFormData({ ...formData, description: changeEvent.target.value })}
                                 className="w-full px-3 py-2 border border-line rounded-xl bg-surface text-ink focus:outline-none focus:ring-1 focus:ring-indigo/30"
                                 rows={2}
-                                placeholder="Описание бандла..."
+                                placeholder="Bundle description..."
                             />
                         </div>
                         <div className="md:col-span-2">

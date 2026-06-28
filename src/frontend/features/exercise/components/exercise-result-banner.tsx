@@ -24,9 +24,9 @@ const TONE_STYLES: Record<
     Tone,
     { footClass: string; tileBg: string; tileColor: string; title: string; icon: IconName; btnClass: string }
 > = {
-    good: { footClass: " ok",   tileBg: "var(--success-soft)", tileColor: "var(--success)", title: "Верно!",     icon: "check",   btnClass: "btn-success" },
-    warn: { footClass: " warn", tileBg: "var(--amber-soft)",   tileColor: "var(--amber)",   title: "Почти",      icon: "warning", btnClass: "btn-danger"  },
-    bad:  { footClass: " bad",  tileBg: "var(--heart-soft)",   tileColor: "var(--heart)",   title: "Не совсем",  icon: "warning", btnClass: "btn-danger"  },
+    good: { footClass: " ok",   tileBg: "var(--success-soft)", tileColor: "var(--success)", title: "Correct!",   icon: "check",   btnClass: "btn-success" },
+    warn: { footClass: " warn", tileBg: "var(--amber-soft)",   tileColor: "var(--amber)",   title: "Almost",     icon: "warning", btnClass: "btn-danger"  },
+    bad:  { footClass: " bad",  tileBg: "var(--heart-soft)",   tileColor: "var(--heart)",   title: "Not quite",  icon: "warning", btnClass: "btn-danger"  },
 };
 
 export function ExerciseResultBanner({
@@ -42,8 +42,8 @@ export function ExerciseResultBanner({
 
     const feedback = (aiFeedback ?? "").trim();
     const fallback = isCorrect
-        ? "Отличный ответ."
-        : "Попробуйте без намёка на решение — пусть клиент откроется.";
+        ? "Great answer."
+        : "Try without hinting at the solution — let the prospect open up.";
     const detailed = feedback.length > 0;
     const ratingOutOfTen = detailed ? Math.max(0, Math.min(10, Math.round(score / 10))) : null;
     const compactSubtitle = explanation ?? fallback;
@@ -92,7 +92,7 @@ export function ExerciseResultBanner({
                                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                                 }}
                             >
-                                {detailed ? "Разбор от AI ↓" : compactSubtitle}
+                                {detailed ? "AI breakdown ↓" : compactSubtitle}
                             </div>
                         </div>
                     </div>
@@ -100,7 +100,7 @@ export function ExerciseResultBanner({
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
                         {ratingOutOfTen !== null && (
                             <div
-                                aria-label={`Оценка ${ratingOutOfTen} из 10`}
+                                aria-label={`Score ${ratingOutOfTen} out of 10`}
                                 style={{
                                     display: "inline-flex", alignItems: "baseline", gap: 2,
                                     padding: "5px 10px",
@@ -128,7 +128,7 @@ export function ExerciseResultBanner({
                             </span>
                         )}
                         <button className={"btn btn-lg " + t.btnClass} onClick={onContinue}>
-                            Дальше
+                            Next
                             <Icon name="arrow-right" size={17} />
                         </button>
                     </div>
@@ -148,7 +148,7 @@ export function ExerciseResultBanner({
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                             <Icon name="sparkle" size="xs" style={{ color: t.tileColor }} />
                             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: t.tileColor }}>
-                                Разбор ответа
+                                Answer breakdown
                             </span>
                         </div>
                         <div

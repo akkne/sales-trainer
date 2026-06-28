@@ -37,10 +37,10 @@ function lessonNodeClass(status: LessonSummary["status"]) {
     return "path-tl-node locked";
 }
 function lessonStatusLabel(status: LessonSummary["status"]) {
-    if (status === "completed") return "Пройден";
-    if (status === "in_progress") return "В процессе";
-    if (status === "available") return "Доступен";
-    return "Заблокирован";
+    if (status === "completed") return "Completed";
+    if (status === "in_progress") return "In progress";
+    if (status === "available") return "Available";
+    return "Locked";
 }
 function lessonStatusClass(status: LessonSummary["status"]) {
     if (status === "completed") return "path-tl-status done";
@@ -48,15 +48,15 @@ function lessonStatusClass(status: LessonSummary["status"]) {
     return "path-tl-status available";
 }
 function lessonActionLabel(lesson: LessonSummary) {
-    if (lesson.status === "completed") return "Повторить";
-    if (lesson.status === "in_progress") return "Продолжить";
-    return "Начать";
+    if (lesson.status === "completed") return "Review";
+    if (lesson.status === "in_progress") return "Continue";
+    return "Start";
 }
 
 function Spinner() {
     return (
         <div
-            aria-label="Загрузка"
+            aria-label="Loading"
             style={{
                 width: 36,
                 height: 36,
@@ -96,9 +96,9 @@ export default function SkillPage({ params }: SkillPageProps) {
     const fabLesson = lessons.find((l) => l.status === "in_progress" || l.status === "available");
 
     function skillStatusLabel(s: string | undefined) {
-        if (s === "completed") return "Освоен";
-        if (s === "in_progress") return "В процессе";
-        return "Доступен";
+        if (s === "completed") return "Mastered";
+        if (s === "in_progress") return "In progress";
+        return "Available";
     }
     function skillStatusClass(s: string | undefined) {
         if (s === "completed") return "path-skill-status done";
@@ -115,7 +115,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                     className="skill-back-link"
                 >
                     <Icon name="arrow-left" size={14} />
-                    Назад к навыкам
+                    Back to skills
                 </Link>
 
                 {/* Skill header card — matches path-skill-header */}
@@ -135,7 +135,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                             href={`/skill/${skillSlug}/map`}
                             style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textDecoration: "none" }}
                         >
-                            Карта курса →
+                            Course map →
                         </Link>
                     </div>
 
@@ -159,20 +159,20 @@ export default function SkillPage({ params }: SkillPageProps) {
                     {/* 4-cell stat grid */}
                     <div className="path-stat-grid" role="list">
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Уроков</div>
+                            <div className="path-stat-label">Lessons</div>
                             <div className="path-stat-val">{totalCount}</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Пройдено</div>
+                            <div className="path-stat-label">Completed</div>
                             <div className="path-stat-val">{completedCount}</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Точность</div>
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                            <div className="path-stat-label">Accuracy</div>
+                            <div className="path-stat-val" aria-label="No data">—</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Время</div>
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                            <div className="path-stat-label">Time</div>
+                            <div className="path-stat-val" aria-label="No data">—</div>
                         </div>
                     </div>
                 </div>
@@ -181,8 +181,8 @@ export default function SkillPage({ params }: SkillPageProps) {
                 {lessons.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-4)" }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>📂</div>
-                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Уроки ещё не добавлены</p>
-                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Попроси администратора добавить уроки</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No lessons added yet</p>
+                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Ask your administrator to add lessons</p>
                     </div>
                 ) : (
                     <div className="path-timeline" role="list">
@@ -202,7 +202,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                                     <div className="path-tl-node-col">
                                         <div
                                             className={lessonNodeClass(lesson.status)}
-                                            aria-label={`Урок ${i + 1}: ${lessonStatusLabel(lesson.status)}`}
+                                            aria-label={`Lesson ${i + 1}: ${lessonStatusLabel(lesson.status)}`}
                                         >
                                             {lesson.status === "completed" ? "✓" : i + 1}
                                         </div>
@@ -211,7 +211,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                                     {/* Card */}
                                     <div className={"path-tl-card" + (lesson.status === "in_progress" ? " active" : "")}>
                                         <div className="path-tl-card-top">
-                                            <span className="path-tl-eyebrow">УРОК {i + 1}</span>
+                                            <span className="path-tl-eyebrow">LESSON {i + 1}</span>
                                             <span className={lessonStatusClass(lesson.status)}>
                                                 {lessonStatusLabel(lesson.status)}
                                             </span>
@@ -234,7 +234,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                                                             className="btn btn-secondary"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
                                                         >
-                                                            Повторить
+                                                            Review
                                                         </button>
                                                     </Link>
                                                 </span>
@@ -245,7 +245,7 @@ export default function SkillPage({ params }: SkillPageProps) {
 
                                         <div className="path-tl-chips">
                                             <span className="path-tl-chip" style={chipStyle(chipKind)}>
-                                                {chipKind === "theory" ? "Теория" : "Практика"}
+                                                {chipKind === "theory" ? "Theory" : "Practice"}
                                             </span>
                                         </div>
                                     </div>
@@ -258,13 +258,13 @@ export default function SkillPage({ params }: SkillPageProps) {
 
             {/* Floating action bar */}
             {fabLesson && (
-                <div className="path-fab" role="complementary" aria-label="Быстрый старт">
+                <div className="path-fab" role="complementary" aria-label="Quick start">
                     <div className="path-fab-text">
-                        <span className="path-fab-eyebrow">Начать новый урок</span>
+                        <span className="path-fab-eyebrow">Start next lesson</span>
                         <span className="path-fab-lesson">{fabLesson.title}</span>
                     </div>
                     <Link href={`/session/${fabLesson.lessonId}`}>
-                        <button className="path-fab-btn">Начать →</button>
+                        <button className="path-fab-btn">Start →</button>
                     </Link>
                 </div>
             )}

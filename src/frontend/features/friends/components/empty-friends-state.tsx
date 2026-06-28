@@ -12,14 +12,14 @@ export function EmptyFriendsState({ onSearchFocus }: EmptyFriendsStateProps) {
             <div className="ic">
                 <Icon name="users" size="lg" />
             </div>
-            <h3 className="h4" style={{ marginBottom: 8 }}>Найди первого напарника!</h3>
+            <h3 className="h4" style={{ marginBottom: 8 }}>Find your first partner!</h3>
             <p className="small" style={{ marginBottom: 18 }}>
-                Тренируйтесь вместе и соревнуйтесь в рейтинге друзей
+                Practice together and compete on the friends leaderboard
             </p>
             {onSearchFocus && (
                 <button onClick={onSearchFocus} className="btn btn-primary">
                     <Icon name="search" size={16} />
-                    Найти друзей
+                    Find friends
                 </button>
             )}
         </div>
