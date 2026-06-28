@@ -13,6 +13,8 @@ export interface SkillTreeNode {
     totalLessonCount: number;
     isLocked: boolean;
     stage: string;
+    /** ISO-8601 UTC timestamp of last practice activity. null (or absent) means never practiced. */
+    lastActivityAt: string | null;
 }
 
 export interface SkillTreeData {

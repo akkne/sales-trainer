@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useProfile } from "@/features/profile/hooks/use-profile";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
 import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
+import { ManageSkillsModal } from "@/features/skills/components/manage-skills-modal";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
@@ -32,6 +34,7 @@ export default function ProfilePage() {
     const { authenticatedUser } = useAuthStore();
     const { version, uploading, uploadError, fileInputRef, openFilePicker, handleFileChange } =
         useAvatarUpload();
+    const [manageOpen, setManageOpen] = useState(false);
 
     if (profileLoading) {
         return (
@@ -67,6 +70,21 @@ export default function ProfilePage() {
         updateEnrolledMutation.mutate(Array.from(next));
     }
 
+    // Skills shown in the card: enrolled (non-locked), sorted by lastActivityAt DESC
+    // (nulls last), then fill remaining slots by sortOrder. Max 6.
+    const enrolledSkills = (allSkills ?? []).filter((s) => s.status !== "locked");
+    const withActivity = enrolledSkills
+        .filter((s) => s.lastActivityAt != null)
+        .sort((a, b) => {
+            // both non-null here
+            return new Date(b.lastActivityAt!).getTime() - new Date(a.lastActivityAt!).getTime();
+        });
+    const withActivitySlugs = new Set(withActivity.map((s) => s.slug));
+    const withoutActivity = enrolledSkills
+        .filter((s) => !withActivitySlugs.has(s.slug))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    const displaySkills = [...withActivity, ...withoutActivity].slice(0, 6);
+
     const personaLabel = profileStats.persona
         ? PERSONA_LABELS[profileStats.persona] ?? profileStats.persona
         : null;
@@ -88,6 +106,7 @@ export default function ProfilePage() {
         (voiceUsage.dailyLimitSeconds > 0 || voiceUsage.monthlyLimitSeconds > 0);
 
     return (
+        <>
         <div className="pv2-scroll">
             {/* Cover band */}
             <div className="pv2-cover" />
@@ -219,16 +238,20 @@ export default function ProfilePage() {
 
                 {/* Two-column body */}
                 <div className="pv2-body">
-                    {/* Left: Enrolled skills with toggle */}
+                    {/* Left: Enrolled skills — recent activity, no toggles */}
                     <div className="pv2-card">
                         <div className="pv2-card-head">
                             <span className="pv2-card-title">Enrolled skills</span>
-                            <Link href="/tree" className="pv2-manage-link">
+                            <button
+                                type="button"
+                                className="pv2-manage-link"
+                                onClick={() => setManageOpen(true)}
+                            >
                                 Manage
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m9 18 6-6-6-6"/>
                                 </svg>
-                            </Link>
+                            </button>
                         </div>
 
                         {skillsLoading ? (
@@ -241,12 +264,21 @@ export default function ProfilePage() {
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
                                 No skills added yet. Contact your administrator.
                             </p>
+                        ) : displaySkills.length === 0 ? (
+                            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
+                                No enrolled skills yet.{" "}
+                                <button
+                                    type="button"
+                                    className="pv2-manage-link"
+                                    style={{ fontSize: 13 }}
+                                    onClick={() => setManageOpen(true)}
+                                >
+                                    Manage →
+                                </button>
+                            </p>
                         ) : (
                             <div>
-                                {allSkills.map((skill) => {
-                                    const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
-                                    const isEnrolled = enrolledSlugs.has(skill.slug);
-                                    const isSaving = updateEnrolledMutation.isPending;
+                                {displaySkills.map((skill) => {
                                     const pct =
                                         skill.totalLessonCount > 0
                                             ? Math.round(
@@ -258,68 +290,28 @@ export default function ProfilePage() {
                                     const isDone = pct === 100;
 
                                     return (
-                                        <div key={skill.skillId} className="pv2-skill-row">
+                                        <Link
+                                            key={skill.skillId}
+                                            href={`/skill/${skill.slug}`}
+                                            className="pv2-skill-row pv2-skill-row-link"
+                                        >
                                             <div className="pv2-skill-row-head">
-                                                {/* Toggle button wraps name */}
-                                                <button
-                                                    type="button"
-                                                    className="pv2-skill-toggle"
-                                                    onClick={() => toggleEnrollment(skill.slug)}
-                                                    disabled={isAlwaysOn || isSaving}
-                                                    aria-label={
-                                                        isAlwaysOn
-                                                            ? `${skill.title} — core skill, always on`
-                                                            : isEnrolled
-                                                            ? `Unenroll from ${skill.title}`
-                                                            : `Enroll in ${skill.title}`
-                                                    }
-                                                >
-                                                    <span className="pv2-skill-name">{skill.title}</span>
-                                                    <div
-                                                        className={`pv2-switch ${
-                                                            isAlwaysOn
-                                                                ? "always"
-                                                                : isEnrolled
-                                                                ? "on"
-                                                                : "off"
-                                                        }`}
-                                                    />
-                                                </button>
+                                                <span className="pv2-skill-name">{skill.title}</span>
+                                                <span className="pv2-skill-pct">{pct}%</span>
                                             </div>
-                                            {/* Progress bar — only shown when enrolled */}
-                                            {(isEnrolled || isAlwaysOn) && (
-                                                <>
-                                                    <div className="pv2-skill-bar">
-                                                        <div
-                                                            className={`pv2-skill-fill${isDone ? " done" : ""}`}
-                                                            style={{ width: `${pct}%` }}
-                                                        />
-                                                    </div>
-                                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                                        <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                                                            {isAlwaysOn
-                                                                ? "Core — always on"
-                                                                : `${skill.completedLessonCount}/${skill.totalLessonCount} lessons`}
-                                                        </span>
-                                                        <span className="pv2-skill-pct">{pct}%</span>
-                                                    </div>
-                                                </>
-                                            )}
-                                            {!isEnrolled && !isAlwaysOn && (
-                                                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                                                    Tap to add
-                                                </span>
-                                            )}
-                                        </div>
+                                            <div className="pv2-skill-bar">
+                                                <div
+                                                    className={`pv2-skill-fill${isDone ? " done" : ""}`}
+                                                    style={{ width: `${pct}%` }}
+                                                />
+                                            </div>
+                                            <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
+                                                {skill.completedLessonCount}/{skill.totalLessonCount} lessons
+                                            </span>
+                                        </Link>
                                     );
                                 })}
                             </div>
-                        )}
-
-                        {updateEnrolledMutation.isError && (
-                            <p style={{ fontSize: 12, color: "var(--heart)", marginTop: 10, textAlign: "center" }}>
-                                Couldn't save. Please try again.
-                            </p>
                         )}
                     </div>
 
@@ -359,6 +351,17 @@ export default function ProfilePage() {
                 </div>
             </div>
         </div>
+
+        {manageOpen && allSkills && (
+            <ManageSkillsModal
+                skills={allSkills}
+                onToggle={toggleEnrollment}
+                isSaving={updateEnrolledMutation.isPending}
+                isError={updateEnrolledMutation.isError}
+                onClose={() => setManageOpen(false)}
+            />
+        )}
+        </>
     );
 }
 

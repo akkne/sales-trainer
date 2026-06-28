@@ -2651,6 +2651,36 @@ html[data-theme="dark"] .pv2-skill-bar { background: var(--surface-3); }
   gap: 3px;
 }
 .pv2-manage-link:hover { color: var(--primary); }
+/* Allow manage link to also be used as a <button> */
+button.pv2-manage-link { background: none; border: none; cursor: pointer; padding: 0; }
+
+/* Clickable skill row (profile card) */
+.pv2-skill-row-link { text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 6px; }
+.pv2-skill-row-link:hover .pv2-skill-name { color: var(--primary); }
+.pv2-skill-row-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+/* Manage skills modal — skill rows */
+.msm-skill-row { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+.msm-skill-row:last-child { border-bottom: none; }
+.msm-skill-row-top { display: flex; align-items: center; gap: 8px; }
+/* Toggle button inside modal — no full-width, just wraps the switch */
+.msm-toggle-btn { width: auto; flex: none; }
+
+/* Subline under modal title */
+.msm-subline { font-size: 12px; color: var(--ink-4); margin: 4px 0 0; }
+
+/* Status badges */
+.msm-badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 7px; white-space: nowrap; flex: none; }
+.msm-badge.completed  { background: #E6F9EE; color: #1A8A4A; }
+.msm-badge.inprogress { background: #EEF0FE; color: #4658D6; }
+.msm-badge.core       { background: #FFF3E0; color: #C27A00; }
+.msm-badge.locked     { background: #F2F2F4; color: var(--ink-4); }
+.msm-badge.available  { background: #EFEFF2; color: var(--ink-3); }
+html[data-theme="dark"] .msm-badge.completed  { background: rgba(52,195,107,.15); color: #5EDA8E; }
+html[data-theme="dark"] .msm-badge.inprogress { background: rgba(70,88,214,.2);  color: #8A96F5; }
+html[data-theme="dark"] .msm-badge.core       { background: rgba(194,122,0,.15); color: #F0A830; }
+html[data-theme="dark"] .msm-badge.locked     { background: var(--surface-3); color: var(--ink-4); }
+html[data-theme="dark"] .msm-badge.available  { background: var(--surface-3); color: var(--ink-3); }
 
 /* Voice quota bars */
 .pv2-quota-row { display: flex; flex-direction: column; gap: 14px; }

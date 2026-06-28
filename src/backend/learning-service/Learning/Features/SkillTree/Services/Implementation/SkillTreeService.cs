@@ -35,7 +35,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             0,
             0,
             false,
-            skill.Stage))
+            skill.Stage,
+            null))
             .ToList();
     }
 
@@ -73,10 +74,30 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             .Select(group => new { SkillId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(entry => entry.SkillId, entry => entry.Count, cancellationToken);
 
+        // Single query: most-recent lesson completion timestamp per skill for this user.
+        // Uses UserLessonProgress.CompletedAt (same join chain as completedLessonCountBySkill above)
+        // rather than UserExerciseAttempt because it requires one fewer join and mirrors the
+        // existing query pattern exactly. Null CompletedAt rows are excluded so skills with no
+        // completions naturally get null in the result dictionary.
+        var lastActivityBySkill = await databaseContext.UserLessonProgressRecords
+            .Where(progress => progress.UserId == userId && progress.CompletedAt != null)
+            .Join(databaseContext.Lessons,
+                progress => progress.LessonId,
+                lesson => lesson.Id,
+                (progress, lesson) => new { lesson.TopicId, progress.CompletedAt })
+            .Join(databaseContext.Topics,
+                entry => entry.TopicId,
+                topic => topic.Id,
+                (entry, topic) => new { topic.SkillId, entry.CompletedAt })
+            .GroupBy(entry => entry.SkillId)
+            .Select(group => new { SkillId = group.Key, LastActivityAt = group.Max(e => e.CompletedAt) })
+            .ToDictionaryAsync(entry => entry.SkillId, entry => entry.LastActivityAt, cancellationToken);
+
         return allSkills.Select(skill =>
         {
             var totalLessons = lessonCountBySkill.GetValueOrDefault(skill.Id, 0);
             var completedLessons = completedLessonCountBySkill.GetValueOrDefault(skill.Id, 0);
+            lastActivityBySkill.TryGetValue(skill.Id, out var lastActivityAt);
 
             var status = completedLessons == 0 ? LessonProgressStatuses.Available :
                          completedLessons >= totalLessons && totalLessons > 0 ? LessonProgressStatuses.Completed :
@@ -92,7 +113,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
                 completedLessons,
                 totalLessons,
                 false,
-                skill.Stage);
+                skill.Stage,
+                lastActivityAt);
         }).ToList();
     }
 

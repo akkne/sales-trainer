@@ -10,5 +10,6 @@ public record SkillTreeNodeDto(
     int CompletedLessonCount,
     int TotalLessonCount,
     bool IsLocked,
-    string Stage
+    string Stage,
+    DateTime? LastActivityAt
 );
