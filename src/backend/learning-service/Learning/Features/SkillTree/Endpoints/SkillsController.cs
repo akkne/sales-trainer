@@ -33,6 +33,22 @@ public sealed class SkillsController(ISkillTreeService skillTreeService, IExerci
         return Ok(stages);
     }
 
+    [HttpPut("enrolled")]
+    public async Task<IActionResult> UpdateEnrolledSkills(
+        [FromBody] UpdateEnrolledSkillsRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryResolveUserId(out var userId))
+            return Unauthorized();
+
+        await skillTreeService.UpdateEnrolledSkillsAsync(
+            userId,
+            request.SkillSlugs ?? [],
+            cancellationToken);
+
+        return NoContent();
+    }
+
     [HttpGet("{skillSlug}/lessons")]
     public async Task<ActionResult<IReadOnlyList<LessonSummaryDto>>> GetLessonsForSkill(string skillSlug, CancellationToken cancellationToken)
     {

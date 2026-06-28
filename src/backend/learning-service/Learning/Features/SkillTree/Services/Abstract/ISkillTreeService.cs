@@ -21,4 +21,13 @@ public interface ISkillTreeService
 
     Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the user's enrolled skill set with the skills identified by
+    /// <paramref name="skillSlugs"/>. The always-on core skill is always kept enrolled.
+    /// </summary>
+    Task UpdateEnrolledSkillsAsync(
+        Guid userId,
+        IReadOnlyList<string> skillSlugs,
+        CancellationToken cancellationToken = default);
 }

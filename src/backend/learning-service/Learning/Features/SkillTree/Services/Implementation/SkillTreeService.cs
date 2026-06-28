@@ -8,6 +8,12 @@ namespace Sellevate.Learning.Features.SkillTree.Services.Implementation;
 
 internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISkillTreeService
 {
+    /// <summary>
+    /// Slug (<see cref="Skill.IconicName"/>) of the core skill every user is always
+    /// enrolled in; it can never be unenrolled.
+    /// </summary>
+    private const string AlwaysEnrolledSlug = "sales-basics";
+
     public async Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
         CancellationToken cancellationToken = default)
     {
@@ -48,6 +54,17 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             .OrderBy(skill => skill.OrderInTree)
             .ThenBy(skill => skill.Id)
             .ToListAsync(cancellationToken);
+
+        // Enrollment: a UserSkillProgress row means the user is enrolled in that skill.
+        // Back-compat: a user who has never enrolled in anything (no rows) is treated as
+        // enrolled in everything, so existing accounts keep seeing the full tree until they
+        // explicitly manage their skills.
+        var enrolledSkillIds = await databaseContext.UserSkillProgressRecords
+            .Where(record => record.UserId == userId)
+            .Select(record => record.SkillId)
+            .ToListAsync(cancellationToken);
+        var enrolledSkillIdSet = enrolledSkillIds.ToHashSet();
+        var hasAnyEnrollment = enrolledSkillIdSet.Count > 0;
 
         // Single query: lesson count per skill via topic join.
         var lessonCountBySkill = await databaseContext.Topics
@@ -99,7 +116,13 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
             var completedLessons = completedLessonCountBySkill.GetValueOrDefault(skill.Id, 0);
             lastActivityBySkill.TryGetValue(skill.Id, out var lastActivityAt);
 
-            var status = completedLessons == 0 ? LessonProgressStatuses.Available :
+            var isEnrolled = !hasAnyEnrollment
+                             || skill.IconicName == AlwaysEnrolledSlug
+                             || enrolledSkillIdSet.Contains(skill.Id);
+
+            // Unenrolled skills surface as "locked" so the UI shows them as opt-in.
+            var status = !isEnrolled ? LessonProgressStatuses.Locked :
+                         completedLessons == 0 ? LessonProgressStatuses.Available :
                          completedLessons >= totalLessons && totalLessons > 0 ? LessonProgressStatuses.Completed :
                          LessonProgressStatuses.InProgress;
 
@@ -112,10 +135,57 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
                 status,
                 completedLessons,
                 totalLessons,
-                false,
+                !isEnrolled,
                 skill.Stage,
                 lastActivityAt);
         }).ToList();
+    }
+
+    public async Task UpdateEnrolledSkillsAsync(
+        Guid userId,
+        IReadOnlyList<string> skillSlugs,
+        CancellationToken cancellationToken = default)
+    {
+        // Always keep the core skill enrolled, regardless of what the caller sent.
+        var desiredSlugs = skillSlugs
+            .Append(AlwaysEnrolledSlug)
+            .Distinct()
+            .ToList();
+
+        // Resolve slugs to real skill ids; silently ignore unknown slugs.
+        var desiredSkillIds = await databaseContext.Skills
+            .Where(skill => desiredSlugs.Contains(skill.IconicName))
+            .Select(skill => skill.Id)
+            .ToListAsync(cancellationToken);
+        var desiredSkillIdSet = desiredSkillIds.ToHashSet();
+
+        var existingRecords = await databaseContext.UserSkillProgressRecords
+            .Where(record => record.UserId == userId)
+            .ToListAsync(cancellationToken);
+        var existingSkillIdSet = existingRecords.Select(record => record.SkillId).ToHashSet();
+
+        // Remove enrollments the user no longer wants.
+        var toRemove = existingRecords
+            .Where(record => !desiredSkillIdSet.Contains(record.SkillId))
+            .ToList();
+        if (toRemove.Count > 0)
+            databaseContext.UserSkillProgressRecords.RemoveRange(toRemove);
+
+        // Add enrollments that don't exist yet.
+        var toAdd = desiredSkillIdSet
+            .Where(skillId => !existingSkillIdSet.Contains(skillId))
+            .Select(skillId => new UserSkillProgress
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                SkillId = skillId,
+                Status = LessonProgressStatuses.Available,
+                CompletedLessonCount = 0,
+                TotalLessonCount = 0,
+            });
+        await databaseContext.UserSkillProgressRecords.AddRangeAsync(toAdd, cancellationToken);
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<TopicDto>> GetTopicsForSkillAsync(

@@ -18,7 +18,7 @@ function statusLabel(skill: SkillTreeNode): { text: string; cls: string } {
     if (skill.slug === ALWAYS_ENROLLED_SLUG) return { text: "Core", cls: "msm-badge core" };
     if (skill.status === "completed") return { text: "Completed", cls: "msm-badge completed" };
     if (skill.status === "in_progress") return { text: "In progress", cls: "msm-badge inprogress" };
-    if (skill.status === "locked") return { text: "Locked", cls: "msm-badge locked" };
+    if (skill.status === "locked") return { text: "Not enrolled", cls: "msm-badge locked" };
     return { text: "Available", cls: "msm-badge available" };
 }
 
@@ -78,8 +78,10 @@ export function ManageSkillsModal({
                     {sorted.map((skill) => {
                         const isAlwaysOn = skill.slug === ALWAYS_ENROLLED_SLUG;
                         const isEnrolled = skill.status !== "locked";
-                        const isLocked = skill.status === "locked";
-                        const toggleDisabled = isAlwaysOn || isLocked || isSaving;
+                        // Unenrolled skills carry status "locked"; they must stay toggleable
+                        // so the user can (re-)enroll. Only the core skill and an in-flight
+                        // save block the toggle.
+                        const toggleDisabled = isAlwaysOn || isSaving;
                         const pct =
                             skill.totalLessonCount > 0
                                 ? Math.round(

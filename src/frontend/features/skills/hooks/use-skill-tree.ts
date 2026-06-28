@@ -60,13 +60,40 @@ export function useSkills() {
  * Pass the full list of slugs the user wants to keep enrolled.
  * sales-basics is always kept by the backend regardless.
  */
+const ALWAYS_ENROLLED_SLUG = "sales-basics";
+
 export function useUpdateEnrolledSkills() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (skillSlugs: string[]) =>
             apiClient.put<void>("/skills/enrolled", { skillSlugs }),
-        onSuccess: () => {
-            // Re-fetch skills so statuses update immediately
+        // Optimistically flip statuses so the toggle responds instantly instead of
+        // waiting for the round-trip. Rolled back in onError.
+        onMutate: async (skillSlugs: string[]) => {
+            await queryClient.cancelQueries({ queryKey: ["skills"] });
+            const previous = queryClient.getQueryData<SkillTreeNode[]>(["skills"]);
+            const enrolled = new Set([...skillSlugs, ALWAYS_ENROLLED_SLUG]);
+            queryClient.setQueryData<SkillTreeNode[]>(["skills"], (current) =>
+                current?.map((skill) => {
+                    const wantEnrolled = enrolled.has(skill.slug);
+                    if (wantEnrolled && skill.status === "locked") {
+                        return { ...skill, status: "available", isLocked: false };
+                    }
+                    if (!wantEnrolled && skill.status !== "locked") {
+                        return { ...skill, status: "locked", isLocked: true };
+                    }
+                    return skill;
+                })
+            );
+            return { previous };
+        },
+        onError: (_error, _vars, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(["skills"], context.previous);
+            }
+        },
+        onSettled: () => {
+            // Re-fetch so server-truth statuses replace the optimistic guess.
             queryClient.invalidateQueries({ queryKey: ["skills"] });
             queryClient.invalidateQueries({ queryKey: ["skill-tree"] });
         },

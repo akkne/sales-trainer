@@ -44,6 +44,75 @@ public sealed class SkillTreeServiceTests
     }
 
     [Test]
+    public async Task UpdateEnrolledSkills_MarksUnenrolledSkillsLocked_AndKeepsCoreEnrolled()
+    {
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
+
+        var coreId = Guid.NewGuid();
+        var wantedId = Guid.NewGuid();
+        var droppedId = Guid.NewGuid();
+        databaseContext.Skills.Add(new Skill { Id = coreId, IconicName = "sales-basics", Title = "Core", OrderInTree = 1 });
+        databaseContext.Skills.Add(new Skill { Id = wantedId, IconicName = "objections", Title = "Objections", OrderInTree = 2 });
+        databaseContext.Skills.Add(new Skill { Id = droppedId, IconicName = "closing", Title = "Closing", OrderInTree = 3 });
+        await databaseContext.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        var service = new SkillTreeService(databaseContext);
+
+        // Enroll only "objections"; core is kept automatically, "closing" stays out.
+        await service.UpdateEnrolledSkillsAsync(userId, new[] { "objections" });
+
+        var skills = await service.GetAllSkillsWithProgressAsync(userId);
+        var bySlug = skills.ToDictionary(skill => skill.Slug);
+
+        bySlug["sales-basics"].Status.Should().NotBe(LessonProgressStatuses.Locked);
+        bySlug["sales-basics"].IsLocked.Should().BeFalse();
+        bySlug["objections"].Status.Should().NotBe(LessonProgressStatuses.Locked);
+        bySlug["objections"].IsLocked.Should().BeFalse();
+        bySlug["closing"].Status.Should().Be(LessonProgressStatuses.Locked);
+        bySlug["closing"].IsLocked.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task UpdateEnrolledSkills_ReplacesPreviousSet()
+    {
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
+
+        var aId = Guid.NewGuid();
+        var bId = Guid.NewGuid();
+        databaseContext.Skills.Add(new Skill { Id = aId, IconicName = "a", Title = "A", OrderInTree = 1 });
+        databaseContext.Skills.Add(new Skill { Id = bId, IconicName = "b", Title = "B", OrderInTree = 2 });
+        await databaseContext.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        var service = new SkillTreeService(databaseContext);
+
+        await service.UpdateEnrolledSkillsAsync(userId, new[] { "a" });
+        await service.UpdateEnrolledSkillsAsync(userId, new[] { "b" });
+
+        var skills = await service.GetAllSkillsWithProgressAsync(userId);
+        var bySlug = skills.ToDictionary(skill => skill.Slug);
+
+        bySlug["a"].Status.Should().Be(LessonProgressStatuses.Locked);
+        bySlug["b"].Status.Should().NotBe(LessonProgressStatuses.Locked);
+    }
+
+    [Test]
+    public async Task GetAllSkillsWithProgress_NoEnrollmentRows_TreatsAllAsEnrolled()
+    {
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
+        databaseContext.Skills.Add(new Skill { Id = Guid.NewGuid(), IconicName = "x", Title = "X", OrderInTree = 1 });
+        databaseContext.Skills.Add(new Skill { Id = Guid.NewGuid(), IconicName = "y", Title = "Y", OrderInTree = 2 });
+        await databaseContext.SaveChangesAsync();
+
+        var service = new SkillTreeService(databaseContext);
+
+        var skills = await service.GetAllSkillsWithProgressAsync(Guid.NewGuid());
+
+        skills.Should().OnlyContain(skill => skill.Status != LessonProgressStatuses.Locked);
+    }
+
+    [Test]
     public async Task GetSkillTreeForUser_ReturnsGamificationAggregatesAsZero()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();

@@ -15,8 +15,19 @@ export function useCompleteOnboarding() {
     const { authenticatedUser, setAuthenticatedUser } = useAuthStore();
 
     return useMutation({
-        mutationFn: (payload: OnboardingPayload) =>
-            apiClient.post<void>("/onboarding", payload),
+        mutationFn: async (payload: OnboardingPayload) => {
+            await apiClient.post<void>("/onboarding", payload);
+            // Persist the chosen skills as the user's enrolled set (core skill is
+            // always kept by the backend). Best-effort: a failure here shouldn't
+            // block onboarding from completing.
+            try {
+                await apiClient.put<void>("/skills/enrolled", {
+                    skillSlugs: payload.selectedSkillSlugs,
+                });
+            } catch {
+                // ignore — user can adjust enrollment later from their profile
+            }
+        },
         onSuccess: () => {
             if (authenticatedUser) {
                 setAuthenticatedUser({
