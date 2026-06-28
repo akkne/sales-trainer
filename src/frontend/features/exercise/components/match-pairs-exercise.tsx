@@ -188,7 +188,7 @@ export function MatchPairsExercise({
                             const isAvailable = selectedLeft && !isConnected;
 
                             let bgColor = isConnected ? PAIR_BG_COLORS[pairIdx! % PAIR_BG_COLORS.length] : "var(--bg-2)";
-                            const textColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--ink)";
+                            let textColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--ink)";
                             let borderColor = isConnected ? PAIR_COLORS[pairIdx! % PAIR_COLORS.length] : "var(--line)";
 
                             if (isAnswered) {

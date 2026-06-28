@@ -99,7 +99,7 @@ export function NavRail() {
                 aria-label="Настройки"
                 aria-current={pathname.startsWith("/settings") ? "page" : undefined}
             >
-                <Icon name="settings" size={20} />
+                <Icon name="settings" size={19} />
             </Link>
         </aside>
     );

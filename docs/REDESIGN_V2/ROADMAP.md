@@ -76,7 +76,7 @@ verification is collected into a checklist for the user.
     + `__tests__/AchievementToast.test.tsx`; clean dead imports/hooks.
 
 - [ ] **P4 — Screen restyles** (each sub-phase = its own CSS + commit + verifier)
-  - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data).
+  - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data). Lesson task-type chips collapsed to a single Теория/Практика chip — `LessonSummary.kind` carries only theory/practice, not per-exercise types, so the granular chipMap is not surfaced on lesson cards (data-contract omission).
   - [x] 4.2 Practice ✅ mentor banner + bundle grid (Chat/Call) + recent sessions + mode select; tsc clean, vitest 78/78. Mode-count number + dialog stats omitted (no data); difficulty inferred from sortOrder.
   - [x] 4.3 Reference ✅ card grid + 392px slide-in detail panel (example bubbles, metric tiles, coach); MasteryRing kept (sm on card, full in panel); tsc clean, vitest 78/78. Hardcoded quick-tags + old stat-tiles omitted (data contract).
   - [x] 4.4 Friends ✅ main list (requests + friend grid) + 330px Activity/Chat rail; public profile restyled. Leaderboard tab UNMOUNTED (component kept) per design+gamification removal; online-dot omitted (no backend presence); chat polling + deep-links preserved. tsc clean, vitest 78/78.
