@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { BUNDLE_TEMPLATE } from "@/features/admin/lib/import-templates";
-import { useImportBundle } from "@/features/admin/hooks/use-admin";
+import { useImportBundle, fetchBundleExport } from "@/features/admin/hooks/use-admin";
+import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
 import {
     EXERCISE_TYPES,
     validateExerciseContent,
@@ -81,20 +83,39 @@ function validateBundle(parsed: unknown): string[] {
 
 export default function AdminBundleImportPage() {
     const importBundle = useImportBundle();
+    const [isExporting, setIsExporting] = useState(false);
+
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            downloadJson(await fetchBundleExport(), `content_bundle_${todayStamp()}.json`);
+        } finally {
+            setIsExporting(false);
+        }
+    }
 
     return (
         <div className="max-w-3xl">
-            <div className="mb-6">
-                <h1 className="text-xl font-semibold text-ink">Bundle Import</h1>
-                <p className="text-sm text-ink-3 mt-1">
-                    Import an entire content tree from a single JSON file:{" "}
-                    <strong>skill → topics → lessons → exercises</strong>. Everything is
-                    upserted idempotently (skills/topics by <code className="font-mono text-xs">iconicName</code>,
-                    lessons by title within their topic, exercises by{" "}
-                    <code className="font-mono text-xs">orderInLesson</code> within their lesson),
-                    so re-importing the same file is safe. Exercise content is validated per type
-                    before anything is written.
-                </p>
+            <div className="mb-6 flex items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-xl font-semibold text-ink">Bundle Import</h1>
+                    <p className="text-sm text-ink-3 mt-1">
+                        Import an entire content tree from a single JSON file:{" "}
+                        <strong>skill → topics → lessons → exercises</strong>. Everything is
+                        upserted idempotently (skills/topics by <code className="font-mono text-xs">iconicName</code>,
+                        lessons by title within their topic, exercises by{" "}
+                        <code className="font-mono text-xs">orderInLesson</code> within their lesson),
+                        so re-importing the same file is safe. Exercise content is validated per type
+                        before anything is written.
+                    </p>
+                </div>
+                <button
+                    onClick={handleExport}
+                    disabled={isExporting}
+                    className="shrink-0 px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                >
+                    {isExporting ? "Exporting..." : "Export tree"}
+                </button>
             </div>
 
             <ImportPanel

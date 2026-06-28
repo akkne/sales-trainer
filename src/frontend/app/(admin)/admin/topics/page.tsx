@@ -9,10 +9,12 @@ import {
     useUpdateTopic,
     useDeleteTopic,
     useImportTopics,
+    fetchTopicsExport,
     type AdminTopicWithSkill,
 } from "@/features/admin/hooks/use-admin";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { TOPICS_TEMPLATE } from "@/features/admin/lib/import-templates";
+import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
 
 export default function AdminTopicsPage() {
     const { data: skills = [] } = useAdminSkills();
@@ -24,6 +26,16 @@ export default function AdminTopicsPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            downloadJson(await fetchTopicsExport(), `topics_${todayStamp()}.json`);
+        } finally {
+            setIsExporting(false);
+        }
+    }
 
     const [formSkillIconicName, setFormSkillIconicName] = useState<string>("");
     const [formIconicName, setFormIconicName] = useState("");
@@ -120,12 +132,21 @@ export default function AdminTopicsPage() {
         <div>
             <div className="flex flex-wrap gap-3 items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Topics</h1>
-                <button
-                    onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
-                    className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
-                >
-                    {showForm ? "Cancel" : "+ New topic"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={handleExport}
+                        disabled={isExporting || topics.length === 0}
+                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        {isExporting ? "Exporting..." : "Export JSON"}
+                    </button>
+                    <button
+                        onClick={() => { setShowForm(v => !v); if (!showForm) resetForm(); }}
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                    >
+                        {showForm ? "Cancel" : "+ New topic"}
+                    </button>
+                </div>
             </div>
 
             <ImportPanel

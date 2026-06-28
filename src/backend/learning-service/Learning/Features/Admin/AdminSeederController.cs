@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -421,6 +422,116 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             lessonsState.ExercisesCreated, lessonsState.ExercisesUpdated,
             errors));
     }
+
+    [HttpGet("admin/seeder/skills/export")]
+    public async Task<ActionResult<IReadOnlyList<SkillExportDto>>> ExportSkills(CancellationToken cancellationToken = default)
+    {
+        var skills = await database.Skills.AsNoTracking()
+            .OrderBy(skill => skill.OrderInTree).ThenBy(skill => skill.IconicName)
+            .ToListAsync(cancellationToken);
+
+        var payload = skills
+            .Select(skill => new SkillExportDto(skill.IconicName, skill.Title, skill.Description, skill.OrderInTree, skill.Stage))
+            .ToList();
+
+        LogExport("skills", payload.Count);
+        return Ok(payload);
+    }
+
+    [HttpGet("admin/seeder/topics/export")]
+    public async Task<ActionResult<IReadOnlyList<TopicExportDto>>> ExportTopics(CancellationToken cancellationToken = default)
+    {
+        var skillIconicById = await database.Skills.AsNoTracking()
+            .ToDictionaryAsync(skill => skill.Id, skill => skill.IconicName, cancellationToken);
+        var topics = await database.Topics.AsNoTracking().ToListAsync(cancellationToken);
+
+        var payload = topics
+            .OrderBy(topic => skillIconicById.GetValueOrDefault(topic.SkillId, "")).ThenBy(topic => topic.OrderInSkill)
+            .Select(topic => new TopicExportDto(
+                skillIconicById.GetValueOrDefault(topic.SkillId, ""), topic.IconicName, topic.Title, topic.OrderInSkill))
+            .ToList();
+
+        LogExport("topics", payload.Count);
+        return Ok(payload);
+    }
+
+    [HttpGet("admin/seeder/lessons/export")]
+    public async Task<ActionResult<IReadOnlyList<LessonExportDto>>> ExportLessons(CancellationToken cancellationToken = default)
+    {
+        var topicIconicById = await database.Topics.AsNoTracking()
+            .ToDictionaryAsync(topic => topic.Id, topic => topic.IconicName, cancellationToken);
+        var lessons = await database.Lessons.AsNoTracking().ToListAsync(cancellationToken);
+        var exercisesByLesson = await LoadExercisesByLessonAsync(cancellationToken);
+
+        var payload = lessons
+            .OrderBy(lesson => topicIconicById.GetValueOrDefault(lesson.TopicId, "")).ThenBy(lesson => lesson.OrderInTopic)
+            .Select(lesson => new LessonExportDto(
+                topicIconicById.GetValueOrDefault(lesson.TopicId, ""),
+                lesson.Title, lesson.OrderInTopic,
+                BuildExercises(exercisesByLesson, lesson.Id)))
+            .ToList();
+
+        LogExport("lessons", payload.Count);
+        return Ok(payload);
+    }
+
+    [HttpGet("admin/seeder/bundle/export")]
+    public async Task<ActionResult<BundleExportDto>> ExportBundle(CancellationToken cancellationToken = default)
+    {
+        var skills = await database.Skills.AsNoTracking()
+            .OrderBy(skill => skill.OrderInTree).ThenBy(skill => skill.IconicName)
+            .ToListAsync(cancellationToken);
+        var topics = await database.Topics.AsNoTracking().ToListAsync(cancellationToken);
+        var lessons = await database.Lessons.AsNoTracking().ToListAsync(cancellationToken);
+        var exercisesByLesson = await LoadExercisesByLessonAsync(cancellationToken);
+
+        var topicsBySkill = topics.GroupBy(topic => topic.SkillId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(topic => topic.OrderInSkill).ToList());
+        var lessonsByTopic = lessons.GroupBy(lesson => lesson.TopicId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(lesson => lesson.OrderInTopic).ToList());
+
+        var skillDtos = skills.Select(skill => new BundleSkillDto(
+            skill.IconicName, skill.Title, skill.Description, skill.OrderInTree, skill.Stage,
+            (topicsBySkill.TryGetValue(skill.Id, out var skillTopics) ? skillTopics : [])
+                .Select(topic => new BundleTopicDto(
+                    topic.IconicName, topic.Title, topic.OrderInSkill,
+                    (lessonsByTopic.TryGetValue(topic.Id, out var topicLessons) ? topicLessons : [])
+                        .Select(lesson => new BundleLessonDto(
+                            lesson.Title, lesson.OrderInTopic, BuildExercises(exercisesByLesson, lesson.Id)))
+                        .ToList()))
+                .ToList()))
+            .ToList();
+
+        LogExport("bundle", skillDtos.Count);
+        return Ok(new BundleExportDto(skillDtos));
+    }
+
+    private async Task<Dictionary<Guid, List<Exercise>>> LoadExercisesByLessonAsync(CancellationToken cancellationToken)
+    {
+        var exercises = await database.Exercises.AsNoTracking().ToListAsync(cancellationToken);
+        return exercises
+            .GroupBy(exercise => exercise.LessonId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(exercise => exercise.OrderInLesson).ToList());
+    }
+
+    private static IReadOnlyList<ExerciseSeedDto> BuildExercises(
+        Dictionary<Guid, List<Exercise>> exercisesByLesson, Guid lessonId) =>
+        (exercisesByLesson.TryGetValue(lessonId, out var list) ? list : [])
+            .Select(exercise => new ExerciseSeedDto(
+                exercise.Type, exercise.OrderInLesson, ParseContent(exercise.SerializedContent), exercise.CustomAiPrompt))
+            .ToList();
+
+    private static JsonNode? ParseContent(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        try { return JsonNode.Parse(raw); }
+        catch (JsonException) { return null; }
+    }
+
+    private void LogExport(string kind, int count) =>
+        logger.LogInformation(
+            "Seeder export ({Kind}): {Count} root items by ActorId={ActorId}",
+            kind, count, User.FindFirstValue(ClaimTypes.NameIdentifier));
 
     private Lesson UpsertLesson(Guid topicId, string title, int orderInTopic,
         List<Lesson> existingLessons, LessonsImportState state)

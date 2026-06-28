@@ -9,10 +9,12 @@ import {
     useUpdateLesson,
     useDeleteLesson,
     useImportLessons,
+    fetchLessonsExport,
     type AdminLessonWithTopic,
 } from "@/features/admin/hooks/use-admin";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { LESSONS_TEMPLATE } from "@/features/admin/lib/import-templates";
+import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
 
 type SortKey = "topicTitle" | "title" | "orderInTopic";
 type SortDir = "asc" | "desc";
@@ -38,6 +40,16 @@ export default function LessonsPage() {
     const [editError, setEditError] = useState("");
 
     const [deleteConfirm, setDeleteConfirm] = useState<AdminLessonWithTopic | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            downloadJson(await fetchLessonsExport(), `lessons_${todayStamp()}.json`);
+        } finally {
+            setIsExporting(false);
+        }
+    }
 
     const updateLesson = useUpdateLesson(editState?.lessonId ?? "");
     const deleteLesson = useDeleteLesson(deleteConfirm?.topicId ?? "");
@@ -134,6 +146,13 @@ export default function LessonsPage() {
                     <h1 className="text-xl font-semibold text-ink">Lessons</h1>
                     <p className="text-sm text-ink-3 mt-0.5">{lessons.length} total</p>
                 </div>
+                <button
+                    onClick={handleExport}
+                    disabled={isExporting || lessons.length === 0}
+                    className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                >
+                    {isExporting ? "Exporting..." : "Export JSON"}
+                </button>
             </div>
 
             <ImportPanel

@@ -562,6 +562,69 @@ export function useImportBundle() {
     });
 }
 
+// --- Seeder content export (re-importable via the matching /admin/seeder/* import) ---
+
+export interface ExerciseSeed {
+    type: string;
+    orderInLesson: number;
+    content: unknown;
+    customAiPrompt: string | null;
+}
+
+export interface SkillSeed {
+    iconicName: string;
+    title: string;
+    description: string | null;
+    orderInTree: number;
+    stage: string;
+}
+
+export interface TopicSeed {
+    skillIconicName: string;
+    iconicName: string;
+    title: string;
+    orderInSkill: number;
+}
+
+export interface LessonSeed {
+    topicIconicName: string;
+    title: string;
+    orderInTopic: number;
+    exercises: ExerciseSeed[];
+}
+
+export interface BundleSeed {
+    skills: Array<
+        Omit<SkillSeed, never> & {
+            topics: Array<
+                Omit<TopicSeed, "skillIconicName"> & {
+                    lessons: Array<Omit<LessonSeed, "topicIconicName">>;
+                }
+            >;
+        }
+    >;
+}
+
+/** Export all skills as a re-importable array (POST /admin/seeder/skills). */
+export function fetchSkillsExport() {
+    return apiClient.get<SkillSeed[]>("/admin/seeder/skills/export");
+}
+
+/** Export all topics as a re-importable array (POST /admin/seeder/topics). */
+export function fetchTopicsExport() {
+    return apiClient.get<TopicSeed[]>("/admin/seeder/topics/export");
+}
+
+/** Export all lessons (with nested exercises) as a re-importable array (POST /admin/seeder/lessons). */
+export function fetchLessonsExport() {
+    return apiClient.get<LessonSeed[]>("/admin/seeder/lessons/export");
+}
+
+/** Export the entire content tree as a re-importable bundle (POST /admin/seeder/bundle). */
+export function fetchBundleExport() {
+    return apiClient.get<BundleSeed>("/admin/seeder/bundle/export");
+}
+
 // --- Techniques ---
 
 export interface AdminTechniqueCoach {

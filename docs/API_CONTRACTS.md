@@ -450,6 +450,12 @@ Rename and avatar moderation are available to any admin (inappropriate nicknames
 | POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
 | POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
 | POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>` (≤20 MB) | `BundleImportResultDto` |
+| GET | /admin/seeder/skills/export | — | `SkillExportDto[]` — re-importable via POST /admin/seeder/skills |
+| GET | /admin/seeder/topics/export | — | `TopicExportDto[]` — re-importable via POST /admin/seeder/topics |
+| GET | /admin/seeder/lessons/export | — | `LessonExportDto[]` (with nested exercises) — re-importable via POST /admin/seeder/lessons |
+| GET | /admin/seeder/bundle/export | — | `BundleExportDto` (`{ skills: [...] }`) — re-importable via POST /admin/seeder/bundle |
+
+Each `GET …/export` returns the full content set shaped exactly like the matching import body, so an export file feeds straight back into its import (exercise `content` is emitted as a JSON object, not a string). Ordered by the relevant order field; skill/topic icon names are resolved from ids. UI: "Export JSON" buttons on `/admin/skills`, `/admin/topics`, `/admin/lessons`; "Export tree" on `/admin/import`.
 
 **Skills JSON:** `[{ iconicName, title, description?, orderInTree, stage? }]`
 **Topics JSON:** `[{ skillIconicName, iconicName, title, orderInSkill }]`

@@ -9,6 +9,7 @@ import {
     useDeleteSkillStage,
     type AdminSkillStage,
 } from "@/features/admin/hooks/use-admin";
+import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
 
 interface StageDraft {
     label: string;
@@ -69,6 +70,14 @@ export default function AdminSkillStagesPage() {
         );
     };
 
+    const handleExport = () =>
+        downloadJson(
+            [...stages]
+                .sort((a, b) => a.order - b.order)
+                .map((s) => ({ key: s.key, label: s.label, accent: s.accent, order: s.order })),
+            `skill_stages_${todayStamp()}.json`
+        );
+
     // `accent` may be a CSS variable (e.g. var(--indigo)); only feed plain hex to the color input.
     const asHex = (accent: string) => (/^#[0-9a-fA-F]{3,8}$/.test(accent) ? accent : "#888888");
 
@@ -87,14 +96,23 @@ export default function AdminSkillStagesPage() {
                     ← All skills
                 </Link>
             </div>
-            <div className="mb-6">
-                <h1 className="text-xl font-bold text-ink">Skill stages</h1>
-                <p className="text-xs text-ink-3 mt-0.5">
-                    Funnel stages used to group skills on the tree. They run from the lowest order
-                    (shown first) to the highest. The key is permanent — it is stored on every skill —
-                    while label, accent color, and order are editable. Unassigned skills fall back to a
-                    generic “Other” bucket.
-                </p>
+            <div className="mb-6 flex items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-xl font-bold text-ink">Skill stages</h1>
+                    <p className="text-xs text-ink-3 mt-0.5">
+                        Funnel stages used to group skills on the tree. They run from the lowest order
+                        (shown first) to the highest. The key is permanent — it is stored on every skill —
+                        while label, accent color, and order are editable. Unassigned skills fall back to a
+                        generic “Other” bucket.
+                    </p>
+                </div>
+                <button
+                    onClick={handleExport}
+                    disabled={stages.length === 0}
+                    className="shrink-0 px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                >
+                    Export JSON
+                </button>
             </div>
 
             {mutationError && (

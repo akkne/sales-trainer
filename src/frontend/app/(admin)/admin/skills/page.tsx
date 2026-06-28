@@ -7,12 +7,14 @@ import {
     useCreateSkill,
     useDeleteSkill,
     useImportSkills,
+    fetchSkillsExport,
     type AdminSkill,
 } from "@/features/admin/hooks/use-admin";
 import { getStageMeta } from "@/features/skills/constants/skill-stages";
 import { useSkillStages } from "@/features/skills/hooks/use-skill-tree";
 import { ImportPanel } from "@/features/admin/components/import-panel";
 import { SKILLS_TEMPLATE } from "@/features/admin/lib/import-templates";
+import { downloadJson, todayStamp } from "@/features/admin/lib/download-json";
 
 const emptyForm = (): Omit<AdminSkill, "id"> => ({
     iconicName: "",
@@ -32,6 +34,16 @@ export default function AdminSkillsPage() {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
+
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            downloadJson(await fetchSkillsExport(), `skills_${todayStamp()}.json`);
+        } finally {
+            setIsExporting(false);
+        }
+    }
 
     async function handleCreate() {
         const stage = form.stage || stages[0]?.key || "general";
@@ -49,12 +61,21 @@ export default function AdminSkillsPage() {
         <div>
             <div className="flex flex-wrap gap-3 items-center justify-between mb-6">
                 <h1 className="text-xl font-semibold text-ink">Skills</h1>
-                <button
-                    onClick={() => setShowForm((v) => !v)}
-                    className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
-                >
-                    {showForm ? "Cancel" : "+ New skill"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={handleExport}
+                        disabled={isExporting || skills.length === 0}
+                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        {isExporting ? "Exporting..." : "Export JSON"}
+                    </button>
+                    <button
+                        onClick={() => setShowForm((v) => !v)}
+                        className="px-4 py-2 text-sm bg-ink text-bg rounded-md hover:opacity-90 transition-colors"
+                    >
+                        {showForm ? "Cancel" : "+ New skill"}
+                    </button>
+                </div>
             </div>
 
             <ImportPanel
