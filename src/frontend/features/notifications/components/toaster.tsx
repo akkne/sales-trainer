@@ -30,14 +30,15 @@ function ToastChip({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             role={toast.variant === "error" ? "alert" : "status"}
             aria-live={toast.variant === "error" ? "assertive" : "polite"}
             aria-atomic="true"
-            className="flex items-start gap-3 w-full max-w-sm bg-surface border border-line rounded-[var(--r-md)] shadow-[var(--sh-3)] px-4 py-3 pointer-events-auto"
+            style={{ pointerEvents: "auto", width: "100%" }}
+            className="flex items-start gap-3 bg-surface border border-line rounded-[var(--r-md)] shadow-[var(--sh-3)] px-4 py-3"
         >
             {/* Accent bar */}
             <span className={`flex-shrink-0 mt-0.5 w-1 self-stretch rounded-full ${styles.bar}`} aria-hidden />
@@ -76,7 +77,17 @@ export function Toaster() {
     return createPortal(
         <div
             aria-label="Notifications"
-            className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 items-end pointer-events-none w-full max-w-sm"
+            style={{
+                position: "fixed",
+                top: "max(1rem, env(safe-area-inset-top, 1rem))",
+                right: "max(1rem, env(safe-area-inset-right, 1rem))",
+                width: "min(384px, calc(100vw - 2rem))",
+                zIndex: 9999,
+                pointerEvents: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+            }}
         >
             <AnimatePresence initial={false} mode="sync">
                 {toasts.map((t) => (

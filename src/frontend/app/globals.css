@@ -2442,20 +2442,28 @@ html[data-theme="dark"] .pv2-avatar-ring { background: var(--surface-2); }
 }
 .pv2-identity-actions { display: flex; align-items: flex-end; gap: 8px; padding-bottom: 6px; flex: none; }
 
-/* Edit-avatar link (below identity on mobile) */
-.pv2-avatar-edit {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--primary);
-  background: none;
-  border: none;
+/* "Edit profile" outline button — spec §3.6 / §4 outline button */
+.pv2-edit-profile-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid #E4E4E9;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #3A3A40;
   cursor: pointer;
-  padding: 4px 0 0;
-  text-decoration: underline;
-  text-align: center;
-  display: block;
+  white-space: nowrap;
+  transition: border-color var(--transition), color var(--transition);
+  font-family: var(--font-ui);
 }
-.pv2-avatar-edit:disabled { opacity: 0.5; cursor: wait; }
+.pv2-edit-profile-button:hover { border-color: var(--primary); color: var(--primary); }
+.pv2-edit-profile-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+html[data-theme="dark"] .pv2-edit-profile-button { background: var(--surface); border-color: var(--line-2); color: var(--ink-2); }
+html[data-theme="dark"] .pv2-edit-profile-button:hover { border-color: var(--primary); color: var(--primary); }
 
 /* 4 stat tiles */
 .pv2-stats {
@@ -2828,6 +2836,64 @@ html[data-theme="dark"] .stg-seg-btn.active {
 }
 .stg-row-action:hover { color: var(--primary); }
 .stg-row-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+/* Notification toggle rows */
+.stg-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line-2);
+}
+.stg-toggle-row:first-of-type { border-top: none; }
+.stg-toggle-body { flex: 1; min-width: 0; }
+.stg-toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-heading);
+  margin: 0;
+}
+.stg-toggle-sub {
+  font-size: 12px;
+  color: var(--ink-4);
+  margin-top: 2px;
+}
+
+/* Toggle switch — 42×24px track, 20px knob, spec §3.7 / §4 */
+.stg-switch {
+  flex: none;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 24px;
+  background: #D8D8DF;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+}
+.stg-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.20);
+  transition: transform 0.2s ease;
+}
+.stg-switch[aria-checked="true"] {
+  background: var(--primary);
+}
+.stg-switch[aria-checked="true"]::after {
+  transform: translateX(18px);
+}
+.stg-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .stg-switch, .stg-switch::after { transition: none; } }
 
 /* Logout button */
 .stg-logout {

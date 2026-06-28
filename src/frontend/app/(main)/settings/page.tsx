@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useLogout } from "@/features/auth/hooks/use-auth";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useThemeStore } from "@/shared/stores/theme-store";
+import { useNotificationPreferencesStore } from "@/shared/stores/notification-preferences-store";
 
 // NOTE: No email-change or password-change flow exists in this frontend.
 // Those rows are rendered as read-only / display-only accordingly.
-// NOTE: No notification-preference backend endpoint exists.
-// The Notifications card is therefore omitted to avoid fabricating non-persisting state.
+// NOTE: Notification preferences are persisted to localStorage via notification-preferences-store.
 
 type Theme = "light" | "dark";
 
@@ -38,6 +38,13 @@ export default function SettingsPage() {
     const logoutMutation = useLogout();
     const { authenticatedUser } = useAuthStore();
     const { theme, setTheme } = useThemeStore();
+
+    const {
+        isPracticeRemindersEnabled,
+        isProductUpdatesEnabled,
+        setPracticeRemindersEnabled,
+        setProductUpdatesEnabled,
+    } = useNotificationPreferencesStore();
 
     const isAdmin =
         authenticatedUser?.role === "Admin" ||
@@ -73,6 +80,41 @@ export default function SettingsPage() {
                                 {opt.label}
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* Notifications */}
+                <div className="stg-card">
+                    <p className="stg-card-title">Notifications</p>
+
+                    <div className="stg-toggle-row">
+                        <div className="stg-toggle-body">
+                            <p className="stg-toggle-label">Practice reminders</p>
+                            <p className="stg-toggle-sub">Daily nudge to keep your streak</p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isPracticeRemindersEnabled}
+                            className="stg-switch"
+                            onClick={() => setPracticeRemindersEnabled(!isPracticeRemindersEnabled)}
+                            aria-label="Practice reminders"
+                        />
+                    </div>
+
+                    <div className="stg-toggle-row">
+                        <div className="stg-toggle-body">
+                            <p className="stg-toggle-label">Product updates</p>
+                            <p className="stg-toggle-sub">News about new skills and features</p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isProductUpdatesEnabled}
+                            className="stg-switch"
+                            onClick={() => setProductUpdatesEnabled(!isProductUpdatesEnabled)}
+                            aria-label="Product updates"
+                        />
                     </div>
                 </div>
 

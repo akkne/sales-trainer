@@ -96,7 +96,7 @@ export default function ProfilePage() {
                 {/* Identity row */}
                 <div className="pv2-identity">
                     {/* Avatar with ring */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                         <div className="pv2-avatar-ring">
                             <div className="pv2-avatar-inner">
                                 {avatarSrc ? (
@@ -112,14 +112,7 @@ export default function ProfilePage() {
                                 )}
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            onClick={uploading ? undefined : openFilePicker}
-                            disabled={uploading}
-                            className="pv2-avatar-edit"
-                        >
-                            {uploading ? "Loading…" : "Update photo"}
-                        </button>
+                        {/* Hidden file input — triggered by "Edit profile" button */}
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -142,7 +135,21 @@ export default function ProfilePage() {
                         )}
                     </div>
 
-                    {/* No edit-profile button: no edit-profile flow exists in the app */}
+                    {/* Edit profile — reuses avatar file picker to update photo */}
+                    <div className="pv2-identity-actions">
+                        <button
+                            type="button"
+                            onClick={uploading ? undefined : openFilePicker}
+                            disabled={uploading}
+                            className="pv2-edit-profile-button"
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            Edit profile
+                        </button>
+                    </div>
                 </div>
 
                 {/* 4 Stat tiles */}
