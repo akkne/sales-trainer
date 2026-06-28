@@ -28,6 +28,7 @@ InMemory). No Postgres/Kafka/Redis/AI service is required.
 | Submission emits `exercise.completed` always, `lesson.completed` + `skill.completed` on completion; no events of the latter two on a wrong answer; `XpEarned` is 0 | `ExerciseServiceEventEmissionTests` (mocks `ILearningEventPublisher`) |
 | Skill-tree progress aggregation (completed/total lessons, status) and gamification aggregates returned as 0 | `SkillTreeServiceTests` |
 | Technique cards (IsNew flag), MarkTechniqueSeen creates progress once (idempotent) | `TechniqueServiceTests` |
+| Admin technique export returns all techniques (ordered by SortOrder) in the re-importable `AdminTechniqueWriteRequestDto[]` shape, preserving tags/dialog/case/coach | `AdminTechniquesExportTests` |
 | Produced event payload shapes match the gamification consumer contract + canonical topic names | `OutgoingEventContractTests` |
 | Gateway flips `/skills`, `/skill-tree`, `/lessons`, `/topics`, `/exercises`, `/reference`, `/techniques`, `/daily-quote`, learning `/admin/*` to the learning cluster and not the monolith; `/profile` is not captured | `Gateway.Tests/LearningRouteFlipTests` |
 

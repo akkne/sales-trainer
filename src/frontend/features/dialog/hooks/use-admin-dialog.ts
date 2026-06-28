@@ -120,6 +120,37 @@ export function useImportDialog() {
     });
 }
 
+export interface DialogExportMode {
+    key: string;
+    title: string;
+    description: string;
+    chatSystemPrompt: string;
+    feedbackSystemPrompt: string;
+    sortOrder: number;
+    isActive: boolean;
+    voiceEnabled: boolean;
+    voiceId: string | null;
+}
+
+export interface DialogExportBundle {
+    skillId: string;
+    title: string;
+    description: string;
+    iconEmoji: string;
+    sortOrder: number;
+    isActive: boolean;
+    modes: DialogExportMode[];
+}
+
+export interface DialogExport {
+    bundles: DialogExportBundle[];
+}
+
+/** Fetch all dialog bundles (with nested modes), shaped to re-import verbatim. */
+export function fetchDialogExport() {
+    return apiClient.get<DialogExport>("/admin/dialog/export");
+}
+
 export function useCreateBundle() {
     const queryClient = useQueryClient();
     return useMutation({

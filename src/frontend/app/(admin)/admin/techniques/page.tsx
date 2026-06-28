@@ -8,6 +8,7 @@ import {
     useUpdateTechnique,
     useDeleteTechnique,
     useImportTechniques,
+    fetchTechniquesExport,
     type AdminTechnique,
     type AdminTechniqueWriteBody,
     type AdminTechniqueImportResult,
@@ -49,6 +50,7 @@ export default function AdminTechniquesPage() {
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [importResult, setImportResult] = useState<AdminTechniqueImportResult | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
 
     const { data: techniques = [], isLoading } = useAdminTechniques({
@@ -96,6 +98,22 @@ export default function AdminTechniquesPage() {
         setEditingId(null);
     }
 
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            const data = await fetchTechniquesExport();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `techniques_${new Date().toISOString().slice(0, 10)}.json`;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        } finally {
+            setIsExporting(false);
+        }
+    }
+
     async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -129,6 +147,13 @@ export default function AdminTechniquesPage() {
                         className="hidden"
                         onChange={handleImportFile}
                     />
+                    <button
+                        onClick={handleExport}
+                        disabled={isExporting || techniques.length === 0}
+                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        {isExporting ? "Exporting..." : "Export JSON"}
+                    </button>
                     <button
                         onClick={() => importInputRef.current?.click()}
                         disabled={importTechniques.isPending}

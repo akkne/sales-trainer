@@ -224,6 +224,48 @@ public sealed class AdminTechniquesController(
             createdCount, updatedCount, failedCount, errors.ToArray()));
     }
 
+    [HttpGet("admin/techniques/export")]
+    public async Task<ActionResult<IReadOnlyList<AdminTechniqueWriteRequestDto>>> Export(
+        CancellationToken cancellationToken)
+    {
+        var techniques = await databaseContext.Techniques.AsNoTracking()
+            .Include(technique => technique.Coach)
+            .Include(technique => technique.AdditionalSkills)
+            .OrderBy(technique => technique.SortOrder)
+            .ThenBy(technique => technique.Name)
+            .ToListAsync(cancellationToken);
+
+        var payload = techniques.Select(MapToWriteRequest).ToList();
+
+        logger.LogInformation(
+            "Technique export: {Count} techniques by ActorId={ActorId}",
+            payload.Count, User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(payload);
+    }
+
+    private static AdminTechniqueWriteRequestDto MapToWriteRequest(Technique technique) =>
+        new(
+            technique.Slug,
+            technique.Name,
+            technique.Summary,
+            technique.Body,
+            technique.Tags,
+            technique.PrimarySkillId,
+            technique.AdditionalSkills.Select(link => link.SkillId).ToArray(),
+            technique.Difficulty,
+            technique.SortOrder,
+            ParseNullable(technique.DialogJson),
+            ParseNullable(technique.CaseJson),
+            technique.Coach is null
+                ? null
+                : new AdminTechniqueCoachDto(
+                    technique.Coach.AvatarSeed,
+                    technique.Coach.Name,
+                    technique.Coach.Role,
+                    technique.Coach.Quote,
+                    ParseNullable(technique.Coach.ChallengesJson)));
+
     private Task<Technique?> LoadTechniqueAsync(Guid id, CancellationToken cancellationToken)
     {
         return databaseContext.Techniques

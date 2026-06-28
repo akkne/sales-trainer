@@ -9,6 +9,7 @@ import {
     useUpdateBundle,
     useDeleteBundle,
     useImportDialog,
+    fetchDialogExport,
     AdminDialogBundle,
     CreateBundleRequest,
 } from "@/features/dialog/hooks/use-admin-dialog";
@@ -31,6 +32,7 @@ export default function AdminDialogPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
     const [deletingBundleId, setDeletingBundleId] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     const [formData, setFormData] = useState<CreateBundleRequest>({
         skillId: "",
@@ -83,6 +85,22 @@ export default function AdminDialogPage() {
         setIsCreating(false);
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        try {
+            const data = await fetchDialogExport();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `dialog_bundles_${new Date().toISOString().slice(0, 10)}.json`;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const startCreating = () => {
         setFormData({
             skillId: skills?.[0]?.id ?? "",
@@ -120,12 +138,21 @@ export default function AdminDialogPage() {
 
             <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
                 <h1 className="text-xl font-bold text-ink">Dialog Bundles</h1>
-                <button
-                    onClick={startCreating}
-                    className="px-4 py-2 bg-ink text-bg rounded-lg hover:opacity-90"
-                >
-                    + New Bundle
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={handleExport}
+                        disabled={isExporting || !bundles || bundles.length === 0}
+                        className="px-4 py-2 border border-line text-ink-3 rounded-lg hover:bg-bg-2 disabled:opacity-40 transition-colors"
+                    >
+                        {isExporting ? "Exporting…" : "Export JSON"}
+                    </button>
+                    <button
+                        onClick={startCreating}
+                        className="px-4 py-2 bg-ink text-bg rounded-lg hover:opacity-90"
+                    >
+                        + New Bundle
+                    </button>
+                </div>
             </div>
 
             <ImportPanel

@@ -382,8 +382,10 @@ All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
 | PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (replaces additional skills + coach) |
 | DELETE | /admin/techniques/:id | — | 204 |
 | POST | /admin/techniques/import | `AdminTechniqueWriteRequestDto[]` | `AdminTechniqueImportResultDto` — upserts by `slug` |
+| GET | /admin/techniques/export | — | `AdminTechniqueWriteRequestDto[]` — all techniques, re-importable verbatim |
 
 `skill` query param filters by `Skills.IconicName` (same convention as the public route).
+`GET /admin/techniques/export` returns every technique (ignores `skill`/`search` filters) shaped exactly like the `import` request body, so an export file feeds straight back into `POST /admin/techniques/import`. UI: "Export JSON" button on `/admin/techniques`.
 
 `AdminTechniqueDto`: `{id, slug, name, summary, body, tags: string[], primarySkillId?, primarySkillIconicName?, primarySkillTitle?, additionalSkillIds: Guid[], difficulty, difficultyName, sortOrder, createdAt, updatedAt, dialog?: JsonNode, case?: JsonNode, coach?: AdminTechniqueCoachDto}`
 
@@ -539,6 +541,9 @@ Errors:
 | PUT | /admin/dialog/modes/:modeId | `UpdateModeRequestDto` | `AdminDialogModeDto` |
 | DELETE | /admin/dialog/modes/:modeId | — | 204 |
 | POST | /admin/dialog/import | `multipart/form-data; file=<JSON>` (≤20 MB) | `DialogImportResultDto` |
+| GET | /admin/dialog/export | — | `DialogExportDto` — all bundles with nested modes, re-importable verbatim |
+
+**Dialog export JSON:** `GET /admin/dialog/export` returns `{ bundles: [{ skillId, title, description, iconEmoji, sortOrder, isActive, modes: [{ key, title, description, chatSystemPrompt, feedbackSystemPrompt, sortOrder, isActive, voiceEnabled, voiceId }] }] }` — exactly the shape `POST /admin/dialog/import` accepts, so an export file re-imports verbatim. UI: "Export JSON" button on `/admin/dialog`.
 
 **Dialog import JSON:** `{ bundles: [{ skillId, title, description?, iconEmoji?, sortOrder?, isActive?, modes: [{ key, title, description?, chatSystemPrompt?, feedbackSystemPrompt?, sortOrder?, isActive?, voiceEnabled?, voiceId? }] }] }` (a bare bundles array is also accepted). Since Phase 6 the bundle references its skill by `skillId` (a `Guid`) rather than `skillIconicName` — the ai-service does not own the `Skills` table. Idempotent upsert: bundles by `(skillId, title)`, modes by `(bundleId, key)`; bundles with a missing/invalid `skillId` and modes with empty key/title are skipped into `errors[]`. UI: import panel on `/admin/dialog`.
 `DialogImportResultDto = { bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors[] }`

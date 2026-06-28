@@ -673,6 +673,11 @@ export function useDeleteTechnique() {
     });
 }
 
+/** Fetch all techniques shaped to re-import verbatim via POST /admin/techniques/import. */
+export function fetchTechniquesExport() {
+    return apiClient.get<AdminTechniqueWriteBody[]>("/admin/techniques/export");
+}
+
 export function useImportTechniques() {
     const queryClient = useQueryClient();
     return useMutation({

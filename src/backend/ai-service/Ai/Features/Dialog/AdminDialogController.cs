@@ -117,6 +117,48 @@ public sealed class AdminDialogController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("export")]
+    public async Task<ActionResult<DialogExportDto>> Export(CancellationToken cancellationToken)
+    {
+        var bundles = await _dbContext.DialogBundles
+            .OrderBy(bundle => bundle.SortOrder)
+            .ToListAsync(cancellationToken);
+
+        var modesByBundle = (await _dbContext.DialogModes
+                .OrderBy(mode => mode.SortOrder)
+                .ToListAsync(cancellationToken))
+            .GroupBy(mode => mode.BundleId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        var bundleDtos = bundles.Select(bundle => new DialogBundleExportDto(
+            bundle.SkillId,
+            bundle.Title,
+            bundle.Description,
+            bundle.IconEmoji,
+            bundle.SortOrder,
+            bundle.IsActive,
+            (modesByBundle.TryGetValue(bundle.Id, out var modes) ? modes : new List<DialogMode>())
+                .Select(mode => new DialogModeExportDto(
+                    mode.Key,
+                    mode.Title,
+                    mode.Description,
+                    mode.ChatSystemPrompt,
+                    mode.FeedbackSystemPrompt,
+                    mode.SortOrder,
+                    mode.IsActive,
+                    mode.VoiceEnabled,
+                    mode.VoiceId))
+                .ToList()))
+            .ToList();
+
+        _logger.LogInformation(
+            "Dialog export: Bundles={BundleCount} Modes={ModeCount} by ActorId={ActorId}",
+            bundleDtos.Count, modesByBundle.Values.Sum(list => list.Count),
+            User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        return Ok(new DialogExportDto(bundleDtos));
+    }
+
     [HttpPost("import")]
     [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<ActionResult<DialogImportResultDto>> Import(IFormFile file)

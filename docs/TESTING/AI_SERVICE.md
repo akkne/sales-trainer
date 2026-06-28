@@ -18,6 +18,7 @@ Unit suite (NUnit, no external dependencies — runs offline):
 | `SpotMistakeEvaluationStrategyTests` | Local line-selection scoring (wrong line → 0, correct line w/o explanation → 50) without calling the LLM. |
 | `StreamingChatReplyParserTests` | Incremental `reply` extraction from streamed JSON, chunked reassembly, `endCall`, plain-text fallback. |
 | `SentenceChunkerTests` | Sentence-ender splitting, minimum-length buffering, tail drain. |
+| `AdminDialogExportTests` | `GET /admin/dialog/export` returns bundles with nested modes (ordered by SortOrder) in the re-importable `{ bundles: [...] }` shape. |
 
 ## Build
 
