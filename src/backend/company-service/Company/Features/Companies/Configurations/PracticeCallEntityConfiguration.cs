@@ -13,7 +13,8 @@ public sealed class PracticeCallEntityConfiguration : IEntityTypeConfiguration<P
         builder.HasKey(practiceCall => practiceCall.Id);
 
         builder.Property(practiceCall => practiceCall.DialogSessionId)
-            .IsRequired();
+            .IsRequired()
+            .HasMaxLength(100);
 
         builder.Property(practiceCall => practiceCall.Goal)
             .IsRequired()

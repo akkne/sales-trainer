@@ -59,7 +59,7 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     CompanyId = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DialogSessionId = table.Column<string>(type: "text", nullable: false),
+                    DialogSessionId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Goal = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },

@@ -9,5 +9,5 @@ public sealed class PracticeCall
     public string Goal { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 
-    public Company Company { get; set; } = null!;
+    public Company? Company { get; set; }
 }

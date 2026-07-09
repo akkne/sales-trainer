@@ -206,7 +206,8 @@ public sealed class CompanyServiceTests
 
         deleted.Should().BeTrue();
         var entries = await _companyService.ListCallLogEntriesAsync(FirstUserId, company.Id);
-        entries.Should().BeEmpty();
+        entries.Should().NotBeNull();
+        entries!.Should().BeEmpty();
     }
 
     [Test]
@@ -238,21 +239,25 @@ public sealed class CompanyServiceTests
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
 
-        var goals = new[] { "Goal A", "Goal B", "Goal C", "Goal D", "Goal E", "Goal F", "Goal A" };
-        foreach (var goal in goals)
-        {
-            await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
-                new CreatePracticeCallRequestDto($"session-{Guid.NewGuid()}", goal));
-        }
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Excluded Goal", DateTime.UtcNow.AddDays(-10));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Goal E", DateTime.UtcNow.AddDays(-5));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Goal D", DateTime.UtcNow.AddDays(-4));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Goal C", DateTime.UtcNow.AddDays(-3));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Goal B", DateTime.UtcNow.AddDays(-2));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Newest Goal", DateTime.UtcNow.AddDays(-1));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Excluded Goal", DateTime.UtcNow.AddDays(-9));
 
         var result = await _companyService.GetRecentGoalsAsync(FirstUserId, company.Id);
 
-        result.Should().HaveCount(5);
+        result.Should().NotBeNull();
+        result!.Should().HaveCount(5);
         result.Should().OnlyHaveUniqueItems();
+        result[0].Should().Be("Newest Goal");
+        result.Should().NotContain("Excluded Goal");
     }
 
     [Test]
-    public async Task GetRecentGoalsAsync_returns_empty_for_wrong_owner()
+    public async Task GetRecentGoalsAsync_returns_null_for_wrong_owner()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
@@ -260,7 +265,7 @@ public sealed class CompanyServiceTests
 
         var result = await _companyService.GetRecentGoalsAsync(SecondUserId, company.Id);
 
-        result.Should().BeEmpty();
+        result.Should().BeNull();
     }
 
     [Test]

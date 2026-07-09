@@ -12,5 +12,5 @@ public sealed class CallLogEntry
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    public Company Company { get; set; } = null!;
+    public Company? Company { get; set; }
 }

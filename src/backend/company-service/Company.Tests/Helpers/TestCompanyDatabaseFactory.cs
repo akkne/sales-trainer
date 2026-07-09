@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Infrastructure.Data;
 using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
@@ -36,5 +37,27 @@ internal static class TestCompanyDatabaseFactory
         databaseContext.Companies.Add(company);
         await databaseContext.SaveChangesAsync(cancellationToken);
         return company;
+    }
+
+    public static async Task<PracticeCall> SeedPracticeCallAsync(
+        CompanyDbContext databaseContext,
+        Guid userId,
+        Guid companyId,
+        string goal,
+        DateTime createdAt,
+        CancellationToken cancellationToken = default)
+    {
+        var practiceCall = new PracticeCall
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            UserId = userId,
+            DialogSessionId = Guid.NewGuid().ToString("N"),
+            Goal = goal,
+            CreatedAt = createdAt
+        };
+        databaseContext.PracticeCalls.Add(practiceCall);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        return practiceCall;
     }
 }

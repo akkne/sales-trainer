@@ -115,7 +115,8 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.Property<string>("DialogSessionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Goal")
                         .IsRequired()

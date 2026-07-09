@@ -89,7 +89,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             return Unauthorized();
 
         var entries = await companyService.ListCallLogEntriesAsync(userId, companyId, cancellationToken);
-        if (!entries.Any() && !await CompanyBelongsToUserAsync(userId, companyId, cancellationToken))
+        if (entries is null)
             return NotFound();
 
         return Ok(entries);
@@ -169,7 +169,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             return Unauthorized();
 
         var practiceCalls = await companyService.ListPracticeCallsAsync(userId, companyId, cancellationToken);
-        if (!practiceCalls.Any() && !await CompanyBelongsToUserAsync(userId, companyId, cancellationToken))
+        if (practiceCalls is null)
             return NotFound();
 
         return Ok(practiceCalls);
@@ -184,7 +184,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             return Unauthorized();
 
         var goals = await companyService.GetRecentGoalsAsync(userId, companyId, cancellationToken);
-        if (!goals.Any() && !await CompanyBelongsToUserAsync(userId, companyId, cancellationToken))
+        if (goals is null)
             return NotFound();
 
         return Ok(goals);
@@ -194,11 +194,5 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(claim, out userId);
-    }
-
-    private async Task<bool> CompanyBelongsToUserAsync(Guid userId, Guid companyId, CancellationToken cancellationToken)
-    {
-        var company = await companyService.GetCompanyAsync(userId, companyId, cancellationToken);
-        return company is not null;
     }
 }

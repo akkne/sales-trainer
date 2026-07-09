@@ -121,7 +121,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             return null;
 
         company.Name = request.Name;
-        company.Description = request.Description;
+        company.Description = request.Description ?? string.Empty;
         company.UpdatedAt = DateTime.UtcNow;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -151,7 +151,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         return true;
     }
 
-    public async Task<IReadOnlyList<CallLogEntryDto>> ListCallLogEntriesAsync(
+    public async Task<IReadOnlyList<CallLogEntryDto>?> ListCallLogEntriesAsync(
         Guid userId,
         Guid companyId,
         CancellationToken cancellationToken = default)
@@ -160,7 +160,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
         if (!companyExists)
-            return [];
+            return null;
 
         return await databaseContext.CallLogEntries
             .Where(entry => entry.CompanyId == companyId)
@@ -175,10 +175,10 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         CreateCallLogEntryRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        var companyExists = await databaseContext.Companies
-            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+        var company = await databaseContext.Companies
+            .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
-        if (!companyExists)
+        if (company is null)
             return null;
 
         var now = DateTime.UtcNow;
@@ -197,11 +197,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
 
         databaseContext.CallLogEntries.Add(entry);
 
-        var company = await databaseContext.Companies.FindAsync([companyId], cancellationToken);
-        if (company is not null)
-        {
-            company.UpdatedAt = now;
-        }
+        company.UpdatedAt = now;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
@@ -291,7 +287,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         return MapToPracticeCallDto(practiceCall);
     }
 
-    public async Task<IReadOnlyList<PracticeCallDto>> ListPracticeCallsAsync(
+    public async Task<IReadOnlyList<PracticeCallDto>?> ListPracticeCallsAsync(
         Guid userId,
         Guid companyId,
         CancellationToken cancellationToken = default)
@@ -300,7 +296,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
         if (!companyExists)
-            return [];
+            return null;
 
         return await databaseContext.PracticeCalls
             .Where(practiceCall => practiceCall.CompanyId == companyId)
@@ -309,7 +305,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<string>> GetRecentGoalsAsync(
+    public async Task<IReadOnlyList<string>?> GetRecentGoalsAsync(
         Guid userId,
         Guid companyId,
         CancellationToken cancellationToken = default)
@@ -318,14 +314,15 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
         if (!companyExists)
-            return [];
+            return null;
 
         return await databaseContext.PracticeCalls
             .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
-            .OrderByDescending(practiceCall => practiceCall.CreatedAt)
-            .Select(practiceCall => practiceCall.Goal)
-            .Distinct()
+            .GroupBy(practiceCall => practiceCall.Goal)
+            .Select(group => new { Goal = group.Key, LastCreatedAt = group.Max(practiceCall => practiceCall.CreatedAt) })
+            .OrderByDescending(goalEntry => goalEntry.LastCreatedAt)
             .Take(RecentGoalCount)
+            .Select(goalEntry => goalEntry.Goal)
             .ToListAsync(cancellationToken);
     }
 

@@ -12,7 +12,7 @@ using Sellevate.Company.Infrastructure.Data;
 namespace Sellevate.Company.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(CompanyDbContext))]
-    [Migration("20260709132610_InitialCompanySchema")]
+    [Migration("20260709133501_InitialCompanySchema")]
     partial class InitialCompanySchema
     {
         /// <inheritdoc />
@@ -118,7 +118,8 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.Property<string>("DialogSessionId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Goal")
                         .IsRequired()

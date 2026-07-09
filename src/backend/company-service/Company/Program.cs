@@ -109,7 +109,7 @@ using (var serviceScope = application.Services.CreateScope())
         builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
 
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<CompanyDbContext>();
-    databaseContext.Database.Migrate();
+    await databaseContext.Database.MigrateAsync();
 }
 
 application.Run();
