@@ -12,16 +12,23 @@ vi.mock("@/shared/api/api-client", () => ({
     },
 }));
 
+const toastError = vi.fn();
+vi.mock("@/features/notifications/store/toast-store", () => ({
+    toast: { error: (...args: unknown[]) => toastError(...args) },
+}));
+
 import { apiClient } from "@/shared/api/api-client";
 import {
     useCompanies,
     useCreateCompany,
+    useUpdateCompany,
     useDeleteCompany,
     type CompanySummary,
 } from "@/features/companies/hooks/use-companies";
 
 const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
 const mockPost = apiClient.post as ReturnType<typeof vi.fn>;
+const mockPut = apiClient.put as ReturnType<typeof vi.fn>;
 const mockDelete = apiClient.delete as ReturnType<typeof vi.fn>;
 
 const COMPANIES: CompanySummary[] = [
@@ -102,15 +109,35 @@ describe("useCreateCompany", () => {
     });
 });
 
+describe("useUpdateCompany", () => {
+    beforeEach(() => {
+        mockPut.mockReset();
+        toastError.mockReset();
+    });
+
+    it("shows an error toast when the update fails", async () => {
+        mockPut.mockRejectedValue(new Error("network down"));
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useUpdateCompany(), { wrapper });
+        result.current.mutate({ id: "1", name: "Ромашка", description: "" });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));
+    });
+});
+
 describe("useDeleteCompany", () => {
     beforeEach(() => {
         mockDelete.mockReset();
+        toastError.mockReset();
     });
 
-    it("calls DELETE /companies/{id} and invalidates the list", async () => {
+    it("calls DELETE /companies/{id}, invalidates the list, and drops the detail cache entry", async () => {
         mockDelete.mockResolvedValue(undefined);
         const { queryClient, wrapper } = createWrapper();
         const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+        const removeSpy = vi.spyOn(queryClient, "removeQueries");
 
         const { result } = renderHook(() => useDeleteCompany(), { wrapper });
         result.current.mutate("1");
@@ -118,5 +145,17 @@ describe("useDeleteCompany", () => {
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(mockDelete).toHaveBeenCalledWith("/companies/1");
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies"] });
+        expect(removeSpy).toHaveBeenCalledWith({ queryKey: ["companies", "1"] });
+    });
+
+    it("shows an error toast when the delete fails", async () => {
+        mockDelete.mockRejectedValue(new Error("boom"));
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useDeleteCompany(), { wrapper });
+        result.current.mutate("1");
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("boom"));
     });
 });

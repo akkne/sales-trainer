@@ -25,7 +25,6 @@ export default function CompaniesPage() {
         });
     };
 
-    // ── Loading skeleton ──────────────────────────────────────────────────────
     if (isLoading) {
         return (
             <div className="page">
@@ -52,7 +51,6 @@ export default function CompaniesPage() {
         );
     }
 
-    // ── Error state ───────────────────────────────────────────────────────────
     if (error) {
         return (
             <div className="page" style={{ padding: "60px 24px" }}>

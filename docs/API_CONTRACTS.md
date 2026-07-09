@@ -895,7 +895,7 @@ Validation: `name` required, max 200; `description` max 8000.
 
 `CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt}`
 
-Validation: `contactName` max 200; `subject`, `outcome` max 4000.
+Validation: `contactName` required, max 200; `subject`, `outcome` optional (empty string allowed), max 4000.
 
 ### Practice Calls
 

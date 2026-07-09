@@ -1,5 +1,3 @@
-// 7-pair gradient palette matching DESIGN_SPEC §1.1 (copied from dialog/page.tsx
-// per docs/COMPANIES/DESIGN_SPEC.md §2.4 — same seeded-avatar recipe).
 const AVATAR_PALETTE: [string, string][] = [
     ["#6C5BD9", "#9B8CF0"],
     ["#4C8DF6", "#7FB0FA"],

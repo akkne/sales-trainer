@@ -203,6 +203,34 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task CreateCallLogEntryAsync_accepts_empty_subject_and_outcome()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCallLogEntryRequestDto("Jane Doe", "", "", DateTime.UtcNow);
+
+        var result = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Subject.Should().BeEmpty();
+        result.Outcome.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task UpdateCallLogEntryAsync_accepts_empty_subject_and_outcome()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var createRequest = new CreateCallLogEntryRequestDto("John", "pitch", "ok", DateTime.UtcNow);
+        var entry = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, createRequest);
+
+        var updateRequest = new UpdateCallLogEntryRequestDto("John", "", "", DateTime.UtcNow);
+        var result = await _companyService.UpdateCallLogEntryAsync(FirstUserId, company.Id, entry!.Id, updateRequest);
+
+        result.Should().NotBeNull();
+        result!.Subject.Should().BeEmpty();
+        result.Outcome.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task UpdateCallLogEntryAsync_returns_null_when_company_belongs_to_other_user()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");

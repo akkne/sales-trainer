@@ -8,7 +8,6 @@ interface CompanyRowProps {
     company: CompanySummary;
 }
 
-/** One row in the `/companies` list (§2.4 of the design spec). */
 export function CompanyRow({ company }: CompanyRowProps) {
     const { from, to } = ava(company.id);
     const abbr = initials(company.name);

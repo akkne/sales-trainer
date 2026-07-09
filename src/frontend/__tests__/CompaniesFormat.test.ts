@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
     pluralizeRu,
     pluralizeCompanies,
     companiesCountLabel,
     formatDateRu,
+    formatCalendarDateRu,
     relativeTimeRu,
 } from "@/features/companies/lib/format";
 
@@ -67,6 +68,26 @@ describe("companiesCountLabel", () => {
 describe("formatDateRu", () => {
     it("formats an ISO date as 'd MMM yyyy' in Russian", () => {
         expect(formatDateRu("2026-07-09T10:00:00.000Z")).toMatch(/^9 июл 2026$/);
+    });
+});
+
+describe("formatCalendarDateRu", () => {
+    const originalTz = process.env.TZ;
+
+    afterEach(() => {
+        process.env.TZ = originalTz;
+    });
+
+    it("formats a midnight-UTC calendar date as 'd MMM yyyy' in Russian", () => {
+        expect(formatCalendarDateRu("2026-07-09T00:00:00.000Z")).toBe("9 июл 2026");
+    });
+
+    it("keeps the same calendar day regardless of the local timezone", () => {
+        process.env.TZ = "America/Los_Angeles";
+        expect(formatCalendarDateRu("2026-07-09T00:00:00.000Z")).toBe("9 июл 2026");
+
+        process.env.TZ = "Pacific/Kiritimati";
+        expect(formatCalendarDateRu("2026-07-09T00:00:00.000Z")).toBe("9 июл 2026");
     });
 });
 
