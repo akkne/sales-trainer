@@ -1243,7 +1243,7 @@
 > Mobile bottom nav: «Компании» replaces «Справочник» in the 5-slot bar
 > (guidebook stays reachable from the desktop rail), per DESIGN_SPEC §1.4.
 
-### [ ] 39.1 Backend — company-service scaffold
+### [>] 39.1 Backend — company-service scaffold
 - [ ] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
 - [ ] `CompanyDbContext` (Postgres `company`), auto-migrate on startup
 - [ ] Entities: `Company` (Id, UserId, Name, Description, CreatedAt, UpdatedAt),
@@ -1253,7 +1253,7 @@
 - [ ] `Program.cs` per notification-service pattern; Dockerfile
 - [ ] Update `docs/DB_SCHEMA.md`
 
-### [ ] 39.2 Backend — company-service API
+### [>] 39.2 Backend — company-service API
 - [ ] `CompanyController`: `GET /companies` (list, `?search=`), `POST /companies` `{name}`,
       `GET /companies/{id}`, `PUT /companies/{id}` `{name, description}`, `DELETE /companies/{id}`
 - [ ] Call log: `GET /companies/{id}/logs`, `POST /companies/{id}/logs` `{contactName, subject, outcome, occurredAt}`,
@@ -1264,7 +1264,7 @@
 - [ ] Input validation + limits (name ≤ 200, description ≤ 8000, log fields ≤ 4000)
 - [ ] Unit tests (service layer, ownership, validation); update `docs/API_CONTRACTS.md`
 
-### [ ] 39.3 Backend — ai-service: company-context sessions
+### [>] 39.3 Backend — ai-service: company-context sessions
 - [ ] `StartSessionRequestDto` gains optional `companyContext { companyName, companyDescription, callGoal }`
 - [ ] Seed admin-editable `DialogMode` template (key `company-call`, voiceEnabled, hidden from `/dialog/bundles` listing)
 - [ ] `DialogService.StartSessionAsync`: when context present → compose chat + feedback
