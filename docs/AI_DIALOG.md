@@ -260,15 +260,84 @@ Infrastructure/Mongo/
 
 ### Seeded content
 
-No default bundles, modes, or skills are seeded. All dialog content and skills
-come exclusively from the database — create them via the admin CRUD
-(`AdminDialogController` / admin panel). There is no startup seeder for dialog
-content (the former `DialogSeeder` and its hardcoded `practice`-stage skills
-were removed).
+No default bundles or modes are seeded except for the special **company-call** mode
+described below. All other dialog content comes from the database — create it via
+the admin CRUD (`AdminDialogController` / admin panel).
 
 > Troubleshooting: if `/dialog` shows «Практика диалогов пока недоступна»,
 > either `OpenAI:ApiKey` is not configured (bundles endpoint intentionally
 > returns `[]`) or no bundles have been created yet in the admin panel.
+
+## Company-Context Sessions
+
+### Purpose
+
+When the `company-service` creates a practice call for a specific prospect company,
+it injects structured company facts into the AI session so the model plays a realistic
+employee of that company rather than a generic persona.
+
+### Seeded template
+
+`CompanyCallModeSeeder` runs at ai-service startup (idempotent — skips if key
+`company-call` already exists). It creates:
+
+- A `DialogBundle` with `IsHidden = true` — excluded from `GET /dialog/bundles` but
+  accessible via admin CRUD and used internally.
+- A `DialogMode` with `Key = "company-call"`, `VoiceEnabled = true`, admin-editable
+  prompts in Russian describing: AI plays an employee/decision-maker at the prospect
+  company; behave realistically for a cold sales call; use the injected company facts.
+
+The fixed `{bundleId, modeId}` for this mode is available via
+`GET /dialog/company-call-mode`.
+
+### Request contract
+
+`POST /dialog/sessions` accepts an optional `companyContext` object:
+
+```json
+{
+  "bundleId": "<company-call bundle id>",
+  "modeId": "<company-call mode id>",
+  "companyContext": {
+    "companyName": "ООО Рога и Копыта",
+    "companyDescription": "Поставщик офисных принадлежностей для малого бизнеса",
+    "callGoal": "Записать встречу с директором"
+  }
+}
+```
+
+`callGoal` is optional. When omitted, the goal line is not appended to the prompt.
+
+### Prompt composition
+
+When `companyContext` is present the service appends a structured block to both
+`ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime:
+
+```
+---
+Компания: <companyName>
+Описание: <companyDescription>
+Цель звонка пользователя: <callGoal>   ← omitted if callGoal is blank
+```
+
+The base prompts are stored in PostgreSQL and remain unchanged. The appended block
+is built in `DialogService.BuildChatSystemPrompt` / `BuildFeedbackSystemPrompt`
+(and equivalently in `VoiceDialogService.BuildChatSystemPrompt` for voice streaming).
+
+### Persistence
+
+`companyContext` is stored in the MongoDB `DialogSession` document as
+`companyCallContext: {companyName, companyDescription, callGoal?}`. All subsequent
+turns (`SendMessageAsync`, `CompleteSessionAsync`) and the voice path
+(`VoiceDialogService.StreamVoiceMessageAsync`) read it from the session, so the
+context is consistent across the entire conversation without re-sending it on every
+request.
+
+### Hidden bundle invariant
+
+`GetActiveBundlesAsync` filters `IsHidden = true` bundles, so the company-call bundle
+never appears in the user-facing `/dialog/bundles` listing. Admin CRUD (`/admin/dialog/bundles`)
+shows all bundles including hidden ones and allows editing the prompts.
 
 ### Frontend
 ```

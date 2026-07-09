@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Sellevate.Ai.Features.Dialog.Models;
@@ -78,7 +79,8 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         // Tasks are awaited in order, so audio chunks always arrive in reply order.
         var pendingAudio = new Queue<Task<byte[]?>>();
 
-        await foreach (var delta in _openAiService.StreamChatMessageAsync(mode.ChatSystemPrompt, session.Messages, ct))
+        var chatSystemPrompt = BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        await foreach (var delta in _openAiService.StreamChatMessageAsync(chatSystemPrompt, session.Messages, ct))
         {
             var replyText = replyParser.Push(delta);
             if (replyText.Length == 0) continue;
@@ -173,5 +175,28 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             await stream.CopyToAsync(ms, ct);
             return ms.ToArray();
         }
+    }
+
+    private static string BuildChatSystemPrompt(string basePrompt, CompanyCallContext? companyCallContext)
+    {
+        if (companyCallContext == null)
+        {
+            return basePrompt;
+        }
+
+        var lines = new StringBuilder();
+        lines.Append(basePrompt);
+        lines.AppendLine();
+        lines.AppendLine();
+        lines.AppendLine("---");
+        lines.AppendLine($"Компания: {companyCallContext.CompanyName}");
+        lines.AppendLine($"Описание: {companyCallContext.CompanyDescription}");
+
+        if (!string.IsNullOrWhiteSpace(companyCallContext.CallGoal))
+        {
+            lines.AppendLine($"Цель звонка пользователя: {companyCallContext.CallGoal}");
+        }
+
+        return lines.ToString();
     }
 }

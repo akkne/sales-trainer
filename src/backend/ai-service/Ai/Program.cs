@@ -8,6 +8,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Dialog;
+using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Evaluation;
 using Sellevate.Ai.Features.Transcription;
 using Sellevate.Ai.Features.Voice;
@@ -186,6 +187,8 @@ using (var serviceScope = application.Services.CreateScope())
 
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<AiDbContext>();
     databaseContext.Database.Migrate();
+
+    await CompanyCallModeSeeder.SeedAsync(databaseContext);
 }
 
 application.Run();
