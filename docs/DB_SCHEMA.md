@@ -646,3 +646,52 @@ Skills
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
+| `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
+
+---
+
+## company database (company-service)
+
+Standalone Postgres database `company`. Owned by `company-service` (port 5009). Connection string key: `ConnectionStrings:Postgres`.
+
+### Table: `Companies`
+
+| Column        | Type         | Constraints                      |
+|---------------|--------------|----------------------------------|
+| `Id`          | uuid         | PK                               |
+| `UserId`      | uuid         | NOT NULL, INDEX                  |
+| `Name`        | varchar(200) | NOT NULL                         |
+| `Description` | varchar(8000)| NOT NULL, DEFAULT ''             |
+| `CreatedAt`   | timestamptz  | NOT NULL                         |
+| `UpdatedAt`   | timestamptz  | NOT NULL                         |
+
+**Indexes:** `IX_Companies_UserId`
+
+### Table: `CallLogEntries`
+
+| Column        | Type         | Constraints                                        |
+|---------------|--------------|----------------------------------------------------|
+| `Id`          | uuid         | PK                                                 |
+| `CompanyId`   | uuid         | NOT NULL, FK → Companies(Id) ON DELETE CASCADE     |
+| `UserId`      | uuid         | NOT NULL                                           |
+| `ContactName` | varchar(200) | NOT NULL                                           |
+| `Subject`     | varchar(4000)| NOT NULL                                           |
+| `Outcome`     | varchar(4000)| NOT NULL                                           |
+| `OccurredAt`  | timestamptz  | NOT NULL                                           |
+| `CreatedAt`   | timestamptz  | NOT NULL                                           |
+| `UpdatedAt`   | timestamptz  | NOT NULL                                           |
+
+**Indexes:** `IX_CallLogEntries_CompanyId_OccurredAt` (CompanyId ASC, OccurredAt DESC)
+
+### Table: `PracticeCalls`
+
+| Column            | Type          | Constraints                                        |
+|-------------------|---------------|----------------------------------------------------|
+| `Id`              | uuid          | PK                                                 |
+| `CompanyId`       | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE     |
+| `UserId`          | uuid          | NOT NULL                                           |
+| `DialogSessionId` | text          | NOT NULL                                           |
+| `Goal`            | varchar(1000) | NOT NULL                                           |
+| `CreatedAt`       | timestamptz   | NOT NULL                                           |
+
+**Indexes:** `IX_PracticeCalls_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
