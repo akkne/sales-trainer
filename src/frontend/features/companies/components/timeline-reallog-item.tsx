@@ -2,7 +2,7 @@
 
 import { Icon } from "@/shared/components/icon";
 import type { CallLogEntry } from "@/features/companies/hooks/use-company-logs";
-import { formatDateRu } from "@/features/companies/lib/format";
+import { formatCalendarDateRu } from "@/features/companies/lib/format";
 
 interface TimelineReallogItemProps {
     log: CallLogEntry;
@@ -10,7 +10,6 @@ interface TimelineReallogItemProps {
     onDelete: () => void;
 }
 
-/** Real-call log timeline entry — green node (§3.4b of the design spec). */
 export function TimelineReallogItem({ log, onEdit, onDelete }: TimelineReallogItemProps) {
     return (
         <div className="co-tl-item reallog">
@@ -18,7 +17,7 @@ export function TimelineReallogItem({ log, onEdit, onDelete }: TimelineReallogIt
             <div className="co-tl-card">
                 <div className="co-tl-top">
                     <span className="co-pill-real">Реальный звонок</span>
-                    <span className="co-tl-time">{formatDateRu(log.occurredAt)}</span>
+                    <span className="co-tl-time">{formatCalendarDateRu(log.occurredAt)}</span>
                     <button className="icon-btn" onClick={onEdit} aria-label="Редактировать запись">
                         <Icon name="edit" size="sm" />
                     </button>

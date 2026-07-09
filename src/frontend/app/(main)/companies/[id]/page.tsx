@@ -47,7 +47,6 @@ export default function CompanyPage() {
     const [editingLog, setEditingLog] = useState<CallLogEntry | null>(null);
     const [deletingLog, setDeletingLog] = useState<CallLogEntry | null>(null);
 
-    // ── Loading skeleton ──────────────────────────────────────────────────────
     if (isLoading) {
         return (
             <div className="co-page">
@@ -67,7 +66,6 @@ export default function CompanyPage() {
         );
     }
 
-    // ── Error / not-found state ──────────────────────────────────────────────
     const isNotFound = error instanceof ApiError && error.status === 404;
     if (error) {
         if (isNotFound) {

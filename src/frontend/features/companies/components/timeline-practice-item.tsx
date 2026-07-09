@@ -10,13 +10,15 @@ interface TimelinePracticeItemProps {
     practiceCall: PracticeCall;
 }
 
-/** Practice-call timeline entry — violet node (§3.4a of the design spec). */
 export function TimelinePracticeItem({ practiceCall }: TimelinePracticeItemProps) {
-    const [showFeedback, setShowFeedback] = useState(false);
-    const { data: session } = useDialogSession(practiceCall.dialogSessionId);
+    const [isExpanded, setExpanded] = useState(false);
+    const [isDismissed, setDismissed] = useState(false);
+    const { data: session } = useDialogSession(isExpanded ? practiceCall.dialogSessionId : null);
 
     const title = practiceCall.goal || "Тренировочный звонок";
     const messageCount = session?.messages.length ?? 0;
+    const canOpenDetails = !isExpanded || !!session?.feedback;
+    const shouldShowModal = isExpanded && !isDismissed && !!session?.feedback;
 
     return (
         <div className="co-tl-item practice">
@@ -27,18 +29,18 @@ export function TimelinePracticeItem({ practiceCall }: TimelinePracticeItemProps
                     <span className="co-tl-time">{relativeTimeRu(practiceCall.createdAt)}</span>
                 </div>
                 <p className="co-tl-title">{title}</p>
-                {messageCount > 0 && (
+                {isExpanded && messageCount > 0 && (
                     <p className="co-tl-meta">Голосовой звонок · {messageCount} реплик</p>
                 )}
-                {session?.feedback && (
-                    <button className="btn-link" style={{ marginTop: 6 }} onClick={() => setShowFeedback(true)}>
+                {canOpenDetails && (
+                    <button className="btn-link" style={{ marginTop: 6 }} onClick={() => setExpanded(true)}>
                         Разбор →
                     </button>
                 )}
             </div>
 
-            {showFeedback && session?.feedback && (
-                <FeedbackModal feedback={session.feedback} onClose={() => setShowFeedback(false)} />
+            {shouldShowModal && session?.feedback && (
+                <FeedbackModal feedback={session.feedback} onClose={() => setDismissed(true)} />
             )}
         </div>
     );

@@ -9,7 +9,6 @@ interface PrecallPanelProps {
     onCall: (goal: string) => void;
 }
 
-/** Pre-call goal step: goal input + recent-goal chips + "Позвонить" CTA (§4.1 of the design spec). */
 export function PrecallPanel({ hasDescription, recentGoals, onCall }: PrecallPanelProps) {
     const [goal, setGoal] = useState("");
 
@@ -24,6 +23,7 @@ export function PrecallPanel({ hasDescription, recentGoals, onCall }: PrecallPan
                     onChange={(event) => setGoal(event.target.value)}
                     placeholder="Цель звонка: напр. договориться о встрече с ЛПР"
                     aria-label="Цель звонка"
+                    maxLength={1000}
                 />
                 <button className="btn btn-dark" onClick={() => onCall(goal.trim())}>
                     <Icon name="phone" size={16} />

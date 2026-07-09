@@ -12,6 +12,11 @@ vi.mock("@/shared/api/api-client", () => ({
     },
 }));
 
+const toastError = vi.fn();
+vi.mock("@/features/notifications/store/toast-store", () => ({
+    toast: { error: (...args: unknown[]) => toastError(...args) },
+}));
+
 import { apiClient } from "@/shared/api/api-client";
 import {
     useCompanyLogs,
@@ -61,6 +66,7 @@ describe("useAddCallLog", () => {
     beforeEach(() => {
         mockPost.mockReset();
         mockGet.mockReset();
+        toastError.mockReset();
     });
 
     it("posts the log and invalidates logs/company/companies queries", async () => {
@@ -76,6 +82,17 @@ describe("useAddCallLog", () => {
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "logs"] });
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1"] });
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies"] });
+    });
+
+    it("shows an error toast when the request fails", async () => {
+        mockPost.mockRejectedValue(new Error("boom"));
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useAddCallLog("c1"), { wrapper });
+        result.current.mutate({ contactName: "Иван", subject: "", outcome: "", occurredAt: "2026-07-01T00:00:00Z" });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("boom"));
     });
 });
 

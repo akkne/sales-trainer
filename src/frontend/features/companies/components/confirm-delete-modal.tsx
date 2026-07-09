@@ -11,7 +11,6 @@ interface ConfirmDeleteModalProps {
     onClose: () => void;
 }
 
-/** Generic small destructive confirm (§5.3 of the design spec). */
 export function ConfirmDeleteModal({ title, body, submitting = false, onConfirm, onClose }: ConfirmDeleteModalProps) {
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {

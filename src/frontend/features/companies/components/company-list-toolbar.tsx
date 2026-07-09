@@ -7,7 +7,6 @@ interface CompanyListToolbarProps {
     count: number;
 }
 
-/** Search field + count row above the companies list (§2.3 of the design spec). */
 export function CompanyListToolbar({ search, onSearchChange, count }: CompanyListToolbarProps) {
     return (
         <div className="co-list-toolbar">

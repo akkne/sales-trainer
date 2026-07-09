@@ -11,7 +11,6 @@ interface CompanyDescriptionCardProps {
 const HELPER_TEXT =
     "Добавьте описание: кто эта компания, что продаёт, кто ЛПР, боли и контекст. Это описание получит ИИ‑собеседник во время тренировки.";
 
-/** Read/edit company description card (§3.3 of the design spec). */
 export function CompanyDescriptionCard({ description, submitting = false, onSave }: CompanyDescriptionCardProps) {
     const [isEditing, setEditing] = useState(false);
     const [draft, setDraft] = useState(description);
@@ -52,6 +51,7 @@ export function CompanyDescriptionCard({ description, submitting = false, onSave
                         value={draft}
                         onChange={(event) => setDraft(event.target.value)}
                         placeholder={HELPER_TEXT}
+                        maxLength={8000}
                         autoFocus
                     />
                     <p style={{ fontSize: 11.5, color: "var(--ink-4)", margin: "6px 0 0" }}>

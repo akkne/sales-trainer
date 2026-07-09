@@ -14,7 +14,6 @@ interface CallLogFormProps {
     onCancel: () => void;
 }
 
-/** 3-field + date form for adding/editing a real-call log entry (§3.5 of the design spec). */
 export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }: CallLogFormProps) {
     const [contactName, setContactName] = useState(initial?.contactName ?? "");
     const [subject, setSubject] = useState(initial?.subject ?? "");
@@ -57,6 +56,7 @@ export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }:
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
                 placeholder="Кратко о ходе разговора"
+                maxLength={4000}
             />
 
             <label className="co-field-label" htmlFor="co-log-outcome">К чему пришли</label>
@@ -67,6 +67,7 @@ export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }:
                 value={outcome}
                 onChange={(event) => setOutcome(event.target.value)}
                 placeholder="Договорённости, следующий шаг"
+                maxLength={4000}
             />
 
             <label className="co-field-label" htmlFor="co-log-date">Дата</label>

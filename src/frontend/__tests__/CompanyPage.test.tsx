@@ -31,8 +31,9 @@ vi.mock("@/features/companies/hooks/use-practice-calls", () => ({
     useRecentGoals: (...args: unknown[]) => useRecentGoals(...args),
 }));
 
+const useDialogSession = vi.fn(() => ({ data: undefined }));
 vi.mock("@/features/dialog/hooks/use-dialog", () => ({
-    useDialogSession: () => ({ data: undefined }),
+    useDialogSession: (...args: unknown[]) => useDialogSession(...args),
 }));
 
 import { ApiError } from "@/shared/api/api-client";
@@ -54,6 +55,7 @@ describe("CompanyPage", () => {
         useCompanyLogs.mockReset();
         useCompanyPracticeCalls.mockReset();
         useRecentGoals.mockReset();
+        useDialogSession.mockClear();
         mockPush.mockReset();
 
         useCompanyLogs.mockReturnValue({ data: [] });
@@ -112,6 +114,16 @@ describe("CompanyPage", () => {
         useCompany.mockReturnValue({ data: COMPANY, isLoading: false, error: null, refetch: vi.fn() });
         render(<CompanyPage />);
         expect(screen.getByText("Здесь появятся ваши тренировки и записи о реальных звонках")).toBeTruthy();
+    });
+
+    it("does not fetch dialog sessions for practice calls on initial render", () => {
+        useCompany.mockReturnValue({ data: COMPANY, isLoading: false, error: null, refetch: vi.fn() });
+        useCompanyPracticeCalls.mockReturnValue({
+            data: [{ id: "p1", companyId: "c1", dialogSessionId: "d1", goal: "Цель", createdAt: "2026-07-01T00:00:00Z" }],
+        });
+        render(<CompanyPage />);
+
+        expect(useDialogSession).toHaveBeenCalledWith(null);
     });
 
     it("navigates to the call route with the goal on 'Позвонить'", () => {

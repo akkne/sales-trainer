@@ -4,14 +4,12 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/shared/components/icon";
 
 interface CompanyModalProps {
-    /** When set, the modal opens in edit mode pre-filled with these values. */
     initial?: { name: string; description: string };
     submitting?: boolean;
     onSubmit: (values: { name: string; description: string }) => void;
     onClose: () => void;
 }
 
-/** Create / edit company modal (§5.1 of the design spec). */
 export function CompanyModal({ initial, submitting = false, onSubmit, onClose }: CompanyModalProps) {
     const isEdit = !!initial;
     const [name, setName] = useState(initial?.name ?? "");

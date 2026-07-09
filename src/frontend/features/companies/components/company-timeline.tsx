@@ -26,7 +26,6 @@ const SEGMENTS: { key: TimelineFilter; label: string }[] = [
     { key: "reallog", label: "Звонки" },
 ];
 
-/** Combined chronological timeline card with segmented filter (§3.4 of the design spec). */
 export function CompanyTimeline({
     practiceCalls,
     logs,

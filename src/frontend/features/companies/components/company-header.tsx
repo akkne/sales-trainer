@@ -11,7 +11,6 @@ interface CompanyHeaderProps {
     onDelete: () => void;
 }
 
-/** Identity header — avatar, name, meta, edit/delete actions (§3.2 of the design spec). */
 export function CompanyHeader({ company, onEdit, onDelete }: CompanyHeaderProps) {
     const { from, to } = ava(company.id);
     const abbr = initials(company.name);

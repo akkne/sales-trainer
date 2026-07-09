@@ -1,7 +1,3 @@
-/**
- * Generic RU plural selector: picks `one` (1, 21, 31…), `few` (2-4, 22-24…),
- * or `many` (0, 5-20, 11-14, 25…) based on the standard mod10/mod100 rule.
- */
 export function pluralizeRu(count: number, [one, few, many]: [string, string, string]): string {
     const mod100 = count % 100;
     const mod10 = count % 10;
@@ -10,12 +6,10 @@ export function pluralizeRu(count: number, [one, few, many]: [string, string, st
     return many;
 }
 
-/** Russian plural for "компания" given a count (§8 of the design spec). */
 export function pluralizeCompanies(count: number): string {
     return pluralizeRu(count, ["компания", "компании", "компаний"]);
 }
 
-/** "{n} компаний" style count label. */
 export function companiesCountLabel(count: number): string {
     return `${count} ${pluralizeCompanies(count)}`;
 }
@@ -25,16 +19,16 @@ const RU_MONTHS = [
     "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
-/** Absolute RU date, e.g. "9 июл 2026". */
 export function formatDateRu(iso: string): string {
     const date = new Date(iso);
     return `${date.getDate()} ${RU_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-/**
- * RU relative time: "только что", "{n} мин назад", "{n} ч назад", "{n} д назад",
- * falling back to the absolute date beyond that (§8.2 of the design spec).
- */
+export function formatCalendarDateRu(iso: string): string {
+    const date = new Date(iso);
+    return `${date.getUTCDate()} ${RU_MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
 export function relativeTimeRu(iso: string): string {
     const diffMs = Date.now() - new Date(iso).getTime();
     const minutes = Math.floor(diffMs / 60_000);
