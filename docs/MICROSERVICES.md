@@ -42,7 +42,7 @@
 
 ---
 
-## 2. Service catalogue (7 services + Gateway)
+## 2. Service catalogue (8 services + Gateway)
 
 ```
                          ┌──────────────────────────┐
@@ -102,6 +102,9 @@ src/backend/
   analytics-service/
     Analytics/
     Analytics.Tests/
+  company-service/
+    Company/
+    Company.Tests/
 ```
 
 Rule: a service is self-contained — `<service>/<Name>` (code) + `<service>/<Name>.Tests`
@@ -199,7 +202,20 @@ live in `building-blocks`.
 - **Kafka (consumes):** optionally mirrors `user.registered`, `exercise.completed`,
   `xp.granted` for product funnels. No durability guarantees needed.
 
-### 2.8 API Gateway — `gateway` (YARP)
+### 2.8 Company Service — `company-service` (Postgres, Phase 39)
+**Bounded context:** the salesperson's account book — companies they sell into, their
+call history, and practice-call sessions tied to a company.
+- **Owns (Postgres `company`):** `Company` (Id, UserId, Name, Description, CreatedAt,
+  UpdatedAt), `CallLogEntry` (real-call log entries), `PracticeCall` (links to an AI
+  `DialogSession` with a goal).
+- **Frontend REST:** `/companies/*` (companies CRUD, call log, practice-call records).
+- **No Kafka, Redis, or Mongo dependency.** Every query is scoped to the JWT's `UserId`
+  at the service layer; 404 on foreign ids.
+- **Sync dependency:** starting a practice call hands a company-context payload
+  (`companyName`, `companyDescription`, `callGoal`) to the **AI Service** `StartSessionAsync`
+  call, which composes it into the roleplay's system prompt (see 2.3).
+
+### 2.9 API Gateway — `gateway` (YARP)
 - Single public entry point. Terminates TLS, validates the JWT once, forwards
   `X-User-Id`/`X-User-Role` headers downstream (stripping client copies), and routes by
   path prefix to the services above. **Each service still re-validates the JWT and

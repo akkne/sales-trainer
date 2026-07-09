@@ -2,7 +2,7 @@
 
 > **Microservices note (Phase 9):** the public API is now served by the **YARP
 > gateway**, which routes every path to its owning microservice (identity, learning,
-> gamification, ai, social, analytics, notification). The original monolith
+> gamification, ai, social, analytics, notification, company). The original monolith
 > (`src/backend/api`) is **retired and removed from `main`** — it is preserved on the
 > `monolith-legacy` branch for rollback/reference. In the Traefik prod overlay,
 > `api.${DOMAIN}` now points at the `gateway` service; "backend" below refers to this
@@ -74,7 +74,7 @@ The whole backend stack deploys via the root `docker-compose.yml`.
 
 ```bash
 # On the deploy host, with a filled-in root .env (see Environment variables below):
-docker compose up --build -d gateway identity learning gamification ai social analytics notification \
+docker compose up --build -d gateway identity learning gamification ai social analytics notification company \
   postgres mongo redis minio kafka loki prometheus grafana
 ```
 

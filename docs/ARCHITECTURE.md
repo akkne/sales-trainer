@@ -94,7 +94,7 @@ repo and the solution as a reference only (not built or run as a container):
 src/backend/
   api/                         ← RETIRED monolith (reference only; not deployed)
   tests/                       ← monolith tests (reference only)
-  {identity,learning,gamification,ai,social,analytics,notification}-service/
+  {identity,learning,gamification,ai,social,analytics,notification,company}-service/
                                ← the extracted services, each with its own DB + tests
   building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
                                        idempotent-consumer base, Redis idempotency

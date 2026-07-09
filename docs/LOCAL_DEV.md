@@ -63,6 +63,7 @@ scripts/dev-gateway.sh    # API gateway (YARP) on host, proxying to backend + id
 scripts/dev-identity.sh   # Identity microservice on host, port 5002 (own identity-db) (optional)
 scripts/dev-notifications.sh # Notification microservice on host, port 5004 (Redis-only) (optional)
 scripts/dev-analytics.sh  # Analytics microservice on host, port 5005 (own analytics-redis on 6380) (optional)
+scripts/dev-company.sh    # Company microservice on host, port 5009 (own company database, no Kafka/Redis/Mongo) (optional)
 ```
 
 > **Identity service (microservices Phase 2).** `scripts/dev-identity.sh` runs the
@@ -82,6 +83,12 @@ scripts/dev-analytics.sh  # Analytics microservice on host, port 5005 (own analy
 > (`analytics-redis` on port 6380, separate from the shared Redis). With the gateway running,
 > `/tracking/*` is proxied to it; the monolith serves the rest. It owns the product Prometheus
 > metrics (`/metrics`). See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md).
+
+> **Company service (Phase 39, Companies feature).** `scripts/dev-company.sh` runs the
+> Company service on `http://localhost:5009` with its own Postgres database `company`
+> (auto-created on first start) on the shared local Postgres. It has no Kafka, Redis, or
+> Mongo dependency. With the gateway running, `/companies` and `/companies/*` are proxied
+> to it.
 
 ## Files added by this profile
 
