@@ -127,6 +127,13 @@ export default function CompanyPage() {
         router.push(`/companies/${companyId}/call/voice?goal=${encodeURIComponent(goal)}`);
     };
 
+    const handleChat = (goal: string) => {
+        if (typeof window !== "undefined") {
+            sessionStorage.setItem(`company-call-goal:${companyId}`, goal);
+        }
+        router.push(`/companies/${companyId}/call/chat?goal=${encodeURIComponent(goal)}`);
+    };
+
     const handleAddLog = (payload: CallLogPayload) => {
         addCallLog.mutate(payload, { onSuccess: () => setAddingLog(false) });
     };
@@ -156,6 +163,7 @@ export default function CompanyPage() {
                 hasDescription={company.description.trim().length > 0}
                 recentGoals={recentGoals ?? []}
                 onCall={handleCall}
+                onChat={handleChat}
             />
 
             <CompanyDescriptionCard

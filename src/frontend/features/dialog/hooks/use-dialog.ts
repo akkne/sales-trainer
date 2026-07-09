@@ -93,8 +93,22 @@ export function useDialogSession(sessionId: string | null) {
     });
 }
 
-export async function startDialogSession(bundleId: string, modeId: string): Promise<DialogSession> {
-    return apiClient.post<DialogSession>("/dialog/sessions", { bundleId, modeId });
+export interface DialogSessionCompanyContext {
+    companyName: string;
+    companyDescription: string;
+    callGoal?: string;
+}
+
+export async function startDialogSession(
+    bundleId: string,
+    modeId: string,
+    companyContext?: DialogSessionCompanyContext,
+): Promise<DialogSession> {
+    return apiClient.post<DialogSession>("/dialog/sessions", {
+        bundleId,
+        modeId,
+        ...(companyContext ? { companyContext } : {}),
+    });
 }
 
 export async function sendDialogMessage(sessionId: string, content: string): Promise<DialogMessage> {
