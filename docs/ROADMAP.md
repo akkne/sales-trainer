@@ -1208,3 +1208,90 @@
 - [x] Admin `/admin/discuss` (thread moderation + curated tag catalog); nav entries + "forum" icon
 - [x] Vitest tests; `.dsc-*` styles ported into `globals.css`
 - [x] Docs: `DISCUSS.md`, `TESTING/DISCUSS.md`, API_CONTRACTS, FEATURES
+
+---
+
+## Phase 39 — Companies (Компании)
+
+> New tab: the user keeps a private list of real prospect companies, writes a free-form
+> description per company, practices AI calls against that description + a per-call goal
+> prompt (reusing the existing full-screen voice-call flow), and logs real calls
+> (who / what about / outcome). Design: [docs/COMPANIES/DESIGN_SPEC.md](COMPANIES/DESIGN_SPEC.md).
+>
+> **Architecture decisions (record in DECISIONS.md when implementing):**
+> - New microservice **`company-service`** (`src/backend/company-service/Company`),
+>   Postgres DB `company`, host port **5009**, scaffolded after `notification-service`
+>   (Serilog+Loki, per-service JWT validation, CORS, health checks, ProblemDetails).
+>   No Kafka producer/consumer in MVP (no cross-service state depends on companies);
+>   adopt BuildingBlocks eventing later if needed.
+> - **ai-service** gains optional per-session context injection: company practice calls
+>   are normal `DialogSession`s created with a seeded admin-editable "company-call"
+>   `DialogMode` template + injected `{companyName, companyDescription, callGoal}`.
+>   The voice pipeline (`/voice/stream`), feedback, XP, and quotas are reused unchanged.
+> - `company-service` stores the link `PracticeCall {companyId, dialogSessionId, goal}`;
+>   the company timeline merges practice calls and real-call logs client-side.
+>
+> **Process:** implementation via sonnet executor agents; EVERY sub-phase ends with a
+> `code-reviewer` agent pass and green tests before commit.
+
+### [ ] 39.1 Backend — company-service scaffold
+- [ ] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
+- [ ] `CompanyDbContext` (Postgres `company`), auto-migrate on startup
+- [ ] Entities: `Company` (Id, UserId, Name, Description, CreatedAt, UpdatedAt),
+      `CallLogEntry` (Id, CompanyId, UserId, ContactName, Subject, Outcome, OccurredAt, CreatedAt, UpdatedAt),
+      `PracticeCall` (Id, CompanyId, UserId, DialogSessionId, Goal, CreatedAt)
+- [ ] EF configurations: indexes on `(UserId)`, `(CompanyId, OccurredAt DESC)`, `(CompanyId, CreatedAt DESC)`
+- [ ] `Program.cs` per notification-service pattern; Dockerfile
+- [ ] Update `docs/DB_SCHEMA.md`
+
+### [ ] 39.2 Backend — company-service API
+- [ ] `CompanyController`: `GET /companies` (list, `?search=`), `POST /companies` `{name}`,
+      `GET /companies/{id}`, `PUT /companies/{id}` `{name, description}`, `DELETE /companies/{id}`
+- [ ] Call log: `GET /companies/{id}/logs`, `POST /companies/{id}/logs` `{contactName, subject, outcome, occurredAt}`,
+      `PUT /companies/{id}/logs/{logId}`, `DELETE /companies/{id}/logs/{logId}`
+- [ ] Practice calls: `POST /companies/{id}/practice-calls` `{dialogSessionId, goal}`,
+      `GET /companies/{id}/practice-calls`; `GET /companies/{id}/recent-goals` (last 5 distinct)
+- [ ] Ownership guard: every query filtered by `UserId` from JWT; 404 on foreign ids
+- [ ] Input validation + limits (name ≤ 200, description ≤ 8000, log fields ≤ 4000)
+- [ ] Unit tests (service layer, ownership, validation); update `docs/API_CONTRACTS.md`
+
+### [ ] 39.3 Backend — ai-service: company-context sessions
+- [ ] `StartSessionRequestDto` gains optional `companyContext { companyName, companyDescription, callGoal }`
+- [ ] Seed admin-editable `DialogMode` template (key `company-call`, voiceEnabled, hidden from `/dialog/bundles` listing)
+- [ ] `DialogService.StartSessionAsync`: when context present → compose chat + feedback
+      system prompts from the template with context appended; persist context in the Mongo `DialogSession`
+- [ ] Voice stream, complete/feedback, XP weights, minute quotas — unchanged and verified with context sessions
+- [ ] Unit tests (prompt composition, context persistence); update `docs/API_CONTRACTS.md`, `docs/AI_DIALOG.md`
+
+### [ ] 39.4 Infra — gateway, compose, dev scripts
+- [ ] YARP: route `/companies/{**catch-all}` → cluster `company` in `gateway/appsettings.json` + gateway tests
+- [ ] `docker-compose.yml`: `company` service entry (env, depends_on postgres; gateway env + depends_on)
+- [ ] `scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) + hook into `scripts/dev-up.sh`
+- [ ] Update `docs/LOCAL_DEV.md`, `docs/CONFIGURATION.md`, `docs/MICROSERVICES.md`, `docs/ARCHITECTURE.md`
+
+### [ ] 39.5 Frontend — nav + companies list
+- [ ] `briefcase` icon added to `IconName`; rail item «Компании» in `nav-rail.tsx`; mobile `bottom-nav.tsx` per spec §1.4
+- [ ] `features/companies/`: `use-companies.ts` hooks (list/create/update/delete, search)
+- [ ] `/companies` page per spec §2: header, toolbar (search + «Добавить компанию»), `.co-row` list,
+      create-company modal, empty/loading/error states
+- [ ] Vitest tests for hooks + list rendering
+
+### [ ] 39.6 Frontend — company page
+- [ ] `/companies/[id]` per spec §3: identity header, description card with edit mode,
+      pre-call `.co-cta` panel (goal input + recent-goal chips), combined timeline
+      (Все / Тренировки / Звонки segmented filter)
+- [ ] Real-call log add/edit form (3 fields: с кем / о чём / к чему пришли + дата) + delete confirm
+- [ ] Edit/delete company (modal + confirm, navigate back on delete)
+- [ ] Vitest tests
+
+### [ ] 39.7 Frontend — practice-call handoff
+- [ ] Full-screen route `/companies/[id]/call/voice` (outside `(main)`) reusing the existing
+      voice pipeline (`useVoice`, call states, sounds, quota) with company-context session creation
+- [ ] Optional chat variant `/companies/[id]/call/chat` reusing chat components
+- [ ] On session create → `POST /companies/{id}/practice-calls`; hangup → feedback modal → return to `/companies/[id]`
+- [ ] Practice entries appear in the company timeline with feedback summary
+
+### [ ] 39.8 Docs, tests & QA
+- [ ] `docs/COMPANIES/COMPANIES.md` feature doc; link both COMPANIES docs in `docs/FEATURES.md`
+- [ ] `docs/TESTING/COMPANIES.md` — manual checklist (CRUD, ownership, practice call with goal, logs, timeline, mobile)
+- [ ] Final `code-reviewer` + `verifier` agent pass over the whole phase (tsc, vitest, dotnet test, eslint)

@@ -56,6 +56,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
+| [Companies — Design Spec](COMPANIES/DESIGN_SPEC.md) | **Planned (Phase 39)** — «Компании» tab: prospect list, per-company description, AI practice calls with goal prompt, real-call log; company-service (port 5009) + ai-service context injection |
 
 ## Testing
 
