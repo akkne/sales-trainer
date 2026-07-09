@@ -7,8 +7,8 @@ namespace Sellevate.Ai.Features.Dialog.Seeders;
 
 public static class CompanyCallModeSeeder
 {
-    private static readonly Guid CompanyCallBundleId = new("a1000000-0000-0000-0000-000000000001");
-    private static readonly Guid CompanyCallModeId = new("a2000000-0000-0000-0000-000000000001");
+    public static readonly Guid CompanyCallBundleId = new("a1000000-0000-0000-0000-000000000001");
+    public static readonly Guid CompanyCallModeId = new("a2000000-0000-0000-0000-000000000001");
     private static readonly Guid CompanyCallSkillId = new("a3000000-0000-0000-0000-000000000001");
 
     private const string BundleTitle = "Звонок по компании";

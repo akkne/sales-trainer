@@ -1,18 +1,19 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
 using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Dialog.Constants;
+using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.Ai.Infrastructure.Mongo;
-using Microsoft.Extensions.Configuration;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -36,22 +37,6 @@ public class CompanyContextDialogTests
         return new MongoDbContext(mongoClient, configuration);
     }
 
-    private static DialogSession BuildSessionWithContext(
-        Guid modeId,
-        CompanyCallContext? companyCallContext)
-    {
-        return new DialogSession
-        {
-            Id = "507f1f77bcf86cd799439011",
-            UserId = Guid.NewGuid(),
-            BundleId = Guid.NewGuid(),
-            ModeId = modeId,
-            Status = DialogSessionStatus.Active,
-            Messages = [],
-            CompanyCallContext = companyCallContext
-        };
-    }
-
     [Test]
     public async Task Seeder_CreatesCompanyCallBundle_AndMode_OnFirstRun()
     {
@@ -65,6 +50,7 @@ public class CompanyContextDialogTests
         mode.Should().NotBeNull();
         mode!.VoiceEnabled.Should().BeTrue();
         mode.IsActive.Should().BeTrue();
+        mode.Id.Should().Be(CompanyCallModeSeeder.CompanyCallModeId);
 
         var bundle = await databaseContext.DialogBundles
             .FirstOrDefaultAsync(dialogBundle => dialogBundle.Id == mode.BundleId);
@@ -72,6 +58,7 @@ public class CompanyContextDialogTests
         bundle.Should().NotBeNull();
         bundle!.IsHidden.Should().BeTrue();
         bundle.IsActive.Should().BeTrue();
+        bundle.Id.Should().Be(CompanyCallModeSeeder.CompanyCallBundleId);
     }
 
     [Test]
@@ -94,11 +81,10 @@ public class CompanyContextDialogTests
         await using var databaseContext = BuildInMemoryContext();
         var mongoContext = BuildFakeMongoContext();
 
-        var visibleSkillId = Guid.NewGuid();
         databaseContext.DialogBundles.Add(new DialogBundle
         {
             Id = Guid.NewGuid(),
-            SkillId = visibleSkillId,
+            SkillId = Guid.NewGuid(),
             Title = "Visible Bundle",
             Description = "A visible bundle",
             IconEmoji = "📞",
@@ -150,9 +136,8 @@ public class CompanyContextDialogTests
             CompanyDescription = "Поставщик офисных принадлежностей",
             CallGoal = "Записать встречу"
         };
-        var session = BuildSessionWithContext(Guid.NewGuid(), companyCallContext);
 
-        var composedPrompt = BuildTestChatSystemPrompt(basePrompt, session.CompanyCallContext);
+        var composedPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(basePrompt, companyCallContext);
 
         composedPrompt.Should().Contain(basePrompt);
         composedPrompt.Should().Contain("Компания: ООО Рога и Копыта");
@@ -170,9 +155,8 @@ public class CompanyContextDialogTests
             CompanyDescription = "ИТ-интегратор",
             CallGoal = null
         };
-        var session = BuildSessionWithContext(Guid.NewGuid(), companyCallContext);
 
-        var composedPrompt = BuildTestChatSystemPrompt(basePrompt, session.CompanyCallContext);
+        var composedPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(basePrompt, companyCallContext);
 
         composedPrompt.Should().Contain(basePrompt);
         composedPrompt.Should().Contain("Компания: Технопром");
@@ -184,9 +168,18 @@ public class CompanyContextDialogTests
     public void ChatSystemPrompt_WithoutCompanyContext_ReturnsBasePromptUnchanged()
     {
         var basePrompt = "Ты — менеджер по продажам.";
-        var session = BuildSessionWithContext(Guid.NewGuid(), null);
 
-        var composedPrompt = BuildTestChatSystemPrompt(basePrompt, session.CompanyCallContext);
+        var composedPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(basePrompt, null);
+
+        composedPrompt.Should().Be(basePrompt);
+    }
+
+    [Test]
+    public void FeedbackSystemPrompt_WithoutCompanyContext_ReturnsBasePromptUnchanged()
+    {
+        var basePrompt = "Оцени разговор.";
+
+        var composedPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(basePrompt, null);
 
         composedPrompt.Should().Be(basePrompt);
     }
@@ -202,7 +195,7 @@ public class CompanyContextDialogTests
             CallGoal = "   "
         };
 
-        var composedPrompt = BuildTestChatSystemPrompt(basePrompt, companyCallContext);
+        var composedPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(basePrompt, companyCallContext);
 
         composedPrompt.Should().NotContain("Цель звонка пользователя");
     }
@@ -249,26 +242,101 @@ public class CompanyContextDialogTests
         session.CompanyCallContext.Should().BeNull();
     }
 
-    private static string BuildTestChatSystemPrompt(string basePrompt, CompanyCallContext? companyCallContext)
+    [Test]
+    public async Task StartSession_WithCompanyContext_OnNonCompanyCallMode_Throws()
     {
-        if (companyCallContext == null)
+        await using var databaseContext = BuildInMemoryContext();
+        var mongoContext = BuildFakeMongoContext();
+
+        var regularModeId = Guid.NewGuid();
+        var bundleId = Guid.NewGuid();
+        databaseContext.DialogBundles.Add(new DialogBundle
         {
-            return basePrompt;
-        }
-
-        var lines = new System.Text.StringBuilder();
-        lines.Append(basePrompt);
-        lines.AppendLine();
-        lines.AppendLine();
-        lines.AppendLine("---");
-        lines.AppendLine($"Компания: {companyCallContext.CompanyName}");
-        lines.AppendLine($"Описание: {companyCallContext.CompanyDescription}");
-
-        if (!string.IsNullOrWhiteSpace(companyCallContext.CallGoal))
+            Id = bundleId,
+            SkillId = Guid.NewGuid(),
+            Title = "Regular Bundle",
+            Description = "Description",
+            IconEmoji = "📞",
+            SortOrder = 1,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        databaseContext.DialogModes.Add(new DialogMode
         {
-            lines.AppendLine($"Цель звонка пользователя: {companyCallContext.CallGoal}");
-        }
+            Id = regularModeId,
+            BundleId = bundleId,
+            Key = "regular-mode",
+            Title = "Regular Mode",
+            Description = "Description",
+            ChatSystemPrompt = "Prompt",
+            FeedbackSystemPrompt = "Feedback",
+            SortOrder = 1,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await databaseContext.SaveChangesAsync();
 
-        return lines.ToString();
+        var dialogService = new DialogService(
+            databaseContext,
+            mongoContext,
+            Substitute.For<IOpenAiChatService>(),
+            Substitute.For<IDialogScoringWeightsProvider>(),
+            Substitute.For<IDialogEventPublisher>(),
+            NullLogger<DialogService>.Instance);
+
+        var companyCallContext = new CompanyCallContext
+        {
+            CompanyName = "Test Company",
+            CompanyDescription = "Test Description"
+        };
+
+        var act = () => dialogService.StartSessionAsync(Guid.NewGuid(), bundleId, regularModeId, companyCallContext);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*company-call*");
+    }
+
+    [Test]
+    public async Task GetCompanyCallMode_ReturnsNull_WhenModeNotSeeded()
+    {
+        await using var databaseContext = BuildInMemoryContext();
+        var mongoContext = BuildFakeMongoContext();
+
+        var dialogService = new DialogService(
+            databaseContext,
+            mongoContext,
+            Substitute.For<IOpenAiChatService>(),
+            Substitute.For<IDialogScoringWeightsProvider>(),
+            Substitute.For<IDialogEventPublisher>(),
+            NullLogger<DialogService>.Instance);
+
+        var mode = await dialogService.GetCompanyCallModeAsync();
+
+        mode.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetCompanyCallMode_ReturnsSeededMode_AfterSeeding()
+    {
+        await using var databaseContext = BuildInMemoryContext();
+        var mongoContext = BuildFakeMongoContext();
+
+        await CompanyCallModeSeeder.SeedAsync(databaseContext);
+
+        var dialogService = new DialogService(
+            databaseContext,
+            mongoContext,
+            Substitute.For<IOpenAiChatService>(),
+            Substitute.For<IDialogScoringWeightsProvider>(),
+            Substitute.For<IDialogEventPublisher>(),
+            NullLogger<DialogService>.Instance);
+
+        var mode = await dialogService.GetCompanyCallModeAsync();
+
+        mode.Should().NotBeNull();
+        mode!.Key.Should().Be(DialogModeKeys.CompanyCall);
+        mode.Id.Should().Be(CompanyCallModeSeeder.CompanyCallModeId);
     }
 }

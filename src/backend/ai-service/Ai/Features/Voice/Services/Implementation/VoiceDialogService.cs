@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
+using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
@@ -67,19 +67,17 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             IsStopSignal = false
         };
         session.Messages.Add(userMsg);
-        // AI7a: Push the single user message instead of overwriting the whole array.
         await _mongoContext.DialogSessions.UpdateOneAsync(
             filter,
             Builders<DialogSession>.Update.Push(s => s.Messages, userMsg),
             cancellationToken: ct);
 
+        var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+
         var replyParser = new StreamingChatReplyParser();
         var sentenceChunker = new SentenceChunker();
-        // TTS pipeline: synthesis of sentence N runs concurrently with LLM streaming of sentence N+1.
-        // Tasks are awaited in order, so audio chunks always arrive in reply order.
         var pendingAudio = new Queue<Task<byte[]?>>();
 
-        var chatSystemPrompt = BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
         await foreach (var delta in _openAiService.StreamChatMessageAsync(chatSystemPrompt, session.Messages, ct))
         {
             var replyText = replyParser.Push(delta);
@@ -96,7 +94,6 @@ internal sealed class VoiceDialogService : IVoiceDialogService
                 pendingAudio.Enqueue(TrySynthesizeAsync(cleaned, mode.VoiceId, sessionId, ct));
             }
 
-            // Flush audio that is already synthesized without blocking the LLM stream.
             while (pendingAudio.Count > 0 && pendingAudio.Peek().IsCompleted)
             {
                 var readyAudio = await pendingAudio.Dequeue();
@@ -136,7 +133,6 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             IsStopSignal = parseResult.EndCall
         };
         session.Messages.Add(assistantMsg);
-        // AI7a: Push the single assistant message instead of overwriting the whole array.
         await _mongoContext.DialogSessions.UpdateOneAsync(
             filter,
             Builders<DialogSession>.Update.Push(s => s.Messages, assistantMsg),
@@ -175,28 +171,5 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             await stream.CopyToAsync(ms, ct);
             return ms.ToArray();
         }
-    }
-
-    private static string BuildChatSystemPrompt(string basePrompt, CompanyCallContext? companyCallContext)
-    {
-        if (companyCallContext == null)
-        {
-            return basePrompt;
-        }
-
-        var lines = new StringBuilder();
-        lines.Append(basePrompt);
-        lines.AppendLine();
-        lines.AppendLine();
-        lines.AppendLine("---");
-        lines.AppendLine($"Компания: {companyCallContext.CompanyName}");
-        lines.AppendLine($"Описание: {companyCallContext.CompanyDescription}");
-
-        if (!string.IsNullOrWhiteSpace(companyCallContext.CallGoal))
-        {
-            lines.AppendLine($"Цель звонка пользователя: {companyCallContext.CallGoal}");
-        }
-
-        return lines.ToString();
     }
 }
