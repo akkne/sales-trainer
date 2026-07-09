@@ -1285,7 +1285,7 @@
       create-company modal, empty/loading/error states
 - [ ] Vitest tests for hooks + list rendering
 
-### [>] 39.6 Frontend — company page
+### [x] 39.6 Frontend — company page
 - [ ] `/companies/[id]` per spec §3: identity header, description card with edit mode,
       pre-call `.co-cta` panel (goal input + recent-goal chips), combined timeline
       (Все / Тренировки / Звонки segmented filter)
@@ -1293,7 +1293,7 @@
 - [ ] Edit/delete company (modal + confirm, navigate back on delete)
 - [ ] Vitest tests
 
-### [ ] 39.7 Frontend — practice-call handoff
+### [>] 39.7 Frontend — practice-call handoff
 - [ ] Full-screen route `/companies/[id]/call/voice` (outside `(main)`) reusing the existing
       voice pipeline (`useVoice`, call states, sounds, quota) with company-context session creation
 - [ ] Optional chat variant `/companies/[id]/call/chat` reusing chat components
