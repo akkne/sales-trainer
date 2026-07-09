@@ -1293,14 +1293,14 @@
 - [ ] Edit/delete company (modal + confirm, navigate back on delete)
 - [ ] Vitest tests
 
-### [>] 39.7 Frontend — practice-call handoff
+### [x] 39.7 Frontend — practice-call handoff
 - [ ] Full-screen route `/companies/[id]/call/voice` (outside `(main)`) reusing the existing
       voice pipeline (`useVoice`, call states, sounds, quota) with company-context session creation
 - [ ] Optional chat variant `/companies/[id]/call/chat` reusing chat components
 - [ ] On session create → `POST /companies/{id}/practice-calls`; hangup → feedback modal → return to `/companies/[id]`
 - [ ] Practice entries appear in the company timeline with feedback summary
 
-### [ ] 39.8 Core docs checkpoint (Stage A)
+### [>] 39.8 Core docs checkpoint (Stage A)
 - [ ] `docs/COMPANIES/COMPANIES.md` feature doc (core flows); link both COMPANIES docs in `docs/FEATURES.md`
 - [ ] `docs/TESTING/COMPANIES.md` — manual checklist (CRUD, ownership, practice call with goal, logs, timeline, mobile)
 
@@ -1310,7 +1310,7 @@
 > Same PR process. Order matters: 39.9/39.10 are schema-level and go first;
 > AI features (39.12–39.14, 39.16) depend on 39.3 core context plumbing.
 
-### [ ] 39.9 Contacts (mini-CRM)
+### [>] 39.9 Contacts (mini-CRM)
 - [ ] Backend: `CompanyContact` entity (Id, CompanyId, UserId, Name, Position, Notes?, CreatedAt, UpdatedAt);
       CRUD `GET/POST /companies/{id}/contacts`, `PUT/DELETE /companies/{id}/contacts/{contactId}`
 - [ ] `CallLogEntry.ContactId` (nullable FK, SET NULL on delete) alongside free-text `ContactName`
