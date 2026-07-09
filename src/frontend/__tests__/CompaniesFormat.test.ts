@@ -1,10 +1,36 @@
 import { describe, it, expect } from "vitest";
 import {
+    pluralizeRu,
     pluralizeCompanies,
     companiesCountLabel,
     formatDateRu,
     relativeTimeRu,
 } from "@/features/companies/lib/format";
+
+describe("pluralizeRu", () => {
+    const forms: [string, string, string] = ["звонок", "звонка", "звонков"];
+
+    it("picks the 'one' form for 1, 21", () => {
+        expect(pluralizeRu(1, forms)).toBe("звонок");
+        expect(pluralizeRu(21, forms)).toBe("звонок");
+    });
+
+    it("picks the 'few' form for 2", () => {
+        expect(pluralizeRu(2, forms)).toBe("звонка");
+    });
+
+    it("picks the 'many' form for 5", () => {
+        expect(pluralizeRu(5, forms)).toBe("звонков");
+    });
+
+    it("picks the 'many' form for 11 (not 'one', despite ending in 1)", () => {
+        expect(pluralizeRu(11, forms)).toBe("звонков");
+    });
+
+    it("picks the 'one' form for 21 (ends in 1, not 11)", () => {
+        expect(pluralizeRu(21, forms)).toBe("звонок");
+    });
+});
 
 describe("pluralizeCompanies", () => {
     it("uses компания for 1, 21, 31 (ends in 1, not 11)", () => {

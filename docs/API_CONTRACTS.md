@@ -874,7 +874,7 @@ DTO additions on the Discuss user endpoints above:
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /companies | `?search=` (optional) | `CompanySummaryDto[]` sorted newest-updated first |
-| POST | /companies | `{name}` | `201 CompanyDetailDto` |
+| POST | /companies | `{name, description?}` | `201 CompanyDetailDto` |
 | GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
 | DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls) |

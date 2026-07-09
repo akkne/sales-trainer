@@ -1,10 +1,18 @@
-/** Russian plural for "компания" given a count (§8 of the design spec). */
-export function pluralizeCompanies(count: number): string {
+/**
+ * Generic RU plural selector: picks `one` (1, 21, 31…), `few` (2-4, 22-24…),
+ * or `many` (0, 5-20, 11-14, 25…) based on the standard mod10/mod100 rule.
+ */
+export function pluralizeRu(count: number, [one, few, many]: [string, string, string]): string {
     const mod100 = count % 100;
     const mod10 = count % 10;
-    if (mod10 === 1 && mod100 !== 11) return "компания";
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "компании";
-    return "компаний";
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+}
+
+/** Russian plural for "компания" given a count (§8 of the design spec). */
+export function pluralizeCompanies(count: number): string {
+    return pluralizeRu(count, ["компания", "компании", "компаний"]);
 }
 
 /** "{n} компаний" style count label. */

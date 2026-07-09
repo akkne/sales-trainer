@@ -60,6 +60,7 @@ export default function CompaniesPage() {
                     title="Не удалось загрузить"
                     message={error.message}
                     onRetry={() => refetch()}
+                    retryLabel="Повторить"
                 />
             </div>
         );

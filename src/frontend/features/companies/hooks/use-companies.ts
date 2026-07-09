@@ -60,12 +60,12 @@ export function useCreateCompany() {
     });
 }
 
-export function useUpdateCompany(id: string) {
+export function useUpdateCompany() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (body: { name: string; description: string }) =>
+        mutationFn: ({ id, ...body }: { id: string; name: string; description: string }) =>
             apiClient.put<CompanyDetail>(`/companies/${id}`, body),
-        onSuccess: () => {
+        onSuccess: (_data, { id }) => {
             queryClient.invalidateQueries({ queryKey: companiesKey });
             queryClient.invalidateQueries({ queryKey: companyKey(id) });
         },

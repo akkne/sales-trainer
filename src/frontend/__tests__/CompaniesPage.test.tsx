@@ -73,7 +73,7 @@ describe("CompaniesPage", () => {
         render(<CompaniesPage />);
 
         expect(screen.getByText("Не удалось загрузить")).toBeTruthy();
-        fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+        fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
         expect(refetch).toHaveBeenCalledOnce();
     });
 
