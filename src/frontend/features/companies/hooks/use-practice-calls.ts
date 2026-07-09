@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
+import { toast } from "@/features/notifications/store/toast-store";
 
 export interface PracticeCall {
     id: string;
@@ -33,10 +34,14 @@ export function useCreatePracticeCall(companyId: string | null) {
     return useMutation({
         mutationFn: (body: { dialogSessionId: string; goal: string }) =>
             apiClient.post<PracticeCall>(`/companies/${companyId}/practice-calls`, body),
+        retry: 2,
         onSuccess: () => {
             if (!companyId) return;
             queryClient.invalidateQueries({ queryKey: practiceCallsKey(companyId) });
             queryClient.invalidateQueries({ queryKey: recentGoalsKey(companyId) });
+        },
+        onError: () => {
+            toast.error("Не удалось сохранить тренировку в историю компании");
         },
     });
 }

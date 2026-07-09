@@ -7,9 +7,10 @@ interface PrecallPanelProps {
     hasDescription: boolean;
     recentGoals: string[];
     onCall: (goal: string) => void;
+    onChat: (goal: string) => void;
 }
 
-export function PrecallPanel({ hasDescription, recentGoals, onCall }: PrecallPanelProps) {
+export function PrecallPanel({ hasDescription, recentGoals, onCall, onChat }: PrecallPanelProps) {
     const [goal, setGoal] = useState("");
 
     return (
@@ -28,6 +29,10 @@ export function PrecallPanel({ hasDescription, recentGoals, onCall }: PrecallPan
                 <button className="btn btn-dark" onClick={() => onCall(goal.trim())}>
                     <Icon name="phone" size={16} />
                     Позвонить
+                </button>
+                <button className="btn btn-outline" onClick={() => onChat(goal.trim())}>
+                    <Icon name="message" size={16} />
+                    Чат
                 </button>
             </div>
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/features/companies/hooks/use-companies";
 import { useCompanyCallMode } from "@/features/companies/hooks/use-company-call-mode";
@@ -143,6 +143,7 @@ export default function CompanyVoiceCallPage() {
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const callSoundsPlayerRef = useRef<CallSoundsPlayer>(new CallSoundsPlayer());
     const previousCallStatusRef = useRef<CallStatus>("idle");
+    const callEndedRef = useRef(false);
     const previousVoiceStateRef = useRef<VoicePipelineState>("idle");
     const assistantReplyOpenRef = useRef<boolean>(false);
     const subtitleScrollRef = useRef<HTMLDivElement>(null);
@@ -196,6 +197,7 @@ export default function CompanyVoiceCallPage() {
     }, []);
 
     const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
+        if (callEndedRef.current) return;
         setSessionId(newSessionId);
         setCallStatus("connected");
         createPracticeCall.mutate({ dialogSessionId: newSessionId, goal });
@@ -247,13 +249,17 @@ export default function CompanyVoiceCallPage() {
         }
     }, [sessionId, completeSession]);
 
-    const companyContext = company
-        ? {
-              companyName: company.name,
-              companyDescription: company.description,
-              ...(goal ? { callGoal: goal.slice(0, COMPANY_CONTEXT_GOAL_MAX) } : {}),
-          }
-        : undefined;
+    const companyContext = useMemo(
+        () =>
+            company
+                ? {
+                      companyName: company.name,
+                      companyDescription: company.description,
+                      ...(goal ? { callGoal: goal.slice(0, COMPANY_CONTEXT_GOAL_MAX) } : {}),
+                  }
+                : undefined,
+        [company, goal],
+    );
 
     const {
         state: voiceState,
@@ -318,6 +324,7 @@ export default function CompanyVoiceCallPage() {
 
     const handleHangUp = useCallback(() => {
         if (callStatus !== "connected" && callStatus !== "dialing") return;
+        callEndedRef.current = true;
         setCallStatus("ended");
         stopVoice();
         refetchUsage();
