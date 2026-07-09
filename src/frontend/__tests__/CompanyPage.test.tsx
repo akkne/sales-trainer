@@ -31,6 +31,14 @@ vi.mock("@/features/companies/hooks/use-practice-calls", () => ({
     useRecentGoals: (...args: unknown[]) => useRecentGoals(...args),
 }));
 
+const useCompanyContacts = vi.fn();
+vi.mock("@/features/companies/hooks/use-company-contacts", () => ({
+    useCompanyContacts: (...args: unknown[]) => useCompanyContacts(...args),
+    useAddCompanyContact: () => ({ mutate: vi.fn(), isPending: false }),
+    useUpdateCompanyContact: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteCompanyContact: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 const useDialogSession = vi.fn(() => ({ data: undefined }));
 vi.mock("@/features/dialog/hooks/use-dialog", () => ({
     useDialogSession: (...args: unknown[]) => useDialogSession(...args),
@@ -45,6 +53,7 @@ const COMPANY = {
     description: "Продаёт цветы",
     callLogCount: 0,
     practiceCallCount: 0,
+    contactCount: 0,
     createdAt: "2026-07-01T00:00:00Z",
     updatedAt: "2026-07-08T00:00:00Z",
 };
@@ -55,12 +64,14 @@ describe("CompanyPage", () => {
         useCompanyLogs.mockReset();
         useCompanyPracticeCalls.mockReset();
         useRecentGoals.mockReset();
+        useCompanyContacts.mockReset();
         useDialogSession.mockClear();
         mockPush.mockReset();
 
         useCompanyLogs.mockReturnValue({ data: [] });
         useCompanyPracticeCalls.mockReturnValue({ data: [] });
         useRecentGoals.mockReturnValue({ data: [] });
+        useCompanyContacts.mockReturnValue({ data: [] });
     });
 
     it("shows loading skeletons while fetching the company", () => {

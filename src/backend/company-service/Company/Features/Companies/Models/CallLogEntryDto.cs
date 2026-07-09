@@ -8,4 +8,5 @@ public sealed record CallLogEntryDto(
     string Outcome,
     DateTime OccurredAt,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    Guid? ContactId);

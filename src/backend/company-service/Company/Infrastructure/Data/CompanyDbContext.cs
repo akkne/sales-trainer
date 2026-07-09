@@ -14,11 +14,13 @@ public sealed class CompanyDbContext : DbContext
     public DbSet<CompanyEntity> Companies => Set<CompanyEntity>();
     public DbSet<CallLogEntry> CallLogEntries => Set<CallLogEntry>();
     public DbSet<PracticeCall> PracticeCalls => Set<PracticeCall>();
+    public DbSet<CompanyContact> CompanyContacts => Set<CompanyContact>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new CompanyEntityConfiguration());
         modelBuilder.ApplyConfiguration(new CallLogEntryEntityConfiguration());
         modelBuilder.ApplyConfiguration(new PracticeCallEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new CompanyContactEntityConfiguration());
     }
 }

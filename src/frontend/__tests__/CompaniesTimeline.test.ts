@@ -12,6 +12,7 @@ const logs: CallLogEntry[] = [
     {
         id: "l1", companyId: "c1", contactName: "Иван", subject: "Обсудили цену", outcome: "Пришлём КП",
         occurredAt: "2026-07-06T10:00:00Z", createdAt: "2026-07-06T10:00:00Z", updatedAt: "2026-07-06T10:00:00Z",
+        contactId: null,
     },
 ];
 

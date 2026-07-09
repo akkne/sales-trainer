@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import type { CallLogEntry } from "@/features/companies/hooks/use-company-logs";
+import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 
 describe("CallLogForm", () => {
     const onSubmit = vi.fn();
@@ -34,6 +35,7 @@ describe("CallLogForm", () => {
                 contactName: "Иван",
                 subject: "Обсудили цену",
                 outcome: "Пришлём КП",
+                contactId: null,
             })
         );
         const payload = onSubmit.mock.calls[0][0];
@@ -49,12 +51,42 @@ describe("CallLogForm", () => {
     it("pre-fills fields when editing an existing entry", () => {
         const initial: CallLogEntry = {
             id: "l1", companyId: "c1", contactName: "Пётр", subject: "Тема", outcome: "Итог",
-            occurredAt: "2026-07-01T00:00:00Z", createdAt: "", updatedAt: "",
+            occurredAt: "2026-07-01T00:00:00Z", createdAt: "", updatedAt: "", contactId: null,
         };
         render(<CallLogForm initial={initial} onSubmit={onSubmit} onCancel={onCancel} />);
 
         expect(screen.getByDisplayValue("Пётр")).toBeTruthy();
         expect(screen.getByDisplayValue("Тема")).toBeTruthy();
         expect(screen.getByDisplayValue("Итог")).toBeTruthy();
+    });
+
+    const CONTACT: CompanyContact = {
+        id: "contact-1", companyId: "c1", name: "Иван Петров", position: "Руководитель закупок",
+        notes: "", createdAt: "", updatedAt: "",
+    };
+
+    it("picking a contact chip fills the name field and sets contactId on submit", () => {
+        render(<CallLogForm contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        expect(screen.getByDisplayValue("Иван Петров")).toBeTruthy();
+
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        expect(onSubmit).toHaveBeenCalledWith(
+            expect.objectContaining({ contactName: "Иван Петров", contactId: "contact-1" })
+        );
+    });
+
+    it("typing free text after picking a contact clears contactId on submit", () => {
+        render(<CallLogForm contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        fireEvent.change(screen.getByPlaceholderText(/Имя и должность/), { target: { value: "Другой человек" } });
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        expect(onSubmit).toHaveBeenCalledWith(
+            expect.objectContaining({ contactName: "Другой человек", contactId: null })
+        );
     });
 });

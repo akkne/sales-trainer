@@ -19,11 +19,11 @@ vi.mock("@/features/notifications/store/toast-store", () => ({
 
 import { apiClient } from "@/shared/api/api-client";
 import {
-    useCompanyLogs,
-    useAddCallLog,
-    useUpdateCallLog,
-    useDeleteCallLog,
-} from "@/features/companies/hooks/use-company-logs";
+    useCompanyContacts,
+    useAddCompanyContact,
+    useUpdateCompanyContact,
+    useDeleteCompanyContact,
+} from "@/features/companies/hooks/use-company-contacts";
 
 const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
 const mockPost = apiClient.post as ReturnType<typeof vi.fn>;
@@ -42,44 +42,43 @@ function createWrapper() {
     };
 }
 
-const LOG = {
-    id: "l1", companyId: "c1", contactName: "Иван", subject: "Тема", outcome: "Итог",
-    occurredAt: "2026-07-01T00:00:00Z", createdAt: "", updatedAt: "", contactId: null,
+const CONTACT = {
+    id: "contact-1", companyId: "c1", name: "Иван Петров", position: "Руководитель закупок",
+    notes: "Любит цифры", createdAt: "", updatedAt: "",
 };
 
-describe("useCompanyLogs", () => {
+describe("useCompanyContacts", () => {
     beforeEach(() => mockGet.mockReset());
 
-    it("fetches logs from /companies/{id}/logs", async () => {
-        mockGet.mockResolvedValue([LOG]);
+    it("fetches contacts from /companies/{id}/contacts", async () => {
+        mockGet.mockResolvedValue([CONTACT]);
         const { wrapper } = createWrapper();
 
-        const { result } = renderHook(() => useCompanyLogs("c1"), { wrapper });
+        const { result } = renderHook(() => useCompanyContacts("c1"), { wrapper });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(mockGet).toHaveBeenCalledWith("/companies/c1/logs");
+        expect(mockGet).toHaveBeenCalledWith("/companies/c1/contacts");
         expect(result.current.data).toHaveLength(1);
     });
 });
 
-describe("useAddCallLog", () => {
+describe("useAddCompanyContact", () => {
     beforeEach(() => {
         mockPost.mockReset();
-        mockGet.mockReset();
         toastError.mockReset();
     });
 
-    it("posts the log and invalidates logs/company/companies queries", async () => {
-        mockPost.mockResolvedValue(LOG);
+    it("posts the contact and invalidates contacts/company/companies queries", async () => {
+        mockPost.mockResolvedValue(CONTACT);
         const { queryClient, wrapper } = createWrapper();
         const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-        const { result } = renderHook(() => useAddCallLog("c1"), { wrapper });
-        result.current.mutate({ contactName: "Иван", subject: "Тема", outcome: "Итог", occurredAt: "2026-07-01T00:00:00Z", contactId: null });
+        const { result } = renderHook(() => useAddCompanyContact("c1"), { wrapper });
+        result.current.mutate({ name: "Иван Петров", position: "Руководитель закупок", notes: "Любит цифры" });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(mockPost).toHaveBeenCalledWith("/companies/c1/logs", expect.objectContaining({ contactName: "Иван" }));
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "logs"] });
+        expect(mockPost).toHaveBeenCalledWith("/companies/c1/contacts", expect.objectContaining({ name: "Иван Петров" }));
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "contacts"] });
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1"] });
         expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies"] });
     });
@@ -88,44 +87,44 @@ describe("useAddCallLog", () => {
         mockPost.mockRejectedValue(new Error("boom"));
         const { wrapper } = createWrapper();
 
-        const { result } = renderHook(() => useAddCallLog("c1"), { wrapper });
-        result.current.mutate({ contactName: "Иван", subject: "", outcome: "", occurredAt: "2026-07-01T00:00:00Z", contactId: null });
+        const { result } = renderHook(() => useAddCompanyContact("c1"), { wrapper });
+        result.current.mutate({ name: "Иван", position: "", notes: "" });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(toastError).toHaveBeenCalledWith(expect.stringContaining("boom"));
     });
 });
 
-describe("useUpdateCallLog", () => {
+describe("useUpdateCompanyContact", () => {
     beforeEach(() => mockPut.mockReset());
 
-    it("puts to /companies/{id}/logs/{logId} and invalidates the logs list", async () => {
-        mockPut.mockResolvedValue(LOG);
+    it("puts to /companies/{id}/contacts/{contactId} and invalidates the contacts list", async () => {
+        mockPut.mockResolvedValue(CONTACT);
         const { queryClient, wrapper } = createWrapper();
         const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-        const { result } = renderHook(() => useUpdateCallLog("c1"), { wrapper });
-        result.current.mutate({ logId: "l1", contactName: "Иван", subject: "Тема", outcome: "Итог", occurredAt: "2026-07-01T00:00:00Z", contactId: null });
+        const { result } = renderHook(() => useUpdateCompanyContact("c1"), { wrapper });
+        result.current.mutate({ contactId: "contact-1", name: "Иван Петров", position: "Директор", notes: "" });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(mockPut).toHaveBeenCalledWith("/companies/c1/logs/l1", expect.objectContaining({ contactName: "Иван" }));
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "logs"] });
+        expect(mockPut).toHaveBeenCalledWith("/companies/c1/contacts/contact-1", expect.objectContaining({ name: "Иван Петров" }));
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "contacts"] });
     });
 });
 
-describe("useDeleteCallLog", () => {
+describe("useDeleteCompanyContact", () => {
     beforeEach(() => mockDelete.mockReset());
 
-    it("deletes the log and invalidates logs/company/companies queries", async () => {
+    it("deletes the contact and invalidates contacts/company/companies queries", async () => {
         mockDelete.mockResolvedValue(undefined);
         const { queryClient, wrapper } = createWrapper();
         const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-        const { result } = renderHook(() => useDeleteCallLog("c1"), { wrapper });
-        result.current.mutate("l1");
+        const { result } = renderHook(() => useDeleteCompanyContact("c1"), { wrapper });
+        result.current.mutate("contact-1");
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(mockDelete).toHaveBeenCalledWith("/companies/c1/logs/l1");
-        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "logs"] });
+        expect(mockDelete).toHaveBeenCalledWith("/companies/c1/contacts/contact-1");
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "c1", "contacts"] });
     });
 });

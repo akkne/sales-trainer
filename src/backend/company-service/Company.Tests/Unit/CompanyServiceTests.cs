@@ -331,4 +331,216 @@ public sealed class CompanyServiceTests
         results[0].CallLogCount.Should().Be(1);
         results[0].PracticeCallCount.Should().Be(1);
     }
+
+    [Test]
+    public async Task CreateContactAsync_creates_contact_for_correct_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCompanyContactRequestDto("Иван Петров", "Руководитель закупок", "Любит цифры");
+
+        var result = await _companyService.CreateContactAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Иван Петров");
+        result.Position.Should().Be("Руководитель закупок");
+        result.Notes.Should().Be("Любит цифры");
+        result.CompanyId.Should().Be(company.Id);
+    }
+
+    [Test]
+    public async Task CreateContactAsync_defaults_position_and_notes_to_empty_when_omitted()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCompanyContactRequestDto("Иван Петров");
+
+        var result = await _companyService.CreateContactAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Position.Should().BeEmpty();
+        result.Notes.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task CreateContactAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCompanyContactRequestDto("Иван Петров");
+
+        var result = await _companyService.CreateContactAsync(SecondUserId, company.Id, request);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task ListContactsAsync_returns_only_company_contacts_newest_first()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
+        await TestCompanyDatabaseFactory.SeedContactAsync(_databaseContext, FirstUserId, company.Id, "Older Contact");
+        await TestCompanyDatabaseFactory.SeedContactAsync(_databaseContext, FirstUserId, otherCompany.Id, "Unrelated Contact");
+        var newest = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Newest Contact"));
+
+        var results = await _companyService.ListContactsAsync(FirstUserId, company.Id);
+
+        results.Should().NotBeNull();
+        results!.Select(contact => contact.Name).Should().Contain("Older Contact").And.Contain("Newest Contact");
+        results.Should().NotContain(contact => contact.Name == "Unrelated Contact");
+        results![0].Id.Should().Be(newest!.Id);
+    }
+
+    [Test]
+    public async Task ListContactsAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var results = await _companyService.ListContactsAsync(SecondUserId, company.Id);
+
+        results.Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpdateContactAsync_updates_name_position_and_notes()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Old Name"));
+        var request = new UpdateCompanyContactRequestDto("New Name", "New Position", "New Notes");
+
+        var result = await _companyService.UpdateContactAsync(FirstUserId, company.Id, contact!.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("New Name");
+        result.Position.Should().Be("New Position");
+        result.Notes.Should().Be("New Notes");
+    }
+
+    [Test]
+    public async Task UpdateContactAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Name"));
+        var request = new UpdateCompanyContactRequestDto("New Name");
+
+        var result = await _companyService.UpdateContactAsync(SecondUserId, company.Id, contact!.Id, request);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task DeleteContactAsync_removes_contact()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Name"));
+
+        var deleted = await _companyService.DeleteContactAsync(FirstUserId, company.Id, contact!.Id);
+
+        deleted.Should().BeTrue();
+        var contacts = await _companyService.ListContactsAsync(FirstUserId, company.Id);
+        contacts.Should().NotBeNull();
+        contacts!.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task DeleteContactAsync_returns_false_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Name"));
+
+        var deleted = await _companyService.DeleteContactAsync(SecondUserId, company.Id, contact!.Id);
+
+        deleted.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task ListCompaniesAsync_returns_contact_count()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Contact One"));
+        await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Contact Two"));
+
+        var results = await _companyService.ListCompaniesAsync(FirstUserId, null);
+
+        results.Should().HaveCount(1);
+        results[0].ContactCount.Should().Be(2);
+    }
+
+    [Test]
+    public async Task GetCompanyAsync_returns_contact_count()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Contact One"));
+
+        var result = await _companyService.GetCompanyAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.ContactCount.Should().Be(1);
+    }
+
+    [Test]
+    public async Task CreateCallLogEntryAsync_links_contact_when_contactId_belongs_to_company()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
+        var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact!.Id);
+
+        var result = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.ContactId.Should().Be(contact.Id);
+    }
+
+    [Test]
+    public async Task CreateCallLogEntryAsync_throws_when_contactId_belongs_to_other_company()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
+        var contactFromOtherCompany = await _companyService.CreateContactAsync(FirstUserId, otherCompany.Id, new CreateCompanyContactRequestDto("Иван"));
+        var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contactFromOtherCompany!.Id);
+
+        Func<Task> act = () => _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task CreateCallLogEntryAsync_throws_when_contactId_does_not_exist()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, Guid.NewGuid());
+
+        Func<Task> act = () => _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task UpdateCallLogEntryAsync_throws_when_contactId_belongs_to_other_company()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
+        var contactFromOtherCompany = await _companyService.CreateContactAsync(FirstUserId, otherCompany.Id, new CreateCompanyContactRequestDto("Иван"));
+        var entry = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id,
+            new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow));
+        var updateRequest = new UpdateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contactFromOtherCompany!.Id);
+
+        Func<Task> act = () => _companyService.UpdateCallLogEntryAsync(FirstUserId, company.Id, entry!.Id, updateRequest);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task DeleteContactAsync_leaves_call_log_entry_with_null_contactId_and_preserved_contactName()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
+        var entry = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id,
+            new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact!.Id));
+
+        await _companyService.DeleteContactAsync(FirstUserId, company.Id, contact.Id);
+
+        var logs = await _companyService.ListCallLogEntriesAsync(FirstUserId, company.Id);
+        logs.Should().NotBeNull();
+        var persistedEntry = logs!.Single(logEntry => logEntry.Id == entry!.Id);
+        persistedEntry.ContactId.Should().BeNull();
+        persistedEntry.ContactName.Should().Be("Иван");
+    }
 }

@@ -877,10 +877,10 @@ DTO additions on the Discuss user endpoints above:
 | POST | /companies | `{name, description?}` | `201 CompanyDetailDto` |
 | GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
-| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls) |
+| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts) |
 
-`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), callLogCount, practiceCallCount, createdAt, updatedAt}`
-`CompanyDetailDto`: `{id, name, description, callLogCount, practiceCallCount, createdAt, updatedAt}`
+`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
+`CompanyDetailDto`: `{id, name, description, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
 
 Validation: `name` required, max 200; `description` max 8000.
 
@@ -889,13 +889,13 @@ Validation: `name` required, max 200; `description` max 8000.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /companies/{id}/logs | — | `CallLogEntryDto[]` sorted by `occurredAt DESC` |
-| POST | /companies/{id}/logs | `{contactName, subject, outcome, occurredAt}` | `201 CallLogEntryDto` or `404` if company not found |
-| PUT | /companies/{id}/logs/{logId} | `{contactName, subject, outcome, occurredAt}` | `CallLogEntryDto` or `404` |
+| POST | /companies/{id}/logs | `{contactName, subject, outcome, occurredAt, contactId?}` | `201 CallLogEntryDto`, `404` if company not found, or `400` if `contactId` does not belong to the company |
+| PUT | /companies/{id}/logs/{logId} | `{contactName, subject, outcome, occurredAt, contactId?}` | `CallLogEntryDto`, `404`, or `400` if `contactId` does not belong to the company |
 | DELETE | /companies/{id}/logs/{logId} | — | `204` or `404` |
 
-`CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt}`
+`CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt, contactId}`
 
-Validation: `contactName` required, max 200; `subject`, `outcome` optional (empty string allowed), max 4000.
+Validation: `contactName` required, max 200; `subject`, `outcome` optional (empty string allowed), max 4000. `contactId` is optional; when present it must reference a `CompanyContact` belonging to the same company (otherwise `400`). The free-text `contactName` is always stored regardless of `contactId`, so the log keeps a readable label even after the linked contact is deleted (see Contacts below).
 
 ### Practice Calls
 
@@ -908,6 +908,19 @@ Validation: `contactName` required, max 200; `subject`, `outcome` optional (empt
 `PracticeCallDto`: `{id, companyId, dialogSessionId, goal, createdAt}`
 
 Validation: `goal` max 1000; `dialogSessionId` required.
+
+### Contacts (Phase 39.9 — mini-CRM)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/contacts | — | `CompanyContactDto[]` sorted by `createdAt DESC` |
+| POST | /companies/{id}/contacts | `{name, position?, notes?}` | `201 CompanyContactDto` or `404` if company not found |
+| PUT | /companies/{id}/contacts/{contactId} | `{name, position, notes}` | `CompanyContactDto` or `404` |
+| DELETE | /companies/{id}/contacts/{contactId} | — | `204` or `404`. Any `CallLogEntry.ContactId` referencing this contact is set to `null`; the log's free-text `ContactName` is preserved. |
+
+`CompanyContactDto`: `{id, companyId, name, position, notes, createdAt, updatedAt}`
+
+Validation: `name` required, max 200; `position` optional (defaults to empty), max 200; `notes` optional (defaults to empty), max 2000.
 
 ---
 

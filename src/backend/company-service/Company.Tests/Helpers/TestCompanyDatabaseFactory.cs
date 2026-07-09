@@ -60,4 +60,30 @@ internal static class TestCompanyDatabaseFactory
         await databaseContext.SaveChangesAsync(cancellationToken);
         return practiceCall;
     }
+
+    public static async Task<CompanyContact> SeedContactAsync(
+        CompanyDbContext databaseContext,
+        Guid userId,
+        Guid companyId,
+        string name,
+        string position = "",
+        string notes = "",
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var contact = new CompanyContact
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            UserId = userId,
+            Name = name,
+            Position = position,
+            Notes = notes,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        databaseContext.CompanyContacts.Add(contact);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        return contact;
+    }
 }

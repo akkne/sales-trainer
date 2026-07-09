@@ -11,6 +11,7 @@ export interface CallLogEntry {
     occurredAt: string;
     createdAt: string;
     updatedAt: string;
+    contactId: string | null;
 }
 
 export interface CallLogPayload {
@@ -18,6 +19,7 @@ export interface CallLogPayload {
     subject: string;
     outcome: string;
     occurredAt: string;
+    contactId: string | null;
 }
 
 const logsKey = (companyId: string) => ["companies", companyId, "logs"] as const;

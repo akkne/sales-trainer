@@ -6,11 +6,12 @@ import { formatCalendarDateRu } from "@/features/companies/lib/format";
 
 interface TimelineReallogItemProps {
     log: CallLogEntry;
+    contactPosition?: string;
     onEdit: () => void;
     onDelete: () => void;
 }
 
-export function TimelineReallogItem({ log, onEdit, onDelete }: TimelineReallogItemProps) {
+export function TimelineReallogItem({ log, contactPosition, onEdit, onDelete }: TimelineReallogItemProps) {
     return (
         <div className="co-tl-item reallog">
             <div className="co-tl-node" aria-hidden="true" />
@@ -29,7 +30,10 @@ export function TimelineReallogItem({ log, onEdit, onDelete }: TimelineReallogIt
                 {log.contactName && (
                     <div className="co-log-field">
                         <div className="co-log-field-label">С кем говорил</div>
-                        <div className="co-log-field-value">{log.contactName}</div>
+                        <div className="co-log-field-value">
+                            {log.contactName}
+                            {contactPosition && <span className="co-log-contact-position"> · {contactPosition}</span>}
+                        </div>
                     </div>
                 )}
                 {log.subject && (
