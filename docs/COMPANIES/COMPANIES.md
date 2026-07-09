@@ -1,0 +1,199 @@
+# Companies (Компании)
+
+**Status:** Stage A shipped (Phase 39.1–39.7). Stage B (contacts, status pipeline, follow-up
+reminders, AI briefing/log-parsing/persona/readiness, voice memo) is **planned, not implemented**
+— see `docs/ROADMAP.md` Phase 39.9+.
+
+Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
+API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
+company-context addendum). Schema reference: [docs/DB_SCHEMA.md](../DB_SCHEMA.md) (`company` database).
+
+## What it is
+
+A private CRM-lite for the salesperson: keep a list of real prospect companies, write a
+free-form description of each one, practice a cold call against that description with an AI
+playing the company's side (voice or chat), and log real calls that happened (who / what about
+/ outcome). Practice sessions and real-call log entries share one chronological timeline per
+company.
+
+## Architecture
+
+### `company-service` (new microservice, port 5009)
+
+`src/backend/company-service/Company`, scaffolded after `notification-service`'s pattern
+(Serilog → Loki, per-service JWT bearer validation, CORS, health checks, ProblemDetails). Owns a
+standalone Postgres database `company`, auto-migrated on startup
+(`DatabaseBootstrapper` / EF Core migrations). **No Kafka producer or consumer** — nothing
+outside the service currently needs to react to company data, so it stays out of the
+BuildingBlocks eventing story (revisit for 39.11 follow-up reminders, which does need Kafka).
+
+Routed at the gateway via YARP cluster `company` (`company-companies` / `company-companies-root`
+routes in `src/backend/gateway/Gateway/appsettings.json`), `docker-compose.yml` service entry, and
+`scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) wired into `scripts/dev-up.sh`.
+
+Every controller action resolves `UserId` from the JWT (`ClaimTypes.NameIdentifier`) and every
+query/mutation is scoped `WHERE UserId = ...` (or via an ownership existence check for
+sub-resources). An id that exists but belongs to another user is indistinguishable from an id
+that doesn't exist — both return `404`, never `403`.
+
+### ai-service — company-context sessions
+
+Practice calls are ordinary `DialogSession`s (same Mongo document, same voice/chat pipeline,
+feedback, XP, and minute quotas as any other dialog mode) with two additions:
+
+- **Seeded hidden mode.** `CompanyCallModeSeeder` (`src/backend/ai-service/Ai/Features/Dialog/Seeders/CompanyCallModeSeeder.cs`)
+  creates one `DialogBundle` (`IsHidden: true`, so it never appears in `GET /dialog/bundles`) and
+  one `DialogMode` with key `company-call`, `VoiceEnabled: true`, and admin-editable chat/feedback
+  system prompt templates ("play a company employee/decision-maker taking a cold call...",
+  "score against the user's stated call goal..."). Both are regular admin-editable rows — a
+  superadmin can tweak the prompts at `/admin/dialog` like any other mode.
+  `GET /dialog/company-call-mode` exposes the fixed `{bundleId, modeId}` pair (404 if the seeder
+  hasn't run yet); the frontend fetches this once (`useCompanyCallMode`) before letting the user
+  start a call.
+- **Prompt context injection.** `POST /dialog/sessions` accepts an optional
+  `companyContext: {companyName, companyDescription, callGoal?}` (`StartSessionRequestDto`).
+  When present, `companyContext` is only accepted alongside the seeded `company-call` mode — any
+  other mode + context combination is `400`. `CompanyContextPromptBuilder`
+  (`src/backend/ai-service/Ai/Features/Dialog/Helpers/CompanyContextPromptBuilder.cs`) appends a
+  small `---\nКомпания: ...\nОписание: ...\nЦель звонка пользователя: ...` block to both the chat
+  and feedback system prompts at session-start time. The context is **not** persisted in
+  PostgreSQL — it's folded into the prompt text and separately stored verbatim on the Mongo
+  `DialogSession` document (`companyCallContext`) purely for the record; nothing downstream
+  (voice stream, feedback generation, XP weighting, minute quotas) changes — they all operate on
+  the composed prompt exactly as with any other mode.
+- **Validation asymmetry (500 vs 1000).** `CompanyCallContextDto.CallGoal` on the ai-service side
+  caps at **500 chars** — this is what actually reaches the AI prompt. `company-service`'s
+  `PracticeCall.Goal` (and the `CreatePracticeCallRequestDto`) caps at **1000 chars** — this is
+  the full goal as the user typed it, stored for the "recent goals" feature. The frontend
+  enforces the 500-char cut when building `companyContext` for the dialog session
+  (`COMPANY_CONTEXT_GOAL_MAX = 500` in both call pages) while sending the untruncated goal to
+  `POST /companies/{id}/practice-calls`.
+
+## Data model (company-service, Postgres `company`)
+
+Three entities, all owned by `UserId`, cascade-deleted with their parent `Company`:
+
+- **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""), CreatedAt, UpdatedAt`.
+  Index on `UserId`.
+- **`CallLogEntry`** (a real call the user logs manually) —
+  `Id, CompanyId, UserId, ContactName (≤200), Subject (≤4000), Outcome (≤4000), OccurredAt,
+  CreatedAt, UpdatedAt`. Only `ContactName` (with `Subject`/`Outcome` empty-allowed) plus
+  `OccurredAt` are required by the DTO — matches the "only «С кем» is mandatory" product rule.
+  Index `(CompanyId, OccurredAt DESC)`.
+- **`PracticeCall`** (a link row created when an AI practice session starts) —
+  `Id, CompanyId, UserId, DialogSessionId (≤100, the ai-service Mongo session id, stored as
+  string), Goal (≤1000), CreatedAt`. Index `(CompanyId, CreatedAt DESC)`. There is no foreign key
+  into ai-service's Mongo store — `DialogSessionId` is an opaque reference the frontend uses to
+  fetch feedback/XP from ai-service directly.
+
+`CompanySummaryDto`/`CompanyDetailDto` also carry a live `callLogCount`/`practiceCallCount`
+(computed via `EF` `Count()`, not denormalized columns).
+
+## The goal-handoff contract
+
+The pre-call goal input lives on `/companies/[id]` (`PrecallPanel`), but the actual call happens
+on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, outside the
+`(main)` layout). The goal has to survive that navigation without a shared React state tree:
+
+1. On "Позвонить"/"Чат" click, the company page writes the trimmed goal to
+   `sessionStorage["company-call-goal:{companyId}"]` **and** pushes the URL with
+   `?goal=<encoded>` as a fallback (`app/(main)/companies/[id]/page.tsx`, `handleCall`/`handleChat`).
+2. The call page's `readStoredGoal(companyId, queryGoal)` reads `sessionStorage` first; the query
+   param is only used if `sessionStorage` has no entry for that key (e.g. a fresh tab / direct
+   link). **`sessionStorage` is authoritative** — it's what survives an empty-string goal
+   correctly (the query param would be `?goal=` either way, but `sessionStorage.getItem` returning
+   `""` vs `null` disambiguates "explicitly no goal" from "no data at all").
+3. The goal is captured once into local state on mount (`useState(() => readStoredGoal(...))`) —
+   it does not change for the lifetime of that call screen even if a background tab edits
+   `sessionStorage`.
+4. The same key is used by both the voice and chat call pages, so a user who navigates directly
+   between `/call/voice` and `/call/chat` for the same company keeps the same goal.
+
+## Frontend structure
+
+- **Routes:**
+  - `/(main)/companies` — list (search, create modal, empty/loading/error states)
+  - `/(main)/companies/[id]` — company detail (identity header, description card, pre-call panel,
+    timeline, log CRUD, edit/delete)
+  - `/companies/[id]/call/voice` and `/companies/[id]/call/chat` — full-screen call routes,
+    intentionally **outside** the `(main)` layout group (no nav rail/bottom nav/top bar) to match
+    the existing full-screen voice-call UX
+- **`features/companies/`** (mirrors `features/dialog/`):
+  - `hooks/use-companies.ts` — list/get/create/update/delete companies (`useCompanies`,
+    `useCompany`, `useCreateCompany`, `useUpdateCompany`, `useDeleteCompany`), client-side name
+    filter on top of the server `?search=`
+  - `hooks/use-company-logs.ts` — call-log CRUD
+  - `hooks/use-practice-calls.ts` — `useCompanyPracticeCalls`, `useRecentGoals`,
+    `useCreatePracticeCall` (retries twice; failure toasts but doesn't block the call)
+  - `hooks/use-company-call-mode.ts` — fetches the seeded `{bundleId, modeId}` once
+  - `components/` — `company-row`, `company-modal` (create/edit), `company-header`,
+    `company-description-card`, `precall-panel`, `company-timeline` (+ `timeline-practice-item`,
+    `timeline-reallog-item`), `call-log-form`/`call-log-modal`, `confirm-delete-modal`
+  - `lib/timeline.ts` — merges `PracticeCall[]` + `CallLogEntry[]` into one sorted, filterable
+    feed (`mergeTimeline`, `filterTimeline`); `lib/format.ts`, `lib/avatar.ts` — display helpers
+- **Nav:** `briefcase` icon added to `IconName` (`shared/components/icon.tsx`); rail item
+  «Компании» in the desktop nav rail; on mobile, «Компании» **replaces** «Справочник» in the
+  5-slot bottom nav bar (`features/layout/components/bottom-nav.tsx` `NAV_ITEMS`) — the guidebook
+  stays reachable from the desktop rail only, per DESIGN_SPEC §1.4.
+
+## Flows
+
+**Create → describe → practice:**
+1. `/companies` → «Добавить компанию» → name (+ optional description) → company page opens.
+2. Description is editable inline on the company page (`CompanyDescriptionCard`, edit mode →
+   `PUT /companies/{id}`).
+3. Pre-call panel: type a goal (or pick one of the last 5 distinct goals used for this company,
+   `GET /companies/{id}/recent-goals`) → «Позвонить» or «Чат».
+4. Handoff (see contract above) to `/call/voice` or `/call/chat`. Both pages: fetch the company
+   and the seeded call-mode id in parallel, build `companyContext` from the company's
+   name/description + the (500-char-capped) goal, and hand it to the existing dialog/voice
+   session-start flow unchanged (`useVoice({ ..., companyContext })` for voice,
+   `startDialogSession` for chat).
+5. On session creation, `POST /companies/{id}/practice-calls {dialogSessionId, goal}` (untruncated
+   goal) links the new session to the company — this list write is retried but non-blocking; a
+   failure only toasts, the call itself proceeds.
+6. Hangup/end → existing `completeDialogSession` → feedback modal (same component as any other
+   dialog mode) → closing the modal returns to `/companies/{id}`.
+7. The new practice call appears at the top of the combined timeline immediately (query
+   invalidation on `practice-calls` and `recent-goals`).
+
+**Real-call logging:** «Записать звонок» on the timeline card opens an inline form (3 fields: с
+кем / о чём / к чему пришли + occurred-at date) — only "с кем" is required. Submits
+`POST /companies/{id}/logs`; edit/delete via the same form in a modal + a confirm-delete dialog.
+
+**Timeline:** `CompanyTimeline` merges practice calls and real-call log entries into one
+reverse-chronological list with a three-way segmented filter (Все / Тренировки / Звонки,
+`lib/timeline.ts`); the "add log" affordance is hidden while the "Тренировки"-only filter is
+active (there's nothing to log for a filtered-out list).
+
+**Delete company:** confirm modal warns that description, practice history, and the call log are
+all deleted together — matches the `OnDelete(DeleteBehavior.Cascade)` FK behavior on both child
+tables.
+
+## Edge cases
+
+- **Voice minute quota (429 from ai-service):** the shared `useVoice` hook already surfaces a
+  429 as a quota-exceeded error state; the company call pages render it through the same
+  `error`/toast path as the generic voice-call screen — no company-specific handling needed.
+- **Company-call mode not yet seeded (`GET /dialog/company-call-mode` → 404):** both call pages
+  show a dedicated "Тренировочные звонки недоступны" card with a link back to the company instead
+  of attempting to start a session.
+- **Ownership violations:** any `{id}` (company, log, or the implicit practice-call/company pair)
+  that doesn't belong to the caller returns `404` uniformly — the frontend's `CompanyPage` reacts
+  to a 404 on `GET /companies/{id}` with "Компания не найдена" and a link back to `/companies`;
+  the same pattern is used on the call pages (`isCompanyNotFound` → toast + redirect).
+- **AI/network unavailable:** `useCreatePracticeCall` retries twice then toasts
+  "Не удалось сохранить тренировку в историю компании" without blocking the call; company CRUD
+  mutations toast a generic "Не удалось сохранить/удалить компанию: {message}" on failure.
+- **Empty description:** the pre-call panel still allows calling but shows a hint
+  ("Совет: заполните описание компании — звонок станет реалистичнее") instead of the "AI will
+  play this company" message.
+
+## Stage B (planned, not implemented)
+
+Approved 2026-07-09, tracked as Phase 39.9–39.17 in `docs/ROADMAP.md`: contacts mini-CRM, company
+status pipeline (Lead/Contacted/MeetingScheduled/DealWon/DealLost), follow-up reminders (new
+Kafka event `company.followup.due` → notification-service), AI pre-call briefing ("Шпаргалка"),
+AI real-call-log parsing from pasted notes, AI persona generation for practice calls, voice-memo
+→ log transcription, and an AI readiness score. None of this is implemented yet — see the roadmap
+for scope and sequencing.
