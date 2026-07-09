@@ -862,6 +862,52 @@ DTO additions on the Discuss user endpoints above:
 
 ---
 
+## Company service (Phase 39)
+
+> **New microservice `company-service`** (host port **5009**). Routes `/companies/*` via YARP gateway cluster `company` (wired in Phase 39.4). All endpoints require Bearer auth; `userId` extracted from `ClaimTypes.NameIdentifier`. Every query is scoped to the authenticated user — foreign/unknown ids return `404`.
+
+### Companies
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies | `?search=` (optional) | `CompanySummaryDto[]` sorted newest-updated first |
+| POST | /companies | `{name}` | `201 CompanyDetailDto` |
+| GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
+| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls) |
+
+`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), callLogCount, practiceCallCount, createdAt, updatedAt}`
+`CompanyDetailDto`: `{id, name, description, callLogCount, practiceCallCount, createdAt, updatedAt}`
+
+Validation: `name` required, max 200; `description` max 8000.
+
+### Call Log
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/logs | — | `CallLogEntryDto[]` sorted by `occurredAt DESC` |
+| POST | /companies/{id}/logs | `{contactName, subject, outcome, occurredAt}` | `201 CallLogEntryDto` or `404` if company not found |
+| PUT | /companies/{id}/logs/{logId} | `{contactName, subject, outcome, occurredAt}` | `CallLogEntryDto` or `404` |
+| DELETE | /companies/{id}/logs/{logId} | — | `204` or `404` |
+
+`CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt}`
+
+Validation: `contactName` max 200; `subject`, `outcome` max 4000.
+
+### Practice Calls
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /companies/{id}/practice-calls | `{dialogSessionId, goal}` | `201 PracticeCallDto` or `404` |
+| GET | /companies/{id}/practice-calls | — | `PracticeCallDto[]` sorted by `createdAt DESC` |
+| GET | /companies/{id}/recent-goals | — | `string[]` — last 5 distinct non-empty goals, newest first |
+
+`PracticeCallDto`: `{id, companyId, dialogSessionId, goal, createdAt}`
+
+Validation: `goal` max 1000; `dialogSessionId` required.
+
+---
+
 ## Tracking / Usage Metrics
 
 > **Served by the analytics-service** (Phase 1). The gateway routes `/tracking/*` to the
