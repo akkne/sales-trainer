@@ -64,7 +64,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             Id = Guid.NewGuid(),
             UserId = userId,
             Name = request.Name,
-            Description = string.Empty,
+            Description = request.Description ?? string.Empty,
             CreatedAt = now,
             UpdatedAt = now
         };

@@ -66,7 +66,8 @@ type IconName =
     | "info"
     | "warning"
     | "send"
-    | "forum";
+    | "forum"
+    | "briefcase";
 
 export type { IconName };
 
@@ -383,6 +384,14 @@ export function Icon({
                     <path d="M16 8h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2v3l-3-3h-4a2 2 0 0 1-2-2" />
                 </svg>
             );
+        case "briefcase":
+            return (
+                <svg {...svgProps}>
+                    <rect x="3" y="7" width="18" height="13" rx="2" />
+                    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M3 12h18" />
+                </svg>
+            );
         default:
             return null;
     }
@@ -432,4 +441,5 @@ export const ICON_NAMES = {
     warning: "warning",
     send: "send",
     forum: "forum",
+    briefcase: "briefcase",
 } as const;

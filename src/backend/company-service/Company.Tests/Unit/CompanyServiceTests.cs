@@ -38,6 +38,26 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task CreateCompanyAsync_persists_description_when_provided()
+    {
+        var request = new CreateCompanyRequestDto("Acme Corp", "Manufacturer of anvils and rockets");
+
+        var result = await _companyService.CreateCompanyAsync(FirstUserId, request);
+
+        result.Description.Should().Be("Manufacturer of anvils and rockets");
+    }
+
+    [Test]
+    public async Task CreateCompanyAsync_defaults_description_to_empty_when_omitted()
+    {
+        var request = new CreateCompanyRequestDto("Acme Corp");
+
+        var result = await _companyService.CreateCompanyAsync(FirstUserId, request);
+
+        result.Description.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task GetCompanyAsync_returns_company_for_correct_owner()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");

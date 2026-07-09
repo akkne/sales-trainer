@@ -3462,3 +3462,53 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .map-ring-wrap { width: 64px; height: 64px; }
   .map-ring-pct { font-size: 12px; }
 }
+
+/* ════════ COMPANIES (docs/COMPANIES/DESIGN_SPEC.md) ════════ */
+
+/* ── List: header + toolbar ── */
+.co-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.co-list-toolbar { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.co-search-wrap { position: relative; flex: 1; max-width: 420px; }
+.co-search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-4); pointer-events: none; display: flex; align-items: center; }
+.co-list-count { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
+
+/* ── List: card + rows ── */
+.co-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+.co-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-2);
+  text-decoration: none; color: inherit;
+  transition: background var(--transition);
+}
+.co-row:last-child { border-bottom: none; }
+.co-row:hover { background: var(--surface-2); }
+.co-row-av {
+  width: 40px; height: 40px; border-radius: 11px; flex: none;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+}
+.co-row-body { flex: 1; min-width: 0; }
+.co-row-name {
+  font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink-heading);
+  margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.co-row-meta { font-size: 12.5px; font-weight: 500; color: var(--ink-4); margin: 2px 0 0; }
+.co-row-chev { color: var(--ink-4); flex: none; }
+
+/* ── Shared field bits reused by the create/edit modal (company-page card
+   variants land in a later sub-phase) ── */
+.co-field-label { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; display: block; }
+.co-textarea { height: auto; min-height: 120px; padding: 12px 14px; line-height: 1.6; resize: vertical; }
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  .co-list-head { flex-direction: column; }
+  .co-list-head .btn-primary { width: 100%; }
+}

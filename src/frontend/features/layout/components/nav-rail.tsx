@@ -15,11 +15,12 @@ interface RailItem {
 }
 
 const RAIL_ITEMS: RailItem[] = [
-    { href: "/tree",      icon: "compass", label: "Path" },
-    { href: "/dialog",    icon: "message", label: "Practice" },
-    { href: "/guidebook", icon: "book",    label: "Guidebook" },
-    { href: "/friends",   icon: "users",   label: "Friends" },
-    { href: "/discuss",   icon: "forum",   label: "Discussions" },
+    { href: "/tree",      icon: "compass",   label: "Path" },
+    { href: "/dialog",    icon: "message",   label: "Practice" },
+    { href: "/companies", icon: "briefcase", label: "Компании" },
+    { href: "/guidebook", icon: "book",      label: "Guidebook" },
+    { href: "/friends",   icon: "users",     label: "Friends" },
+    { href: "/discuss",   icon: "forum",     label: "Discussions" },
 ];
 
 function getInitials(name: string): string {
