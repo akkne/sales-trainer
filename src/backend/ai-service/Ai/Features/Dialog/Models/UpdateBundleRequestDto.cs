@@ -8,4 +8,5 @@ public sealed class UpdateBundleRequestDto
     public string? IconEmoji { get; set; }
     public int? SortOrder { get; set; }
     public bool? IsActive { get; set; }
+    public bool? IsHidden { get; set; }
 }

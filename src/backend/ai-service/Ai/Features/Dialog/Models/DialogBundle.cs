@@ -9,6 +9,7 @@ public sealed class DialogBundle
     public string IconEmoji { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsHidden { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

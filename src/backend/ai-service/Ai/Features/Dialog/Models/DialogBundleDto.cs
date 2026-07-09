@@ -10,6 +10,7 @@ public sealed class DialogBundleDto
     public string IconEmoji { get; set; } = null!;
     public int SortOrder { get; set; }
     public bool IsActive { get; set; }
+    public bool IsHidden { get; set; }
 
     public static DialogBundleDto FromEntity(DialogBundle bundle) => new()
     {
@@ -20,6 +21,7 @@ public sealed class DialogBundleDto
         Description = bundle.Description,
         IconEmoji = bundle.IconEmoji,
         SortOrder = bundle.SortOrder,
-        IsActive = bundle.IsActive
+        IsActive = bundle.IsActive,
+        IsHidden = bundle.IsHidden
     };
 }

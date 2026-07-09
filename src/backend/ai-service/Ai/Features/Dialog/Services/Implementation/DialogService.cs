@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Sellevate.Ai.Eventing;
+using Sellevate.Ai.Features.Dialog.Constants;
+using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
+using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.Ai.Infrastructure.Mongo;
@@ -38,7 +41,7 @@ internal sealed class DialogService : IDialogService
     public async Task<List<DialogBundle>> GetActiveBundlesAsync(CancellationToken cancellationToken = default)
     {
         return await _databaseContext.DialogBundles
-            .Where(bundle => bundle.IsActive)
+            .Where(bundle => bundle.IsActive && !bundle.IsHidden)
             .OrderBy(bundle => bundle.SortOrder)
             .ToListAsync(cancellationToken);
     }
@@ -70,10 +73,21 @@ internal sealed class DialogService : IDialogService
             .FirstOrDefaultAsync(mode => mode.Id == modeId, cancellationToken);
     }
 
+    public async Task<DialogMode?> GetCompanyCallModeAsync(CancellationToken cancellationToken = default)
+    {
+        return await _databaseContext.DialogModes
+            .Include(mode => mode.Bundle)
+            .FirstOrDefaultAsync(
+                mode => mode.Id == CompanyCallModeSeeder.CompanyCallModeId
+                    && mode.Key == DialogModeKeys.CompanyCall,
+                cancellationToken);
+    }
+
     public async Task<DialogSession> StartSessionAsync(
         Guid userId,
         Guid bundleId,
         Guid modeId,
+        CompanyCallContext? companyCallContext,
         CancellationToken cancellationToken = default)
     {
         var mode = await GetModeByIdAsync(modeId, cancellationToken);
@@ -82,13 +96,21 @@ internal sealed class DialogService : IDialogService
             throw new InvalidOperationException($"Mode {modeId} not found");
         }
 
+        if (companyCallContext != null && mode.Key != DialogModeKeys.CompanyCall)
+        {
+            throw new InvalidOperationException(
+                "companyContext may only be used with the company-call mode. " +
+                "Obtain the correct bundleId and modeId from GET /dialog/company-call-mode.");
+        }
+
         var session = new DialogSession
         {
             UserId = userId,
             BundleId = bundleId,
             ModeId = modeId,
             Status = DialogSessionStatus.Active,
-            Messages = []
+            Messages = [],
+            CompanyCallContext = companyCallContext
         };
 
         await _mongoContext.DialogSessions.InsertOneAsync(session, cancellationToken: cancellationToken);
@@ -159,7 +181,8 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(userMessage);
 
-        var chatResult = await _openAiChatService.SendChatMessageAsync(mode.ChatSystemPrompt, session.Messages, cancellationToken);
+        var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        var chatResult = await _openAiChatService.SendChatMessageAsync(chatSystemPrompt, session.Messages, cancellationToken);
 
         var aiMessage = new DialogMessage
         {
@@ -171,8 +194,6 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(aiMessage);
 
-        // AI7a: PushEach appends only the new messages — avoids lost-update when concurrent reads
-        // hold a stale Messages list and then overwrite the whole array with Set.
         var updateDefinition = Builders<DialogSession>.Update.PushEach(
             sessionRecord => sessionRecord.Messages,
             new[] { userMessage, aiMessage });
@@ -230,7 +251,8 @@ internal sealed class DialogService : IDialogService
             scoringWeights.Objection,
             scoringWeights.Goal);
 
-        var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(mode.FeedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
+        var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(mode.FeedbackSystemPrompt, session.CompanyCallContext);
+        var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(feedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
 
         var earnedXp = (int)Math.Round(feedbackResult.XpReward * scoringWeights.Multiplier);
 
