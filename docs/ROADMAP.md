@@ -1231,8 +1231,17 @@
 > - `company-service` stores the link `PracticeCall {companyId, dialogSessionId, goal}`;
 >   the company timeline merges practice calls and real-call logs client-side.
 >
-> **Process:** implementation via sonnet executor agents; EVERY sub-phase ends with a
-> `code-reviewer` agent pass and green tests before commit.
+> **Process (PR-based):** all work happens on the integration branch `feature/companies`.
+> Each sub-phase = its own branch `companies/39.X-<slug>` off `feature/companies` →
+> implemented by a sonnet executor agent → PR into `feature/companies` → a `code-reviewer`
+> agent reviews the PR diff → findings fixed → merge only with green tests
+> (`dotnet test`, `tsc`, `vitest`). When the whole phase is done: final PR
+> `feature/companies` → `main` for the product owner.
+>
+> **Scope decision (2026-07-09):** the product owner approved ALL eight extension
+> features (Stage B below) — this is the flagship feature of the project.
+> Mobile bottom nav: «Компании» replaces «Справочник» in the 5-slot bar
+> (guidebook stays reachable from the desktop rail), per DESIGN_SPEC §1.4.
 
 ### [ ] 39.1 Backend — company-service scaffold
 - [ ] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
@@ -1291,7 +1300,90 @@
 - [ ] On session create → `POST /companies/{id}/practice-calls`; hangup → feedback modal → return to `/companies/[id]`
 - [ ] Practice entries appear in the company timeline with feedback summary
 
-### [ ] 39.8 Docs, tests & QA
-- [ ] `docs/COMPANIES/COMPANIES.md` feature doc; link both COMPANIES docs in `docs/FEATURES.md`
+### [ ] 39.8 Core docs checkpoint (Stage A)
+- [ ] `docs/COMPANIES/COMPANIES.md` feature doc (core flows); link both COMPANIES docs in `docs/FEATURES.md`
 - [ ] `docs/TESTING/COMPANIES.md` — manual checklist (CRUD, ownership, practice call with goal, logs, timeline, mobile)
-- [ ] Final `code-reviewer` + `verifier` agent pass over the whole phase (tsc, vitest, dotnet test, eslint)
+
+---
+
+> **Stage B — approved extension features (all eight, 2026-07-09).**
+> Same PR process. Order matters: 39.9/39.10 are schema-level and go first;
+> AI features (39.12–39.14, 39.16) depend on 39.3 core context plumbing.
+
+### [ ] 39.9 Contacts (mini-CRM)
+- [ ] Backend: `CompanyContact` entity (Id, CompanyId, UserId, Name, Position, Notes?, CreatedAt, UpdatedAt);
+      CRUD `GET/POST /companies/{id}/contacts`, `PUT/DELETE /companies/{id}/contacts/{contactId}`
+- [ ] `CallLogEntry.ContactId` (nullable FK, SET NULL on delete) alongside free-text `ContactName`
+- [ ] Frontend: contacts section on company page (add/edit/delete); log-form field «С кем говорил»
+      becomes combo: pick a contact or type free text (typed name offers «Сохранить как контакт»)
+- [ ] Unit tests; `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`
+
+### [ ] 39.10 Company status pipeline
+- [ ] `Company.Status` enum: `Lead / Contacted / MeetingScheduled / DealWon / DealLost` (default Lead)
+- [ ] `PUT /companies/{id}/status`; status included in list/detail DTOs
+- [ ] Frontend: status chip on `/companies` rows + status filter chips in toolbar;
+      status selector on the company page header (V2 chip colors: lead neutral, contacted info,
+      meeting violet, won success, lost danger)
+- [ ] Unit tests; docs
+
+### [ ] 39.11 Follow-up reminders
+- [ ] `Company.NextActionAt` (nullable timestamptz), `NextActionNote` (nullable), `FollowUpNotifiedAt` (nullable)
+- [ ] company-service adopts BuildingBlocks eventing (Kafka producer): hosted background service
+      polls due follow-ups (every 5 min), publishes `company.followup.due` once per due date
+      (guard via `FollowUpNotifiedAt`); topic constant in `BuildingBlocks/Topics`
+- [ ] notification-service: consume `company.followup.due` → notification type `CompanyFollowUpDue`,
+      title «Пора связаться с {companyName}», actionUrl `/companies/{id}`
+- [ ] Frontend: follow-up date + note editor on company page; due/overdue badge on `/companies` rows
+- [ ] Unit tests both services (due-poll logic, once-only guard, event contract, consumer→inbox); docs
+
+### [ ] 39.12 AI pre-call briefing («Шпаргалка»)
+- [ ] ai-service: `POST /ai/companies/briefing` — input: company description, goal?, recent real-call
+      logs, feedback summaries of recent practice sessions (by sessionIds from Mongo); output: short
+      structured markdown cheat-sheet (кто они, о чём договаривались, возражения, следующий шаг)
+- [ ] company-service: `POST /companies/{id}/briefing` — gathers context, calls ai-service
+      (internal HTTP, same pattern as learning→ai `/ai/evaluate`), caches result on the company
+      (`BriefingContent`, `BriefingGeneratedAt`); `GET` returns cached
+- [ ] Frontend: «Шпаргалка к звонку» card on company page — generate/regenerate, markdown render,
+      generated-at timestamp; loading/error states
+- [ ] Unit tests (prompt composition mocked HTTP, caching); docs
+
+### [ ] 39.13 AI real-call log parsing
+- [ ] ai-service: `POST /ai/companies/parse-log` `{rawText}` → `{contactName?, subject, outcome, occurredAt?}`
+- [ ] company-service proxy: `POST /companies/{id}/logs/parse`
+- [ ] Frontend: log form gets «Вставить заметки» mode — paste raw notes/transcript → AI prefills
+      the 3 fields → user reviews/edits → save; graceful fallback to manual on AI error
+- [ ] Unit tests (mocked HTTP, malformed AI output); docs
+
+### [ ] 39.14 AI persona generation for practice calls
+- [ ] company-service: `CompanyPersona` entity (Id, CompanyId, UserId, Name, Position, Personality,
+      Difficulty enum Easy/Medium/Hard, CreatedAt); CRUD-lite: `GET/POST /companies/{id}/personas`,
+      `DELETE /companies/{id}/personas/{personaId}`
+- [ ] ai-service: `POST /ai/companies/persona` `{companyDescription, contactName?, contactPosition?, difficulty}`
+      → persona JSON; optionally seeded from an existing contact (39.9 synergy)
+- [ ] Pre-call `.co-cta` panel: persona selector (chips: сгенерированные персоны + «Без персоны») +
+      «Сгенерировать собеседника» (difficulty picker); selected persona injected into `companyContext`
+      chat/feedback prompts (extends 39.3)
+- [ ] Unit tests; docs
+
+### [ ] 39.15 Voice memo → log
+- [ ] Frontend: mic button in the log form (MediaRecorder, same UX as free-text exercises) →
+      existing ai-service `POST /transcription/transcribe` → transcript lands in the raw-notes
+      field → optionally chains into AI log parsing (39.13)
+- [ ] Verify gateway route for `/transcription/*` → ai-service (add if missing)
+- [ ] Component tests (recording states, error fallback); docs
+
+### [ ] 39.16 Readiness score
+- [ ] ai-service: `POST /ai/companies/readiness` — input: goal, feedback summaries of last N practice
+      sessions for the company; output `{score 0–100, strengths[], gaps[], recommendation}`
+- [ ] company-service: `GET /companies/{id}/readiness` — cached (`ReadinessJson`, `ReadinessGeneratedAt`),
+      invalidated when a new practice call completes; 204 when no practice sessions yet
+- [ ] Frontend: readiness ring + «Что подтянуть» list next to the pre-call panel; empty state
+      «Проведите тренировку, чтобы получить оценку готовности»
+- [ ] Unit tests (scoring parse, cache invalidation); docs
+
+### [ ] 39.17 Final QA, docs & release PR
+- [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
+- [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
+- [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
+      (dotnet test, tsc, vitest, eslint, codestyle-lint)
+- [ ] Final PR `feature/companies` → `main`
