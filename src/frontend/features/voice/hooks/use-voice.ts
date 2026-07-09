@@ -16,7 +16,7 @@ export type { VoicePipelineState } from "@/features/voice/types/voice-pipeline-s
 export type { UseVoiceOptions } from "@/features/voice/types/use-voice-options";
 
 export function useVoice(options: UseVoiceOptions) {
-    const { sessionId, modeVoiceEnabled, bundleId, modeId, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
+    const { sessionId, modeVoiceEnabled, bundleId, modeId, companyContext, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
 
     const [state, setState] = useState<VoicePipelineState>("idle");
     const [currentTranscript, setCurrentTranscript] = useState("");
@@ -165,7 +165,11 @@ export function useVoice(options: UseVoiceOptions) {
         let activeSessionId = currentSessionIdRef.current;
         if (!activeSessionId && bundleId && modeId) {
             try {
-                const session = await apiClient.post<{ id: string }>("/dialog/sessions", { bundleId, modeId });
+                const session = await apiClient.post<{ id: string }>("/dialog/sessions", {
+                    bundleId,
+                    modeId,
+                    ...(companyContext ? { companyContext } : {}),
+                });
                 activeSessionId = session.id;
                 currentSessionIdRef.current = activeSessionId;
                 onSessionCreated?.(activeSessionId);
@@ -230,7 +234,7 @@ export function useVoice(options: UseVoiceOptions) {
             onError?.(error instanceof Error ? error : new Error("Voice initialization failed"));
             setState("error");
         }
-    }, [isVoiceAvailable, bundleId, modeId, voiceConfig, onSessionCreated, onError, processSpeech]);
+    }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionCreated, onError, processSpeech]);
 
     const stopVoice = useCallback(() => {
         endpointerRef.current?.reset();
