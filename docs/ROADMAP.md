@@ -1243,8 +1243,8 @@
 > Mobile bottom nav: «Компании» replaces «Справочник» in the 5-slot bar
 > (guidebook stays reachable from the desktop rail), per DESIGN_SPEC §1.4.
 
-### [>] 39.1 Backend — company-service scaffold
-- [ ] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
+### [x] 39.1 Backend — company-service scaffold
+- [x] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
 - [ ] `CompanyDbContext` (Postgres `company`), auto-migrate on startup
 - [ ] Entities: `Company` (Id, UserId, Name, Description, CreatedAt, UpdatedAt),
       `CallLogEntry` (Id, CompanyId, UserId, ContactName, Subject, Outcome, OccurredAt, CreatedAt, UpdatedAt),
@@ -1253,7 +1253,7 @@
 - [ ] `Program.cs` per notification-service pattern; Dockerfile
 - [ ] Update `docs/DB_SCHEMA.md`
 
-### [>] 39.2 Backend — company-service API
+### [x] 39.2 Backend — company-service API
 - [ ] `CompanyController`: `GET /companies` (list, `?search=`), `POST /companies` `{name}`,
       `GET /companies/{id}`, `PUT /companies/{id}` `{name, description}`, `DELETE /companies/{id}`
 - [ ] Call log: `GET /companies/{id}/logs`, `POST /companies/{id}/logs` `{contactName, subject, outcome, occurredAt}`,
@@ -1264,7 +1264,7 @@
 - [ ] Input validation + limits (name ≤ 200, description ≤ 8000, log fields ≤ 4000)
 - [ ] Unit tests (service layer, ownership, validation); update `docs/API_CONTRACTS.md`
 
-### [>] 39.3 Backend — ai-service: company-context sessions
+### [x] 39.3 Backend — ai-service: company-context sessions
 - [ ] `StartSessionRequestDto` gains optional `companyContext { companyName, companyDescription, callGoal }`
 - [ ] Seed admin-editable `DialogMode` template (key `company-call`, voiceEnabled, hidden from `/dialog/bundles` listing)
 - [ ] `DialogService.StartSessionAsync`: when context present → compose chat + feedback
@@ -1272,13 +1272,13 @@
 - [ ] Voice stream, complete/feedback, XP weights, minute quotas — unchanged and verified with context sessions
 - [ ] Unit tests (prompt composition, context persistence); update `docs/API_CONTRACTS.md`, `docs/AI_DIALOG.md`
 
-### [ ] 39.4 Infra — gateway, compose, dev scripts
+### [>] 39.4 Infra — gateway, compose, dev scripts
 - [ ] YARP: route `/companies/{**catch-all}` → cluster `company` in `gateway/appsettings.json` + gateway tests
 - [ ] `docker-compose.yml`: `company` service entry (env, depends_on postgres; gateway env + depends_on)
 - [ ] `scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) + hook into `scripts/dev-up.sh`
 - [ ] Update `docs/LOCAL_DEV.md`, `docs/CONFIGURATION.md`, `docs/MICROSERVICES.md`, `docs/ARCHITECTURE.md`
 
-### [ ] 39.5 Frontend — nav + companies list
+### [>] 39.5 Frontend — nav + companies list
 - [ ] `briefcase` icon added to `IconName`; rail item «Компании» in `nav-rail.tsx`; mobile `bottom-nav.tsx` per spec §1.4
 - [ ] `features/companies/`: `use-companies.ts` hooks (list/create/update/delete, search)
 - [ ] `/companies` page per spec §2: header, toolbar (search + «Добавить компанию»), `.co-row` list,
