@@ -1272,20 +1272,20 @@
 - [ ] Voice stream, complete/feedback, XP weights, minute quotas — unchanged and verified with context sessions
 - [ ] Unit tests (prompt composition, context persistence); update `docs/API_CONTRACTS.md`, `docs/AI_DIALOG.md`
 
-### [>] 39.4 Infra — gateway, compose, dev scripts
+### [x] 39.4 Infra — gateway, compose, dev scripts
 - [ ] YARP: route `/companies/{**catch-all}` → cluster `company` in `gateway/appsettings.json` + gateway tests
 - [ ] `docker-compose.yml`: `company` service entry (env, depends_on postgres; gateway env + depends_on)
 - [ ] `scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) + hook into `scripts/dev-up.sh`
 - [ ] Update `docs/LOCAL_DEV.md`, `docs/CONFIGURATION.md`, `docs/MICROSERVICES.md`, `docs/ARCHITECTURE.md`
 
-### [>] 39.5 Frontend — nav + companies list
+### [x] 39.5 Frontend — nav + companies list
 - [ ] `briefcase` icon added to `IconName`; rail item «Компании» in `nav-rail.tsx`; mobile `bottom-nav.tsx` per spec §1.4
 - [ ] `features/companies/`: `use-companies.ts` hooks (list/create/update/delete, search)
 - [ ] `/companies` page per spec §2: header, toolbar (search + «Добавить компанию»), `.co-row` list,
       create-company modal, empty/loading/error states
 - [ ] Vitest tests for hooks + list rendering
 
-### [ ] 39.6 Frontend — company page
+### [>] 39.6 Frontend — company page
 - [ ] `/companies/[id]` per spec §3: identity header, description card with edit mode,
       pre-call `.co-cta` panel (goal input + recent-goal chips), combined timeline
       (Все / Тренировки / Звонки segmented filter)
