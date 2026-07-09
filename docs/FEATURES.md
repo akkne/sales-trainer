@@ -56,7 +56,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
-| [Companies — Design Spec](COMPANIES/DESIGN_SPEC.md) | **In progress (Phase 39)** — «Компании» tab: prospect list (39.5, done), company page with description/pre-call CTA/combined timeline/call-log CRUD (39.6, done); company-service (port 5009) + ai-service context injection. The company-voice call route (39.7) is not yet built, so «Позвонить» 404s by design until then |
+| [Companies](COMPANIES/COMPANIES.md) | **Stage A shipped (Phase 39.1–39.8)** — «Компании» tab: prospect list + CRUD, description, pre-call goal + recent goals, AI voice/chat practice calls with company-context injection (company-service port 5009 + ai-service seeded hidden `company-call` mode), combined timeline, real-call log CRUD. Design: [DESIGN_SPEC.md](COMPANIES/DESIGN_SPEC.md). Stage B (contacts, status pipeline, follow-up reminders, AI briefing/log-parsing/persona/readiness, voice memo) is planned, not implemented — see `docs/ROADMAP.md` Phase 39.9+ |
 
 ## Testing
 
@@ -83,6 +83,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | [SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md) | Phase 5: social-service unit tests (friend lifecycle + events, forum CRUD/voting/photos, chat friendship guard, `user.*` replica consumer, event contract) + gateway route-flip |
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
+| [COMPANIES.md](TESTING/COMPANIES.md) | Phase 39: company-service CRUD/ownership unit tests, ai-service company-context prompt tests, gateway route-flip, frontend vitest coverage + manual checklist (CRUD, ownership isolation, goal handoff, voice/chat practice calls, timeline, real-call log, mobile nav) |
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
 | Feature checklists | Manual test checklists for each feature |
 
