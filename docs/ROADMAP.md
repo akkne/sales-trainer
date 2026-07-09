@@ -1300,7 +1300,7 @@
 - [ ] On session create → `POST /companies/{id}/practice-calls`; hangup → feedback modal → return to `/companies/[id]`
 - [ ] Practice entries appear in the company timeline with feedback summary
 
-### [>] 39.8 Core docs checkpoint (Stage A)
+### [x] 39.8 Core docs checkpoint (Stage A)
 - [ ] `docs/COMPANIES/COMPANIES.md` feature doc (core flows); link both COMPANIES docs in `docs/FEATURES.md`
 - [ ] `docs/TESTING/COMPANIES.md` — manual checklist (CRUD, ownership, practice call with goal, logs, timeline, mobile)
 
