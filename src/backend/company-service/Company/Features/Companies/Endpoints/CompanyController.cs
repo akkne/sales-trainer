@@ -124,6 +124,11 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         {
             return StatusCode(503, new { message = invalidOperationException.Message });
         }
+        catch (HttpRequestException)
+        {
+            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+        }
     }
 
     [HttpGet("companies/{companyId:guid}/briefing")]
@@ -179,6 +184,11 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         catch (InvalidOperationException invalidOperationException)
         {
             return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+        catch (HttpRequestException)
+        {
+            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
     }
 
@@ -437,6 +447,11 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         catch (InvalidOperationException invalidOperationException)
         {
             return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+        catch (HttpRequestException)
+        {
+            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
     }
 
