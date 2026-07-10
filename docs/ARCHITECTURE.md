@@ -148,6 +148,26 @@ src/backend/
   were the named scope of roadmap 10.3 (the producers whose events drive cross-service state).
   Other producers (social, ai) still publish directly and can adopt the same shared building
   blocks if/when their events need the same guarantee.
+- **Producer-only service (Phase 39.11):** `company-service` produces `company.followup.due`
+  (a hosted `FollowUpReminderBackgroundService` polling every `FollowUpReminder:PollIntervalMinutes`,
+  default 5 min, for companies whose `NextActionAt` is due and not yet notified) but never
+  consumes. It registers the Kafka publisher + topic provisioner directly rather than the
+  shared `AddSellevateEventing` helper, since that helper also wires the Redis-backed consumer
+  idempotency store — an unneeded dependency for a producer-only service. It does **not** use
+  the Outbox: the reminder poll already reads from Postgres on its own schedule, so there is no
+  separate "business change that must commit atomically with an event" to protect — the poll
+  claims a company (sets `FollowUpNotifiedAt`, commits) *before* publishing to Kafka — the whole
+  claimed batch (up to `FollowUpReminder:BatchSize`, default 100) is committed in one
+  `SaveChangesAsync`, then each company is published individually. This is a deliberate
+  at-most-once trade-off for a single-instance service: a single publish failure only drops that
+  one company's reminder (each publish is individually try/caught), but a process crash *between*
+  the claim commit and the publish loop — or a broker outage that fails every publish in the loop
+  — silently drops **up to the whole in-flight batch** (bounded by `BatchSize`, not unbounded)
+  for that tick, since every claimed company is already marked notified and will not be
+  reconsidered. This favors "never double-notify" over guaranteed delivery. The user can always
+  force a fresh reminder for an affected company by rescheduling `NextActionAt`, which resets
+  `FollowUpNotifiedAt`. Revisit with the Outbox pattern if guaranteed delivery becomes a
+  requirement.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

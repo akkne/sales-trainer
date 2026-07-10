@@ -28,6 +28,16 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
             .HasMaxLength(32)
             .HasDefaultValue(CompanyStatus.Lead);
 
+        builder.Property(company => company.NextActionAt)
+            .IsRequired(false);
+
+        builder.Property(company => company.NextActionNote)
+            .IsRequired(false)
+            .HasMaxLength(2000);
+
+        builder.Property(company => company.FollowUpNotifiedAt)
+            .IsRequired(false);
+
         builder.Property(company => company.CreatedAt)
             .IsRequired();
 
@@ -35,6 +45,11 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
             .IsRequired();
 
         builder.HasIndex(company => company.UserId);
+
+        // Sparse index (only rows with a scheduled follow-up) so the reminder poll's
+        // WHERE NextActionAt <= now AND FollowUpNotifiedAt IS NULL stays cheap as the table grows.
+        builder.HasIndex(company => company.NextActionAt)
+            .HasFilter("\"NextActionAt\" IS NOT NULL");
 
         builder.HasMany(company => company.CallLogEntries)
             .WithOne(entry => entry.Company)

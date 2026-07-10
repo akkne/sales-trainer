@@ -9,5 +9,6 @@ public enum NotificationType
     StreakMilestone = 5,
     DiscussReplyReceived = 6,
     LeagueUpdated = 7,
-    UserWelcome = 8
+    UserWelcome = 8,
+    CompanyFollowUpDue = 9
 }

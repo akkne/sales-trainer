@@ -410,10 +410,16 @@ services:
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
+      - Kafka__BootstrapServers=kafka:29092
     depends_on:
       postgres:
         condition: service_healthy
       loki:
+        condition: service_started
+      # service_started (not a broker readiness check) is intentionally lenient: the topic
+      # provisioner and reminder publisher both tolerate a not-yet-ready broker at startup
+      # (logged, not fatal) and self-heal once Kafka accepts connections.
+      kafka:
         condition: service_started
 
   gateway:

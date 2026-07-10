@@ -4,6 +4,7 @@ import type { CompanySummary } from "@/features/companies/hooks/use-companies";
 import { ava, initials } from "@/features/companies/lib/avatar";
 import { relativeTimeRu, pluralizeRu } from "@/features/companies/lib/format";
 import { CompanyStatusBadge } from "@/features/companies/components/company-status-badge";
+import { CompanyFollowUpBadge } from "@/features/companies/components/company-followup-badge";
 
 interface CompanyRowProps {
     company: CompanySummary;
@@ -43,6 +44,7 @@ export function CompanyRow({ company }: CompanyRowProps) {
                 <p className="co-row-name">{company.name}</p>
                 <p className="co-row-meta">{metaParts.join(" · ")}</p>
             </div>
+            <CompanyFollowUpBadge nextActionAt={company.nextActionAt} />
             <CompanyStatusBadge status={company.status} className="co-row-status" />
             <Icon name="chevron-right" size={18} className="co-row-chev" />
         </Link>

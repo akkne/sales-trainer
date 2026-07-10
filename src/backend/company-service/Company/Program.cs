@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Infrastructure.Data;
@@ -37,7 +38,18 @@ builder.Services.AddDbContext<CompanyDbContext>(databaseOptions =>
 
 builder.Services.AddCompanyFeatureServices();
 
-builder.Services.AddSellevateHealthChecks();
+// company-service only *produces* Kafka events (company.followup.due) — it never consumes, so it
+// registers the publisher + topic provisioner directly rather than the full AddSellevateEventing
+// helper, which also wires the Redis-backed consumer idempotency store. That would add a Redis
+// dependency this service has never needed. Revisit if company-service ever needs to consume events.
+builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
+builder.Services.AddHostedService<KafkaTopicProvisioner>();
+builder.Services.AddSingleton<KafkaEventPublisher>();
+builder.Services.AddSingleton<IEventPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
+builder.Services.AddCompanyFollowUpReminders(builder.Configuration);
+
+builder.Services.AddSellevateHealthChecks()
+    .AddKafka();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CompanyDbContext>(
         CompanyHealthCheckConstants.PostgresCheckName,

@@ -11,6 +11,7 @@ export interface CompanySummary {
     callLogCount: number;
     practiceCallCount: number;
     contactCount: number;
+    nextActionAt: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -23,6 +24,9 @@ export interface CompanyDetail {
     callLogCount: number;
     practiceCallCount: number;
     contactCount: number;
+    nextActionAt: string | null;
+    nextActionNote: string | null;
+    followUpNotifiedAt: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -87,6 +91,21 @@ export function useUpdateCompanyStatus() {
         },
         onError: (error: Error) => {
             toast.error(`Не удалось изменить статус: ${error.message}`);
+        },
+    });
+}
+
+export function useUpdateCompanyFollowUp() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, nextActionAt, nextActionNote }: { id: string; nextActionAt: string | null; nextActionNote: string | null }) =>
+            apiClient.put<CompanyDetail>(`/companies/${id}/follow-up`, { nextActionAt, nextActionNote }),
+        onSuccess: (_data, { id }) => {
+            queryClient.invalidateQueries({ queryKey: companiesKey });
+            queryClient.invalidateQueries({ queryKey: companyKey(id) });
+        },
+        onError: (error: Error) => {
+            toast.error(`Не удалось сохранить напоминание: ${error.message}`);
         },
     });
 }

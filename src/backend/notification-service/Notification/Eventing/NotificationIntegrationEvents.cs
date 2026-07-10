@@ -56,6 +56,16 @@ public sealed record LeagueUpdatedEvent(
     string Outcome,
     int Rank);
 
+/// <summary>Published by company-service's follow-up reminder poll when a scheduled
+/// <c>Company.NextActionAt</c> becomes due and has not yet been notified. Field names match the
+/// wire contract in <c>company-service</c>'s <c>CompanyIntegrationEvents.CompanyFollowUpDueEvent</c>.</summary>
+public sealed record CompanyFollowUpDueEvent(
+    Guid CompanyId,
+    Guid UserId,
+    string CompanyName,
+    DateTime NextActionAt,
+    string? Note);
+
 // User-profile replica events — consumed to resolve a recipient's email/display name locally
 // (the notification service has no database, so the replica is held in Redis).
 public sealed record UserRegisteredEvent(Guid UserId, string Email, string DisplayName, string? AvatarKey);
