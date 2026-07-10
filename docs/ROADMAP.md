@@ -1354,7 +1354,7 @@
       the 3 fields → user reviews/edits → save; graceful fallback to manual on AI error
 - [ ] Unit tests (mocked HTTP, malformed AI output); docs
 
-### [>] 39.14 AI persona generation for practice calls
+### [x] 39.14 AI persona generation for practice calls
 - [ ] company-service: `CompanyPersona` entity (Id, CompanyId, UserId, Name, Position, Personality,
       Difficulty enum Easy/Medium/Hard, CreatedAt); CRUD-lite: `GET/POST /companies/{id}/personas`,
       `DELETE /companies/{id}/personas/{personaId}`
