@@ -48,10 +48,15 @@ internal sealed class ParseLogService : IParseLogService
 
     private ParsedCallLogDto ParseAiResponse(string aiResponseText)
     {
+        // Models occasionally ignore the "no code blocks" instruction and wrap the
+        // JSON in a ```json … ``` fence; strip it before parsing so a valid answer
+        // does not needlessly degrade to a 503 (same defense the dialog parser uses).
+        var jsonText = StripMarkdownCodeFence(aiResponseText);
+
         JsonElement root;
         try
         {
-            root = JsonDocument.Parse(aiResponseText).RootElement;
+            root = JsonDocument.Parse(jsonText).RootElement;
         }
         catch (JsonException jsonException)
         {
@@ -82,6 +87,23 @@ internal sealed class ParseLogService : IParseLogService
             : null;
 
         return new ParsedCallLogDto(contactName, subject, outcome, occurredAt);
+    }
+
+    private static string StripMarkdownCodeFence(string text)
+    {
+        var trimmedText = text.Trim();
+        if (!trimmedText.StartsWith("```", StringComparison.Ordinal))
+            return trimmedText;
+
+        var firstLineBreakIndex = trimmedText.IndexOf('\n');
+        if (firstLineBreakIndex < 0)
+            return trimmedText;
+
+        var withoutOpeningFence = trimmedText[(firstLineBreakIndex + 1)..];
+        var closingFenceIndex = withoutOpeningFence.LastIndexOf("```", StringComparison.Ordinal);
+        return closingFenceIndex >= 0
+            ? withoutOpeningFence[..closingFenceIndex].Trim()
+            : withoutOpeningFence.Trim();
     }
 
     private static string? GetStringOrNull(JsonElement element) =>

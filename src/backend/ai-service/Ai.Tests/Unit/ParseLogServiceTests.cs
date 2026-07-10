@@ -37,6 +37,20 @@ public class ParseLogServiceTests
     }
 
     [Test]
+    public async Task ParseLogAsync_ParsesJson_WhenWrappedInMarkdownCodeFence()
+    {
+        _openAiChatService
+            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns("```json\n{\"contactName\": \"Иван Петров\", \"subject\": \"Обсудили условия\", \"outcome\": \"Взял паузу\", \"occurredAt\": \"2026-07-01\"}\n```");
+
+        var result = await _parseLogService.ParseLogAsync("текст");
+
+        result.ContactName.Should().Be("Иван Петров");
+        result.Subject.Should().Be("Обсудили условия");
+        result.OccurredAt.Should().Be(new DateTime(2026, 7, 1));
+    }
+
+    [Test]
     public async Task ParseLogAsync_ReturnsNullOccurredAt_WhenDateMissing()
     {
         _openAiChatService
