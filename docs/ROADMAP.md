@@ -1336,7 +1336,7 @@
 - [ ] Frontend: follow-up date + note editor on company page; due/overdue badge on `/companies` rows
 - [ ] Unit tests both services (due-poll logic, once-only guard, event contract, consumer→inbox); docs
 
-### [ ] 39.12 AI pre-call briefing («Шпаргалка»)
+### [>] 39.12 AI pre-call briefing («Шпаргалка»)
 - [ ] ai-service: `POST /ai/companies/briefing` — input: company description, goal?, recent real-call
       logs, feedback summaries of recent practice sessions (by sessionIds from Mongo); output: short
       structured markdown cheat-sheet (кто они, о чём договаривались, возражения, следующий шаг)
