@@ -878,10 +878,11 @@ DTO additions on the Discuss user endpoints above:
 | GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id}/status | `{status}` | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id}/follow-up | `{nextActionAt, nextActionNote?}` | `CompanyDetailDto` or `404` |
 | DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts) |
 
-`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
-`CompanyDetailDto`: `{id, name, description, status, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
+`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, nextActionAt, createdAt, updatedAt}`
+`CompanyDetailDto`: `{id, name, description, status, callLogCount, practiceCallCount, contactCount, nextActionAt, nextActionNote, followUpNotifiedAt, createdAt, updatedAt}`
 
 Validation: `name` required, max 200; `description` max 8000.
 
@@ -889,6 +890,26 @@ Validation: `name` required, max 200; `description` max 8000.
 (string enum), defaulting to `Lead` on creation. `PUT /companies/{id}/status` sets it directly —
 no server-side transition constraints, any status may be set from any other. `404` on missing
 company or wrong owner, same ownership pattern as every other company endpoint.
+
+`nextActionAt`/`nextActionNote`/`followUpNotifiedAt` (Phase 39.11 — follow-up reminders):
+`PUT /companies/{id}/follow-up` with a non-null `nextActionAt` (re)schedules the follow-up
+(`nextActionNote` optional, max 2000 chars, defaults to empty) and **resets
+`followUpNotifiedAt` to `null`**, so a rescheduled due date is eligible to notify again even if
+the previous one already fired. A request with `nextActionAt: null` **clears** the follow-up —
+`nextActionNote` and `followUpNotifiedAt` are cleared with it. `followUpNotifiedAt` is
+read-only/server-managed (set by the reminder background service, see below) and is exposed on
+`CompanyDetailDto` for observability, not on the list DTO. `nextActionAt` is included on
+`CompanySummaryDto` so the `/companies` list can render a due/overdue badge per row without an
+extra request per company.
+
+**Follow-up reminder background service (Kafka producer):** `company-service` runs a hosted
+background service (`FollowUpReminderBackgroundService`) that polls every
+`FollowUpReminder:PollIntervalMinutes` (default 5) for companies where `NextActionAt <= now AND
+FollowUpNotifiedAt IS NULL`, claims them (sets `FollowUpNotifiedAt`, commits), and publishes one
+`company.followup.due` Kafka event per claimed company — see `docs/MICROSERVICES.md §4.1` for the
+topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Consumed by
+notification-service → `NotificationType.CompanyFollowUpDue`, an in-app-only notification (no
+email) titled *«Пора связаться с {companyName}»*, `actionUrl` `/companies/{id}`.
 
 ### Call Log
 

@@ -205,12 +205,19 @@ live in `building-blocks`.
 ### 2.8 Company Service — `company-service` (Postgres, Phase 39)
 **Bounded context:** the salesperson's account book — companies they sell into, their
 call history, and practice-call sessions tied to a company.
-- **Owns (Postgres `company`):** `Company` (Id, UserId, Name, Description, CreatedAt,
-  UpdatedAt), `CallLogEntry` (real-call log entries), `PracticeCall` (links to an AI
-  `DialogSession` with a goal).
-- **Frontend REST:** `/companies/*` (companies CRUD, call log, practice-call records).
-- **No Kafka, Redis, or Mongo dependency.** Every query is scoped to the JWT's `UserId`
-  at the service layer; 404 on foreign ids.
+- **Owns (Postgres `company`):** `Company` (Id, UserId, Name, Description, Status,
+  NextActionAt, NextActionNote, FollowUpNotifiedAt, CreatedAt, UpdatedAt), `CallLogEntry`
+  (real-call log entries), `PracticeCall` (links to an AI `DialogSession` with a goal),
+  `CompanyContact` (mini-CRM contacts).
+- **Frontend REST:** `/companies/*` (companies CRUD, status, follow-up scheduling, call log,
+  practice-call records, contacts).
+- **Kafka producer only** (since Phase 39.11): a polling background service
+  (`FollowUpReminderBackgroundService`, default every 5 min) publishes `company.followup.due`
+  for companies whose `NextActionAt` is due and not yet notified — see §4.1. Registers only
+  the Kafka publisher + topic provisioner directly (not the full `AddSellevateEventing`
+  helper), since it never consumes and so has no need for the Redis-backed consumer
+  idempotency store that helper also wires up. **No Redis or Mongo dependency.** Every
+  query is scoped to the JWT's `UserId` at the service layer; 404 on foreign ids.
 - **Sync dependency:** starting a practice call hands a company-context payload
   (`companyName`, `companyDescription`, `callGoal`) to the **AI Service** `StartSessionAsync`
   call, which composes it into the roleplay's system prompt (see 2.3).
@@ -261,6 +268,7 @@ a composition of those per-service admin APIs.
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
 | `league.updated` | Gamification | Notifications | userId, leagueId, previousTier, newTier, outcome, rank |
+| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
 per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once

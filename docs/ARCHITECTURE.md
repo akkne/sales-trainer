@@ -148,6 +148,21 @@ src/backend/
   were the named scope of roadmap 10.3 (the producers whose events drive cross-service state).
   Other producers (social, ai) still publish directly and can adopt the same shared building
   blocks if/when their events need the same guarantee.
+- **Producer-only service (Phase 39.11):** `company-service` produces `company.followup.due`
+  (a hosted `FollowUpReminderBackgroundService` polling every `FollowUpReminder:PollIntervalMinutes`,
+  default 5 min, for companies whose `NextActionAt` is due and not yet notified) but never
+  consumes. It registers the Kafka publisher + topic provisioner directly rather than the
+  shared `AddSellevateEventing` helper, since that helper also wires the Redis-backed consumer
+  idempotency store — an unneeded dependency for a producer-only service. It does **not** use
+  the Outbox: the reminder poll already reads from Postgres on its own schedule, so there is no
+  separate "business change that must commit atomically with an event" to protect — the poll
+  claims a company (sets `FollowUpNotifiedAt`, commits) *before* publishing to Kafka. This is a
+  deliberate at-most-once trade-off for a single-instance service: if the process crashes or the
+  Kafka produce fails after the claim commits, that specific reminder is silently dropped rather
+  than retried (the company is already marked notified) — favoring "never double-notify" over
+  guaranteed delivery. The user can always force a fresh reminder by rescheduling
+  `NextActionAt`, which resets `FollowUpNotifiedAt`. Revisit with the Outbox pattern if
+  guaranteed delivery becomes a requirement.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

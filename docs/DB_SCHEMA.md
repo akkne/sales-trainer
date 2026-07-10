@@ -649,6 +649,7 @@ Skills
 | `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
 | `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
 | `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
+| `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
 
 ---
 
@@ -665,14 +666,23 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 | `Name`        | varchar(200) | NOT NULL                         |
 | `Description` | varchar(8000)| NOT NULL, DEFAULT ''             |
 | `Status`      | varchar(32)  | NOT NULL, DEFAULT 'Lead'         |
+| `NextActionAt`| timestamptz  | NULL                             |
+| `NextActionNote` | varchar(2000) | NULL                          |
+| `FollowUpNotifiedAt` | timestamptz | NULL                      |
 | `CreatedAt`   | timestamptz  | NOT NULL                         |
 | `UpdatedAt`   | timestamptz  | NOT NULL                         |
 
-**Indexes:** `IX_Companies_UserId`
+**Indexes:** `IX_Companies_UserId`, `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`)
 
 `Status` (Phase 39.10) is one of `Lead | Contacted | MeetingScheduled | DealWon | DealLost`,
 stored as its string name (`HasConversion<string>()`, not the numeric enum value) so the column
 stays human-readable in the database.
+
+`NextActionAt`/`NextActionNote`/`FollowUpNotifiedAt` (Phase 39.11 — follow-up reminders):
+`NextActionAt` is the scheduled follow-up due date; `NextActionNote` a free-form note;
+`FollowUpNotifiedAt` is set by the reminder background service once `company.followup.due` has
+been published for the current `NextActionAt`, and is reset to `null` whenever `NextActionAt` is
+rescheduled (see `docs/API_CONTRACTS.md`). All three are nullable and independent of `Status`.
 
 ### Table: `CallLogEntries`
 

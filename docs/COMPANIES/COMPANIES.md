@@ -1,9 +1,9 @@
 # Companies (Компании)
 
-**Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9) and status
-pipeline (39.10) are shipped. The rest of Stage B (follow-up reminders,
-AI briefing/log-parsing/persona/readiness, voice memo) is **planned, not implemented** — see
-`docs/ROADMAP.md` Phase 39.11+.
+**Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9), status
+pipeline (39.10), and follow-up reminders (39.11) are shipped. The rest of Stage B
+(AI briefing/log-parsing/persona/readiness, voice memo) is **planned, not implemented** — see
+`docs/ROADMAP.md` Phase 39.12+.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -24,9 +24,9 @@ company.
 `src/backend/company-service/Company`, scaffolded after `notification-service`'s pattern
 (Serilog → Loki, per-service JWT bearer validation, CORS, health checks, ProblemDetails). Owns a
 standalone Postgres database `company`, auto-migrated on startup
-(`DatabaseBootstrapper` / EF Core migrations). **No Kafka producer or consumer** — nothing
-outside the service currently needs to react to company data, so it stays out of the
-BuildingBlocks eventing story (revisit for 39.11 follow-up reminders, which does need Kafka).
+(`DatabaseBootstrapper` / EF Core migrations). **Kafka producer only** (since Phase 39.11) — it
+publishes `company.followup.due` via a polling background service but consumes nothing; see
+"Follow-up reminders" below and `docs/ARCHITECTURE.md` for the registration/trade-off details.
 
 Routed at the gateway via YARP cluster `company` (`company-companies` / `company-companies-root`
 routes in `src/backend/gateway/Gateway/appsettings.json`), `docker-compose.yml` service entry, and
@@ -76,9 +76,12 @@ Three entities, all owned by `UserId`, cascade-deleted with their parent `Compan
 
 - **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""),
   Status (Lead/Contacted/MeetingScheduled/DealWon/DealLost, default Lead, stored as string),
-  CreatedAt, UpdatedAt`. Index on `UserId`. Status is changed via a dedicated
-  `PUT /companies/{id}/status` endpoint (kept separate from the name/description update so the
-  frontend can fire a status change without re-submitting the whole edit form).
+  NextActionAt (nullable), NextActionNote (nullable, ≤2000), FollowUpNotifiedAt (nullable),
+  CreatedAt, UpdatedAt`. Index on `UserId`; sparse index on `NextActionAt`. Status is changed via
+  a dedicated `PUT /companies/{id}/status` endpoint (kept separate from the name/description
+  update so the frontend can fire a status change without re-submitting the whole edit form); the
+  follow-up trio is likewise changed via its own `PUT /companies/{id}/follow-up` endpoint — see
+  "Follow-up reminders" below.
 - **`CallLogEntry`** (a real call the user logs manually) —
   `Id, CompanyId, UserId, ContactName (≤200), Subject (≤4000), Outcome (≤4000), OccurredAt,
   CreatedAt, UpdatedAt`. Only `ContactName` (with `Subject`/`Outcome` empty-allowed) plus
@@ -125,13 +128,18 @@ on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, o
 - **`features/companies/`** (mirrors `features/dialog/`):
   - `hooks/use-companies.ts` — list/get/create/update/delete companies (`useCompanies`,
     `useCompany`, `useCreateCompany`, `useUpdateCompany`, `useUpdateCompanyStatus`,
-    `useDeleteCompany`), client-side name filter on top of the server `?search=`
+    `useUpdateCompanyFollowUp`, `useDeleteCompany`), client-side name filter on top of the
+    server `?search=`
   - `lib/company-status.ts` — single source of truth for the 5 status values, their Russian
     labels (Лид / Был контакт / Встреча назначена / Сделка закрыта / Отказ), and the CSS tone
     class per status; `components/company-status-badge.tsx` (read-only chip, used on list rows)
     and `components/company-status-menu.tsx` (click-to-open dropdown, used on the company header)
     both key off it — status filter chips on `/companies` and the list-row badge share the same
     tone classes (`co-status--lead|contacted|meeting|won|lost` in `app/globals.css`)
+  - `lib/company-followup.ts` — due/overdue tone for a `nextActionAt` (due: within 24h, overdue:
+    past); `components/company-followup-badge.tsx` (renders nothing when there's no follow-up or
+    it's more than a day out) and `components/company-followup-card.tsx` (date + note editor on
+    the company page) both key off it — tone classes `co-followup--due|overdue` in `app/globals.css`
   - `hooks/use-company-logs.ts` — call-log CRUD
   - `hooks/use-practice-calls.ts` — `useCompanyPracticeCalls`, `useRecentGoals`,
     `useCreatePracticeCall` (retries twice; failure toasts but doesn't block the call)
@@ -215,10 +223,38 @@ to `Lead`. There's no server-side enforced transition order; any status can be s
   network call); a click-to-open status dropdown on the company page header
   (`CompanyStatusMenu`) that calls `useUpdateCompanyStatus` on selection.
 
+## Follow-up reminders (Phase 39.11)
+
+A salesperson schedules a next-contact date (+ optional note) per company; company-service polls
+for due dates and notifies via the shared notification inbox — no client-side reminder logic.
+
+- **Backend (company-service):** `PUT /companies/{id}/follow-up` (`{ "nextActionAt": "...",
+  "nextActionNote": "..." }`) sets `NextActionAt`/`NextActionNote` and resets
+  `FollowUpNotifiedAt` to `null` (so a rescheduled due date is eligible to notify again, even if
+  the previous one already fired); passing `nextActionAt: null` clears all three fields — there's
+  nothing left to remind about. A hosted `FollowUpReminderBackgroundService` polls every
+  `FollowUpReminder:PollIntervalMinutes` (default 5) for `NextActionAt <= now AND
+  FollowUpNotifiedAt IS NULL`, claims matching companies (sets `FollowUpNotifiedAt`, commits),
+  then publishes one `company.followup.due` Kafka event per claim (payload: `companyId, userId,
+  companyName, nextActionAt, note`). See `docs/ARCHITECTURE.md` for why the claim commits
+  *before* the publish (an at-most-once trade-off appropriate for a single-instance, non-outbox
+  producer) and `docs/API_CONTRACTS.md` for the full contract.
+- **notification-service:** consumes `company.followup.due` → `NotificationType.CompanyFollowUpDue`,
+  an **in-app-only** notification (no email) titled *«Пора связаться с {companyName}»*, body is
+  the follow-up note (or a generic fallback when there's none), `actionUrl` `/companies/{id}`.
+  Dedupes on `companyId:nextActionAt` (not just `companyId`) so a reschedule — which resets
+  `FollowUpNotifiedAt` on the producer side — still produces a fresh notification instead of
+  being suppressed by the still-inboxed reminder for the earlier due date.
+- **Frontend:** a "Следующий контакт" card on the company page (date + note editor, "Убрать
+  напоминание" to clear) below the description card; a due/overdue badge
+  (`CompanyFollowUpBadge`) on `/companies` rows and on the card itself — due (within 24h) uses
+  the info tone, overdue uses the danger tone, nothing renders otherwise. Mirrors the 39.10
+  status-badge pattern (`lib/company-followup.ts` + `.co-followup-*` CSS tone classes in
+  `app/globals.css`, parallel to `.co-status-*`).
+
 ## Stage B remainder (planned, not implemented)
 
-Approved 2026-07-09, tracked as Phase 39.11–39.17 in `docs/ROADMAP.md`: follow-up reminders (new
-Kafka event `company.followup.due` → notification-service), AI pre-call briefing ("Шпаргалка"),
-AI real-call-log parsing from pasted notes, AI persona generation for practice calls, voice-memo
-→ log transcription, and an AI readiness score. None of this is implemented yet — see the roadmap
-for scope and sequencing.
+Approved 2026-07-09, tracked as Phase 39.12–39.17 in `docs/ROADMAP.md`: AI pre-call briefing
+("Шпаргалка"), AI real-call-log parsing from pasted notes, AI persona generation for practice
+calls, voice-memo → log transcription, and an AI readiness score. None of this is implemented
+yet — see the roadmap for scope and sequencing.
