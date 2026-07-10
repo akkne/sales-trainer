@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { CallLogEntry, CallLogPayload } from "@/features/companies/hooks/use-company-logs";
 import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 import { useParseCallLog } from "@/features/companies/hooks/use-parse-call-log";
+import { useVoiceMemoRecorder } from "@/features/companies/hooks/use-voice-memo-recorder";
+import { Icon } from "@/shared/components/icon";
 
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
@@ -32,6 +34,14 @@ export function CallLogForm({ companyId, initial, contacts = [], submitting = fa
     const [isPasteMode, setPasteMode] = useState(false);
     const [rawNotes, setRawNotes] = useState("");
     const parseCallLog = useParseCallLog(companyId);
+
+    // Voice memo (39.15): record → transcribe → land the transcript in the raw-notes
+    // textarea above, so it can feed the same "Распознать" AI parse as pasted text.
+    const voiceMemo = useVoiceMemoRecorder({
+        onTranscript: (text) => {
+            setRawNotes((current) => (current.trim() ? `${current}\n${text}` : text));
+        },
+    });
 
     const canSubmit = contactName.trim().length > 0 && !submitting;
 
@@ -76,7 +86,33 @@ export function CallLogForm({ companyId, initial, contacts = [], submitting = fa
             {!initial && (
                 isPasteMode ? (
                     <div className="co-paste-notes">
-                        <label className="co-field-label" htmlFor="co-log-raw-notes">Вставьте заметки или расшифровку звонка</label>
+                        <div className="co-paste-notes-head">
+                            <label className="co-field-label" htmlFor="co-log-raw-notes">Вставьте заметки или расшифровку звонка</label>
+                            {voiceMemo.isSupported && (
+                                <button
+                                    type="button"
+                                    className={
+                                        "co-mic-btn" +
+                                        (voiceMemo.state === "recording" ? " co-mic-btn--recording" : "")
+                                    }
+                                    onClick={voiceMemo.state === "recording" ? voiceMemo.stopRecording : voiceMemo.startRecording}
+                                    disabled={voiceMemo.state === "requesting-permission" || voiceMemo.state === "transcribing"}
+                                    aria-label={voiceMemo.state === "recording" ? "Остановить запись" : "Наговорить заметку"}
+                                >
+                                    {voiceMemo.state === "transcribing" ? (
+                                        <span className="co-mic-spinner" aria-hidden="true" />
+                                    ) : (
+                                        <Icon name="mic" size="sm" />
+                                    )}
+                                    <span>
+                                        {voiceMemo.state === "requesting-permission" && "Запрос доступа…"}
+                                        {voiceMemo.state === "recording" && "Остановить"}
+                                        {voiceMemo.state === "transcribing" && "Распознаём…"}
+                                        {(voiceMemo.state === "idle" || voiceMemo.state === "error") && "Наговорить"}
+                                    </span>
+                                </button>
+                            )}
+                        </div>
                         <textarea
                             id="co-log-raw-notes"
                             className="field co-textarea"
@@ -87,6 +123,11 @@ export function CallLogForm({ companyId, initial, contacts = [], submitting = fa
                             maxLength={16000}
                             autoFocus
                         />
+                        {voiceMemo.error && (
+                            <p className="small" style={{ color: "var(--heart)" }}>
+                                {voiceMemo.error}. Можно вставить или напечатать текст вручную.
+                            </p>
+                        )}
                         {parseCallLog.isError && (
                             <p className="small" style={{ color: "var(--heart)" }}>
                                 Не удалось распознать заметки: {parseCallLog.error.message}. Можно заполнить поля вручную.

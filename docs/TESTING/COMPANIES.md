@@ -186,7 +186,12 @@ npx vitest run __tests__/Compan
   contact/subject/outcome/date and returns to the manual form for review, a `null` `contactName`
   from the AI leaves the field untouched, an AI failure keeps the form in paste mode with an
   inline error and a "Заполнить вручную" escape hatch that leaves the form fully usable, and
-  toggling back to manual mode without parsing makes no API call
+  toggling back to manual mode without parsing makes no API call. Voice memo recording (Phase
+  39.15, MediaRecorder + `getUserMedia` mocked): record → stop → transcribe lands the transcript
+  in the raw-notes textarea; appends with a `\n` separator instead of clobbering existing text;
+  microphone-permission-denied shows an inline error and leaves the field editable; a
+  transcription API error shows an inline error and leaves the field editable; the mic button is
+  hidden entirely when `MediaRecorder` is unsupported
 - `CompaniesFollowUp.test.ts` — `getFollowUpTone`: null when unscheduled, `overdue` for a past
   date, `due` for within-24h and exactly-now, `null` beyond 24h, `null` for an invalid date string
 - `useCompanyLogs.test.tsx` — call-log CRUD hooks
@@ -348,6 +353,27 @@ npx vitest run __tests__/Compan
     usable empty manual form (confirms the AI outage never blocks manual log entry).
 53. While editing an existing log entry (not creating a new one), confirm «Вставить заметки» is
     not offered — paste-notes mode is create-only.
+
+### Voice memo → log (Phase 39.15)
+53a. On the company page, click «+ Записать звонок» → click «Вставить заметки» → a mic button
+     («Наговорить») is visible next to the raw-notes label.
+53b. Click «Наговорить» → grant microphone permission → the button switches through "Запрос
+     доступа…" → "Остановить" (recording). Speak a few sentences about a call, then click
+     «Остановить» → button shows "Распознаём…" briefly, then the transcript appears in the
+     raw-notes textarea.
+53c. With the transcript in the textarea, click «Распознать» → the AI parse (39.13) runs on the
+     transcribed text exactly as it would on pasted text, prefilling contact/subject/outcome/date
+     for review before «Сохранить запись».
+53d. Record a second memo after the first transcript is already in the textarea → confirm the new
+     transcript is appended on a new line rather than replacing the earlier text.
+53e. Deny the microphone permission prompt → an inline error message appears (e.g. "Доступ к
+     микрофону запрещён") and the raw-notes textarea remains fully editable for manual/paste
+     entry.
+53f. Simulate a transcription failure (stop ai-service or disconnect network mid-recording) →
+     after clicking «Остановить», an inline error appears and the raw-notes textarea keeps
+     whatever text was already there, still editable.
+53g. In a browser/context without microphone support (or with `MediaRecorder` unavailable), the
+     mic button is not shown at all — paste and manual entry remain fully usable.
 
 ### AI persona generation for practice calls
 54. On the company page's pre-call panel, the persona row defaults to «Без персоны» selected (no
