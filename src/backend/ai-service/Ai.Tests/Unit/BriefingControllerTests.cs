@@ -40,6 +40,19 @@ public class BriefingControllerTests
     }
 
     [Test]
+    public async Task GenerateBriefing_ReturnsBadRequest_WhenContextExceedsLimit()
+    {
+        var oversized = new GenerateBriefingRequestDto(
+            new string('a', 60001), null, [], []);
+
+        var result = await _controller.GenerateBriefing(oversized);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        await _briefingService.DidNotReceive()
+            .GenerateBriefingAsync(Arg.Any<GenerateBriefingRequestDto>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GenerateBriefing_ReturnsServiceUnavailable_OnInvalidOperationException()
     {
         _briefingService
