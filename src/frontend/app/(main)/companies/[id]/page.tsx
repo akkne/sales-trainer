@@ -10,6 +10,7 @@ import {
     useCompany,
     useUpdateCompany,
     useUpdateCompanyStatus,
+    useUpdateCompanyFollowUp,
     useDeleteCompany,
 } from "@/features/companies/hooks/use-companies";
 import type { CompanyStatus } from "@/features/companies/lib/company-status";
@@ -32,6 +33,7 @@ import {
 } from "@/features/companies/hooks/use-company-contacts";
 import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
+import { CompanyFollowUpCard } from "@/features/companies/components/company-followup-card";
 import { PrecallPanel } from "@/features/companies/components/precall-panel";
 import { CompanyContactsCard } from "@/features/companies/components/company-contacts-card";
 import { CompanyTimeline } from "@/features/companies/components/company-timeline";
@@ -47,6 +49,7 @@ export default function CompanyPage() {
     const { data: company, isLoading, error, refetch } = useCompany(companyId);
     const updateCompany = useUpdateCompany();
     const updateCompanyStatus = useUpdateCompanyStatus();
+    const updateCompanyFollowUp = useUpdateCompanyFollowUp();
     const deleteCompany = useDeleteCompany();
 
     const { data: logs } = useCompanyLogs(companyId);
@@ -148,6 +151,10 @@ export default function CompanyPage() {
         updateCompany.mutate({ id: companyId, name: company.name, description });
     };
 
+    const handleSaveFollowUp = (nextActionAt: string | null, nextActionNote: string | null) => {
+        updateCompanyFollowUp.mutate({ id: companyId, nextActionAt, nextActionNote });
+    };
+
     const handleCall = (goal: string) => {
         if (typeof window !== "undefined") {
             sessionStorage.setItem(`company-call-goal:${companyId}`, goal);
@@ -221,6 +228,13 @@ export default function CompanyPage() {
                 description={company.description}
                 submitting={updateCompany.isPending}
                 onSave={handleSaveDescription}
+            />
+
+            <CompanyFollowUpCard
+                nextActionAt={company.nextActionAt}
+                nextActionNote={company.nextActionNote}
+                submitting={updateCompanyFollowUp.isPending}
+                onSave={handleSaveFollowUp}
             />
 
             <CompanyContactsCard

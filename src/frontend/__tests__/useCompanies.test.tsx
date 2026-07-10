@@ -23,6 +23,7 @@ import {
     useCreateCompany,
     useUpdateCompany,
     useUpdateCompanyStatus,
+    useUpdateCompanyFollowUp,
     useDeleteCompany,
     type CompanySummary,
 } from "@/features/companies/hooks/use-companies";
@@ -33,8 +34,8 @@ const mockPut = apiClient.put as ReturnType<typeof vi.fn>;
 const mockDelete = apiClient.delete as ReturnType<typeof vi.fn>;
 
 const COMPANIES: CompanySummary[] = [
-    { id: "1", name: "Ромашка", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
-    { id: "2", name: "Вектор", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
+    { id: "1", name: "Ромашка", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, nextActionAt: null, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
+    { id: "2", name: "Вектор", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, nextActionAt: null, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
 ];
 
 function createWrapper() {
@@ -154,6 +155,62 @@ describe("useUpdateCompanyStatus", () => {
 
         const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
         result.current.mutate({ id: "1", status: "DealLost" });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));
+    });
+});
+
+describe("useUpdateCompanyFollowUp", () => {
+    beforeEach(() => {
+        mockPut.mockReset();
+        toastError.mockReset();
+    });
+
+    it("puts to /companies/{id}/follow-up and invalidates list and detail caches", async () => {
+        mockPut.mockResolvedValue({
+            id: "1", name: "Ромашка", description: "", status: "Lead",
+            contactCount: 0, callLogCount: 0, practiceCallCount: 0,
+            nextActionAt: "2026-08-01T00:00:00Z", nextActionNote: "Позвонить", followUpNotifiedAt: null,
+            createdAt: "", updatedAt: "",
+        });
+        const { queryClient, wrapper } = createWrapper();
+        const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+        const { result } = renderHook(() => useUpdateCompanyFollowUp(), { wrapper });
+        result.current.mutate({ id: "1", nextActionAt: "2026-08-01T00:00:00Z", nextActionNote: "Позвонить" });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(mockPut).toHaveBeenCalledWith("/companies/1/follow-up", {
+            nextActionAt: "2026-08-01T00:00:00Z",
+            nextActionNote: "Позвонить",
+        });
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies"] });
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "1"] });
+    });
+
+    it("supports clearing the follow-up by sending null fields", async () => {
+        mockPut.mockResolvedValue({
+            id: "1", name: "Ромашка", description: "", status: "Lead",
+            contactCount: 0, callLogCount: 0, practiceCallCount: 0,
+            nextActionAt: null, nextActionNote: null, followUpNotifiedAt: null,
+            createdAt: "", updatedAt: "",
+        });
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useUpdateCompanyFollowUp(), { wrapper });
+        result.current.mutate({ id: "1", nextActionAt: null, nextActionNote: null });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(mockPut).toHaveBeenCalledWith("/companies/1/follow-up", { nextActionAt: null, nextActionNote: null });
+    });
+
+    it("shows an error toast when the follow-up update fails", async () => {
+        mockPut.mockRejectedValue(new Error("network down"));
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useUpdateCompanyFollowUp(), { wrapper });
+        result.current.mutate({ id: "1", nextActionAt: "2026-08-01T00:00:00Z", nextActionNote: null });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));

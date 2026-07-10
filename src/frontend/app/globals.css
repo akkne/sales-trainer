@@ -3532,6 +3532,15 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-status-dot.co-status--won        { background: var(--success); }
 .co-status-dot.co-status--lost        { background: var(--heart); }
 
+/* ── Follow-up badge (row / header) — due within 24h or overdue; hidden otherwise ── */
+.co-followup-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 24px; padding: 0 9px; border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.co-followup--due     { background: var(--info-soft); color: var(--info); }
+.co-followup--overdue { background: var(--heart-soft); color: var(--heart); }
+
 /* ── List: card + rows ── */
 .co-list {
   background: var(--surface);
