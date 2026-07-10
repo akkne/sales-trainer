@@ -1347,7 +1347,7 @@
       generated-at timestamp; loading/error states
 - [ ] Unit tests (prompt composition mocked HTTP, caching); docs
 
-### [>] 39.13 AI real-call log parsing
+### [x] 39.13 AI real-call log parsing
 - [ ] ai-service: `POST /ai/companies/parse-log` `{rawText}` → `{contactName?, subject, outcome, occurredAt?}`
 - [ ] company-service proxy: `POST /companies/{id}/logs/parse`
 - [ ] Frontend: log form gets «Вставить заметки» mode — paste raw notes/transcript → AI prefills
