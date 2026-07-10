@@ -9,10 +9,12 @@ vi.mock("next/navigation", () => ({
 
 const useCompany = vi.fn();
 const mutateUpdate = vi.fn();
+const mutateUpdateStatus = vi.fn();
 const mutateDelete = vi.fn();
 vi.mock("@/features/companies/hooks/use-companies", () => ({
     useCompany: (...args: unknown[]) => useCompany(...args),
     useUpdateCompany: () => ({ mutate: mutateUpdate, isPending: false }),
+    useUpdateCompanyStatus: () => ({ mutate: mutateUpdateStatus, isPending: false }),
     useDeleteCompany: () => ({ mutate: mutateDelete, isPending: false }),
 }));
 
@@ -51,6 +53,7 @@ const COMPANY = {
     id: "c1",
     name: "Ромашка",
     description: "Продаёт цветы",
+    status: "Lead" as const,
     callLogCount: 0,
     practiceCallCount: 0,
     contactCount: 0,

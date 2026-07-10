@@ -4,14 +4,24 @@ import { Icon } from "@/shared/components/icon";
 import type { CompanyDetail } from "@/features/companies/hooks/use-companies";
 import { ava, initials } from "@/features/companies/lib/avatar";
 import { pluralizeRu } from "@/features/companies/lib/format";
+import { CompanyStatusMenu } from "@/features/companies/components/company-status-menu";
+import type { CompanyStatus } from "@/features/companies/lib/company-status";
 
 interface CompanyHeaderProps {
     company: CompanyDetail;
     onEdit: () => void;
     onDelete: () => void;
+    onStatusChange: (status: CompanyStatus) => void;
+    statusChangeSubmitting?: boolean;
 }
 
-export function CompanyHeader({ company, onEdit, onDelete }: CompanyHeaderProps) {
+export function CompanyHeader({
+    company,
+    onEdit,
+    onDelete,
+    onStatusChange,
+    statusChangeSubmitting = false,
+}: CompanyHeaderProps) {
     const { from, to } = ava(company.id);
     const abbr = initials(company.name);
 
@@ -39,6 +49,11 @@ export function CompanyHeader({ company, onEdit, onDelete }: CompanyHeaderProps)
             <div className="co-header-body">
                 <div className="co-header-name">
                     <h1 className="h3">{company.name}</h1>
+                    <CompanyStatusMenu
+                        status={company.status}
+                        onChange={onStatusChange}
+                        disabled={statusChangeSubmitting}
+                    />
                 </div>
                 {metaParts.length > 0 && <p className="co-header-meta">{metaParts.join(" · ")}</p>}
             </div>

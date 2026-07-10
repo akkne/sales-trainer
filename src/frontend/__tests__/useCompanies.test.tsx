@@ -22,6 +22,7 @@ import {
     useCompanies,
     useCreateCompany,
     useUpdateCompany,
+    useUpdateCompanyStatus,
     useDeleteCompany,
     type CompanySummary,
 } from "@/features/companies/hooks/use-companies";
@@ -32,8 +33,8 @@ const mockPut = apiClient.put as ReturnType<typeof vi.fn>;
 const mockDelete = apiClient.delete as ReturnType<typeof vi.fn>;
 
 const COMPANIES: CompanySummary[] = [
-    { id: "1", name: "Ромашка", descriptionExcerpt: "", callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
-    { id: "2", name: "Вектор", descriptionExcerpt: "", callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
+    { id: "1", name: "Ромашка", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
+    { id: "2", name: "Вектор", descriptionExcerpt: "", status: "Lead", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "2026-07-01T00:00:00Z" },
 ];
 
 function createWrapper() {
@@ -121,6 +122,38 @@ describe("useUpdateCompany", () => {
 
         const { result } = renderHook(() => useUpdateCompany(), { wrapper });
         result.current.mutate({ id: "1", name: "Ромашка", description: "" });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));
+    });
+});
+
+describe("useUpdateCompanyStatus", () => {
+    beforeEach(() => {
+        mockPut.mockReset();
+        toastError.mockReset();
+    });
+
+    it("puts to /companies/{id}/status and invalidates list and detail caches", async () => {
+        mockPut.mockResolvedValue({ id: "1", name: "Ромашка", description: "", status: "Contacted", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "" });
+        const { queryClient, wrapper } = createWrapper();
+        const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+        const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result.current.mutate({ id: "1", status: "Contacted" });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(mockPut).toHaveBeenCalledWith("/companies/1/status", { status: "Contacted" });
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies"] });
+        expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["companies", "1"] });
+    });
+
+    it("shows an error toast when the status update fails", async () => {
+        mockPut.mockRejectedValue(new Error("network down"));
+        const { wrapper } = createWrapper();
+
+        const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result.current.mutate({ id: "1", status: "DealLost" });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));

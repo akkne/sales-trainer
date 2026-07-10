@@ -6,7 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import { Skeleton } from "@/shared/components";
 import { ApiError } from "@/shared/api/api-client";
-import { useCompany, useUpdateCompany, useDeleteCompany } from "@/features/companies/hooks/use-companies";
+import {
+    useCompany,
+    useUpdateCompany,
+    useUpdateCompanyStatus,
+    useDeleteCompany,
+} from "@/features/companies/hooks/use-companies";
+import type { CompanyStatus } from "@/features/companies/lib/company-status";
 import {
     useCompanyLogs,
     useAddCallLog,
@@ -40,6 +46,7 @@ export default function CompanyPage() {
 
     const { data: company, isLoading, error, refetch } = useCompany(companyId);
     const updateCompany = useUpdateCompany();
+    const updateCompanyStatus = useUpdateCompanyStatus();
     const deleteCompany = useDeleteCompany();
 
     const { data: logs } = useCompanyLogs(companyId);
@@ -133,6 +140,10 @@ export default function CompanyPage() {
         });
     };
 
+    const handleStatusChange = (status: CompanyStatus) => {
+        updateCompanyStatus.mutate({ id: companyId, status });
+    };
+
     const handleSaveDescription = (description: string) => {
         updateCompany.mutate({ id: companyId, name: company.name, description });
     };
@@ -191,7 +202,13 @@ export default function CompanyPage() {
                 <Icon name="chevron-left" size={16} /> К списку
             </Link>
 
-            <CompanyHeader company={company} onEdit={() => setEditOpen(true)} onDelete={() => setDeleteOpen(true)} />
+            <CompanyHeader
+                company={company}
+                onEdit={() => setEditOpen(true)}
+                onDelete={() => setDeleteOpen(true)}
+                onStatusChange={handleStatusChange}
+                statusChangeSubmitting={updateCompanyStatus.isPending}
+            />
 
             <PrecallPanel
                 hasDescription={company.description.trim().length > 0}

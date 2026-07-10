@@ -3467,10 +3467,70 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 
 /* ── List: header + toolbar ── */
 .co-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.co-list-toolbar { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; }
+.co-list-toolbar-wrap { display: flex; flex-direction: column; gap: 10px; margin: 0 0 14px; }
+.co-list-toolbar { display: flex; align-items: center; gap: 14px; margin: 0; }
 .co-search-wrap { position: relative; flex: 1; max-width: 420px; }
 .co-search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-4); pointer-events: none; display: flex; align-items: center; }
 .co-list-count { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
+
+/* ── Status filter chips ── */
+.co-status-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-status-filter-chip {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 12px;
+  border-radius: var(--r-pill); font-size: 12px; font-weight: 600;
+  background: var(--surface-3); color: var(--ink-3); border: 1px solid var(--line);
+  cursor: pointer; transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+.co-status-filter-chip:hover { border-color: var(--primary-tint-border); }
+.co-status-filter-chip.active { border-color: transparent; color: var(--ink); background: var(--dark-surface); }
+.co-status-filter-chip.active.co-status--lead     { background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--line-strong); }
+.co-status-filter-chip.active.co-status--contacted { background: var(--info-soft); color: var(--info); }
+.co-status-filter-chip.active.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
+.co-status-filter-chip.active.co-status--won       { background: var(--success-soft); color: var(--success); }
+.co-status-filter-chip.active.co-status--lost      { background: var(--heart-soft); color: var(--heart); }
+
+/* ── Status badge (row / header) ── */
+.co-status-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 24px; padding: 0 9px; border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--surface-3); color: var(--ink-3);
+}
+.co-status--lead      { background: var(--surface-3); color: var(--ink-3); }
+.co-status--contacted { background: var(--info-soft); color: var(--info); }
+.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
+.co-status--won        { background: var(--success-soft); color: var(--success); }
+.co-status--lost        { background: var(--heart-soft); color: var(--heart); }
+.co-row-status { margin-left: auto; }
+
+.co-status-badge--interactive {
+  border: 1px solid transparent; cursor: pointer;
+  transition: filter var(--transition);
+}
+.co-status-badge--interactive:hover { filter: brightness(0.96); }
+.co-status-badge--interactive:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* ── Status dropdown menu (company header) ── */
+.co-status-menu { position: relative; display: inline-flex; }
+.co-status-menu-list {
+  position: absolute; top: calc(100% + 8px); left: 0; min-width: 210px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--sh-3); z-index: 20; overflow: hidden; padding: 6px;
+}
+.co-status-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; border: none; background: transparent;
+  font-size: 13px; font-weight: 600; color: var(--ink-2); text-align: left; cursor: pointer;
+  transition: background var(--transition);
+}
+.co-status-menu-item:hover { background: var(--surface-3); }
+.co-status-menu-check { margin-left: auto; color: var(--primary); flex: none; }
+.co-status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.co-status-dot.co-status--lead      { background: var(--ink-4); }
+.co-status-dot.co-status--contacted { background: var(--info); }
+.co-status-dot.co-status--meeting   { background: var(--violet); }
+.co-status-dot.co-status--won        { background: var(--success); }
+.co-status-dot.co-status--lost        { background: var(--heart); }
 
 /* ── List: card + rows ── */
 .co-list {

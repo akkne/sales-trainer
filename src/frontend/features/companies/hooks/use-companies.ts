@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import { toast } from "@/features/notifications/store/toast-store";
+import type { CompanyStatus } from "@/features/companies/lib/company-status";
 
 export interface CompanySummary {
     id: string;
     name: string;
     descriptionExcerpt: string;
+    status: CompanyStatus;
     callLogCount: number;
     practiceCallCount: number;
     contactCount: number;
@@ -17,6 +19,7 @@ export interface CompanyDetail {
     id: string;
     name: string;
     description: string;
+    status: CompanyStatus;
     callLogCount: number;
     practiceCallCount: number;
     contactCount: number;
@@ -69,6 +72,21 @@ export function useUpdateCompany() {
         },
         onError: (error: Error) => {
             toast.error(`Не удалось сохранить компанию: ${error.message}`);
+        },
+    });
+}
+
+export function useUpdateCompanyStatus() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, status }: { id: string; status: CompanyStatus }) =>
+            apiClient.put<CompanyDetail>(`/companies/${id}/status`, { status }),
+        onSuccess: (_data, { id }) => {
+            queryClient.invalidateQueries({ queryKey: companiesKey });
+            queryClient.invalidateQueries({ queryKey: companyKey(id) });
+        },
+        onError: (error: Error) => {
+            toast.error(`Не удалось изменить статус: ${error.message}`);
         },
     });
 }

@@ -8,9 +8,11 @@ import { useCompanies, useCreateCompany } from "@/features/companies/hooks/use-c
 import { CompanyListToolbar } from "@/features/companies/components/company-list-toolbar";
 import { CompanyRow } from "@/features/companies/components/company-row";
 import { CompanyModal } from "@/features/companies/components/company-modal";
+import type { CompanyStatus } from "@/features/companies/lib/company-status";
 
 export default function CompaniesPage() {
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<CompanyStatus | null>(null);
     const [isCreateOpen, setCreateOpen] = useState(false);
     const { data: companies, isLoading, error, refetch } = useCompanies(search);
     const createCompany = useCreateCompany();
@@ -64,8 +66,11 @@ export default function CompaniesPage() {
         );
     }
 
-    const list = companies ?? [];
-    const hasAnyCompanies = list.length > 0 || search.trim().length > 0;
+    const allCompanies = companies ?? [];
+    const list = statusFilter
+        ? allCompanies.filter((company) => company.status === statusFilter)
+        : allCompanies;
+    const hasAnyCompanies = allCompanies.length > 0 || search.trim().length > 0;
 
     return (
         <div className="page">
@@ -85,7 +90,13 @@ export default function CompaniesPage() {
                 </div>
 
                 {hasAnyCompanies && (
-                    <CompanyListToolbar search={search} onSearchChange={setSearch} count={list.length} />
+                    <CompanyListToolbar
+                        search={search}
+                        onSearchChange={setSearch}
+                        count={list.length}
+                        statusFilter={statusFilter}
+                        onStatusFilterChange={setStatusFilter}
+                    />
                 )}
 
                 {/* ── List / empty states ── */}
@@ -95,9 +106,13 @@ export default function CompaniesPage() {
                             <CompanyRow key={company.id} company={company} />
                         ))}
                     </div>
-                ) : search.trim().length > 0 ? (
+                ) : search.trim().length > 0 || statusFilter !== null ? (
                     <div className="empty">
-                        <p className="small">Ничего не найдено по запросу «{search.trim()}»</p>
+                        <p className="small">
+                            {search.trim().length > 0
+                                ? `Ничего не найдено по запросу «${search.trim()}»`
+                                : "Нет компаний с таким статусом"}
+                        </p>
                     </div>
                 ) : (
                     <div className="empty">
