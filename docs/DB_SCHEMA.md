@@ -650,6 +650,7 @@ Skills
 | `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
 | `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
 | `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
+| `AddCompanyBriefing` (company-service)   | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
 
 ---
 
@@ -669,6 +670,8 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 | `NextActionAt`| timestamptz  | NULL                             |
 | `NextActionNote` | varchar(2000) | NULL                          |
 | `FollowUpNotifiedAt` | timestamptz | NULL                      |
+| `BriefingContent` | text     | NULL                             |
+| `BriefingGeneratedAt` | timestamptz | NULL                     |
 | `CreatedAt`   | timestamptz  | NOT NULL                         |
 | `UpdatedAt`   | timestamptz  | NOT NULL                         |
 
@@ -683,6 +686,11 @@ stays human-readable in the database.
 `FollowUpNotifiedAt` is set by the reminder background service once `company.followup.due` has
 been published for the current `NextActionAt`, and is reset to `null` whenever `NextActionAt` is
 rescheduled (see `docs/API_CONTRACTS.md`). All three are nullable and independent of `Status`.
+
+`BriefingContent`/`BriefingGeneratedAt` (Phase 39.12 — AI pre-call briefing): a cache of the
+markdown cheat sheet returned by ai-service's `POST /ai/companies/briefing`, written by
+`POST /companies/{id}/briefing` and read back by `GET /companies/{id}/briefing`. Both null until
+the first generation; overwritten (not versioned/appended) on every regeneration.
 
 ### Table: `CallLogEntries`
 

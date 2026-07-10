@@ -1,7 +1,9 @@
 using FluentAssertions;
+using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Implementation;
+using Sellevate.Company.Infrastructure.Ai;
 using Sellevate.Company.Tests.Helpers;
 
 namespace Sellevate.Company.Tests.Unit;
@@ -10,6 +12,7 @@ namespace Sellevate.Company.Tests.Unit;
 public sealed class CompanyServiceTests
 {
     private Infrastructure.Data.CompanyDbContext _databaseContext = null!;
+    private IBriefingAiClient _briefingAiClient = null!;
     private CompanyService _companyService = null!;
 
     private static readonly Guid FirstUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -19,7 +22,8 @@ public sealed class CompanyServiceTests
     public void SetUp()
     {
         _databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
-        _companyService = new CompanyService(_databaseContext);
+        _briefingAiClient = Substitute.For<IBriefingAiClient>();
+        _companyService = new CompanyService(_databaseContext, _briefingAiClient);
     }
 
     [TearDown]
@@ -744,5 +748,117 @@ public sealed class CompanyServiceTests
         var persistedEntry = logs!.Single(logEntry => logEntry.Id == entry!.Id);
         persistedEntry.ContactId.Should().BeNull();
         persistedEntry.ContactName.Should().Be("Иван");
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.GenerateBriefingAsync(SecondUserId, company.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_returns_null_for_nonexistent_company()
+    {
+        var result = await _companyService.GenerateBriefingAsync(FirstUserId, Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_caches_content_on_the_company_and_returns_it()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Продаёт виджеты");
+        var generatedAt = new DateTime(2026, 7, 10, 12, 0, 0, DateTimeKind.Utc);
+        _briefingAiClient
+            .GenerateBriefingAsync(Arg.Any<BriefingAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new BriefingAiResult("## Кто они\n- Продаёт виджеты", generatedAt));
+
+        var result = await _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Content.Should().Be("## Кто они\n- Продаёт виджеты");
+        result.GeneratedAt.Should().Be(generatedAt);
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_passes_company_description_and_latest_goal_to_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Продаёт виджеты");
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Older goal", DateTime.UtcNow.AddDays(-2));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Newest goal", DateTime.UtcNow.AddDays(-1));
+        _briefingAiClient
+            .GenerateBriefingAsync(Arg.Any<BriefingAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new BriefingAiResult("content", DateTime.UtcNow));
+
+        await _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
+
+        await _briefingAiClient.Received(1).GenerateBriefingAsync(
+            Arg.Is<BriefingAiRequest>(request =>
+                request.CompanyDescription == "Продаёт виджеты" &&
+                request.Goal == "Newest goal"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_passes_recent_call_logs_to_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id,
+            new CreateCallLogEntryRequestDto("Иван", "Обсудили условия", "Взял паузу", DateTime.UtcNow));
+        _briefingAiClient
+            .GenerateBriefingAsync(Arg.Any<BriefingAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new BriefingAiResult("content", DateTime.UtcNow));
+
+        await _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
+
+        await _briefingAiClient.Received(1).GenerateBriefingAsync(
+            Arg.Is<BriefingAiRequest>(request =>
+                request.RecentCalls.Count == 1 &&
+                request.RecentCalls[0].ContactName == "Иван" &&
+                request.RecentCalls[0].Subject == "Обсудили условия"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetBriefingAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.GetBriefingAsync(SecondUserId, company.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetBriefingAsync_returns_both_fields_null_when_never_generated()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.GetBriefingAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Content.Should().BeNull();
+        result.GeneratedAt.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetBriefingAsync_returns_cached_content_after_generation()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var generatedAt = new DateTime(2026, 7, 10, 12, 0, 0, DateTimeKind.Utc);
+        _briefingAiClient
+            .GenerateBriefingAsync(Arg.Any<BriefingAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new BriefingAiResult("cached content", generatedAt));
+        await _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
+
+        var result = await _companyService.GetBriefingAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Content.Should().Be("cached content");
+        result.GeneratedAt.Should().Be(generatedAt);
     }
 }

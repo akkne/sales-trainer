@@ -104,6 +104,46 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(company);
     }
 
+    [HttpPost("companies/{companyId:guid}/briefing")]
+    public async Task<IActionResult> GenerateBriefing(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            var briefing = await companyService.GenerateBriefingAsync(userId, companyId, cancellationToken);
+            if (briefing is null)
+                return NotFound();
+
+            return Ok(briefing);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+    }
+
+    [HttpGet("companies/{companyId:guid}/briefing")]
+    public async Task<IActionResult> GetBriefing(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var briefing = await companyService.GetBriefingAsync(userId, companyId, cancellationToken);
+        if (briefing is null)
+            return NotFound();
+
+        if (briefing.Content is null)
+            return NoContent();
+
+        return Ok(briefing);
+    }
+
     [HttpDelete("companies/{companyId:guid}")]
     public async Task<IActionResult> DeleteCompany(
         Guid companyId,

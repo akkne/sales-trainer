@@ -1336,7 +1336,7 @@
 - [ ] Frontend: follow-up date + note editor on company page; due/overdue badge on `/companies` rows
 - [ ] Unit tests both services (due-poll logic, once-only guard, event contract, consumer→inbox); docs
 
-### [ ] 39.12 AI pre-call briefing («Шпаргалка»)
+### [>] 39.12 AI pre-call briefing («Шпаргалка»)
 - [ ] ai-service: `POST /ai/companies/briefing` — input: company description, goal?, recent real-call
       logs, feedback summaries of recent practice sessions (by sessionIds from Mongo); output: short
       structured markdown cheat-sheet (кто они, о чём договаривались, возражения, следующий шаг)
@@ -1392,6 +1392,15 @@
 > (consistent with the rest of use-companies.ts); CSS `.co-status-filter-chip.active`
 > tone overrides rely on source order — bump specificity or comment; product sign-off
 > that unconstrained status transitions (e.g. DealWon → Lead) are intended.
+> Carry-over from PR #22 review (non-blocking fast-follows): add a company-service
+> test for the AI-failure propagation path (client throws → 503, cache left
+> unchanged); `InternalAuth:ServiceSecret` is provisioned nowhere and
+> learning-service's `AiEvaluationClient` never sends `X-Internal-Service-Secret`
+> — either wire the header there too or document that the guard runs open in all
+> environments; consider dedicated `BriefingModel`/`MaximumBriefingTokenCount`
+> options instead of reusing the feedback/open-question OpenAI config names.
+> (The MEDIUM finding — missing input-size guard on `POST /ai/companies/briefing`
+> — was fixed in-PR.)
 > Carry-over from PR #21 review (non-blocking fast-follows): follow-up badge
 > due/overdue tone uses the client clock (document caveat or resync against server
 > time); consider a short in-process retry (2–3 attempts) around the Kafka publish

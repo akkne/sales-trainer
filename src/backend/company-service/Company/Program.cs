@@ -36,7 +36,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddDbContext<CompanyDbContext>(databaseOptions =>
     databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-builder.Services.AddCompanyFeatureServices();
+builder.Services.AddCompanyFeatureServices(builder.Configuration);
 
 // company-service only *produces* Kafka events (company.followup.due) — it never consumes, so it
 // registers the publisher + topic provisioner directly rather than the full AddSellevateEventing

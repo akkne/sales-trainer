@@ -2,14 +2,16 @@ using Microsoft.Extensions.Configuration;
 using Sellevate.Company.Features.Companies.FollowUpReminders;
 using Sellevate.Company.Features.Companies.Services.Abstract;
 using Sellevate.Company.Features.Companies.Services.Implementation;
+using Sellevate.Company.Infrastructure.Ai;
 
 namespace Sellevate.Company.Features.Companies;
 
 public static class CompanyFeatureServiceCollectionExtensions
 {
-    public static IServiceCollection AddCompanyFeatureServices(this IServiceCollection services)
+    public static IServiceCollection AddCompanyFeatureServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<ICompanyService, CompanyService>();
+        services.AddBriefingAiClient(configuration);
         return services;
     }
 

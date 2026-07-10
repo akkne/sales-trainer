@@ -1,0 +1,10 @@
+namespace Sellevate.Company.Infrastructure.Configuration;
+
+public sealed class AiServiceConfiguration
+{
+    public const string SectionName = "AiService";
+
+    public required string BaseUrl { get; init; }
+
+    public string BriefingPath { get; init; } = "/ai/companies/briefing";
+}

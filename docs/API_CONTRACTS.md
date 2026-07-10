@@ -501,6 +501,15 @@ Errors:
 > exerciseContent, userAnswer}` → `{isCorrect, score, explanation?, aiFeedback?}`, called
 > by Learning to grade AI exercise types. `DialogBundleDto.skillTitle` is now empty
 > (`Skills` are owned by Learning; only `skillId` is kept).
+> Internal-only (Phase 39.12): `POST /ai/companies/briefing`
+> `{companyDescription, goal?, recentCalls: [{contactName?, subject, outcome, occurredAt}],
+> feedbackSummaries: string[]}` → `{content, generatedAt}` (`content` is markdown), called by
+> company-service to generate the pre-call cheat sheet. Stateless — reads nothing from Mongo or
+> Postgres itself, just composes a Russian system prompt from the request body and asks the
+> configured LLM. `503` if OpenAI isn't configured or the provider call fails. Both internal
+> endpoints share `InternalServiceAuthFilter` (`X-Internal-Service-Secret` header, checked against
+> `InternalAuth:ServiceSecret`; left open when that config key is unset, i.e. dev/single-service
+> mode).
 
 ### Public endpoints
 
@@ -879,6 +888,8 @@ DTO additions on the Discuss user endpoints above:
 | PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id}/status | `{status}` | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id}/follow-up | `{nextActionAt, nextActionNote?}` | `CompanyDetailDto` or `404` |
+| POST | /companies/{id}/briefing | — | `CompanyBriefingDto`, `404`, or `503` if ai-service is unavailable |
+| GET | /companies/{id}/briefing | — | `CompanyBriefingDto` or `204` if never generated, or `404` |
 | DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts) |
 
 `CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, nextActionAt, createdAt, updatedAt}`
@@ -910,6 +921,22 @@ FollowUpNotifiedAt IS NULL`, claims them (sets `FollowUpNotifiedAt`, commits), a
 topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Consumed by
 notification-service → `NotificationType.CompanyFollowUpDue`, an in-app-only notification (no
 email) titled *«Пора связаться с {companyName}»*, `actionUrl` `/companies/{id}`.
+
+**Pre-call briefing / "Шпаргалка" (Phase 39.12):** `POST /companies/{id}/briefing` gathers
+context — the company's `description`, the most recent non-empty `PracticeCall.Goal` (single
+newest, not the last-5-distinct list used by `/recent-goals`), and the last 5 `CallLogEntry` rows
+(newest first) — and forwards it to ai-service's internal `POST /ai/companies/briefing` (see
+below), which returns a markdown cheat sheet. company-service caches the result on
+`Company.BriefingContent`/`BriefingGeneratedAt` and returns it. `GET /companies/{id}/briefing`
+returns the cached value without calling ai-service; `204` if the company exists but a briefing
+has never been generated. Both endpoints follow the same ownership/`404` pattern as every other
+company endpoint; `POST` returns `503` if ai-service is unreachable or misconfigured (mirrors the
+Evaluation feature's error handling). **Feedback summaries are not included** — company-service
+has no cross-service read into ai-service's Mongo feedback store (out of scope for 39.12), so the
+`feedbackSummaries` list sent to ai-service is always empty; the briefing prompt degrades
+gracefully (skips that section's data) when empty.
+
+`CompanyBriefingDto`: `{content, generatedAt}` — both `null` when never generated.
 
 ### Call Log
 

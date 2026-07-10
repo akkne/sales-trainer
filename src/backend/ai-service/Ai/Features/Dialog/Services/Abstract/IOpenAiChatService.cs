@@ -21,4 +21,14 @@ public interface IOpenAiChatService
         List<DialogMessage> conversationHistory,
         DialogXpWeights xpWeights,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One-shot free-text completion: no JSON response-format contract, no XP/summary
+    /// post-processing. Used by non-dialogue features (e.g. company briefing generation) that
+    /// need a plain-text/markdown answer to a single system+user prompt pair.
+    /// </summary>
+    Task<string> GenerateTextAsync(
+        string systemPrompt,
+        string userPrompt,
+        CancellationToken cancellationToken = default);
 }
