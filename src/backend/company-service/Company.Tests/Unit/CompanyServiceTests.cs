@@ -14,6 +14,7 @@ public sealed class CompanyServiceTests
     private Infrastructure.Data.CompanyDbContext _databaseContext = null!;
     private IBriefingAiClient _briefingAiClient = null!;
     private IParseLogAiClient _parseLogAiClient = null!;
+    private IPersonaAiClient _personaAiClient = null!;
     private CompanyService _companyService = null!;
 
     private static readonly Guid FirstUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -25,7 +26,8 @@ public sealed class CompanyServiceTests
         _databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
         _briefingAiClient = Substitute.For<IBriefingAiClient>();
         _parseLogAiClient = Substitute.For<IParseLogAiClient>();
-        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient);
+        _personaAiClient = Substitute.For<IPersonaAiClient>();
+        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient, _personaAiClient);
     }
 
     [TearDown]
@@ -928,6 +930,163 @@ public sealed class CompanyServiceTests
 
         var act = () => _companyService.ParseCallLogAsync(
             FirstUserId, company.Id, new ParseCallLogRequestDto("сырые заметки"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task CreatePersonaAsync_creates_persona_for_correct_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCompanyPersonaRequestDto("Мария Соколова", "Руководитель закупок", "Прагматична и скептична.", PersonaDifficulty.Hard);
+
+        var result = await _companyService.CreatePersonaAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Мария Соколова");
+        result.Position.Should().Be("Руководитель закупок");
+        result.Personality.Should().Be("Прагматична и скептична.");
+        result.Difficulty.Should().Be(PersonaDifficulty.Hard);
+    }
+
+    [Test]
+    public async Task CreatePersonaAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreateCompanyPersonaRequestDto("Мария", "Закупщик", "Скептична.", PersonaDifficulty.Medium);
+
+        var result = await _companyService.CreatePersonaAsync(SecondUserId, company.Id, request);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task ListPersonasAsync_returns_only_company_personas_newest_first()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePersonaAsync(FirstUserId, company.Id, new CreateCompanyPersonaRequestDto("Older", "Pos", "Personality", PersonaDifficulty.Easy));
+        var newest = await _companyService.CreatePersonaAsync(FirstUserId, company.Id, new CreateCompanyPersonaRequestDto("Newest", "Pos", "Personality", PersonaDifficulty.Easy));
+
+        var results = await _companyService.ListPersonasAsync(FirstUserId, company.Id);
+
+        results.Should().NotBeNull();
+        results!.Should().HaveCount(2);
+        results[0].Id.Should().Be(newest!.Id);
+    }
+
+    [Test]
+    public async Task ListPersonasAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var results = await _companyService.ListPersonasAsync(SecondUserId, company.Id);
+
+        results.Should().BeNull();
+    }
+
+    [Test]
+    public async Task DeletePersonaAsync_removes_persona()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var persona = await _companyService.CreatePersonaAsync(FirstUserId, company.Id, new CreateCompanyPersonaRequestDto("Name", "Pos", "Personality", PersonaDifficulty.Medium));
+
+        var deleted = await _companyService.DeletePersonaAsync(FirstUserId, company.Id, persona!.Id);
+
+        deleted.Should().BeTrue();
+        var personas = await _companyService.ListPersonasAsync(FirstUserId, company.Id);
+        personas.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task DeletePersonaAsync_returns_false_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var persona = await _companyService.CreatePersonaAsync(FirstUserId, company.Id, new CreateCompanyPersonaRequestDto("Name", "Pos", "Personality", PersonaDifficulty.Medium));
+
+        var deleted = await _companyService.DeletePersonaAsync(SecondUserId, company.Id, persona!.Id);
+
+        deleted.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task DeletePersonaAsync_returns_false_for_persona_from_another_company()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
+        var personaFromOtherCompany = await _companyService.CreatePersonaAsync(FirstUserId, otherCompany.Id, new CreateCompanyPersonaRequestDto("Name", "Pos", "Personality", PersonaDifficulty.Medium));
+
+        var deleted = await _companyService.DeletePersonaAsync(FirstUserId, company.Id, personaFromOtherCompany!.Id);
+
+        deleted.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GeneratePersonaAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Описание");
+
+        var result = await _companyService.GeneratePersonaAsync(
+            SecondUserId, company.Id, new GenerateCompanyPersonaRequestDto(null, null, PersonaDifficulty.Medium));
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GeneratePersonaAsync_returns_null_for_nonexistent_company()
+    {
+        var result = await _companyService.GeneratePersonaAsync(
+            FirstUserId, Guid.NewGuid(), new GenerateCompanyPersonaRequestDto(null, null, PersonaDifficulty.Medium));
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GeneratePersonaAsync_returns_fields_from_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Поставщик офисных принадлежностей");
+        _personaAiClient
+            .GeneratePersonaAsync(Arg.Any<PersonaAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new PersonaAiResult("Мария Соколова", "Руководитель закупок", "Прагматична."));
+
+        var result = await _companyService.GeneratePersonaAsync(
+            FirstUserId, company.Id, new GenerateCompanyPersonaRequestDto("Иван", "Закупщик", PersonaDifficulty.Hard));
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Мария Соколова");
+        result.Position.Should().Be("Руководитель закупок");
+        result.Personality.Should().Be("Прагматична.");
+    }
+
+    [Test]
+    public async Task GeneratePersonaAsync_passes_company_description_and_seed_contact_to_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Поставщик офисных принадлежностей");
+        _personaAiClient
+            .GeneratePersonaAsync(Arg.Any<PersonaAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new PersonaAiResult("Name", "Pos", "Personality"));
+
+        await _companyService.GeneratePersonaAsync(
+            FirstUserId, company.Id, new GenerateCompanyPersonaRequestDto("Иван", "Закупщик", PersonaDifficulty.Hard));
+
+        await _personaAiClient.Received(1).GeneratePersonaAsync(
+            Arg.Is<PersonaAiRequest>(request =>
+                request.CompanyDescription == "Поставщик офисных принадлежностей" &&
+                request.ContactName == "Иван" &&
+                request.ContactPosition == "Закупщик" &&
+                request.Difficulty == "Hard"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GeneratePersonaAsync_propagates_ai_failure()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Описание");
+        _personaAiClient
+            .GeneratePersonaAsync(Arg.Any<PersonaAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns<PersonaAiResult>(_ => throw new InvalidOperationException("AI persona service returned 503."));
+
+        var act = () => _companyService.GeneratePersonaAsync(
+            FirstUserId, company.Id, new GenerateCompanyPersonaRequestDto(null, null, PersonaDifficulty.Medium));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }

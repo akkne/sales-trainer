@@ -71,5 +71,10 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
             .WithOne(contact => contact.Company)
             .HasForeignKey(contact => contact.CompanyId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(company => company.Personas)
+            .WithOne(persona => persona.Company)
+            .HasForeignKey(persona => persona.CompanyId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

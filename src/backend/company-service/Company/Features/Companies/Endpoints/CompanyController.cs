@@ -370,6 +370,76 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
+    [HttpGet("companies/{companyId:guid}/personas")]
+    public async Task<ActionResult<IReadOnlyList<CompanyPersonaDto>>> ListPersonas(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var personas = await companyService.ListPersonasAsync(userId, companyId, cancellationToken);
+        if (personas is null)
+            return NotFound();
+
+        return Ok(personas);
+    }
+
+    [HttpPost("companies/{companyId:guid}/personas")]
+    public async Task<ActionResult<CompanyPersonaDto>> CreatePersona(
+        Guid companyId,
+        [FromBody] CreateCompanyPersonaRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var persona = await companyService.CreatePersonaAsync(userId, companyId, request, cancellationToken);
+        if (persona is null)
+            return NotFound();
+
+        return Created($"/companies/{companyId}/personas/{persona.Id}", persona);
+    }
+
+    [HttpDelete("companies/{companyId:guid}/personas/{personaId:guid}")]
+    public async Task<IActionResult> DeletePersona(
+        Guid companyId,
+        Guid personaId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var deleted = await companyService.DeletePersonaAsync(userId, companyId, personaId, cancellationToken);
+        if (!deleted)
+            return NotFound();
+
+        return NoContent();
+    }
+
+    [HttpPost("companies/{companyId:guid}/personas/generate")]
+    public async Task<IActionResult> GeneratePersona(
+        Guid companyId,
+        [FromBody] GenerateCompanyPersonaRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            var persona = await companyService.GeneratePersonaAsync(userId, companyId, request, cancellationToken);
+            if (persona is null)
+                return NotFound();
+
+            return Ok(persona);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+    }
+
     private bool TryGetCurrentUserId(out Guid userId)
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

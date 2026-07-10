@@ -12,7 +12,14 @@ public static class CompanyContextPromptBuilder
             return basePrompt;
         }
 
-        return basePrompt + BuildCompanyContextBlock(companyCallContext);
+        var prompt = basePrompt + BuildCompanyContextBlock(companyCallContext);
+
+        if (HasPersona(companyCallContext))
+        {
+            prompt += BuildChatPersonaBlock(companyCallContext);
+        }
+
+        return prompt;
     }
 
     public static string BuildFeedbackSystemPrompt(string basePrompt, CompanyCallContext? companyCallContext)
@@ -22,8 +29,18 @@ public static class CompanyContextPromptBuilder
             return basePrompt;
         }
 
-        return basePrompt + BuildCompanyContextBlock(companyCallContext);
+        var prompt = basePrompt + BuildCompanyContextBlock(companyCallContext);
+
+        if (HasPersona(companyCallContext))
+        {
+            prompt += BuildFeedbackPersonaBlock(companyCallContext);
+        }
+
+        return prompt;
     }
+
+    private static bool HasPersona(CompanyCallContext companyCallContext) =>
+        !string.IsNullOrWhiteSpace(companyCallContext.PersonaName);
 
     private static string BuildCompanyContextBlock(CompanyCallContext companyCallContext)
     {
@@ -41,4 +58,47 @@ public static class CompanyContextPromptBuilder
 
         return lines.ToString();
     }
+
+    private static string BuildChatPersonaBlock(CompanyCallContext companyCallContext)
+    {
+        var lines = new StringBuilder();
+        lines.AppendLine();
+        lines.AppendLine("---");
+        lines.AppendLine("ВОЙДИ В РОЛЬ следующего персонажа и общайся с пользователем от его лица на протяжении всего разговора:");
+        lines.AppendLine($"Имя: {companyCallContext.PersonaName}");
+        lines.AppendLine($"Должность: {companyCallContext.PersonaPosition}");
+        lines.AppendLine($"Характер: {companyCallContext.PersonaPersonality}");
+
+        if (!string.IsNullOrWhiteSpace(companyCallContext.PersonaDifficulty))
+        {
+            lines.AppendLine($"Уровень сложности собеседника: {DescribeDifficultyToughness(companyCallContext.PersonaDifficulty)}");
+        }
+
+        return lines.ToString();
+    }
+
+    private static string BuildFeedbackPersonaBlock(CompanyCallContext companyCallContext)
+    {
+        var lines = new StringBuilder();
+        lines.AppendLine();
+        lines.AppendLine("---");
+        lines.AppendLine("В этом звонке ИИ играл роль персонажа со следующими характеристиками — учти это при оценке звонка:");
+        lines.AppendLine($"Имя: {companyCallContext.PersonaName}");
+        lines.AppendLine($"Должность: {companyCallContext.PersonaPosition}");
+        lines.AppendLine($"Характер: {companyCallContext.PersonaPersonality}");
+
+        if (!string.IsNullOrWhiteSpace(companyCallContext.PersonaDifficulty))
+        {
+            lines.AppendLine($"Уровень сложности собеседника: {DescribeDifficultyToughness(companyCallContext.PersonaDifficulty)}");
+        }
+
+        return lines.ToString();
+    }
+
+    private static string DescribeDifficultyToughness(string difficulty) => difficulty switch
+    {
+        "Easy" => "лёгкий — персонаж дружелюбен и легко идёт на контакт",
+        "Hard" => "сложный — персонаж скептичен, придирчив и активно возражает",
+        _ => "средний — персонаж вежлив, но осторожен",
+    };
 }
