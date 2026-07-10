@@ -1318,7 +1318,7 @@
       becomes combo: pick a contact or type free text (typed name offers «Сохранить как контакт»)
 - [ ] Unit tests; `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`
 
-### [ ] 39.10 Company status pipeline
+### [>] 39.10 Company status pipeline
 - [ ] `Company.Status` enum: `Lead / Contacted / MeetingScheduled / DealWon / DealLost` (default Lead)
 - [ ] `PUT /companies/{id}/status`; status included in list/detail DTOs
 - [ ] Frontend: status chip on `/companies` rows + status filter chips in toolbar;
