@@ -2,6 +2,10 @@ export interface VoiceCompanyContext {
     companyName: string;
     companyDescription: string;
     callGoal?: string;
+    personaName?: string;
+    personaPosition?: string;
+    personaPersonality?: string;
+    personaDifficulty?: string;
 }
 
 export interface UseVoiceOptions {

@@ -32,6 +32,24 @@ function readStoredGoal(companyId: string, queryGoal: string | null): string {
     return stored !== null ? stored : (queryGoal ?? "");
 }
 
+interface StoredPersona {
+    name: string;
+    position: string;
+    personality: string;
+    difficulty: string;
+}
+
+function readStoredPersona(companyId: string): StoredPersona | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(`company-call-persona:${companyId}`);
+    if (!stored) return null;
+    try {
+        return JSON.parse(stored) as StoredPersona;
+    } catch {
+        return null;
+    }
+}
+
 type CallStatus = "idle" | "dialing" | "connected" | "ended";
 
 interface SubtitleEntry {
@@ -131,6 +149,7 @@ export default function CompanyVoiceCallPage() {
     const createPracticeCall = useCreatePracticeCall(companyId);
 
     const [goal] = useState(() => readStoredGoal(companyId, searchParams.get("goal")));
+    const [persona] = useState(() => readStoredPersona(companyId));
 
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [callStatus, setCallStatus] = useState<CallStatus>("idle");
@@ -256,9 +275,17 @@ export default function CompanyVoiceCallPage() {
                       companyName: company.name,
                       companyDescription: company.description,
                       ...(goal ? { callGoal: goal.slice(0, COMPANY_CONTEXT_GOAL_MAX) } : {}),
+                      ...(persona
+                          ? {
+                                personaName: persona.name,
+                                personaPosition: persona.position,
+                                personaPersonality: persona.personality,
+                                personaDifficulty: persona.difficulty,
+                            }
+                          : {}),
                   }
                 : undefined,
-        [company, goal],
+        [company, goal, persona],
     );
 
     const {
