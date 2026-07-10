@@ -1,9 +1,10 @@
 # Companies (Компании)
 
 **Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9), status
-pipeline (39.10), follow-up reminders (39.11), AI pre-call briefing (39.12), and AI real-call-log
-parsing (39.13) are shipped. The rest of Stage B (AI persona generation, voice memo, readiness
-score) is **planned, not implemented** — see `docs/ROADMAP.md` Phase 39.14+.
+pipeline (39.10), follow-up reminders (39.11), AI pre-call briefing (39.12), AI real-call-log
+parsing (39.13), and AI persona generation for practice calls (39.14) are shipped. The rest of
+Stage B (voice memo, readiness score) is **planned, not implemented** — see `docs/ROADMAP.md`
+Phase 39.15+.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -325,8 +326,58 @@ log-create flow. Persists nothing on its own; it's a pure extraction proxy.
   inline error plus a toast, and a "Заполнить вручную" link always lets the user bail out to the
   normal fields — the form is never blocked by an AI outage.
 
+## AI persona generation for practice calls (Phase 39.14)
+
+Lets a manager give the practice-call AI a specific character to play — instead of a generic
+"employee of this company" — chosen from saved personas, freshly generated, or skipped entirely
+("Без персоны", the pre-39.14 default behavior).
+
+- **ai-service:** stateless internal endpoint `POST /ai/companies/persona`
+  (`src/backend/ai-service/Ai/Features/Companies/PersonaController.cs`, same
+  `InternalServiceAuthFilter` guard and size-guard pattern — 16000-char cap on
+  `companyDescription` — as `ParseLogController`). `PersonaService` composes a Russian system
+  prompt (difficulty-aware: `Easy`/`Medium`/`Hard` map to a friendliness/skepticism instruction)
+  and calls the same `IOpenAiChatService.GenerateTextAsync` one-shot completion used by the
+  briefing/parse-log features, requesting strict JSON `{name, position, personality}`. Unlike
+  parse-log, every field is **required** — a persona missing/blank `name`, `position`, or
+  `personality` is treated as a parse failure (`InvalidOperationException` → `503`), since there's
+  no sensible partial persona.
+- **company-service:** `CompanyPersona` entity/table (see `docs/DB_SCHEMA.md`), CRUD-lite mirroring
+  `CompanyContact` — `GET/POST /companies/{id}/personas`, `DELETE
+  /companies/{id}/personas/{personaId}` — all ownership-guarded (`404` on foreign/unknown company
+  id). `POST /companies/{id}/personas/generate` (`CompanyController.GeneratePersona`) gathers the
+  company's `description`, forwards it plus an optional contact-name/position seed and the
+  requested difficulty to ai-service via `PersonaAiClient` (mirrors `ParseLogAiClient`:
+  typed `HttpClient`, `AiService:BaseUrl`/`PersonaPath` config, `X-Internal-Service-Secret`
+  header), and returns the draft **without persisting anything** — saving is the separate
+  `POST /companies/{id}/personas` call, so the user can regenerate before committing. `503` if
+  ai-service is unreachable, misconfigured, or returns an unparseable/incomplete response. See
+  `docs/API_CONTRACTS.md` for the full contract.
+- **Practice-call injection (extends 39.3):** `CompanyCallContext`/`CompanyCallContextDto` and
+  `CompanyContextPromptBuilder` (ai-service) gained four optional `persona*` fields. When present,
+  the chat system prompt instructs the model to role-play as that persona (name, position,
+  personality, difficulty-derived toughness); the feedback prompt gets a related "grade with this
+  persona in mind" block. When absent, prompt output is byte-for-byte unchanged from pre-39.14 —
+  see `docs/AI_DIALOG.md` for the exact prompt shapes and the Mongo persistence note.
+- **Frontend:** the pre-call `PrecallPanel` (`.co-cta`, `components/precall-panel.tsx`) gained a
+  persona selector — chips listing the company's saved personas (`useCompanyPersonas`) plus a
+  «Без персоны» chip (default) and a «Сгенерировать собеседника» toggle that opens a small form
+  (optional seed contact name/position + an `Easy`/`Medium`/`Hard` difficulty picker calling
+  `useGenerateCompanyPersona`); the generated draft is shown inline with a "Сохранить собеседника"
+  button (`useAddCompanyPersona`). The chip selection is threaded through `onCall`/`onChat` into
+  `handleCall`/`handleChat` on `app/(main)/companies/[id]/page.tsx`, which stash it in
+  `sessionStorage` under `company-call-persona:{companyId}` (mirroring the existing
+  `company-call-goal:{companyId}` pattern) before navigating to `call/voice` or `call/chat`. Both
+  call pages read the stored persona once on mount and spread its four fields into the
+  `companyContext` payload sent to `POST /dialog/sessions` (chat) / the voice session-start call
+  (`useVoice`'s `companyContext` option) — omitted entirely when no persona was selected, so the
+  no-persona call flow is unaffected. New hooks: `hooks/use-company-personas.ts`
+  (`useCompanyPersonas`, `useAddCompanyPersona`, `useDeleteCompanyPersona`,
+  `useGenerateCompanyPersona`), following the `use-company-briefing.ts`/`use-parse-call-log.ts`
+  conventions (React Query, `toast.error` on mutation failure).
+
 ## Stage B remainder (planned, not implemented)
 
-Approved 2026-07-09, tracked as Phase 39.14–39.17 in `docs/ROADMAP.md`: AI persona generation for
-practice calls, voice-memo → log transcription, and an AI readiness score. None of this is
-implemented yet — see the roadmap for scope and sequencing.
+Approved 2026-07-09, tracked as Phase 39.15–39.17 in `docs/ROADMAP.md`: voice-memo → log
+transcription and an AI readiness score. None of this is implemented yet — see the roadmap for
+scope and sequencing.
