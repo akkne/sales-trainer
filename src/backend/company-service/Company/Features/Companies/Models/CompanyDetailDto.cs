@@ -4,6 +4,7 @@ public sealed record CompanyDetailDto(
     Guid Id,
     string Name,
     string Description,
+    CompanyStatus Status,
     int CallLogCount,
     int PracticeCallCount,
     int ContactCount,

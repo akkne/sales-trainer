@@ -65,6 +65,22 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(company);
     }
 
+    [HttpPut("companies/{companyId:guid}/status")]
+    public async Task<ActionResult<CompanyDetailDto>> UpdateCompanyStatus(
+        Guid companyId,
+        [FromBody] UpdateCompanyStatusRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var company = await companyService.UpdateCompanyStatusAsync(userId, companyId, request, cancellationToken);
+        if (company is null)
+            return NotFound();
+
+        return Ok(company);
+    }
+
     [HttpDelete("companies/{companyId:guid}")]
     public async Task<IActionResult> DeleteCompany(
         Guid companyId,

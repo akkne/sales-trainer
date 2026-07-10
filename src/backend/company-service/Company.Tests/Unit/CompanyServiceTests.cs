@@ -147,6 +147,73 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task CreateCompanyAsync_defaults_status_to_lead()
+    {
+        var request = new CreateCompanyRequestDto("Acme Corp");
+
+        var result = await _companyService.CreateCompanyAsync(FirstUserId, request);
+
+        result.Status.Should().Be(CompanyStatus.Lead);
+    }
+
+    [Test]
+    public async Task UpdateCompanyStatusAsync_updates_status_for_correct_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new UpdateCompanyStatusRequestDto(CompanyStatus.Contacted);
+
+        var result = await _companyService.UpdateCompanyStatusAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(CompanyStatus.Contacted);
+    }
+
+    [Test]
+    public async Task UpdateCompanyStatusAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new UpdateCompanyStatusRequestDto(CompanyStatus.DealWon);
+
+        var result = await _companyService.UpdateCompanyStatusAsync(SecondUserId, company.Id, request);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpdateCompanyStatusAsync_returns_null_for_nonexistent_company()
+    {
+        var request = new UpdateCompanyStatusRequestDto(CompanyStatus.DealLost);
+
+        var result = await _companyService.UpdateCompanyStatusAsync(FirstUserId, Guid.NewGuid(), request);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpdateCompanyStatusAsync_persists_status_across_reads()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new UpdateCompanyStatusRequestDto(CompanyStatus.MeetingScheduled);
+
+        await _companyService.UpdateCompanyStatusAsync(FirstUserId, company.Id, request);
+        var result = await _companyService.GetCompanyAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(CompanyStatus.MeetingScheduled);
+    }
+
+    [Test]
+    public async Task ListCompaniesAsync_includes_status_for_each_company()
+    {
+        await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Won Deal", status: CompanyStatus.DealWon);
+
+        var results = await _companyService.ListCompaniesAsync(FirstUserId, null);
+
+        results.Should().HaveCount(1);
+        results[0].Status.Should().Be(CompanyStatus.DealWon);
+    }
+
+    [Test]
     public async Task DeleteCompanyAsync_removes_company()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
