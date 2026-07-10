@@ -1326,7 +1326,7 @@
       meeting violet, won success, lost danger)
 - [ ] Unit tests; docs
 
-### [>] 39.11 Follow-up reminders
+### [x] 39.11 Follow-up reminders
 - [ ] `Company.NextActionAt` (nullable timestamptz), `NextActionNote` (nullable), `FollowUpNotifiedAt` (nullable)
 - [ ] company-service adopts BuildingBlocks eventing (Kafka producer): hosted background service
       polls due follow-ups (every 5 min), publishes `company.followup.due` once per due date
@@ -1392,6 +1392,11 @@
 > (consistent with the rest of use-companies.ts); CSS `.co-status-filter-chip.active`
 > tone overrides rely on source order — bump specificity or comment; product sign-off
 > that unconstrained status transitions (e.g. DealWon → Lead) are intended.
+> Carry-over from PR #21 review (non-blocking fast-follows): follow-up badge
+> due/overdue tone uses the client clock (document caveat or resync against server
+> time); consider a short in-process retry (2–3 attempts) around the Kafka publish
+> in FollowUpReminderService to absorb transient broker blips within the accepted
+> at-most-once design.
 - [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
 - [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
 - [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
