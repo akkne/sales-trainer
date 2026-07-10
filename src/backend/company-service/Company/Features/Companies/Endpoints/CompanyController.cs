@@ -159,6 +159,29 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return NoContent();
     }
 
+    [HttpPost("companies/{companyId:guid}/logs/parse")]
+    public async Task<IActionResult> ParseCallLog(
+        Guid companyId,
+        [FromBody] ParseCallLogRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            var parsed = await companyService.ParseCallLogAsync(userId, companyId, request, cancellationToken);
+            if (parsed is null)
+                return NotFound();
+
+            return Ok(parsed);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+    }
+
     [HttpGet("companies/{companyId:guid}/logs")]
     public async Task<ActionResult<IReadOnlyList<CallLogEntryDto>>> ListCallLogEntries(
         Guid companyId,

@@ -12,6 +12,7 @@ public static class CompanyFeatureServiceCollectionExtensions
     {
         services.AddScoped<ICompanyService, CompanyService>();
         services.AddBriefingAiClient(configuration);
+        services.AddParseLogAiClient(configuration);
         return services;
     }
 

@@ -7,7 +7,10 @@ using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Features.Companies.Services.Implementation;
 
-internal sealed class CompanyService(CompanyDbContext databaseContext, IBriefingAiClient briefingAiClient) : ICompanyService
+internal sealed class CompanyService(
+    CompanyDbContext databaseContext,
+    IBriefingAiClient briefingAiClient,
+    IParseLogAiClient parseLogAiClient) : ICompanyService
 {
     private const int DescriptionExcerptLength = 160;
     private const int RecentGoalCount = 5;
@@ -598,6 +601,24 @@ internal sealed class CompanyService(CompanyDbContext databaseContext, IBriefing
             return null;
 
         return new CompanyBriefingDto(company.BriefingContent, company.BriefingGeneratedAt);
+    }
+
+    public async Task<ParsedCallLogDto?> ParseCallLogAsync(
+        Guid userId,
+        Guid companyId,
+        ParseCallLogRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        var aiResult = await parseLogAiClient.ParseLogAsync(
+            new ParseLogAiRequest(request.RawText), cancellationToken);
+
+        return new ParsedCallLogDto(aiResult.ContactName, aiResult.Subject, aiResult.Outcome, aiResult.OccurredAt);
     }
 
     private async Task EnsureContactBelongsToCompanyAsync(Guid companyId, Guid contactId, CancellationToken cancellationToken)

@@ -13,6 +13,7 @@ public sealed class CompanyServiceTests
 {
     private Infrastructure.Data.CompanyDbContext _databaseContext = null!;
     private IBriefingAiClient _briefingAiClient = null!;
+    private IParseLogAiClient _parseLogAiClient = null!;
     private CompanyService _companyService = null!;
 
     private static readonly Guid FirstUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -23,7 +24,8 @@ public sealed class CompanyServiceTests
     {
         _databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
         _briefingAiClient = Substitute.For<IBriefingAiClient>();
-        _companyService = new CompanyService(_databaseContext, _briefingAiClient);
+        _parseLogAiClient = Substitute.For<IParseLogAiClient>();
+        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient);
     }
 
     [TearDown]
@@ -860,5 +862,73 @@ public sealed class CompanyServiceTests
         result.Should().NotBeNull();
         result!.Content.Should().Be("cached content");
         result.GeneratedAt.Should().Be(generatedAt);
+    }
+
+    [Test]
+    public async Task ParseCallLogAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.ParseCallLogAsync(
+            SecondUserId, company.Id, new ParseCallLogRequestDto("сырые заметки"));
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task ParseCallLogAsync_returns_null_for_nonexistent_company()
+    {
+        var result = await _companyService.ParseCallLogAsync(
+            FirstUserId, Guid.NewGuid(), new ParseCallLogRequestDto("сырые заметки"));
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task ParseCallLogAsync_returns_parsed_fields_from_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        _parseLogAiClient
+            .ParseLogAsync(Arg.Any<ParseLogAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ParseLogAiResult("Иван Петров", "Обсудили условия", "Взял паузу подумать", new DateTime(2026, 7, 1)));
+
+        var result = await _companyService.ParseCallLogAsync(
+            FirstUserId, company.Id, new ParseCallLogRequestDto("сырые заметки"));
+
+        result.Should().NotBeNull();
+        result!.ContactName.Should().Be("Иван Петров");
+        result.Subject.Should().Be("Обсудили условия");
+        result.Outcome.Should().Be("Взял паузу подумать");
+        result.OccurredAt.Should().Be(new DateTime(2026, 7, 1));
+    }
+
+    [Test]
+    public async Task ParseCallLogAsync_passes_raw_text_to_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        _parseLogAiClient
+            .ParseLogAsync(Arg.Any<ParseLogAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ParseLogAiResult(null, "subject", "outcome", null));
+
+        await _companyService.ParseCallLogAsync(
+            FirstUserId, company.Id, new ParseCallLogRequestDto("расшифровка звонка"));
+
+        await _parseLogAiClient.Received(1).ParseLogAsync(
+            Arg.Is<ParseLogAiRequest>(request => request.RawText == "расшифровка звонка"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ParseCallLogAsync_propagates_ai_failure()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        _parseLogAiClient
+            .ParseLogAsync(Arg.Any<ParseLogAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns<ParseLogAiResult>(_ => throw new InvalidOperationException("AI parse-log service returned 503."));
+
+        var act = () => _companyService.ParseCallLogAsync(
+            FirstUserId, company.Id, new ParseCallLogRequestDto("сырые заметки"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 }
