@@ -20,6 +20,7 @@ const COMPANIES = [
         id: "1",
         name: "Ромашка",
         descriptionExcerpt: "",
+        status: "Lead",
         callLogCount: 2,
         practiceCallCount: 3,
         createdAt: "2026-07-01T00:00:00Z",
@@ -29,6 +30,7 @@ const COMPANIES = [
         id: "2",
         name: "Вектор",
         descriptionExcerpt: "",
+        status: "DealWon",
         callLogCount: 0,
         practiceCallCount: 0,
         createdAt: "2026-07-01T00:00:00Z",
@@ -108,5 +110,30 @@ describe("CompaniesPage", () => {
             options.onSuccess({ id: "new-id" });
         });
         expect(mockPush).toHaveBeenCalledWith("/companies/new-id");
+    });
+
+    it("filters the list client-side by status when a status chip is clicked", () => {
+        useCompanies.mockReturnValue({ data: COMPANIES, isLoading: false, error: null, refetch: vi.fn() });
+        render(<CompaniesPage />);
+
+        expect(screen.getByText("Ромашка")).toBeTruthy();
+        expect(screen.getByText("Вектор")).toBeTruthy();
+
+        fireEvent.click(screen.getByRole("button", { name: "Сделка закрыта" }));
+
+        expect(screen.queryByText("Ромашка")).toBeFalsy();
+        expect(screen.getByText("Вектор")).toBeTruthy();
+    });
+
+    it("clears the status filter when the active chip is clicked again", () => {
+        useCompanies.mockReturnValue({ data: COMPANIES, isLoading: false, error: null, refetch: vi.fn() });
+        render(<CompaniesPage />);
+
+        fireEvent.click(screen.getByRole("button", { name: "Сделка закрыта" }));
+        expect(screen.queryByText("Ромашка")).toBeFalsy();
+
+        fireEvent.click(screen.getByRole("button", { name: "Сделка закрыта" }));
+        expect(screen.getByText("Ромашка")).toBeTruthy();
+        expect(screen.getByText("Вектор")).toBeTruthy();
     });
 });

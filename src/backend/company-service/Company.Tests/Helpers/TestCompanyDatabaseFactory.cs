@@ -22,6 +22,7 @@ internal static class TestCompanyDatabaseFactory
         Guid userId,
         string name,
         string description = "",
+        CompanyStatus status = CompanyStatus.Lead,
         CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -31,6 +32,7 @@ internal static class TestCompanyDatabaseFactory
             UserId = userId,
             Name = name,
             Description = description,
+            Status = status,
             CreatedAt = now,
             UpdatedAt = now
         };

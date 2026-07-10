@@ -6,6 +6,7 @@ public sealed class Company
     public Guid UserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public CompanyStatus Status { get; set; } = CompanyStatus.Lead;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

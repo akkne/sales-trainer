@@ -648,6 +648,7 @@ Skills
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
 | `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
 | `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
+| `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
 
 ---
 
@@ -663,10 +664,15 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 | `UserId`      | uuid         | NOT NULL, INDEX                  |
 | `Name`        | varchar(200) | NOT NULL                         |
 | `Description` | varchar(8000)| NOT NULL, DEFAULT ''             |
+| `Status`      | varchar(32)  | NOT NULL, DEFAULT 'Lead'         |
 | `CreatedAt`   | timestamptz  | NOT NULL                         |
 | `UpdatedAt`   | timestamptz  | NOT NULL                         |
 
 **Indexes:** `IX_Companies_UserId`
+
+`Status` (Phase 39.10) is one of `Lead | Contacted | MeetingScheduled | DealWon | DealLost`,
+stored as its string name (`HasConversion<string>()`, not the numeric enum value) so the column
+stays human-readable in the database.
 
 ### Table: `CallLogEntries`
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sellevate.Company.Features.Companies.Models;
 using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Features.Companies.Configurations;
@@ -20,6 +21,12 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
             .IsRequired()
             .HasMaxLength(8000)
             .HasDefaultValue(string.Empty);
+
+        builder.Property(company => company.Status)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(CompanyStatus.Lead);
 
         builder.Property(company => company.CreatedAt)
             .IsRequired();

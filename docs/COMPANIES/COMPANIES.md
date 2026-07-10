@@ -1,8 +1,9 @@
 # Companies (Компании)
 
-**Status:** Stage A shipped (Phase 39.1–39.7). Stage B (contacts, status pipeline, follow-up
-reminders, AI briefing/log-parsing/persona/readiness, voice memo) is **planned, not implemented**
-— see `docs/ROADMAP.md` Phase 39.9+.
+**Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9) and status
+pipeline (39.10) are shipped. The rest of Stage B (follow-up reminders,
+AI briefing/log-parsing/persona/readiness, voice memo) is **planned, not implemented** — see
+`docs/ROADMAP.md` Phase 39.11+.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -73,8 +74,11 @@ feedback, XP, and minute quotas as any other dialog mode) with two additions:
 
 Three entities, all owned by `UserId`, cascade-deleted with their parent `Company`:
 
-- **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""), CreatedAt, UpdatedAt`.
-  Index on `UserId`.
+- **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""),
+  Status (Lead/Contacted/MeetingScheduled/DealWon/DealLost, default Lead, stored as string),
+  CreatedAt, UpdatedAt`. Index on `UserId`. Status is changed via a dedicated
+  `PUT /companies/{id}/status` endpoint (kept separate from the name/description update so the
+  frontend can fire a status change without re-submitting the whole edit form).
 - **`CallLogEntry`** (a real call the user logs manually) —
   `Id, CompanyId, UserId, ContactName (≤200), Subject (≤4000), Outcome (≤4000), OccurredAt,
   CreatedAt, UpdatedAt`. Only `ContactName` (with `Subject`/`Outcome` empty-allowed) plus
@@ -120,8 +124,14 @@ on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, o
     the existing full-screen voice-call UX
 - **`features/companies/`** (mirrors `features/dialog/`):
   - `hooks/use-companies.ts` — list/get/create/update/delete companies (`useCompanies`,
-    `useCompany`, `useCreateCompany`, `useUpdateCompany`, `useDeleteCompany`), client-side name
-    filter on top of the server `?search=`
+    `useCompany`, `useCreateCompany`, `useUpdateCompany`, `useUpdateCompanyStatus`,
+    `useDeleteCompany`), client-side name filter on top of the server `?search=`
+  - `lib/company-status.ts` — single source of truth for the 5 status values, their Russian
+    labels (Лид / Был контакт / Встреча назначена / Сделка закрыта / Отказ), and the CSS tone
+    class per status; `components/company-status-badge.tsx` (read-only chip, used on list rows)
+    and `components/company-status-menu.tsx` (click-to-open dropdown, used on the company header)
+    both key off it — status filter chips on `/companies` and the list-row badge share the same
+    tone classes (`co-status--lead|contacted|meeting|won|lost` in `app/globals.css`)
   - `hooks/use-company-logs.ts` — call-log CRUD
   - `hooks/use-practice-calls.ts` — `useCompanyPracticeCalls`, `useRecentGoals`,
     `useCreatePracticeCall` (retries twice; failure toasts but doesn't block the call)
@@ -189,10 +199,25 @@ tables.
   ("Совет: заполните описание компании — звонок станет реалистичнее") instead of the "AI will
   play this company" message.
 
-## Stage B (planned, not implemented)
+## Company status pipeline (Phase 39.10)
 
-Approved 2026-07-09, tracked as Phase 39.9–39.17 in `docs/ROADMAP.md`: contacts mini-CRM, company
-status pipeline (Lead/Contacted/MeetingScheduled/DealWon/DealLost), follow-up reminders (new
+`Company.Status` is a 5-value enum — `Lead` (Лид, neutral) → `Contacted` (Был контакт, info) →
+`MeetingScheduled` (Встреча назначена, violet) → `DealWon`/`DealLost` (Сделка закрыта / Отказ,
+success/danger) — persisted as a string column, defaulting new (and pre-migration existing) rows
+to `Lead`. There's no server-side enforced transition order; any status can be set from any other.
+
+- **Backend:** `PUT /companies/{id}/status` (`{ "status": "Contacted" }`) returns the updated
+  `CompanyDetailDto`; `404` on missing company or wrong owner, same ownership pattern as every
+  other company endpoint. `status` is included on both `CompanySummaryDto` (list) and
+  `CompanyDetailDto` (detail).
+- **Frontend:** status chip on each `/companies` row; status filter chips in the list toolbar
+  (client-side filter over the already-fetched list, same pattern as the name search — no extra
+  network call); a click-to-open status dropdown on the company page header
+  (`CompanyStatusMenu`) that calls `useUpdateCompanyStatus` on selection.
+
+## Stage B remainder (planned, not implemented)
+
+Approved 2026-07-09, tracked as Phase 39.11–39.17 in `docs/ROADMAP.md`: follow-up reminders (new
 Kafka event `company.followup.due` → notification-service), AI pre-call briefing ("Шпаргалка"),
 AI real-call-log parsing from pasted notes, AI persona generation for practice calls, voice-memo
 → log transcription, and an AI readiness score. None of this is implemented yet — see the roadmap

@@ -3,6 +3,7 @@ import { Icon } from "@/shared/components/icon";
 import type { CompanySummary } from "@/features/companies/hooks/use-companies";
 import { ava, initials } from "@/features/companies/lib/avatar";
 import { relativeTimeRu, pluralizeRu } from "@/features/companies/lib/format";
+import { CompanyStatusBadge } from "@/features/companies/components/company-status-badge";
 
 interface CompanyRowProps {
     company: CompanySummary;
@@ -42,6 +43,7 @@ export function CompanyRow({ company }: CompanyRowProps) {
                 <p className="co-row-name">{company.name}</p>
                 <p className="co-row-meta">{metaParts.join(" · ")}</p>
             </div>
+            <CompanyStatusBadge status={company.status} className="co-row-status" />
             <Icon name="chevron-right" size={18} className="co-row-chev" />
         </Link>
     );

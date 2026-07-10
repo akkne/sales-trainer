@@ -32,6 +32,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 company.Id,
                 company.Name,
                 company.Description,
+                company.Status,
                 company.CreatedAt,
                 company.UpdatedAt,
                 CallLogCount = company.CallLogEntries.Count,
@@ -47,6 +48,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 company.Description.Length > DescriptionExcerptLength
                     ? company.Description[..DescriptionExcerptLength]
                     : company.Description,
+                company.Status,
                 company.CallLogCount,
                 company.PracticeCallCount,
                 company.ContactCount,
@@ -77,6 +79,37 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         return MapToDetailDto(company, 0, 0, 0);
     }
 
+    public async Task<CompanyDetailDto?> UpdateCompanyStatusAsync(
+        Guid userId,
+        Guid companyId,
+        UpdateCompanyStatusRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.Status is not { } status)
+            throw new ArgumentException("Status is required.", nameof(request));
+
+        var company = await databaseContext.Companies
+            .Where(c => c.Id == companyId && c.UserId == userId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (company is null)
+            return null;
+
+        company.Status = status;
+        company.UpdatedAt = DateTime.UtcNow;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        var callLogCount = await databaseContext.CallLogEntries
+            .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
+        var practiceCallCount = await databaseContext.PracticeCalls
+            .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+        var contactCount = await databaseContext.CompanyContacts
+            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
+
+        return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
+    }
+
     public async Task<CompanyDetailDto?> GetCompanyAsync(
         Guid userId,
         Guid companyId,
@@ -89,6 +122,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 c.Id,
                 c.Name,
                 c.Description,
+                c.Status,
                 c.CreatedAt,
                 c.UpdatedAt,
                 CallLogCount = c.CallLogEntries.Count,
@@ -104,6 +138,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             company.Id,
             company.Name,
             company.Description,
+            company.Status,
             company.CallLogCount,
             company.PracticeCallCount,
             company.ContactCount,
@@ -453,7 +488,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
     }
 
     private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount, int contactCount) =>
-        new(company.Id, company.Name, company.Description, callLogCount, practiceCallCount, contactCount, company.CreatedAt, company.UpdatedAt);
+        new(company.Id, company.Name, company.Description, company.Status, callLogCount, practiceCallCount, contactCount, company.CreatedAt, company.UpdatedAt);
 
     private static CallLogEntryDto MapToCallLogDto(CallLogEntry entry) =>
         new(entry.Id, entry.CompanyId, entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt, entry.CreatedAt, entry.UpdatedAt, entry.ContactId);

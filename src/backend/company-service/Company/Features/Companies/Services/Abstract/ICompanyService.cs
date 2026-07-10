@@ -8,6 +8,7 @@ public interface ICompanyService
     Task<CompanyDetailDto> CreateCompanyAsync(Guid userId, CreateCompanyRequestDto request, CancellationToken cancellationToken = default);
     Task<CompanyDetailDto?> GetCompanyAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
     Task<CompanyDetailDto?> UpdateCompanyAsync(Guid userId, Guid companyId, UpdateCompanyRequestDto request, CancellationToken cancellationToken = default);
+    Task<CompanyDetailDto?> UpdateCompanyStatusAsync(Guid userId, Guid companyId, UpdateCompanyStatusRequestDto request, CancellationToken cancellationToken = default);
     Task<bool> DeleteCompanyAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<CallLogEntryDto>?> ListCallLogEntriesAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
