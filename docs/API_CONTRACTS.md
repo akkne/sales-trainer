@@ -877,12 +877,18 @@ DTO additions on the Discuss user endpoints above:
 | POST | /companies | `{name, description?}` | `201 CompanyDetailDto` |
 | GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
 | PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id}/status | `{status}` | `CompanyDetailDto` or `404` |
 | DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts) |
 
-`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
-`CompanyDetailDto`: `{id, name, description, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
+`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
+`CompanyDetailDto`: `{id, name, description, status, callLogCount, practiceCallCount, contactCount, createdAt, updatedAt}`
 
 Validation: `name` required, max 200; `description` max 8000.
+
+`status` (Phase 39.10) is one of `Lead | Contacted | MeetingScheduled | DealWon | DealLost`
+(string enum), defaulting to `Lead` on creation. `PUT /companies/{id}/status` sets it directly —
+no server-side transition constraints, any status may be set from any other. `404` on missing
+company or wrong owner, same ownership pattern as every other company endpoint.
 
 ### Call Log
 

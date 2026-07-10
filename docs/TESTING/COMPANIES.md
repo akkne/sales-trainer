@@ -15,7 +15,9 @@ dotnet test company-service/Company.Tests/Company.Tests.csproj
 Coverage: list/search companies (own only), create/get/update/delete company, description-excerpt
 truncation, call-log create/list/update/delete (ownership-scoped, 404 for foreign/unknown company
 or log id), practice-call create/list, recent-goals (last 5 distinct, newest first, empties
-excluded), cascade delete of logs + practice calls when a company is deleted.
+excluded), cascade delete of logs + practice calls when a company is deleted, status pipeline
+(defaults to `Lead` on create, `PUT /companies/{id}/status` updates status for the correct owner,
+`404` for wrong owner/nonexistent company, status is included in both list and detail reads).
 
 ### Backend — ai-service company-context (NUnit)
 `src/backend/ai-service/Ai.Tests/Unit/CompanyContextDialogTests.cs`
@@ -42,8 +44,12 @@ monolith), cluster destination resolves to the `company` container address.
 cd src/frontend
 npx vitest run __tests__/Compan
 ```
-- `CompaniesPage.test.tsx` — list rendering, empty/loading/error states, create modal
-- `useCompanies.test.tsx` — list/create/update/delete hooks, search filtering
+- `CompaniesPage.test.tsx` — list rendering, empty/loading/error states, create modal, status
+  filter chips (filter/clear)
+- `useCompanies.test.tsx` — list/create/update/delete hooks, search filtering,
+  `useUpdateCompanyStatus` (PUT to `/companies/{id}/status`, cache invalidation, error toast)
+- `CompanyStatusMenu.test.tsx` — status dropdown: shows current status, lists all 5 options,
+  calls `onChange` on selection (not on re-selecting the current status), disabled state
 - `useCompanyLogs.test.tsx` — call-log CRUD hooks
 - `CompaniesFormat.test.ts` — description excerpt / date formatting helpers
 - `CompaniesTimeline.test.ts` — `mergeTimeline`/`filterTimeline` ordering and segment filtering
@@ -121,6 +127,21 @@ npx vitest run __tests__/Compan
 27. Delete a company that has both call-log entries and practice calls → both disappear (verify
     via a fresh `GET /companies/{id}/logs` and `/practice-calls` returning 404 once the company
     itself is gone).
+
+### Status pipeline
+32. New company defaults to «Лид» — visible as the status chip on both the list row and the
+    company header.
+33. On the company header, click the status chip → dropdown opens with all 5 statuses; the
+    current one shows a checkmark. Pick a different status → header chip and list-row chip both
+    update (list re-fetches on navigating back), correct tone color per status (neutral / info /
+    violet / success / danger for Лид / Был контакт / Встреча назначена / Сделка закрыта / Отказ).
+34. On `/companies`, click a status filter chip → only companies with that status remain; click
+    the same chip again → filter clears and the full list returns. Click «Все» → clears any
+    active status filter.
+35. Combine a status filter with the name search → both filters apply together (client-side, no
+    extra network calls — verify via network tab that filtering doesn't re-hit `GET /companies`).
+36. Reload `/companies/{id}` after changing status → the new status persists (confirms
+    `PUT /companies/{id}/status` was saved server-side, not just client cache).
 
 ### Mobile nav
 28. On a narrow viewport, the bottom nav shows «Компании» in the 5-slot bar and does **not** show
