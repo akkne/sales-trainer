@@ -156,13 +156,18 @@ src/backend/
   idempotency store — an unneeded dependency for a producer-only service. It does **not** use
   the Outbox: the reminder poll already reads from Postgres on its own schedule, so there is no
   separate "business change that must commit atomically with an event" to protect — the poll
-  claims a company (sets `FollowUpNotifiedAt`, commits) *before* publishing to Kafka. This is a
-  deliberate at-most-once trade-off for a single-instance service: if the process crashes or the
-  Kafka produce fails after the claim commits, that specific reminder is silently dropped rather
-  than retried (the company is already marked notified) — favoring "never double-notify" over
-  guaranteed delivery. The user can always force a fresh reminder by rescheduling
-  `NextActionAt`, which resets `FollowUpNotifiedAt`. Revisit with the Outbox pattern if
-  guaranteed delivery becomes a requirement.
+  claims a company (sets `FollowUpNotifiedAt`, commits) *before* publishing to Kafka — the whole
+  claimed batch (up to `FollowUpReminder:BatchSize`, default 100) is committed in one
+  `SaveChangesAsync`, then each company is published individually. This is a deliberate
+  at-most-once trade-off for a single-instance service: a single publish failure only drops that
+  one company's reminder (each publish is individually try/caught), but a process crash *between*
+  the claim commit and the publish loop — or a broker outage that fails every publish in the loop
+  — silently drops **up to the whole in-flight batch** (bounded by `BatchSize`, not unbounded)
+  for that tick, since every claimed company is already marked notified and will not be
+  reconsidered. This favors "never double-notify" over guaranteed delivery. The user can always
+  force a fresh reminder for an affected company by rescheduling `NextActionAt`, which resets
+  `FollowUpNotifiedAt`. Revisit with the Outbox pattern if guaranteed delivery becomes a
+  requirement.
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.

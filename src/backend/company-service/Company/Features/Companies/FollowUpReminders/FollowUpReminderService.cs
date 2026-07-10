@@ -36,13 +36,18 @@ internal sealed class FollowUpReminderService(
         if (dueCompanies.Count == 0)
             return 0;
 
-        // Claim before publish: stamp FollowUpNotifiedAt and commit first, then publish to Kafka.
-        // Trade-off (single-instance, non-outbox service): if the process crashes or the Kafka
-        // produce fails after this commit, that specific reminder is silently dropped rather than
-        // retried on the next tick — the company is already claimed. This favors "at most once"
-        // (never double-notify a due follow-up) over guaranteed delivery. The user can always force
-        // a fresh reminder by rescheduling NextActionAt, which resets FollowUpNotifiedAt. Revisit
-        // with the Outbox pattern (BuildingBlocks/Outbox) if guaranteed delivery becomes a requirement.
+        // Claim before publish: stamp FollowUpNotifiedAt for the whole claimed batch (up to
+        // BatchSize companies) and commit first, then publish to Kafka one-by-one.
+        // Trade-off (single-instance, non-outbox service): a single publish failure only drops
+        // that one company's reminder (each publish is individually try/caught below), but a
+        // process crash *between* this commit and the publish loop — or a broker outage that
+        // fails every publish in the loop — silently drops up to the whole in-flight batch
+        // (BatchSize, default 100) for this tick, since every claimed company is already marked
+        // notified. This favors "at most once" (never double-notify a due follow-up) over
+        // guaranteed delivery, and keeps the blast radius bounded by BatchSize rather than
+        // unbounded. The user can always force a fresh reminder for an affected company by
+        // rescheduling NextActionAt, which resets FollowUpNotifiedAt. Revisit with the Outbox
+        // pattern (BuildingBlocks/Outbox) if guaranteed delivery becomes a requirement.
         foreach (var company in dueCompanies)
         {
             company.FollowUpNotifiedAt = now;

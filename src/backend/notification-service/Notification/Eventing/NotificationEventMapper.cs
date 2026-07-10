@@ -255,7 +255,10 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             // Dedupe on company + the specific due date, not just the company: company-service
             // resets FollowUpNotifiedAt on reschedule, so a later due date for the same company
             // must produce a fresh notification rather than being suppressed by the still-inboxed
-            // reminder for the earlier date.
+            // reminder for the earlier date. Uses the "O" (round-trip) format so the key is
+            // exact to the tick and reproducible byte-for-byte on both the producer's original
+            // DateTime and any re-serialization here — a lossier format (e.g. seconds-only) could
+            // collapse two distinct-but-close due dates onto the same dedupe key.
             $"{payload.CompanyId}:{payload.NextActionAt:O}");
         // SendEmail stays false: follow-up due reminders are in-app only per product spec.
     }
