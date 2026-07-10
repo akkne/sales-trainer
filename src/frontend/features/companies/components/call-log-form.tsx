@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CallLogEntry, CallLogPayload } from "@/features/companies/hooks/use-company-logs";
+import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
@@ -9,13 +10,15 @@ function todayIso(): string {
 
 interface CallLogFormProps {
     initial?: CallLogEntry;
+    contacts?: CompanyContact[];
     submitting?: boolean;
     onSubmit: (payload: CallLogPayload) => void;
     onCancel: () => void;
 }
 
-export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }: CallLogFormProps) {
+export function CallLogForm({ initial, contacts = [], submitting = false, onSubmit, onCancel }: CallLogFormProps) {
     const [contactName, setContactName] = useState(initial?.contactName ?? "");
+    const [contactId, setContactId] = useState<string | null>(initial?.contactId ?? null);
     const [subject, setSubject] = useState(initial?.subject ?? "");
     const [outcome, setOutcome] = useState(initial?.outcome ?? "");
     const [occurredAt, setOccurredAt] = useState(
@@ -24,6 +27,16 @@ export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }:
 
     const canSubmit = contactName.trim().length > 0 && !submitting;
 
+    const handlePickContact = (contact: CompanyContact) => {
+        setContactName(contact.name);
+        setContactId(contact.id);
+    };
+
+    const handleContactNameChange = (value: string) => {
+        setContactName(value);
+        setContactId(null);
+    };
+
     const handleSubmit = () => {
         if (!canSubmit) return;
         onSubmit({
@@ -31,17 +44,32 @@ export function CallLogForm({ initial, submitting = false, onSubmit, onCancel }:
             subject: subject.trim(),
             outcome: outcome.trim(),
             occurredAt: new Date(occurredAt).toISOString(),
+            contactId,
         });
     };
 
     return (
         <div className="co-log-form">
             <label className="co-field-label" htmlFor="co-log-contact">С кем говорил</label>
+            {contacts.length > 0 && (
+                <div className="co-contact-chips" role="group" aria-label="Существующие контакты">
+                    {contacts.map((contact) => (
+                        <button
+                            key={contact.id}
+                            type="button"
+                            className={contactId === contact.id ? "chip-tag active" : "chip-tag"}
+                            onClick={() => handlePickContact(contact)}
+                        >
+                            {contact.name}
+                        </button>
+                    ))}
+                </div>
+            )}
             <input
                 id="co-log-contact"
                 className="field"
                 value={contactName}
-                onChange={(event) => setContactName(event.target.value)}
+                onChange={(event) => handleContactNameChange(event.target.value)}
                 placeholder="Имя и должность, напр. Иван, руководитель отдела закупок"
                 maxLength={200}
                 autoFocus

@@ -4,15 +4,17 @@ import { useEffect } from "react";
 import { Icon } from "@/shared/components/icon";
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import type { CallLogEntry, CallLogPayload } from "@/features/companies/hooks/use-company-logs";
+import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 
 interface CallLogModalProps {
     initial?: CallLogEntry;
+    contacts?: CompanyContact[];
     submitting?: boolean;
     onSubmit: (payload: CallLogPayload) => void;
     onClose: () => void;
 }
 
-export function CallLogModal({ initial, submitting = false, onSubmit, onClose }: CallLogModalProps) {
+export function CallLogModal({ initial, contacts = [], submitting = false, onSubmit, onClose }: CallLogModalProps) {
     const isEdit = !!initial;
 
     useEffect(() => {
@@ -44,6 +46,7 @@ export function CallLogModal({ initial, submitting = false, onSubmit, onClose }:
                 <div className="modal-body">
                     <CallLogForm
                         initial={initial}
+                        contacts={contacts}
                         submitting={submitting}
                         onSubmit={onSubmit}
                         onCancel={onClose}

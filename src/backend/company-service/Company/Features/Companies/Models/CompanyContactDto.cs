@@ -1,11 +1,10 @@
 namespace Sellevate.Company.Features.Companies.Models;
 
-public sealed record CompanyDetailDto(
+public sealed record CompanyContactDto(
     Guid Id,
+    Guid CompanyId,
     string Name,
-    string Description,
-    int CallLogCount,
-    int PracticeCallCount,
-    int ContactCount,
+    string Position,
+    string Notes,
     DateTime CreatedAt,
     DateTime UpdatedAt);

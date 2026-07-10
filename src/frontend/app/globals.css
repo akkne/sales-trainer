@@ -3567,6 +3567,22 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-log-form { border: 1px solid var(--line); border-radius: 13px; padding: 16px; margin-bottom: 16px; background: var(--surface-2); }
 .co-log-form .co-field-label + * { margin-bottom: 14px; }
 .co-log-form-foot { display: flex; gap: 10px; justify-content: flex-end; }
+.co-log-contact-position { color: var(--ink-4); font-weight: 500; }
+
+/* contact chips inside the log form */
+.co-contact-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+/* contacts card */
+.co-contact-form { border: 1px solid var(--line); border-radius: 13px; padding: 16px; margin-bottom: 16px; background: var(--surface-2); }
+.co-contact-form .co-field-label + * { margin-bottom: 14px; }
+.co-contact-list { display: flex; flex-direction: column; }
+.co-contact-row { position: relative; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.co-contact-row:last-child { border-bottom: none; }
+.co-contact-main { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; background: transparent; border: none; padding: 0; padding-right: 64px; cursor: pointer; }
+.co-contact-name { font-size: 13.5px; font-weight: 700; color: var(--ink-heading); }
+.co-contact-position { font-size: 12.5px; color: var(--ink-4); }
+.co-contact-actions { position: absolute; top: 10px; right: 0; display: flex; gap: 6px; }
+.co-contact-notes { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-secondary); white-space: pre-wrap; }
 
 /* ── Responsive ── */
 @media (max-width: 767px) {

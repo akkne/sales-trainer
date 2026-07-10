@@ -18,4 +18,9 @@ public interface ICompanyService
     Task<PracticeCallDto?> CreatePracticeCallAsync(Guid userId, Guid companyId, CreatePracticeCallRequestDto request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PracticeCallDto>?> ListPracticeCallsAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>?> GetRecentGoalsAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CompanyContactDto>?> ListContactsAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
+    Task<CompanyContactDto?> CreateContactAsync(Guid userId, Guid companyId, CreateCompanyContactRequestDto request, CancellationToken cancellationToken = default);
+    Task<CompanyContactDto?> UpdateContactAsync(Guid userId, Guid companyId, Guid contactId, UpdateCompanyContactRequestDto request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteContactAsync(Guid userId, Guid companyId, Guid contactId, CancellationToken cancellationToken = default);
 }

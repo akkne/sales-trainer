@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { PracticeCall } from "@/features/companies/hooks/use-practice-calls";
 import type { CallLogEntry, CallLogPayload } from "@/features/companies/hooks/use-company-logs";
+import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 import { mergeTimeline, filterTimeline, type TimelineFilter } from "@/features/companies/lib/timeline";
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import { TimelinePracticeItem } from "@/features/companies/components/timeline-practice-item";
@@ -11,6 +12,7 @@ import { TimelineReallogItem } from "@/features/companies/components/timeline-re
 interface CompanyTimelineProps {
     practiceCalls: PracticeCall[];
     logs: CallLogEntry[];
+    contacts?: CompanyContact[];
     addingLog: boolean;
     addLogSubmitting?: boolean;
     onStartAddLog: () => void;
@@ -29,6 +31,7 @@ const SEGMENTS: { key: TimelineFilter; label: string }[] = [
 export function CompanyTimeline({
     practiceCalls,
     logs,
+    contacts = [],
     addingLog,
     addLogSubmitting = false,
     onStartAddLog,
@@ -42,6 +45,11 @@ export function CompanyTimeline({
     const entries = useMemo(
         () => filterTimeline(mergeTimeline(practiceCalls, logs), filter),
         [practiceCalls, logs, filter]
+    );
+
+    const contactPositionById = useMemo(
+        () => new Map(contacts.map((contact) => [contact.id, contact.position])),
+        [contacts]
     );
 
     const canAddLog = filter !== "practice";
@@ -67,7 +75,12 @@ export function CompanyTimeline({
 
             {canAddLog && (
                 addingLog ? (
-                    <CallLogForm submitting={addLogSubmitting} onSubmit={onAddLog} onCancel={onCancelAddLog} />
+                    <CallLogForm
+                        contacts={contacts}
+                        submitting={addLogSubmitting}
+                        onSubmit={onAddLog}
+                        onCancel={onCancelAddLog}
+                    />
                 ) : (
                     <button className="btn btn-soft co-add-log" onClick={onStartAddLog}>
                         + Записать звонок
@@ -84,6 +97,9 @@ export function CompanyTimeline({
                             <TimelineReallogItem
                                 key={`reallog-${entry.log.id}`}
                                 log={entry.log}
+                                contactPosition={
+                                    entry.log.contactId ? contactPositionById.get(entry.log.contactId) : undefined
+                                }
                                 onEdit={() => onEditLog(entry.log)}
                                 onDelete={() => onDeleteLog(entry.log)}
                             />

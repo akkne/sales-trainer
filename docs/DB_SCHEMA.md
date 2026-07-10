@@ -647,6 +647,7 @@ Skills
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
 | `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
+| `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
 
 ---
 
@@ -669,19 +670,22 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 
 ### Table: `CallLogEntries`
 
-| Column        | Type         | Constraints                                        |
-|---------------|--------------|----------------------------------------------------|
-| `Id`          | uuid         | PK                                                 |
-| `CompanyId`   | uuid         | NOT NULL, FK → Companies(Id) ON DELETE CASCADE     |
-| `UserId`      | uuid         | NOT NULL                                           |
-| `ContactName` | varchar(200) | NOT NULL                                           |
-| `Subject`     | varchar(4000)| NOT NULL                                           |
-| `Outcome`     | varchar(4000)| NOT NULL                                           |
-| `OccurredAt`  | timestamptz  | NOT NULL                                           |
-| `CreatedAt`   | timestamptz  | NOT NULL                                           |
-| `UpdatedAt`   | timestamptz  | NOT NULL                                           |
+| Column        | Type         | Constraints                                                |
+|---------------|--------------|-------------------------------------------------------------|
+| `Id`          | uuid         | PK                                                          |
+| `CompanyId`   | uuid         | NOT NULL, FK → Companies(Id) ON DELETE CASCADE              |
+| `UserId`      | uuid         | NOT NULL                                                    |
+| `ContactId`   | uuid         | NULL, FK → CompanyContacts(Id) ON DELETE SET NULL           |
+| `ContactName` | varchar(200) | NOT NULL                                                    |
+| `Subject`     | varchar(4000)| NOT NULL                                                    |
+| `Outcome`     | varchar(4000)| NOT NULL                                                    |
+| `OccurredAt`  | timestamptz  | NOT NULL                                                    |
+| `CreatedAt`   | timestamptz  | NOT NULL                                                    |
+| `UpdatedAt`   | timestamptz  | NOT NULL                                                    |
 
-**Indexes:** `IX_CallLogEntries_CompanyId_OccurredAt` (CompanyId ASC, OccurredAt DESC)
+**Indexes:** `IX_CallLogEntries_CompanyId_OccurredAt` (CompanyId ASC, OccurredAt DESC), `IX_CallLogEntries_ContactId`
+
+`ContactId` is optional and independent of `ContactName`: the free-text name is always stored so the log stays readable even after the linked contact is deleted (deleting a `CompanyContact` sets `ContactId` to `NULL` on its logs, `ContactName` is untouched).
 
 ### Table: `PracticeCalls`
 
@@ -695,3 +699,18 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 | `CreatedAt`       | timestamptz   | NOT NULL                                           |
 
 **Indexes:** `IX_PracticeCalls_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+### Table: `CompanyContacts` (Phase 39.9 — mini-CRM)
+
+| Column       | Type          | Constraints                                    |
+|--------------|---------------|-------------------------------------------------|
+| `Id`         | uuid          | PK                                              |
+| `CompanyId`  | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE  |
+| `UserId`     | uuid          | NOT NULL                                        |
+| `Name`       | varchar(200)  | NOT NULL                                        |
+| `Position`   | varchar(200)  | NOT NULL, DEFAULT ''                            |
+| `Notes`      | varchar(2000) | NOT NULL, DEFAULT ''                            |
+| `CreatedAt`  | timestamptz   | NOT NULL                                        |
+| `UpdatedAt`  | timestamptz   | NOT NULL                                        |
+
+**Indexes:** `IX_CompanyContacts_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)

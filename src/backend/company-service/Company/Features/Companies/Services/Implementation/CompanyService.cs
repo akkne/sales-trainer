@@ -35,7 +35,8 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 company.CreatedAt,
                 company.UpdatedAt,
                 CallLogCount = company.CallLogEntries.Count,
-                PracticeCallCount = company.PracticeCalls.Count
+                PracticeCallCount = company.PracticeCalls.Count,
+                ContactCount = company.Contacts.Count
             })
             .ToListAsync(cancellationToken);
 
@@ -48,6 +49,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                     : company.Description,
                 company.CallLogCount,
                 company.PracticeCallCount,
+                company.ContactCount,
                 company.CreatedAt,
                 company.UpdatedAt))
             .ToList();
@@ -72,7 +74,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         databaseContext.Companies.Add(company);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        return MapToDetailDto(company, 0, 0);
+        return MapToDetailDto(company, 0, 0, 0);
     }
 
     public async Task<CompanyDetailDto?> GetCompanyAsync(
@@ -90,7 +92,8 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 c.CreatedAt,
                 c.UpdatedAt,
                 CallLogCount = c.CallLogEntries.Count,
-                PracticeCallCount = c.PracticeCalls.Count
+                PracticeCallCount = c.PracticeCalls.Count,
+                ContactCount = c.Contacts.Count
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -103,6 +106,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             company.Description,
             company.CallLogCount,
             company.PracticeCallCount,
+            company.ContactCount,
             company.CreatedAt,
             company.UpdatedAt);
     }
@@ -130,8 +134,10 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
         var practiceCallCount = await databaseContext.PracticeCalls
             .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+        var contactCount = await databaseContext.CompanyContacts
+            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
 
-        return MapToDetailDto(company, callLogCount, practiceCallCount);
+        return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
     }
 
     public async Task<bool> DeleteCompanyAsync(
@@ -181,12 +187,16 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         if (company is null)
             return null;
 
+        if (request.ContactId is { } contactId)
+            await EnsureContactBelongsToCompanyAsync(companyId, contactId, cancellationToken);
+
         var now = DateTime.UtcNow;
         var entry = new CallLogEntry
         {
             Id = Guid.NewGuid(),
             CompanyId = companyId,
             UserId = userId,
+            ContactId = request.ContactId,
             ContactName = request.ContactName,
             Subject = request.Subject,
             Outcome = request.Outcome,
@@ -224,6 +234,10 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         if (entry is null)
             return null;
 
+        if (request.ContactId is { } contactId)
+            await EnsureContactBelongsToCompanyAsync(companyId, contactId, cancellationToken);
+
+        entry.ContactId = request.ContactId;
         entry.ContactName = request.ContactName;
         entry.Subject = request.Subject;
         entry.Outcome = request.Outcome;
@@ -326,12 +340,127 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             .ToListAsync(cancellationToken);
     }
 
-    private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount) =>
-        new(company.Id, company.Name, company.Description, callLogCount, practiceCallCount, company.CreatedAt, company.UpdatedAt);
+    public async Task<IReadOnlyList<CompanyContactDto>?> ListContactsAsync(
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        return await databaseContext.CompanyContacts
+            .Where(contact => contact.CompanyId == companyId)
+            .OrderByDescending(contact => contact.CreatedAt)
+            .Select(contact => MapToContactDto(contact))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<CompanyContactDto?> CreateContactAsync(
+        Guid userId,
+        Guid companyId,
+        CreateCompanyContactRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        var now = DateTime.UtcNow;
+        var contact = new CompanyContact
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            UserId = userId,
+            Name = request.Name,
+            Position = request.Position ?? string.Empty,
+            Notes = request.Notes ?? string.Empty,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        databaseContext.CompanyContacts.Add(contact);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        return MapToContactDto(contact);
+    }
+
+    public async Task<CompanyContactDto?> UpdateContactAsync(
+        Guid userId,
+        Guid companyId,
+        Guid contactId,
+        UpdateCompanyContactRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        var contact = await databaseContext.CompanyContacts
+            .Where(c => c.Id == contactId && c.CompanyId == companyId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (contact is null)
+            return null;
+
+        contact.Name = request.Name;
+        contact.Position = request.Position;
+        contact.Notes = request.Notes;
+        contact.UpdatedAt = DateTime.UtcNow;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        return MapToContactDto(contact);
+    }
+
+    public async Task<bool> DeleteContactAsync(
+        Guid userId,
+        Guid companyId,
+        Guid contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return false;
+
+        var contact = await databaseContext.CompanyContacts
+            .Where(c => c.Id == contactId && c.CompanyId == companyId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (contact is null)
+            return false;
+
+        databaseContext.CompanyContacts.Remove(contact);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task EnsureContactBelongsToCompanyAsync(Guid companyId, Guid contactId, CancellationToken cancellationToken)
+    {
+        var contactBelongsToCompany = await databaseContext.CompanyContacts
+            .AnyAsync(contact => contact.Id == contactId && contact.CompanyId == companyId, cancellationToken);
+
+        if (!contactBelongsToCompany)
+            throw new InvalidOperationException("Указанный контакт не найден в этой компании.");
+    }
+
+    private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount, int contactCount) =>
+        new(company.Id, company.Name, company.Description, callLogCount, practiceCallCount, contactCount, company.CreatedAt, company.UpdatedAt);
 
     private static CallLogEntryDto MapToCallLogDto(CallLogEntry entry) =>
-        new(entry.Id, entry.CompanyId, entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt, entry.CreatedAt, entry.UpdatedAt);
+        new(entry.Id, entry.CompanyId, entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt, entry.CreatedAt, entry.UpdatedAt, entry.ContactId);
 
     private static PracticeCallDto MapToPracticeCallDto(PracticeCall practiceCall) =>
         new(practiceCall.Id, practiceCall.CompanyId, practiceCall.DialogSessionId, practiceCall.Goal, practiceCall.CreatedAt);
+
+    private static CompanyContactDto MapToContactDto(CompanyContact contact) =>
+        new(contact.Id, contact.CompanyId, contact.Name, contact.Position, contact.Notes, contact.CreatedAt, contact.UpdatedAt);
 }

@@ -16,9 +16,18 @@ import {
     type CallLogPayload,
 } from "@/features/companies/hooks/use-company-logs";
 import { useCompanyPracticeCalls, useRecentGoals } from "@/features/companies/hooks/use-practice-calls";
+import {
+    useCompanyContacts,
+    useAddCompanyContact,
+    useUpdateCompanyContact,
+    useDeleteCompanyContact,
+    type CompanyContact,
+    type CompanyContactPayload,
+} from "@/features/companies/hooks/use-company-contacts";
 import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
 import { PrecallPanel } from "@/features/companies/components/precall-panel";
+import { CompanyContactsCard } from "@/features/companies/components/company-contacts-card";
 import { CompanyTimeline } from "@/features/companies/components/company-timeline";
 import { CompanyModal } from "@/features/companies/components/company-modal";
 import { CallLogModal } from "@/features/companies/components/call-log-modal";
@@ -41,11 +50,19 @@ export default function CompanyPage() {
     const { data: practiceCalls } = useCompanyPracticeCalls(companyId);
     const { data: recentGoals } = useRecentGoals(companyId);
 
+    const { data: contacts } = useCompanyContacts(companyId);
+    const addContact = useAddCompanyContact(companyId);
+    const updateContact = useUpdateCompanyContact(companyId);
+    const deleteContact = useDeleteCompanyContact(companyId);
+
     const [isEditOpen, setEditOpen] = useState(false);
     const [isDeleteOpen, setDeleteOpen] = useState(false);
     const [isAddingLog, setAddingLog] = useState(false);
     const [editingLog, setEditingLog] = useState<CallLogEntry | null>(null);
     const [deletingLog, setDeletingLog] = useState<CallLogEntry | null>(null);
+    const [isAddingContact, setAddingContact] = useState(false);
+    const [editingContact, setEditingContact] = useState<CompanyContact | null>(null);
+    const [deletingContact, setDeletingContact] = useState<CompanyContact | null>(null);
 
     if (isLoading) {
         return (
@@ -151,6 +168,23 @@ export default function CompanyPage() {
         deleteCallLog.mutate(deletingLog.id, { onSuccess: () => setDeletingLog(null) });
     };
 
+    const handleAddContact = (payload: CompanyContactPayload) => {
+        addContact.mutate(payload, { onSuccess: () => setAddingContact(false) });
+    };
+
+    const handleUpdateContact = (payload: CompanyContactPayload) => {
+        if (!editingContact) return;
+        updateContact.mutate(
+            { contactId: editingContact.id, ...payload },
+            { onSuccess: () => setEditingContact(null) }
+        );
+    };
+
+    const handleConfirmDeleteContact = () => {
+        if (!deletingContact) return;
+        deleteContact.mutate(deletingContact.id, { onSuccess: () => setDeletingContact(null) });
+    };
+
     return (
         <div className="co-page">
             <Link href="/companies" className="back-link plain">
@@ -172,9 +206,25 @@ export default function CompanyPage() {
                 onSave={handleSaveDescription}
             />
 
+            <CompanyContactsCard
+                contacts={contacts ?? []}
+                addingContact={isAddingContact}
+                addContactSubmitting={addContact.isPending}
+                editingContact={editingContact}
+                updateContactSubmitting={updateContact.isPending}
+                onStartAddContact={() => setAddingContact(true)}
+                onCancelAddContact={() => setAddingContact(false)}
+                onAddContact={handleAddContact}
+                onStartEditContact={setEditingContact}
+                onCancelEditContact={() => setEditingContact(null)}
+                onUpdateContact={handleUpdateContact}
+                onDeleteContact={setDeletingContact}
+            />
+
             <CompanyTimeline
                 practiceCalls={practiceCalls ?? []}
                 logs={logs ?? []}
+                contacts={contacts ?? []}
                 addingLog={isAddingLog}
                 addLogSubmitting={addCallLog.isPending}
                 onStartAddLog={() => setAddingLog(true)}
@@ -206,6 +256,7 @@ export default function CompanyPage() {
             {editingLog && (
                 <CallLogModal
                     initial={editingLog}
+                    contacts={contacts ?? []}
                     submitting={updateCallLog.isPending}
                     onSubmit={handleUpdateLog}
                     onClose={() => setEditingLog(null)}
@@ -219,6 +270,16 @@ export default function CompanyPage() {
                     submitting={deleteCallLog.isPending}
                     onConfirm={handleConfirmDeleteLog}
                     onClose={() => setDeletingLog(null)}
+                />
+            )}
+
+            {deletingContact && (
+                <ConfirmDeleteModal
+                    title="Удалить контакт?"
+                    body={`Контакт «${deletingContact.name}» будет удалён. Записи о звонках с этим контактом сохранятся без привязки.`}
+                    submitting={deleteContact.isPending}
+                    onConfirm={handleConfirmDeleteContact}
+                    onClose={() => setDeletingContact(null)}
                 />
             )}
         </div>

@@ -8,6 +8,7 @@ export interface CompanySummary {
     descriptionExcerpt: string;
     callLogCount: number;
     practiceCallCount: number;
+    contactCount: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -18,6 +19,7 @@ export interface CompanyDetail {
     description: string;
     callLogCount: number;
     practiceCallCount: number;
+    contactCount: number;
     createdAt: string;
     updatedAt: string;
 }

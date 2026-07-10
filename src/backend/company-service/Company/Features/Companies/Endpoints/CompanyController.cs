@@ -104,11 +104,18 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
 
-        var entry = await companyService.CreateCallLogEntryAsync(userId, companyId, request, cancellationToken);
-        if (entry is null)
-            return NotFound();
+        try
+        {
+            var entry = await companyService.CreateCallLogEntryAsync(userId, companyId, request, cancellationToken);
+            if (entry is null)
+                return NotFound();
 
-        return Created($"/companies/{companyId}/logs/{entry.Id}", entry);
+            return Created($"/companies/{companyId}/logs/{entry.Id}", entry);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return BadRequest(new { message = invalidOperationException.Message });
+        }
     }
 
     [HttpPut("companies/{companyId:guid}/logs/{logId:guid}")]
@@ -121,11 +128,18 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
 
-        var entry = await companyService.UpdateCallLogEntryAsync(userId, companyId, logId, request, cancellationToken);
-        if (entry is null)
-            return NotFound();
+        try
+        {
+            var entry = await companyService.UpdateCallLogEntryAsync(userId, companyId, logId, request, cancellationToken);
+            if (entry is null)
+                return NotFound();
 
-        return Ok(entry);
+            return Ok(entry);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return BadRequest(new { message = invalidOperationException.Message });
+        }
     }
 
     [HttpDelete("companies/{companyId:guid}/logs/{logId:guid}")]
@@ -188,6 +202,70 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
             return NotFound();
 
         return Ok(goals);
+    }
+
+    [HttpGet("companies/{companyId:guid}/contacts")]
+    public async Task<ActionResult<IReadOnlyList<CompanyContactDto>>> ListContacts(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var contacts = await companyService.ListContactsAsync(userId, companyId, cancellationToken);
+        if (contacts is null)
+            return NotFound();
+
+        return Ok(contacts);
+    }
+
+    [HttpPost("companies/{companyId:guid}/contacts")]
+    public async Task<ActionResult<CompanyContactDto>> CreateContact(
+        Guid companyId,
+        [FromBody] CreateCompanyContactRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var contact = await companyService.CreateContactAsync(userId, companyId, request, cancellationToken);
+        if (contact is null)
+            return NotFound();
+
+        return Created($"/companies/{companyId}/contacts/{contact.Id}", contact);
+    }
+
+    [HttpPut("companies/{companyId:guid}/contacts/{contactId:guid}")]
+    public async Task<ActionResult<CompanyContactDto>> UpdateContact(
+        Guid companyId,
+        Guid contactId,
+        [FromBody] UpdateCompanyContactRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var contact = await companyService.UpdateContactAsync(userId, companyId, contactId, request, cancellationToken);
+        if (contact is null)
+            return NotFound();
+
+        return Ok(contact);
+    }
+
+    [HttpDelete("companies/{companyId:guid}/contacts/{contactId:guid}")]
+    public async Task<IActionResult> DeleteContact(
+        Guid companyId,
+        Guid contactId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        var deleted = await companyService.DeleteContactAsync(userId, companyId, contactId, cancellationToken);
+        if (!deleted)
+            return NotFound();
+
+        return NoContent();
     }
 
     private bool TryGetCurrentUserId(out Guid userId)
