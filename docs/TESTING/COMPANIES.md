@@ -47,6 +47,15 @@ with NSubstitute): `ParseCallLogAsync` returns `null` for wrong owner/nonexisten
 call made — doesn't persist anything either way), returns the AI client's parsed fields as-is,
 passes `rawText` through unchanged, and propagates an `InvalidOperationException` thrown by the AI
 client (mapped to `503` by `CompanyController.ParseCallLog`).
+
+`CompanyServiceTests.cs` also covers personas (Phase 39.14, `IPersonaAiClient` mocked with
+NSubstitute): `CreatePersonaAsync`/`ListPersonasAsync`/`DeletePersonaAsync` ownership-scoped
+(`404`/`null`/`false` for wrong owner or nonexistent company), a persona from another company is
+not deletable via a different company id, `ListPersonasAsync` returns newest-first,
+`GeneratePersonaAsync` returns `null` for wrong owner/nonexistent company (no AI call made, no
+persist either way), passes the company's `description` plus the seed contact name/position and
+difficulty through to the AI client unchanged, and propagates an `InvalidOperationException`
+thrown by the AI client (mapped to `503` by `CompanyController.GeneratePersona`).
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -83,7 +92,12 @@ dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~Com
 Coverage: prompt composition appends the company block to both chat and feedback system prompts
 when `companyContext` is present, prompt is unchanged when it's absent, `companyContext` combined
 with a non-`company-call` mode is rejected, and the context is persisted on the Mongo
-`DialogSession` document.
+`DialogSession` document. Also covers persona injection (Phase 39.14): when a persona is present,
+the chat prompt contains the "ВОЙДИ В РОЛЬ" role-play instruction plus all persona fields and a
+difficulty description, the feedback prompt contains the persona-awareness block (distinct wording
+from chat) plus the same fields, and — critically — the no-persona chat prompt is asserted
+**byte-for-byte equal** to the exact pre-39.14 output string, proving the persona addition cannot
+silently change behavior when no persona is selected.
 
 ### Backend — ai-service briefing (NUnit)
 `src/backend/ai-service/Ai.Tests/Unit/BriefingServiceTests.cs`,
@@ -117,6 +131,23 @@ when OpenAI isn't configured. `ParseLogController` (`IParseLogService` mocked): 
 parsed DTO on success, `400` when `rawText` exceeds the 16000-char guard (service not called),
 `503` on `InvalidOperationException` or `HttpRequestException` — same pattern as
 `BriefingController`.
+
+### Backend — ai-service persona generation (NUnit)
+`src/backend/ai-service/Ai.Tests/Unit/PersonaServiceTests.cs`,
+`src/backend/ai-service/Ai.Tests/Unit/PersonaControllerTests.cs`
+```
+cd src/backend
+dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~Persona"
+```
+Coverage: `PersonaService` returns the parsed `{name, position, personality}` from well-formed AI
+JSON (including when fenced in a ```` ```json ```` code block), throws
+`InvalidOperationException` when the AI response is non-JSON/non-object, when any of
+`name`/`position`/`personality` is missing or blank (personas have no meaningful partial result,
+unlike parse-log's optional fields), and when OpenAI isn't configured; the composed system prompt
+varies by requested difficulty (asserted via a difficulty-parameterized test). `PersonaController`
+(`IPersonaService` mocked): `200` with the persona DTO on success, `400` when `companyDescription`
+exceeds the 16000-char guard (service not called), `503` on `InvalidOperationException` or
+`HttpRequestException` — same pattern as `ParseLogController`.
 
 ### Backend — gateway route flip (NUnit)
 `src/backend/gateway/Gateway.Tests/CompanyRouteFlipTests.cs`
@@ -164,7 +195,18 @@ npx vitest run __tests__/Compan
 - `CompanyPage.test.tsx` — detail page: description edit, pre-call panel, timeline, delete flow
 - `CompanyVoiceCallPage.test.tsx` — goal handoff (sessionStorage/query fallback), call states,
   practice-call creation on session start, quota/mode-unavailable error states
-- `CompanyChatCallPage.test.tsx` — chat variant equivalent of the above
+- `CompanyChatCallPage.test.tsx` — chat variant equivalent of the above, plus (Phase 39.14): a
+  persona stored in `sessionStorage` under `company-call-persona:{companyId}` is spread into the
+  `companyContext` sent to `POST /dialog/sessions` as `personaName`/`personaPosition`/
+  `personaPersonality`/`personaDifficulty`
+- `useCompanyPersonas.test.tsx` — persona CRUD hooks (`useCompanyPersonas` GET,
+  `useAddCompanyPersona`/`useDeleteCompanyPersona` POST/DELETE with query invalidation and error
+  toasts) and `useGenerateCompanyPersona` (POST to `/companies/{id}/personas/generate`, returns the
+  draft, error toast on AI failure)
+- `PrecallPanel.test.tsx` — persona chips (default «Без персоны» selection, selecting/deselecting
+  a saved persona feeds the right `SelectedPersona` object into `onCall`/`onChat`), generate flow
+  (opens the generate form, calls `onGeneratePersona` with the seed/difficulty, renders the draft,
+  "Сохранить собеседника" calls `onSavePersona`), and the inline error shown when generation fails
 
 ## Manual checklist
 
@@ -306,6 +348,37 @@ npx vitest run __tests__/Compan
     usable empty manual form (confirms the AI outage never blocks manual log entry).
 53. While editing an existing log entry (not creating a new one), confirm «Вставить заметки» is
     not offered — paste-notes mode is create-only.
+
+### AI persona generation for practice calls
+54. On the company page's pre-call panel, the persona row defaults to «Без персоны» selected (no
+    saved personas yet) — starting a call behaves exactly as before 39.14 (no persona in the
+    prompt).
+55. Click «Сгенерировать собеседника» → a small form opens (optional contact name/position +
+    Easy/Medium/Hard difficulty chips, defaulting to Средний) → click «Сгенерировать» → button
+    shows a generating state, then a draft persona (name, position, personality) renders inline
+    with a «Сохранить собеседника» button.
+56. Generate at each difficulty (Лёгкий / Средний / Сложный) → the generated personality text
+    plausibly reflects the requested toughness (friendlier/more agreeable for Easy, more
+    skeptical/objection-heavy for Hard) — spot-check, not exact wording.
+57. Click «Сохранить собеседника» on a generated draft → it appears as a new chip in the persona
+    row (persisted — reload the page and confirm the chip is still there via
+    `GET /companies/{id}/personas`).
+58. Select a saved persona chip, then «Позвонить» → start a voice call and confirm the AI answers
+    **in character** as that persona (uses the generated name/position implicitly in tone,
+    reflects the personality/toughness) rather than a generic company employee — the key
+    regression check for persona prompt injection.
+59. Repeat 58 via «Чат» instead of «Позвонить» — same in-character behavior over text.
+60. Select «Без персоны» after having a persona selected, then start a call → AI plays a generic
+    company employee as before (no persona leaks into the prompt from a stale selection).
+61. Prefill the seed contact name/position from an existing saved contact before generating → the
+    generated persona's position is plausibly related to the seed (not required to match exactly
+    — the AI takes it only as inspiration).
+62. Simulate ai-service unavailable during generation → «Сгенерировать» shows an inline error
+    (toast + message), the generate form stays open for retry, and the rest of the pre-call panel
+    (goal input, «Без персоны», existing saved persona chips, «Позвонить»/«Чат») remains fully
+    usable.
+63. Delete a saved persona (via its chip or a management surface, if present) → it disappears from
+    the chip row; a call started right after with «Без персоны» selected is unaffected.
 
 ### Mobile nav
 28. On a narrow viewport, the bottom nav shows «Компании» in the 5-slot bar and does **not** show

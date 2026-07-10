@@ -651,6 +651,7 @@ Skills
 | `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
 | `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
 | `AddCompanyBriefing` (company-service)   | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
+| `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
 
 ---
 
@@ -738,3 +739,24 @@ the first generation; overwritten (not versioned/appended) on every regeneration
 | `UpdatedAt`  | timestamptz   | NOT NULL                                        |
 
 **Indexes:** `IX_CompanyContacts_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+### Table: `CompanyPersonas` (Phase 39.14 — AI persona generation for practice calls)
+
+| Column        | Type          | Constraints                                    |
+|---------------|---------------|-------------------------------------------------|
+| `Id`          | uuid          | PK                                              |
+| `CompanyId`   | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE  |
+| `UserId`      | uuid          | NOT NULL                                        |
+| `Name`        | varchar(200)  | NOT NULL                                        |
+| `Position`    | varchar(200)  | NOT NULL                                        |
+| `Personality` | varchar(4000) | NOT NULL                                        |
+| `Difficulty`  | varchar(16)   | NOT NULL, DEFAULT 'Medium'                      |
+| `CreatedAt`   | timestamptz   | NOT NULL                                        |
+
+**Indexes:** `IX_CompanyPersonas_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+`Difficulty` is one of `Easy | Medium | Hard`, stored as its string name (`HasConversion<string>()`,
+same pattern as `Companies.Status`) so the column stays human-readable. A `CompanyPersona` is
+either hand-written or the result of a `POST /companies/{id}/personas/generate` draft the user
+chose to save (see `docs/API_CONTRACTS.md`); it is not itself an AI call — generation is stateless
+and proxies to ai-service, only the save step touches this table.

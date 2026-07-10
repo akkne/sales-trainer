@@ -1354,7 +1354,7 @@
       the 3 fields → user reviews/edits → save; graceful fallback to manual on AI error
 - [ ] Unit tests (mocked HTTP, malformed AI output); docs
 
-### [ ] 39.14 AI persona generation for practice calls
+### [>] 39.14 AI persona generation for practice calls
 - [ ] company-service: `CompanyPersona` entity (Id, CompanyId, UserId, Name, Position, Personality,
       Difficulty enum Easy/Medium/Hard, CreatedAt); CRUD-lite: `GET/POST /companies/{id}/personas`,
       `DELETE /companies/{id}/personas/{personaId}`
@@ -1401,6 +1401,16 @@
 > options instead of reusing the feedback/open-question OpenAI config names.
 > (The MEDIUM finding — missing input-size guard on `POST /ai/companies/briefing`
 > — was fixed in-PR.)
+> Carry-over from PR #24 review (non-blocking fast-follows): persona `personality`
+> text is injected unfenced into the dialog role-play prompt (consistent with the
+> pre-existing company name/description/goal injection, self-injection only) —
+> consider fencing all dialog company-context fields as data for defense-in-depth;
+> `use-company-personas` exposes a `useDeleteCompanyPersona` mutation with no UI
+> consumer yet (wire a manage-personas UI or trim); rename the overloaded
+> ai-service `AddBriefingFeatureServices()` (now also wires ParseLog + Persona) to
+> `AddCompanyAiFeatureServices()` on next touch. (The LOW transport-failure finding
+> — `HttpRequestException` from the AI proxies surfaced as 500 — was fixed in-PR
+> for all three proxies, briefing/parse-log/persona.)
 > Carry-over from PR #21 review (non-blocking fast-follows): follow-up badge
 > due/overdue tone uses the client clock (document caveat or resync against server
 > time); consider a short in-process retry (2–3 attempts) around the Kafka publish

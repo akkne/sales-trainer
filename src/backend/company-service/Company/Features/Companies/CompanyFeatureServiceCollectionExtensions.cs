@@ -13,6 +13,7 @@ public static class CompanyFeatureServiceCollectionExtensions
         services.AddScoped<ICompanyService, CompanyService>();
         services.AddBriefingAiClient(configuration);
         services.AddParseLogAiClient(configuration);
+        services.AddPersonaAiClient(configuration);
         return services;
     }
 

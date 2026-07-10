@@ -92,6 +92,27 @@ describe("CompanyChatCallPage", () => {
         });
     });
 
+    it("includes persona fields in companyContext when a persona is stored in sessionStorage", async () => {
+        window.sessionStorage.setItem("company-call-goal:c1", "Договориться о встрече");
+        window.sessionStorage.setItem(
+            "company-call-persona:c1",
+            JSON.stringify({ name: "Мария Соколова", position: "Закупщик", personality: "Прагматична.", difficulty: "Hard" })
+        );
+
+        renderPage();
+
+        await waitFor(() => expect(startDialogSession).toHaveBeenCalledOnce());
+        expect(startDialogSession).toHaveBeenCalledWith("b1", "m1", {
+            companyName: "Ромашка",
+            companyDescription: "Продаёт цветы оптом",
+            callGoal: "Договориться о встрече",
+            personaName: "Мария Соколова",
+            personaPosition: "Закупщик",
+            personaPersonality: "Прагматична.",
+            personaDifficulty: "Hard",
+        });
+    });
+
     it("falls back to the query param when sessionStorage has no stored goal", async () => {
         mockSearchParamsGoal = "Fallback goal from URL";
 

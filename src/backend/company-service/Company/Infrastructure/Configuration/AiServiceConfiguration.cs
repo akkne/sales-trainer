@@ -9,4 +9,6 @@ public sealed class AiServiceConfiguration
     public string BriefingPath { get; init; } = "/ai/companies/briefing";
 
     public string ParseLogPath { get; init; } = "/ai/companies/parse-log";
+
+    public string PersonaPath { get; init; } = "/ai/companies/persona";
 }

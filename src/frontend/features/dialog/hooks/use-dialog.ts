@@ -97,6 +97,10 @@ export interface DialogSessionCompanyContext {
     companyName: string;
     companyDescription: string;
     callGoal?: string;
+    personaName?: string;
+    personaPosition?: string;
+    personaPersonality?: string;
+    personaDifficulty?: string;
 }
 
 export async function startDialogSession(

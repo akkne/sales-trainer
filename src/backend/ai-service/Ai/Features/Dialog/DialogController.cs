@@ -130,7 +130,11 @@ public sealed class DialogController : ControllerBase
                 {
                     CompanyName = request.CompanyContext.CompanyName,
                     CompanyDescription = request.CompanyContext.CompanyDescription,
-                    CallGoal = request.CompanyContext.CallGoal
+                    CallGoal = request.CompanyContext.CallGoal,
+                    PersonaName = request.CompanyContext.PersonaName,
+                    PersonaPosition = request.CompanyContext.PersonaPosition,
+                    PersonaPersonality = request.CompanyContext.PersonaPersonality,
+                    PersonaDifficulty = request.CompanyContext.PersonaDifficulty
                 };
             }
 

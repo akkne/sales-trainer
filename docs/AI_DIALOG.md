@@ -301,12 +301,18 @@ The fixed `{bundleId, modeId}` for this mode is available via
   "companyContext": {
     "companyName": "ООО Рога и Копыта",
     "companyDescription": "Поставщик офисных принадлежностей для малого бизнеса",
-    "callGoal": "Записать встречу с директором"
+    "callGoal": "Записать встречу с директором",
+    "personaName": "Мария Соколова",
+    "personaPosition": "Руководитель закупок",
+    "personaPersonality": "Прагматична и скептична, требует цифр и конкретики.",
+    "personaDifficulty": "Hard"
   }
 }
 ```
 
-`callGoal` is optional. When omitted, the goal line is not appended to the prompt.
+`callGoal` is optional. When omitted, the goal line is not appended to the prompt. The four
+`persona*` fields (Phase 39.14) are also optional as a group — either all meaningful or all
+omitted/blank; see "Persona role-play" below.
 
 ### Prompt composition
 
@@ -324,14 +330,49 @@ The base prompts are stored in PostgreSQL and remain unchanged. The appended blo
 is built in `DialogService.BuildChatSystemPrompt` / `BuildFeedbackSystemPrompt`
 (and equivalently in `VoiceDialogService.BuildChatSystemPrompt` for voice streaming).
 
+### Persona role-play (Phase 39.14)
+
+Extends the block above — a company-call session may optionally carry a **persona** (a saved or
+freshly generated `CompanyPersona` the user picked before starting the call; see
+`docs/COMPANIES/COMPANIES.md`). Persona presence is decided by `personaName` being non-blank; when
+absent, prompt output is **byte-for-byte identical** to the pre-39.14 shape above — this is
+covered by a dedicated `CompanyContextPromptBuilder` unit test.
+
+When a persona is present, `CompanyContextPromptBuilder` appends a *second* block, distinct for
+chat vs. feedback:
+
+Chat system prompt (instructs the model to **become** the persona for the rest of the call):
+```
+---
+ВОЙДИ В РОЛЬ следующего персонажа и общайся с пользователем от его лица на протяжении всего разговора:
+Имя: <personaName>
+Должность: <personaPosition>
+Характер: <personaPersonality>
+Уровень сложности собеседника: <difficulty description>   ← omitted if personaDifficulty is blank
+```
+
+Feedback system prompt (asks the grader to account for the persona instead of role-playing it):
+```
+---
+В этом звонке ИИ играл роль персонажа со следующими характеристиками — учти это при оценке звонка:
+Имя: <personaName>
+Должность: <personaPosition>
+Характер: <personaPersonality>
+Уровень сложности собеседника: <difficulty description>   ← omitted if personaDifficulty is blank
+```
+
+`<difficulty description>` is a short Russian phrase derived from `personaDifficulty`
+(`Easy` → "лёгкий — дружелюбен и легко идёт на контакт", `Hard` → "сложный — скептичен, придирчив
+и активно возражает", anything else/`Medium` → "средний — вежлив, но осторожен").
+
 ### Persistence
 
 `companyContext` is stored in the MongoDB `DialogSession` document as
-`companyCallContext: {companyName, companyDescription, callGoal?}`. All subsequent
-turns (`SendMessageAsync`, `CompleteSessionAsync`) and the voice path
-(`VoiceDialogService.StreamVoiceMessageAsync`) read it from the session, so the
-context is consistent across the entire conversation without re-sending it on every
-request.
+`companyCallContext: {companyName, companyDescription, callGoal?, personaName?, personaPosition?,
+personaPersonality?, personaDifficulty?}`. All subsequent turns (`SendMessageAsync`,
+`CompleteSessionAsync`) and the voice path (`VoiceDialogService.StreamVoiceMessageAsync`) read it
+from the session, so the context — persona included — is consistent across the entire
+conversation without re-sending it on every request.
 
 ### Hidden bundle invariant
 

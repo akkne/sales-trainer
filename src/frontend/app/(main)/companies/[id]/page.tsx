@@ -32,11 +32,16 @@ import {
     type CompanyContact,
     type CompanyContactPayload,
 } from "@/features/companies/hooks/use-company-contacts";
+import {
+    useCompanyPersonas,
+    useAddCompanyPersona,
+    useGenerateCompanyPersona,
+} from "@/features/companies/hooks/use-company-personas";
 import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
 import { CompanyFollowUpCard } from "@/features/companies/components/company-followup-card";
 import { CompanyBriefingCard } from "@/features/companies/components/company-briefing-card";
-import { PrecallPanel } from "@/features/companies/components/precall-panel";
+import { PrecallPanel, type SelectedPersona } from "@/features/companies/components/precall-panel";
 import { CompanyContactsCard } from "@/features/companies/components/company-contacts-card";
 import { CompanyTimeline } from "@/features/companies/components/company-timeline";
 import { CompanyModal } from "@/features/companies/components/company-modal";
@@ -69,6 +74,10 @@ export default function CompanyPage() {
     const addContact = useAddCompanyContact(companyId);
     const updateContact = useUpdateCompanyContact(companyId);
     const deleteContact = useDeleteCompanyContact(companyId);
+
+    const { data: personas } = useCompanyPersonas(companyId);
+    const addPersona = useAddCompanyPersona(companyId);
+    const generatePersona = useGenerateCompanyPersona(companyId);
 
     const [isEditOpen, setEditOpen] = useState(false);
     const [isDeleteOpen, setDeleteOpen] = useState(false);
@@ -160,17 +169,29 @@ export default function CompanyPage() {
         updateCompanyFollowUp.mutate({ id: companyId, nextActionAt, nextActionNote });
     };
 
-    const handleCall = (goal: string) => {
+    const storeSelectedPersona = (persona: SelectedPersona | null) => {
+        if (typeof window === "undefined") return;
+        const key = `company-call-persona:${companyId}`;
+        if (persona) {
+            sessionStorage.setItem(key, JSON.stringify(persona));
+        } else {
+            sessionStorage.removeItem(key);
+        }
+    };
+
+    const handleCall = (goal: string, persona: SelectedPersona | null) => {
         if (typeof window !== "undefined") {
             sessionStorage.setItem(`company-call-goal:${companyId}`, goal);
         }
+        storeSelectedPersona(persona);
         router.push(`/companies/${companyId}/call/voice?goal=${encodeURIComponent(goal)}`);
     };
 
-    const handleChat = (goal: string) => {
+    const handleChat = (goal: string, persona: SelectedPersona | null) => {
         if (typeof window !== "undefined") {
             sessionStorage.setItem(`company-call-goal:${companyId}`, goal);
         }
+        storeSelectedPersona(persona);
         router.push(`/companies/${companyId}/call/chat?goal=${encodeURIComponent(goal)}`);
     };
 
@@ -227,6 +248,11 @@ export default function CompanyPage() {
                 recentGoals={recentGoals ?? []}
                 onCall={handleCall}
                 onChat={handleChat}
+                personas={personas ?? []}
+                onGeneratePersona={(payload) => generatePersona.mutateAsync(payload)}
+                isGeneratingPersona={generatePersona.isPending}
+                onSavePersona={(payload) => addPersona.mutate(payload)}
+                isSavingPersona={addPersona.isPending}
             />
 
             <CompanyDescriptionCard

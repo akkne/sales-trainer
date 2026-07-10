@@ -243,6 +243,71 @@ public class CompanyContextDialogTests
     }
 
     [Test]
+    public void ChatSystemPrompt_WithPersona_AppendsRolePlayInstructionAndPersonaFields()
+    {
+        var basePrompt = "Ты — менеджер по продажам.";
+        var companyCallContext = new CompanyCallContext
+        {
+            CompanyName = "ООО Рога и Копыта",
+            CompanyDescription = "Поставщик офисных принадлежностей",
+            CallGoal = "Записать встречу",
+            PersonaName = "Мария Соколова",
+            PersonaPosition = "Руководитель закупок",
+            PersonaPersonality = "Прагматична и скептична, требует цифр.",
+            PersonaDifficulty = "Hard"
+        };
+
+        var composedPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(basePrompt, companyCallContext);
+
+        composedPrompt.Should().Contain("ВОЙДИ В РОЛЬ");
+        composedPrompt.Should().Contain("Мария Соколова");
+        composedPrompt.Should().Contain("Руководитель закупок");
+        composedPrompt.Should().Contain("Прагматична и скептична, требует цифр.");
+        composedPrompt.Should().Contain("сложный");
+    }
+
+    [Test]
+    public void FeedbackSystemPrompt_WithPersona_AppendsPersonaAwarenessBlock()
+    {
+        var basePrompt = "Оцени разговор пользователя.";
+        var companyCallContext = new CompanyCallContext
+        {
+            CompanyName = "Технопром",
+            CompanyDescription = "ИТ-интегратор",
+            PersonaName = "Алексей Орлов",
+            PersonaPosition = "ИТ-директор",
+            PersonaPersonality = "Дружелюбен, но занят.",
+            PersonaDifficulty = "Easy"
+        };
+
+        var composedPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(basePrompt, companyCallContext);
+
+        composedPrompt.Should().Contain("Алексей Орлов");
+        composedPrompt.Should().Contain("ИТ-директор");
+        composedPrompt.Should().Contain("Дружелюбен, но занят.");
+        composedPrompt.Should().Contain("лёгкий");
+    }
+
+    [Test]
+    public void ChatSystemPrompt_WithoutPersona_MatchesPreviousNoPersonaOutput_ByteForByte()
+    {
+        var basePrompt = "Ты — менеджер по продажам.";
+        var companyCallContext = new CompanyCallContext
+        {
+            CompanyName = "ООО Рога и Копыта",
+            CompanyDescription = "Поставщик офисных принадлежностей",
+            CallGoal = "Записать встречу"
+        };
+
+        var withNullPersonaFields = CompanyContextPromptBuilder.BuildChatSystemPrompt(basePrompt, companyCallContext);
+
+        var expected = basePrompt + "\n\n---\nКомпания: ООО Рога и Копыта\nОписание: Поставщик офисных принадлежностей\nЦель звонка пользователя: Записать встречу\n";
+
+        withNullPersonaFields.Should().Be(expected);
+        withNullPersonaFields.Should().NotContain("ВОЙДИ В РОЛЬ");
+    }
+
+    [Test]
     public async Task StartSession_WithCompanyContext_OnNonCompanyCallMode_Throws()
     {
         await using var databaseContext = BuildInMemoryContext();

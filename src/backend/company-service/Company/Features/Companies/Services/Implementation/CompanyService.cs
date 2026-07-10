@@ -10,7 +10,8 @@ namespace Sellevate.Company.Features.Companies.Services.Implementation;
 internal sealed class CompanyService(
     CompanyDbContext databaseContext,
     IBriefingAiClient briefingAiClient,
-    IParseLogAiClient parseLogAiClient) : ICompanyService
+    IParseLogAiClient parseLogAiClient,
+    IPersonaAiClient personaAiClient) : ICompanyService
 {
     private const int DescriptionExcerptLength = 160;
     private const int RecentGoalCount = 5;
@@ -621,6 +622,99 @@ internal sealed class CompanyService(
         return new ParsedCallLogDto(aiResult.ContactName, aiResult.Subject, aiResult.Outcome, aiResult.OccurredAt);
     }
 
+    public async Task<IReadOnlyList<CompanyPersonaDto>?> ListPersonasAsync(
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        return await databaseContext.CompanyPersonas
+            .Where(persona => persona.CompanyId == companyId)
+            .OrderByDescending(persona => persona.CreatedAt)
+            .Select(persona => MapToPersonaDto(persona))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<CompanyPersonaDto?> CreatePersonaAsync(
+        Guid userId,
+        Guid companyId,
+        CreateCompanyPersonaRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return null;
+
+        var persona = new CompanyPersona
+        {
+            Id = Guid.NewGuid(),
+            CompanyId = companyId,
+            UserId = userId,
+            Name = request.Name,
+            Position = request.Position,
+            Personality = request.Personality,
+            Difficulty = request.Difficulty,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        databaseContext.CompanyPersonas.Add(persona);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        return MapToPersonaDto(persona);
+    }
+
+    public async Task<bool> DeletePersonaAsync(
+        Guid userId,
+        Guid companyId,
+        Guid personaId,
+        CancellationToken cancellationToken = default)
+    {
+        var companyExists = await databaseContext.Companies
+            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+
+        if (!companyExists)
+            return false;
+
+        var persona = await databaseContext.CompanyPersonas
+            .Where(p => p.Id == personaId && p.CompanyId == companyId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (persona is null)
+            return false;
+
+        databaseContext.CompanyPersonas.Remove(persona);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<GeneratedCompanyPersonaDto?> GeneratePersonaAsync(
+        Guid userId,
+        Guid companyId,
+        GenerateCompanyPersonaRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await databaseContext.Companies
+            .Where(c => c.Id == companyId && c.UserId == userId)
+            .Select(c => new { c.Description })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (company is null)
+            return null;
+
+        var aiResult = await personaAiClient.GeneratePersonaAsync(
+            new PersonaAiRequest(company.Description, request.ContactName, request.ContactPosition, request.Difficulty.ToString()),
+            cancellationToken);
+
+        return new GeneratedCompanyPersonaDto(aiResult.Name, aiResult.Position, aiResult.Personality);
+    }
+
     private async Task EnsureContactBelongsToCompanyAsync(Guid companyId, Guid contactId, CancellationToken cancellationToken)
     {
         var contactBelongsToCompany = await databaseContext.CompanyContacts
@@ -653,4 +747,7 @@ internal sealed class CompanyService(
 
     private static CompanyContactDto MapToContactDto(CompanyContact contact) =>
         new(contact.Id, contact.CompanyId, contact.Name, contact.Position, contact.Notes, contact.CreatedAt, contact.UpdatedAt);
+
+    private static CompanyPersonaDto MapToPersonaDto(CompanyPersona persona) =>
+        new(persona.Id, persona.CompanyId, persona.Name, persona.Position, persona.Personality, persona.Difficulty, persona.CreatedAt);
 }

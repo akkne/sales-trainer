@@ -38,4 +38,16 @@ public interface ICompanyService
     Task<CompanyContactDto?> CreateContactAsync(Guid userId, Guid companyId, CreateCompanyContactRequestDto request, CancellationToken cancellationToken = default);
     Task<CompanyContactDto?> UpdateContactAsync(Guid userId, Guid companyId, Guid contactId, UpdateCompanyContactRequestDto request, CancellationToken cancellationToken = default);
     Task<bool> DeleteContactAsync(Guid userId, Guid companyId, Guid contactId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CompanyPersonaDto>?> ListPersonasAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
+    Task<CompanyPersonaDto?> CreatePersonaAsync(Guid userId, Guid companyId, CreateCompanyPersonaRequestDto request, CancellationToken cancellationToken = default);
+    Task<bool> DeletePersonaAsync(Guid userId, Guid companyId, Guid personaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Proxies to ai-service to generate a draft buyer persona (name, position, personality) for
+    /// a practice call against this company, optionally seeded from a contact's name/position.
+    /// Does not persist anything — the caller reviews the result and, if desired, saves it via
+    /// <see cref="CreatePersonaAsync"/>. Null if the company doesn't exist/belong to the user.
+    /// </summary>
+    Task<GeneratedCompanyPersonaDto?> GeneratePersonaAsync(Guid userId, Guid companyId, GenerateCompanyPersonaRequestDto request, CancellationToken cancellationToken = default);
 }

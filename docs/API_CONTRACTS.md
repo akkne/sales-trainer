@@ -517,6 +517,15 @@ Errors:
 > endpoints share `InternalServiceAuthFilter` (`X-Internal-Service-Secret` header, checked against
 > `InternalAuth:ServiceSecret`; left open when that config key is unset, i.e. dev/single-service
 > mode).
+> Internal-only (Phase 39.14): `POST /ai/companies/persona` `{companyDescription (max 16000 chars,
+> `400` if exceeded), contactName?, contactPosition?, difficulty: "Easy"|"Medium"|"Hard"}` →
+> `{name, position, personality}`, called by company-service to invent a buyer persona for a
+> practice call. Stateless — composes a Russian system prompt (difficulty tunes how
+> tough/skeptical the persona is; `contactName`/`contactPosition` are an optional seed, not copied
+> verbatim) instructing strict JSON output, then parses it. `503` if OpenAI isn't configured, the
+> provider call fails, or any of `name`/`position`/`personality` is missing/empty in the response
+> (unlike parse-log, personas have no valid "N/A" field — an incomplete persona is treated as a
+> parse failure). Shares `InternalServiceAuthFilter` with the other internal endpoints.
 
 ### Public endpoints
 
@@ -531,7 +540,9 @@ Errors:
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
 | POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
 
-**Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500)}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
+**Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500), personaName?: string (≤200), personaPosition?: string (≤200), personaPersonality?: string (≤4000), personaDifficulty?: string (≤16, "Easy"|"Medium"|"Hard")}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
+
+**Persona role-play (Phase 39.14):** the four `persona*` fields are all optional/nullable — a call may have no persona (e.g. `personaName` absent or blank), in which case the prompt output is byte-for-byte identical to pre-39.14 behavior. When `personaName` is non-blank, `CompanyContextPromptBuilder` appends a second block to the chat system prompt instructing the model to **role-play as** that persona (name, position, personality, and a difficulty-derived toughness description), and a related but distinctly-worded "grade with this persona in mind" block to the feedback system prompt. See [AI_DIALOG.md](AI_DIALOG.md) for the full prompt shapes.
 
 **DTOs:**
 - `DialogBundleDto`: `{id, skillId, skillSlug, skillTitle, title, description, iconEmoji, sortOrder, isActive}`
@@ -897,7 +908,7 @@ DTO additions on the Discuss user endpoints above:
 | PUT | /companies/{id}/follow-up | `{nextActionAt, nextActionNote?}` | `CompanyDetailDto` or `404` |
 | POST | /companies/{id}/briefing | — | `CompanyBriefingDto`, `404`, or `503` if ai-service is unavailable |
 | GET | /companies/{id}/briefing | — | `CompanyBriefingDto` or `204` if never generated, or `404` |
-| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts) |
+| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts + personas) |
 
 `CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, nextActionAt, createdAt, updatedAt}`
 `CompanyDetailDto`: `{id, name, description, status, callLogCount, practiceCallCount, contactCount, nextActionAt, nextActionNote, followUpNotifiedAt, createdAt, updatedAt}`
@@ -992,6 +1003,36 @@ Validation: `goal` max 1000; `dialogSessionId` required.
 `CompanyContactDto`: `{id, companyId, name, position, notes, createdAt, updatedAt}`
 
 Validation: `name` required, max 200; `position` optional (defaults to empty), max 200; `notes` optional (defaults to empty), max 2000.
+
+### Personas (Phase 39.14 — AI persona generation for practice calls)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/personas | — | `CompanyPersonaDto[]` sorted by `createdAt DESC` |
+| POST | /companies/{id}/personas | `{name, position, personality, difficulty}` | `201 CompanyPersonaDto` or `404` |
+| DELETE | /companies/{id}/personas/{personaId} | — | `204` or `404` |
+| POST | /companies/{id}/personas/generate | `{contactName?, contactPosition?, difficulty}` | `GeneratedCompanyPersonaDto`, `404`, or `503` if ai-service is unavailable |
+
+`CompanyPersonaDto`: `{id, companyId, name, position, personality, difficulty, createdAt}`
+`GeneratedCompanyPersonaDto`: `{name, position, personality}` — not persisted.
+
+Validation: `name` required, max 200; `position` required, max 200; `personality` required, max 4000; `difficulty` one of `Easy | Medium | Hard` (string enum, same conversion pattern as `Company.Status`).
+
+**Generate-then-save flow:** `POST /companies/{id}/personas/generate` gathers the company's
+`description` and forwards it — plus the optional `contactName`/`contactPosition` seed and the
+requested `difficulty` — to ai-service's internal `POST /ai/companies/persona` (see above), and
+returns the draft `{name, position, personality}` **without persisting anything**, so the caller
+can regenerate before committing. Saving is a separate `POST /companies/{id}/personas` call with
+the (possibly edited) draft plus the chosen `difficulty`. The roadmap's "seeded from an existing
+contact" note is purely a frontend UX affordance (prefilling `contactName`/`contactPosition` from
+a contact the user picks) — there is no backend coupling between `CompanyContact` and
+`CompanyPersona`. Same ownership/`404` pattern as every other company endpoint; `503` if
+ai-service is unreachable, misconfigured, or returns an unparseable/incomplete response.
+
+**Injection into practice calls:** the frontend's persona selector (chips + «Без персоны» +
+generate) lets the caller pick a saved `CompanyPersona` (or none) before starting a voice/chat
+practice call; the selected persona's `name`/`position`/`personality`/`difficulty` are sent as the
+`persona*` fields of `companyContext` on `POST /dialog/sessions` (see the Dialog section above).
 
 ---
 

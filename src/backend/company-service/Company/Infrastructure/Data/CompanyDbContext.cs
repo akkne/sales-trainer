@@ -15,6 +15,7 @@ public sealed class CompanyDbContext : DbContext
     public DbSet<CallLogEntry> CallLogEntries => Set<CallLogEntry>();
     public DbSet<PracticeCall> PracticeCalls => Set<PracticeCall>();
     public DbSet<CompanyContact> CompanyContacts => Set<CompanyContact>();
+    public DbSet<CompanyPersona> CompanyPersonas => Set<CompanyPersona>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,5 +23,6 @@ public sealed class CompanyDbContext : DbContext
         modelBuilder.ApplyConfiguration(new CallLogEntryEntityConfiguration());
         modelBuilder.ApplyConfiguration(new PracticeCallEntityConfiguration());
         modelBuilder.ApplyConfiguration(new CompanyContactEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new CompanyPersonaEntityConfiguration());
     }
 }

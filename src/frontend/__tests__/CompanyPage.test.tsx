@@ -43,6 +43,14 @@ vi.mock("@/features/companies/hooks/use-company-contacts", () => ({
     useDeleteCompanyContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+const useCompanyPersonas = vi.fn();
+vi.mock("@/features/companies/hooks/use-company-personas", () => ({
+    useCompanyPersonas: (...args: unknown[]) => useCompanyPersonas(...args),
+    useAddCompanyPersona: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteCompanyPersona: () => ({ mutate: vi.fn(), isPending: false }),
+    useGenerateCompanyPersona: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
 vi.mock("@/features/companies/hooks/use-company-briefing", () => ({
     useCompanyBriefing: () => ({ data: undefined, isLoading: false }),
     useGenerateCompanyBriefing: () => ({ mutate: vi.fn(), isPending: false, isError: false, error: null }),
@@ -78,6 +86,7 @@ describe("CompanyPage", () => {
         useCompanyPracticeCalls.mockReset();
         useRecentGoals.mockReset();
         useCompanyContacts.mockReset();
+        useCompanyPersonas.mockReset();
         useDialogSession.mockClear();
         mockPush.mockReset();
 
@@ -85,6 +94,7 @@ describe("CompanyPage", () => {
         useCompanyPracticeCalls.mockReturnValue({ data: [] });
         useRecentGoals.mockReturnValue({ data: [] });
         useCompanyContacts.mockReturnValue({ data: [] });
+        useCompanyPersonas.mockReturnValue({ data: [] });
     });
 
     it("shows loading skeletons while fetching the company", () => {
