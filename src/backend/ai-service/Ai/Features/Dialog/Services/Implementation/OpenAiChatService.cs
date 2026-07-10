@@ -294,6 +294,23 @@ endCall: true означает, что твой персонаж кладёт т
         };
     }
 
+    public async Task<string> GenerateTextAsync(
+        string systemPrompt,
+        string userPrompt,
+        CancellationToken cancellationToken = default)
+    {
+        var model = _openAiOptions.Value.OpenQuestionModel;
+        var maxTokens = _openAiOptions.Value.MaximumFeedbackTokenCount;
+
+        var userMessage = new List<DialogMessage>
+        {
+            new() { Role = "user", Content = userPrompt, Timestamp = DateTime.UtcNow }
+        };
+
+        var response = await CallOpenAiAsync(systemPrompt, userMessage, model, maxTokens, responseFormat: null, cancellationToken);
+        return response.Trim();
+    }
+
     private (HttpClient Client, string ApiUrl) CreateConfiguredClient()
     {
         var config = _openAiOptions.Value;
