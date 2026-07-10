@@ -8,5 +8,6 @@ public sealed record CompanySummaryDto(
     int CallLogCount,
     int PracticeCallCount,
     int ContactCount,
+    DateTime? NextActionAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);

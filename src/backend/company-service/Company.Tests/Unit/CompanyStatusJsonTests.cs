@@ -23,7 +23,7 @@ public sealed class CompanyStatusJsonTests
     public void CompanyDetailDto_serializes_status_as_the_enum_member_name()
     {
         var now = DateTime.UtcNow;
-        var dto = new CompanyDetailDto(Guid.NewGuid(), "Acme", "", CompanyStatus.Lead, 0, 0, 0, now, now);
+        var dto = new CompanyDetailDto(Guid.NewGuid(), "Acme", "", CompanyStatus.Lead, 0, 0, 0, null, null, null, now, now);
 
         var json = JsonSerializer.Serialize(dto, ApiJsonSerializerOptions);
 
@@ -34,7 +34,7 @@ public sealed class CompanyStatusJsonTests
     public void CompanySummaryDto_serializes_status_as_the_enum_member_name()
     {
         var now = DateTime.UtcNow;
-        var dto = new CompanySummaryDto(Guid.NewGuid(), "Acme", "", CompanyStatus.DealWon, 0, 0, 0, now, now);
+        var dto = new CompanySummaryDto(Guid.NewGuid(), "Acme", "", CompanyStatus.DealWon, 0, 0, 0, null, now, now);
 
         var json = JsonSerializer.Serialize(dto, ApiJsonSerializerOptions);
 

@@ -26,6 +26,7 @@ public sealed class TopicsCatalogTests
             Topics.LeagueUpdated,
             Topics.AchievementUnlocked,
             Topics.StreakMilestone,
+            Topics.CompanyFollowUpDue,
         });
     }
 

@@ -7,6 +7,20 @@ public sealed class Company
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public CompanyStatus Status { get; set; } = CompanyStatus.Lead;
+
+    /// <summary>When the next follow-up with this company is due. Null means no follow-up is scheduled.</summary>
+    public DateTime? NextActionAt { get; set; }
+
+    /// <summary>Free-form note attached to the scheduled follow-up (e.g. "call about the proposal").</summary>
+    public string? NextActionNote { get; set; }
+
+    /// <summary>
+    /// When the due-follow-up reminder was published for the current <see cref="NextActionAt"/>.
+    /// Null means no reminder has been sent yet for this due date. Reset to null whenever
+    /// <see cref="NextActionAt"/> is rescheduled, so a rescheduled follow-up notifies again.
+    /// </summary>
+    public DateTime? FollowUpNotifiedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

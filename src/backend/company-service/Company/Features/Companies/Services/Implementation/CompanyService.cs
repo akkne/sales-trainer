@@ -33,6 +33,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 company.Name,
                 company.Description,
                 company.Status,
+                company.NextActionAt,
                 company.CreatedAt,
                 company.UpdatedAt,
                 CallLogCount = company.CallLogEntries.Count,
@@ -52,6 +53,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 company.CallLogCount,
                 company.PracticeCallCount,
                 company.ContactCount,
+                company.NextActionAt,
                 company.CreatedAt,
                 company.UpdatedAt))
             .ToList();
@@ -110,6 +112,50 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
     }
 
+    public async Task<CompanyDetailDto?> UpdateCompanyFollowUpAsync(
+        Guid userId,
+        Guid companyId,
+        UpdateCompanyFollowUpRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await databaseContext.Companies
+            .Where(c => c.Id == companyId && c.UserId == userId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (company is null)
+            return null;
+
+        if (request.NextActionAt is { } nextActionAt)
+        {
+            // (Re)scheduling: reset FollowUpNotifiedAt so the reminder background service
+            // notifies again for the new due date, even if the previous one already fired.
+            company.NextActionAt = nextActionAt.ToUniversalTime();
+            company.NextActionNote = request.NextActionNote ?? string.Empty;
+            company.FollowUpNotifiedAt = null;
+        }
+        else
+        {
+            // Clearing the follow-up clears the note and the notified-at marker with it —
+            // there is nothing left to remind about.
+            company.NextActionAt = null;
+            company.NextActionNote = null;
+            company.FollowUpNotifiedAt = null;
+        }
+
+        company.UpdatedAt = DateTime.UtcNow;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        var callLogCount = await databaseContext.CallLogEntries
+            .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
+        var practiceCallCount = await databaseContext.PracticeCalls
+            .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+        var contactCount = await databaseContext.CompanyContacts
+            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
+
+        return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
+    }
+
     public async Task<CompanyDetailDto?> GetCompanyAsync(
         Guid userId,
         Guid companyId,
@@ -123,6 +169,9 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
                 c.Name,
                 c.Description,
                 c.Status,
+                c.NextActionAt,
+                c.NextActionNote,
+                c.FollowUpNotifiedAt,
                 c.CreatedAt,
                 c.UpdatedAt,
                 CallLogCount = c.CallLogEntries.Count,
@@ -142,6 +191,9 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
             company.CallLogCount,
             company.PracticeCallCount,
             company.ContactCount,
+            company.NextActionAt,
+            company.NextActionNote,
+            company.FollowUpNotifiedAt,
             company.CreatedAt,
             company.UpdatedAt);
     }
@@ -488,7 +540,19 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
     }
 
     private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount, int contactCount) =>
-        new(company.Id, company.Name, company.Description, company.Status, callLogCount, practiceCallCount, contactCount, company.CreatedAt, company.UpdatedAt);
+        new(
+            company.Id,
+            company.Name,
+            company.Description,
+            company.Status,
+            callLogCount,
+            practiceCallCount,
+            contactCount,
+            company.NextActionAt,
+            company.NextActionNote,
+            company.FollowUpNotifiedAt,
+            company.CreatedAt,
+            company.UpdatedAt);
 
     private static CallLogEntryDto MapToCallLogDto(CallLogEntry entry) =>
         new(entry.Id, entry.CompanyId, entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt, entry.CreatedAt, entry.UpdatedAt, entry.ContactId);

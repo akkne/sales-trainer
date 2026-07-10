@@ -43,6 +43,9 @@ public static class Topics
     // ── Gamification (produces) — league lifecycle ─────────────────────────
     public const string LeagueUpdated = "league.updated";
 
+    // ── Company (produces) ─────────────────────────────────────────────────
+    public const string CompanyFollowUpDue = "company.followup.due";
+
     /// <summary>
     /// Suffix appended to a source topic to form its dead-letter topic. A message that
     /// still fails after the configured retries is published to <c>&lt;topic&gt;.dlt</c>

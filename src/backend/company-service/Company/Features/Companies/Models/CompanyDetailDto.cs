@@ -8,5 +8,8 @@ public sealed record CompanyDetailDto(
     int CallLogCount,
     int PracticeCallCount,
     int ContactCount,
+    DateTime? NextActionAt,
+    string? NextActionNote,
+    DateTime? FollowUpNotifiedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);

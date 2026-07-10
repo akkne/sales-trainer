@@ -193,6 +193,7 @@ export_company_env() {
   export ASPNETCORE_URLS="http://localhost:${LOCAL_COMPANY_PORT}"
 
   export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 
   export Jwt__Key="${JWT_KEY}"

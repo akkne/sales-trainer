@@ -23,6 +23,9 @@ internal static class TestCompanyDatabaseFactory
         string name,
         string description = "",
         CompanyStatus status = CompanyStatus.Lead,
+        DateTime? nextActionAt = null,
+        string? nextActionNote = null,
+        DateTime? followUpNotifiedAt = null,
         CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -33,6 +36,9 @@ internal static class TestCompanyDatabaseFactory
             Name = name,
             Description = description,
             Status = status,
+            NextActionAt = nextActionAt,
+            NextActionNote = nextActionNote,
+            FollowUpNotifiedAt = followUpNotifiedAt,
             CreatedAt = now,
             UpdatedAt = now
         };
