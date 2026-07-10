@@ -1365,7 +1365,7 @@
       chat/feedback prompts (extends 39.3)
 - [ ] Unit tests; docs
 
-### [>] 39.15 Voice memo → log
+### [x] 39.15 Voice memo → log
 - [ ] Frontend: mic button in the log form (MediaRecorder, same UX as free-text exercises) →
       existing ai-service `POST /transcription/transcribe` → transcript lands in the raw-notes
       field → optionally chains into AI log parsing (39.13)
