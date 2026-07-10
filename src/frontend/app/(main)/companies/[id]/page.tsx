@@ -24,6 +24,7 @@ import {
 } from "@/features/companies/hooks/use-company-logs";
 import { useCompanyPracticeCalls, useRecentGoals } from "@/features/companies/hooks/use-practice-calls";
 import { useCompanyBriefing, useGenerateCompanyBriefing } from "@/features/companies/hooks/use-company-briefing";
+import { useCompanyReadiness } from "@/features/companies/hooks/use-company-readiness";
 import {
     useCompanyContacts,
     useAddCompanyContact,
@@ -41,6 +42,7 @@ import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
 import { CompanyFollowUpCard } from "@/features/companies/components/company-followup-card";
 import { CompanyBriefingCard } from "@/features/companies/components/company-briefing-card";
+import { CompanyReadinessCard } from "@/features/companies/components/company-readiness-card";
 import { PrecallPanel, type SelectedPersona } from "@/features/companies/components/precall-panel";
 import { CompanyContactsCard } from "@/features/companies/components/company-contacts-card";
 import { CompanyTimeline } from "@/features/companies/components/company-timeline";
@@ -61,6 +63,9 @@ export default function CompanyPage() {
 
     const { data: briefing, isLoading: isBriefingLoading } = useCompanyBriefing(companyId);
     const generateBriefing = useGenerateCompanyBriefing(companyId);
+
+    const { data: readiness, isLoading: isReadinessLoading, error: readinessError, refetch: refetchReadiness } =
+        useCompanyReadiness(companyId);
 
     const { data: logs } = useCompanyLogs(companyId);
     const addCallLog = useAddCallLog(companyId);
@@ -253,6 +258,13 @@ export default function CompanyPage() {
                 isGeneratingPersona={generatePersona.isPending}
                 onSavePersona={(payload) => addPersona.mutate(payload)}
                 isSavingPersona={addPersona.isPending}
+            />
+
+            <CompanyReadinessCard
+                readiness={readiness}
+                isLoading={isReadinessLoading}
+                errorMessage={readinessError ? readinessError.message : null}
+                onRefresh={() => refetchReadiness()}
             />
 
             <CompanyDescriptionCard
