@@ -9,6 +9,7 @@ vi.mock("@/shared/api/api-client", () => ({
         post: vi.fn(),
         put: vi.fn(),
         delete: vi.fn(),
+        postFile: vi.fn(),
     },
 }));
 
@@ -22,6 +23,7 @@ import type { CallLogEntry } from "@/features/companies/hooks/use-company-logs";
 import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 
 const mockPost = apiClient.post as ReturnType<typeof vi.fn>;
+const mockPostFile = apiClient.postFile as ReturnType<typeof vi.fn>;
 
 function renderWithClient(ui: React.ReactElement) {
     const queryClient = new QueryClient({
@@ -205,6 +207,123 @@ describe("CallLogForm", () => {
 
             expect(screen.getByText("Вставить заметки")).toBeTruthy();
             expect(mockPost).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("voice memo recording (39.15)", () => {
+        // Minimal MediaRecorder stub: start() flips state, stop() synchronously fires
+        // ondataavailable + onstop, mirroring how real recorders flush their last chunk on stop.
+        class MockMediaRecorder {
+            state: "inactive" | "recording" = "inactive";
+            ondataavailable: ((event: { data: Blob }) => void) | null = null;
+            onstop: (() => void) | null = null;
+            constructor(public stream: MediaStream) {}
+            start() {
+                this.state = "recording";
+            }
+            stop() {
+                this.state = "inactive";
+                this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+                this.onstop?.();
+            }
+        }
+
+        function fakeStream(): MediaStream {
+            const track = { stop: vi.fn() };
+            return { getTracks: () => [track] } as unknown as MediaStream;
+        }
+
+        let getUserMedia: ReturnType<typeof vi.fn>;
+
+        beforeEach(() => {
+            mockPostFile.mockReset();
+            getUserMedia = vi.fn().mockResolvedValue(fakeStream());
+            (window as unknown as { MediaRecorder: typeof MockMediaRecorder }).MediaRecorder = MockMediaRecorder;
+            Object.defineProperty(navigator, "mediaDevices", {
+                value: { getUserMedia },
+                writable: true,
+                configurable: true,
+            });
+        });
+
+        it("records, transcribes, and lands the transcript in the raw-notes textarea", async () => {
+            mockPostFile.mockResolvedValue({ text: "Звонили Ивану по поводу поставки", language: "ru" });
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+            await waitFor(() => expect(getUserMedia).toHaveBeenCalledWith({ audio: true }));
+            await waitFor(() => expect(screen.getByLabelText("Остановить запись")).toBeTruthy());
+
+            fireEvent.click(screen.getByLabelText("Остановить запись"));
+
+            await waitFor(() => expect(mockPostFile).toHaveBeenCalledWith(
+                "/transcription/transcribe",
+                expect.any(FormData)
+            ));
+            await waitFor(() =>
+                expect(screen.getByDisplayValue("Звонили Ивану по поводу поставки")).toBeTruthy()
+            );
+        });
+
+        it("appends the transcript with a separator when raw notes already has text", async () => {
+            mockPostFile.mockResolvedValue({ text: "и договорились созвониться", language: "ru" });
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.change(screen.getByPlaceholderText(/AI распознает/), { target: { value: "Обсудили условия поставки" } });
+
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+            await waitFor(() => expect(screen.getByLabelText("Остановить запись")).toBeTruthy());
+            fireEvent.click(screen.getByLabelText("Остановить запись"));
+
+            await waitFor(() => {
+                const textarea = screen.getByPlaceholderText(/AI распознает/) as HTMLTextAreaElement;
+                expect(textarea.value).toBe("Обсудили условия поставки\nи договорились созвониться");
+            });
+        });
+
+        it("shows a graceful error and keeps the form usable when the microphone is denied", async () => {
+            getUserMedia.mockRejectedValue(new Error("Permission denied"));
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+
+            await waitFor(() => expect(screen.getByText(/Доступ к микрофону запрещён/)).toBeTruthy());
+
+            // Raw-notes field stays editable — manual/paste entry still works.
+            fireEvent.change(screen.getByPlaceholderText(/AI распознает/), { target: { value: "текст вручную" } });
+            expect(screen.getByDisplayValue("текст вручную")).toBeTruthy();
+        });
+
+        it("shows a graceful error and keeps raw notes editable when transcription fails", async () => {
+            mockPostFile.mockRejectedValue(new Error("ai-service unavailable"));
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+            await waitFor(() => expect(screen.getByLabelText("Остановить запись")).toBeTruthy());
+            fireEvent.click(screen.getByLabelText("Остановить запись"));
+
+            await waitFor(() => expect(screen.getByText(/ai-service unavailable/)).toBeTruthy());
+
+            fireEvent.change(screen.getByPlaceholderText(/AI распознает/), { target: { value: "заметка вручную после ошибки" } });
+            expect(screen.getByDisplayValue("заметка вручную после ошибки")).toBeTruthy();
+        });
+
+        it("hides the mic button when MediaRecorder is unsupported", () => {
+            (window as unknown as { MediaRecorder?: typeof MockMediaRecorder }).MediaRecorder = undefined;
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+
+            expect(screen.queryByLabelText("Наговорить заметку")).toBeNull();
+            // Paste/manual flow remains fully usable without the mic.
+            expect(screen.getByPlaceholderText(/AI распознает/)).toBeTruthy();
         });
     });
 });
