@@ -255,6 +255,43 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task UpdateCompanyFollowUpAsync_same_date_with_new_note_does_not_reset_FollowUpNotifiedAt()
+    {
+        var sameDate = DateTime.UtcNow.AddDays(3);
+        var notifiedAt = DateTime.UtcNow.AddHours(-2);
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(
+            _databaseContext, FirstUserId, "Test Company",
+            nextActionAt: sameDate,
+            nextActionNote: "old note",
+            followUpNotifiedAt: notifiedAt);
+        var request = new UpdateCompanyFollowUpRequestDto(sameDate, "new note only");
+
+        var result = await _companyService.UpdateCompanyFollowUpAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.NextActionNote.Should().Be("new note only");
+        result.FollowUpNotifiedAt.Should().BeCloseTo(notifiedAt, TimeSpan.FromSeconds(1));
+    }
+
+    [Test]
+    public async Task UpdateCompanyFollowUpAsync_different_date_resets_FollowUpNotifiedAt()
+    {
+        var originalDate = DateTime.UtcNow.AddDays(-1);
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(
+            _databaseContext, FirstUserId, "Test Company",
+            nextActionAt: originalDate,
+            followUpNotifiedAt: DateTime.UtcNow.AddHours(-1));
+        var newDate = DateTime.UtcNow.AddDays(7);
+        var request = new UpdateCompanyFollowUpRequestDto(newDate, null);
+
+        var result = await _companyService.UpdateCompanyFollowUpAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.FollowUpNotifiedAt.Should().BeNull();
+        result.NextActionAt.Should().BeCloseTo(newDate, TimeSpan.FromSeconds(1));
+    }
+
+    [Test]
     public async Task UpdateCompanyFollowUpAsync_clearing_NextActionAt_clears_note_and_notified_at()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(
