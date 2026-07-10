@@ -10,6 +10,7 @@ import { TimelinePracticeItem } from "@/features/companies/components/timeline-p
 import { TimelineReallogItem } from "@/features/companies/components/timeline-reallog-item";
 
 interface CompanyTimelineProps {
+    companyId: string;
     practiceCalls: PracticeCall[];
     logs: CallLogEntry[];
     contacts?: CompanyContact[];
@@ -29,6 +30,7 @@ const SEGMENTS: { key: TimelineFilter; label: string }[] = [
 ];
 
 export function CompanyTimeline({
+    companyId,
     practiceCalls,
     logs,
     contacts = [],
@@ -76,6 +78,7 @@ export function CompanyTimeline({
             {canAddLog && (
                 addingLog ? (
                     <CallLogForm
+                        companyId={companyId}
                         contacts={contacts}
                         submitting={addLogSubmitting}
                         onSubmit={onAddLog}

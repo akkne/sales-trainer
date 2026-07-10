@@ -1,8 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+
+vi.mock("@/shared/api/api-client", () => ({
+    apiClient: {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+    },
+}));
+
+vi.mock("@/features/notifications/store/toast-store", () => ({
+    toast: { error: vi.fn() },
+}));
+
+import { apiClient } from "@/shared/api/api-client";
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import type { CallLogEntry } from "@/features/companies/hooks/use-company-logs";
 import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
+
+const mockPost = apiClient.post as ReturnType<typeof vi.fn>;
+
+function renderWithClient(ui: React.ReactElement) {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    return render(ui, { wrapper });
+}
 
 describe("CallLogForm", () => {
     const onSubmit = vi.fn();
@@ -11,10 +40,11 @@ describe("CallLogForm", () => {
     beforeEach(() => {
         onSubmit.mockReset();
         onCancel.mockReset();
+        mockPost.mockReset();
     });
 
     it("disables save until the required 'С кем говорил' field has content", () => {
-        render(<CallLogForm onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
         const saveButton = screen.getByText("Сохранить запись");
         expect(saveButton).toBeDisabled();
 
@@ -23,7 +53,7 @@ describe("CallLogForm", () => {
     });
 
     it("submits trimmed field values with an ISO occurredAt date", () => {
-        render(<CallLogForm onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
 
         fireEvent.change(screen.getByPlaceholderText(/Имя и должность/), { target: { value: "  Иван  " } });
         fireEvent.change(screen.getByPlaceholderText("Кратко о ходе разговора"), { target: { value: "Обсудили цену" } });
@@ -43,7 +73,7 @@ describe("CallLogForm", () => {
     });
 
     it("calls onCancel when the cancel button is clicked", () => {
-        render(<CallLogForm onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
         fireEvent.click(screen.getByText("Отмена"));
         expect(onCancel).toHaveBeenCalledOnce();
     });
@@ -53,11 +83,21 @@ describe("CallLogForm", () => {
             id: "l1", companyId: "c1", contactName: "Пётр", subject: "Тема", outcome: "Итог",
             occurredAt: "2026-07-01T00:00:00Z", createdAt: "", updatedAt: "", contactId: null,
         };
-        render(<CallLogForm initial={initial} onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" initial={initial} onSubmit={onSubmit} onCancel={onCancel} />);
 
         expect(screen.getByDisplayValue("Пётр")).toBeTruthy();
         expect(screen.getByDisplayValue("Тема")).toBeTruthy();
         expect(screen.getByDisplayValue("Итог")).toBeTruthy();
+    });
+
+    it("does not offer paste-notes mode while editing an existing entry", () => {
+        const initial: CallLogEntry = {
+            id: "l1", companyId: "c1", contactName: "Пётр", subject: "Тема", outcome: "Итог",
+            occurredAt: "2026-07-01T00:00:00Z", createdAt: "", updatedAt: "", contactId: null,
+        };
+        renderWithClient(<CallLogForm companyId="c1" initial={initial} onSubmit={onSubmit} onCancel={onCancel} />);
+
+        expect(screen.queryByText("Вставить заметки")).toBeNull();
     });
 
     const CONTACT: CompanyContact = {
@@ -66,7 +106,7 @@ describe("CallLogForm", () => {
     };
 
     it("picking a contact chip fills the name field and sets contactId on submit", () => {
-        render(<CallLogForm contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
 
         fireEvent.click(screen.getByText("Иван Петров"));
         expect(screen.getByDisplayValue("Иван Петров")).toBeTruthy();
@@ -79,7 +119,7 @@ describe("CallLogForm", () => {
     });
 
     it("typing free text after picking a contact clears contactId on submit", () => {
-        render(<CallLogForm contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={onSubmit} onCancel={onCancel} />);
 
         fireEvent.click(screen.getByText("Иван Петров"));
         fireEvent.change(screen.getByPlaceholderText(/Имя и должность/), { target: { value: "Другой человек" } });
@@ -88,5 +128,83 @@ describe("CallLogForm", () => {
         expect(onSubmit).toHaveBeenCalledWith(
             expect.objectContaining({ contactName: "Другой человек", contactId: null })
         );
+    });
+
+    describe("paste-notes mode", () => {
+        it("switches to paste mode and prefills fields from the AI response on success", async () => {
+            mockPost.mockResolvedValue({
+                contactName: "Иван Петров",
+                subject: "Обсудили условия",
+                outcome: "Взял паузу подумать",
+                occurredAt: "2026-07-01T00:00:00Z",
+            });
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.change(
+                screen.getByPlaceholderText(/AI распознает/),
+                { target: { value: "звонили Ивану, обсудили условия, взял паузу" } }
+            );
+            fireEvent.click(screen.getByText("Распознать"));
+
+            await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+                "/companies/c1/logs/parse",
+                { rawText: "звонили Ивану, обсудили условия, взял паузу" }
+            ));
+
+            await waitFor(() => expect(screen.getByDisplayValue("Иван Петров")).toBeTruthy());
+            expect(screen.getByDisplayValue("Обсудили условия")).toBeTruthy();
+            expect(screen.getByDisplayValue("Взял паузу подумать")).toBeTruthy();
+            // Back in manual mode for review before saving.
+            expect(screen.getByText("Вставить заметки")).toBeTruthy();
+        });
+
+        it("keeps contact name untouched when the AI omits it", async () => {
+            mockPost.mockResolvedValue({
+                contactName: null,
+                subject: "Звонок",
+                outcome: "Договорились созвониться",
+                occurredAt: null,
+            });
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.change(screen.getByPlaceholderText(/AI распознает/), { target: { value: "текст без имени" } });
+            fireEvent.click(screen.getByText("Распознать"));
+
+            await waitFor(() => expect(screen.getByDisplayValue("Звонок")).toBeTruthy());
+            expect((screen.getByPlaceholderText(/Имя и должность/) as HTMLInputElement).value).toBe("");
+        });
+
+        it("falls back gracefully to manual entry when parsing fails", async () => {
+            mockPost.mockRejectedValue(new Error("AI service unavailable"));
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.change(screen.getByPlaceholderText(/AI распознает/), { target: { value: "сырые заметки" } });
+            fireEvent.click(screen.getByText("Распознать"));
+
+            await waitFor(() =>
+                expect(screen.getByText(/Не удалось распознать заметки/)).toBeTruthy()
+            );
+
+            // Still in paste mode with a manual-entry escape hatch — the form stays usable.
+            fireEvent.click(screen.getByText("Заполнить вручную"));
+            fireEvent.change(screen.getByPlaceholderText(/Имя и должность/), { target: { value: "Иван" } });
+            expect(screen.getByText("Сохранить запись")).not.toBeDisabled();
+        });
+
+        it("returns to manual mode via the 'Заполнить вручную' link without calling the API", () => {
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.click(screen.getByText("Заполнить вручную"));
+
+            expect(screen.getByText("Вставить заметки")).toBeTruthy();
+            expect(mockPost).not.toHaveBeenCalled();
+        });
     });
 });
