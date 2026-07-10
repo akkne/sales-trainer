@@ -1318,7 +1318,7 @@
       becomes combo: pick a contact or type free text (typed name offers «Сохранить как контакт»)
 - [ ] Unit tests; `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`
 
-### [>] 39.10 Company status pipeline
+### [x] 39.10 Company status pipeline
 - [ ] `Company.Status` enum: `Lead / Contacted / MeetingScheduled / DealWon / DealLost` (default Lead)
 - [ ] `PUT /companies/{id}/status`; status included in list/detail DTOs
 - [ ] Frontend: status chip on `/companies` rows + status filter chips in toolbar;
@@ -1386,6 +1386,12 @@
 > `InvalidOperationException` contact-validation flow with a typed error; translate
 > `DbUpdateException` on the ContactId FK race into a 400; align Create/Update
 > contact DTO nullability; clear stale `contactId` client-side on a 400.
+> Carry-over from PR #20 review (non-blocking fast-follows): status dropdown uses
+> `role="menu"` without the ARIA menu keyboard contract (Escape/arrows/focus return) —
+> implement it or downgrade the role; consider optimistic updates for status mutation
+> (consistent with the rest of use-companies.ts); CSS `.co-status-filter-chip.active`
+> tone overrides rely on source order — bump specificity or comment; product sign-off
+> that unconstrained status transitions (e.g. DealWon → Lead) are intended.
 - [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
 - [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
 - [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
