@@ -315,6 +315,51 @@ describe("CallLogForm", () => {
             expect(screen.getByDisplayValue("заметка вручную после ошибки")).toBeTruthy();
         });
 
+        it("skips transcription and returns to idle for an empty recording", async () => {
+            class EmptyMediaRecorder extends MockMediaRecorder {
+                stop() {
+                    this.state = "inactive";
+                    // No dataavailable payload → the hook builds a 0-byte blob.
+                    this.onstop?.();
+                }
+            }
+            (window as unknown as { MediaRecorder: typeof MockMediaRecorder }).MediaRecorder =
+                EmptyMediaRecorder;
+
+            renderWithClient(<CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />);
+            fireEvent.click(screen.getByText("Вставить заметки"));
+
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+            await waitFor(() => expect(screen.getByLabelText("Остановить запись")).toBeTruthy());
+            fireEvent.click(screen.getByLabelText("Остановить запись"));
+
+            await waitFor(() => expect(screen.getByLabelText("Наговорить заметку")).toBeTruthy());
+            expect(mockPostFile).not.toHaveBeenCalled();
+        });
+
+        it("releases the microphone if unmounted while the permission prompt is open", async () => {
+            const track = { stop: vi.fn() };
+            let resolveStream: (stream: MediaStream) => void = () => {};
+            getUserMedia.mockReturnValue(
+                new Promise<MediaStream>((resolve) => {
+                    resolveStream = resolve;
+                })
+            );
+
+            const { unmount } = renderWithClient(
+                <CallLogForm companyId="c1" onSubmit={onSubmit} onCancel={onCancel} />
+            );
+            fireEvent.click(screen.getByText("Вставить заметки"));
+            fireEvent.click(screen.getByLabelText("Наговорить заметку"));
+            await waitFor(() => expect(getUserMedia).toHaveBeenCalled());
+
+            // Unmount before the mic permission resolves, then resolve it late.
+            unmount();
+            resolveStream({ getTracks: () => [track] } as unknown as MediaStream);
+
+            await waitFor(() => expect(track.stop).toHaveBeenCalledTimes(1));
+        });
+
         it("hides the mic button when MediaRecorder is unsupported", () => {
             (window as unknown as { MediaRecorder?: typeof MockMediaRecorder }).MediaRecorder = undefined;
 

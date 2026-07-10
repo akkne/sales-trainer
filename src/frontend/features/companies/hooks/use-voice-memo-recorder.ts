@@ -32,6 +32,10 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const streamRef = useRef<MediaStream | null>(null);
+    const isMountedRef = useRef(true);
+    // `state` snapshot for the concurrent-start guard without re-creating the callback.
+    const stateRef = useRef<VoiceMemoRecorderState>("idle");
+    stateRef.current = state;
     const transcribeAudio = useTranscribeAudio();
 
     const isSupported = isVoiceMemoRecordingSupported();
@@ -48,6 +52,16 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
             return;
         }
 
+        // Guard against a second invocation while a recording/permission/transcription
+        // is already in flight (defense-in-depth beyond the disabled button).
+        if (
+            stateRef.current === "requesting-permission" ||
+            stateRef.current === "recording" ||
+            stateRef.current === "transcribing"
+        ) {
+            return;
+        }
+
         setError(null);
         setState("requesting-permission");
 
@@ -57,6 +71,13 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
         } catch {
             setError("Доступ к микрофону запрещён");
             setState("error");
+            return;
+        }
+
+        // The component may have unmounted while the permission prompt was open —
+        // release the just-acquired mic immediately instead of leaving it hot.
+        if (!isMountedRef.current) {
+            stream.getTracks().forEach((track) => track.stop());
             return;
         }
 
@@ -74,14 +95,25 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
             stopStream();
             const blob = new Blob(chunksRef.current, { type: "audio/webm" });
             chunksRef.current = [];
+
+            // Discard an in-flight recording that ended because we unmounted,
+            // and skip an empty/near-empty capture (e.g. an immediate stop).
+            if (!isMountedRef.current) return;
+            if (blob.size === 0) {
+                setState("idle");
+                return;
+            }
+
             setState("transcribing");
 
             transcribeAudio.mutate(blob, {
                 onSuccess: (result) => {
+                    if (!isMountedRef.current) return;
                     setState("idle");
                     onTranscript(result.text);
                 },
                 onError: (mutationError: Error) => {
+                    if (!isMountedRef.current) return;
                     setState("error");
                     setError(mutationError.message);
                 },
@@ -98,8 +130,18 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
         }
     }, []);
 
-    // Release the microphone if the component unmounts mid-recording.
-    useEffect(() => stopStream, [stopStream]);
+    // Release the microphone if the component unmounts mid-recording. Detach the
+    // recorder's onstop first so ending the tracks can't fire a stale transcription.
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (mediaRecorderRef.current) {
+                mediaRecorderRef.current.onstop = null;
+            }
+            stopStream();
+        };
+    }, [stopStream]);
 
     return {
         state,
