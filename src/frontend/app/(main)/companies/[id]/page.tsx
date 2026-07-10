@@ -266,6 +266,7 @@ export default function CompanyPage() {
             />
 
             <CompanyTimeline
+                companyId={companyId}
                 practiceCalls={practiceCalls ?? []}
                 logs={logs ?? []}
                 contacts={contacts ?? []}
@@ -299,6 +300,7 @@ export default function CompanyPage() {
 
             {editingLog && (
                 <CallLogModal
+                    companyId={companyId}
                     initial={editingLog}
                     contacts={contacts ?? []}
                     submitting={updateCallLog.isPending}

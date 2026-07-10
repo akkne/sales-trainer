@@ -41,6 +41,12 @@ nonexistent company, generation caches `content`/`generatedAt` on the company an
 the AI request includes the company description + single most recent non-empty practice-call goal
 + recent call-log entries, `GetBriefingAsync` returns both fields `null` before the first
 generation and the cached values afterward.
+
+`CompanyServiceTests.cs` also covers AI call-log parsing (Phase 39.13, `IParseLogAiClient` mocked
+with NSubstitute): `ParseCallLogAsync` returns `null` for wrong owner/nonexistent company (no AI
+call made — doesn't persist anything either way), returns the AI client's parsed fields as-is,
+passes `rawText` through unchanged, and propagates an `InvalidOperationException` thrown by the AI
+client (mapped to `503` by `CompanyController.ParseCallLog`).
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -93,6 +99,25 @@ don't throw. `BriefingController` (`IBriefingService` mocked): `200` with `{cont
 on success, `503` on `InvalidOperationException` or `HttpRequestException` — same pattern as
 `EvaluationController`.
 
+### Backend — ai-service call-log parsing (NUnit)
+`src/backend/ai-service/Ai.Tests/Unit/ParseLogServiceTests.cs`,
+`src/backend/ai-service/Ai.Tests/Unit/ParseLogControllerTests.cs`
+```
+cd src/backend
+dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~ParseLog"
+```
+Coverage: `ParseLogService` returns the parsed `{contactName, subject, outcome, occurredAt}` from
+well-formed AI JSON, returns `null` for `occurredAt` when the date is missing or unparseable
+(`DateTime.TryParse` failure) without throwing, defaults `subject`/`outcome` to an empty string
+when the AI omits them, throws `InvalidOperationException` when the AI response is non-JSON or a
+non-object JSON value (mirrors the graceful-degrade philosophy of
+`AiEvaluationStrategyBase.ParseAiResponse` but surfaces failure as a thrown exception instead of a
+degraded-but-valid result, since parse-log has no meaningful "failed but valid" shape), and throws
+when OpenAI isn't configured. `ParseLogController` (`IParseLogService` mocked): `200` with the
+parsed DTO on success, `400` when `rawText` exceeds the 16000-char guard (service not called),
+`503` on `InvalidOperationException` or `HttpRequestException` — same pattern as
+`BriefingController`.
+
 ### Backend — gateway route flip (NUnit)
 `src/backend/gateway/Gateway.Tests/CompanyRouteFlipTests.cs`
 ```
@@ -123,6 +148,14 @@ npx vitest run __tests__/Compan
 - `CompanyBriefingCard.test.tsx` — loading state, empty state with a generate button, renders
   markdown content + relative generated-at timestamp, regenerate button, generating/disabled
   state, error message shown both alongside existing content and in the empty state
+- `useParseCallLog.test.tsx` — `useParseCallLog` posts `{rawText}` to
+  `/companies/{id}/logs/parse` and returns the parsed fields, error toast on failure
+- `CallLogForm.test.tsx` — paste-notes mode: "Вставить заметки" toggle is offered only when
+  creating a new entry (not while editing), switching to paste mode and parsing prefills
+  contact/subject/outcome/date and returns to the manual form for review, a `null` `contactName`
+  from the AI leaves the field untouched, an AI failure keeps the form in paste mode with an
+  inline error and a "Заполнить вручную" escape hatch that leaves the form fully usable, and
+  toggling back to manual mode without parsing makes no API call
 - `CompaniesFollowUp.test.ts` — `getFollowUpTone`: null when unscheduled, `overdue` for a past
   date, `due` for within-24h and exactly-now, `null` beyond 24h, `null` for an invalid date string
 - `useCompanyLogs.test.tsx` — call-log CRUD hooks
@@ -251,6 +284,28 @@ npx vitest run __tests__/Compan
 47. Simulate ai-service unavailable (stop ai-service or unset the OpenAI key) → «Сгенерировать»/
     «Обновить» shows an error message without crashing the page; any previously cached briefing
     stays visible if one existed.
+
+### AI real-call log parsing / "Вставить заметки"
+48. On the company page, click «+ Записать звонок» → click «Вставить заметки» → the form switches
+    to a single textarea for pasted notes/transcript; a «Заполнить вручную» link is visible.
+49. Paste a few sentences of notes/transcript that mention a contact name, what was discussed, an
+    outcome, and a date (e.g. "Звонили Ивану, обсудили условия поставки, договорились созвониться
+    на следующей неделе, 5 июля") → click «Распознать» → button shows a "Распознаём…" state, then
+    the form returns to the normal manual fields with «С кем говорил» / «О чём был разговор» /
+    «К чему пришли» / «Дата» prefilled from the notes.
+50. Edit any prefilled field before saving (e.g. correct a misheard name) → click «Сохранить
+    запись» → the entry is saved via the normal `POST /companies/{id}/logs` flow and appears in
+    the timeline with the edited values (confirms parsing never persists anything on its own —
+    only the explicit save does).
+51. Paste notes with no date mentioned → after «Распознать», the «Дата» field is left at its
+    default (today) rather than showing an error — a missing date doesn't block the rest of the
+    prefill.
+52. Simulate ai-service unavailable (stop ai-service or unset the OpenAI key), then click
+    «Распознать» → an inline error message appears under the textarea plus a toast, the form stays
+    in paste mode with the pasted text intact, and «Заполнить вручную» still switches to a fully
+    usable empty manual form (confirms the AI outage never blocks manual log entry).
+53. While editing an existing log entry (not creating a new one), confirm «Вставить заметки» is
+    not offered — paste-notes mode is create-only.
 
 ### Mobile nav
 28. On a narrow viewport, the bottom nav shows «Компании» in the 5-slot bar and does **not** show

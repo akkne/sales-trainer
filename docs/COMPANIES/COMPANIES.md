@@ -1,9 +1,9 @@
 # Companies (Компании)
 
 **Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9), status
-pipeline (39.10), follow-up reminders (39.11), and AI pre-call briefing (39.12) are shipped. The
-rest of Stage B (real-call-log parsing, AI persona generation, voice memo, readiness score) is
-**planned, not implemented** — see `docs/ROADMAP.md` Phase 39.13+.
+pipeline (39.10), follow-up reminders (39.11), AI pre-call briefing (39.12), and AI real-call-log
+parsing (39.13) are shipped. The rest of Stage B (AI persona generation, voice memo, readiness
+score) is **planned, not implemented** — see `docs/ROADMAP.md` Phase 39.14+.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -292,9 +292,41 @@ company row.
   timestamp, loading/empty/error states. Regenerating overwrites the cache; there's no history of
   past briefings.
 
+## AI real-call log parsing / "Вставить заметки" (Phase 39.13)
+
+Lets a manager paste raw notes or a call transcript instead of typing the three log fields by
+hand — ai-service extracts a draft, the user reviews/edits it, then saves through the existing
+log-create flow. Persists nothing on its own; it's a pure extraction proxy.
+
+- **ai-service:** stateless internal endpoint `POST /ai/companies/parse-log`
+  (`src/backend/ai-service/Ai/Features/Companies/ParseLogController.cs`, same
+  `InternalServiceAuthFilter` guard and `MaxRawTextLength` (16000-char) size guard pattern as
+  `BriefingController`). `ParseLogService` composes a Russian system prompt instructing the model
+  to return a strict JSON object (`{contactName, subject, outcome, occurredAt}`) and calls the
+  same `IOpenAiChatService.GenerateTextAsync` one-shot completion used by the briefing feature.
+  The response is parsed with `JsonDocument.Parse`; a non-JSON or non-object response throws
+  `InvalidOperationException` (mapped to `503` by the controller, same as an unconfigured/failed
+  OpenAI call). Individual fields degrade gracefully instead of failing the whole parse:
+  `contactName`/`occurredAt` are `null` when absent or (for the date) unparseable via
+  `DateTime.TryParse`; `subject`/`outcome` default to an empty string if the model omits them.
+- **company-service:** `POST /companies/{id}/logs/parse` (`CompanyController.ParseCallLog`) checks
+  company ownership (`404` on foreign/unknown id, same as every other company endpoint), forwards
+  `{rawText}` to ai-service via `ParseLogAiClient` (mirrors `BriefingAiClient`: typed `HttpClient`,
+  `AiService:BaseUrl`/`ParseLogPath` config, `X-Internal-Service-Secret` header), and returns the
+  parsed draft as-is — **no database write**. `503` if ai-service is unreachable, misconfigured, or
+  returns an unparseable response. See `docs/API_CONTRACTS.md` for the full contract.
+- **Frontend:** a "Вставить заметки" toggle inside `CallLogForm`
+  (`components/call-log-form.tsx`), offered only when creating a new entry (not while editing).
+  Switches the form to a single textarea; "Распознать" calls `useParseCallLog`
+  (`hooks/use-parse-call-log.ts`, POST to `/companies/{id}/logs/parse`) and, on success, prefills
+  the contact/subject/outcome/date fields and switches back to the normal manual form for
+  review/edit before the user clicks "Сохранить запись" (the existing `POST /companies/{id}/logs`
+  flow — parsing never saves anything itself). On AI failure the form stays in paste mode with an
+  inline error plus a toast, and a "Заполнить вручную" link always lets the user bail out to the
+  normal fields — the form is never blocked by an AI outage.
+
 ## Stage B remainder (planned, not implemented)
 
-Approved 2026-07-09, tracked as Phase 39.13–39.17 in `docs/ROADMAP.md`: AI real-call-log parsing
-from pasted notes, AI persona generation for practice calls, voice-memo → log transcription, and
-an AI readiness score. None of this is implemented yet — see the roadmap for scope and
-sequencing.
+Approved 2026-07-09, tracked as Phase 39.14–39.17 in `docs/ROADMAP.md`: AI persona generation for
+practice calls, voice-memo → log transcription, and an AI readiness score. None of this is
+implemented yet — see the roadmap for scope and sequencing.

@@ -7,6 +7,7 @@ import type { CallLogEntry, CallLogPayload } from "@/features/companies/hooks/us
 import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
 
 interface CallLogModalProps {
+    companyId: string;
     initial?: CallLogEntry;
     contacts?: CompanyContact[];
     submitting?: boolean;
@@ -14,7 +15,7 @@ interface CallLogModalProps {
     onClose: () => void;
 }
 
-export function CallLogModal({ initial, contacts = [], submitting = false, onSubmit, onClose }: CallLogModalProps) {
+export function CallLogModal({ companyId, initial, contacts = [], submitting = false, onSubmit, onClose }: CallLogModalProps) {
     const isEdit = !!initial;
 
     useEffect(() => {
@@ -45,6 +46,7 @@ export function CallLogModal({ initial, contacts = [], submitting = false, onSub
 
                 <div className="modal-body">
                     <CallLogForm
+                        companyId={companyId}
                         initial={initial}
                         contacts={contacts}
                         submitting={submitting}

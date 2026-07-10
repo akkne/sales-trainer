@@ -7,4 +7,6 @@ public sealed class AiServiceConfiguration
     public required string BaseUrl { get; init; }
 
     public string BriefingPath { get; init; } = "/ai/companies/briefing";
+
+    public string ParseLogPath { get; init; } = "/ai/companies/parse-log";
 }

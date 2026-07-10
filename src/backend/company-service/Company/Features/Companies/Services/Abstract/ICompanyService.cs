@@ -18,6 +18,13 @@ public interface ICompanyService
     /// <summary>Returns the cached briefing (both fields null if never generated). Null if the company doesn't exist/belong to the user.</summary>
     Task<CompanyBriefingDto?> GetBriefingAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Proxies pasted raw notes/transcript to ai-service to extract a draft call-log entry
+    /// (contact, subject, outcome, optional date) for the user to review before saving. Does not
+    /// persist anything. Null if the company doesn't exist/belong to the user.
+    /// </summary>
+    Task<ParsedCallLogDto?> ParseCallLogAsync(Guid userId, Guid companyId, ParseCallLogRequestDto request, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<CallLogEntryDto>?> ListCallLogEntriesAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
     Task<CallLogEntryDto?> CreateCallLogEntryAsync(Guid userId, Guid companyId, CreateCallLogEntryRequestDto request, CancellationToken cancellationToken = default);
     Task<CallLogEntryDto?> UpdateCallLogEntryAsync(Guid userId, Guid companyId, Guid logId, UpdateCallLogEntryRequestDto request, CancellationToken cancellationToken = default);

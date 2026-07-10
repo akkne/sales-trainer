@@ -506,7 +506,14 @@ Errors:
 > feedbackSummaries: string[]}` → `{content, generatedAt}` (`content` is markdown), called by
 > company-service to generate the pre-call cheat sheet. Stateless — reads nothing from Mongo or
 > Postgres itself, just composes a Russian system prompt from the request body and asks the
-> configured LLM. `503` if OpenAI isn't configured or the provider call fails. Both internal
+> configured LLM. `503` if OpenAI isn't configured or the provider call fails.
+> Internal-only (Phase 39.13): `POST /ai/companies/parse-log` `{rawText}` (max 16000 chars, `400`
+> if exceeded) → `{contactName?, subject, outcome, occurredAt?}`, called by company-service to
+> extract a structured call-log draft from pasted notes/transcript. Stateless — composes a Russian
+> system prompt instructing the model to return strict JSON, then parses it. `subject`/`outcome`
+> default to an empty string if the model omits them; `contactName`/`occurredAt` are `null` if not
+> mentioned or unparseable (never fails the whole parse just for a missing date). `503` if OpenAI
+> isn't configured, the provider call fails, or the AI response isn't valid JSON. Both internal
 > endpoints share `InternalServiceAuthFilter` (`X-Internal-Service-Secret` header, checked against
 > `InternalAuth:ServiceSecret`; left open when that config key is unset, i.e. dev/single-service
 > mode).
@@ -946,6 +953,16 @@ gracefully (skips that section's data) when empty.
 | POST | /companies/{id}/logs | `{contactName, subject, outcome, occurredAt, contactId?}` | `201 CallLogEntryDto`, `404` if company not found, or `400` if `contactId` does not belong to the company |
 | PUT | /companies/{id}/logs/{logId} | `{contactName, subject, outcome, occurredAt, contactId?}` | `CallLogEntryDto`, `404`, or `400` if `contactId` does not belong to the company |
 | DELETE | /companies/{id}/logs/{logId} | — | `204` or `404` |
+| POST | /companies/{id}/logs/parse | `{rawText}` | `ParsedCallLogDto`, `404`, or `503` if ai-service is unavailable |
+
+**AI log parsing / "Вставить заметки" (Phase 39.13):** `POST /companies/{id}/logs/parse` proxies
+`rawText` (pasted notes/transcript) to ai-service's internal `POST /ai/companies/parse-log` (see
+above) and returns the extracted draft **without persisting anything** — the client prefills the
+existing log-create form for the user to review/edit, then saves it through the normal
+`POST /companies/{id}/logs`. Same ownership/`404` pattern as every other company endpoint; `503`
+if ai-service is unreachable, misconfigured, or returns an unparseable response.
+
+`ParsedCallLogDto`: `{contactName: string|null, subject, outcome, occurredAt: DateTime|null}`.
 
 `CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt, contactId}`
 
