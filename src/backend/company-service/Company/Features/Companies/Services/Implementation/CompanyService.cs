@@ -127,11 +127,22 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
 
         if (request.NextActionAt is { } nextActionAt)
         {
-            // (Re)scheduling: reset FollowUpNotifiedAt so the reminder background service
-            // notifies again for the new due date, even if the previous one already fired.
-            company.NextActionAt = nextActionAt.ToUniversalTime();
+            var normalizedNextActionAt = nextActionAt.ToUniversalTime();
+
+            // Only reset FollowUpNotifiedAt when the due date actually changes, so the reminder
+            // background service notifies again for a genuinely new due date. Editing only the
+            // note (or re-submitting the same date) must NOT re-arm an already-fired reminder —
+            // otherwise the next poll would republish company.followup.due for a date that was
+            // already notified, producing a spurious duplicate notification once the original
+            // scrolls out of the recipient's inbox (the consumer dedupes on companyId+dueDate,
+            // which can no longer catch a same-date replay once that entry has expired/scrolled).
+            if (company.NextActionAt != normalizedNextActionAt)
+            {
+                company.FollowUpNotifiedAt = null;
+            }
+
+            company.NextActionAt = normalizedNextActionAt;
             company.NextActionNote = request.NextActionNote ?? string.Empty;
-            company.FollowUpNotifiedAt = null;
         }
         else
         {
