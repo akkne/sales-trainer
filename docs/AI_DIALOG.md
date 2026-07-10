@@ -404,6 +404,31 @@ lib/hooks/
   useAdminDialog.ts               — admin hooks
 ```
 
+## Readiness score (Phase 39.16)
+
+`company-service`'s `GET /companies/{id}/readiness` needs the AI feedback **summaries** of a
+company's recent practice sessions to score real-call readiness. Those summaries only exist in
+ai-service's own MongoDB (`DialogSession.Feedback.Summary`, same field described above) —
+company-service only stores `PracticeCall {DialogSessionId, Goal}`, not the feedback text itself.
+So, keeping the "each service owns its data" boundary, company-service never reaches into
+ai-service's Mongo directly; instead it calls internal `POST /ai/companies/readiness`
+`{goal?, sessionIds: string[]}` and ai-service does the Mongo read on its side:
+
+1. For each id in `sessionIds`, `ReadinessService` calls the existing `IDialogService.GetSessionByIdAsync`
+   (the same lookup used by `GET /dialog/sessions/:sessionId`) to load the `DialogSession`.
+2. Sessions with no `Feedback` yet (abandoned calls, or a practice call still in progress) are
+   skipped — their summary isn't used.
+3. If **no** session yields a usable summary, the endpoint returns `204 No Content` without calling
+   the LLM at all — the "no data yet" signal company-service maps to its own `204`.
+4. Otherwise, the collected summaries (+ optional `goal`) are composed into a Russian system prompt
+   asking for strict JSON `{score, strengths, gaps, recommendation}`, same fenced-code-tolerant
+   parsing pattern as `PersonaService`/`BriefingService`.
+
+This mirrors the trade-off already documented for the briefing feature (§ "Feedback summaries are
+not included" in `docs/API_CONTRACTS.md`), except readiness is the one feature (39.16) that
+actually needs those summaries, so it's the one place that reads `DialogSession.Feedback.Summary`
+by id list instead of leaving it empty.
+
 ## Testing
 
 See `docs/TESTING/AI_DIALOG.md` for:

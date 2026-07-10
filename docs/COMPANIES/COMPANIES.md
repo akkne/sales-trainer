@@ -2,9 +2,9 @@
 
 **Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9), status
 pipeline (39.10), follow-up reminders (39.11), AI pre-call briefing (39.12), AI real-call-log
-parsing (39.13), AI persona generation for practice calls (39.14), and voice memo → log (39.15)
-are shipped. The rest of Stage B (readiness score) is **planned, not implemented** — see
-`docs/ROADMAP.md` Phase 39.16+.
+parsing (39.13), AI persona generation for practice calls (39.14), voice memo → log (39.15), and
+AI readiness score (39.16) are shipped. Stage B is now feature-complete; 39.17 (final QA) is next
+— see `docs/ROADMAP.md`.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -78,7 +78,9 @@ Three entities, all owned by `UserId`, cascade-deleted with their parent `Compan
 - **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""),
   Status (Lead/Contacted/MeetingScheduled/DealWon/DealLost, default Lead, stored as string),
   NextActionAt (nullable), NextActionNote (nullable, ≤2000), FollowUpNotifiedAt (nullable),
-  CreatedAt, UpdatedAt`. Index on `UserId`; sparse index on `NextActionAt`. Status is changed via
+  BriefingContent (nullable), BriefingGeneratedAt (nullable), ReadinessJson (nullable),
+  ReadinessGeneratedAt (nullable), CreatedAt, UpdatedAt`. Index on `UserId`; sparse index on
+  `NextActionAt`. Status is changed via
   a dedicated `PUT /companies/{id}/status` endpoint (kept separate from the name/description
   update so the frontend can fire a status change without re-submitting the whole edit form); the
   follow-up trio is likewise changed via its own `PUT /companies/{id}/follow-up` endpoint — see
@@ -149,8 +151,12 @@ on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, o
     `{content: null, generatedAt: null}` since React Query query functions may not return
     `undefined`), `useGenerateCompanyBriefing` (POST, writes the result straight into the query
     cache on success)
+  - `hooks/use-company-readiness.ts` — `useCompanyReadiness` (GET only; the endpoint
+    self-generates-and-caches server-side, so there's no separate mutation — same 204-normalization
+    pattern as briefing, all fields `null`)
   - `components/` — `company-row`, `company-modal` (create/edit), `company-header`,
-    `company-description-card`, `precall-panel`, `company-briefing-card`, `company-timeline`
+    `company-description-card`, `precall-panel`, `company-briefing-card`, `company-readiness-card`
+    (SVG ring gauge + strengths/gaps/recommendation), `company-timeline`
     (+ `timeline-practice-item`, `timeline-reallog-item`), `call-log-form`/`call-log-modal`,
     `confirm-delete-modal`
   - `lib/timeline.ts` — merges `PracticeCall[]` + `CallLogEntry[]` into one sorted, filterable
@@ -403,7 +409,45 @@ reuses the existing `POST /transcription/transcribe` endpoint and the gateway's
   transcription failure, unsupported browser) never block the field: the textarea stays editable
   and the user can always fall back to typing or pasting.
 
-## Stage B remainder (planned, not implemented)
+## AI readiness score (Phase 39.16)
 
-Approved 2026-07-09, tracked as Phase 39.16–39.17 in `docs/ROADMAP.md`: an AI readiness score.
-None of this is implemented yet — see the roadmap for scope and sequencing.
+Scores how ready the user is for a **real** call against a company, based on the AI feedback of
+their recent **practice** calls. Rendered as a circular 0–100 gauge next to the pre-call panel on
+`/companies/[id]`, with a «Что подтянуть» (gaps) list, strengths, and a one-line recommendation.
+
+- **Cross-service data boundary.** The feedback summaries readiness needs
+  (`DialogSession.Feedback.Summary`) live only in ai-service's MongoDB — company-service has no
+  read access into it (same boundary as the 39.12 briefing feature). So company-service sends
+  ai-service the practice calls' `DialogSessionId`s and lets ai-service do its own Mongo lookup,
+  rather than reaching across services. See `docs/AI_DIALOG.md` § "Readiness score" for the
+  ai-service-side read.
+- **`GET /companies/{id}/readiness` self-generates and caches** — no separate `POST` like
+  briefing has. `CompanyService.GetReadinessAsync`
+  (`src/backend/company-service/Company/Features/Companies/Services/Implementation/CompanyService.cs`):
+  on a cache hit (`Company.ReadinessJson` set) deserializes and returns it; on a miss, gathers this
+  company's practice-call session ids (newest first, capped to 50) plus the latest non-empty goal,
+  and calls `ReadinessAiClient` (mirrors `BriefingAiClient`/`PersonaAiClient`: typed `HttpClient`,
+  `AiService:ReadinessPath` config, `X-Internal-Service-Secret` header).
+- **Two distinct "no data" cases, both `204` with nothing cached:** (1) the company has zero
+  practice calls — the ai-service call is skipped entirely; (2) ai-service itself returns `204`
+  (none of the supplied sessions had usable feedback yet — still in progress or abandoned).
+  Leaving the cache empty in both cases means the next `GET` retries instead of getting stuck on a
+  stale "no data" result.
+- **Cache invalidation.** A new practice call
+  (`POST /companies/{id}/practice-calls`, same `CompanyService.CreatePracticeCallAsync`) is this
+  codebase's practice-completion signal — dialog-session completion itself is tracked only in
+  ai-service's Mongo, invisible to company-service. On create, `Company.ReadinessJson`/
+  `ReadinessGeneratedAt` are cleared to `null` so the next `GET /readiness` regenerates from the
+  fresh session list rather than serving a stale score.
+- **`ReadinessController`/`ReadinessService`** on the ai-service side
+  (`src/backend/ai-service/Ai/Features/Companies/`) follow the exact 39.12–39.14 pattern:
+  `[ServiceFilter(typeof(InternalServiceAuthFilter))]`, an input-size guard (≤50 `sessionIds`,
+  `400` if exceeded), a Russian strict-JSON prompt, `IOpenAiChatService.GenerateTextAsync`,
+  markdown-fence stripping before `JsonDocument.Parse`, tolerant field parsing (`score` accepts a
+  numeric string too, then clamped to `[0, 100]`), and `503` on a malformed/incomplete AI response.
+- **Frontend** (`components/company-readiness-card.tsx`): an inline SVG ring (no charting
+  dependency — `aria-label` carries the numeric score for accessibility) plus strengths/gaps lists
+  and the recommendation text. Empty state: «Проведите тренировку, чтобы получить оценку
+  готовности.» A manual «Обновить» button just refetches the query (matches the briefing card's
+  affordance) — since the backend already regenerates automatically once the cache is invalidated,
+  there's no separate "generate" action to wire up.
