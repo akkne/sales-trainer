@@ -1326,7 +1326,7 @@
       meeting violet, won success, lost danger)
 - [ ] Unit tests; docs
 
-### [ ] 39.11 Follow-up reminders
+### [>] 39.11 Follow-up reminders
 - [ ] `Company.NextActionAt` (nullable timestamptz), `NextActionNote` (nullable), `FollowUpNotifiedAt` (nullable)
 - [ ] company-service adopts BuildingBlocks eventing (Kafka producer): hosted background service
       polls due follow-ups (every 5 min), publishes `company.followup.due` once per due date
