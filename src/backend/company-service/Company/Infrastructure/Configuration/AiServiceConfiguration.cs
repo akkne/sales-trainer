@@ -11,4 +11,6 @@ public sealed class AiServiceConfiguration
     public string ParseLogPath { get; init; } = "/ai/companies/parse-log";
 
     public string PersonaPath { get; init; } = "/ai/companies/persona";
+
+    public string ReadinessPath { get; init; } = "/ai/companies/readiness";
 }

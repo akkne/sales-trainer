@@ -15,6 +15,7 @@ public static class BriefingServiceCollectionExtensions
         services.AddScoped<IBriefingService, BriefingService>();
         services.AddScoped<IParseLogService, ParseLogService>();
         services.AddScoped<IPersonaService, PersonaService>();
+        services.AddScoped<IReadinessService, ReadinessService>();
         return services;
     }
 }

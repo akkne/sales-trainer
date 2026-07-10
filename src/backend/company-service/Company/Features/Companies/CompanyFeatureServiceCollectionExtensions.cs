@@ -14,6 +14,7 @@ public static class CompanyFeatureServiceCollectionExtensions
         services.AddBriefingAiClient(configuration);
         services.AddParseLogAiClient(configuration);
         services.AddPersonaAiClient(configuration);
+        services.AddReadinessAiClient(configuration);
         return services;
     }
 

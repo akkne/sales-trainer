@@ -149,6 +149,36 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         return Ok(briefing);
     }
 
+    [HttpGet("companies/{companyId:guid}/readiness")]
+    public async Task<IActionResult> GetReadiness(
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetCurrentUserId(out var userId))
+            return Unauthorized();
+
+        try
+        {
+            var readiness = await companyService.GetReadinessAsync(userId, companyId, cancellationToken);
+            if (readiness is null)
+                return NotFound();
+
+            if (readiness.Score is null)
+                return NoContent();
+
+            return Ok(readiness);
+        }
+        catch (InvalidOperationException invalidOperationException)
+        {
+            return StatusCode(503, new { message = invalidOperationException.Message });
+        }
+        catch (HttpRequestException)
+        {
+            // Raw transport failure (ai-service unreachable / DNS) — surface as 503, not 500.
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+        }
+    }
+
     [HttpDelete("companies/{companyId:guid}")]
     public async Task<IActionResult> DeleteCompany(
         Guid companyId,

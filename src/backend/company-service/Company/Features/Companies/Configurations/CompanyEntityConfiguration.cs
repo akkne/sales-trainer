@@ -44,6 +44,12 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
         builder.Property(company => company.BriefingGeneratedAt)
             .IsRequired(false);
 
+        builder.Property(company => company.ReadinessJson)
+            .IsRequired(false);
+
+        builder.Property(company => company.ReadinessGeneratedAt)
+            .IsRequired(false);
+
         builder.Property(company => company.CreatedAt)
             .IsRequired();
 
