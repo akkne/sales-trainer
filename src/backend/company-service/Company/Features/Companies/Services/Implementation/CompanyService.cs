@@ -1,15 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
+using Sellevate.Company.Infrastructure.Ai;
 using Sellevate.Company.Infrastructure.Data;
 using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Features.Companies.Services.Implementation;
 
-internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompanyService
+internal sealed class CompanyService(CompanyDbContext databaseContext, IBriefingAiClient briefingAiClient) : ICompanyService
 {
     private const int DescriptionExcerptLength = 160;
     private const int RecentGoalCount = 5;
+    private const int RecentCallLogCountForBriefing = 5;
 
     public async Task<IReadOnlyList<CompanySummaryDto>> ListCompaniesAsync(
         Guid userId,
@@ -539,6 +541,63 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         databaseContext.CompanyContacts.Remove(contact);
         await databaseContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<CompanyBriefingDto?> GenerateBriefingAsync(
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await databaseContext.Companies
+            .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
+
+        if (company is null)
+            return null;
+
+        // Most recent non-empty practice-call goal, if any — same "latest goal" notion as the
+        // recent-goals feature, but only the single newest one (not the last-5-distinct list).
+        var latestGoal = await databaseContext.PracticeCalls
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
+            .OrderByDescending(practiceCall => practiceCall.CreatedAt)
+            .Select(practiceCall => practiceCall.Goal)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var recentCalls = await databaseContext.CallLogEntries
+            .Where(entry => entry.CompanyId == companyId)
+            .OrderByDescending(entry => entry.OccurredAt)
+            .Take(RecentCallLogCountForBriefing)
+            .Select(entry => new BriefingCallLogItem(entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt))
+            .ToListAsync(cancellationToken);
+
+        // Practice-session feedback text lives in ai-service's Mongo store, not here — company-service
+        // has no cross-service read for it (out of scope for 39.12), so the feedback-summaries list is
+        // always empty; ai-service's briefing prompt degrades gracefully when it's empty.
+        var aiRequest = new BriefingAiRequest(company.Description, latestGoal, recentCalls, []);
+        var aiResult = await briefingAiClient.GenerateBriefingAsync(aiRequest, cancellationToken);
+
+        company.BriefingContent = aiResult.Content;
+        company.BriefingGeneratedAt = aiResult.GeneratedAt;
+        company.UpdatedAt = DateTime.UtcNow;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        return new CompanyBriefingDto(company.BriefingContent, company.BriefingGeneratedAt);
+    }
+
+    public async Task<CompanyBriefingDto?> GetBriefingAsync(
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await databaseContext.Companies
+            .Where(c => c.Id == companyId && c.UserId == userId)
+            .Select(c => new { c.BriefingContent, c.BriefingGeneratedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (company is null)
+            return null;
+
+        return new CompanyBriefingDto(company.BriefingContent, company.BriefingGeneratedAt);
     }
 
     private async Task EnsureContactBelongsToCompanyAsync(Guid companyId, Guid contactId, CancellationToken cancellationToken)

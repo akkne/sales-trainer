@@ -12,6 +12,12 @@ public interface ICompanyService
     Task<CompanyDetailDto?> UpdateCompanyFollowUpAsync(Guid userId, Guid companyId, UpdateCompanyFollowUpRequestDto request, CancellationToken cancellationToken = default);
     Task<bool> DeleteCompanyAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
 
+    /// <summary>Generates a fresh pre-call briefing via ai-service and caches it on the company. Null if the company doesn't exist/belong to the user.</summary>
+    Task<CompanyBriefingDto?> GenerateBriefingAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the cached briefing (both fields null if never generated). Null if the company doesn't exist/belong to the user.</summary>
+    Task<CompanyBriefingDto?> GetBriefingAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<CallLogEntryDto>?> ListCallLogEntriesAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
     Task<CallLogEntryDto?> CreateCallLogEntryAsync(Guid userId, Guid companyId, CreateCallLogEntryRequestDto request, CancellationToken cancellationToken = default);
     Task<CallLogEntryDto?> UpdateCallLogEntryAsync(Guid userId, Guid companyId, Guid logId, UpdateCallLogEntryRequestDto request, CancellationToken cancellationToken = default);

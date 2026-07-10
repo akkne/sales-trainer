@@ -43,6 +43,11 @@ vi.mock("@/features/companies/hooks/use-company-contacts", () => ({
     useDeleteCompanyContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/features/companies/hooks/use-company-briefing", () => ({
+    useCompanyBriefing: () => ({ data: undefined, isLoading: false }),
+    useGenerateCompanyBriefing: () => ({ mutate: vi.fn(), isPending: false, isError: false, error: null }),
+}));
+
 const useDialogSession = vi.fn(() => ({ data: undefined }));
 vi.mock("@/features/dialog/hooks/use-dialog", () => ({
     useDialogSession: (...args: unknown[]) => useDialogSession(...args),

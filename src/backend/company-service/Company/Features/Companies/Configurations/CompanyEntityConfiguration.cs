@@ -38,6 +38,12 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
         builder.Property(company => company.FollowUpNotifiedAt)
             .IsRequired(false);
 
+        builder.Property(company => company.BriefingContent)
+            .IsRequired(false);
+
+        builder.Property(company => company.BriefingGeneratedAt)
+            .IsRequired(false);
+
         builder.Property(company => company.CreatedAt)
             .IsRequired();
 

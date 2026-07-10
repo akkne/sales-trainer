@@ -23,6 +23,7 @@ import {
     type CallLogPayload,
 } from "@/features/companies/hooks/use-company-logs";
 import { useCompanyPracticeCalls, useRecentGoals } from "@/features/companies/hooks/use-practice-calls";
+import { useCompanyBriefing, useGenerateCompanyBriefing } from "@/features/companies/hooks/use-company-briefing";
 import {
     useCompanyContacts,
     useAddCompanyContact,
@@ -34,6 +35,7 @@ import {
 import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
 import { CompanyFollowUpCard } from "@/features/companies/components/company-followup-card";
+import { CompanyBriefingCard } from "@/features/companies/components/company-briefing-card";
 import { PrecallPanel } from "@/features/companies/components/precall-panel";
 import { CompanyContactsCard } from "@/features/companies/components/company-contacts-card";
 import { CompanyTimeline } from "@/features/companies/components/company-timeline";
@@ -51,6 +53,9 @@ export default function CompanyPage() {
     const updateCompanyStatus = useUpdateCompanyStatus();
     const updateCompanyFollowUp = useUpdateCompanyFollowUp();
     const deleteCompany = useDeleteCompany();
+
+    const { data: briefing, isLoading: isBriefingLoading } = useCompanyBriefing(companyId);
+    const generateBriefing = useGenerateCompanyBriefing(companyId);
 
     const { data: logs } = useCompanyLogs(companyId);
     const addCallLog = useAddCallLog(companyId);
@@ -235,6 +240,14 @@ export default function CompanyPage() {
                 nextActionNote={company.nextActionNote}
                 submitting={updateCompanyFollowUp.isPending}
                 onSave={handleSaveFollowUp}
+            />
+
+            <CompanyBriefingCard
+                briefing={briefing}
+                isLoading={isBriefingLoading}
+                isGenerating={generateBriefing.isPending}
+                errorMessage={generateBriefing.isError ? generateBriefing.error.message : null}
+                onGenerate={() => generateBriefing.mutate()}
             />
 
             <CompanyContactsCard
