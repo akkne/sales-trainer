@@ -489,6 +489,11 @@ Errors:
 - `400` — file missing, too large, or unsupported format
 - `502` — Whisper API returned an error
 
+**Reused by Companies (Phase 39.15):** the call-log form's voice memo recorder
+(`features/companies/hooks/use-voice-memo-recorder.ts`) posts the recorded `webm` blob to this
+same endpoint via the existing `useTranscribeAudio` hook — no new endpoint, no company-service
+involvement.
+
 ---
 
 ## Dialog (AI-powered conversation practice)

@@ -2,9 +2,9 @@
 
 **Status:** Stage A shipped (Phase 39.1–39.7). Stage B contacts mini-CRM (39.9), status
 pipeline (39.10), follow-up reminders (39.11), AI pre-call briefing (39.12), AI real-call-log
-parsing (39.13), and AI persona generation for practice calls (39.14) are shipped. The rest of
-Stage B (voice memo, readiness score) is **planned, not implemented** — see `docs/ROADMAP.md`
-Phase 39.15+.
+parsing (39.13), AI persona generation for practice calls (39.14), and voice memo → log (39.15)
+are shipped. The rest of Stage B (readiness score) is **planned, not implemented** — see
+`docs/ROADMAP.md` Phase 39.16+.
 
 Design reference: [docs/COMPANIES/DESIGN_SPEC.md](DESIGN_SPEC.md) (screen layout, copy, CSS).
 API reference: [docs/API_CONTRACTS.md](../API_CONTRACTS.md) (`Companies` section + `POST /dialog/sessions`
@@ -376,8 +376,34 @@ Lets a manager give the practice-call AI a specific character to play — instea
   `useGenerateCompanyPersona`), following the `use-company-briefing.ts`/`use-parse-call-log.ts`
   conventions (React Query, `toast.error` on mutation failure).
 
+## Voice memo → log (Phase 39.15)
+
+Lets a manager record a short voice memo instead of typing or pasting call notes. The memo is
+transcribed and dropped into the same raw-notes textarea the 39.13 "Вставить заметки" mode
+already uses, so it chains straight into the existing AI parse: **voice → transcript in raw
+notes → (optional) "Распознать" AI parse → 3 fields → "Сохранить запись".** Frontend-only —
+reuses the existing `POST /transcription/transcribe` endpoint and the gateway's
+`/transcription/{**catch-all}` route (both pre-existing, no backend change).
+
+- **`useTranscribeAudio`** (`features/exercise/hooks/use-lesson.ts`) — pre-existing hook (until
+  now unused) that posts a `Blob` as multipart `file` to `/transcription/transcribe` via
+  `apiClient.postFile` and returns `{ text, language }`. Reused as-is rather than duplicated.
+- **`useVoiceMemoRecorder`** (`features/companies/hooks/use-voice-memo-recorder.ts`) — new
+  companies-local hook wrapping `MediaRecorder` + `navigator.mediaDevices.getUserMedia` around
+  `useTranscribeAudio`. States: `idle` → `requesting-permission` → `recording` → `transcribing`
+  → back to `idle` (success) or `error`. `isVoiceMemoRecordingSupported()` guards browsers
+  without `MediaRecorder`/`getUserMedia`. On `recorder.onstop`, the collected chunks become a
+  single `audio/webm` blob that's handed to `transcribeAudio.mutate`.
+- **`CallLogForm`** (`components/call-log-form.tsx`) — inside the 39.13 paste-notes mode, a mic
+  button (`Icon name="mic"`, hidden entirely when `isSupported` is `false`) sits next to the raw
+  notes label. Click → record → click again to stop → transcribe. On success the transcript is
+  appended to the raw-notes textarea (`current + "\n" + transcript`, or just the transcript if
+  the field was empty) rather than clobbering anything already typed/pasted — from there the
+  existing "Распознать" button and its 39.13 behavior are untouched. Errors (permission denied,
+  transcription failure, unsupported browser) never block the field: the textarea stays editable
+  and the user can always fall back to typing or pasting.
+
 ## Stage B remainder (planned, not implemented)
 
-Approved 2026-07-09, tracked as Phase 39.15–39.17 in `docs/ROADMAP.md`: voice-memo → log
-transcription and an AI readiness score. None of this is implemented yet — see the roadmap for
-scope and sequencing.
+Approved 2026-07-09, tracked as Phase 39.16–39.17 in `docs/ROADMAP.md`: an AI readiness score.
+None of this is implemented yet — see the roadmap for scope and sequencing.
