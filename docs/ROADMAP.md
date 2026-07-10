@@ -1310,7 +1310,7 @@
 > Same PR process. Order matters: 39.9/39.10 are schema-level and go first;
 > AI features (39.12–39.14, 39.16) depend on 39.3 core context plumbing.
 
-### [>] 39.9 Contacts (mini-CRM)
+### [x] 39.9 Contacts (mini-CRM)
 - [ ] Backend: `CompanyContact` entity (Id, CompanyId, UserId, Name, Position, Notes?, CreatedAt, UpdatedAt);
       CRUD `GET/POST /companies/{id}/contacts`, `PUT/DELETE /companies/{id}/contacts/{contactId}`
 - [ ] `CallLogEntry.ContactId` (nullable FK, SET NULL on delete) alongside free-text `ContactName`
@@ -1382,6 +1382,10 @@
 - [ ] Unit tests (scoring parse, cache invalidation); docs
 
 ### [ ] 39.17 Final QA, docs & release PR
+> Carry-over from PR #19 review (non-blocking fast-follows): replace the generic
+> `InvalidOperationException` contact-validation flow with a typed error; translate
+> `DbUpdateException` on the ContactId FK race into a 400; align Create/Update
+> contact DTO nullability; clear stale `contactId` client-side on a 400.
 - [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
 - [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
 - [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
