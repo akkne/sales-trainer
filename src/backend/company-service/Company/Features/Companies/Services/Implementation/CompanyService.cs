@@ -85,6 +85,9 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         UpdateCompanyStatusRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        if (request.Status is not { } status)
+            throw new ArgumentException("Status is required.", nameof(request));
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -92,7 +95,7 @@ internal sealed class CompanyService(CompanyDbContext databaseContext) : ICompan
         if (company is null)
             return null;
 
-        company.Status = request.Status;
+        company.Status = status;
         company.UpdatedAt = DateTime.UtcNow;
 
         await databaseContext.SaveChangesAsync(cancellationToken);

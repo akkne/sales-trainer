@@ -74,11 +74,18 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         if (!TryGetCurrentUserId(out var userId))
             return Unauthorized();
 
-        var company = await companyService.UpdateCompanyStatusAsync(userId, companyId, request, cancellationToken);
-        if (company is null)
-            return NotFound();
+        try
+        {
+            var company = await companyService.UpdateCompanyStatusAsync(userId, companyId, request, cancellationToken);
+            if (company is null)
+                return NotFound();
 
-        return Ok(company);
+            return Ok(company);
+        }
+        catch (ArgumentException argumentException)
+        {
+            return BadRequest(new { message = argumentException.Message });
+        }
     }
 
     [HttpDelete("companies/{companyId:guid}")]
