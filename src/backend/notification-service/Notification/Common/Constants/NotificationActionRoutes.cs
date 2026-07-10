@@ -13,4 +13,6 @@ public static class NotificationActionRoutes
     public const string League = "/league";
 
     public static string DiscussThread(Guid threadId) => $"/discuss/{threadId}";
+
+    public static string CompanyDetails(Guid companyId) => $"/companies/{companyId}";
 }
