@@ -34,6 +34,13 @@ future follow-up, skips a company with no follow-up scheduled, **once-only guard
 already-notified due company, a claimed company is not re-published on a second poll tick,
 `FollowUpNotifiedAt` is persisted on the claimed company, multiple due companies are processed in
 one tick.
+
+`CompanyServiceTests.cs` also covers the AI briefing feature (Phase 39.12, `IBriefingAiClient`
+mocked with NSubstitute): `GenerateBriefingAsync`/`GetBriefingAsync` `404` for wrong owner/
+nonexistent company, generation caches `content`/`generatedAt` on the company and returns them,
+the AI request includes the company description + single most recent non-empty practice-call goal
++ recent call-log entries, `GetBriefingAsync` returns both fields `null` before the first
+generation and the cached values afterward.
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -72,6 +79,20 @@ when `companyContext` is present, prompt is unchanged when it's absent, `company
 with a non-`company-call` mode is rejected, and the context is persisted on the Mongo
 `DialogSession` document.
 
+### Backend — ai-service briefing (NUnit)
+`src/backend/ai-service/Ai.Tests/Unit/BriefingServiceTests.cs`,
+`src/backend/ai-service/Ai.Tests/Unit/BriefingControllerTests.cs`
+```
+cd src/backend
+dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~Briefing"
+```
+Coverage: `BriefingService` returns the chat service's markdown content, throws
+`InvalidOperationException` when OpenAI isn't configured, the composed system prompt includes the
+company description/goal/recent-calls/feedback-summaries, and empty recent-calls/feedback lists
+don't throw. `BriefingController` (`IBriefingService` mocked): `200` with `{content, generatedAt}`
+on success, `503` on `InvalidOperationException` or `HttpRequestException` — same pattern as
+`EvaluationController`.
+
 ### Backend — gateway route flip (NUnit)
 `src/backend/gateway/Gateway.Tests/CompanyRouteFlipTests.cs`
 ```
@@ -96,6 +117,12 @@ npx vitest run __tests__/Compan
   calls `onChange` on selection (not on re-selecting the current status), disabled state
 - `CompanyFollowUpCard.test.tsx` — empty state, shows scheduled date/note, edit → save (date +
   note), save disabled while date is empty, clear via "Убрать напоминание", cancel discards edits
+- `useCompanyBriefing.test.tsx` — `useCompanyBriefing` (GET, normalizes a 204 to
+  `{content: null, generatedAt: null}`, disabled without a companyId), `useGenerateCompanyBriefing`
+  (POST with an empty body, writes the response into the query cache, error toast on failure)
+- `CompanyBriefingCard.test.tsx` — loading state, empty state with a generate button, renders
+  markdown content + relative generated-at timestamp, regenerate button, generating/disabled
+  state, error message shown both alongside existing content and in the empty state
 - `CompaniesFollowUp.test.ts` — `getFollowUpTone`: null when unscheduled, `overdue` for a past
   date, `due` for within-24h and exactly-now, `null` beyond 24h, `null` for an invalid date string
 - `useCompanyLogs.test.tsx` — call-log CRUD hooks
@@ -209,6 +236,21 @@ npx vitest run __tests__/Compan
     server-side (not just local state).
 42. Edit an existing follow-up's note only (same date) → save → note updates without resetting
     the due/overdue badge state.
+
+### AI pre-call briefing
+43. On a company with no briefing yet, the "Шпаргалка к звонку" card shows the empty state with a
+    «Сгенерировать» button (`GET /companies/{id}/briefing` returns `204`).
+44. Click «Сгенерировать» → button shows a generating state, then the card renders the markdown
+    cheat sheet (кто они / о чём договаривались / возможные возражения / следующий шаг) with a
+    relative "Обновлено ..." timestamp.
+45. Reload the page → the same briefing is shown immediately (`GET` returns the cached content,
+    no regeneration).
+46. Add a real call-log entry and/or a practice call with a goal, then click «Обновить» → the new
+    briefing reflects the added context (mentions the logged call or goal); the cached content
+    replaces the previous one (no history of past briefings).
+47. Simulate ai-service unavailable (stop ai-service or unset the OpenAI key) → «Сгенерировать»/
+    «Обновить» shows an error message without crashing the page; any previously cached briefing
+    stays visible if one existed.
 
 ### Mobile nav
 28. On a narrow viewport, the bottom nav shows «Компании» in the 5-slot bar and does **not** show
