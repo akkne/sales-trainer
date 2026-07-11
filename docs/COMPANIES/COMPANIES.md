@@ -232,6 +232,14 @@ tables.
 - **Empty description:** the pre-call panel still allows calling but shows a hint
   ("Совет: заполните описание компании — звонок станет реалистичнее") instead of the "AI will
   play this company" message.
+- **Stale `contactId` on a call log (39.17 hardening):** if a contact is deleted concurrently
+  between the call-log form loading its chips and the user submitting, `POST`/`PUT
+  /companies/{id}/logs[...]` reject with `400` (a typed `ContactNotFoundInCompanyException`, both
+  for the plain "doesn't belong to this company" check and for the same-shaped `DbUpdateException`
+  raised when the FK race trips at save time). `CallLogForm` clears its local `contactId` when it
+  sees that `400`, so retrying re-submits the entry as free-text `contactName` instead of repeating
+  the same failing request. See [API_CONTRACTS.md](../API_CONTRACTS.md#call-log) for the response
+  shape.
 
 ## Company status pipeline (Phase 39.10)
 

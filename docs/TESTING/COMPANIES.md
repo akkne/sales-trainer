@@ -79,10 +79,21 @@ second call within the TTL returns the same empty result **without calling the A
 practice call always gets a fresh fan-out attempt even mid-TTL
 (`CreatePracticeCallAsync_clears_negative_readiness_cache_so_next_get_refanouts`).
 
-`CompanyControllerTests.cs` covers the controller-level AI-failure → `503` mapping directly (both
-`GenerateBriefing` and `GetReadiness`, both for a thrown `InvalidOperationException` and for a raw
-`HttpRequestException` transport failure), complementing the service-layer
-cache-unchanged assertions above.
+`CompanyServiceTests.cs` also covers the 39.17 contacts hardening (PR #19 review carry-over):
+`CreateCallLogEntryAsync`/`UpdateCallLogEntryAsync` throw the typed `ContactNotFoundInCompanyException`
+(not a bare `InvalidOperationException`) when `contactId` doesn't belong to the company or doesn't
+exist; a dedicated `ThrowOnCallLogContactIdInterceptor` (a `SaveChangesInterceptor` — the InMemory EF
+provider doesn't enforce FKs on its own) simulates the concurrent-delete race where the contact is
+removed between the ownership check and `SaveChangesAsync`, asserting the resulting
+`DbUpdateException` is translated into the same typed exception with the original exception as
+`InnerException`; `UpdateContactAsync_defaults_position_and_notes_to_empty_when_omitted` covers the
+Create/Update DTO nullability alignment.
+
+`CompanyControllerTests.cs` covers controller-level mapping for both the AI-failure → `503` path
+(both `GenerateBriefing` and `GetReadiness`, both for a thrown `InvalidOperationException` and for
+a raw `HttpRequestException` transport failure — complementing the service-layer cache-unchanged
+assertions above) and the same 39.17 contacts-hardening fix: `CreateCallLogEntry`/
+`UpdateCallLogEntry` map `ContactNotFoundInCompanyException` to `400 { message }`.
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -252,7 +263,10 @@ npx vitest run __tests__/Compan
   in the raw-notes textarea; appends with a `\n` separator instead of clobbering existing text;
   microphone-permission-denied shows an inline error and leaves the field editable; a
   transcription API error shows an inline error and leaves the field editable; the mic button is
-  hidden entirely when `MediaRecorder` is unsupported
+  hidden entirely when `MediaRecorder` is unsupported. Stale-contactId hardening (39.17): when
+  `onSubmit` rejects with `ApiError(400)` (the picked contact was deleted concurrently), the form
+  clears `contactId` so retrying resubmits as free text instead of repeating the same failing
+  request; a non-400 rejection (e.g. a network error) leaves `contactId` untouched
 - `CompaniesFollowUp.test.ts` — `getFollowUpTone`: null when unscheduled, `overdue` for a past
   date, `due` for within-24h and exactly-now, `null` beyond 24h, `null` for an invalid date string
 - `useCompanyLogs.test.tsx` — call-log CRUD hooks
