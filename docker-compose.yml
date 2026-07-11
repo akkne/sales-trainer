@@ -201,6 +201,9 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
+      # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
+      # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
+      - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
       # --- AI tunables (override in .env; defaults are the in-code values) ---
       - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
       - OpenAI__OpenQuestionModel=${OPENAI_OPEN_QUESTION_MODEL:-gpt-4.1}
@@ -370,6 +373,9 @@ services:
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
       - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
+      # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
+      # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
+      - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
       # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
       - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
       - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
