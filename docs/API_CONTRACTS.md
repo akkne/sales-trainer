@@ -1030,6 +1030,20 @@ if ai-service is unreachable, misconfigured, or returns an unparseable response.
 
 Validation: `contactName` required, max 200; `subject`, `outcome` optional (empty string allowed), max 4000. `contactId` is optional; when present it must reference a `CompanyContact` belonging to the same company (otherwise `400`). The free-text `contactName` is always stored regardless of `contactId`, so the log keeps a readable label even after the linked contact is deleted (see Contacts below).
 
+**`400` on a bad `contactId` (39.17 hardening):** company-service raises a typed
+`ContactNotFoundInCompanyException` — not a generic `InvalidOperationException` — both when the
+ownership check fails up front and when a concurrently-deleted contact trips the `ContactId`
+foreign key at `SaveChangesAsync` time (the check-then-act race between the ownership check and the
+save; the FK-violation `DbUpdateException` is only translated when it's specifically a Postgres
+`23503` on the `FK_CallLogEntries_CompanyContacts_ContactId` constraint — any other
+`DbUpdateException` propagates unchanged as a `500`). Both cases map to the same
+`400 { code: "CONTACT_NOT_FOUND", message }` response, where `code` is a machine-readable
+discriminator distinguishing this from other `400`s on the same endpoints (e.g. ASP.NET
+model-validation failures on `contactName`/`subject`/`outcome` length, which have no `code` field).
+The frontend only clears the stale `contactId` from the call-log form when it sees
+`code === "CONTACT_NOT_FOUND"`, so retrying resubmits as free text instead of repeating the same
+failing request, while other `400`s leave the form untouched.
+
 ### Practice Calls
 
 | Method | Path | Body | Response |
@@ -1048,12 +1062,12 @@ Validation: `goal` max 1000; `dialogSessionId` required.
 |---|---|---|---|
 | GET | /companies/{id}/contacts | — | `CompanyContactDto[]` sorted by `createdAt DESC` |
 | POST | /companies/{id}/contacts | `{name, position?, notes?}` | `201 CompanyContactDto` or `404` if company not found |
-| PUT | /companies/{id}/contacts/{contactId} | `{name, position, notes}` | `CompanyContactDto` or `404` |
+| PUT | /companies/{id}/contacts/{contactId} | `{name, position?, notes?}` | `CompanyContactDto` or `404` |
 | DELETE | /companies/{id}/contacts/{contactId} | — | `204` or `404`. Any `CallLogEntry.ContactId` referencing this contact is set to `null`; the log's free-text `ContactName` is preserved. |
 
 `CompanyContactDto`: `{id, companyId, name, position, notes, createdAt, updatedAt}`
 
-Validation: `name` required, max 200; `position` optional (defaults to empty), max 200; `notes` optional (defaults to empty), max 2000.
+Validation: `name` required, max 200; `position` optional (nullable, defaults to empty), max 200; `notes` optional (nullable, defaults to empty), max 2000. Create and Update use the same nullability for `position`/`notes` (39.17 hardening — they previously diverged: Update declared them as non-nullable with an empty-string default instead of nullable).
 
 ### Personas (Phase 39.14 — AI persona generation for practice calls)
 

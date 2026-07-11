@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
 using Sellevate.Company.Infrastructure.Ai;
@@ -330,7 +332,21 @@ internal sealed class CompanyService(
 
         company.UpdatedAt = now;
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbUpdateException) when (
+            request.ContactId is { } raceContactId && IsContactIdForeignKeyViolation(dbUpdateException))
+        {
+            // The ownership check above and this SaveChangesAsync aren't atomic — the contact can
+            // be deleted concurrently in between, in which case Postgres rejects the insert with a
+            // ContactId FK violation. Surface that as the same typed 400 the ownership check itself
+            // throws, rather than letting a raw DbUpdateException bubble up as a 500. Any other
+            // DbUpdateException (unrelated unique-constraint violation, deadlock, connection drop,
+            // etc.) is NOT this filter's business and keeps propagating as a real 500.
+            throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
+        }
 
         return MapToCallLogDto(entry);
     }
@@ -365,7 +381,18 @@ internal sealed class CompanyService(
         entry.OccurredAt = request.OccurredAt.ToUniversalTime();
         entry.UpdatedAt = DateTime.UtcNow;
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbUpdateException) when (
+            request.ContactId is { } raceContactId && IsContactIdForeignKeyViolation(dbUpdateException))
+        {
+            // Same concurrent-delete race as CreateCallLogEntryAsync: the contact can be removed
+            // between the ownership check and this SaveChangesAsync, tripping the ContactId FK.
+            // Any other DbUpdateException keeps propagating as a real 500.
+            throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
+        }
 
         return MapToCallLogDto(entry);
     }
@@ -540,8 +567,8 @@ internal sealed class CompanyService(
             return null;
 
         contact.Name = request.Name;
-        contact.Position = request.Position;
-        contact.Notes = request.Notes;
+        contact.Position = request.Position ?? string.Empty;
+        contact.Notes = request.Notes ?? string.Empty;
         contact.UpdatedAt = DateTime.UtcNow;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -820,8 +847,20 @@ internal sealed class CompanyService(
             .AnyAsync(contact => contact.Id == contactId && contact.CompanyId == companyId, cancellationToken);
 
         if (!contactBelongsToCompany)
-            throw new InvalidOperationException("Указанный контакт не найден в этой компании.");
+            throw new ContactNotFoundInCompanyException(contactId, companyId);
     }
+
+    // The FK for CallLogEntries.ContactId -> CompanyContacts.Id (see FK_CallLogEntries_
+    // CompanyContacts_ContactId in the AddCompanyContacts migration). Only a Postgres foreign-key
+    // violation (SqlState 23503) against exactly this constraint should be treated as the
+    // ContactId concurrent-delete race — any other DbUpdateException (unrelated unique-constraint
+    // violation, deadlock, connection drop, etc.) must keep propagating as a real 500 instead of
+    // being silently mis-mapped to "contact not found".
+    private const string ContactIdForeignKeyConstraintName = "FK_CallLogEntries_CompanyContacts_ContactId";
+
+    private static bool IsContactIdForeignKeyViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation } postgresException &&
+        string.Equals(postgresException.ConstraintName, ContactIdForeignKeyConstraintName, StringComparison.Ordinal);
 
     private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount, int contactCount) =>
         new(

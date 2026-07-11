@@ -3,21 +3,25 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-vi.mock("@/shared/api/api-client", () => ({
-    apiClient: {
-        get: vi.fn(),
-        post: vi.fn(),
-        put: vi.fn(),
-        delete: vi.fn(),
-        postFile: vi.fn(),
-    },
-}));
+vi.mock("@/shared/api/api-client", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/shared/api/api-client")>();
+    return {
+        ...actual,
+        apiClient: {
+            get: vi.fn(),
+            post: vi.fn(),
+            put: vi.fn(),
+            delete: vi.fn(),
+            postFile: vi.fn(),
+        },
+    };
+});
 
 vi.mock("@/features/notifications/store/toast-store", () => ({
     toast: { error: vi.fn() },
 }));
 
-import { apiClient } from "@/shared/api/api-client";
+import { apiClient, ApiError } from "@/shared/api/api-client";
 import { CallLogForm } from "@/features/companies/components/call-log-form";
 import type { CallLogEntry } from "@/features/companies/hooks/use-company-logs";
 import type { CompanyContact } from "@/features/companies/hooks/use-company-contacts";
@@ -129,6 +133,63 @@ describe("CallLogForm", () => {
 
         expect(onSubmit).toHaveBeenCalledWith(
             expect.objectContaining({ contactName: "Другой человек", contactId: null })
+        );
+    });
+
+    it("clears the stale contactId when submission fails with a 400 CONTACT_NOT_FOUND (contact deleted concurrently)", async () => {
+        const rejectingSubmit = vi.fn().mockRejectedValue(
+            new ApiError(400, { code: "CONTACT_NOT_FOUND", message: "Указанный контакт не найден в этой компании." })
+        );
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledWith(
+            expect.objectContaining({ contactId: "contact-1" })
+        ));
+
+        // Retrying after the 400 must not resend the now-deleted contactId.
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenLastCalledWith(
+            expect.objectContaining({ contactId: null })
+        ));
+    });
+
+    it("does not clear contactId when submission fails for a reason other than a 400", async () => {
+        const rejectingSubmit = vi.fn().mockRejectedValue(new Error("network error"));
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(2));
+        expect(rejectingSubmit).toHaveBeenLastCalledWith(
+            expect.objectContaining({ contactId: "contact-1" })
+        );
+    });
+
+    it("does not clear contactId on a 400 that isn't CONTACT_NOT_FOUND (e.g. field-length validation)", async () => {
+        const rejectingSubmit = vi.fn().mockRejectedValue(
+            new ApiError(400, { message: "Subject must be at most 4000 characters." })
+        );
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(2));
+        expect(rejectingSubmit).toHaveBeenLastCalledWith(
+            expect.objectContaining({ contactId: "contact-1" })
         );
     });
 

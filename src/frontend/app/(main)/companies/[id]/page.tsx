@@ -200,16 +200,14 @@ export default function CompanyPage() {
         router.push(`/companies/${companyId}/call/chat?goal=${encodeURIComponent(goal)}`);
     };
 
-    const handleAddLog = (payload: CallLogPayload) => {
-        addCallLog.mutate(payload, { onSuccess: () => setAddingLog(false) });
-    };
+    const handleAddLog = (payload: CallLogPayload) =>
+        addCallLog.mutateAsync(payload).then(() => setAddingLog(false));
 
     const handleUpdateLog = (payload: CallLogPayload) => {
-        if (!editingLog) return;
-        updateCallLog.mutate(
-            { logId: editingLog.id, ...payload },
-            { onSuccess: () => setEditingLog(null) }
-        );
+        if (!editingLog) return Promise.resolve();
+        return updateCallLog
+            .mutateAsync({ logId: editingLog.id, ...payload })
+            .then(() => setEditingLog(null));
     };
 
     const handleConfirmDeleteLog = () => {
