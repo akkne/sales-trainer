@@ -1,9 +1,11 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Implementation;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -18,14 +20,15 @@ public class BriefingServiceTests
     {
         _openAiChatService = Substitute.For<IOpenAiChatService>();
         _openAiChatService.IsConfigured.Returns(true);
-        _briefingService = new BriefingService(_openAiChatService);
+        var openAiOptions = Options.Create(new OpenAiConfiguration { ApiKey = "test-key" });
+        _briefingService = new BriefingService(_openAiChatService, openAiOptions);
     }
 
     [Test]
     public async Task GenerateBriefingAsync_ReturnsContentFromChatService()
     {
         _openAiChatService
-            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<int?>())
             .Returns("## Кто они\n- Тестовая компания");
 
         var request = new GenerateBriefingRequestDto("Описание компании", null, [], []);
@@ -51,7 +54,12 @@ public class BriefingServiceTests
     {
         string? capturedSystemPrompt = null;
         _openAiChatService
-            .GenerateTextAsync(Arg.Do<string>(prompt => capturedSystemPrompt = prompt), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GenerateTextAsync(
+                Arg.Do<string>(prompt => capturedSystemPrompt = prompt),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<string?>(),
+                Arg.Any<int?>())
             .Returns("content");
 
         var request = new GenerateBriefingRequestDto("Продаёт виджеты", "Договориться о демо", [], []);
@@ -67,7 +75,12 @@ public class BriefingServiceTests
     {
         string? capturedSystemPrompt = null;
         _openAiChatService
-            .GenerateTextAsync(Arg.Do<string>(prompt => capturedSystemPrompt = prompt), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GenerateTextAsync(
+                Arg.Do<string>(prompt => capturedSystemPrompt = prompt),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<string?>(),
+                Arg.Any<int?>())
             .Returns("content");
 
         var request = new GenerateBriefingRequestDto(
@@ -87,7 +100,7 @@ public class BriefingServiceTests
     public async Task GenerateBriefingAsync_HandlesEmptyRecentCallsAndFeedback_WithoutThrowing()
     {
         _openAiChatService
-            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<int?>())
             .Returns("content");
 
         var request = new GenerateBriefingRequestDto("Описание", null, [], []);
@@ -95,5 +108,34 @@ public class BriefingServiceTests
         var act = () => _briefingService.GenerateBriefingAsync(request);
 
         await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task GenerateBriefingAsync_UsesDedicatedBriefingModelAndTokenCount_NotOpenQuestionConfig()
+    {
+        var openAiOptions = Options.Create(new OpenAiConfiguration
+        {
+            ApiKey = "test-key",
+            OpenQuestionModel = "gpt-open-question",
+            MaximumFeedbackTokenCount = 999,
+            BriefingModel = "gpt-briefing-dedicated",
+            MaximumBriefingTokenCount = 42
+        });
+        var briefingService = new BriefingService(_openAiChatService, openAiOptions);
+
+        _openAiChatService
+            .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<int?>())
+            .Returns("content");
+
+        var request = new GenerateBriefingRequestDto("Описание", null, [], []);
+
+        await briefingService.GenerateBriefingAsync(request);
+
+        await _openAiChatService.Received(1).GenerateTextAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>(),
+            "gpt-briefing-dedicated",
+            42);
     }
 }

@@ -34,4 +34,21 @@ public sealed class OpenAiConfiguration
     public int MaximumDialogTokenCount { get; init; } = 500;
     public int MaximumFeedbackTokenCount { get; init; } = 1500;
     public double DialogTemperature { get; init; } = 0.7;
+
+    /// <summary>
+    /// Model used for the company pre-call briefing ("шпаргалка", 39.12). Dedicated option
+    /// (rather than reusing <see cref="OpenQuestionModel"/>) so briefing can be tuned/priced
+    /// independently of the open-question feature it happened to share config with initially.
+    /// Defaults to the same value as <see cref="OpenQuestionModel"/> so unset config keeps
+    /// today's behavior.
+    /// </summary>
+    public string BriefingModel { get; init; } = "gpt-4.1";
+
+    /// <summary>
+    /// Max tokens for the company pre-call briefing (39.12). Dedicated option (rather than
+    /// reusing <see cref="MaximumFeedbackTokenCount"/>) for the same reason as
+    /// <see cref="BriefingModel"/>. Defaults to the same value as
+    /// <see cref="MaximumFeedbackTokenCount"/> so unset config keeps today's behavior.
+    /// </summary>
+    public int MaximumBriefingTokenCount { get; init; } = 1500;
 }
