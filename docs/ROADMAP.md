@@ -1435,8 +1435,14 @@
 > time); consider a short in-process retry (2–3 attempts) around the Kafka publish
 > in FollowUpReminderService to absorb transient broker blips within the accepted
 > at-most-once design.
-- [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
-- [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
-- [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
-      (dotnet test, tsc, vitest, eslint, codestyle-lint)
-- [ ] Final PR `feature/companies` → `main`
+- [x] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
+- [x] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
+      (holistic opus integration review confirmed docs match the shipped surface)
+- [x] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
+      — opus review: APPROVE, 0 blockers (1 MED internal-auth-secret-in-compose + 2 LOW, all
+      documented/post-merge follow-ups); verifier: backend build + all suites green
+      (company 122, ai 108, learning 40), frontend tsc + vitest green (250). Lint: the one
+      genuine new error (voice-memo ref-in-render) fixed; the codestyle `///` no-comments
+      "violations" are an unenforced repo-wide convention (main has 909 such lines) — recorded
+      as a DECISIONS exception rather than mass-stripped.
+- [>] Final PR `feature/companies` → `main` — opened, awaiting release sign-off to merge
