@@ -652,6 +652,7 @@ Skills
 | `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
 | `AddCompanyBriefing` (company-service)   | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
 | `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
+| `AddCompanyReadiness` (company-service)  | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
 
 ---
 
@@ -673,6 +674,8 @@ Standalone Postgres database `company`. Owned by `company-service` (port 5009). 
 | `FollowUpNotifiedAt` | timestamptz | NULL                      |
 | `BriefingContent` | text     | NULL                             |
 | `BriefingGeneratedAt` | timestamptz | NULL                     |
+| `ReadinessJson` | text       | NULL                             |
+| `ReadinessGeneratedAt` | timestamptz | NULL                   |
 | `CreatedAt`   | timestamptz  | NOT NULL                         |
 | `UpdatedAt`   | timestamptz  | NOT NULL                         |
 
@@ -692,6 +695,14 @@ rescheduled (see `docs/API_CONTRACTS.md`). All three are nullable and independen
 markdown cheat sheet returned by ai-service's `POST /ai/companies/briefing`, written by
 `POST /companies/{id}/briefing` and read back by `GET /companies/{id}/briefing`. Both null until
 the first generation; overwritten (not versioned/appended) on every regeneration.
+
+`ReadinessJson`/`ReadinessGeneratedAt` (Phase 39.16 — AI readiness score): a cache of the
+`{score, strengths, gaps, recommendation}` JSON returned by ai-service's
+`POST /ai/companies/readiness`, both written and read by the single `GET /companies/{id}/readiness`
+endpoint (self-generates on a cache miss). Both null until first generated, and **cleared back to
+null** whenever a new practice call is created (`POST /companies/{id}/practice-calls`) — the
+cache-invalidation trigger for this feature — so the next `GET` regenerates from the fresh
+practice-call list instead of serving a stale score.
 
 ### Table: `CallLogEntries`
 

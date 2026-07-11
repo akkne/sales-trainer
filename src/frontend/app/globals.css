@@ -3598,6 +3598,13 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-recent-goals { display: flex; flex-wrap: wrap; gap: 8px; }
 .co-cta-help { font-size: 11.5px; color: var(--ink-4); margin: 10px 0 0; line-height: 1.5; }
 
+/* ── Readiness score (39.16) ── */
+.co-readiness-body { display: flex; align-items: flex-start; gap: 18px; }
+.co-readiness-details { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.co-readiness-group { display: flex; flex-direction: column; gap: 4px; }
+.co-readiness-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-4); margin: 0; }
+.co-readiness-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--ink-secondary); }
+
 /* ── Description ── */
 .co-desc { font-size: 13.5px; line-height: 1.6; color: var(--ink-secondary); white-space: pre-wrap; margin: 0; }
 .co-desc-empty { border: 1px dashed var(--line); border-radius: var(--r-sm); padding: 16px; text-align: center; color: var(--ink-4); font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; align-items: center; gap: 12px; }

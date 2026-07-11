@@ -1,8 +1,9 @@
 # Testing — Companies (Компании)
 
-Covers Stage A (Phase 39.1–39.7): company-service, ai-service company-context sessions, and the
-`/companies` frontend. Feature doc: [docs/COMPANIES/COMPANIES.md](../COMPANIES/COMPANIES.md).
-Design spec: [docs/COMPANIES/DESIGN_SPEC.md](../COMPANIES/DESIGN_SPEC.md).
+Covers Stage A (Phase 39.1–39.7) and Stage B (39.9–39.16): company-service, ai-service
+company-context sessions, and the `/companies` frontend. Feature doc:
+[docs/COMPANIES/COMPANIES.md](../COMPANIES/COMPANIES.md). Design spec:
+[docs/COMPANIES/DESIGN_SPEC.md](../COMPANIES/DESIGN_SPEC.md).
 
 ## Automated
 
@@ -56,6 +57,17 @@ not deletable via a different company id, `ListPersonasAsync` returns newest-fir
 persist either way), passes the company's `description` plus the seed contact name/position and
 difficulty through to the AI client unchanged, and propagates an `InvalidOperationException`
 thrown by the AI client (mapped to `503` by `CompanyController.GeneratePersona`).
+
+`CompanyServiceTests.cs` also covers the readiness score (Phase 39.16, `IReadinessAiClient` mocked
+with NSubstitute): `GetReadinessAsync` returns `null` for wrong owner/nonexistent company, returns
+all-`null`-fields with **no AI call made** when the company has zero practice calls, returns
+all-`null`-fields when the AI client itself signals no data (`null` result), generates and caches
+on first call then a second call returns the cache **without calling the AI client again**
+(`Received(1)`), passes the practice calls' session ids and the single latest non-empty goal to the
+AI client, propagates an `InvalidOperationException` thrown by the AI client (mapped to `503` by
+`CompanyController.GetReadiness`), and — the cache-invalidation contract — creating a **new**
+practice call after a cached readiness exists clears the cache so the next `GetReadinessAsync` call
+hits the AI client again (`Received(2)` across both generations) and returns the fresh score.
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -149,6 +161,26 @@ varies by requested difficulty (asserted via a difficulty-parameterized test). `
 exceeds the 16000-char guard (service not called), `503` on `InvalidOperationException` or
 `HttpRequestException` — same pattern as `ParseLogController`.
 
+### Backend — ai-service readiness score (NUnit)
+`src/backend/ai-service/Ai.Tests/Unit/ReadinessServiceTests.cs`,
+`src/backend/ai-service/Ai.Tests/Unit/ReadinessControllerTests.cs`
+```
+cd src/backend
+dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~Readiness"
+```
+Coverage: `ReadinessService` returns the parsed `{score, strengths, gaps, recommendation}` from
+well-formed AI JSON (including fenced in a ```` ```json ```` code block), throws
+`InvalidOperationException` when the AI response is non-JSON/missing `score`/missing
+`recommendation`, clamps an out-of-range `score` to `[0, 100]`, filters out sessions whose
+`DialogSession.Feedback` is null (or the session itself doesn't exist) before composing the prompt,
+returns `null` (the "no data" signal) **without calling the LLM** when zero of the supplied
+`sessionIds` have usable feedback, and throws when OpenAI isn't configured. Mongo access is mocked
+via the same `IDialogService.GetSessionByIdAsync` substitute pattern used elsewhere (not a raw
+`IMongoCollection` substitute — see `docs/AI_DIALOG.md` § "Readiness score" for why). `ReadinessController`
+(`IReadinessService` mocked): `200` with the readiness DTO on success, `204` when the service
+returns `null`, `400` when `sessionIds` exceeds the 50-item guard (service not called), `503` on
+`InvalidOperationException` or `HttpRequestException` — same pattern as `PersonaController`.
+
 ### Backend — gateway route flip (NUnit)
 `src/backend/gateway/Gateway.Tests/CompanyRouteFlipTests.cs`
 ```
@@ -212,6 +244,13 @@ npx vitest run __tests__/Compan
   a saved persona feeds the right `SelectedPersona` object into `onCall`/`onChat`), generate flow
   (opens the generate form, calls `onGeneratePersona` with the seed/difficulty, renders the draft,
   "Сохранить собеседника" calls `onSavePersona`), and the inline error shown when generation fails
+- `useCompanyReadiness.test.tsx` — `useCompanyReadiness` (GET, normalizes a 204 to
+  `{score: null, strengths: null, gaps: null, recommendation: null, generatedAt: null}`, disabled
+  without a companyId)
+- `CompanyReadinessCard.test.tsx` — loading state, empty state (no score yet), renders the score
+  ring (`aria-label` carries the numeric score), strengths/gaps lists and recommendation text with
+  a relative "Обновлено ..." timestamp, «Обновить» button calls `onRefresh`, error message shown
+  both alongside existing content and in the empty state
 
 ## Manual checklist
 
@@ -405,6 +444,34 @@ npx vitest run __tests__/Compan
     usable.
 63. Delete a saved persona (via its chip or a management surface, if present) → it disappears from
     the chip row; a call started right after with «Без персоны» selected is unaffected.
+
+### AI readiness score (Phase 39.16)
+64. On a company with zero practice calls, the readiness card (next to the pre-call panel) shows
+    the empty state: «Проведите тренировку, чтобы получить оценку готовности.» — no ring, no
+    «Обновить» button (`GET /companies/{id}/readiness` returns `204`).
+65. Run one practice call (voice or chat) to completion so it gets AI feedback, then reload the
+    company page → the readiness card now shows a score ring (0–100), strengths, «Что подтянуть»
+    gaps, and a recommendation, with a relative "Обновлено ..." timestamp. This is the **first
+    generation** — confirm it happens automatically on `GET`, with no separate "generate" click
+    required.
+66. Reload the page again → the same score is shown immediately (served from cache, not
+    regenerated — no visible delay/spinner).
+67. Run a **second** practice call against the same company, then reload the company page → the
+    readiness score **changes** (regenerated from the fresh session list) — this is the
+    cache-invalidation check: creating a practice call must have cleared the previous cached score.
+68. Click «Обновить» on the readiness card → refetches; since nothing was invalidated since the
+    last generation, the same cached score is returned (confirms «Обновить» is a plain refetch, not
+    a forced regeneration).
+69. Run several practice calls but hang up immediately on each without engaging (so they get no
+    meaningful feedback, or are marked abandoned) → the readiness card may still show `204`/empty
+    if ai-service finds no usable feedback among them — confirms the "no data" signal propagates
+    correctly through both services.
+70. Simulate ai-service unavailable (stop ai-service or unset the OpenAI key) on a company that has
+    practice calls but no cached readiness yet → the card shows an inline error instead of a stuck
+    spinner or a crash; a company with an **already-cached** score keeps showing it (the outage
+    only affects generation, not reading the cache).
+71. Toggle dark mode with the readiness card visible (both populated and empty states) → the ring
+    colors and text remain readable, no contrast regressions.
 
 ### Mobile nav
 28. On a narrow viewport, the bottom nav shows «Компании» in the 5-slot bar and does **not** show

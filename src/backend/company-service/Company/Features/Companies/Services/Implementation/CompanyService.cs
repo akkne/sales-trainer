@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
@@ -11,11 +12,20 @@ internal sealed class CompanyService(
     CompanyDbContext databaseContext,
     IBriefingAiClient briefingAiClient,
     IParseLogAiClient parseLogAiClient,
-    IPersonaAiClient personaAiClient) : ICompanyService
+    IPersonaAiClient personaAiClient,
+    IReadinessAiClient readinessAiClient) : ICompanyService
 {
     private const int DescriptionExcerptLength = 160;
     private const int RecentGoalCount = 5;
     private const int RecentCallLogCountForBriefing = 5;
+
+    // Mirrors ai-service's ReadinessController.MaxSessionIds guard — no point sending more
+    // session ids than ai-service will accept.
+    private const int MaxSessionIdsForReadiness = 50;
+
+    private static readonly JsonSerializerOptions ReadinessCacheSerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private sealed record ReadinessCachePayload(int Score, List<string> Strengths, List<string> Gaps, string Recommendation);
 
     public async Task<IReadOnlyList<CompanySummaryDto>> ListCompaniesAsync(
         Guid userId,
@@ -383,10 +393,10 @@ internal sealed class CompanyService(
         CreatePracticeCallRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        var companyExists = await databaseContext.Companies
-            .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
+        var company = await databaseContext.Companies
+            .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
-        if (!companyExists)
+        if (company is null)
             return null;
 
         var practiceCall = new PracticeCall
@@ -400,6 +410,12 @@ internal sealed class CompanyService(
         };
 
         databaseContext.PracticeCalls.Add(practiceCall);
+
+        // A new practice call is this codebase's practice-completion signal (see 39.16 design) —
+        // invalidate the cached readiness score so the next GET regenerates it from fresh feedback.
+        company.ReadinessJson = null;
+        company.ReadinessGeneratedAt = null;
+
         await databaseContext.SaveChangesAsync(cancellationToken);
 
         return MapToPracticeCallDto(practiceCall);
@@ -602,6 +618,62 @@ internal sealed class CompanyService(
             return null;
 
         return new CompanyBriefingDto(company.BriefingContent, company.BriefingGeneratedAt);
+    }
+
+    public async Task<CompanyReadinessDto?> GetReadinessAsync(
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await databaseContext.Companies
+            .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
+
+        if (company is null)
+            return null;
+
+        if (company.ReadinessJson is not null)
+        {
+            var cached = JsonSerializer.Deserialize<ReadinessCachePayload>(company.ReadinessJson, ReadinessCacheSerializerOptions);
+            // A corrupted/hand-edited cache value (e.g. literal "null") is treated as a
+            // cache miss and regenerated below, rather than throwing a raw 500.
+            if (cached is not null)
+                return new CompanyReadinessDto(cached.Score, cached.Strengths, cached.Gaps, cached.Recommendation, company.ReadinessGeneratedAt);
+        }
+
+        // Most recent practice-call session ids first (capped to what ai-service accepts), plus
+        // the single latest non-empty goal — same "latest goal" notion used by the briefing feature.
+        var sessionIds = await databaseContext.PracticeCalls
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.DialogSessionId != string.Empty)
+            .OrderByDescending(practiceCall => practiceCall.CreatedAt)
+            .Take(MaxSessionIdsForReadiness)
+            .Select(practiceCall => practiceCall.DialogSessionId)
+            .ToListAsync(cancellationToken);
+
+        if (sessionIds.Count == 0)
+            return new CompanyReadinessDto(null, null, null, null, null);
+
+        var latestGoal = await databaseContext.PracticeCalls
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
+            .OrderByDescending(practiceCall => practiceCall.CreatedAt)
+            .Select(practiceCall => practiceCall.Goal)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var aiResult = await readinessAiClient.GenerateReadinessAsync(
+            new ReadinessAiRequest(userId, latestGoal, sessionIds), cancellationToken);
+
+        if (aiResult is null)
+            return new CompanyReadinessDto(null, null, null, null, null);
+
+        var generatedAt = DateTime.UtcNow;
+        company.ReadinessJson = JsonSerializer.Serialize(
+            new ReadinessCachePayload(aiResult.Score, aiResult.Strengths, aiResult.Gaps, aiResult.Recommendation),
+            ReadinessCacheSerializerOptions);
+        company.ReadinessGeneratedAt = generatedAt;
+        company.UpdatedAt = generatedAt;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+
+        return new CompanyReadinessDto(aiResult.Score, aiResult.Strengths, aiResult.Gaps, aiResult.Recommendation, generatedAt);
     }
 
     public async Task<ParsedCallLogDto?> ParseCallLogAsync(

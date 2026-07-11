@@ -531,6 +531,21 @@ involvement.
 > provider call fails, or any of `name`/`position`/`personality` is missing/empty in the response
 > (unlike parse-log, personas have no valid "N/A" field — an incomplete persona is treated as a
 > parse failure). Shares `InternalServiceAuthFilter` with the other internal endpoints.
+> Internal-only (Phase 39.16): `POST /ai/companies/readiness` `{userId, goal?, sessionIds: string[]}`
+> (max 50 session ids, `400` if exceeded) → `{score (0-100), strengths: string[], gaps: string[],
+> recommendation}`, called by company-service to score a user's readiness for a real call. Unlike
+> the other internal endpoints, this one **does** read from ai-service's own Mongo store: for each
+> `sessionIds` entry it loads the `DialogSession` **scoped to `userId`** (via
+> `IDialogService.GetSessionForUserAsync`, so ai-service independently verifies the caller-supplied
+> ids belong to that user — defense in depth beyond `InternalServiceAuthFilter` + company-service's
+> ownership check) and pulls `Feedback.Summary`, skipping sessions with no feedback yet (abandoned/incomplete calls).
+> If zero sessions have usable feedback, returns **`204 No Content`** without calling the LLM — the
+> "no data yet" signal company-service turns into its own `204`. Otherwise composes a Russian
+> system prompt from the collected summaries (+ optional `goal`) instructing strict JSON output;
+> `score` is clamped to `[0, 100]` after parsing (tolerates a numeric string too). `503` if OpenAI
+> isn't configured, the provider call fails, or the response is unparseable/missing
+> `score`/`recommendation` (`strengths`/`gaps` default to `[]` if omitted). Shares
+> `InternalServiceAuthFilter` with the other internal endpoints.
 
 ### Public endpoints
 
@@ -913,6 +928,7 @@ DTO additions on the Discuss user endpoints above:
 | PUT | /companies/{id}/follow-up | `{nextActionAt, nextActionNote?}` | `CompanyDetailDto` or `404` |
 | POST | /companies/{id}/briefing | — | `CompanyBriefingDto`, `404`, or `503` if ai-service is unavailable |
 | GET | /companies/{id}/briefing | — | `CompanyBriefingDto` or `204` if never generated, or `404` |
+| GET | /companies/{id}/readiness | — | `CompanyReadinessDto`, `204` if no data yet, `404`, or `503` if ai-service is unavailable |
 | DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts + personas) |
 
 `CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, nextActionAt, createdAt, updatedAt}`
@@ -960,6 +976,29 @@ has no cross-service read into ai-service's Mongo feedback store (out of scope f
 gracefully (skips that section's data) when empty.
 
 `CompanyBriefingDto`: `{content, generatedAt}` — both `null` when never generated.
+
+**Readiness score (Phase 39.16):** `GET /companies/{id}/readiness` **self-generates and caches** —
+unlike briefing, there is no separate `POST`. On a cache miss it gathers the company's practice-call
+`DialogSessionId`s (newest first, capped to 50 — mirrors ai-service's own cap) and the single most
+recent non-empty `PracticeCall.Goal`, and forwards them to ai-service's internal
+`POST /ai/companies/readiness` (see above). The result is cached on
+`Company.ReadinessJson`/`ReadinessGeneratedAt` and returned; a subsequent `GET` returns the cache
+without calling ai-service again. Two distinct "no data" cases both collapse to `204`, with all
+`CompanyReadinessDto` fields `null` and **nothing cached** (so the next `GET` retries): (1) the
+company has no practice calls yet — the ai-service call is skipped entirely; (2) the company has
+practice calls but ai-service signalled `204` (none of them have usable feedback yet, e.g. sessions
+still in progress or abandoned). `404` on missing company/wrong owner; `503` if ai-service is
+unreachable, misconfigured, or returns an unparseable/incomplete response (same pattern as
+briefing/persona).
+
+**Cache invalidation:** creating a practice call (`POST /companies/{id}/practice-calls`) is this
+codebase's practice-completion signal (dialog-session completion itself is tracked only in
+ai-service's Mongo, not in company-service) — it clears `ReadinessJson`/`ReadinessGeneratedAt` on
+the company so the next `GET /readiness` regenerates from the fresh session list. There is no other
+path in company-service that marks a practice call complete.
+
+`CompanyReadinessDto`: `{score, strengths, gaps, recommendation, generatedAt}` — all fields `null`
+when there's no data yet (see above).
 
 ### Call Log
 

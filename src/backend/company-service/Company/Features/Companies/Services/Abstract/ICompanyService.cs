@@ -50,4 +50,13 @@ public interface ICompanyService
     /// <see cref="CreatePersonaAsync"/>. Null if the company doesn't exist/belong to the user.
     /// </summary>
     Task<GeneratedCompanyPersonaDto?> GeneratePersonaAsync(Guid userId, Guid companyId, GenerateCompanyPersonaRequestDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the company's readiness score, generating and caching it on first call (or after
+    /// invalidation) and returning the cached value on subsequent calls. All DTO fields are null
+    /// when the company has no practice sessions yet or ai-service found no usable feedback among
+    /// them — the controller turns that into a 204. Null return means the company doesn't
+    /// exist/belong to the user (404).
+    /// </summary>
+    Task<CompanyReadinessDto?> GetReadinessAsync(Guid userId, Guid companyId, CancellationToken cancellationToken = default);
 }

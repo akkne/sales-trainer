@@ -15,6 +15,7 @@ public sealed class CompanyServiceTests
     private IBriefingAiClient _briefingAiClient = null!;
     private IParseLogAiClient _parseLogAiClient = null!;
     private IPersonaAiClient _personaAiClient = null!;
+    private IReadinessAiClient _readinessAiClient = null!;
     private CompanyService _companyService = null!;
 
     private static readonly Guid FirstUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -27,7 +28,8 @@ public sealed class CompanyServiceTests
         _briefingAiClient = Substitute.For<IBriefingAiClient>();
         _parseLogAiClient = Substitute.For<IParseLogAiClient>();
         _personaAiClient = Substitute.For<IPersonaAiClient>();
-        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient, _personaAiClient);
+        _readinessAiClient = Substitute.For<IReadinessAiClient>();
+        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
     }
 
     [TearDown]
@@ -1089,5 +1091,140 @@ public sealed class CompanyServiceTests
             FirstUserId, company.Id, new GenerateCompanyPersonaRequestDto(null, null, PersonaDifficulty.Medium));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_returns_null_for_wrong_owner()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.GetReadinessAsync(SecondUserId, company.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_returns_null_for_nonexistent_company()
+    {
+        var result = await _companyService.GetReadinessAsync(FirstUserId, Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_returns_all_null_fields_when_no_practice_sessions()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+
+        var result = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Score.Should().BeNull();
+        result.Strengths.Should().BeNull();
+        result.Gaps.Should().BeNull();
+        result.Recommendation.Should().BeNull();
+        result.GeneratedAt.Should().BeNull();
+        await _readinessAiClient.DidNotReceive().GenerateReadinessAsync(
+            Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_returns_all_null_fields_when_ai_service_signals_no_data()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "goal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns((ReadinessAiResult?)null);
+
+        var result = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Score.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_generates_and_caches_then_second_call_returns_cache_without_calling_ai_client_again()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "Close the deal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ReadinessAiResult(75, ["Уверенный тон"], ["Работа с ценой"], "Потренируйте возражения."));
+
+        var firstResult = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+        var secondResult = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        firstResult.Should().NotBeNull();
+        firstResult!.Score.Should().Be(75);
+        secondResult.Should().NotBeNull();
+        secondResult!.Score.Should().Be(75);
+        secondResult.Strengths.Should().ContainSingle().Which.Should().Be("Уверенный тон");
+        secondResult.Recommendation.Should().Be("Потренируйте возражения.");
+        await _readinessAiClient.Received(1).GenerateReadinessAsync(
+            Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_passes_session_ids_and_latest_goal_to_ai_client()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Older goal", DateTime.UtcNow.AddDays(-2));
+        await TestCompanyDatabaseFactory.SeedPracticeCallAsync(_databaseContext, FirstUserId, company.Id, "Newest goal", DateTime.UtcNow.AddDays(-1));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ReadinessAiResult(50, [], [], "Ок."));
+
+        await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        await _readinessAiClient.Received(1).GenerateReadinessAsync(
+            Arg.Is<ReadinessAiRequest>(request =>
+                request.Goal == "Newest goal" &&
+                request.SessionIds.Count == 2),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_propagates_ai_failure()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "goal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns<ReadinessAiResult?>(_ => throw new InvalidOperationException("AI readiness service returned 503."));
+
+        var act = () => _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task CreatePracticeCallAsync_invalidates_cached_readiness_so_next_get_regenerates_it()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "goal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ReadinessAiResult(40, [], [], "Первая рекомендация."));
+        await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        // A new practice call is the completion signal that should invalidate the cache.
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-2", "goal 2"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ReadinessAiResult(90, [], [], "Вторая рекомендация."));
+
+        var result = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Score.Should().Be(90);
+        result.Recommendation.Should().Be("Вторая рекомендация.");
+        await _readinessAiClient.Received(2).GenerateReadinessAsync(
+            Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
     }
 }
