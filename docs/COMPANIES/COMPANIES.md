@@ -145,12 +145,14 @@ on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, o
     `company-status-menu.tsx` implements the full ARIA `menu`/`menuitem` keyboard contract
     (39.17 PR #20 review fast-follow): opening focuses the current status item, `ArrowDown`/
     `ArrowUp` move roving focus with wraparound, `Home`/`End` jump to the first/last item,
-    `Escape` closes the menu and returns focus to the trigger, and selecting an item (click or
-    native Enter/Space on the `<button role="menuitem">`) closes the menu and returns focus to the
-    trigger. `useUpdateCompanyStatus` applies an optimistic update (flips the status in both the
-    `["companies"]` list cache and the `["companies", id]` detail cache in `onMutate`, rolled back
-    in `onError`), matching the pattern used by `useUpdateEnrolledSkills` in
-    `features/skills/hooks/use-skill-tree.ts`.
+    `Escape` or `Tab` closes the menu and returns focus to the trigger, and selecting an item
+    (click or native Enter/Space on the `<button role="menuitem">`) closes the menu and returns
+    focus to the trigger. `useUpdateCompanyStatus` applies an optimistic update (flips the status
+    in both the `["companies"]` list cache and the `["companies", id]` detail cache in `onMutate`,
+    rolled back in `onError`), matching the pattern used by `useUpdateEnrolledSkills` in
+    `features/skills/hooks/use-skill-tree.ts`. Cache invalidation for both keys runs in
+    `onSettled` (not `onSuccess`) so the caches re-sync with the server on **both** success and
+    error — a rollback restores a snapshot that may already be stale, so it always refetches too.
   - `lib/company-followup.ts` — due/overdue tone for a `nextActionAt` (due: within 24h, overdue:
     past); `components/company-followup-badge.tsx` (renders nothing when there's no follow-up or
     it's more than a day out) and `components/company-followup-card.tsx` (date + note editor on

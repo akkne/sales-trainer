@@ -218,15 +218,19 @@ npx vitest run __tests__/Compan
 - `useCompanies.test.tsx` — list/create/update/delete hooks, search filtering,
   `useUpdateCompanyStatus` (PUT to `/companies/{id}/status`, cache invalidation, error toast,
   and — 39.17 PR #20 review fast-follow — **optimistic update**: the status flips in the cached
-  `["companies"]` list immediately on `mutate()` before the request resolves, and rolls back to the
-  previous cached value on error), `useUpdateCompanyFollowUp` (PUT to `/companies/{id}/follow-up`
-  with a schedule and with null-clearing fields, cache invalidation, error toast)
+  `["companies"]` list *and* the `["companies", id]` detail cache immediately on `mutate()` before
+  the request resolves, rolls back both to their previous cached values on error, and re-syncs via
+  `invalidateQueries` in `onSettled` — i.e. on **both** success and error, not just success (a PR
+  #29 review follow-up: a rollback alone can leave a stale snapshot if it doesn't refetch)),
+  `useUpdateCompanyFollowUp` (PUT to `/companies/{id}/follow-up` with a schedule and with
+  null-clearing fields, cache invalidation, error toast)
 - `CompanyStatusMenu.test.tsx` — status dropdown: shows current status, lists all 5 options,
   calls `onChange` on selection (not on re-selecting the current status), disabled state, and
   (39.17 PR #20 review fast-follow) the ARIA menu keyboard contract: opening the menu moves focus
   to the currently-selected `menuitem`, `Escape` closes the menu and returns focus to the trigger,
   `ArrowDown`/`ArrowUp` move roving focus between items and wrap at the ends, `Home`/`End` jump to
-  the first/last item, and selecting an item (click or Enter/Space via native `<button>` behavior)
+  the first/last item, `Tab` closes the menu (menus trap tabbing), and selecting an item (click or
+  Enter/Space via native `<button>` behavior)
   closes the menu and returns focus to the trigger
 - `CompanyFollowUpCard.test.tsx` — empty state, shows scheduled date/note, edit → save (date +
   note), save disabled while date is empty, clear via "Убрать напоминание", cancel discards edits

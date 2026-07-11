@@ -87,7 +87,8 @@ export function useUpdateCompanyStatus() {
             apiClient.put<CompanyDetail>(`/companies/${id}/status`, { status }),
         // Optimistically flip the status in both caches so the badge/menu reflects
         // the change instantly instead of waiting for the round-trip. Rolled back
-        // in onError; onSuccess re-syncs with the server response.
+        // in onError; onSettled re-syncs with the server on both success and error
+        // (a rollback restores a possibly-stale snapshot, so it must refetch too).
         onMutate: async ({ id, status }: { id: string; status: CompanyStatus }) => {
             await queryClient.cancelQueries({ queryKey: companiesKey });
             await queryClient.cancelQueries({ queryKey: companyKey(id) });
@@ -104,10 +105,6 @@ export function useUpdateCompanyStatus() {
 
             return { previousList, previousDetail, id };
         },
-        onSuccess: (_data, { id }) => {
-            queryClient.invalidateQueries({ queryKey: companiesKey });
-            queryClient.invalidateQueries({ queryKey: companyKey(id) });
-        },
         onError: (error: Error, _variables, context) => {
             if (context?.previousList) {
                 queryClient.setQueryData(companiesKey, context.previousList);
@@ -116,6 +113,10 @@ export function useUpdateCompanyStatus() {
                 queryClient.setQueryData(companyKey(context.id), context.previousDetail);
             }
             toast.error(`Не удалось изменить статус: ${error.message}`);
+        },
+        onSettled: (_data, _error, { id }) => {
+            queryClient.invalidateQueries({ queryKey: companiesKey });
+            queryClient.invalidateQueries({ queryKey: companyKey(id) });
         },
     });
 }

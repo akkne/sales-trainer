@@ -116,4 +116,20 @@ describe("CompanyStatusMenu", () => {
         expect(screen.queryByRole("menu")).toBeFalsy();
         expect(trigger).toHaveFocus();
     });
+
+    it("closes the menu on Tab (menus trap tabbing; leaving should close it)", async () => {
+        render(<CompanyStatusMenu status="Lead" onChange={onChange} />);
+        const trigger = screen.getByRole("button", { name: /Лид/ });
+
+        fireEvent.click(trigger);
+        await waitFor(() => expect(screen.getByRole("menu")).toBeTruthy());
+
+        fireEvent.keyDown(screen.getByRole("menu"), { key: "Tab" });
+
+        expect(screen.queryByRole("menu")).toBeFalsy();
+        // jsdom doesn't implement native Tab focus-traversal, but our handler
+        // explicitly calls closeAndReturnFocus() (same as Escape), so focus
+        // returning to the trigger here reflects real code, not a jsdom quirk.
+        expect(trigger).toHaveFocus();
+    });
 });

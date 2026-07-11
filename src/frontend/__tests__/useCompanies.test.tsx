@@ -27,6 +27,7 @@ import {
     useDeleteCompany,
     type CompanySummary,
 } from "@/features/companies/hooks/use-companies";
+import type { CompanyStatus } from "@/features/companies/lib/company-status";
 
 const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
 const mockPost = apiClient.post as ReturnType<typeof vi.fn>;
@@ -200,6 +201,38 @@ describe("useUpdateCompanyStatus", () => {
         expect(queryClient.getQueryData<CompanySummary[]>(["companies"])?.find((c) => c.id === "1")?.status).toBe(
             "Lead"
         );
+    });
+
+    it("optimistically flips the status in the cached company detail, and rolls back on error", async () => {
+        const { queryClient, wrapper } = createWrapper();
+        const detail = {
+            id: "1", name: "Ромашка", description: "", status: "Lead" as CompanyStatus,
+            contactCount: 0, callLogCount: 0, practiceCallCount: 0,
+            nextActionAt: null, nextActionNote: null, followUpNotifiedAt: null,
+            createdAt: "", updatedAt: "",
+        };
+        queryClient.setQueryData(["companies", "1"], detail);
+
+        let resolvePut!: (value: unknown) => void;
+        mockPut.mockReturnValue(new Promise((resolve) => { resolvePut = resolve; }));
+
+        const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result.current.mutate({ id: "1", status: "Contacted" });
+
+        await waitFor(() =>
+            expect(queryClient.getQueryData<typeof detail>(["companies", "1"])?.status).toBe("Contacted")
+        );
+
+        resolvePut({ ...detail, status: "Contacted" });
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+        // Now exercise the rollback path on a fresh mutation.
+        mockPut.mockRejectedValue(new Error("network down"));
+        const { result: result2 } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result2.current.mutate({ id: "1", status: "DealLost" });
+
+        await waitFor(() => expect(result2.current.isError).toBe(true));
+        expect(queryClient.getQueryData<typeof detail>(["companies", "1"])?.status).toBe("Contacted");
     });
 });
 
