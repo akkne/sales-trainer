@@ -65,9 +65,24 @@ all-`null`-fields when the AI client itself signals no data (`null` result), gen
 on first call then a second call returns the cache **without calling the AI client again**
 (`Received(1)`), passes the practice calls' session ids and the single latest non-empty goal to the
 AI client, propagates an `InvalidOperationException` thrown by the AI client (mapped to `503` by
-`CompanyController.GetReadiness`), and — the cache-invalidation contract — creating a **new**
-practice call after a cached readiness exists clears the cache so the next `GetReadinessAsync` call
-hits the AI client again (`Received(2)` across both generations) and returns the fresh score.
+`CompanyController.GetReadiness`) **and leaves the cache untouched** (`ReadinessJson`/
+`ReadinessGeneratedAt`/`ReadinessNoFeedbackUntil` all still `null` after the failed call), and —
+the cache-invalidation contract — creating a **new** practice call after a cached readiness exists
+clears the cache so the next `GetReadinessAsync` call hits the AI client again (`Received(2)`
+across both generations) and returns the fresh score.
+
+**Negative cache (39.17 PR #26 review fast-follow):** when ai-service signals no usable feedback
+(`null` result), `GetReadinessAsync` sets `Company.ReadinessNoFeedbackUntil` (now + 2 minutes); a
+second call within the TTL returns the same empty result **without calling the AI client again**
+(`GetReadinessAsync_negative_caches_no_feedback_result_so_repeat_call_does_not_refanout`,
+`Received(1)`). Creating a new practice call clears `ReadinessNoFeedbackUntil` too, so a fresh
+practice call always gets a fresh fan-out attempt even mid-TTL
+(`CreatePracticeCallAsync_clears_negative_readiness_cache_so_next_get_refanouts`).
+
+`CompanyControllerTests.cs` covers the controller-level AI-failure → `503` mapping directly (both
+`GenerateBriefing` and `GetReadiness`, both for a thrown `InvalidOperationException` and for a raw
+`HttpRequestException` transport failure), complementing the service-layer
+cache-unchanged assertions above.
 ```
 cd src/backend
 dotnet test company-service/Company.Tests/Sellevate.Company.Tests.csproj
@@ -120,10 +135,13 @@ dotnet test ai-service/Ai.Tests/Ai.Tests.csproj --filter "FullyQualifiedName~Bri
 ```
 Coverage: `BriefingService` returns the chat service's markdown content, throws
 `InvalidOperationException` when OpenAI isn't configured, the composed system prompt includes the
-company description/goal/recent-calls/feedback-summaries, and empty recent-calls/feedback lists
-don't throw. `BriefingController` (`IBriefingService` mocked): `200` with `{content, generatedAt}`
-on success, `503` on `InvalidOperationException` or `HttpRequestException` — same pattern as
-`EvaluationController`.
+company description/goal/recent-calls/feedback-summaries, empty recent-calls/feedback lists
+don't throw, and (39.17 PR #22 review fast-follow) it calls `GenerateTextAsync` with
+`OpenAiConfiguration.BriefingModel`/`MaximumBriefingTokenCount` — not the open-question/feedback
+config — proven by a dedicated test that sets divergent values for both pairs and asserts only the
+briefing-specific ones were passed through. `BriefingController` (`IBriefingService` mocked): `200`
+with `{content, generatedAt}` on success, `503` on `InvalidOperationException` or
+`HttpRequestException` — same pattern as `EvaluationController`.
 
 ### Backend — ai-service call-log parsing (NUnit)
 `src/backend/ai-service/Ai.Tests/Unit/ParseLogServiceTests.cs`,
