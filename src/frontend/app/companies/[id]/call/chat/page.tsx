@@ -110,7 +110,6 @@ export default function CompanyChatCallPage() {
             });
             setSessionId(session.id);
             setMessages(session.messages);
-            createPracticeCall.mutate({ dialogSessionId: session.id, goal });
         } catch (sessionError) {
             setError(sessionError instanceof Error ? sessionError.message : "Не удалось начать сессию");
         } finally {
@@ -135,6 +134,7 @@ export default function CompanyChatCallPage() {
             const sessionFeedback = await completeDialogSession(sid);
             if (sessionFeedback) {
                 setFeedback(sessionFeedback);
+                createPracticeCall.mutate({ dialogSessionId: sid, goal });
                 queryClient.invalidateQueries({ queryKey: ["profile"] });
             }
         } catch (completeError) {
@@ -142,7 +142,8 @@ export default function CompanyChatCallPage() {
         } finally {
             setIsCompleting(false);
         }
-    }, [isCompleting, queryClient]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCompleting, queryClient, goal]);
 
     const handleSendMessage = async (content: string) => {
         if (!sessionId || isSending) return;

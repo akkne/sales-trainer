@@ -219,9 +219,7 @@ export default function CompanyVoiceCallPage() {
         if (callEndedRef.current) return;
         setSessionId(newSessionId);
         setCallStatus("connected");
-        createPracticeCall.mutate({ dialogSessionId: newSessionId, goal });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [goal]);
+    }, []);
 
     const completeSession = useCallback(async (sid: string) => {
         if (isCompleting) return;
@@ -230,6 +228,7 @@ export default function CompanyVoiceCallPage() {
             const sessionFeedback = await completeDialogSession(sid);
             if (sessionFeedback) {
                 setFeedback(sessionFeedback);
+                createPracticeCall.mutate({ dialogSessionId: sid, goal });
                 queryClient.invalidateQueries({ queryKey: ["profile"] });
             } else {
                 setSessionId(null);
@@ -239,7 +238,8 @@ export default function CompanyVoiceCallPage() {
         } finally {
             setIsCompleting(false);
         }
-    }, [isCompleting, queryClient]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCompleting, queryClient, goal]);
 
     const handleTranscript = useCallback((transcript: string) => {
         assistantReplyOpenRef.current = false;

@@ -1048,11 +1048,16 @@ failing request, while other `400`s leave the form untouched.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /companies/{id}/practice-calls | `{dialogSessionId, goal}` | `201 PracticeCallDto` or `404` |
+| POST | /companies/{id}/practice-calls | `{dialogSessionId, goal?}` | `201 PracticeCallDto` or `404` |
 | GET | /companies/{id}/practice-calls | — | `PracticeCallDto[]` sorted by `createdAt DESC` |
 | GET | /companies/{id}/recent-goals | — | `string[]` — last 5 distinct non-empty goals, newest first |
 
 `PracticeCallDto`: `{id, companyId, dialogSessionId, goal, createdAt}`
+
+`goal` is **optional** (`≤1000`); when omitted/empty it is stored as `""` and excluded from
+recent-goals. The client records the practice call only once the session **completes and
+feedback is formed** (on hang-up / stop-signal), not at call start — so an abandoned session
+leaves no practice-call record.
 
 Validation: `goal` max 1000; `dialogSessionId` required.
 

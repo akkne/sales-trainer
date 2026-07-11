@@ -439,7 +439,7 @@ internal sealed class CompanyService(
             CompanyId = companyId,
             UserId = userId,
             DialogSessionId = request.DialogSessionId,
-            Goal = request.Goal,
+            Goal = request.Goal ?? string.Empty,
             CreatedAt = DateTime.UtcNow
         };
 

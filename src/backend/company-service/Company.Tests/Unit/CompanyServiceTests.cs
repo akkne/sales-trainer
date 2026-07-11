@@ -501,6 +501,19 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task CreatePracticeCallAsync_stores_empty_goal_when_goal_is_omitted()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var request = new CreatePracticeCallRequestDto("session-no-goal");
+
+        var result = await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id, request);
+
+        result.Should().NotBeNull();
+        result!.DialogSessionId.Should().Be("session-no-goal");
+        result.Goal.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task GetRecentGoalsAsync_returns_last_5_distinct_goals_newest_first()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");

@@ -138,26 +138,47 @@ describe("CompanyVoiceCallPage", () => {
     it("truncates the goal passed to companyContext.callGoal to 500 chars but keeps the full goal for the practice-call record", async () => {
         const longGoal = "a".repeat(600);
         window.sessionStorage.setItem("company-call-goal:c1", longGoal);
+        completeDialogSession.mockResolvedValue({
+            summary: "Хорошо", content: "Разбор", generatedAt: "2026-07-09T00:00:00Z", xpEarned: 10,
+        });
 
         renderPage();
         expect((capturedVoiceOptions?.companyContext as { callGoal: string }).callGoal).toHaveLength(500);
 
         fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
         await waitFor(() => expect(mutateCreatePracticeCall).toHaveBeenCalledOnce());
         expect(mutateCreatePracticeCall).toHaveBeenCalledWith({ dialogSessionId: "sess-1", goal: longGoal });
     });
 
-    it("registers the practice call with the created session id and the full goal once the session is created", async () => {
+    it("registers the practice call with the session id and the full goal once feedback is formed", async () => {
         window.sessionStorage.setItem("company-call-goal:c1", "Узнать бюджет на Q3");
+        completeDialogSession.mockResolvedValue({
+            summary: "Хорошо", content: "Разбор", generatedAt: "2026-07-09T00:00:00Z", xpEarned: 10,
+        });
 
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
 
         await waitFor(() => expect(mutateCreatePracticeCall).toHaveBeenCalledOnce());
         expect(mutateCreatePracticeCall).toHaveBeenCalledWith({
             dialogSessionId: "sess-1",
             goal: "Узнать бюджет на Q3",
         });
+    });
+
+    it("does not register a practice call when the session ends without feedback", async () => {
+        window.sessionStorage.setItem("company-call-goal:c1", "Узнать бюджет на Q3");
+        completeDialogSession.mockResolvedValue(null);
+
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
+        await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-1"));
+        expect(mutateCreatePracticeCall).not.toHaveBeenCalled();
     });
 
     it("navigates back to /companies/[id] on the back link (not /dialog)", () => {
@@ -176,9 +197,8 @@ describe("CompanyVoiceCallPage", () => {
 
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
-        await waitFor(() => expect(mutateCreatePracticeCall).toHaveBeenCalledOnce());
 
-        fireEvent.click(screen.getByRole("button", { name: "Завершить звонок" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
         await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-1"));
 
         await waitFor(() => expect(screen.getByText("Закрыть разбор")).toBeTruthy());
