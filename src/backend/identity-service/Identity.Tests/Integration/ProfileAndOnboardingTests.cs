@@ -43,6 +43,31 @@ public class ProfileAndOnboardingTests
     }
 
     [Test]
+    public async Task UpdateProfile_RequiresAuthentication()
+    {
+        var client = Factory.CreateClient();
+        var response = await client.PutAsJsonAsync("/profile", new { displayName = "Someone" });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task UpdateProfile_RejectsEmptyName()
+    {
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "e@test.com", "E");
+        var response = await client.PutAsJsonAsync("/profile", new { displayName = "   " });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task UpdateProfile_RejectsInvalidPersona()
+    {
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "p2@test.com", "P");
+        var response = await client.PutAsJsonAsync("/profile",
+            new { displayName = "Valid Name", persona = "not-a-persona" });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
     public async Task GetAvatar_ForUnknownUser_ReturnsNotFound()
     {
         var client = Factory.CreateClient();

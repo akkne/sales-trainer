@@ -194,6 +194,14 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 | GET | /profile | `UserProfileStatsDto` |
 | GET | /profile/achievements | `AchievementDto[]` |
 | PUT | /profile/persona | `{persona: string}` → 204 |
+| PUT | /profile | `{displayName: string (1–100, required), persona?: string}` → 204 |
+
+> `PUT /profile` updates the user's display name (and, when `persona` is provided and
+> valid, upserts the persona in one call). `displayName` is trimmed; empty → `400`,
+> `>100` chars → `400`, `persona` outside the allow-list (`sdr`, `account_executive`,
+> `account_manager`, `founder`, `other`) → `400`, unknown user → `404`. A successful
+> update publishes `UserUpdatedEvent` so replica-holding services (ai, notification, …)
+> refresh their cached display name.
 
 ### Gamification progress (Phase 7)
 

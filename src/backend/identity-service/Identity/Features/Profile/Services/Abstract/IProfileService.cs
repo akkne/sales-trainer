@@ -12,4 +12,10 @@ public interface IProfileService
         Guid userId,
         string persona,
         CancellationToken cancellationToken = default);
+
+    Task UpdateProfileForUserAsync(
+        Guid userId,
+        string displayName,
+        string? persona,
+        CancellationToken cancellationToken = default);
 }

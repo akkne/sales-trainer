@@ -2,6 +2,8 @@ namespace Sellevate.Identity.Features.Profile.Models;
 
 public record UpdatePersonaRequestDto(string Persona);
 
+public record UpdateProfileRequestDto(string DisplayName, string? Persona);
+
 public record UserProfileStatsDto(
     string DisplayName,
     string Email,

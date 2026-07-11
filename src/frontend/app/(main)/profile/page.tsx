@@ -6,8 +6,10 @@ import { useProfile } from "@/features/profile/hooks/use-profile";
 import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
 import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
+import { useUpdateProfile } from "@/features/profile/hooks/use-update-profile";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 import { ManageSkillsModal } from "@/features/skills/components/manage-skills-modal";
+import { EditProfileModal } from "@/features/profile/components/edit-profile-modal";
 
 const ALWAYS_ENROLLED_SLUG = "sales-basics";
 
@@ -34,7 +36,9 @@ export default function ProfilePage() {
     const { authenticatedUser } = useAuthStore();
     const { version, uploading, uploadError, fileInputRef, openFilePicker, handleFileChange } =
         useAvatarUpload();
+    const updateProfileMutation = useUpdateProfile();
     const [manageOpen, setManageOpen] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
 
     if (profileLoading) {
         return (
@@ -131,14 +135,6 @@ export default function ProfilePage() {
                                 )}
                             </div>
                         </div>
-                        {/* Hidden file input — triggered by "Edit profile" button */}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            style={{ display: "none" }}
-                            onChange={handleFileChange}
-                        />
                     </div>
 
                     {/* Name / persona / email */}
@@ -154,12 +150,11 @@ export default function ProfilePage() {
                         )}
                     </div>
 
-                    {/* Edit profile — reuses avatar file picker to update photo */}
+                    {/* Edit profile — opens a modal to change name, position and photo */}
                     <div className="pv2-identity-actions">
                         <button
                             type="button"
-                            onClick={uploading ? undefined : openFilePicker}
-                            disabled={uploading}
+                            onClick={() => setEditOpen(true)}
                             className="pv2-edit-profile-button"
                         >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -359,6 +354,29 @@ export default function ProfilePage() {
                 isSaving={updateEnrolledMutation.isPending}
                 isError={updateEnrolledMutation.isError}
                 onClose={() => setManageOpen(false)}
+            />
+        )}
+
+        {editOpen && (
+            <EditProfileModal
+                initialName={profileStats.displayName}
+                initialPersona={profileStats.persona}
+                avatarSrc={avatarSrc}
+                avatarInitials={initials(profileStats.displayName)}
+                uploading={uploading}
+                uploadError={uploadError}
+                fileInputRef={fileInputRef}
+                onPickPhoto={openFilePicker}
+                onFileChange={handleFileChange}
+                isSaving={updateProfileMutation.isPending}
+                isError={updateProfileMutation.isError}
+                onSave={(displayName, persona) =>
+                    updateProfileMutation.mutate(
+                        { displayName, persona },
+                        { onSuccess: () => setEditOpen(false) }
+                    )
+                }
+                onClose={() => setEditOpen(false)}
             />
         )}
         </>

@@ -44,10 +44,7 @@ public class ProfileController(IProfileService profileService) : ControllerBase
             return Unauthorized();
         }
 
-        var validPersonas = new HashSet<string>
-            { "sdr", "account_executive", "account_manager", "founder", "other" };
-
-        if (!validPersonas.Contains(request.Persona))
+        if (!ValidPersonas.Contains(request.Persona))
         {
             return BadRequest(new { message = "Invalid persona value." });
         }
@@ -55,4 +52,48 @@ public class ProfileController(IProfileService profileService) : ControllerBase
         await profileService.UpdatePersonaForUserAsync(userId, request.Persona);
         return NoContent();
     }
+
+    [HttpPut]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequestDto request)
+    {
+        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (!Guid.TryParse(rawUserId, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var displayName = request.DisplayName?.Trim() ?? "";
+
+        if (displayName.Length == 0)
+        {
+            return BadRequest(new { message = "Display name is required." });
+        }
+
+        if (displayName.Length > 100)
+        {
+            return BadRequest(new { message = "Display name must be 100 characters or fewer." });
+        }
+
+        var persona = string.IsNullOrWhiteSpace(request.Persona) ? null : request.Persona;
+
+        if (persona is not null && !ValidPersonas.Contains(persona))
+        {
+            return BadRequest(new { message = "Invalid persona value." });
+        }
+
+        try
+        {
+            await profileService.UpdateProfileForUserAsync(userId, displayName, persona);
+            return NoContent();
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(new { message = exception.Message });
+        }
+    }
+
+    private static readonly HashSet<string> ValidPersonas =
+        new() { "sdr", "account_executive", "account_manager", "founder", "other" };
 }

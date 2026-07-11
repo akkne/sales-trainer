@@ -76,6 +76,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
 | [DISCUSS_PHOTOS.md](TESTING/DISCUSS_PHOTOS.md) | Discuss photo attachments: upload, max-count, auth, magic-byte validation, cascade delete, PhotoPicker component |
 | [USER_AVATARS.md](TESTING/USER_AVATARS.md) | User avatar upload on own profile: hover overlay, file picker, cache-busting, fallback |
+| [EDIT_PROFILE.md](TESTING/EDIT_PROFILE.md) | Edit profile modal: change name, position (persona) and photo in one dialog; `PUT /profile` validation + `UserUpdatedEvent` propagation |
 | [MICROSERVICES_FOUNDATIONS.md](TESTING/MICROSERVICES_FOUNDATIONS.md) | Phase 0: building-blocks (envelope, idempotency, identity headers) + YARP gateway passthrough/anti-spoof tests |
 | [ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) | Phase 1: presence window math, usage-event counters, funnel event consumption, gateway route-flip config |
 | [NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md) | Phase 4: notification-service unit tests (event→inbox, unread count, mark-read, capping, TTL, mapper) + gateway route-flip |
@@ -181,6 +182,12 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
 - User management (`/admin/users`, admins): rich user list (avatar, email + verification, auth provider, role), per-user detail modal with activity stats (XP, streaks, skills, avg score, persona), moderation rename of inappropriate nicknames, and removal of inappropriate uploaded photos (resets to default avatar). Role changes remain SuperAdmin-only.
+
+### Edit Profile
+- "Edit profile" button on `/profile` opens a modal (same pattern as "Manage skills") to edit **name**, **position (persona)** and **photo** together
+- `PUT /profile` updates display name (1–100 chars, trimmed) and optionally upserts persona; photo reuses `POST /avatars`
+- A successful save publishes `UserUpdatedEvent` so ai/notification user replicas refresh the cached display name
+- Position is a fixed dropdown (SDR, Account Executive, Account Manager, Founder, Other) plus "Not set"
 
 ### User Avatars
 - Custom avatar upload on own profile page (`POST /avatars`, multipart, ≤5 MB, png/jpg/webp)

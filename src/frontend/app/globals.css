@@ -2465,6 +2465,19 @@ html[data-theme="dark"] .pv2-avatar-ring { background: var(--surface-2); }
 html[data-theme="dark"] .pv2-edit-profile-button { background: var(--surface); border-color: var(--line-2); color: var(--ink-2); }
 html[data-theme="dark"] .pv2-edit-profile-button:hover { border-color: var(--primary); color: var(--primary); }
 
+/* ── Edit profile modal ── */
+.epm-photo-row { display: flex; align-items: center; gap: 16px; }
+.epm-photo-avatar { flex: none; }
+.epm-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.epm-field-label select.field { cursor: pointer; }
+
 /* 4 stat tiles */
 .pv2-stats {
   display: grid;
