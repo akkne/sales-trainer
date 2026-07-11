@@ -85,11 +85,36 @@ export function useUpdateCompanyStatus() {
     return useMutation({
         mutationFn: ({ id, status }: { id: string; status: CompanyStatus }) =>
             apiClient.put<CompanyDetail>(`/companies/${id}/status`, { status }),
+        // Optimistically flip the status in both caches so the badge/menu reflects
+        // the change instantly instead of waiting for the round-trip. Rolled back
+        // in onError; onSuccess re-syncs with the server response.
+        onMutate: async ({ id, status }: { id: string; status: CompanyStatus }) => {
+            await queryClient.cancelQueries({ queryKey: companiesKey });
+            await queryClient.cancelQueries({ queryKey: companyKey(id) });
+
+            const previousList = queryClient.getQueryData<CompanySummary[]>(companiesKey);
+            const previousDetail = queryClient.getQueryData<CompanyDetail>(companyKey(id));
+
+            queryClient.setQueryData<CompanySummary[]>(companiesKey, (current) =>
+                current?.map((company) => (company.id === id ? { ...company, status } : company))
+            );
+            queryClient.setQueryData<CompanyDetail>(companyKey(id), (current) =>
+                current ? { ...current, status } : current
+            );
+
+            return { previousList, previousDetail, id };
+        },
         onSuccess: (_data, { id }) => {
             queryClient.invalidateQueries({ queryKey: companiesKey });
             queryClient.invalidateQueries({ queryKey: companyKey(id) });
         },
-        onError: (error: Error) => {
+        onError: (error: Error, _variables, context) => {
+            if (context?.previousList) {
+                queryClient.setQueryData(companiesKey, context.previousList);
+            }
+            if (context) {
+                queryClient.setQueryData(companyKey(context.id), context.previousDetail);
+            }
             toast.error(`Не удалось изменить статус: ${error.message}`);
         },
     });

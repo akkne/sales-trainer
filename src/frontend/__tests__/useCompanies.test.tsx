@@ -159,6 +159,48 @@ describe("useUpdateCompanyStatus", () => {
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(toastError).toHaveBeenCalledWith(expect.stringContaining("network down"));
     });
+
+    it("optimistically flips the status in the cached list before the request resolves", async () => {
+        mockGet.mockResolvedValue(COMPANIES);
+        const { queryClient, wrapper } = createWrapper();
+
+        const { result: listResult } = renderHook(() => useCompanies(), { wrapper });
+        await waitFor(() => expect(listResult.current.isSuccess).toBe(true));
+
+        let resolvePut!: (value: unknown) => void;
+        mockPut.mockReturnValue(new Promise((resolve) => { resolvePut = resolve; }));
+
+        const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result.current.mutate({ id: "1", status: "Contacted" });
+
+        await waitFor(() =>
+            expect(queryClient.getQueryData<CompanySummary[]>(["companies"])?.find((c) => c.id === "1")?.status).toBe(
+                "Contacted"
+            )
+        );
+
+        resolvePut({ id: "1", name: "Ромашка", description: "", status: "Contacted", contactCount: 0, callLogCount: 0, practiceCallCount: 0, createdAt: "", updatedAt: "" });
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    });
+
+    it("rolls back the optimistic status change on error", async () => {
+        mockGet.mockResolvedValue(COMPANIES);
+        const { queryClient, wrapper } = createWrapper();
+
+        const { result: listResult } = renderHook(() => useCompanies(), { wrapper });
+        await waitFor(() => expect(listResult.current.isSuccess).toBe(true));
+
+        mockPut.mockRejectedValue(new Error("network down"));
+
+        const { result } = renderHook(() => useUpdateCompanyStatus(), { wrapper });
+        result.current.mutate({ id: "1", status: "Contacted" });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
+
+        expect(queryClient.getQueryData<CompanySummary[]>(["companies"])?.find((c) => c.id === "1")?.status).toBe(
+            "Lead"
+        );
+    });
 });
 
 describe("useUpdateCompanyFollowUp", () => {
