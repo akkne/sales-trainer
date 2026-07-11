@@ -4,6 +4,27 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-07-11 — INCIDENT: sellevate.site down — registrar suspended the domain (email verification hold)
+
+- **Symptom:** `https://sellevate.site` unreachable from the internet; `api.sellevate.site`
+  failed TLS with "unrecognized name". All Docker services up; Traefik served HTTP 200 for
+  `sellevate.site` when queried locally with `--resolve sellevate.site:443:127.0.0.1`.
+- **Root cause:** Not the server. The registrar (PDR Ltd / PublicDomainRegistry, likely via a
+  reseller) suspended the domain for failed registrant **email verification** (ICANN rule:
+  15 days after registration). Domain registered 2026-06-15; on 2026-07-01 its NS delegation
+  was replaced with `ns1/ns2.verification-hold.suspended-domain.com`, which are unreachable ⇒
+  public DNS returns SERVFAIL ("No Reachable Authority") and stale/parking A records.
+- **Diagnosis trail:** `dig +trace NS sellevate.site` shows the `.site` zone delegating to the
+  `verification-hold.suspended-domain.com` nameservers; RDAP (`rdap.org/domain/sellevate.site`)
+  confirms registrar, dates, and the hold NS.
+- **Fix (external, cannot be done from the server):** the domain owner must complete registrant
+  email verification — find the registrar/reseller email titled roughly "Immediate verification
+  required" sent to the registrant contact address and click the link, or log in to the
+  registrar/reseller control panel and resend + complete verification. NS restore within
+  minutes–hours after verification; public DNS recovers as caches expire (records had TTL 900s).
+- **How to spot this again fast:** healthy containers + local Traefik 200 + public SERVFAIL ⇒
+  always check the delegation (`dig +trace`) and RDAP before touching the stack.
+
 ## 2026-07-11 — AI backend hardening (39.17, PR #22 + PR #26 review fast-follows)
 
 ### `InternalAuth:ServiceSecret` — wire the missing header in learning-service, don't just document
