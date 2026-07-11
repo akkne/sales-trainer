@@ -882,6 +882,10 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   position: sticky;
   top: 0;
   overflow: visible;
+  /* Sticky creates a stacking context; without an explicit z-index the rail
+     (and the notification panel that escapes to its right) paints below
+     .shell-content. Lift it above all in-content layers. */
+  z-index: 50;
 }
 
 [data-theme="dark"] .rail {
