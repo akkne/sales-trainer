@@ -133,4 +133,60 @@ public sealed class FollowUpReminderServiceTests
 
         publishedCount.Should().Be(2);
     }
+
+    [Test]
+    public async Task ProcessDueFollowUpsAsync_retries_a_transient_publish_failure_and_still_succeeds()
+    {
+        await TestCompanyDatabaseFactory.SeedCompanyAsync(
+            _databaseContext, UserId, "Acme", nextActionAt: DateTime.UtcNow.AddMinutes(-5));
+
+        var callCount = 0;
+        _eventPublisher
+            .PublishAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                callCount++;
+                if (callCount < 2)
+                {
+                    throw new InvalidOperationException("transient broker blip");
+                }
+
+                return Task.CompletedTask;
+            });
+
+        var publishedCount = await _reminderService.ProcessDueFollowUpsAsync();
+
+        publishedCount.Should().Be(1);
+        callCount.Should().Be(2);
+    }
+
+    [Test]
+    public async Task ProcessDueFollowUpsAsync_gives_up_after_exhausting_retries_on_a_persistent_publish_failure()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(
+            _databaseContext, UserId, "Acme", nextActionAt: DateTime.UtcNow.AddMinutes(-5));
+
+        var callCount = 0;
+        _eventPublisher
+            .PublishAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<Task>(_ =>
+            {
+                callCount++;
+                throw new InvalidOperationException("broker is down");
+            });
+
+        var publishedCount = await _reminderService.ProcessDueFollowUpsAsync();
+
+        // Gives up after 3 attempts (2 retries), but the company stays claimed — at-most-once,
+        // not retried again this tick — matching the pre-existing "already claimed" contract.
+        publishedCount.Should().Be(0);
+        callCount.Should().Be(3);
+
+        var persisted = await _databaseContext.Companies.FindAsync(company.Id);
+        persisted!.FollowUpNotifiedAt.Should().NotBeNull();
+    }
 }

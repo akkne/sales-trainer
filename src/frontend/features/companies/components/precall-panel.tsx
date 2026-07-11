@@ -26,6 +26,8 @@ interface PrecallPanelProps {
     isGeneratingPersona?: boolean;
     onSavePersona: (payload: GeneratedPersona & { difficulty: PersonaDifficulty }) => void;
     isSavingPersona?: boolean;
+    /** Requests deletion of a saved persona; the caller owns confirmation UI. Omitted → no delete affordance rendered. */
+    onDeletePersona?: (personaId: string) => void;
 }
 
 const DIFFICULTY_OPTIONS: { value: PersonaDifficulty; label: string }[] = [
@@ -44,6 +46,7 @@ export function PrecallPanel({
     isGeneratingPersona = false,
     onSavePersona,
     isSavingPersona = false,
+    onDeletePersona,
 }: PrecallPanelProps) {
     const [goal, setGoal] = useState("");
     const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
@@ -56,6 +59,13 @@ export function PrecallPanel({
 
     const selectedPersona: CompanyPersona | null =
         personas.find((persona) => persona.id === selectedPersonaId) ?? null;
+
+    // Treated as "no persona selected" whenever the id doesn't resolve to a real persona — covers
+    // both the default null id and a selected persona having been deleted out from under this
+    // panel (e.g. via the delete button below), so "Без персоны" re-highlights instead of leaving
+    // a stale, now-nonexistent selection. Derived from props/state on every render rather than an
+    // effect, so there's no extra render pass.
+    const isNoPersonaSelected = selectedPersonaId === null || !selectedPersona;
 
     const toSelectedPersona = (): SelectedPersona | null =>
         selectedPersona
@@ -133,20 +143,34 @@ export function PrecallPanel({
             <div className="co-recent-goals">
                 <button
                     type="button"
-                    className={"chip-tag" + (selectedPersonaId === null ? " active" : "")}
+                    className={"chip-tag" + (isNoPersonaSelected ? " active" : "")}
                     onClick={() => setSelectedPersonaId(null)}
                 >
                     Без персоны
                 </button>
                 {personas.map((persona) => (
-                    <button
-                        key={persona.id}
-                        type="button"
-                        className={"chip-tag" + (selectedPersonaId === persona.id ? " active" : "")}
-                        onClick={() => setSelectedPersonaId(persona.id)}
-                    >
-                        {persona.name}
-                    </button>
+                    <span key={persona.id} className="co-persona-chip">
+                        <button
+                            type="button"
+                            className={"chip-tag" + (selectedPersonaId === persona.id ? " active" : "")}
+                            onClick={() => setSelectedPersonaId(persona.id)}
+                        >
+                            {persona.name}
+                        </button>
+                        {onDeletePersona && (
+                            <button
+                                type="button"
+                                className="icon-btn co-persona-chip-delete"
+                                aria-label={`Удалить собеседника ${persona.name}`}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDeletePersona(persona.id);
+                                }}
+                            >
+                                <Icon name="close" size="sm" />
+                            </button>
+                        )}
+                    </span>
                 ))}
                 <button
                     type="button"

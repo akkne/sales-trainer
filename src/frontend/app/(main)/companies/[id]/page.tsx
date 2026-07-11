@@ -36,7 +36,9 @@ import {
 import {
     useCompanyPersonas,
     useAddCompanyPersona,
+    useDeleteCompanyPersona,
     useGenerateCompanyPersona,
+    type CompanyPersona,
 } from "@/features/companies/hooks/use-company-personas";
 import { CompanyHeader } from "@/features/companies/components/company-header";
 import { CompanyDescriptionCard } from "@/features/companies/components/company-description-card";
@@ -82,6 +84,7 @@ export default function CompanyPage() {
 
     const { data: personas } = useCompanyPersonas(companyId);
     const addPersona = useAddCompanyPersona(companyId);
+    const deletePersona = useDeleteCompanyPersona(companyId);
     const generatePersona = useGenerateCompanyPersona(companyId);
 
     const [isEditOpen, setEditOpen] = useState(false);
@@ -92,6 +95,7 @@ export default function CompanyPage() {
     const [isAddingContact, setAddingContact] = useState(false);
     const [editingContact, setEditingContact] = useState<CompanyContact | null>(null);
     const [deletingContact, setDeletingContact] = useState<CompanyContact | null>(null);
+    const [deletingPersona, setDeletingPersona] = useState<CompanyPersona | null>(null);
 
     if (isLoading) {
         return (
@@ -232,6 +236,11 @@ export default function CompanyPage() {
         deleteContact.mutate(deletingContact.id, { onSuccess: () => setDeletingContact(null) });
     };
 
+    const handleConfirmDeletePersona = () => {
+        if (!deletingPersona) return;
+        deletePersona.mutate(deletingPersona.id, { onSuccess: () => setDeletingPersona(null) });
+    };
+
     return (
         <div className="co-page">
             <Link href="/companies" className="back-link plain">
@@ -256,6 +265,10 @@ export default function CompanyPage() {
                 isGeneratingPersona={generatePersona.isPending}
                 onSavePersona={(payload) => addPersona.mutate(payload)}
                 isSavingPersona={addPersona.isPending}
+                onDeletePersona={(personaId) => {
+                    const persona = (personas ?? []).find((candidate) => candidate.id === personaId);
+                    if (persona) setDeletingPersona(persona);
+                }}
             />
 
             <CompanyReadinessCard
@@ -361,6 +374,16 @@ export default function CompanyPage() {
                     submitting={deleteContact.isPending}
                     onConfirm={handleConfirmDeleteContact}
                     onClose={() => setDeletingContact(null)}
+                />
+            )}
+
+            {deletingPersona && (
+                <ConfirmDeleteModal
+                    title="Удалить собеседника?"
+                    body={`Персона «${deletingPersona.name}» будет удалена безвозвратно.`}
+                    submitting={deletePersona.isPending}
+                    onConfirm={handleConfirmDeletePersona}
+                    onClose={() => setDeletingPersona(null)}
                 />
             )}
         </div>

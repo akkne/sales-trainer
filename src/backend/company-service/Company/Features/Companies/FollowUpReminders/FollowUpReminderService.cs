@@ -21,6 +21,13 @@ internal sealed class FollowUpReminderService(
     IOptions<FollowUpReminderOptions> options,
     ILogger<FollowUpReminderService> logger) : IFollowUpReminderService
 {
+    // Short in-process retry to absorb transient broker blips (e.g. a leader election mid-tick)
+    // without changing the at-most-once delivery semantics documented below: the outer try/catch
+    // still gives up and logs after these attempts are exhausted, it just takes a couple of quick
+    // extra swings first (39.17 PR #21 review fast-follow).
+    private const int PublishMaxAttempts = 3;
+    private static readonly TimeSpan PublishRetryBaseDelay = TimeSpan.FromMilliseconds(100);
+
     public async Task<int> ProcessDueFollowUpsAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
@@ -67,12 +74,7 @@ internal sealed class FollowUpReminderService(
                     company.NextActionAt!.Value,
                     company.NextActionNote);
 
-                await eventPublisher.PublishAsync(
-                    Topics.CompanyFollowUpDue,
-                    company.UserId.ToString(),
-                    Topics.CompanyFollowUpDue,
-                    payload,
-                    cancellationToken: cancellationToken);
+                await PublishWithRetryAsync(payload, company.UserId, company.Id, cancellationToken);
 
                 publishedCount++;
             }
@@ -86,5 +88,42 @@ internal sealed class FollowUpReminderService(
         }
 
         return publishedCount;
+    }
+
+    /// <summary>
+    /// Publishes <paramref name="payload"/>, retrying up to <see cref="PublishMaxAttempts"/> times
+    /// with a small linear backoff before giving up. Does not change delivery semantics: the
+    /// company is already claimed (FollowUpNotifiedAt stamped) before this runs, and a failure on
+    /// the final attempt still propagates to the caller's try/catch, which logs and moves on
+    /// without retrying again this tick — this only smooths over brief transient broker blips.
+    /// </summary>
+    private async Task PublishWithRetryAsync(
+        CompanyFollowUpDueEvent payload,
+        Guid userId,
+        Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= PublishMaxAttempts; attempt++)
+        {
+            try
+            {
+                await eventPublisher.PublishAsync(
+                    Topics.CompanyFollowUpDue,
+                    userId.ToString(),
+                    Topics.CompanyFollowUpDue,
+                    payload,
+                    cancellationToken: cancellationToken);
+
+                return;
+            }
+            catch (Exception) when (attempt < PublishMaxAttempts)
+            {
+                logger.LogWarning(
+                    "Publish attempt {Attempt}/{MaxAttempts} of {Topic} failed for company {CompanyId}; retrying",
+                    attempt, PublishMaxAttempts, Topics.CompanyFollowUpDue, companyId);
+
+                await Task.Delay(PublishRetryBaseDelay * attempt, cancellationToken);
+            }
+        }
     }
 }

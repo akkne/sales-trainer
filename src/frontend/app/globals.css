@@ -3600,6 +3600,9 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-recent-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-4); margin-bottom: 6px; }
 .co-recent-goals { display: flex; flex-wrap: wrap; gap: 8px; }
 .co-cta-help { font-size: 11.5px; color: var(--ink-4); margin: 10px 0 0; line-height: 1.5; }
+.co-persona-chip { display: inline-flex; align-items: center; gap: 4px; }
+.co-persona-chip-delete { width: 22px; height: 22px; border-radius: 6px; }
+.co-persona-chip-delete .nb { width: 12px; height: 12px; }
 
 /* ── Readiness score (39.16) ── */
 .co-readiness-body { display: flex; align-items: flex-start; gap: 18px; }
