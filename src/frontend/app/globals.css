@@ -3483,11 +3483,14 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 }
 .co-status-filter-chip:hover { border-color: var(--primary-tint-border); }
 .co-status-filter-chip.active { border-color: transparent; color: var(--ink); background: var(--dark-surface); }
-.co-status-filter-chip.active.co-status--lead     { background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--line-strong); }
-.co-status-filter-chip.active.co-status--contacted { background: var(--info-soft); color: var(--info); }
-.co-status-filter-chip.active.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
-.co-status-filter-chip.active.co-status--won       { background: var(--success-soft); color: var(--success); }
-.co-status-filter-chip.active.co-status--lost      { background: var(--heart-soft); color: var(--heart); }
+/* Tone overrides are scoped under .co-status-filters (4 class selectors) so they
+   always outrank the 2-class .co-status-filter-chip.active rule above on specificity
+   alone — correctness does not depend on these rules appearing after it in the file. */
+.co-status-filters .co-status-filter-chip.active.co-status--lead     { background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--line-strong); }
+.co-status-filters .co-status-filter-chip.active.co-status--contacted { background: var(--info-soft); color: var(--info); }
+.co-status-filters .co-status-filter-chip.active.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
+.co-status-filters .co-status-filter-chip.active.co-status--won       { background: var(--success-soft); color: var(--success); }
+.co-status-filters .co-status-filter-chip.active.co-status--lost      { background: var(--heart-soft); color: var(--heart); }
 
 /* ── Status badge (row / header) ── */
 .co-status-badge {
