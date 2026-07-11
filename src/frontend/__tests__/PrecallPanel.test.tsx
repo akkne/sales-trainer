@@ -103,4 +103,28 @@ describe("PrecallPanel", () => {
 
         await waitFor(() => expect(screen.getByText("AI unavailable")).toBeTruthy());
     });
+
+    it("does not render a delete affordance when onDeletePersona is not provided", () => {
+        renderPanel({ personas: [PERSONA] });
+        expect(screen.queryByLabelText("Удалить собеседника Мария Соколова")).toBeNull();
+    });
+
+    it("calls onDeletePersona with the persona id when its delete button is clicked", () => {
+        const onDeletePersona = vi.fn();
+        renderPanel({ personas: [PERSONA], onDeletePersona });
+
+        fireEvent.click(screen.getByLabelText("Удалить собеседника Мария Соколова"));
+
+        expect(onDeletePersona).toHaveBeenCalledWith("persona-1");
+    });
+
+    it("does not select the persona when its delete button is clicked", () => {
+        const onDeletePersona = vi.fn();
+        renderPanel({ personas: [PERSONA], onDeletePersona });
+
+        fireEvent.click(screen.getByLabelText("Удалить собеседника Мария Соколова"));
+        fireEvent.click(screen.getByText("Позвонить"));
+
+        expect(onCall).toHaveBeenCalledWith("", null);
+    });
 });

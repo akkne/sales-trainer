@@ -26,6 +26,8 @@ interface PrecallPanelProps {
     isGeneratingPersona?: boolean;
     onSavePersona: (payload: GeneratedPersona & { difficulty: PersonaDifficulty }) => void;
     isSavingPersona?: boolean;
+    /** Requests deletion of a saved persona; the caller owns confirmation UI. Omitted → no delete affordance rendered. */
+    onDeletePersona?: (personaId: string) => void;
 }
 
 const DIFFICULTY_OPTIONS: { value: PersonaDifficulty; label: string }[] = [
@@ -44,6 +46,7 @@ export function PrecallPanel({
     isGeneratingPersona = false,
     onSavePersona,
     isSavingPersona = false,
+    onDeletePersona,
 }: PrecallPanelProps) {
     const [goal, setGoal] = useState("");
     const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
@@ -139,14 +142,28 @@ export function PrecallPanel({
                     Без персоны
                 </button>
                 {personas.map((persona) => (
-                    <button
-                        key={persona.id}
-                        type="button"
-                        className={"chip-tag" + (selectedPersonaId === persona.id ? " active" : "")}
-                        onClick={() => setSelectedPersonaId(persona.id)}
-                    >
-                        {persona.name}
-                    </button>
+                    <span key={persona.id} className="co-persona-chip">
+                        <button
+                            type="button"
+                            className={"chip-tag" + (selectedPersonaId === persona.id ? " active" : "")}
+                            onClick={() => setSelectedPersonaId(persona.id)}
+                        >
+                            {persona.name}
+                        </button>
+                        {onDeletePersona && (
+                            <button
+                                type="button"
+                                className="icon-btn co-persona-chip-delete"
+                                aria-label={`Удалить собеседника ${persona.name}`}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDeletePersona(persona.id);
+                                }}
+                            >
+                                <Icon name="close" size="sm" />
+                            </button>
+                        )}
+                    </span>
                 ))}
                 <button
                     type="button"

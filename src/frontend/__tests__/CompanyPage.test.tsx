@@ -44,10 +44,11 @@ vi.mock("@/features/companies/hooks/use-company-contacts", () => ({
 }));
 
 const useCompanyPersonas = vi.fn();
+const mutateDeletePersona = vi.fn();
 vi.mock("@/features/companies/hooks/use-company-personas", () => ({
     useCompanyPersonas: (...args: unknown[]) => useCompanyPersonas(...args),
     useAddCompanyPersona: () => ({ mutate: vi.fn(), isPending: false }),
-    useDeleteCompanyPersona: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteCompanyPersona: () => ({ mutate: mutateDeletePersona, isPending: false }),
     useGenerateCompanyPersona: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
@@ -93,6 +94,7 @@ describe("CompanyPage", () => {
         useCompanyPersonas.mockReset();
         useDialogSession.mockClear();
         mockPush.mockReset();
+        mutateDeletePersona.mockReset();
 
         useCompanyLogs.mockReturnValue({ data: [] });
         useCompanyPracticeCalls.mockReturnValue({ data: [] });
@@ -185,5 +187,19 @@ describe("CompanyPage", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
         expect(mutateDelete).toHaveBeenCalledWith("c1", expect.objectContaining({ onSuccess: expect.any(Function) }));
+    });
+
+    it("opens the delete-persona confirm and calls the delete mutation", () => {
+        useCompany.mockReturnValue({ data: COMPANY, isLoading: false, error: null, refetch: vi.fn() });
+        useCompanyPersonas.mockReturnValue({
+            data: [{ id: "p1", companyId: "c1", name: "Мария Соколова", position: "Закупки", personality: "Прагматична.", difficulty: "Hard", createdAt: "" }],
+        });
+        render(<CompanyPage />);
+
+        fireEvent.click(screen.getByLabelText("Удалить собеседника Мария Соколова"));
+        expect(screen.getByText("Удалить собеседника?")).toBeTruthy();
+
+        fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+        expect(mutateDeletePersona).toHaveBeenCalledWith("p1", expect.objectContaining({ onSuccess: expect.any(Function) }));
     });
 });
