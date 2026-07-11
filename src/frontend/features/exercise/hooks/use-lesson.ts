@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/api/api-client";
 import type { ExerciseType } from "@/features/exercise/types/exercise-types";
 
@@ -50,6 +50,7 @@ export function useExercisesForLesson(lessonId: string) {
 }
 
 export function useSubmitExercise() {
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({
             exerciseId,
@@ -62,6 +63,11 @@ export function useSubmitExercise() {
                 `/exercises/${exerciseId}/submit`,
                 { answer }
             ),
+        // Progress may have changed (lesson completed / next lesson unlocked), so drop
+        // the cached lesson lists — the path/tree/skill views refetch fresh statuses.
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["lessons"] });
+        },
     });
 }
 
