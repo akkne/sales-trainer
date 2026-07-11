@@ -11,7 +11,7 @@ interface CallLogModalProps {
     initial?: CallLogEntry;
     contacts?: CompanyContact[];
     submitting?: boolean;
-    onSubmit: (payload: CallLogPayload) => void;
+    onSubmit: (payload: CallLogPayload) => unknown;
     onClose: () => void;
 }
 

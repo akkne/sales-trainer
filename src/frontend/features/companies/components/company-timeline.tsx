@@ -18,7 +18,7 @@ interface CompanyTimelineProps {
     addLogSubmitting?: boolean;
     onStartAddLog: () => void;
     onCancelAddLog: () => void;
-    onAddLog: (payload: CallLogPayload) => void;
+    onAddLog: (payload: CallLogPayload) => unknown;
     onEditLog: (log: CallLogEntry) => void;
     onDeleteLog: (log: CallLogEntry) => void;
 }

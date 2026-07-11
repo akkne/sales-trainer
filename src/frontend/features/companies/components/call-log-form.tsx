@@ -6,6 +6,7 @@ import type { CompanyContact } from "@/features/companies/hooks/use-company-cont
 import { useParseCallLog } from "@/features/companies/hooks/use-parse-call-log";
 import { useVoiceMemoRecorder } from "@/features/companies/hooks/use-voice-memo-recorder";
 import { Icon } from "@/shared/components/icon";
+import { ApiError } from "@/shared/api/api-client";
 
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
@@ -16,7 +17,7 @@ interface CallLogFormProps {
     initial?: CallLogEntry;
     contacts?: CompanyContact[];
     submitting?: boolean;
-    onSubmit: (payload: CallLogPayload) => void;
+    onSubmit: (payload: CallLogPayload) => unknown;
     onCancel: () => void;
 }
 
@@ -72,12 +73,21 @@ export function CallLogForm({ companyId, initial, contacts = [], submitting = fa
 
     const handleSubmit = () => {
         if (!canSubmit) return;
-        onSubmit({
-            contactName: contactName.trim(),
-            subject: subject.trim(),
-            outcome: outcome.trim(),
-            occurredAt: new Date(occurredAt).toISOString(),
-            contactId,
+        Promise.resolve(
+            onSubmit({
+                contactName: contactName.trim(),
+                subject: subject.trim(),
+                outcome: outcome.trim(),
+                occurredAt: new Date(occurredAt).toISOString(),
+                contactId,
+            })
+        ).catch((error: unknown) => {
+            // The picked contact was deleted by someone else between load and submit — the API
+            // rejects the stale contactId with 400. Clear it so retrying re-submits as free text
+            // instead of repeating the same failing request.
+            if (error instanceof ApiError && error.status === 400) {
+                setContactId(null);
+            }
         });
     };
 
