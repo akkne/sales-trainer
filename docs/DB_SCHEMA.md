@@ -646,3 +646,139 @@ Skills
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
 | `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
+| `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
+| `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
+| `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
+| `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
+| `AddCompanyBriefing` (company-service)   | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
+| `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
+| `AddCompanyReadiness` (company-service)  | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+| `AddCompanyReadinessNoFeedbackCache` (company-service) | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+
+---
+
+## company database (company-service)
+
+Standalone Postgres database `company`. Owned by `company-service` (port 5009). Connection string key: `ConnectionStrings:Postgres`.
+
+### Table: `Companies`
+
+| Column        | Type         | Constraints                      |
+|---------------|--------------|----------------------------------|
+| `Id`          | uuid         | PK                               |
+| `UserId`      | uuid         | NOT NULL, INDEX                  |
+| `Name`        | varchar(200) | NOT NULL                         |
+| `Description` | varchar(8000)| NOT NULL, DEFAULT ''             |
+| `Status`      | varchar(32)  | NOT NULL, DEFAULT 'Lead'         |
+| `NextActionAt`| timestamptz  | NULL                             |
+| `NextActionNote` | varchar(2000) | NULL                          |
+| `FollowUpNotifiedAt` | timestamptz | NULL                      |
+| `BriefingContent` | text     | NULL                             |
+| `BriefingGeneratedAt` | timestamptz | NULL                     |
+| `ReadinessJson` | text       | NULL                             |
+| `ReadinessGeneratedAt` | timestamptz | NULL                   |
+| `ReadinessNoFeedbackUntil` | timestamptz | NULL               |
+| `CreatedAt`   | timestamptz  | NOT NULL                         |
+| `UpdatedAt`   | timestamptz  | NOT NULL                         |
+
+**Indexes:** `IX_Companies_UserId`, `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`)
+
+`Status` (Phase 39.10) is one of `Lead | Contacted | MeetingScheduled | DealWon | DealLost`,
+stored as its string name (`HasConversion<string>()`, not the numeric enum value) so the column
+stays human-readable in the database.
+
+`NextActionAt`/`NextActionNote`/`FollowUpNotifiedAt` (Phase 39.11 — follow-up reminders):
+`NextActionAt` is the scheduled follow-up due date; `NextActionNote` a free-form note;
+`FollowUpNotifiedAt` is set by the reminder background service once `company.followup.due` has
+been published for the current `NextActionAt`, and is reset to `null` whenever `NextActionAt` is
+rescheduled (see `docs/API_CONTRACTS.md`). All three are nullable and independent of `Status`.
+
+`BriefingContent`/`BriefingGeneratedAt` (Phase 39.12 — AI pre-call briefing): a cache of the
+markdown cheat sheet returned by ai-service's `POST /ai/companies/briefing`, written by
+`POST /companies/{id}/briefing` and read back by `GET /companies/{id}/briefing`. Both null until
+the first generation; overwritten (not versioned/appended) on every regeneration.
+
+`ReadinessJson`/`ReadinessGeneratedAt` (Phase 39.16 — AI readiness score): a cache of the
+`{score, strengths, gaps, recommendation}` JSON returned by ai-service's
+`POST /ai/companies/readiness`, both written and read by the single `GET /companies/{id}/readiness`
+endpoint (self-generates on a cache miss). Both null until first generated, and **cleared back to
+null** whenever a new practice call is created (`POST /companies/{id}/practice-calls`) — the
+cache-invalidation trigger for this feature — so the next `GET` regenerates from the fresh
+practice-call list instead of serving a stale score.
+
+`ReadinessNoFeedbackUntil` (39.17 PR #26 review fast-follow — negative readiness cache): set to
+"now + 2 minutes" whenever ai-service fans out across the company's practice sessions and comes
+back with `204` (no usable feedback text found yet). While this timestamp is set and in the
+future, `GET /companies/{id}/readiness` short-circuits to the empty result without re-running the
+fan-out. Cleared back to `null` alongside `ReadinessJson`/`ReadinessGeneratedAt` whenever a new
+practice call is created, and also cleared once a real (non-204) readiness result is generated.
+Left `null` (not written at all) for the *other* "no data" case — a company with zero practice
+calls — since that path never reaches ai-service and has nothing expensive to avoid re-running.
+
+### Table: `CallLogEntries`
+
+| Column        | Type         | Constraints                                                |
+|---------------|--------------|-------------------------------------------------------------|
+| `Id`          | uuid         | PK                                                          |
+| `CompanyId`   | uuid         | NOT NULL, FK → Companies(Id) ON DELETE CASCADE              |
+| `UserId`      | uuid         | NOT NULL                                                    |
+| `ContactId`   | uuid         | NULL, FK → CompanyContacts(Id) ON DELETE SET NULL           |
+| `ContactName` | varchar(200) | NOT NULL                                                    |
+| `Subject`     | varchar(4000)| NOT NULL                                                    |
+| `Outcome`     | varchar(4000)| NOT NULL                                                    |
+| `OccurredAt`  | timestamptz  | NOT NULL                                                    |
+| `CreatedAt`   | timestamptz  | NOT NULL                                                    |
+| `UpdatedAt`   | timestamptz  | NOT NULL                                                    |
+
+**Indexes:** `IX_CallLogEntries_CompanyId_OccurredAt` (CompanyId ASC, OccurredAt DESC), `IX_CallLogEntries_ContactId`
+
+`ContactId` is optional and independent of `ContactName`: the free-text name is always stored so the log stays readable even after the linked contact is deleted (deleting a `CompanyContact` sets `ContactId` to `NULL` on its logs, `ContactName` is untouched).
+
+### Table: `PracticeCalls`
+
+| Column            | Type          | Constraints                                        |
+|-------------------|---------------|----------------------------------------------------|
+| `Id`              | uuid          | PK                                                 |
+| `CompanyId`       | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE     |
+| `UserId`          | uuid          | NOT NULL                                           |
+| `DialogSessionId` | text          | NOT NULL                                           |
+| `Goal`            | varchar(1000) | NOT NULL                                           |
+| `CreatedAt`       | timestamptz   | NOT NULL                                           |
+
+**Indexes:** `IX_PracticeCalls_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+### Table: `CompanyContacts` (Phase 39.9 — mini-CRM)
+
+| Column       | Type          | Constraints                                    |
+|--------------|---------------|-------------------------------------------------|
+| `Id`         | uuid          | PK                                              |
+| `CompanyId`  | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE  |
+| `UserId`     | uuid          | NOT NULL                                        |
+| `Name`       | varchar(200)  | NOT NULL                                        |
+| `Position`   | varchar(200)  | NOT NULL, DEFAULT ''                            |
+| `Notes`      | varchar(2000) | NOT NULL, DEFAULT ''                            |
+| `CreatedAt`  | timestamptz   | NOT NULL                                        |
+| `UpdatedAt`  | timestamptz   | NOT NULL                                        |
+
+**Indexes:** `IX_CompanyContacts_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+### Table: `CompanyPersonas` (Phase 39.14 — AI persona generation for practice calls)
+
+| Column        | Type          | Constraints                                    |
+|---------------|---------------|-------------------------------------------------|
+| `Id`          | uuid          | PK                                              |
+| `CompanyId`   | uuid          | NOT NULL, FK → Companies(Id) ON DELETE CASCADE  |
+| `UserId`      | uuid          | NOT NULL                                        |
+| `Name`        | varchar(200)  | NOT NULL                                        |
+| `Position`    | varchar(200)  | NOT NULL                                        |
+| `Personality` | varchar(4000) | NOT NULL                                        |
+| `Difficulty`  | varchar(16)   | NOT NULL, DEFAULT 'Medium'                      |
+| `CreatedAt`   | timestamptz   | NOT NULL                                        |
+
+**Indexes:** `IX_CompanyPersonas_CompanyId_CreatedAt` (CompanyId ASC, CreatedAt DESC)
+
+`Difficulty` is one of `Easy | Medium | Hard`, stored as its string name (`HasConversion<string>()`,
+same pattern as `Companies.Status`) so the column stays human-readable. A `CompanyPersona` is
+either hand-written or the result of a `POST /companies/{id}/personas/generate` draft the user
+chose to save (see `docs/API_CONTRACTS.md`); it is not itself an AI call — generation is stateless
+and proxies to ai-service, only the save step touches this table.

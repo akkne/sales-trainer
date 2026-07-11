@@ -214,4 +214,20 @@ public sealed class EventContractCatalogTests
         root.GetProperty("preview").GetString().Should().Be("hi");
         root.GetProperty("conversationId").GetGuid().Should().Be(conversationId);
     }
+
+    [Test]
+    public void CompanyFollowUpDue_CompanyProducer_MatchesNotifications()
+    {
+        Topics.CompanyFollowUpDue.Should().Be("company.followup.due");
+        var companyId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var nextActionAt = DateTime.UtcNow;
+        var root = Serialize(new { companyId, userId, companyName = "Acme", nextActionAt, note = "Call back about pricing" });
+
+        root.GetProperty("companyId").GetGuid().Should().Be(companyId);
+        root.GetProperty("userId").GetGuid().Should().Be(userId);
+        root.GetProperty("companyName").GetString().Should().Be("Acme");
+        root.GetProperty("nextActionAt").GetDateTime().Should().Be(nextActionAt);
+        root.GetProperty("note").GetString().Should().Be("Call back about pricing");
+    }
 }

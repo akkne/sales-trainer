@@ -56,6 +56,22 @@ public sealed class DialogController : ControllerBase
         return Ok(modeDtos);
     }
 
+    [HttpGet("company-call-mode")]
+    public async Task<IActionResult> GetCompanyCallMode(CancellationToken cancellationToken = default)
+    {
+        var mode = await _dialogService.GetCompanyCallModeAsync(cancellationToken);
+        if (mode == null)
+        {
+            return NotFound(new { message = "Company-call mode is not seeded yet." });
+        }
+
+        return Ok(new CompanyCallModeIdentifierDto
+        {
+            BundleId = mode.BundleId,
+            ModeId = mode.Id
+        });
+    }
+
     [HttpGet("sessions")]
     public async Task<IActionResult> GetUserSessions(CancellationToken cancellationToken = default)
     {
@@ -107,7 +123,22 @@ public sealed class DialogController : ControllerBase
 
         try
         {
-            var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId, cancellationToken);
+            CompanyCallContext? companyCallContext = null;
+            if (request.CompanyContext != null)
+            {
+                companyCallContext = new CompanyCallContext
+                {
+                    CompanyName = request.CompanyContext.CompanyName,
+                    CompanyDescription = request.CompanyContext.CompanyDescription,
+                    CallGoal = request.CompanyContext.CallGoal,
+                    PersonaName = request.CompanyContext.PersonaName,
+                    PersonaPosition = request.CompanyContext.PersonaPosition,
+                    PersonaPersonality = request.CompanyContext.PersonaPersonality,
+                    PersonaDifficulty = request.CompanyContext.PersonaDifficulty
+                };
+            }
+
+            var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId, companyCallContext, cancellationToken);
             return Ok(DialogSessionDto.FromEntity(session));
         }
         catch (OpenAiPaymentRequiredException)

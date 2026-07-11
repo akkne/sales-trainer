@@ -41,7 +41,7 @@ cat <<EOF
     Frontend : http://localhost:${LOCAL_FRONTEND_PORT}   (logs: logs/frontend.log)
 
     The monolith is retired; start the per-service backends + gateway as needed
-    (scripts/dev-gateway.sh, scripts/dev-identity.sh, ...).
+    (scripts/dev-gateway.sh, scripts/dev-identity.sh, scripts/dev-company.sh, ...).
 
     Tail logs:  tail -f logs/frontend.log
     Stop all :  scripts/dev-down.sh

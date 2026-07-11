@@ -489,6 +489,11 @@ Errors:
 - `400` — file missing, too large, or unsupported format
 - `502` — Whisper API returned an error
 
+**Reused by Companies (Phase 39.15):** the call-log form's voice memo recorder
+(`features/companies/hooks/use-voice-memo-recorder.ts`) posts the recorded `webm` blob to this
+same endpoint via the existing `useTranscribeAudio` hook — no new endpoint, no company-service
+involvement.
+
 ---
 
 ## Dialog (AI-powered conversation practice)
@@ -501,18 +506,63 @@ Errors:
 > exerciseContent, userAnswer}` → `{isCorrect, score, explanation?, aiFeedback?}`, called
 > by Learning to grade AI exercise types. `DialogBundleDto.skillTitle` is now empty
 > (`Skills` are owned by Learning; only `skillId` is kept).
+> Internal-only (Phase 39.12): `POST /ai/companies/briefing`
+> `{companyDescription, goal?, recentCalls: [{contactName?, subject, outcome, occurredAt}],
+> feedbackSummaries: string[]}` → `{content, generatedAt}` (`content` is markdown), called by
+> company-service to generate the pre-call cheat sheet. Stateless — reads nothing from Mongo or
+> Postgres itself, just composes a Russian system prompt from the request body and asks the
+> configured LLM. `503` if OpenAI isn't configured or the provider call fails.
+> Internal-only (Phase 39.13): `POST /ai/companies/parse-log` `{rawText}` (max 16000 chars, `400`
+> if exceeded) → `{contactName?, subject, outcome, occurredAt?}`, called by company-service to
+> extract a structured call-log draft from pasted notes/transcript. Stateless — composes a Russian
+> system prompt instructing the model to return strict JSON, then parses it. `subject`/`outcome`
+> default to an empty string if the model omits them; `contactName`/`occurredAt` are `null` if not
+> mentioned or unparseable (never fails the whole parse just for a missing date). `503` if OpenAI
+> isn't configured, the provider call fails, or the AI response isn't valid JSON. Both internal
+> endpoints share `InternalServiceAuthFilter` (`X-Internal-Service-Secret` header, checked against
+> `InternalAuth:ServiceSecret`; left open when that config key is unset, i.e. dev/single-service
+> mode).
+> Internal-only (Phase 39.14): `POST /ai/companies/persona` `{companyDescription (max 16000 chars,
+> `400` if exceeded), contactName?, contactPosition?, difficulty: "Easy"|"Medium"|"Hard"}` →
+> `{name, position, personality}`, called by company-service to invent a buyer persona for a
+> practice call. Stateless — composes a Russian system prompt (difficulty tunes how
+> tough/skeptical the persona is; `contactName`/`contactPosition` are an optional seed, not copied
+> verbatim) instructing strict JSON output, then parses it. `503` if OpenAI isn't configured, the
+> provider call fails, or any of `name`/`position`/`personality` is missing/empty in the response
+> (unlike parse-log, personas have no valid "N/A" field — an incomplete persona is treated as a
+> parse failure). Shares `InternalServiceAuthFilter` with the other internal endpoints.
+> Internal-only (Phase 39.16): `POST /ai/companies/readiness` `{userId, goal?, sessionIds: string[]}`
+> (max 50 session ids, `400` if exceeded) → `{score (0-100), strengths: string[], gaps: string[],
+> recommendation}`, called by company-service to score a user's readiness for a real call. Unlike
+> the other internal endpoints, this one **does** read from ai-service's own Mongo store: for each
+> `sessionIds` entry it loads the `DialogSession` **scoped to `userId`** (via
+> `IDialogService.GetSessionForUserAsync`, so ai-service independently verifies the caller-supplied
+> ids belong to that user — defense in depth beyond `InternalServiceAuthFilter` + company-service's
+> ownership check) and pulls `Feedback.Summary`, skipping sessions with no feedback yet (abandoned/incomplete calls).
+> If zero sessions have usable feedback, returns **`204 No Content`** without calling the LLM — the
+> "no data yet" signal company-service turns into its own `204`. Otherwise composes a Russian
+> system prompt from the collected summaries (+ optional `goal`) instructing strict JSON output;
+> `score` is clamped to `[0, 100]` after parsing (tolerates a numeric string too). `503` if OpenAI
+> isn't configured, the provider call fails, or the response is unparseable/missing
+> `score`/`recommendation` (`strengths`/`gaps` default to `[]` if omitted). Shares
+> `InternalServiceAuthFilter` with the other internal endpoints.
 
 ### Public endpoints
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /dialog/bundles | — | `DialogBundleDto[]` |
+| GET | /dialog/bundles | — | `DialogBundleDto[]` (hidden bundles excluded) |
 | GET | /dialog/bundles/:bundleId/modes | — | `DialogModeDto[]` |
+| GET | /dialog/company-call-mode | — | `{bundleId, modeId}` — IDs of the seeded company-call mode; `404` if not yet seeded |
 | GET | /dialog/sessions | — | `DialogSessionSummaryDto[]` (user's history) |
-| POST | /dialog/sessions | `{bundleId, modeId}` | `DialogSessionDto` |
+| POST | /dialog/sessions | `{bundleId, modeId, companyContext?}` | `DialogSessionDto` |
 | GET | /dialog/sessions/:sessionId | — | `DialogSessionDto` |
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
 | POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
+
+**Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500), personaName?: string (≤200), personaPosition?: string (≤200), personaPersonality?: string (≤4000), personaDifficulty?: string (≤16, "Easy"|"Medium"|"Hard")}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
+
+**Persona role-play (Phase 39.14):** the four `persona*` fields are all optional/nullable — a call may have no persona (e.g. `personaName` absent or blank), in which case the prompt output is byte-for-byte identical to pre-39.14 behavior. When `personaName` is non-blank, `CompanyContextPromptBuilder` appends a second block to the chat system prompt instructing the model to **role-play as** that persona (name, position, personality, and a difficulty-derived toughness description), and a related but distinctly-worded "grade with this persona in mind" block to the feedback system prompt. See [AI_DIALOG.md](AI_DIALOG.md) for the full prompt shapes.
 
 **DTOs:**
 - `DialogBundleDto`: `{id, skillId, skillSlug, skillTitle, title, description, iconEmoji, sortOrder, isActive}`
@@ -859,6 +909,195 @@ DTO additions on the Discuss user endpoints above:
 - `GET /avatars/{userId}` returns the uploaded object if `AvatarType == Uploaded`, otherwise the `DefaultAvatars` row matching `user.DefaultAvatarIndex`. Returns `404` if the user/avatar object cannot be resolved (so the client falls back to the generated avatar instead of a 500).
 - `GET /avatars/{userId}` uses **validation-based caching**: it returns the object's `ETag` and `Cache-Control: public, no-cache` (clients cache but must revalidate every load). A matching `If-None-Match` yields `304 Not Modified` with no body. This makes a freshly uploaded avatar appear immediately after a page refresh (and in the nav bar) while unchanged images cost only a 304 round-trip. Do **not** restore a long `max-age` here — it reintroduces the stale-avatar-after-refresh bug.
 - Subtask 5 will expose `avatarUrl` (value: `/avatars/{userId}`) on profile/user DTOs throughout the API.
+
+---
+
+## Company service (Phase 39)
+
+> **New microservice `company-service`** (host port **5009**). Routes `/companies/*` via YARP gateway cluster `company` (wired in Phase 39.4). All endpoints require Bearer auth; `userId` extracted from `ClaimTypes.NameIdentifier`. Every query is scoped to the authenticated user — foreign/unknown ids return `404`.
+
+### Companies
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies | `?search=` (optional) | `CompanySummaryDto[]` sorted newest-updated first |
+| POST | /companies | `{name, description?}` | `201 CompanyDetailDto` |
+| GET | /companies/{id} | — | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id} | `{name, description}` | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id}/status | `{status}` | `CompanyDetailDto` or `404` |
+| PUT | /companies/{id}/follow-up | `{nextActionAt, nextActionNote?}` | `CompanyDetailDto` or `404` |
+| POST | /companies/{id}/briefing | — | `CompanyBriefingDto`, `404`, or `503` if ai-service is unavailable |
+| GET | /companies/{id}/briefing | — | `CompanyBriefingDto` or `204` if never generated, or `404` |
+| GET | /companies/{id}/readiness | — | `CompanyReadinessDto`, `204` if no data yet, `404`, or `503` if ai-service is unavailable |
+| DELETE | /companies/{id} | — | `204` or `404` (cascade-deletes logs + practice calls + contacts + personas) |
+
+`CompanySummaryDto`: `{id, name, descriptionExcerpt (≤160 chars), status, callLogCount, practiceCallCount, contactCount, nextActionAt, createdAt, updatedAt}`
+`CompanyDetailDto`: `{id, name, description, status, callLogCount, practiceCallCount, contactCount, nextActionAt, nextActionNote, followUpNotifiedAt, createdAt, updatedAt}`
+
+Validation: `name` required, max 200; `description` max 8000.
+
+`status` (Phase 39.10) is one of `Lead | Contacted | MeetingScheduled | DealWon | DealLost`
+(string enum), defaulting to `Lead` on creation. `PUT /companies/{id}/status` sets it directly —
+no server-side transition constraints, any status may be set from any other. `404` on missing
+company or wrong owner, same ownership pattern as every other company endpoint.
+
+`nextActionAt`/`nextActionNote`/`followUpNotifiedAt` (Phase 39.11 — follow-up reminders):
+`PUT /companies/{id}/follow-up` with a non-null `nextActionAt` (re)schedules the follow-up
+(`nextActionNote` optional, max 2000 chars, defaults to empty) and **resets
+`followUpNotifiedAt` to `null`**, so a rescheduled due date is eligible to notify again even if
+the previous one already fired. A request with `nextActionAt: null` **clears** the follow-up —
+`nextActionNote` and `followUpNotifiedAt` are cleared with it. `followUpNotifiedAt` is
+read-only/server-managed (set by the reminder background service, see below) and is exposed on
+`CompanyDetailDto` for observability, not on the list DTO. `nextActionAt` is included on
+`CompanySummaryDto` so the `/companies` list can render a due/overdue badge per row without an
+extra request per company.
+
+**Follow-up reminder background service (Kafka producer):** `company-service` runs a hosted
+background service (`FollowUpReminderBackgroundService`) that polls every
+`FollowUpReminder:PollIntervalMinutes` (default 5) for companies where `NextActionAt <= now AND
+FollowUpNotifiedAt IS NULL`, claims them (sets `FollowUpNotifiedAt`, commits), and publishes one
+`company.followup.due` Kafka event per claimed company — see `docs/MICROSERVICES.md §4.1` for the
+topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Consumed by
+notification-service → `NotificationType.CompanyFollowUpDue`, an in-app-only notification (no
+email) titled *«Пора связаться с {companyName}»*, `actionUrl` `/companies/{id}`.
+
+**Pre-call briefing / "Шпаргалка" (Phase 39.12):** `POST /companies/{id}/briefing` gathers
+context — the company's `description`, the most recent non-empty `PracticeCall.Goal` (single
+newest, not the last-5-distinct list used by `/recent-goals`), and the last 5 `CallLogEntry` rows
+(newest first) — and forwards it to ai-service's internal `POST /ai/companies/briefing` (see
+below), which returns a markdown cheat sheet. company-service caches the result on
+`Company.BriefingContent`/`BriefingGeneratedAt` and returns it. `GET /companies/{id}/briefing`
+returns the cached value without calling ai-service; `204` if the company exists but a briefing
+has never been generated. Both endpoints follow the same ownership/`404` pattern as every other
+company endpoint; `POST` returns `503` if ai-service is unreachable or misconfigured (mirrors the
+Evaluation feature's error handling). **Feedback summaries are not included** — company-service
+has no cross-service read into ai-service's Mongo feedback store (out of scope for 39.12), so the
+`feedbackSummaries` list sent to ai-service is always empty; the briefing prompt degrades
+gracefully (skips that section's data) when empty.
+
+`CompanyBriefingDto`: `{content, generatedAt}` — both `null` when never generated.
+
+**Readiness score (Phase 39.16):** `GET /companies/{id}/readiness` **self-generates and caches** —
+unlike briefing, there is no separate `POST`. On a cache miss it gathers the company's practice-call
+`DialogSessionId`s (newest first, capped to 50 — mirrors ai-service's own cap) and the single most
+recent non-empty `PracticeCall.Goal`, and forwards them to ai-service's internal
+`POST /ai/companies/readiness` (see above). The result is cached on
+`Company.ReadinessJson`/`ReadinessGeneratedAt` and returned; a subsequent `GET` returns the cache
+without calling ai-service again. Two distinct "no data" cases both collapse to `204`, with all
+`CompanyReadinessDto` fields `null`, but they are **not** treated identically for caching: (1) the
+company has no practice calls yet — the ai-service call is skipped entirely and **nothing is
+cached** (every `GET` re-checks cheaply, since there's no fan-out to avoid); (2) the company has
+practice calls but ai-service signalled `204` (none of them have usable feedback yet, e.g. sessions
+still in progress or abandoned) — this **is negative-cached** on `Company.ReadinessNoFeedbackUntil`
+for a short TTL (2 minutes) so repeated requests within the TTL short-circuit to the empty result
+instead of re-running the fan-out (up to 50 sequential `DialogSessionId` lookups against
+ai-service/Mongo) on every request (PR #26 review fast-follow, 39.17). `404` on missing
+company/wrong owner; `503` if ai-service is unreachable, misconfigured, or returns an
+unparseable/incomplete response (same pattern as briefing/persona) — a failure of this kind is
+**never** cached (positive or negative), so the next `GET` retries against ai-service instead of
+being stuck behind a stale/incorrect cache entry.
+
+**Cache invalidation:** creating a practice call (`POST /companies/{id}/practice-calls`) is this
+codebase's practice-completion signal (dialog-session completion itself is tracked only in
+ai-service's Mongo, not in company-service) — it clears `ReadinessJson`/`ReadinessGeneratedAt`
+**and** `ReadinessNoFeedbackUntil` on the company so the next `GET /readiness` regenerates from the
+fresh session list instead of being held back by a stale negative cache. There is no other path in
+company-service that marks a practice call complete.
+
+`CompanyReadinessDto`: `{score, strengths, gaps, recommendation, generatedAt}` — all fields `null`
+when there's no data yet (see above).
+
+### Call Log
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/logs | — | `CallLogEntryDto[]` sorted by `occurredAt DESC` |
+| POST | /companies/{id}/logs | `{contactName, subject, outcome, occurredAt, contactId?}` | `201 CallLogEntryDto`, `404` if company not found, or `400` if `contactId` does not belong to the company |
+| PUT | /companies/{id}/logs/{logId} | `{contactName, subject, outcome, occurredAt, contactId?}` | `CallLogEntryDto`, `404`, or `400` if `contactId` does not belong to the company |
+| DELETE | /companies/{id}/logs/{logId} | — | `204` or `404` |
+| POST | /companies/{id}/logs/parse | `{rawText}` | `ParsedCallLogDto`, `404`, or `503` if ai-service is unavailable |
+
+**AI log parsing / "Вставить заметки" (Phase 39.13):** `POST /companies/{id}/logs/parse` proxies
+`rawText` (pasted notes/transcript) to ai-service's internal `POST /ai/companies/parse-log` (see
+above) and returns the extracted draft **without persisting anything** — the client prefills the
+existing log-create form for the user to review/edit, then saves it through the normal
+`POST /companies/{id}/logs`. Same ownership/`404` pattern as every other company endpoint; `503`
+if ai-service is unreachable, misconfigured, or returns an unparseable response.
+
+`ParsedCallLogDto`: `{contactName: string|null, subject, outcome, occurredAt: DateTime|null}`.
+
+`CallLogEntryDto`: `{id, companyId, contactName, subject, outcome, occurredAt, createdAt, updatedAt, contactId}`
+
+Validation: `contactName` required, max 200; `subject`, `outcome` optional (empty string allowed), max 4000. `contactId` is optional; when present it must reference a `CompanyContact` belonging to the same company (otherwise `400`). The free-text `contactName` is always stored regardless of `contactId`, so the log keeps a readable label even after the linked contact is deleted (see Contacts below).
+
+**`400` on a bad `contactId` (39.17 hardening):** company-service raises a typed
+`ContactNotFoundInCompanyException` — not a generic `InvalidOperationException` — both when the
+ownership check fails up front and when a concurrently-deleted contact trips the `ContactId`
+foreign key at `SaveChangesAsync` time (the check-then-act race between the ownership check and the
+save; the FK-violation `DbUpdateException` is only translated when it's specifically a Postgres
+`23503` on the `FK_CallLogEntries_CompanyContacts_ContactId` constraint — any other
+`DbUpdateException` propagates unchanged as a `500`). Both cases map to the same
+`400 { code: "CONTACT_NOT_FOUND", message }` response, where `code` is a machine-readable
+discriminator distinguishing this from other `400`s on the same endpoints (e.g. ASP.NET
+model-validation failures on `contactName`/`subject`/`outcome` length, which have no `code` field).
+The frontend only clears the stale `contactId` from the call-log form when it sees
+`code === "CONTACT_NOT_FOUND"`, so retrying resubmits as free text instead of repeating the same
+failing request, while other `400`s leave the form untouched.
+
+### Practice Calls
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /companies/{id}/practice-calls | `{dialogSessionId, goal}` | `201 PracticeCallDto` or `404` |
+| GET | /companies/{id}/practice-calls | — | `PracticeCallDto[]` sorted by `createdAt DESC` |
+| GET | /companies/{id}/recent-goals | — | `string[]` — last 5 distinct non-empty goals, newest first |
+
+`PracticeCallDto`: `{id, companyId, dialogSessionId, goal, createdAt}`
+
+Validation: `goal` max 1000; `dialogSessionId` required.
+
+### Contacts (Phase 39.9 — mini-CRM)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/contacts | — | `CompanyContactDto[]` sorted by `createdAt DESC` |
+| POST | /companies/{id}/contacts | `{name, position?, notes?}` | `201 CompanyContactDto` or `404` if company not found |
+| PUT | /companies/{id}/contacts/{contactId} | `{name, position?, notes?}` | `CompanyContactDto` or `404` |
+| DELETE | /companies/{id}/contacts/{contactId} | — | `204` or `404`. Any `CallLogEntry.ContactId` referencing this contact is set to `null`; the log's free-text `ContactName` is preserved. |
+
+`CompanyContactDto`: `{id, companyId, name, position, notes, createdAt, updatedAt}`
+
+Validation: `name` required, max 200; `position` optional (nullable, defaults to empty), max 200; `notes` optional (nullable, defaults to empty), max 2000. Create and Update use the same nullability for `position`/`notes` (39.17 hardening — they previously diverged: Update declared them as non-nullable with an empty-string default instead of nullable).
+
+### Personas (Phase 39.14 — AI persona generation for practice calls)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /companies/{id}/personas | — | `CompanyPersonaDto[]` sorted by `createdAt DESC` |
+| POST | /companies/{id}/personas | `{name, position, personality, difficulty}` | `201 CompanyPersonaDto` or `404` |
+| DELETE | /companies/{id}/personas/{personaId} | — | `204` or `404` |
+| POST | /companies/{id}/personas/generate | `{contactName?, contactPosition?, difficulty}` | `GeneratedCompanyPersonaDto`, `404`, or `503` if ai-service is unavailable |
+
+`CompanyPersonaDto`: `{id, companyId, name, position, personality, difficulty, createdAt}`
+`GeneratedCompanyPersonaDto`: `{name, position, personality}` — not persisted.
+
+Validation: `name` required, max 200; `position` required, max 200; `personality` required, max 4000; `difficulty` one of `Easy | Medium | Hard` (string enum, same conversion pattern as `Company.Status`).
+
+**Generate-then-save flow:** `POST /companies/{id}/personas/generate` gathers the company's
+`description` and forwards it — plus the optional `contactName`/`contactPosition` seed and the
+requested `difficulty` — to ai-service's internal `POST /ai/companies/persona` (see above), and
+returns the draft `{name, position, personality}` **without persisting anything**, so the caller
+can regenerate before committing. Saving is a separate `POST /companies/{id}/personas` call with
+the (possibly edited) draft plus the chosen `difficulty`. The roadmap's "seeded from an existing
+contact" note is purely a frontend UX affordance (prefilling `contactName`/`contactPosition` from
+a contact the user picks) — there is no backend coupling between `CompanyContact` and
+`CompanyPersona`. Same ownership/`404` pattern as every other company endpoint; `503` if
+ai-service is unreachable, misconfigured, or returns an unparseable/incomplete response.
+
+**Injection into practice calls:** the frontend's persona selector (chips + «Без персоны» +
+generate) lets the caller pick a saved `CompanyPersona` (or none) before starting a voice/chat
+practice call; the selected persona's `name`/`position`/`personality`/`difficulty` are sent as the
+`persona*` fields of `companyContext` on `POST /dialog/sessions` (see the Dialog section above).
 
 ---
 

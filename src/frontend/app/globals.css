@@ -3462,3 +3462,237 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .map-ring-wrap { width: 64px; height: 64px; }
   .map-ring-pct { font-size: 12px; }
 }
+
+/* ════════ COMPANIES (docs/COMPANIES/DESIGN_SPEC.md) ════════ */
+
+/* ── List: header + toolbar ── */
+.co-list-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.co-list-toolbar-wrap { display: flex; flex-direction: column; gap: 10px; margin: 0 0 14px; }
+.co-list-toolbar { display: flex; align-items: center; gap: 14px; margin: 0; }
+.co-search-wrap { position: relative; flex: 1; max-width: 420px; }
+.co-search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-4); pointer-events: none; display: flex; align-items: center; }
+.co-list-count { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--ink-4); white-space: nowrap; }
+
+/* ── Status filter chips ── */
+.co-status-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-status-filter-chip {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 12px;
+  border-radius: var(--r-pill); font-size: 12px; font-weight: 600;
+  background: var(--surface-3); color: var(--ink-3); border: 1px solid var(--line);
+  cursor: pointer; transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+.co-status-filter-chip:hover { border-color: var(--primary-tint-border); }
+.co-status-filter-chip.active { border-color: transparent; color: var(--ink); background: var(--dark-surface); }
+/* Tone overrides are scoped under .co-status-filters (4 class selectors) so they
+   always outrank the 2-class .co-status-filter-chip.active rule above on specificity
+   alone — correctness does not depend on these rules appearing after it in the file. */
+.co-status-filters .co-status-filter-chip.active.co-status--lead     { background: var(--surface-3); color: var(--ink-2); border: 1px solid var(--line-strong); }
+.co-status-filters .co-status-filter-chip.active.co-status--contacted { background: var(--info-soft); color: var(--info); }
+.co-status-filters .co-status-filter-chip.active.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
+.co-status-filters .co-status-filter-chip.active.co-status--won       { background: var(--success-soft); color: var(--success); }
+.co-status-filters .co-status-filter-chip.active.co-status--lost      { background: var(--heart-soft); color: var(--heart); }
+
+/* ── Status badge (row / header) ── */
+.co-status-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 24px; padding: 0 9px; border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--surface-3); color: var(--ink-3);
+}
+.co-status--lead      { background: var(--surface-3); color: var(--ink-3); }
+.co-status--contacted { background: var(--info-soft); color: var(--info); }
+.co-status--meeting   { background: var(--violet-soft); color: var(--violet); }
+.co-status--won        { background: var(--success-soft); color: var(--success); }
+.co-status--lost        { background: var(--heart-soft); color: var(--heart); }
+.co-row-status { margin-left: auto; }
+
+.co-status-badge--interactive {
+  border: 1px solid transparent; cursor: pointer;
+  transition: filter var(--transition);
+}
+.co-status-badge--interactive:hover { filter: brightness(0.96); }
+.co-status-badge--interactive:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* ── Status dropdown menu (company header) ── */
+.co-status-menu { position: relative; display: inline-flex; }
+.co-status-menu-list {
+  position: absolute; top: calc(100% + 8px); left: 0; min-width: 210px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--sh-3); z-index: 20; overflow: hidden; padding: 6px;
+}
+.co-status-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; border: none; background: transparent;
+  font-size: 13px; font-weight: 600; color: var(--ink-2); text-align: left; cursor: pointer;
+  transition: background var(--transition);
+}
+.co-status-menu-item:hover { background: var(--surface-3); }
+.co-status-menu-check { margin-left: auto; color: var(--primary); flex: none; }
+.co-status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.co-status-dot.co-status--lead      { background: var(--ink-4); }
+.co-status-dot.co-status--contacted { background: var(--info); }
+.co-status-dot.co-status--meeting   { background: var(--violet); }
+.co-status-dot.co-status--won        { background: var(--success); }
+.co-status-dot.co-status--lost        { background: var(--heart); }
+
+/* ── Follow-up badge (row / header) — due within 24h or overdue; hidden otherwise ── */
+.co-followup-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 24px; padding: 0 9px; border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.co-followup--due     { background: var(--info-soft); color: var(--info); }
+.co-followup--overdue { background: var(--heart-soft); color: var(--heart); }
+
+/* ── List: card + rows ── */
+.co-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+.co-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-2);
+  text-decoration: none; color: inherit;
+  transition: background var(--transition);
+}
+.co-row:last-child { border-bottom: none; }
+.co-row:hover { background: var(--surface-2); }
+.co-row-av {
+  width: 40px; height: 40px; border-radius: 11px; flex: none;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+}
+.co-row-body { flex: 1; min-width: 0; }
+.co-row-name {
+  font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink-heading);
+  margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.co-row-meta { font-size: 12.5px; font-weight: 500; color: var(--ink-4); margin: 2px 0 0; }
+.co-row-chev { color: var(--ink-4); flex: none; }
+
+/* ── Shared field bits reused by the create/edit modal ── */
+.co-field-label { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; display: block; }
+.co-textarea { height: auto; min-height: 120px; padding: 12px 14px; line-height: 1.6; resize: vertical; }
+.co-date { max-width: 200px; }
+
+/* ── Company page shell ── */
+.co-page { max-width: 860px; margin: 0 auto; padding: 22px clamp(16px,3.5vw,30px) 64px; display: flex; flex-direction: column; gap: 20px; }
+.co-header { display: flex; align-items: center; gap: 16px; }
+.co-header-av { width: 64px; height: 64px; border-radius: 16px; flex: none; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; letter-spacing: -0.02em; }
+.co-header-body { flex: 1; min-width: 0; }
+.co-header-name { display: inline-flex; align-items: center; gap: 8px; }
+.co-header-meta { font-size: 12.5px; font-weight: 500; color: var(--ink-4); margin: 4px 0 0; }
+.co-header-actions { display: flex; gap: 8px; flex: none; }
+
+/* ── Card primitive (companies) ── */
+.co-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-1); padding: 18px 20px; }
+.co-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+
+/* ── Pre-call panel ── */
+.co-cta { background: var(--primary-softer); border: 1px solid var(--primary-tint-border-2); border-radius: var(--r-lg); padding: 18px 20px; }
+.co-cta-row { display: flex; gap: 10px; margin: 12px 0 10px; }
+.co-goal-input { flex: 1; }
+.co-cta .btn { flex: none; }
+.co-recent-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-4); margin-bottom: 6px; }
+.co-recent-goals { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-cta-help { font-size: 11.5px; color: var(--ink-4); margin: 10px 0 0; line-height: 1.5; }
+.co-persona-chip { display: inline-flex; align-items: center; gap: 4px; }
+.co-persona-chip-delete { width: 22px; height: 22px; border-radius: 6px; }
+.co-persona-chip-delete .nb { width: 12px; height: 12px; }
+
+/* ── Readiness score (39.16) ── */
+.co-readiness-body { display: flex; align-items: flex-start; gap: 18px; }
+.co-readiness-details { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.co-readiness-group { display: flex; flex-direction: column; gap: 4px; }
+.co-readiness-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-4); margin: 0; }
+.co-readiness-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--ink-secondary); }
+
+/* ── Description ── */
+.co-desc { font-size: 13.5px; line-height: 1.6; color: var(--ink-secondary); white-space: pre-wrap; margin: 0; }
+.co-desc-empty { border: 1px dashed var(--line); border-radius: var(--r-sm); padding: 16px; text-align: center; color: var(--ink-4); font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+/* ── Timeline ── */
+.co-seg { display: inline-flex; gap: 4px; background: var(--surface-3); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+.co-seg button { border: none; background: transparent; color: var(--ink-3); font-size: 12.5px; font-weight: 700; padding: 6px 13px; border-radius: 7px; cursor: pointer; transition: background var(--transition), color var(--transition); }
+.co-seg button.active { background: var(--dark-surface); color: #fff; }
+
+.co-add-log { width: 100%; border: 1px dashed var(--primary-tint-border-2); background: var(--primary-softer); color: var(--primary-strong); justify-content: center; margin-bottom: 16px; }
+
+.co-timeline { position: relative; }
+.co-tl-item { position: relative; padding: 0 0 16px 40px; }
+.co-tl-item:last-child { padding-bottom: 0; }
+.co-tl-item::before { content: ""; position: absolute; left: 19px; top: 18px; bottom: 0; width: 2px; background: var(--line); }
+.co-tl-item:last-child::before { display: none; }
+.co-tl-node { position: absolute; left: 13px; top: 6px; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 3px var(--surface); }
+.co-tl-item.practice .co-tl-node { background: var(--primary); }
+.co-tl-item.reallog  .co-tl-node { background: var(--success); }
+.co-tl-card { border: 1px solid var(--line); border-radius: 13px; padding: 12px 14px; transition: border-color var(--transition), box-shadow var(--transition); }
+.co-tl-card:hover { border-color: var(--primary-tint-border); box-shadow: var(--sh-2); }
+.co-tl-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.co-tl-time { margin-left: auto; font-size: 12px; color: var(--ink-4); white-space: nowrap; }
+.co-tl-title { font-size: 14px; font-weight: 700; color: var(--ink-heading); margin: 0 0 2px; }
+.co-tl-meta { font-size: 12px; color: var(--ink-4); margin: 0; }
+
+.co-pill-real { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 700; background: var(--success-soft); color: var(--success); }
+
+/* real-log fields */
+.co-log-field { margin-top: 10px; }
+.co-log-field-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 3px; }
+.co-log-field-value { font-size: 13.5px; line-height: 1.5; color: var(--ink-secondary); white-space: pre-wrap; }
+.co-log-field.outcome .co-log-field-value { border-left: 2px solid var(--success); padding-left: 10px; }
+
+/* inline log form */
+.co-log-form { border: 1px solid var(--line); border-radius: 13px; padding: 16px; margin-bottom: 16px; background: var(--surface-2); }
+.co-log-form .co-field-label + * { margin-bottom: 14px; }
+.co-log-form-foot { display: flex; gap: 10px; justify-content: flex-end; }
+.co-log-contact-position { color: var(--ink-4); font-weight: 500; }
+
+/* voice memo mic button (39.15, "Вставить заметки" mode) */
+.co-paste-notes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.co-paste-notes-head .co-field-label { margin-bottom: 0; }
+.co-mic-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 4px 10px; color: var(--ink-2); cursor: pointer;
+  font-size: 12px; font-family: var(--font-mono); white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.co-mic-btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--primary-tint-border); color: var(--primary); }
+.co-mic-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.co-mic-btn--recording { background: var(--heart-soft); border-color: var(--heart); color: var(--heart); }
+.co-mic-spinner {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+@media (prefers-reduced-motion: reduce) { .co-mic-spinner { animation: none; opacity: 0.5; } }
+
+/* contact chips inside the log form */
+.co-contact-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+/* contacts card */
+.co-contact-form { border: 1px solid var(--line); border-radius: 13px; padding: 16px; margin-bottom: 16px; background: var(--surface-2); }
+.co-contact-form .co-field-label + * { margin-bottom: 14px; }
+.co-contact-list { display: flex; flex-direction: column; }
+.co-contact-row { position: relative; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.co-contact-row:last-child { border-bottom: none; }
+.co-contact-main { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; background: transparent; border: none; padding: 0; padding-right: 64px; cursor: pointer; }
+.co-contact-name { font-size: 13.5px; font-weight: 700; color: var(--ink-heading); }
+.co-contact-position { font-size: 12.5px; color: var(--ink-4); }
+.co-contact-actions { position: absolute; top: 10px; right: 0; display: flex; gap: 6px; }
+.co-contact-notes { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-secondary); white-space: pre-wrap; }
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  .co-list-head { flex-direction: column; }
+  .co-list-head .btn-primary { width: 100%; }
+  .co-cta-row { flex-direction: column; }
+  .co-cta-row .btn { width: 100%; }
+  .co-date { max-width: 100%; }
+  .co-page { padding: 16px 16px 64px; }
+}

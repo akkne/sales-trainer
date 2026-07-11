@@ -1243,8 +1243,8 @@
 > Mobile bottom nav: «Компании» replaces «Справочник» in the 5-slot bar
 > (guidebook stays reachable from the desktop rail), per DESIGN_SPEC §1.4.
 
-### [ ] 39.1 Backend — company-service scaffold
-- [ ] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
+### [x] 39.1 Backend — company-service scaffold
+- [x] Project `company-service/Company` + `Company.Tests`, added to `Sellevate.sln`
 - [ ] `CompanyDbContext` (Postgres `company`), auto-migrate on startup
 - [ ] Entities: `Company` (Id, UserId, Name, Description, CreatedAt, UpdatedAt),
       `CallLogEntry` (Id, CompanyId, UserId, ContactName, Subject, Outcome, OccurredAt, CreatedAt, UpdatedAt),
@@ -1253,7 +1253,7 @@
 - [ ] `Program.cs` per notification-service pattern; Dockerfile
 - [ ] Update `docs/DB_SCHEMA.md`
 
-### [ ] 39.2 Backend — company-service API
+### [x] 39.2 Backend — company-service API
 - [ ] `CompanyController`: `GET /companies` (list, `?search=`), `POST /companies` `{name}`,
       `GET /companies/{id}`, `PUT /companies/{id}` `{name, description}`, `DELETE /companies/{id}`
 - [ ] Call log: `GET /companies/{id}/logs`, `POST /companies/{id}/logs` `{contactName, subject, outcome, occurredAt}`,
@@ -1264,7 +1264,7 @@
 - [ ] Input validation + limits (name ≤ 200, description ≤ 8000, log fields ≤ 4000)
 - [ ] Unit tests (service layer, ownership, validation); update `docs/API_CONTRACTS.md`
 
-### [ ] 39.3 Backend — ai-service: company-context sessions
+### [x] 39.3 Backend — ai-service: company-context sessions
 - [ ] `StartSessionRequestDto` gains optional `companyContext { companyName, companyDescription, callGoal }`
 - [ ] Seed admin-editable `DialogMode` template (key `company-call`, voiceEnabled, hidden from `/dialog/bundles` listing)
 - [ ] `DialogService.StartSessionAsync`: when context present → compose chat + feedback
@@ -1272,20 +1272,20 @@
 - [ ] Voice stream, complete/feedback, XP weights, minute quotas — unchanged and verified with context sessions
 - [ ] Unit tests (prompt composition, context persistence); update `docs/API_CONTRACTS.md`, `docs/AI_DIALOG.md`
 
-### [ ] 39.4 Infra — gateway, compose, dev scripts
+### [x] 39.4 Infra — gateway, compose, dev scripts
 - [ ] YARP: route `/companies/{**catch-all}` → cluster `company` in `gateway/appsettings.json` + gateway tests
 - [ ] `docker-compose.yml`: `company` service entry (env, depends_on postgres; gateway env + depends_on)
 - [ ] `scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) + hook into `scripts/dev-up.sh`
 - [ ] Update `docs/LOCAL_DEV.md`, `docs/CONFIGURATION.md`, `docs/MICROSERVICES.md`, `docs/ARCHITECTURE.md`
 
-### [ ] 39.5 Frontend — nav + companies list
+### [x] 39.5 Frontend — nav + companies list
 - [ ] `briefcase` icon added to `IconName`; rail item «Компании» in `nav-rail.tsx`; mobile `bottom-nav.tsx` per spec §1.4
 - [ ] `features/companies/`: `use-companies.ts` hooks (list/create/update/delete, search)
 - [ ] `/companies` page per spec §2: header, toolbar (search + «Добавить компанию»), `.co-row` list,
       create-company modal, empty/loading/error states
 - [ ] Vitest tests for hooks + list rendering
 
-### [ ] 39.6 Frontend — company page
+### [x] 39.6 Frontend — company page
 - [ ] `/companies/[id]` per spec §3: identity header, description card with edit mode,
       pre-call `.co-cta` panel (goal input + recent-goal chips), combined timeline
       (Все / Тренировки / Звонки segmented filter)
@@ -1293,14 +1293,14 @@
 - [ ] Edit/delete company (modal + confirm, navigate back on delete)
 - [ ] Vitest tests
 
-### [ ] 39.7 Frontend — practice-call handoff
+### [x] 39.7 Frontend — practice-call handoff
 - [ ] Full-screen route `/companies/[id]/call/voice` (outside `(main)`) reusing the existing
       voice pipeline (`useVoice`, call states, sounds, quota) with company-context session creation
 - [ ] Optional chat variant `/companies/[id]/call/chat` reusing chat components
 - [ ] On session create → `POST /companies/{id}/practice-calls`; hangup → feedback modal → return to `/companies/[id]`
 - [ ] Practice entries appear in the company timeline with feedback summary
 
-### [ ] 39.8 Core docs checkpoint (Stage A)
+### [x] 39.8 Core docs checkpoint (Stage A)
 - [ ] `docs/COMPANIES/COMPANIES.md` feature doc (core flows); link both COMPANIES docs in `docs/FEATURES.md`
 - [ ] `docs/TESTING/COMPANIES.md` — manual checklist (CRUD, ownership, practice call with goal, logs, timeline, mobile)
 
@@ -1310,7 +1310,7 @@
 > Same PR process. Order matters: 39.9/39.10 are schema-level and go first;
 > AI features (39.12–39.14, 39.16) depend on 39.3 core context plumbing.
 
-### [ ] 39.9 Contacts (mini-CRM)
+### [x] 39.9 Contacts (mini-CRM)
 - [ ] Backend: `CompanyContact` entity (Id, CompanyId, UserId, Name, Position, Notes?, CreatedAt, UpdatedAt);
       CRUD `GET/POST /companies/{id}/contacts`, `PUT/DELETE /companies/{id}/contacts/{contactId}`
 - [ ] `CallLogEntry.ContactId` (nullable FK, SET NULL on delete) alongside free-text `ContactName`
@@ -1318,7 +1318,7 @@
       becomes combo: pick a contact or type free text (typed name offers «Сохранить как контакт»)
 - [ ] Unit tests; `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`
 
-### [ ] 39.10 Company status pipeline
+### [x] 39.10 Company status pipeline
 - [ ] `Company.Status` enum: `Lead / Contacted / MeetingScheduled / DealWon / DealLost` (default Lead)
 - [ ] `PUT /companies/{id}/status`; status included in list/detail DTOs
 - [ ] Frontend: status chip on `/companies` rows + status filter chips in toolbar;
@@ -1326,7 +1326,7 @@
       meeting violet, won success, lost danger)
 - [ ] Unit tests; docs
 
-### [ ] 39.11 Follow-up reminders
+### [x] 39.11 Follow-up reminders
 - [ ] `Company.NextActionAt` (nullable timestamptz), `NextActionNote` (nullable), `FollowUpNotifiedAt` (nullable)
 - [ ] company-service adopts BuildingBlocks eventing (Kafka producer): hosted background service
       polls due follow-ups (every 5 min), publishes `company.followup.due` once per due date
@@ -1336,7 +1336,7 @@
 - [ ] Frontend: follow-up date + note editor on company page; due/overdue badge on `/companies` rows
 - [ ] Unit tests both services (due-poll logic, once-only guard, event contract, consumer→inbox); docs
 
-### [ ] 39.12 AI pre-call briefing («Шпаргалка»)
+### [x] 39.12 AI pre-call briefing («Шпаргалка»)
 - [ ] ai-service: `POST /ai/companies/briefing` — input: company description, goal?, recent real-call
       logs, feedback summaries of recent practice sessions (by sessionIds from Mongo); output: short
       structured markdown cheat-sheet (кто они, о чём договаривались, возражения, следующий шаг)
@@ -1347,14 +1347,14 @@
       generated-at timestamp; loading/error states
 - [ ] Unit tests (prompt composition mocked HTTP, caching); docs
 
-### [ ] 39.13 AI real-call log parsing
+### [x] 39.13 AI real-call log parsing
 - [ ] ai-service: `POST /ai/companies/parse-log` `{rawText}` → `{contactName?, subject, outcome, occurredAt?}`
 - [ ] company-service proxy: `POST /companies/{id}/logs/parse`
 - [ ] Frontend: log form gets «Вставить заметки» mode — paste raw notes/transcript → AI prefills
       the 3 fields → user reviews/edits → save; graceful fallback to manual on AI error
 - [ ] Unit tests (mocked HTTP, malformed AI output); docs
 
-### [ ] 39.14 AI persona generation for practice calls
+### [x] 39.14 AI persona generation for practice calls
 - [ ] company-service: `CompanyPersona` entity (Id, CompanyId, UserId, Name, Position, Personality,
       Difficulty enum Easy/Medium/Hard, CreatedAt); CRUD-lite: `GET/POST /companies/{id}/personas`,
       `DELETE /companies/{id}/personas/{personaId}`
@@ -1365,14 +1365,14 @@
       chat/feedback prompts (extends 39.3)
 - [ ] Unit tests; docs
 
-### [ ] 39.15 Voice memo → log
+### [x] 39.15 Voice memo → log
 - [ ] Frontend: mic button in the log form (MediaRecorder, same UX as free-text exercises) →
       existing ai-service `POST /transcription/transcribe` → transcript lands in the raw-notes
       field → optionally chains into AI log parsing (39.13)
 - [ ] Verify gateway route for `/transcription/*` → ai-service (add if missing)
 - [ ] Component tests (recording states, error fallback); docs
 
-### [ ] 39.16 Readiness score
+### [x] 39.16 Readiness score
 - [ ] ai-service: `POST /ai/companies/readiness` — input: goal, feedback summaries of last N practice
       sessions for the company; output `{score 0–100, strengths[], gaps[], recommendation}`
 - [ ] company-service: `GET /companies/{id}/readiness` — cached (`ReadinessJson`, `ReadinessGeneratedAt`),
@@ -1381,9 +1381,68 @@
       «Проведите тренировку, чтобы получить оценку готовности»
 - [ ] Unit tests (scoring parse, cache invalidation); docs
 
-### [ ] 39.17 Final QA, docs & release PR
-- [ ] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
-- [ ] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
-- [ ] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
-      (dotnet test, tsc, vitest, eslint, codestyle-lint)
-- [ ] Final PR `feature/companies` → `main`
+### [>] 39.17 Final QA, docs & release PR
+> **Carry-overs status:** all non-blocking fast-follows below are now cleared via
+> PRs #27 (PR #22+#26 — AI backend hardening), #28 (PR #19 — contacts hardening),
+> #29 (PR #20 — status dropdown a11y + optimistic update), #30 (PR #24+#21 — persona/
+> dialog fencing, persona-delete UI, DI rename, Kafka publish retry, follow-up clock
+> caveat). Each was code-reviewed and merged. Two items remain deliberately open:
+> (1) **product sign-off** that unconstrained status transitions (e.g. DealWon → Lead)
+> are intended — a product decision, not code; (2) **prompt-delimiter injection
+> hardening** — company/persona free-text is fenced as data (defense-in-depth) but the
+> static `=== ДАННЫЕ ===` delimiters are not escaped, so a user can forge an END marker
+> in their own training data (self-injection only, mirrors the accepted pattern across
+> Briefing/Persona/ParseLog/Readiness). Tracked as a codebase-wide follow-up (switch to
+> per-request token delimiters) — out of scope for the companies release.
+> Carry-over from PR #19 review (non-blocking fast-follows): replace the generic
+> `InvalidOperationException` contact-validation flow with a typed error; translate
+> `DbUpdateException` on the ContactId FK race into a 400; align Create/Update
+> contact DTO nullability; clear stale `contactId` client-side on a 400.
+> Carry-over from PR #20 review (non-blocking fast-follows): status dropdown uses
+> `role="menu"` without the ARIA menu keyboard contract (Escape/arrows/focus return) —
+> implement it or downgrade the role; consider optimistic updates for status mutation
+> (consistent with the rest of use-companies.ts); CSS `.co-status-filter-chip.active`
+> tone overrides rely on source order — bump specificity or comment; product sign-off
+> that unconstrained status transitions (e.g. DealWon → Lead) are intended.
+> Carry-over from PR #22 review (non-blocking fast-follows): add a company-service
+> test for the AI-failure propagation path (client throws → 503, cache left
+> unchanged); `InternalAuth:ServiceSecret` is provisioned nowhere and
+> learning-service's `AiEvaluationClient` never sends `X-Internal-Service-Secret`
+> — either wire the header there too or document that the guard runs open in all
+> environments; consider dedicated `BriefingModel`/`MaximumBriefingTokenCount`
+> options instead of reusing the feedback/open-question OpenAI config names.
+> (The MEDIUM finding — missing input-size guard on `POST /ai/companies/briefing`
+> — was fixed in-PR.)
+> Carry-over from PR #24 review (non-blocking fast-follows): persona `personality`
+> text is injected unfenced into the dialog role-play prompt (consistent with the
+> pre-existing company name/description/goal injection, self-injection only) —
+> consider fencing all dialog company-context fields as data for defense-in-depth;
+> `use-company-personas` exposes a `useDeleteCompanyPersona` mutation with no UI
+> consumer yet (wire a manage-personas UI or trim); rename the overloaded
+> ai-service `AddBriefingFeatureServices()` (now also wires ParseLog + Persona) to
+> `AddCompanyAiFeatureServices()` on next touch. (The LOW transport-failure finding
+> — `HttpRequestException` from the AI proxies surfaced as 500 — was fixed in-PR
+> for all three proxies, briefing/parse-log/persona.)
+> Carry-over from PR #26 review (non-blocking fast-follow): the no-usable-feedback
+> readiness result (ai-service returns 204) is not cached, so every `GET
+> /companies/{id}/readiness` re-fans-out up to 50 sequential Mongo reads until
+> feedback lands — consider a short negative-cache TTL. (The HIGH findings —
+> misleading no-op «Обновить» refresh button, ai-service reading sessions without
+> user scoping, and error-vs-empty UI conflation — plus the null-forgiving cache
+> deserialize were all fixed in-PR.)
+> Carry-over from PR #21 review (non-blocking fast-follows): follow-up badge
+> due/overdue tone uses the client clock (document caveat or resync against server
+> time); consider a short in-process retry (2–3 attempts) around the Kafka publish
+> in FollowUpReminderService to absorb transient broker blips within the accepted
+> at-most-once design.
+- [x] `docs/COMPANIES/COMPANIES.md` updated with all Stage B features; `docs/TESTING/COMPANIES.md` full checklist
+- [x] `docs/API_CONTRACTS.md`, `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` complete
+      (holistic opus integration review confirmed docs match the shipped surface)
+- [x] Full `code-reviewer` (opus) + `verifier` pass over `feature/companies` vs `main`
+      — opus review: APPROVE, 0 blockers (1 MED internal-auth-secret-in-compose + 2 LOW, all
+      documented/post-merge follow-ups); verifier: backend build + all suites green
+      (company 122, ai 108, learning 40), frontend tsc + vitest green (250). Lint: the one
+      genuine new error (voice-memo ref-in-render) fixed; the codestyle `///` no-comments
+      "violations" are an unenforced repo-wide convention (main has 909 such lines) — recorded
+      as a DECISIONS exception rather than mass-stripped.
+- [>] Final PR `feature/companies` → `main` — opened, awaiting release sign-off to merge

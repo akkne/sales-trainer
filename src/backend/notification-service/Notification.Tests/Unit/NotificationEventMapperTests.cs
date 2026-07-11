@@ -268,4 +268,64 @@ public class NotificationEventMapperTests
         request.Should().NotBeNull();
         request!.Body.Should().Be("Zara: ");
     }
+
+    // ── Company follow-up due ────────────────────────────────────────────────
+
+    [Test]
+    public void Map_CompanyFollowUpDue_ProducesInAppOnlyNotificationWithCompanyNameInTitle()
+    {
+        var userId = Guid.NewGuid();
+        var companyId = Guid.NewGuid();
+        var nextActionAt = DateTime.UtcNow;
+        var envelope = EventEnvelope.Create(
+            Topics.CompanyFollowUpDue,
+            new CompanyFollowUpDueEvent(companyId, userId, "Acme Corp", nextActionAt, "Call about pricing"));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.RecipientUserId.Should().Be(userId);
+        request.NotificationType.Should().Be(NotificationType.CompanyFollowUpDue);
+        request.Title.Should().Be("Пора связаться с Acme Corp");
+        request.Body.Should().Be("Call about pricing");
+        request.ActionUrl.Should().Be($"/companies/{companyId}");
+        request.SendEmail.Should().BeFalse();
+    }
+
+    [Test]
+    public void Map_CompanyFollowUpDue_WithoutNote_UsesDefaultBody()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.CompanyFollowUpDue,
+            new CompanyFollowUpDueEvent(Guid.NewGuid(), Guid.NewGuid(), "Acme Corp", DateTime.UtcNow, null));
+
+        var request = _mapper.Map(envelope);
+
+        request.Should().NotBeNull();
+        request!.Body.Should().Be("Настало время запланированного контакта.");
+    }
+
+    [Test]
+    public void Map_CompanyFollowUpDue_DedupesOnCompanyAndDueDate()
+    {
+        var companyId = Guid.NewGuid();
+        var nextActionAt = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc);
+        var envelope = EventEnvelope.Create(
+            Topics.CompanyFollowUpDue,
+            new CompanyFollowUpDueEvent(companyId, Guid.NewGuid(), "Acme Corp", nextActionAt, null));
+
+        var request = _mapper.Map(envelope);
+
+        request!.RelatedEntityId.Should().Be($"{companyId}:{nextActionAt:O}");
+    }
+
+    [Test]
+    public void Map_CompanyFollowUpDue_WithBlankCompanyName_ReturnsNull()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.CompanyFollowUpDue,
+            new CompanyFollowUpDueEvent(Guid.NewGuid(), Guid.NewGuid(), "  ", DateTime.UtcNow, null));
+
+        _mapper.Map(envelope).Should().BeNull();
+    }
 }

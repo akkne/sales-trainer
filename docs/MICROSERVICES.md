@@ -42,7 +42,7 @@
 
 ---
 
-## 2. Service catalogue (7 services + Gateway)
+## 2. Service catalogue (8 services + Gateway)
 
 ```
                          ┌──────────────────────────┐
@@ -102,6 +102,9 @@ src/backend/
   analytics-service/
     Analytics/
     Analytics.Tests/
+  company-service/
+    Company/
+    Company.Tests/
 ```
 
 Rule: a service is self-contained — `<service>/<Name>` (code) + `<service>/<Name>.Tests`
@@ -199,7 +202,27 @@ live in `building-blocks`.
 - **Kafka (consumes):** optionally mirrors `user.registered`, `exercise.completed`,
   `xp.granted` for product funnels. No durability guarantees needed.
 
-### 2.8 API Gateway — `gateway` (YARP)
+### 2.8 Company Service — `company-service` (Postgres, Phase 39)
+**Bounded context:** the salesperson's account book — companies they sell into, their
+call history, and practice-call sessions tied to a company.
+- **Owns (Postgres `company`):** `Company` (Id, UserId, Name, Description, Status,
+  NextActionAt, NextActionNote, FollowUpNotifiedAt, CreatedAt, UpdatedAt), `CallLogEntry`
+  (real-call log entries), `PracticeCall` (links to an AI `DialogSession` with a goal),
+  `CompanyContact` (mini-CRM contacts).
+- **Frontend REST:** `/companies/*` (companies CRUD, status, follow-up scheduling, call log,
+  practice-call records, contacts).
+- **Kafka producer only** (since Phase 39.11): a polling background service
+  (`FollowUpReminderBackgroundService`, default every 5 min) publishes `company.followup.due`
+  for companies whose `NextActionAt` is due and not yet notified — see §4.1. Registers only
+  the Kafka publisher + topic provisioner directly (not the full `AddSellevateEventing`
+  helper), since it never consumes and so has no need for the Redis-backed consumer
+  idempotency store that helper also wires up. **No Redis or Mongo dependency.** Every
+  query is scoped to the JWT's `UserId` at the service layer; 404 on foreign ids.
+- **Sync dependency:** starting a practice call hands a company-context payload
+  (`companyName`, `companyDescription`, `callGoal`) to the **AI Service** `StartSessionAsync`
+  call, which composes it into the roleplay's system prompt (see 2.3).
+
+### 2.9 API Gateway — `gateway` (YARP)
 - Single public entry point. Terminates TLS, validates the JWT once, forwards
   `X-User-Id`/`X-User-Role` headers downstream (stripping client copies), and routes by
   path prefix to the services above. **Each service still re-validates the JWT and
@@ -245,6 +268,7 @@ a composition of those per-service admin APIs.
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
 | `league.updated` | Gamification | Notifications | userId, leagueId, previousTier, newTier, outcome, rank |
+| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
 per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once

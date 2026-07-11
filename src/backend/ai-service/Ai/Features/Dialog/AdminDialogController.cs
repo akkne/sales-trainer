@@ -89,6 +89,7 @@ public sealed class AdminDialogController : ControllerBase
         if (request.IconEmoji != null) bundle.IconEmoji = request.IconEmoji;
         if (request.SortOrder.HasValue) bundle.SortOrder = request.SortOrder.Value;
         if (request.IsActive.HasValue) bundle.IsActive = request.IsActive.Value;
+        if (request.IsHidden.HasValue) bundle.IsHidden = request.IsHidden.Value;
 
         bundle.UpdatedAt = DateTime.UtcNow;
 

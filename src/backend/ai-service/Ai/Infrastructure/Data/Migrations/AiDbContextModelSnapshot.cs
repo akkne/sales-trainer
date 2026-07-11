@@ -44,6 +44,9 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("SkillId")
                         .HasColumnType("uuid");
 

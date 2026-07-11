@@ -57,6 +57,7 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.ChatMessageSent => MapChatMessageSent(envelope),
             Topics.DiscussReplyCreated => MapDiscussReplyCreated(envelope),
             Topics.LeagueUpdated => MapLeagueUpdated(envelope),
+            Topics.CompanyFollowUpDue => MapCompanyFollowUpDue(envelope),
             _ => null
         };
     }
@@ -230,6 +231,36 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             // while replays of the same rollover event are collapsed.
             payload.LeagueId.ToString(),
             SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapCompanyFollowUpDue(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<CompanyFollowUpDueEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.CompanyName))
+        {
+            return null;
+        }
+
+        var title = $"Пора связаться с {payload.CompanyName}";
+        var body = string.IsNullOrWhiteSpace(payload.Note)
+            ? "Настало время запланированного контакта."
+            : payload.Note.Trim();
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.CompanyFollowUpDue,
+            title,
+            body,
+            NotificationActionRoutes.CompanyDetails(payload.CompanyId),
+            // Dedupe on company + the specific due date, not just the company: company-service
+            // resets FollowUpNotifiedAt on reschedule, so a later due date for the same company
+            // must produce a fresh notification rather than being suppressed by the still-inboxed
+            // reminder for the earlier date. Uses the "O" (round-trip) format so the key is
+            // exact to the tick and reproducible byte-for-byte on both the producer's original
+            // DateTime and any re-serialization here — a lossier format (e.g. seconds-only) could
+            // collapse two distinct-but-close due dates onto the same dedupe key.
+            $"{payload.CompanyId}:{payload.NextActionAt:O}");
+        // SendEmail stays false: follow-up due reminders are in-app only per product spec.
     }
 
     private static string FormatTier(string? tierKey)

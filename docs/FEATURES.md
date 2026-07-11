@@ -7,7 +7,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | Document | Description |
 |----------|-------------|
 | [Architecture](ARCHITECTURE.md) | Stack overview, folder structure, EF column types |
-| [Microservices (target)](MICROSERVICES.md) | Target microservices architecture: 7 services + YARP gateway, DB-per-service, Kafka events, service catalogue & contracts |
+| [Microservices (target)](MICROSERVICES.md) | Target microservices architecture: 8 services + YARP gateway, DB-per-service, Kafka events, service catalogue & contracts |
 | [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [Microservices Review & Remediation](REVIEW_MICROSERVICES.md) | Post-migration code-review findings (7 services + gateway + BuildingBlocks), severity-rated, with remediation status tracker |
 | [AI Engine Service](AI_SERVICE.md) | Phase 6: extracted `ai-service` (Dialog, Voice, Transcription, `/ai/evaluate`); Postgres+Mongo, `dialog.evaluated`, cached scoring weights |
@@ -56,7 +56,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
-| [Companies — Design Spec](COMPANIES/DESIGN_SPEC.md) | **Planned (Phase 39)** — «Компании» tab: prospect list, per-company description, AI practice calls with goal prompt, real-call log; company-service (port 5009) + ai-service context injection |
+| [Companies](COMPANIES/COMPANIES.md) | **Stage A shipped (Phase 39.1–39.8)**, Stage B contacts mini-CRM (39.9), status pipeline (39.10), and follow-up reminders (39.11) shipped — «Компании» tab: prospect list + CRUD, description, pre-call goal + recent goals, AI voice/chat practice calls with company-context injection (company-service port 5009 + ai-service seeded hidden `company-call` mode), combined timeline, real-call log CRUD, contacts, status chip, scheduled follow-up with Kafka-driven due/overdue in-app reminders (`company.followup.due` → notification-service). Design: [DESIGN_SPEC.md](COMPANIES/DESIGN_SPEC.md). Remaining Stage B (AI briefing/log-parsing/persona/readiness, voice memo) is planned, not implemented — see `docs/ROADMAP.md` Phase 39.12+ |
 
 ## Testing
 
@@ -83,6 +83,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | [SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md) | Phase 5: social-service unit tests (friend lifecycle + events, forum CRUD/voting/photos, chat friendship guard, `user.*` replica consumer, event contract) + gateway route-flip |
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
+| [COMPANIES.md](TESTING/COMPANIES.md) | Phase 39: company-service CRUD/ownership unit tests, ai-service company-context prompt tests, gateway route-flip, frontend vitest coverage + manual checklist (CRUD, ownership isolation, goal handoff, voice/chat practice calls, timeline, real-call log, mobile nav) |
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
 | Feature checklists | Manual test checklists for each feature |
 

@@ -56,6 +56,14 @@ Non-secret email-verification tuning (`EmailVerification:CodeLength`, `CodeLifet
 `MaximumVerificationAttempts`, `ResendCooldownSeconds`) lives in `appsettings.json`. See
 [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md) and [INTEGRATIONS.md](INTEGRATIONS.md#mailersend-transactional-email).
 
+## Company service (Phase 39)
+
+`company-service` introduces no new secrets — it reuses the shared `POSTGRES_USER`/
+`POSTGRES_PASSWORD` (own database `company`), `JWT_KEY`, and `FRONTEND_URL` from the
+root `.env`. Its `ConnectionStrings:Postgres`, `Jwt:Key`, and `Frontend:Url` config
+keys are `INJECTED_FROM_ENV` in `src/backend/company-service/Company/appsettings.json`,
+same pattern as the other extracted services.
+
 ## Yandex TTS key
 
 Yandex SpeechKit API key of a service account with the `ai.speechkit-tts.user` role.

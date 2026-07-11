@@ -363,6 +363,14 @@ text-dialog screen with the same company-context session. Optional for v1.
 > but the AI plays a person at THIS company using the company description," plus the
 > goal injection.
 
+**39.6 implementation note:** the company page persists the goal to
+`sessionStorage` (key `company-call-goal:{companyId}`) immediately before
+navigating, and also passes it as a `?goal=` query param on the same URL. The
+`sessionStorage` value is the **authoritative** goal source for the call route —
+the query param exists only as a fallback for a deep-link or a hard refresh
+where `sessionStorage` may already be cleared or was never set on this tab.
+39.7 must read `sessionStorage` first and fall back to the query param.
+
 ---
 
 ## 5. Modals (reuse `.modal-overlay` / `.modal` / `.modal-head/body/foot`)
