@@ -79,7 +79,8 @@ Three entities, all owned by `UserId`, cascade-deleted with their parent `Compan
   Status (Lead/Contacted/MeetingScheduled/DealWon/DealLost, default Lead, stored as string),
   NextActionAt (nullable), NextActionNote (nullable, ≤2000), FollowUpNotifiedAt (nullable),
   BriefingContent (nullable), BriefingGeneratedAt (nullable), ReadinessJson (nullable),
-  ReadinessGeneratedAt (nullable), CreatedAt, UpdatedAt`. Index on `UserId`; sparse index on
+  ReadinessGeneratedAt (nullable), ReadinessNoFeedbackUntil (nullable), CreatedAt, UpdatedAt`.
+  Index on `UserId`; sparse index on
   `NextActionAt`. Status is changed via
   a dedicated `PUT /companies/{id}/status` endpoint (kept separate from the name/description
   update so the frontend can fire a status change without re-submitting the whole edit form); the
@@ -278,7 +279,11 @@ company row.
   `IOpenAiChatService.GenerateTextAsync` — a new one-shot plain-text completion method added
   alongside the existing dialogue-shaped `SendChatMessageAsync` (forces a `{reply, endCall}` JSON
   contract) and `GenerateFeedbackAsync` (forces an HTML + `[XP:N]`-tag contract), neither of which
-  fits free-form markdown output.
+  fits free-form markdown output. Uses `OpenAiConfiguration.BriefingModel`/
+  `MaximumBriefingTokenCount` (39.17 PR #22 review fast-follow — dedicated options, default to the
+  same values as `OpenQuestionModel`/`MaximumFeedbackTokenCount` so unset config is a no-op);
+  `ParseLogService`/`ReadinessService`/`PersonaService` still use the shared
+  `OpenQuestionModel`/`MaximumFeedbackTokenCount` pair unchanged.
 - **company-service:** `POST /companies/{id}/briefing` gathers context — `Company.Description`,
   the single most recent non-empty `PracticeCall.Goal` (not the last-5-distinct list used by
   `/recent-goals`), and the last 5 `CallLogEntry` rows (newest first) — calls ai-service via
@@ -428,17 +433,21 @@ their recent **practice** calls. Rendered as a circular 0–100 gauge next to th
   company's practice-call session ids (newest first, capped to 50) plus the latest non-empty goal,
   and calls `ReadinessAiClient` (mirrors `BriefingAiClient`/`PersonaAiClient`: typed `HttpClient`,
   `AiService:ReadinessPath` config, `X-Internal-Service-Secret` header).
-- **Two distinct "no data" cases, both `204` with nothing cached:** (1) the company has zero
-  practice calls — the ai-service call is skipped entirely; (2) ai-service itself returns `204`
-  (none of the supplied sessions had usable feedback yet — still in progress or abandoned).
-  Leaving the cache empty in both cases means the next `GET` retries instead of getting stuck on a
-  stale "no data" result.
+- **Two distinct "no data" cases, both `204`, cached differently (39.17 PR #26 review
+  fast-follow):** (1) the company has zero practice calls — the ai-service call is skipped
+  entirely and nothing is cached (there's no expensive fan-out to avoid re-running); (2)
+  ai-service itself returns `204` after a real fan-out (none of the supplied sessions had usable
+  feedback yet — still in progress or abandoned) — this **is** negative-cached on
+  `Company.ReadinessNoFeedbackUntil` (now + 2 minutes), so a repeat `GET` within the TTL
+  short-circuits to the empty result instead of re-running the fan-out (up to 50 sequential
+  `DialogSessionId` lookups) on every request.
 - **Cache invalidation.** A new practice call
   (`POST /companies/{id}/practice-calls`, same `CompanyService.CreatePracticeCallAsync`) is this
   codebase's practice-completion signal — dialog-session completion itself is tracked only in
   ai-service's Mongo, invisible to company-service. On create, `Company.ReadinessJson`/
-  `ReadinessGeneratedAt` are cleared to `null` so the next `GET /readiness` regenerates from the
-  fresh session list rather than serving a stale score.
+  `ReadinessGeneratedAt`/`ReadinessNoFeedbackUntil` are all cleared to `null` so the next
+  `GET /readiness` regenerates from the fresh session list rather than serving a stale score or
+  being held back by a stale negative cache.
 - **`ReadinessController`/`ReadinessService`** on the ai-service side
   (`src/backend/ai-service/Ai/Features/Companies/`) follow the exact 39.12–39.14 pattern:
   `[ServiceFilter(typeof(InternalServiceAuthFilter))]`, an input-size guard (≤50 `sessionIds`,

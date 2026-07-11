@@ -27,8 +27,16 @@ public interface IOpenAiChatService
     /// post-processing. Used by non-dialogue features (e.g. company briefing generation) that
     /// need a plain-text/markdown answer to a single system+user prompt pair.
     /// </summary>
+    /// <param name="model">
+    /// Overrides the model used for this call. Defaults to <see cref="Sellevate.Ai.Infrastructure.Configuration.OpenAiConfiguration.OpenQuestionModel"/> when null.
+    /// </param>
+    /// <param name="maxTokens">
+    /// Overrides the max token count for this call. Defaults to <see cref="Sellevate.Ai.Infrastructure.Configuration.OpenAiConfiguration.MaximumFeedbackTokenCount"/> when null.
+    /// </param>
     Task<string> GenerateTextAsync(
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? model = null,
+        int? maxTokens = null);
 }

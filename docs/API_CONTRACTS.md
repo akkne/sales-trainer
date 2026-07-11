@@ -984,18 +984,25 @@ recent non-empty `PracticeCall.Goal`, and forwards them to ai-service's internal
 `POST /ai/companies/readiness` (see above). The result is cached on
 `Company.ReadinessJson`/`ReadinessGeneratedAt` and returned; a subsequent `GET` returns the cache
 without calling ai-service again. Two distinct "no data" cases both collapse to `204`, with all
-`CompanyReadinessDto` fields `null` and **nothing cached** (so the next `GET` retries): (1) the
-company has no practice calls yet — the ai-service call is skipped entirely; (2) the company has
+`CompanyReadinessDto` fields `null`, but they are **not** treated identically for caching: (1) the
+company has no practice calls yet — the ai-service call is skipped entirely and **nothing is
+cached** (every `GET` re-checks cheaply, since there's no fan-out to avoid); (2) the company has
 practice calls but ai-service signalled `204` (none of them have usable feedback yet, e.g. sessions
-still in progress or abandoned). `404` on missing company/wrong owner; `503` if ai-service is
-unreachable, misconfigured, or returns an unparseable/incomplete response (same pattern as
-briefing/persona).
+still in progress or abandoned) — this **is negative-cached** on `Company.ReadinessNoFeedbackUntil`
+for a short TTL (2 minutes) so repeated requests within the TTL short-circuit to the empty result
+instead of re-running the fan-out (up to 50 sequential `DialogSessionId` lookups against
+ai-service/Mongo) on every request (PR #26 review fast-follow, 39.17). `404` on missing
+company/wrong owner; `503` if ai-service is unreachable, misconfigured, or returns an
+unparseable/incomplete response (same pattern as briefing/persona) — a failure of this kind is
+**never** cached (positive or negative), so the next `GET` retries against ai-service instead of
+being stuck behind a stale/incorrect cache entry.
 
 **Cache invalidation:** creating a practice call (`POST /companies/{id}/practice-calls`) is this
 codebase's practice-completion signal (dialog-session completion itself is tracked only in
-ai-service's Mongo, not in company-service) — it clears `ReadinessJson`/`ReadinessGeneratedAt` on
-the company so the next `GET /readiness` regenerates from the fresh session list. There is no other
-path in company-service that marks a practice call complete.
+ai-service's Mongo, not in company-service) — it clears `ReadinessJson`/`ReadinessGeneratedAt`
+**and** `ReadinessNoFeedbackUntil` on the company so the next `GET /readiness` regenerates from the
+fresh session list instead of being held back by a stale negative cache. There is no other path in
+company-service that marks a practice call complete.
 
 `CompanyReadinessDto`: `{score, strengths, gaps, recommendation, generatedAt}` — all fields `null`
 when there's no data yet (see above).

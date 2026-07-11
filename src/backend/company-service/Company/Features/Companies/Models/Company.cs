@@ -37,6 +37,16 @@ public sealed class Company
     /// <summary>When <see cref="ReadinessJson"/> was last (re)generated. Null until first generated.</summary>
     public DateTime? ReadinessGeneratedAt { get; set; }
 
+    /// <summary>
+    /// Negative-cache expiry for the "no usable feedback yet" readiness result (ai-service
+    /// returned 204 after fanning out to Mongo for the company's practice-call feedback). While
+    /// this is set and in the future, <c>GET /companies/{id}/readiness</c> short-circuits to the
+    /// empty result instead of re-running the fan-out on every request. Cleared whenever a new
+    /// practice call completes (same signal that invalidates <see cref="ReadinessJson"/>) or once
+    /// a real readiness result is generated.
+    /// </summary>
+    public DateTime? ReadinessNoFeedbackUntil { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

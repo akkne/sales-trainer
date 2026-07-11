@@ -297,17 +297,19 @@ endCall: true означает, что твой персонаж кладёт т
     public async Task<string> GenerateTextAsync(
         string systemPrompt,
         string userPrompt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? model = null,
+        int? maxTokens = null)
     {
-        var model = _openAiOptions.Value.OpenQuestionModel;
-        var maxTokens = _openAiOptions.Value.MaximumFeedbackTokenCount;
+        var resolvedModel = model ?? _openAiOptions.Value.OpenQuestionModel;
+        var resolvedMaxTokens = maxTokens ?? _openAiOptions.Value.MaximumFeedbackTokenCount;
 
         var userMessage = new List<DialogMessage>
         {
             new() { Role = "user", Content = userPrompt, Timestamp = DateTime.UtcNow }
         };
 
-        var response = await CallOpenAiAsync(systemPrompt, userMessage, model, maxTokens, responseFormat: null, cancellationToken);
+        var response = await CallOpenAiAsync(systemPrompt, userMessage, resolvedModel, resolvedMaxTokens, responseFormat: null, cancellationToken);
         return response.Trim();
     }
 

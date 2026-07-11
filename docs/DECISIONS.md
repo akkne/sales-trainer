@@ -4,6 +4,78 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-07-11 — AI backend hardening (39.17, PR #22 + PR #26 review fast-follows)
+
+### `InternalAuth:ServiceSecret` — wire the missing header in learning-service, don't just document
+
+- **Context:** PR #22 review flagged that `InternalAuth:ServiceSecret` (the shared secret behind
+  ai-service's `InternalServiceAuthFilter`, guarding `EvaluationController` and the Companies AI
+  controllers — briefing/readiness/parse-log/persona) is never provisioned in any `appsettings*.json`
+  in this repo, and learning-service's `AiEvaluationClient` never sent the
+  `X-Internal-Service-Secret` header (unlike company-service's four AI clients, which all already
+  send it via their `*AiServiceCollectionExtensions`). Net effect today: the guard runs open in
+  every environment (unset secret ⇒ `InternalServiceAuthFilter` skips the check), so
+  `EvaluationController` is currently reachable by anyone who can route to ai-service directly.
+- **Decision:** Wire the header in `AiEvaluationServiceCollectionExtensions.AddAiEvaluationClient`
+  (learning-service), mirroring the exact pattern company-service's `BriefingAiServiceCollectionExtensions`
+  / `ReadinessAiServiceCollectionExtensions` / `ParseLogAiServiceCollectionExtensions` /
+  `PersonaAiServiceCollectionExtensions` already use: read `InternalAuth:ServiceSecret` from
+  config, add the header to the typed `HttpClient` only if the secret is non-empty.
+- **Why wiring instead of documenting:** the fix is a ~10-line, single-file, additive change
+  (no behavior change while the secret stays unset — it's the same no-op the other four clients
+  already have) that closes the actual gap, rather than leaving `EvaluationController` open and
+  writing a paragraph explaining why. There was no risk/blast-radius reason to prefer
+  documentation-only here — the change touches nothing else callers depend on.
+- **Still true after this fix:** `InternalAuth:ServiceSecret` is *provisioned* nowhere (no
+  `appsettings*.json`/deployment config sets it), so the guard still runs open by default in
+  every environment today. Wiring the header only means that *if/when* ops sets the secret in
+  ai-service **and** all three callers (company-service, learning-service, gateway if it ever
+  calls ai-service directly), the guard will actually enforce it end-to-end. Provisioning the
+  secret itself is an ops/deployment task, out of scope here — tracked as a gap, not silently
+  assumed done.
+
+### Negative-cache TTL for the "no usable feedback yet" readiness result
+
+- **Context:** PR #26 review noted `GET /companies/{id}/readiness` re-fans-out (up to 50
+  sequential `DialogSessionId` lookups via ai-service → Mongo) on *every* request while the
+  company has practice sessions but ai-service keeps returning `204` (no feedback text landed
+  yet) — the positive cache (`ReadinessJson`) only helps once there's a real result.
+- **Decision:** Add `Company.ReadinessNoFeedbackUntil` (nullable timestamptz) — set to
+  `now + 2 minutes` when ai-service returns `204` after a real fan-out; checked before the
+  fan-out on subsequent `GET`s. Left untouched (`null`) for the *other* 204 case — zero practice
+  calls — since that path already short-circuits before touching ai-service and has nothing
+  expensive to avoid. Cleared by `CreatePracticeCallAsync` alongside the existing
+  `ReadinessJson`/`ReadinessGeneratedAt` invalidation, and cleared again once a real result is
+  cached, so a fresh practice call always gets a fresh readiness attempt.
+- **Why 2 minutes:** short enough that a user who just finished a practice call and immediately
+  reloads doesn't wait meaningfully longer than before for a fresh readiness attempt (the
+  practice-call-created invalidation already covers the common case), long enough to absorb
+  repeated polling/reloads from the frontend readiness card within the same short window.
+- **Alternative considered:** cache the negative result indefinitely until the next practice
+  call. Rejected — feedback can, in principle, land in Mongo asynchronously without a new practice
+  call being created in company-service (out of scope to fully reason about here), so an
+  unbounded negative cache risked being wrong for longer than necessary.
+
+### Dedicated `BriefingModel`/`MaximumBriefingTokenCount` config in ai-service
+
+- **Context:** PR #22 review noted the briefing feature (39.12) reused `OpenAiConfiguration`'s
+  `OpenQuestionModel`/`MaximumFeedbackTokenCount` — config names that describe unrelated features
+  (open-question exercises, dialog feedback), making it unclear/risky to retune either without
+  affecting briefing too.
+- **Decision:** Add `OpenAiConfiguration.BriefingModel` (default `"gpt-4.1"`, same as
+  `OpenQuestionModel`'s default) and `MaximumBriefingTokenCount` (default `1500`, same as
+  `MaximumFeedbackTokenCount`'s default) — unset config keeps today's behavior byte-for-byte.
+  `IOpenAiChatService.GenerateTextAsync` gained optional `model`/`maxTokens` parameters (default
+  `null` ⇒ falls back to `OpenQuestionModel`/`MaximumFeedbackTokenCount`, preserving the other
+  three callers — `ParseLogService`, `ReadinessService`, `PersonaService` — unchanged); only
+  `BriefingService` passes the new dedicated options explicitly.
+- **Why not also split ParseLog/Readiness/Persona:** out of scope — the PR #22 review only
+  flagged briefing by name, and those three weren't called out as piggybacking on unrelated
+  config. Keeping the change scoped avoids touching three working features' behavior/config
+  surface without a stated need.
+
+---
+
 ## 2026-06-21 — Phase 3 (Shared User read-model replica) — resolved as satisfied/superseded
 
 - **Context:** [MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) Phase 3 ("Shared User

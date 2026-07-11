@@ -1,7 +1,9 @@
 using System.Text;
+using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Companies.Services.Implementation;
 
@@ -10,10 +12,12 @@ internal sealed class BriefingService : IBriefingService
     private const string TriggerPrompt = "Составь шпаргалку по данным выше.";
 
     private readonly IOpenAiChatService _openAiChatService;
+    private readonly OpenAiConfiguration _openAiConfiguration;
 
-    public BriefingService(IOpenAiChatService openAiChatService)
+    public BriefingService(IOpenAiChatService openAiChatService, IOptions<OpenAiConfiguration> openAiOptions)
     {
         _openAiChatService = openAiChatService;
+        _openAiConfiguration = openAiOptions.Value;
     }
 
     public async Task<string> GenerateBriefingAsync(
@@ -26,7 +30,15 @@ internal sealed class BriefingService : IBriefingService
             throw new InvalidOperationException("OpenAI API is not configured");
 
         var systemPrompt = BuildSystemPrompt(request);
-        return await _openAiChatService.GenerateTextAsync(systemPrompt, TriggerPrompt, cancellationToken);
+        // Dedicated BriefingModel/MaximumBriefingTokenCount (rather than the open-question/
+        // feedback config the briefing feature originally piggybacked on) so briefing can be
+        // tuned independently — see OpenAiConfiguration.
+        return await _openAiChatService.GenerateTextAsync(
+            systemPrompt,
+            TriggerPrompt,
+            cancellationToken,
+            model: _openAiConfiguration.BriefingModel,
+            maxTokens: _openAiConfiguration.MaximumBriefingTokenCount);
     }
 
     private static string BuildSystemPrompt(GenerateBriefingRequestDto request)
