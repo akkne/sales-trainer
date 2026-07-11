@@ -304,3 +304,17 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 - **Why the tests missed it:** `PersonaControllerTests`/`PersonaServiceTests` build the DTO in-process
   and never cross the JSON wire. Added `PersonaRequestWireContractTests` to lock the string-enum
   contract at the serialization boundary.
+
+### F5Ai LLM provider must be selected via OpenAI__Provider (persona/dialog 500 → 401 fix)
+
+- **Bug:** After the persona string-enum fix, `POST /ai/companies/persona` reached the LLM but
+  returned **500** wrapping `OpenAiAuthenticationException` — the F5Ai gateway (`api.f5ai.ru`)
+  answered **401**. This broke ALL LLM calls (persona, dialog, feedback), not just personas.
+- **Root cause:** `OpenAiChatService` picks the auth header by `OpenAI:Provider`
+  (`F5Ai` → `X-Auth-Token`, otherwise → `Authorization: Bearer`). After the "AI7c" refactor from
+  URL-sniffing to an explicit provider enum, no deploy config set `OpenAI__Provider`, so it defaulted
+  to `OpenAi` → Bearer → 401 against F5Ai. Verified live: same key returns **200** with
+  `X-Auth-Token` and **401** with `Bearer`.
+- **Fix:** Added `OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}` to both ai and learning service env
+  blocks in `docker-compose.yml`; set `OPENAI_PROVIDER=F5Ai` in `.env` (documented default `OpenAi`
+  in `.env.example`). No code change — the enum path was already correct, only unconfigured.
