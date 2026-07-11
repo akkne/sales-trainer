@@ -1381,7 +1381,7 @@
       «Проведите тренировку, чтобы получить оценку готовности»
 - [ ] Unit tests (scoring parse, cache invalidation); docs
 
-### [>] 39.17 Final QA, docs & release PR
+### [x] 39.17 Final QA, docs & release PR
 > **Carry-overs status:** all non-blocking fast-follows below are now cleared via
 > PRs #27 (PR #22+#26 — AI backend hardening), #28 (PR #19 — contacts hardening),
 > #29 (PR #20 — status dropdown a11y + optimistic update), #30 (PR #24+#21 — persona/
@@ -1445,4 +1445,4 @@
       genuine new error (voice-memo ref-in-render) fixed; the codestyle `///` no-comments
       "violations" are an unenforced repo-wide convention (main has 909 such lines) — recorded
       as a DECISIONS exception rather than mass-stripped.
-- [>] Final PR `feature/companies` → `main` — opened, awaiting release sign-off to merge
+- [x] Final PR `feature/companies` → `main` — PR #31 merged (2026-07-11)
