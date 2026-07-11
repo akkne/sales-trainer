@@ -85,7 +85,9 @@ export default function SkillPage({ params }: SkillPageProps) {
     }
 
     const skill = skills?.find((s) => s.slug === skillSlug);
-    const lessons = (lessonSummaries ?? []).slice().sort((a, b) => a.orderInTopic - b.orderInTopic);
+    const lessons = (lessonSummaries ?? [])
+        .slice()
+        .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic);
     const completedCount = lessons.filter((l) => l.status === "completed").length;
     const totalCount = lessons.length;
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;

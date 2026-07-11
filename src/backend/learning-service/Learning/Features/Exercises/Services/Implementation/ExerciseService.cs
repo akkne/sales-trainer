@@ -24,10 +24,15 @@ internal sealed class ExerciseService(
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
-        var allLessons = await databaseContext.Lessons
-            .OrderBy(lesson => lesson.OrderInTopic)
+        var topicOrderById = await databaseContext.Topics
+            .ToDictionaryAsync(topic => topic.Id, topic => topic.OrderInSkill, cancellationToken);
+
+        var allLessons = (await databaseContext.Lessons
+            .ToListAsync(cancellationToken))
+            .OrderBy(lesson => topicOrderById.GetValueOrDefault(lesson.TopicId))
+            .ThenBy(lesson => lesson.OrderInTopic)
             .ThenBy(lesson => lesson.Id)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
@@ -38,6 +43,7 @@ internal sealed class ExerciseService(
                 lesson.Id,
                 lesson.Title,
                 lesson.OrderInTopic,
+                topicOrderById.GetValueOrDefault(lesson.TopicId),
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
@@ -74,6 +80,11 @@ internal sealed class ExerciseService(
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
+        var topicOrder = await databaseContext.Topics
+            .Where(topic => topic.Id == topicId)
+            .Select(topic => (int?)topic.OrderInSkill)
+            .FirstOrDefaultAsync(cancellationToken) ?? 0;
+
         var allLessons = await databaseContext.Lessons
             .Where(lesson => lesson.TopicId == topicId)
             .OrderBy(lesson => lesson.OrderInTopic)
@@ -88,6 +99,7 @@ internal sealed class ExerciseService(
                 lesson.Id,
                 lesson.Title,
                 lesson.OrderInTopic,
+                topicOrder,
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
@@ -105,22 +117,29 @@ internal sealed class ExerciseService(
         if (skill is null)
             return [];
 
-        var topicIds = await databaseContext.Topics
+        var topics = await databaseContext.Topics
             .Where(topic => topic.SkillId == skill.Id)
-            .Select(topic => topic.Id)
+            .Select(topic => new { topic.Id, topic.OrderInSkill })
             .ToListAsync(cancellationToken);
 
-        if (topicIds.Count == 0)
+        if (topics.Count == 0)
             return [];
+
+        var topicOrderById = topics.ToDictionary(topic => topic.Id, topic => topic.OrderInSkill);
+        var topicIds = topicOrderById.Keys.ToList();
 
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
-        var allLessons = await databaseContext.Lessons
+        // Order across the whole skill by topic first (Topic.OrderInSkill), then by the
+        // lesson's position within its topic — so topics stay grouped instead of interleaving.
+        var allLessons = (await databaseContext.Lessons
             .Where(lesson => topicIds.Contains(lesson.TopicId))
-            .OrderBy(lesson => lesson.OrderInTopic)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .OrderBy(lesson => topicOrderById[lesson.TopicId])
+            .ThenBy(lesson => lesson.OrderInTopic)
+            .ToList();
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
@@ -136,6 +155,7 @@ internal sealed class ExerciseService(
                 lesson.Id,
                 lesson.Title,
                 lesson.OrderInTopic,
+                topicOrderById[lesson.TopicId],
                 status,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));

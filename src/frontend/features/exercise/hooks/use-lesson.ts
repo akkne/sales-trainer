@@ -6,6 +6,7 @@ export interface LessonSummary {
     lessonId: string;
     title: string;
     orderInTopic: number;
+    topicOrder: number;
     status: "locked" | "available" | "in_progress" | "completed";
     bestScore: number;
     // "theory" when every exercise in the lesson is a theory_card, otherwise "practice".

@@ -283,7 +283,9 @@ function PathCenterColumn({
 }) {
     const { data: lessons, isLoading } = useLessonsForSkill(skillSlug);
 
-    const sorted = (lessons ?? []).slice().sort((a, b) => a.orderInTopic - b.orderInTopic);
+    const sorted = (lessons ?? [])
+        .slice()
+        .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic);
     const completedCount = sorted.filter((l) => l.status === "completed").length;
     const totalCount = sorted.length;
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;

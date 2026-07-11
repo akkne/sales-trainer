@@ -98,7 +98,7 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
 | POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |
 
-`LessonSummaryDto`: `{lessonId, title, orderInTopic, status, bestScore, kind}` where `kind` is `"theory"` (every exercise is a `theory_card`) or `"practice"`. Theory lessons are played as swipeable cards; the client submits the last card once to complete them.
+`LessonSummaryDto`: `{lessonId, title, orderInTopic, topicOrder, status, bestScore, kind}` where `kind` is `"theory"` (every exercise is a `theory_card`) or `"practice"`. Theory lessons are played as swipeable cards; the client submits the last card once to complete them. Across a skill, lessons are ordered by `topicOrder` (the topic's `OrderInSkill`) first, then by `orderInTopic` — so topics stay grouped instead of interleaving; the client sorts by `(topicOrder, orderInTopic)`.
 
 **AI Dialog Chat Endpoint:**
 `POST /exercises/:exerciseId/chat` — for `ai_dialog` type exercises only. Handles multi-turn conversation.
