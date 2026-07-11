@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -156,7 +157,12 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<UpstreamConnectionWarmup>();
 builder.Services.AddHostedService<UpstreamConnectionWarmupService>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    // Accept string enum values (e.g. "Medium") on the wire. company-service serializes the
+    // persona Difficulty enum as a string, so without this the default numeric-only enum binding
+    // fails and [ApiController] auto-returns 400 before the controller runs.
+    .AddJsonOptions(jsonOptions =>
+        jsonOptions.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

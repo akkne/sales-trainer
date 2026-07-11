@@ -291,3 +291,16 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 - **Follow-up (post-merge hardening):** inject a shared `InternalAuth__ServiceSecret` env on BOTH
   the `ai` and `company` services (and any k8s manifest) so the guard enforces in non-dev; provision
   symmetrically to avoid a one-sided 401.
+
+### ai-service must accept string enum values on its JSON wire (persona 400 fix)
+
+- **Bug:** `POST /companies/{id}/personas/generate` returned `AI persona service returned 400`.
+  Root cause: company-service serializes the persona `Difficulty` enum as a **string** (via
+  `enum.ToString()`, e.g. `"Medium"`), but ai-service registered plain `AddControllers()` with no
+  `JsonStringEnumConverter`. System.Text.Json binds enums from **numbers** by default, so the string
+  failed to deserialize and `[ApiController]` auto-returned **400** before `PersonaController` ran.
+- **Decision:** Register `JsonStringEnumConverter` in ai-service's `AddControllers().AddJsonOptions(...)`,
+  mirroring company-service's existing config. Cross-service enum payloads now bind by name on both hops.
+- **Why the tests missed it:** `PersonaControllerTests`/`PersonaServiceTests` build the DTO in-process
+  and never cross the JSON wire. Added `PersonaRequestWireContractTests` to lock the string-enum
+  contract at the serialization boundary.
