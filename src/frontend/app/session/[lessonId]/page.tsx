@@ -403,9 +403,9 @@ function SessionLoader() {
 }
 
 /**
- * Theory lesson flow: swipe through story cards. Reaching the end submits the last
- * card once (the only graded-shaped call) so the lesson is marked complete on the
- * backend and the fixed theory XP is awarded — then shows the completion screen.
+ * Theory lesson flow: swipe through story cards. Reaching the end submits every
+ * card (each records a correct attempt) so the backend's all-exercises-passed gate
+ * marks the lesson complete — then shows the completion screen.
  */
 function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
     const router = useRouter();
@@ -421,18 +421,20 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
 
     const cards = exercises.map((ex) => ex.content as TheoryCardContent);
 
-    function handleComplete() {
-        const lastCard = exercises[exercises.length - 1];
-        submitExerciseMutation.mutate(
-            { exerciseId: lastCard.exerciseId, answer: {} },
-            {
-                onSuccess: (result) => {
-                    setXpEarned(result.xpEarned);
-                    setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
-                    setCompleted(true);
-                },
-            }
-        );
+    async function handleComplete() {
+        // The backend marks a lesson complete only when every exercise in it has a
+        // correct attempt. Theory cards always evaluate as correct, so we must submit
+        // ALL cards (not just the last one) or a multi-card lesson never completes.
+        let lastResult: ExerciseSubmissionResult | undefined;
+        for (const exercise of exercises) {
+            lastResult = await submitExerciseMutation.mutateAsync({
+                exerciseId: exercise.exerciseId,
+                answer: {},
+            });
+        }
+        setXpEarned(lastResult?.xpEarned ?? 0);
+        setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
+        setCompleted(true);
     }
 
     if (completed) {
