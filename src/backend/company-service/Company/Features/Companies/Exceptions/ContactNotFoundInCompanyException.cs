@@ -10,6 +10,13 @@ namespace Sellevate.Company.Features.Companies.Exceptions;
 /// </summary>
 public sealed class ContactNotFoundInCompanyException : Exception
 {
+    /// <summary>
+    /// Machine-readable discriminator for the 400 response body, so callers can distinguish this
+    /// from other 400s on the same endpoints (e.g. ASP.NET model-validation failures on
+    /// ContactName/Subject/Outcome length) without parsing the localized message.
+    /// </summary>
+    public const string Code = "CONTACT_NOT_FOUND";
+
     public Guid ContactId { get; }
     public Guid CompanyId { get; }
 

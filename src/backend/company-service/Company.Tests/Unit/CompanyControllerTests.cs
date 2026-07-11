@@ -125,7 +125,7 @@ public sealed class CompanyControllerTests
         var result = await _controller.CreateCallLogEntry(CompanyId, CreateLogRequest(contactId), CancellationToken.None);
 
         var badRequest = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().BeEquivalentTo(new { message = "Указанный контакт не найден в этой компании." });
+        badRequest.Value.Should().BeEquivalentTo(new { code = "CONTACT_NOT_FOUND", message = "Указанный контакт не найден в этой компании." });
     }
 
     [Test]
@@ -140,7 +140,7 @@ public sealed class CompanyControllerTests
         var result = await _controller.UpdateCallLogEntry(CompanyId, logId, UpdateLogRequest(contactId), CancellationToken.None);
 
         var badRequest = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequest.Value.Should().BeEquivalentTo(new { message = "Указанный контакт не найден в этой компании." });
+        badRequest.Value.Should().BeEquivalentTo(new { code = "CONTACT_NOT_FOUND", message = "Указанный контакт не найден в этой компании." });
     }
 
     [Test]

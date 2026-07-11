@@ -257,7 +257,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (ContactNotFoundInCompanyException contactNotFoundException)
         {
-            return BadRequest(new { message = contactNotFoundException.Message });
+            return BadRequest(new { code = ContactNotFoundInCompanyException.Code, message = contactNotFoundException.Message });
         }
     }
 
@@ -281,7 +281,7 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
         }
         catch (ContactNotFoundInCompanyException contactNotFoundException)
         {
-            return BadRequest(new { message = contactNotFoundException.Message });
+            return BadRequest(new { code = ContactNotFoundInCompanyException.Code, message = contactNotFoundException.Message });
         }
     }
 
