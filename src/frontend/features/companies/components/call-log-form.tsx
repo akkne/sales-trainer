@@ -83,9 +83,10 @@ export function CallLogForm({ companyId, initial, contacts = [], submitting = fa
             })
         ).catch((error: unknown) => {
             // The picked contact was deleted by someone else between load and submit — the API
-            // rejects the stale contactId with 400. Clear it so retrying re-submits as free text
-            // instead of repeating the same failing request.
-            if (error instanceof ApiError && error.status === 400) {
+            // rejects the stale contactId with this specific 400 code. Other 400s on the same
+            // endpoint (e.g. ContactName/Subject/Outcome length validation) must NOT clear
+            // contactId, so this checks the machine-readable code, not just the status.
+            if (error instanceof ApiError && error.status === 400 && error.payload?.code === "CONTACT_NOT_FOUND") {
                 setContactId(null);
             }
         });

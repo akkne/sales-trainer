@@ -136,8 +136,10 @@ describe("CallLogForm", () => {
         );
     });
 
-    it("clears the stale contactId when submission fails with a 400 (contact deleted concurrently)", async () => {
-        const rejectingSubmit = vi.fn().mockRejectedValue(new ApiError(400, { message: "Указанный контакт не найден в этой компании." }));
+    it("clears the stale contactId when submission fails with a 400 CONTACT_NOT_FOUND (contact deleted concurrently)", async () => {
+        const rejectingSubmit = vi.fn().mockRejectedValue(
+            new ApiError(400, { code: "CONTACT_NOT_FOUND", message: "Указанный контакт не найден в этой компании." })
+        );
         renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
 
         fireEvent.click(screen.getByText("Иван Петров"));
@@ -157,6 +159,25 @@ describe("CallLogForm", () => {
 
     it("does not clear contactId when submission fails for a reason other than a 400", async () => {
         const rejectingSubmit = vi.fn().mockRejectedValue(new Error("network error"));
+        renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
+
+        fireEvent.click(screen.getByText("Иван Петров"));
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(screen.getByText("Сохранить запись"));
+
+        await waitFor(() => expect(rejectingSubmit).toHaveBeenCalledTimes(2));
+        expect(rejectingSubmit).toHaveBeenLastCalledWith(
+            expect.objectContaining({ contactId: "contact-1" })
+        );
+    });
+
+    it("does not clear contactId on a 400 that isn't CONTACT_NOT_FOUND (e.g. field-length validation)", async () => {
+        const rejectingSubmit = vi.fn().mockRejectedValue(
+            new ApiError(400, { message: "Subject must be at most 4000 characters." })
+        );
         renderWithClient(<CallLogForm companyId="c1" contacts={[CONTACT]} onSubmit={rejectingSubmit} onCancel={onCancel} />);
 
         fireEvent.click(screen.getByText("Иван Петров"));
