@@ -35,7 +35,9 @@ export function useVoiceMemoRecorder({ onTranscript }: UseVoiceMemoRecorderOptio
     const isMountedRef = useRef(true);
     // `state` snapshot for the concurrent-start guard without re-creating the callback.
     const stateRef = useRef<VoiceMemoRecorderState>("idle");
-    stateRef.current = state;
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
     const transcribeAudio = useTranscribeAudio();
 
     const isSupported = isVoiceMemoRecordingSupported();
