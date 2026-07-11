@@ -1,6 +1,9 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using NSubstitute;
 using NUnit.Framework;
+using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Implementation;
 using Sellevate.Company.Infrastructure.Ai;
@@ -12,6 +15,7 @@ namespace Sellevate.Company.Tests.Unit;
 public sealed class CompanyServiceTests
 {
     private Infrastructure.Data.CompanyDbContext _databaseContext = null!;
+    private string _databaseName = null!;
     private IBriefingAiClient _briefingAiClient = null!;
     private IParseLogAiClient _parseLogAiClient = null!;
     private IPersonaAiClient _personaAiClient = null!;
@@ -24,7 +28,8 @@ public sealed class CompanyServiceTests
     [SetUp]
     public void SetUp()
     {
-        _databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
+        _databaseName = $"company-tests-{Guid.NewGuid()}";
+        _databaseContext = TestCompanyDatabaseFactory.CreateInMemory(_databaseName);
         _briefingAiClient = Substitute.For<IBriefingAiClient>();
         _parseLogAiClient = Substitute.For<IParseLogAiClient>();
         _personaAiClient = Substitute.For<IPersonaAiClient>();
@@ -638,6 +643,24 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task UpdateContactAsync_defaults_position_and_notes_to_empty_when_omitted()
+    {
+        // DTO nullability alignment: CreateCompanyContactRequestDto and UpdateCompanyContactRequestDto
+        // both treat Position/Notes as optional (nullable, default null), and the service normalizes
+        // an omitted value to "" the same way for both create and update.
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(
+            FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван Петров", "Руководитель закупок", "Любит цифры"));
+        var request = new UpdateCompanyContactRequestDto("Иван Петров");
+
+        var result = await _companyService.UpdateContactAsync(FirstUserId, company.Id, contact!.Id, request);
+
+        result.Should().NotBeNull();
+        result!.Position.Should().Be(string.Empty);
+        result.Notes.Should().Be(string.Empty);
+    }
+
+    [Test]
     public async Task DeleteContactAsync_removes_contact()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
@@ -701,7 +724,7 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
-    public async Task CreateCallLogEntryAsync_throws_when_contactId_belongs_to_other_company()
+    public async Task CreateCallLogEntryAsync_throws_ContactNotFoundInCompanyException_when_contactId_belongs_to_other_company()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
@@ -710,22 +733,22 @@ public sealed class CompanyServiceTests
 
         Func<Task> act = () => _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
     }
 
     [Test]
-    public async Task CreateCallLogEntryAsync_throws_when_contactId_does_not_exist()
+    public async Task CreateCallLogEntryAsync_throws_ContactNotFoundInCompanyException_when_contactId_does_not_exist()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, Guid.NewGuid());
 
         Func<Task> act = () => _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
     }
 
     [Test]
-    public async Task UpdateCallLogEntryAsync_throws_when_contactId_belongs_to_other_company()
+    public async Task UpdateCallLogEntryAsync_throws_ContactNotFoundInCompanyException_when_contactId_belongs_to_other_company()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var otherCompany = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Other Company");
@@ -736,7 +759,50 @@ public sealed class CompanyServiceTests
 
         Func<Task> act = () => _companyService.UpdateCallLogEntryAsync(FirstUserId, company.Id, entry!.Id, updateRequest);
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
+    }
+
+    [Test]
+    public async Task CreateCallLogEntryAsync_translates_DbUpdateException_on_ContactId_fk_race_into_ContactNotFoundInCompanyException()
+    {
+        // Simulates the check-then-act race: EnsureContactBelongsToCompanyAsync's existence check
+        // passes, but the contact is deleted by a concurrent request before SaveChangesAsync
+        // commits, so Postgres would reject the insert with a ContactId FK violation. The
+        // InMemory provider doesn't enforce FKs, so a SaveChangesInterceptor simulates that
+        // violation deterministically for the entry being inserted here.
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
+
+        using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(
+            _databaseName, new ThrowOnCallLogContactIdInterceptor(contact!.Id));
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
+
+        Func<Task> act = () => racingService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        var exception = await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
+        exception.Which.ContactId.Should().Be(contact.Id);
+        exception.Which.InnerException.Should().BeOfType<DbUpdateException>();
+    }
+
+    [Test]
+    public async Task UpdateCallLogEntryAsync_translates_DbUpdateException_on_ContactId_fk_race_into_ContactNotFoundInCompanyException()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
+        var entry = await _companyService.CreateCallLogEntryAsync(FirstUserId, company.Id,
+            new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow));
+
+        using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(_databaseName,
+            new ThrowOnCallLogContactIdInterceptor(contact!.Id));
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var updateRequest = new UpdateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
+
+        Func<Task> act = () => racingService.UpdateCallLogEntryAsync(FirstUserId, company.Id, entry!.Id, updateRequest);
+
+        var exception = await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
+        exception.Which.ContactId.Should().Be(contact.Id);
+        exception.Which.InnerException.Should().BeOfType<DbUpdateException>();
     }
 
     [Test]
@@ -1309,5 +1375,33 @@ public sealed class CompanyServiceTests
         result!.Score.Should().Be(60);
         await _readinessAiClient.Received(2).GenerateReadinessAsync(
             Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
+    }
+}
+
+/// <summary>
+/// Test double for the ContactId FK-race scenario: fails <c>SaveChangesAsync</c> with a
+/// <see cref="DbUpdateException"/> whenever the change set has an added/modified
+/// <see cref="CallLogEntry"/> pointing at <paramref name="raceContactId"/>, standing in for the
+/// FK violation a real Postgres database raises when that contact was concurrently deleted (the
+/// InMemory provider used in these tests does not enforce foreign keys on its own).
+/// </summary>
+internal sealed class ThrowOnCallLogContactIdInterceptor(Guid raceContactId) : SaveChangesInterceptor
+{
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        var tripsRace = eventData.Context?.ChangeTracker.Entries<CallLogEntry>().Any(entry =>
+            entry.State is EntityState.Added or EntityState.Modified &&
+            entry.Entity.ContactId == raceContactId) ?? false;
+
+        if (tripsRace)
+        {
+            throw new DbUpdateException(
+                "Simulated ContactId foreign key violation (contact deleted concurrently).");
+        }
+
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 }
