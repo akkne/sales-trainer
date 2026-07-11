@@ -216,11 +216,18 @@ npx vitest run __tests__/Compan
 - `CompaniesPage.test.tsx` — list rendering, empty/loading/error states, create modal, status
   filter chips (filter/clear)
 - `useCompanies.test.tsx` — list/create/update/delete hooks, search filtering,
-  `useUpdateCompanyStatus` (PUT to `/companies/{id}/status`, cache invalidation, error toast),
-  `useUpdateCompanyFollowUp` (PUT to `/companies/{id}/follow-up` with a schedule and with
-  null-clearing fields, cache invalidation, error toast)
+  `useUpdateCompanyStatus` (PUT to `/companies/{id}/status`, cache invalidation, error toast,
+  and — 39.17 PR #20 review fast-follow — **optimistic update**: the status flips in the cached
+  `["companies"]` list immediately on `mutate()` before the request resolves, and rolls back to the
+  previous cached value on error), `useUpdateCompanyFollowUp` (PUT to `/companies/{id}/follow-up`
+  with a schedule and with null-clearing fields, cache invalidation, error toast)
 - `CompanyStatusMenu.test.tsx` — status dropdown: shows current status, lists all 5 options,
-  calls `onChange` on selection (not on re-selecting the current status), disabled state
+  calls `onChange` on selection (not on re-selecting the current status), disabled state, and
+  (39.17 PR #20 review fast-follow) the ARIA menu keyboard contract: opening the menu moves focus
+  to the currently-selected `menuitem`, `Escape` closes the menu and returns focus to the trigger,
+  `ArrowDown`/`ArrowUp` move roving focus between items and wrap at the ends, `Home`/`End` jump to
+  the first/last item, and selecting an item (click or Enter/Space via native `<button>` behavior)
+  closes the menu and returns focus to the trigger
 - `CompanyFollowUpCard.test.tsx` — empty state, shows scheduled date/note, edit → save (date +
   note), save disabled while date is empty, clear via "Убрать напоминание", cancel discards edits
 - `useCompanyBriefing.test.tsx` — `useCompanyBriefing` (GET, normalizes a 204 to
@@ -347,6 +354,16 @@ npx vitest run __tests__/Compan
     current one shows a checkmark. Pick a different status → header chip and list-row chip both
     update (list re-fetches on navigating back), correct tone color per status (neutral / info /
     violet / success / danger for Лид / Был контакт / Встреча назначена / Сделка закрыта / Отказ).
+    The chip flips to the new status **immediately** on click (optimistic update), before the
+    network round-trip completes.
+33a. Keyboard-only: focus the status chip and press Enter/Space → menu opens, focus lands on the
+     current status item. `ArrowDown`/`ArrowUp` move focus through the 5 items, wrapping past the
+     last/first. `Home`/`End` jump to the first/last item. Press `Escape` → menu closes and focus
+     returns to the status chip (not lost to `<body>`). Press Enter/Space on a focused item → menu
+     closes, status changes, focus returns to the chip.
+33b. Simulate the status update failing (stop company-service or block the request) → the chip
+     shows the optimistically-changed status for a moment, then reverts to the original status and
+     an error toast appears (confirms optimistic rollback).
 34. On `/companies`, click a status filter chip → only companies with that status remain; click
     the same chip again → filter clears and the full list returns. Click «Все» → clears any
     active status filter.

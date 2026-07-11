@@ -139,7 +139,18 @@ on a separate full-screen route (`/companies/[id]/call/voice` or `/call/chat`, o
     class per status; `components/company-status-badge.tsx` (read-only chip, used on list rows)
     and `components/company-status-menu.tsx` (click-to-open dropdown, used on the company header)
     both key off it — status filter chips on `/companies` and the list-row badge share the same
-    tone classes (`co-status--lead|contacted|meeting|won|lost` in `app/globals.css`)
+    tone classes (`co-status--lead|contacted|meeting|won|lost` in `app/globals.css`). The
+    `.co-status-filter-chip.active` tone overrides are scoped under `.co-status-filters` for extra
+    specificity so they always win over the base `.active` rule regardless of source order.
+    `company-status-menu.tsx` implements the full ARIA `menu`/`menuitem` keyboard contract
+    (39.17 PR #20 review fast-follow): opening focuses the current status item, `ArrowDown`/
+    `ArrowUp` move roving focus with wraparound, `Home`/`End` jump to the first/last item,
+    `Escape` closes the menu and returns focus to the trigger, and selecting an item (click or
+    native Enter/Space on the `<button role="menuitem">`) closes the menu and returns focus to the
+    trigger. `useUpdateCompanyStatus` applies an optimistic update (flips the status in both the
+    `["companies"]` list cache and the `["companies", id]` detail cache in `onMutate`, rolled back
+    in `onError`), matching the pattern used by `useUpdateEnrolledSkills` in
+    `features/skills/hooks/use-skill-tree.ts`.
   - `lib/company-followup.ts` — due/overdue tone for a `nextActionAt` (due: within 24h, overdue:
     past); `components/company-followup-badge.tsx` (renders nothing when there's no follow-up or
     it's more than a day out) and `components/company-followup-card.tsx` (date + note editor on
