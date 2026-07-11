@@ -7,6 +7,7 @@ import { useAuthStore } from "@/shared/stores/auth-store";
 import { useSkills, useUpdateEnrolledSkills } from "@/features/skills/hooks/use-skill-tree";
 import { useAvatarUpload } from "@/features/profile/hooks/use-avatar-upload";
 import { useUpdateProfile } from "@/features/profile/hooks/use-update-profile";
+import { resolveAvatarUrl } from "@/shared/utils/resolve-avatar-url";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 import { ManageSkillsModal } from "@/features/skills/components/manage-skills-modal";
 import { EditProfileModal } from "@/features/profile/components/edit-profile-modal";
@@ -99,11 +100,11 @@ export default function ProfilePage() {
         0
     );
 
-    // Avatar URL with cache-bust
-    const avatarSrc =
-        version > 0 && profileStats.avatarUrl
-            ? `${profileStats.avatarUrl}?v=${version}`
-            : profileStats.avatarUrl;
+    // Avatar URL: resolve against the API origin (identity service lives on a
+    // different host in prod) and cache-bust after an upload.
+    const avatarSrc = profileStats.avatarUrl
+        ? `${resolveAvatarUrl(profileStats.avatarUrl)}${version > 0 ? `?v=${version}` : ""}`
+        : profileStats.avatarUrl;
 
     const hasVoiceQuota =
         voiceUsage &&

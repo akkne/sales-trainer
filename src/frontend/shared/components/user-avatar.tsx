@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
-import { EnvironmentConfiguration } from "@/config/environment";
+import { resolveAvatarUrl } from "@/shared/utils/resolve-avatar-url";
 
 interface UserAvatarProps {
     avatarUrl?: string | null;
@@ -10,14 +10,6 @@ interface UserAvatarProps {
     size: number;
     circle?: boolean;
     className?: string;
-}
-
-function resolveAvatarUrl(avatarUrl: string): string {
-    if (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) {
-        return avatarUrl;
-    }
-    const base = EnvironmentConfiguration.apiBaseUrl.replace(/\/$/, "");
-    return `${base}${avatarUrl}`;
 }
 
 export function UserAvatar({ avatarUrl, seed, size, circle = false, className = "" }: UserAvatarProps) {
