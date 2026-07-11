@@ -1381,7 +1381,19 @@
       «Проведите тренировку, чтобы получить оценку готовности»
 - [ ] Unit tests (scoring parse, cache invalidation); docs
 
-### [ ] 39.17 Final QA, docs & release PR
+### [>] 39.17 Final QA, docs & release PR
+> **Carry-overs status:** all non-blocking fast-follows below are now cleared via
+> PRs #27 (PR #22+#26 — AI backend hardening), #28 (PR #19 — contacts hardening),
+> #29 (PR #20 — status dropdown a11y + optimistic update), #30 (PR #24+#21 — persona/
+> dialog fencing, persona-delete UI, DI rename, Kafka publish retry, follow-up clock
+> caveat). Each was code-reviewed and merged. Two items remain deliberately open:
+> (1) **product sign-off** that unconstrained status transitions (e.g. DealWon → Lead)
+> are intended — a product decision, not code; (2) **prompt-delimiter injection
+> hardening** — company/persona free-text is fenced as data (defense-in-depth) but the
+> static `=== ДАННЫЕ ===` delimiters are not escaped, so a user can forge an END marker
+> in their own training data (self-injection only, mirrors the accepted pattern across
+> Briefing/Persona/ParseLog/Readiness). Tracked as a codebase-wide follow-up (switch to
+> per-request token delimiters) — out of scope for the companies release.
 > Carry-over from PR #19 review (non-blocking fast-follows): replace the generic
 > `InvalidOperationException` contact-validation flow with a typed error; translate
 > `DbUpdateException` on the ContactId FK race into a 400; align Create/Update
