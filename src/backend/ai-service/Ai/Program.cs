@@ -121,7 +121,7 @@ builder.Services
     .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration)
     .AddEvaluationFeatureServices()
-    .AddBriefingFeatureServices();
+    .AddCompanyAiFeatureServices();
 
 // AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
 // HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.
