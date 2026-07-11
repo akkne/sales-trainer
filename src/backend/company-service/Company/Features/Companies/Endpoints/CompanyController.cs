@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
 
@@ -254,9 +255,9 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
 
             return Created($"/companies/{companyId}/logs/{entry.Id}", entry);
         }
-        catch (InvalidOperationException invalidOperationException)
+        catch (ContactNotFoundInCompanyException contactNotFoundException)
         {
-            return BadRequest(new { message = invalidOperationException.Message });
+            return BadRequest(new { message = contactNotFoundException.Message });
         }
     }
 
@@ -278,9 +279,9 @@ public sealed class CompanyController(ICompanyService companyService) : Controll
 
             return Ok(entry);
         }
-        catch (InvalidOperationException invalidOperationException)
+        catch (ContactNotFoundInCompanyException contactNotFoundException)
         {
-            return BadRequest(new { message = invalidOperationException.Message });
+            return BadRequest(new { message = contactNotFoundException.Message });
         }
     }
 

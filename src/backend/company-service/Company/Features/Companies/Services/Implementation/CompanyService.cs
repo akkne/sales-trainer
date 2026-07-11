@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Abstract;
 using Sellevate.Company.Infrastructure.Ai;
@@ -330,7 +331,18 @@ internal sealed class CompanyService(
 
         company.UpdatedAt = now;
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbUpdateException) when (request.ContactId is { } raceContactId)
+        {
+            // The ownership check above and this SaveChangesAsync aren't atomic — the contact can
+            // be deleted concurrently in between, in which case Postgres rejects the insert with a
+            // ContactId FK violation. Surface that as the same typed 400 the ownership check itself
+            // throws, rather than letting a raw DbUpdateException bubble up as a 500.
+            throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
+        }
 
         return MapToCallLogDto(entry);
     }
@@ -365,7 +377,16 @@ internal sealed class CompanyService(
         entry.OccurredAt = request.OccurredAt.ToUniversalTime();
         entry.UpdatedAt = DateTime.UtcNow;
 
-        await databaseContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await databaseContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException dbUpdateException) when (request.ContactId is { } raceContactId)
+        {
+            // Same concurrent-delete race as CreateCallLogEntryAsync: the contact can be removed
+            // between the ownership check and this SaveChangesAsync, tripping the ContactId FK.
+            throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
+        }
 
         return MapToCallLogDto(entry);
     }
@@ -540,8 +561,8 @@ internal sealed class CompanyService(
             return null;
 
         contact.Name = request.Name;
-        contact.Position = request.Position;
-        contact.Notes = request.Notes;
+        contact.Position = request.Position ?? string.Empty;
+        contact.Notes = request.Notes ?? string.Empty;
         contact.UpdatedAt = DateTime.UtcNow;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -820,7 +841,7 @@ internal sealed class CompanyService(
             .AnyAsync(contact => contact.Id == contactId && contact.CompanyId == companyId, cancellationToken);
 
         if (!contactBelongsToCompany)
-            throw new InvalidOperationException("Указанный контакт не найден в этой компании.");
+            throw new ContactNotFoundInCompanyException(contactId, companyId);
     }
 
     private static CompanyDetailDto MapToDetailDto(CompanyEntity company, int callLogCount, int practiceCallCount, int contactCount) =>
