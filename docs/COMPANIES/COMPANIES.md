@@ -264,6 +264,20 @@ for due dates and notifies via the shared notification inbox — no client-side 
   the info tone, overdue uses the danger tone, nothing renders otherwise. Mirrors the 39.10
   status-badge pattern (`lib/company-followup.ts` + `.co-followup-*` CSS tone classes in
   `app/globals.css`, parallel to `.co-status-*`).
+  - **Known caveat (39.17 PR #21 review fast-follow, documented not fixed):**
+    `getFollowUpTone` in `lib/company-followup.ts` defaults its `now` parameter to
+    `new Date()` — the **client's** clock, not the server's. A user with a materially
+    skewed local clock sees a due/overdue tone that doesn't match what the backend
+    (`FollowUpReminderService`, which correctly uses `DateTime.UtcNow`) actually used
+    to decide whether to fire the reminder notification. This only affects the
+    cosmetic badge tone/threshold on `/companies` and the company page — it has no
+    effect on the actual reminder delivery, which is entirely server-side. Chose to
+    document rather than resync against server time because the skew is rare (modern
+    OSes auto-sync the clock), the blast radius is a slightly-off badge color/label
+    (not a data-loss or security issue), and plumbing a server "now" into every list
+    render would add a network round trip or extra API field for a cosmetic-only gap.
+    Revisit if server time becomes cheaply available on these payloads for another
+    reason.
 
 ## AI pre-call briefing / "Шпаргалка" (Phase 39.12)
 
@@ -375,17 +389,23 @@ Lets a manager give the practice-call AI a specific character to play — instea
   «Без персоны» chip (default) and a «Сгенерировать собеседника» toggle that opens a small form
   (optional seed contact name/position + an `Easy`/`Medium`/`Hard` difficulty picker calling
   `useGenerateCompanyPersona`); the generated draft is shown inline with a "Сохранить собеседника"
-  button (`useAddCompanyPersona`). The chip selection is threaded through `onCall`/`onChat` into
-  `handleCall`/`handleChat` on `app/(main)/companies/[id]/page.tsx`, which stash it in
-  `sessionStorage` under `company-call-persona:{companyId}` (mirroring the existing
-  `company-call-goal:{companyId}` pattern) before navigating to `call/voice` or `call/chat`. Both
-  call pages read the stored persona once on mount and spread its four fields into the
-  `companyContext` payload sent to `POST /dialog/sessions` (chat) / the voice session-start call
-  (`useVoice`'s `companyContext` option) — omitted entirely when no persona was selected, so the
-  no-persona call flow is unaffected. New hooks: `hooks/use-company-personas.ts`
-  (`useCompanyPersonas`, `useAddCompanyPersona`, `useDeleteCompanyPersona`,
-  `useGenerateCompanyPersona`), following the `use-company-briefing.ts`/`use-parse-call-log.ts`
-  conventions (React Query, `toast.error` on mutation failure).
+  button (`useAddCompanyPersona`). Each saved persona chip also has a small delete icon button
+  (39.17 PR #24 review fast-follow — `useDeleteCompanyPersona` previously had no UI consumer;
+  wired here rather than trimmed since the persona list UI already existed) that opens the shared
+  `ConfirmDeleteModal` (same component used for contacts/logs/company deletion) before calling
+  `DELETE /companies/{id}/personas/{personaId}`; deleting the currently-selected persona falls
+  back to "Без персоны" automatically once the list refetches. The chip selection is threaded
+  through `onCall`/`onChat` into `handleCall`/`handleChat` on
+  `app/(main)/companies/[id]/page.tsx`, which stash it in `sessionStorage` under
+  `company-call-persona:{companyId}` (mirroring the existing `company-call-goal:{companyId}`
+  pattern) before navigating to `call/voice` or `call/chat`. Both call pages read the stored
+  persona once on mount and spread its four fields into the `companyContext` payload sent to
+  `POST /dialog/sessions` (chat) / the voice session-start call (`useVoice`'s `companyContext`
+  option) — omitted entirely when no persona was selected, so the no-persona call flow is
+  unaffected. New hooks: `hooks/use-company-personas.ts` (`useCompanyPersonas`,
+  `useAddCompanyPersona`, `useDeleteCompanyPersona`, `useGenerateCompanyPersona`), following the
+  `use-company-briefing.ts`/`use-parse-call-log.ts` conventions (React Query, `toast.error` on
+  mutation failure).
 
 ## Voice memo → log (Phase 39.15)
 

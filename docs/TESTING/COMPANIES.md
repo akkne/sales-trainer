@@ -34,7 +34,11 @@ publishes for a due+unnotified company with the correct payload/topic/partition-
 future follow-up, skips a company with no follow-up scheduled, **once-only guard** skips an
 already-notified due company, a claimed company is not re-published on a second poll tick,
 `FollowUpNotifiedAt` is persisted on the claimed company, multiple due companies are processed in
-one tick.
+one tick. **Publish retry (39.17 PR #21 review fast-follow):** a transient publish failure (first
+call throws, second succeeds) is retried and still counts as published (2 calls observed); a
+persistent publish failure exhausts all 3 attempts and gives up for that tick (3 calls observed,
+`publishedCount` unaffected, company stays claimed — at-most-once, matching the pre-existing
+"already claimed" contract).
 
 `CompanyServiceTests.cs` also covers the AI briefing feature (Phase 39.12, `IBriefingAiClient`
 mocked with NSubstitute): `GenerateBriefingAsync`/`GetBriefingAsync` `404` for wrong owner/
@@ -123,8 +127,14 @@ with a non-`company-call` mode is rejected, and the context is persisted on the 
 the chat prompt contains the "ВОЙДИ В РОЛЬ" role-play instruction plus all persona fields and a
 difficulty description, the feedback prompt contains the persona-awareness block (distinct wording
 from chat) plus the same fields, and — critically — the no-persona chat prompt is asserted
-**byte-for-byte equal** to the exact pre-39.14 output string, proving the persona addition cannot
-silently change behavior when no persona is selected.
+**byte-for-byte equal** to the exact fenced-company-block-only output string (updated 39.17 PR #24
+review fast-follow), proving the persona addition cannot silently change behavior when no persona
+is selected. **Fencing (39.17 PR #24 review fast-follow):** the company block is wrapped in
+`=== ДАННЫЕ О КОМПАНИИ ... ===` / `=== КОНЕЦ ДАННЫХ О КОМПАНИИ ===` delimiters with the company
+name appearing strictly between them; the persona block is wrapped in its own
+`=== ДАННЫЕ О ПЕРСОНАЖЕ ... ===` / `=== КОНЕЦ ДАННЫХ О ПЕРСОНАЖЕ ===` delimiters, with the
+"ВОЙДИ В РОЛЬ" instruction line asserted to appear *before* the persona fence (instruction stays
+outside the data fence) and the persona name strictly inside it.
 
 ### Backend — ai-service briefing (NUnit)
 `src/backend/ai-service/Ai.Tests/Unit/BriefingServiceTests.cs`,
@@ -261,7 +271,12 @@ npx vitest run __tests__/Compan
 - `PrecallPanel.test.tsx` — persona chips (default «Без персоны» selection, selecting/deselecting
   a saved persona feeds the right `SelectedPersona` object into `onCall`/`onChat`), generate flow
   (opens the generate form, calls `onGeneratePersona` with the seed/difficulty, renders the draft,
-  "Сохранить собеседника" calls `onSavePersona`), and the inline error shown when generation fails
+  "Сохранить собеседника" calls `onSavePersona`), and the inline error shown when generation fails.
+  **Persona delete (39.17 PR #24 review fast-follow):** no delete affordance renders when
+  `onDeletePersona` is omitted; the delete button calls `onDeletePersona` with the persona id
+  without also selecting the persona (`stopPropagation`); after the persona disappears from the
+  `personas` prop (simulating a delete + refetch), the panel falls back to «Без персоны» — verified
+  via `onCall` receiving `null` rather than the stale persona.
 - `useCompanyReadiness.test.tsx` — `useCompanyReadiness` (GET, normalizes a 204 to
   `{score: null, strengths: null, gaps: null, recommendation: null, generatedAt: null}`, disabled
   without a companyId)

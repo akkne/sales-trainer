@@ -127,4 +127,29 @@ describe("PrecallPanel", () => {
 
         expect(onCall).toHaveBeenCalledWith("", null);
     });
+
+    it("falls back to 'Без персоны' when the selected persona disappears from the list (e.g. after deletion)", async () => {
+        const onDeletePersona = vi.fn();
+        const { rerender } = renderPanel({ personas: [PERSONA], onDeletePersona });
+
+        fireEvent.click(screen.getByText("Мария Соколова"));
+
+        rerender(
+            <PrecallPanel
+                hasDescription
+                recentGoals={[]}
+                onCall={onCall}
+                onChat={onChat}
+                personas={[]}
+                onGeneratePersona={onGeneratePersona}
+                onSavePersona={onSavePersona}
+                onDeletePersona={onDeletePersona}
+            />
+        );
+
+        await waitFor(() => {
+            fireEvent.click(screen.getByText("Позвонить"));
+            expect(onCall).toHaveBeenCalledWith("", null);
+        });
+    });
 });

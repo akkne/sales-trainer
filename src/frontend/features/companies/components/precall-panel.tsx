@@ -60,6 +60,13 @@ export function PrecallPanel({
     const selectedPersona: CompanyPersona | null =
         personas.find((persona) => persona.id === selectedPersonaId) ?? null;
 
+    // Treated as "no persona selected" whenever the id doesn't resolve to a real persona — covers
+    // both the default null id and a selected persona having been deleted out from under this
+    // panel (e.g. via the delete button below), so "Без персоны" re-highlights instead of leaving
+    // a stale, now-nonexistent selection. Derived from props/state on every render rather than an
+    // effect, so there's no extra render pass.
+    const isNoPersonaSelected = selectedPersonaId === null || !selectedPersona;
+
     const toSelectedPersona = (): SelectedPersona | null =>
         selectedPersona
             ? {
@@ -136,7 +143,7 @@ export function PrecallPanel({
             <div className="co-recent-goals">
                 <button
                     type="button"
-                    className={"chip-tag" + (selectedPersonaId === null ? " active" : "")}
+                    className={"chip-tag" + (isNoPersonaSelected ? " active" : "")}
                     onClick={() => setSelectedPersonaId(null)}
                 >
                     Без персоны
