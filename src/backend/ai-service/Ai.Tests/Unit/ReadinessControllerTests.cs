@@ -23,7 +23,7 @@ public class ReadinessControllerTests
     }
 
     private static GenerateReadinessRequestDto ValidRequest() =>
-        new("Записать встречу", ["s1", "s2"]);
+        new(Guid.NewGuid(), "Записать встречу", ["s1", "s2"]);
 
     [Test]
     public async Task GenerateReadiness_ReturnsOkWithReadiness()
@@ -54,7 +54,7 @@ public class ReadinessControllerTests
     [Test]
     public async Task GenerateReadiness_ReturnsBadRequest_WhenSessionIdsExceedLimit()
     {
-        var oversized = new GenerateReadinessRequestDto(null, Enumerable.Range(0, 51).Select(i => $"s{i}").ToList());
+        var oversized = new GenerateReadinessRequestDto(Guid.NewGuid(), null, Enumerable.Range(0, 51).Select(i => $"s{i}").ToList());
 
         var result = await _controller.GenerateReadiness(oversized);
 

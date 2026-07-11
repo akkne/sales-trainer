@@ -7,7 +7,6 @@ interface CompanyReadinessCardProps {
     readiness: CompanyReadiness | undefined;
     isLoading: boolean;
     errorMessage: string | null;
-    onRefresh: () => void;
 }
 
 const RING_SIZE = 84;
@@ -73,19 +72,16 @@ export function CompanyReadinessCard({
     readiness,
     isLoading,
     errorMessage,
-    onRefresh,
 }: CompanyReadinessCardProps) {
     const hasScore = readiness?.score !== null && readiness?.score !== undefined;
+    // A genuine failure (no cached score to fall back on) must not read as the
+    // "you haven't practiced yet" empty state.
+    const showError = !hasScore && !isLoading && !!errorMessage;
 
     return (
         <div className="co-card">
             <div className="co-card-head">
                 <span className="eyebrow">ГОТОВНОСТЬ К ЗВОНКУ</span>
-                {hasScore && (
-                    <button className="btn-link" onClick={onRefresh}>
-                        Обновить
-                    </button>
-                )}
             </div>
 
             {isLoading ? (
@@ -131,12 +127,14 @@ export function CompanyReadinessCard({
                         <p className="small" style={{ color: "var(--heart)", marginTop: 8 }}>{errorMessage}</p>
                     )}
                 </>
+            ) : showError ? (
+                <div className="co-desc-empty">
+                    <span>Не удалось получить оценку готовности. Попробуйте позже.</span>
+                    <p className="small" style={{ color: "var(--heart)", marginTop: 8 }}>{errorMessage}</p>
+                </div>
             ) : (
                 <div className="co-desc-empty">
                     <span>Проведите тренировку, чтобы получить оценку готовности.</span>
-                    {errorMessage && (
-                        <p className="small" style={{ color: "var(--heart)", marginTop: 8 }}>{errorMessage}</p>
-                    )}
                 </div>
             )}
         </div>

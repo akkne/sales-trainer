@@ -64,7 +64,7 @@ export default function CompanyPage() {
     const { data: briefing, isLoading: isBriefingLoading } = useCompanyBriefing(companyId);
     const generateBriefing = useGenerateCompanyBriefing(companyId);
 
-    const { data: readiness, isLoading: isReadinessLoading, error: readinessError, refetch: refetchReadiness } =
+    const { data: readiness, isLoading: isReadinessLoading, error: readinessError } =
         useCompanyReadiness(companyId);
 
     const { data: logs } = useCompanyLogs(companyId);
@@ -264,7 +264,6 @@ export default function CompanyPage() {
                 readiness={readiness}
                 isLoading={isReadinessLoading}
                 errorMessage={readinessError ? readinessError.message : null}
-                onRefresh={() => refetchReadiness()}
             />
 
             <CompanyDescriptionCard

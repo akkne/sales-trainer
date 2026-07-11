@@ -34,13 +34,15 @@ public class ReadinessServiceTests
         Feedback = summary is null ? null : new DialogFeedback { Summary = summary, Content = "content", GeneratedAt = DateTime.UtcNow }
     };
 
+    private static readonly Guid TestUserId = Guid.NewGuid();
+
     private static GenerateReadinessRequestDto BuildRequest(params string[] sessionIds) =>
-        new("Записать встречу", sessionIds.ToList());
+        new(TestUserId, "Записать встречу", sessionIds.ToList());
 
     [Test]
     public async Task GenerateReadinessAsync_ReturnsParsedFields_ForWellFormedJson()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Хорошо держал паузу, но забыл про цену."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -58,7 +60,7 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_ParsesJson_WhenWrappedInMarkdownCodeFence()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Резюме звонка."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -74,7 +76,7 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_ThrowsInvalidOperationException_WhenAiReturnsNonJson()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Резюме."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -88,7 +90,7 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_ThrowsInvalidOperationException_WhenScoreMissing()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Резюме."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -102,7 +104,7 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_ThrowsInvalidOperationException_WhenRecommendationMissing()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Резюме."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -117,7 +119,7 @@ public class ReadinessServiceTests
     [TestCase(-10, 0)]
     public async Task GenerateReadinessAsync_ClampsScore_ToZeroToHundredRange(int rawScore, int expectedScore)
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", "Резюме."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -131,9 +133,9 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_ReturnsNull_WhenNoSessionsHaveFeedback()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", null));
-        _dialogService.GetSessionByIdAsync("s2", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s2", TestUserId, Arg.Any<CancellationToken>())
             .Returns((DialogSession?)null);
 
         var result = await _readinessService.GenerateReadinessAsync(BuildRequest("s1", "s2"));
@@ -146,9 +148,9 @@ public class ReadinessServiceTests
     [Test]
     public async Task GenerateReadinessAsync_FiltersOutSessionsWithoutFeedback_AndUsesRemaining()
     {
-        _dialogService.GetSessionByIdAsync("s1", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s1", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s1", null));
-        _dialogService.GetSessionByIdAsync("s2", Arg.Any<CancellationToken>())
+        _dialogService.GetSessionForUserAsync("s2", TestUserId, Arg.Any<CancellationToken>())
             .Returns(SessionWithFeedback("s2", "Хорошее резюме."));
         _openAiChatService
             .GenerateTextAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())

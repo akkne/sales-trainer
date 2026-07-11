@@ -531,12 +531,14 @@ involvement.
 > provider call fails, or any of `name`/`position`/`personality` is missing/empty in the response
 > (unlike parse-log, personas have no valid "N/A" field — an incomplete persona is treated as a
 > parse failure). Shares `InternalServiceAuthFilter` with the other internal endpoints.
-> Internal-only (Phase 39.16): `POST /ai/companies/readiness` `{goal?, sessionIds: string[]}` (max
-> 50 session ids, `400` if exceeded) → `{score (0-100), strengths: string[], gaps: string[],
+> Internal-only (Phase 39.16): `POST /ai/companies/readiness` `{userId, goal?, sessionIds: string[]}`
+> (max 50 session ids, `400` if exceeded) → `{score (0-100), strengths: string[], gaps: string[],
 > recommendation}`, called by company-service to score a user's readiness for a real call. Unlike
 > the other internal endpoints, this one **does** read from ai-service's own Mongo store: for each
-> `sessionIds` entry it loads the `DialogSession` (via `IDialogService.GetSessionByIdAsync`) and
-> pulls `Feedback.Summary`, skipping sessions with no feedback yet (abandoned/incomplete calls).
+> `sessionIds` entry it loads the `DialogSession` **scoped to `userId`** (via
+> `IDialogService.GetSessionForUserAsync`, so ai-service independently verifies the caller-supplied
+> ids belong to that user — defense in depth beyond `InternalServiceAuthFilter` + company-service's
+> ownership check) and pulls `Feedback.Summary`, skipping sessions with no feedback yet (abandoned/incomplete calls).
 > If zero sessions have usable feedback, returns **`204 No Content`** without calling the LLM — the
 > "no data yet" signal company-service turns into its own `204`. Otherwise composes a Russian
 > system prompt from the collected summaries (+ optional `goal`) instructing strict JSON output;

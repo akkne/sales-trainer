@@ -1,21 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { CompanyReadinessCard } from "@/features/companies/components/company-readiness-card";
 
 describe("CompanyReadinessCard", () => {
-    const onRefresh = vi.fn();
-
-    beforeEach(() => {
-        onRefresh.mockReset();
-    });
-
     it("shows a loading state", () => {
         render(
             <CompanyReadinessCard
                 readiness={undefined}
                 isLoading={true}
                 errorMessage={null}
-                onRefresh={onRefresh}
             />
         );
 
@@ -28,7 +21,6 @@ describe("CompanyReadinessCard", () => {
                 readiness={{ score: null, strengths: null, gaps: null, recommendation: null, generatedAt: null }}
                 isLoading={false}
                 errorMessage={null}
-                onRefresh={onRefresh}
             />
         );
 
@@ -47,7 +39,6 @@ describe("CompanyReadinessCard", () => {
                 }}
                 isLoading={false}
                 errorMessage={null}
-                onRefresh={onRefresh}
             />
         );
 
@@ -55,47 +46,34 @@ describe("CompanyReadinessCard", () => {
         expect(screen.getByText("Уверенный тон")).toBeTruthy();
         expect(screen.getByText("Работа с ценой")).toBeTruthy();
         expect(screen.getByText("Потренируйте возражения по цене.")).toBeTruthy();
-        expect(screen.getByText("Обновить")).toBeTruthy();
     });
 
-    it("calls onRefresh when the update button is clicked", () => {
-        render(
-            <CompanyReadinessCard
-                readiness={{ score: 50, strengths: [], gaps: [], recommendation: "Ок.", generatedAt: "2026-07-10T12:00:00Z" }}
-                isLoading={false}
-                errorMessage={null}
-                onRefresh={onRefresh}
-            />
-        );
-
-        fireEvent.click(screen.getByText("Обновить"));
-        expect(onRefresh).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows an error message alongside existing content", () => {
+    it("shows an error message alongside existing cached content", () => {
         render(
             <CompanyReadinessCard
                 readiness={{ score: 50, strengths: [], gaps: [], recommendation: "Ок.", generatedAt: "2026-07-10T12:00:00Z" }}
                 isLoading={false}
                 errorMessage="AI service unavailable"
-                onRefresh={onRefresh}
             />
         );
 
         expect(screen.getByText("AI service unavailable")).toBeTruthy();
+        // Cached score is still shown even though a refetch failed.
+        expect(screen.getByRole("img", { name: "Готовность к звонку: 50 из 100" })).toBeTruthy();
     });
 
-    it("shows an error message in the empty state", () => {
+    it("shows a distinct error state (not the empty state) when there is no cached score", () => {
         render(
             <CompanyReadinessCard
-                readiness={{ score: null, strengths: null, gaps: null, recommendation: null, generatedAt: null }}
+                readiness={undefined}
                 isLoading={false}
                 errorMessage="AI service unavailable"
-                onRefresh={onRefresh}
             />
         );
 
+        expect(screen.getByText("Не удалось получить оценку готовности. Попробуйте позже.")).toBeTruthy();
         expect(screen.getByText("AI service unavailable")).toBeTruthy();
-        expect(screen.getByText("Проведите тренировку, чтобы получить оценку готовности.")).toBeTruthy();
+        // Must NOT mislead the user into thinking they simply haven't practiced.
+        expect(screen.queryByText("Проведите тренировку, чтобы получить оценку готовности.")).toBeNull();
     });
 });

@@ -47,7 +47,7 @@ internal sealed class ReadinessService : IReadinessService
         if (!_openAiChatService.IsConfigured)
             throw new InvalidOperationException("OpenAI API is not configured");
 
-        var feedbackSummaries = await CollectFeedbackSummariesAsync(request.SessionIds ?? [], cancellationToken);
+        var feedbackSummaries = await CollectFeedbackSummariesAsync(request.UserId, request.SessionIds ?? [], cancellationToken);
         if (feedbackSummaries.Count == 0)
             return null;
 
@@ -63,13 +63,17 @@ internal sealed class ReadinessService : IReadinessService
     }
 
     private async Task<List<string>> CollectFeedbackSummariesAsync(
+        Guid userId,
         List<string> sessionIds,
         CancellationToken cancellationToken)
     {
         var summaries = new List<string>();
         foreach (var sessionId in sessionIds)
         {
-            var session = await _dialogService.GetSessionByIdAsync(sessionId, cancellationToken);
+            // Scope to the owning user so ai-service independently verifies the
+            // caller-supplied session ids belong to that user (defense in depth
+            // beyond company-service's ownership check + InternalServiceAuthFilter).
+            var session = await _dialogService.GetSessionForUserAsync(sessionId, userId, cancellationToken);
             var summary = session?.Feedback?.Summary;
             if (!string.IsNullOrWhiteSpace(summary))
                 summaries.Add(summary);

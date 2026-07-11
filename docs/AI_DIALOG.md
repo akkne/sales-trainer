@@ -412,10 +412,12 @@ ai-service's own MongoDB (`DialogSession.Feedback.Summary`, same field described
 company-service only stores `PracticeCall {DialogSessionId, Goal}`, not the feedback text itself.
 So, keeping the "each service owns its data" boundary, company-service never reaches into
 ai-service's Mongo directly; instead it calls internal `POST /ai/companies/readiness`
-`{goal?, sessionIds: string[]}` and ai-service does the Mongo read on its side:
+`{userId, goal?, sessionIds: string[]}` and ai-service does the Mongo read on its side:
 
-1. For each id in `sessionIds`, `ReadinessService` calls the existing `IDialogService.GetSessionByIdAsync`
-   (the same lookup used by `GET /dialog/sessions/:sessionId`) to load the `DialogSession`.
+1. For each id in `sessionIds`, `ReadinessService` calls `IDialogService.GetSessionForUserAsync(sessionId, userId)`
+   to load the `DialogSession` **scoped to the owning user** — ai-service independently verifies the
+   caller-supplied session ids belong to that user rather than trusting company-service's list
+   (defense in depth beyond `InternalServiceAuthFilter`).
 2. Sessions with no `Feedback` yet (abandoned calls, or a practice call still in progress) are
    skipped — their summary isn't used.
 3. If **no** session yields a usable summary, the endpoint returns `204 No Content` without calling

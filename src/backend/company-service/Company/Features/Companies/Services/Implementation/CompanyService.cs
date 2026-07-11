@@ -633,8 +633,11 @@ internal sealed class CompanyService(
 
         if (company.ReadinessJson is not null)
         {
-            var cached = JsonSerializer.Deserialize<ReadinessCachePayload>(company.ReadinessJson, ReadinessCacheSerializerOptions)!;
-            return new CompanyReadinessDto(cached.Score, cached.Strengths, cached.Gaps, cached.Recommendation, company.ReadinessGeneratedAt);
+            var cached = JsonSerializer.Deserialize<ReadinessCachePayload>(company.ReadinessJson, ReadinessCacheSerializerOptions);
+            // A corrupted/hand-edited cache value (e.g. literal "null") is treated as a
+            // cache miss and regenerated below, rather than throwing a raw 500.
+            if (cached is not null)
+                return new CompanyReadinessDto(cached.Score, cached.Strengths, cached.Gaps, cached.Recommendation, company.ReadinessGeneratedAt);
         }
 
         // Most recent practice-call session ids first (capped to what ai-service accepts), plus
@@ -656,7 +659,7 @@ internal sealed class CompanyService(
             .FirstOrDefaultAsync(cancellationToken);
 
         var aiResult = await readinessAiClient.GenerateReadinessAsync(
-            new ReadinessAiRequest(latestGoal, sessionIds), cancellationToken);
+            new ReadinessAiRequest(userId, latestGoal, sessionIds), cancellationToken);
 
         if (aiResult is null)
             return new CompanyReadinessDto(null, null, null, null, null);

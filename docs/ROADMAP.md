@@ -1411,6 +1411,13 @@
 > `AddCompanyAiFeatureServices()` on next touch. (The LOW transport-failure finding
 > — `HttpRequestException` from the AI proxies surfaced as 500 — was fixed in-PR
 > for all three proxies, briefing/parse-log/persona.)
+> Carry-over from PR #26 review (non-blocking fast-follow): the no-usable-feedback
+> readiness result (ai-service returns 204) is not cached, so every `GET
+> /companies/{id}/readiness` re-fans-out up to 50 sequential Mongo reads until
+> feedback lands — consider a short negative-cache TTL. (The HIGH findings —
+> misleading no-op «Обновить» refresh button, ai-service reading sessions without
+> user scoping, and error-vs-empty UI conflation — plus the null-forgiving cache
+> deserialize were all fixed in-PR.)
 > Carry-over from PR #21 review (non-blocking fast-follows): follow-up badge
 > due/overdue tone uses the client clock (document caveat or resync against server
 > time); consider a short in-process retry (2–3 attempts) around the Kafka publish
