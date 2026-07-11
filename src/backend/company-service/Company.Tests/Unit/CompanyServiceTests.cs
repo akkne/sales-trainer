@@ -830,6 +830,25 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task GenerateBriefingAsync_propagates_ai_failure_and_leaves_cache_unchanged()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company", "Продаёт виджеты");
+        _briefingAiClient
+            .GenerateBriefingAsync(Arg.Any<BriefingAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns<BriefingAiResult>(_ => throw new InvalidOperationException("AI briefing service returned 503."));
+
+        var act = () => _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
+
+        // The controller maps this exception to a 503 response (see CompanyController.GenerateBriefing).
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        var cached = await _companyService.GetBriefingAsync(FirstUserId, company.Id);
+        cached.Should().NotBeNull();
+        cached!.Content.Should().BeNull();
+        cached.GeneratedAt.Should().BeNull();
+    }
+
+    [Test]
     public async Task GetBriefingAsync_returns_null_for_wrong_owner()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
@@ -1187,7 +1206,7 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
-    public async Task GetReadinessAsync_propagates_ai_failure()
+    public async Task GetReadinessAsync_propagates_ai_failure_and_leaves_cache_unchanged()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
@@ -1198,7 +1217,43 @@ public sealed class CompanyServiceTests
 
         var act = () => _companyService.GetReadinessAsync(FirstUserId, company.Id);
 
+        // The controller maps this exception to a 503 response (see CompanyController.GetReadiness).
         await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // Neither the positive cache nor the negative ("no feedback") cache should have been
+        // written — a transport/AI failure must not be confused with a "no feedback yet" result.
+        var persisted = await _databaseContext.Companies.FindAsync(company.Id);
+        persisted!.ReadinessJson.Should().BeNull();
+        persisted.ReadinessGeneratedAt.Should().BeNull();
+        persisted.ReadinessNoFeedbackUntil.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetReadinessAsync_negative_caches_no_feedback_result_so_repeat_call_does_not_refanout()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "goal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns((ReadinessAiResult?)null);
+
+        var firstResult = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+        var secondResult = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        firstResult.Should().NotBeNull();
+        firstResult!.Score.Should().BeNull();
+        secondResult.Should().NotBeNull();
+        secondResult!.Score.Should().BeNull();
+
+        // The second call must be served from the negative cache — it must NOT re-fan-out to
+        // ai-service (which would itself re-run the sequential Mongo reads across sessions).
+        await _readinessAiClient.Received(1).GenerateReadinessAsync(
+            Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
+
+        var persisted = await _databaseContext.Companies.FindAsync(company.Id);
+        persisted!.ReadinessNoFeedbackUntil.Should().NotBeNull();
+        persisted.ReadinessNoFeedbackUntil.Should().BeAfter(DateTime.UtcNow);
     }
 
     [Test]
@@ -1224,6 +1279,34 @@ public sealed class CompanyServiceTests
         result.Should().NotBeNull();
         result!.Score.Should().Be(90);
         result.Recommendation.Should().Be("Вторая рекомендация.");
+        await _readinessAiClient.Received(2).GenerateReadinessAsync(
+            Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CreatePracticeCallAsync_clears_negative_readiness_cache_so_next_get_refanouts()
+    {
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-1", "goal"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns((ReadinessAiResult?)null);
+        // Negative-cache the "no feedback yet" result.
+        await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        // A new practice call completing is the signal that feedback might now exist — it must
+        // clear the negative cache too, not just the positive ReadinessJson cache.
+        await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
+            new CreatePracticeCallRequestDto("session-2", "goal 2"));
+        _readinessAiClient
+            .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new ReadinessAiResult(60, [], [], "Готовность выросла."));
+
+        var result = await _companyService.GetReadinessAsync(FirstUserId, company.Id);
+
+        result.Should().NotBeNull();
+        result!.Score.Should().Be(60);
         await _readinessAiClient.Received(2).GenerateReadinessAsync(
             Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
     }

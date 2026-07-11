@@ -23,6 +23,13 @@ internal sealed class CompanyService(
     // session ids than ai-service will accept.
     private const int MaxSessionIdsForReadiness = 50;
 
+    // How long to negative-cache a "no usable feedback yet" readiness result (ai-service fanned
+    // out to Mongo across the company's practice sessions and found no feedback text). Without
+    // this, every GET re-runs the fan-out (up to MaxSessionIdsForReadiness sequential Mongo
+    // reads) until feedback lands. Short TTL because feedback can land at any time (practice
+    // call creation already invalidates this eagerly — see CreatePracticeCallAsync).
+    private static readonly TimeSpan ReadinessNoFeedbackCacheTtl = TimeSpan.FromMinutes(2);
+
     private static readonly JsonSerializerOptions ReadinessCacheSerializerOptions = new(JsonSerializerDefaults.Web);
 
     private sealed record ReadinessCachePayload(int Score, List<string> Strengths, List<string> Gaps, string Recommendation);
@@ -413,8 +420,11 @@ internal sealed class CompanyService(
 
         // A new practice call is this codebase's practice-completion signal (see 39.16 design) —
         // invalidate the cached readiness score so the next GET regenerates it from fresh feedback.
+        // Also clear the negative "no usable feedback yet" cache — this practice call may be the
+        // one that finally has usable feedback.
         company.ReadinessJson = null;
         company.ReadinessGeneratedAt = null;
+        company.ReadinessNoFeedbackUntil = null;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
@@ -640,6 +650,12 @@ internal sealed class CompanyService(
                 return new CompanyReadinessDto(cached.Score, cached.Strengths, cached.Gaps, cached.Recommendation, company.ReadinessGeneratedAt);
         }
 
+        // Negative cache: if a recent fan-out already came back with no usable feedback and the
+        // TTL hasn't expired yet, skip straight to the empty result instead of re-running the
+        // (up to MaxSessionIdsForReadiness) sequential Mongo reads on every request.
+        if (company.ReadinessNoFeedbackUntil is { } noFeedbackUntil && noFeedbackUntil > DateTime.UtcNow)
+            return new CompanyReadinessDto(null, null, null, null, null);
+
         // Most recent practice-call session ids first (capped to what ai-service accepts), plus
         // the single latest non-empty goal — same "latest goal" notion used by the briefing feature.
         var sessionIds = await databaseContext.PracticeCalls
@@ -662,13 +678,24 @@ internal sealed class CompanyService(
             new ReadinessAiRequest(userId, latestGoal, sessionIds), cancellationToken);
 
         if (aiResult is null)
+        {
+            // No usable feedback found across the fanned-out sessions — negative-cache the result
+            // so repeated requests within the TTL don't re-fan-out. CreatePracticeCallAsync still
+            // clears this eagerly when a new practice call completes.
+            company.ReadinessNoFeedbackUntil = DateTime.UtcNow.Add(ReadinessNoFeedbackCacheTtl);
+            company.UpdatedAt = DateTime.UtcNow;
+
+            await databaseContext.SaveChangesAsync(cancellationToken);
+
             return new CompanyReadinessDto(null, null, null, null, null);
+        }
 
         var generatedAt = DateTime.UtcNow;
         company.ReadinessJson = JsonSerializer.Serialize(
             new ReadinessCachePayload(aiResult.Score, aiResult.Strengths, aiResult.Gaps, aiResult.Recommendation),
             ReadinessCacheSerializerOptions);
         company.ReadinessGeneratedAt = generatedAt;
+        company.ReadinessNoFeedbackUntil = null;
         company.UpdatedAt = generatedAt;
 
         await databaseContext.SaveChangesAsync(cancellationToken);

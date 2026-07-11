@@ -50,6 +50,9 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
         builder.Property(company => company.ReadinessGeneratedAt)
             .IsRequired(false);
 
+        builder.Property(company => company.ReadinessNoFeedbackUntil)
+            .IsRequired(false);
+
         builder.Property(company => company.CreatedAt)
             .IsRequired();
 
