@@ -1372,7 +1372,7 @@
 - [ ] Verify gateway route for `/transcription/*` → ai-service (add if missing)
 - [ ] Component tests (recording states, error fallback); docs
 
-### [>] 39.16 Readiness score
+### [x] 39.16 Readiness score
 - [ ] ai-service: `POST /ai/companies/readiness` — input: goal, feedback summaries of last N practice
       sessions for the company; output `{score 0–100, strengths[], gaps[], recommendation}`
 - [ ] company-service: `GET /companies/{id}/readiness` — cached (`ReadinessJson`, `ReadinessGeneratedAt`),
