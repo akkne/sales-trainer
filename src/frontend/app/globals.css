@@ -3604,6 +3604,22 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-persona-chip-delete { width: 22px; height: 22px; border-radius: 6px; }
 .co-persona-chip-delete .nb { width: 12px; height: 12px; }
 
+/* persona generator (39.x) — collapsible panel + generated draft */
+.co-persona-generate {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 12px; padding: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 13px;
+}
+.co-persona-generate .co-cta-row { margin: 0; }
+.co-persona-generate > .btn { align-self: flex-start; }
+.co-persona-draft {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 4px; padding: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+}
+.co-persona-draft .small { margin: 2px 0 8px; line-height: 1.55; color: var(--ink-secondary); }
+.co-persona-draft > .btn { align-self: flex-start; }
+
 /* ── Readiness score (39.16) ── */
 .co-readiness-body { display: flex; align-items: flex-start; gap: 18px; }
 .co-readiness-details { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
