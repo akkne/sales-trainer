@@ -234,12 +234,15 @@ tables.
   play this company" message.
 - **Stale `contactId` on a call log (39.17 hardening):** if a contact is deleted concurrently
   between the call-log form loading its chips and the user submitting, `POST`/`PUT
-  /companies/{id}/logs[...]` reject with `400` (a typed `ContactNotFoundInCompanyException`, both
-  for the plain "doesn't belong to this company" check and for the same-shaped `DbUpdateException`
-  raised when the FK race trips at save time). `CallLogForm` clears its local `contactId` when it
-  sees that `400`, so retrying re-submits the entry as free-text `contactName` instead of repeating
-  the same failing request. See [API_CONTRACTS.md](../API_CONTRACTS.md#call-log) for the response
-  shape.
+  /companies/{id}/logs[...]` reject with `400 { code: "CONTACT_NOT_FOUND", message }` (a typed
+  `ContactNotFoundInCompanyException`, both for the plain "doesn't belong to this company" check
+  and for the matching Postgres FK-violation `DbUpdateException` raised when the race trips at save
+  time — only a `23503` on `FK_CallLogEntries_CompanyContacts_ContactId` is translated this way;
+  any other `DbUpdateException` still surfaces as a `500`). `CallLogForm` clears its local
+  `contactId` only when it sees that specific `code`, so retrying re-submits the entry as free-text
+  `contactName` instead of repeating the same failing request, while other `400`s on the same
+  endpoint (e.g. field-length validation) leave the form untouched. See
+  [API_CONTRACTS.md](../API_CONTRACTS.md#call-log) for the response shape.
 
 ## Company status pipeline (Phase 39.10)
 

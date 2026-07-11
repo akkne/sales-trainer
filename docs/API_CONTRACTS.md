@@ -1034,9 +1034,15 @@ Validation: `contactName` required, max 200; `subject`, `outcome` optional (empt
 `ContactNotFoundInCompanyException` — not a generic `InvalidOperationException` — both when the
 ownership check fails up front and when a concurrently-deleted contact trips the `ContactId`
 foreign key at `SaveChangesAsync` time (the check-then-act race between the ownership check and the
-save). Both cases map to the same `400 { message }` response; the frontend clears the stale
-`contactId` from the call-log form when it sees this, so retrying resubmits as free text instead of
-repeating the same failing request.
+save; the FK-violation `DbUpdateException` is only translated when it's specifically a Postgres
+`23503` on the `FK_CallLogEntries_CompanyContacts_ContactId` constraint — any other
+`DbUpdateException` propagates unchanged as a `500`). Both cases map to the same
+`400 { code: "CONTACT_NOT_FOUND", message }` response, where `code` is a machine-readable
+discriminator distinguishing this from other `400`s on the same endpoints (e.g. ASP.NET
+model-validation failures on `contactName`/`subject`/`outcome` length, which have no `code` field).
+The frontend only clears the stale `contactId` from the call-log form when it sees
+`code === "CONTACT_NOT_FOUND"`, so retrying resubmits as free text instead of repeating the same
+failing request, while other `400`s leave the form untouched.
 
 ### Practice Calls
 
