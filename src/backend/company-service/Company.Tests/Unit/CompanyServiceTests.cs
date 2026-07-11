@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Company.Features.Companies.Exceptions;
@@ -806,6 +807,26 @@ public sealed class CompanyServiceTests
     }
 
     [Test]
+    public async Task CreateCallLogEntryAsync_does_not_translate_an_unrelated_DbUpdateException()
+    {
+        // An unrelated DbUpdateException (different constraint, not the ContactId FK) must NOT be
+        // mis-mapped to "contact not found" -> 400 — it has to keep propagating as-is (-> 500),
+        // otherwise real database failures would be silently hidden from monitoring.
+        var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
+        var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
+
+        using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(
+            _databaseName,
+            new ThrowOnCallLogContactIdInterceptor(contact!.Id, SimulatedDbUpdateFailure.UnrelatedConstraintViolation));
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
+
+        Func<Task> act = () => racingService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
+
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Test]
     public async Task DeleteContactAsync_leaves_call_log_entry_with_null_contactId_and_preserved_contactName()
     {
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
@@ -1378,15 +1399,41 @@ public sealed class CompanyServiceTests
     }
 }
 
+/// <summary>Which inner exception <see cref="ThrowOnCallLogContactIdInterceptor"/> simulates.</summary>
+internal enum SimulatedDbUpdateFailure
+{
+    /// <summary>
+    /// A real Postgres FK violation (SqlState 23503) against exactly
+    /// <c>FK_CallLogEntries_CompanyContacts_ContactId</c> — the shape
+    /// <c>CompanyService.IsContactIdForeignKeyViolation</c> is meant to catch and translate.
+    /// </summary>
+    ContactIdForeignKeyViolation,
+
+    /// <summary>
+    /// An unrelated failure (e.g. a different constraint, a transient error) that happens to also
+    /// be a <see cref="DbUpdateException"/> with a <see cref="PostgresException"/> inner exception,
+    /// but must NOT be translated into <see cref="ContactNotFoundInCompanyException"/> — it should
+    /// keep propagating so it surfaces as a real 500 instead of a mis-mapped 400.
+    /// </summary>
+    UnrelatedConstraintViolation
+}
+
 /// <summary>
 /// Test double for the ContactId FK-race scenario: fails <c>SaveChangesAsync</c> with a
 /// <see cref="DbUpdateException"/> whenever the change set has an added/modified
 /// <see cref="CallLogEntry"/> pointing at <paramref name="raceContactId"/>, standing in for the
 /// FK violation a real Postgres database raises when that contact was concurrently deleted (the
-/// InMemory provider used in these tests does not enforce foreign keys on its own).
+/// InMemory provider used in these tests does not enforce foreign keys on its own). The inner
+/// exception is a real <see cref="PostgresException"/> (constructed via its public constructor)
+/// carrying the same <c>SqlState</c>/<c>ConstraintName</c> shape the production code inspects, so
+/// the translation logic itself — not just this test double — is exercised.
 /// </summary>
-internal sealed class ThrowOnCallLogContactIdInterceptor(Guid raceContactId) : SaveChangesInterceptor
+internal sealed class ThrowOnCallLogContactIdInterceptor(
+    Guid raceContactId,
+    SimulatedDbUpdateFailure failureMode = SimulatedDbUpdateFailure.ContactIdForeignKeyViolation) : SaveChangesInterceptor
 {
+    private const string ContactIdForeignKeyConstraintName = "FK_CallLogEntries_CompanyContacts_ContactId";
+
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
@@ -1398,8 +1445,40 @@ internal sealed class ThrowOnCallLogContactIdInterceptor(Guid raceContactId) : S
 
         if (tripsRace)
         {
+            var (sqlState, constraintName) = failureMode switch
+            {
+                SimulatedDbUpdateFailure.ContactIdForeignKeyViolation =>
+                    (PostgresErrorCodes.ForeignKeyViolation, ContactIdForeignKeyConstraintName),
+                SimulatedDbUpdateFailure.UnrelatedConstraintViolation =>
+                    // 23505 = unique_violation on some unrelated constraint — same DbUpdateException/
+                    // PostgresException shape, but not the ContactId FK, so it must not be translated.
+                    (PostgresErrorCodes.UniqueViolation, "IX_CompanyContacts_SomeUnrelatedIndex"),
+                _ => throw new ArgumentOutOfRangeException(nameof(failureMode))
+            };
+
+            var postgresException = new PostgresException(
+                messageText: "Simulated database constraint violation for test purposes.",
+                severity: "ERROR",
+                invariantSeverity: "ERROR",
+                sqlState: sqlState,
+                detail: null,
+                hint: null,
+                position: 0,
+                internalPosition: 0,
+                internalQuery: null,
+                where: null,
+                schemaName: null,
+                tableName: null,
+                columnName: null,
+                dataTypeName: null,
+                constraintName: constraintName,
+                file: null,
+                line: null,
+                routine: null);
+
             throw new DbUpdateException(
-                "Simulated ContactId foreign key violation (contact deleted concurrently).");
+                "Simulated ContactId foreign key violation (contact deleted concurrently).",
+                postgresException);
         }
 
         return base.SavingChangesAsync(eventData, result, cancellationToken);
