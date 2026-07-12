@@ -272,6 +272,13 @@ JSON import is available inline on Skills and Lessons pages:
 3. Upload your JSON file
 4. View import results (created/updated counts, errors)
 
+The **Techniques** page exposes the same trio in its header — **Download template**
+(a valid `techniques_template.json` with dialog / case / coach examples),
+**Export JSON**, and **Import JSON** — sourced from `TECHNIQUES_TEMPLATE` in
+`features/admin/lib/import-templates.ts`. Import upserts by `slug`; leave
+`primarySkillId` / `additionalSkillIds` `null` / `[]` in the template and set the
+real skill after import.
+
 
 ### Lessons Template (with all 10 exercise types)
 ```json

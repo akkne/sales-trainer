@@ -13,6 +13,8 @@ import {
     type AdminTechniqueWriteBody,
     type AdminTechniqueImportResult,
 } from "@/features/admin/hooks/use-admin";
+import { TECHNIQUES_TEMPLATE } from "@/features/admin/lib/import-templates";
+import { downloadJson } from "@/features/admin/lib/download-json";
 
 const DIFFICULTY_OPTIONS = [
     { value: 1, label: "1 · Novice" },
@@ -147,6 +149,12 @@ export default function AdminTechniquesPage() {
                         className="hidden"
                         onChange={handleImportFile}
                     />
+                    <button
+                        onClick={() => downloadJson(TECHNIQUES_TEMPLATE, "techniques_template.json")}
+                        className="px-4 py-2 text-sm border border-line text-ink-3 rounded-md hover:bg-bg-2 transition-colors"
+                    >
+                        Download template
+                    </button>
                     <button
                         onClick={handleExport}
                         disabled={isExporting || techniques.length === 0}

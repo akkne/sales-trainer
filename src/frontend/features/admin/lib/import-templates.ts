@@ -100,6 +100,60 @@ export const LESSONS_TEMPLATE = [
 ];
 
 /**
+ * `POST /admin/techniques/import` — flat array of techniques (the same write body
+ * used by create/update, so an export re-imports verbatim). `primarySkillId` /
+ * `additionalSkillIds` are skill GUIDs; leave them `null` / `[]` here since a fresh
+ * template has no real ids — set them in the UI after import. `dialog`, `case` and
+ * `coach` are optional (use `null` to omit).
+ */
+export const TECHNIQUES_TEMPLATE = [
+    {
+        slug: "mirror-and-label",
+        name: "Mirror & Label",
+        summary: "Repeat the last few words, then name the emotion to build rapport.",
+        body: "## When to use\nUse mirroring when the prospect goes quiet or guarded.\n\n1. Repeat their last 1-3 words as a question.\n2. Label the feeling: \"It sounds like…\".",
+        tags: ["discovery", "rapport"],
+        primarySkillId: null,
+        additionalSkillIds: [],
+        difficulty: 2,
+        sortOrder: 1,
+        dialog: [
+            { orderIndex: 1, side: "them", text: "We already have a vendor.", annotations: [] },
+            { orderIndex: 2, side: "me", text: "You already have a vendor?", annotations: ["mirror"] },
+            { orderIndex: 3, side: "them", text: "Yeah, but honestly they're slow to respond." },
+        ],
+        case: {
+            title: "Reviving a stalled deal",
+            body: "A rep used a single label — \"It seems like timing is the real blocker\" — and the prospect opened up about a budget freeze.",
+            metrics: [{ label: "Reply rate", value: "+38%" }],
+        },
+        coach: {
+            avatarSeed: "mirror-coach",
+            name: "Dana Cross",
+            role: "Negotiation coach",
+            quote: "Silence after a label is where the truth comes out.",
+            challenges: [
+                { label: "Practice 3 mirrors in a live call", kind: "dialog", targetSlug: null },
+            ],
+        },
+    },
+    {
+        slug: "feel-felt-found",
+        name: "Feel · Felt · Found",
+        summary: "Acknowledge the objection, relate, then reframe with a proof point.",
+        body: "Structure your reply as: I understand how you **feel** → others **felt** the same → here's what they **found**.",
+        tags: ["objection-handling"],
+        primarySkillId: null,
+        additionalSkillIds: [],
+        difficulty: 1,
+        sortOrder: 2,
+        dialog: null,
+        case: null,
+        coach: null,
+    },
+];
+
+/**
  * `POST /admin/dialog/import` — dialog bundles with nested modes in one file.
  * `skillIconicName` must already exist. Upsert: bundles by (skill, title), modes
  * by (bundle, key). Re-importing the same file is safe.
