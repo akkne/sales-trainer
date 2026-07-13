@@ -29,7 +29,13 @@ public sealed class OpenAiConfiguration
     public OpenAiProvider Provider { get; init; } = OpenAiProvider.OpenAi;
 
     public string OpenQuestionModel { get; init; } = "gpt-4.1";
-    public string DialogModel { get; init; } = "gpt-4.1";
+
+    /// <summary>
+    /// Model driving the roleplay character during a dialog. Defaults to a stronger
+    /// conversational model (gpt-4o) so the simulated interlocutor reasons and reacts
+    /// more naturally. Override via <c>OPENAI_DIALOG_MODEL</c>.
+    /// </summary>
+    public string DialogModel { get; init; } = "gpt-4o";
     public int MaximumOpenQuestionTokenCount { get; init; } = 300;
     public int MaximumDialogTokenCount { get; init; } = 500;
     public int MaximumFeedbackTokenCount { get; init; } = 1500;

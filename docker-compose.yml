@@ -205,7 +205,7 @@ services:
       # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
       - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
       # --- AI tunables (override in .env; defaults are the in-code values) ---
-      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
+      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4o}
       - OpenAI__OpenQuestionModel=${OPENAI_OPEN_QUESTION_MODEL:-gpt-4.1}
       - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
       - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
@@ -377,7 +377,7 @@ services:
       # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
       - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
       # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
-      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4.1}
+      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4o}
       - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
       - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
       - Voice__TtsProvider=${TTS_PROVIDER:-yandex}

@@ -138,10 +138,10 @@ unknown-skill error, 403 for non-admin — requires Docker).
     "ApiKey": "sk-...",
     "BaseUrl": "https://api.openai.com",
     "ChatCompletionsPath": "/v1/chat/completions",
-    "ChatModel": "gpt-4.1-nano",
-    "FeedbackModel": "gpt-4.1",
-    "MaxTokensChat": 500,
-    "MaxTokensFeedback": 1500
+    "DialogModel": "gpt-4o",
+    "OpenQuestionModel": "gpt-4.1",
+    "MaximumDialogTokenCount": 500,
+    "MaximumFeedbackTokenCount": 1500
   }
 }
 ```
