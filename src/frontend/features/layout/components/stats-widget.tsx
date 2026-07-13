@@ -8,8 +8,8 @@ import { useDailyQuote } from "@/features/layout/hooks/use-daily-quote";
 import { useProfile } from "@/features/profile/hooks/use-profile";
 
 const FALLBACK_QUOTE = {
-    text: "When a prospect says 'too expensive', don't offer a discount. Ask — 'expensive compared to what?'",
-    author: "Skeptic Sergey",
+    text: "Когда клиент говорит «дорого», не предлагай скидку. Спроси — «дорого по сравнению с чем?»",
+    author: "Скептик Сергей",
 };
 
 interface StatsWidgetProps {
@@ -41,28 +41,28 @@ export function StatsWidget({
             {/* Stats grid 2x2 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <StatTile
-                    label="Streak"
+                    label="Серия"
                     value={currentStreakDayCount}
-                    unit="d"
+                    unit="д"
                     icon={<Icon name="flame" size="xs" />}
                     tone="flame"
                 />
                 <StatTile
-                    label="Week"
+                    label="Неделя"
                     value={weeklyXpAmount}
                     unit="XP"
                     icon={<Icon name="bolt" size="xs" />}
                     tone="primary"
                 />
                 <StatTile
-                    label="Total"
+                    label="Всего"
                     value={totalXpAmount.toLocaleString("en")}
                     unit="XP"
                     icon={<Icon name="sparkle" size="xs" />}
                     tone="violet"
                 />
                 <StatTile
-                    label="Accuracy"
+                    label="Точность"
                     value={accuracyPercent}
                     unit="%"
                     icon={<Icon name="target" size="xs" />}
@@ -72,7 +72,7 @@ export function StatsWidget({
 
             {/* Daily goal card */}
             <Card padding={20}>
-                <div className="eyebrow muted">Today</div>
+                <div className="eyebrow muted">Сегодня</div>
                 <div
                     style={{
                         display: "flex",
@@ -88,7 +88,7 @@ export function StatsWidget({
                             letterSpacing: "-0.01em",
                         }}
                     >
-                        {remaining} XP to go
+                        Осталось {remaining} XP
                     </span>
                     <span className="tnum" style={{ fontSize: 13, color: "var(--ink-3)" }}>
                         {safeCurrent} / {safeGoal}
@@ -99,7 +99,7 @@ export function StatsWidget({
 
             {/* Tip card */}
             <Card padding={20} style={{ background: "var(--surface-2)" }}>
-                <div className="eyebrow muted">Tip of the day</div>
+                <div className="eyebrow muted">Совет дня</div>
                 <div
                     style={{
                         fontSize: 14,

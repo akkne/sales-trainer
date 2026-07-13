@@ -43,14 +43,14 @@ export function formatRelativeTimestamp(isoTimestamp: string, nowDate: Date = ne
     const differenceMilliseconds = nowDate.getTime() - createdAtDate.getTime();
     const differenceMinutes = Math.floor(differenceMilliseconds / 60000);
 
-    if (differenceMinutes < 1) return "just now";
-    if (differenceMinutes < 60) return `${differenceMinutes} min ago`;
+    if (differenceMinutes < 1) return "только что";
+    if (differenceMinutes < 60) return `${differenceMinutes} мин назад`;
 
     const differenceHours = Math.floor(differenceMinutes / 60);
-    if (differenceHours < 24) return `${differenceHours} h ago`;
+    if (differenceHours < 24) return `${differenceHours} ч назад`;
 
     const differenceDays = Math.floor(differenceHours / 24);
-    if (differenceDays < 7) return `${differenceDays} d ago`;
+    if (differenceDays < 7) return `${differenceDays} д назад`;
 
-    return createdAtDate.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+    return createdAtDate.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }

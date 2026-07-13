@@ -19,9 +19,9 @@ function formatConversationTime(dateString: string | null): string {
     if (diffDays === 0) {
         return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     }
-    if (diffDays === 1) return "yesterday";
-    if (diffDays < 7) return `${diffDays} d ago`;
-    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    if (diffDays === 1) return "вчера";
+    if (diffDays < 7) return `${diffDays} дн назад`;
+    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 export function ConversationCard({ conversation, isActive, onSelect }: ConversationCardProps) {

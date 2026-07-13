@@ -47,35 +47,35 @@ export function NotificationPanel({ isOpen, onRequestClose }: NotificationPanelP
             />
             <div
                 role="dialog"
-                aria-label="Notifications"
+                aria-label="Уведомления"
                 className="fixed top-14 right-0 left-0 md:absolute md:top-auto md:bottom-0 md:left-full md:right-auto md:ml-3 md:w-96 z-50 bg-surface border border-line rounded-[var(--r-md)] md:rounded-[var(--r-lg)] shadow-lg overflow-hidden max-h-[80vh] flex flex-col"
             >
                 <header className="flex items-center justify-between px-4 py-3 border-b border-line bg-bg-2">
-                    <h2 className="text-sm font-semibold text-ink">Notifications</h2>
+                    <h2 className="text-sm font-semibold text-ink">Уведомления</h2>
                     <button
                         type="button"
                         onClick={handleMarkAllAsRead}
                         disabled={!hasUnread || markAllAsReadMutation.isPending}
                         className="text-xs font-medium text-indigo disabled:text-ink-3 disabled:cursor-not-allowed hover:underline"
                     >
-                        Mark all read
+                        Отметить всё как прочитанное
                     </button>
                 </header>
 
                 <div className="flex-1 overflow-y-auto" aria-live="polite" aria-atomic="false">
                     {isLoading && (
                         <p className="px-4 py-8 text-center text-sm text-ink-3">
-                            Loading...
+                            Загрузка...
                         </p>
                     )}
                     {isError && (
                         <p className="px-4 py-8 text-center text-sm text-bad">
-                            Couldn't load notifications
+                            Не удалось загрузить уведомления
                         </p>
                     )}
                     {!isLoading && !isError && (notifications?.length ?? 0) === 0 && (
                         <p className="px-4 py-8 text-center text-sm text-ink-3">
-                            No notifications yet
+                            Пока нет уведомлений
                         </p>
                     )}
                     {notifications?.map((notification) => (

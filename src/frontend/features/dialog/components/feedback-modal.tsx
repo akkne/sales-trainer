@@ -31,9 +31,9 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                         <span className="itile primary" style={{ width: 40, height: 40 }}>
                             <Icon name="book" size="md" />
                         </span>
-                        <h2 className="h3">Feedback</h2>
+                        <h2 className="h3">Обратная связь</h2>
                     </div>
-                    <button className="icon-btn" onClick={onClose} aria-label="Close">
+                    <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
                         <Icon name="close" size="md" />
                     </button>
                 </div>
@@ -45,7 +45,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                             style={{ background: "var(--primary-soft)", color: "var(--primary)", fontSize: 13, padding: "6px 12px", marginBottom: 16 }}
                         >
                             <Icon name="bolt" size={15} />
-                            +{feedback.xpEarned} XP earned
+                            +{feedback.xpEarned} XP получено
                         </span>
                     )}
 
@@ -57,7 +57,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
 
                     {!isExpanded && feedback.content !== feedback.summary && (
                         <button className="more-btn" onClick={() => setIsExpanded(true)}>
-                            More <Icon name="chevron-down" size={18} />
+                            Ещё <Icon name="chevron-down" size={18} />
                         </button>
                     )}
 
@@ -70,7 +70,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                                 dangerouslySetInnerHTML={{ __html: feedback.content }}
                             />
                             <button className="more-btn" style={{ color: "var(--ink-3)" }} onClick={() => setIsExpanded(false)}>
-                                Collapse <Icon name="chevron-up" size={18} />
+                                Свернуть <Icon name="chevron-up" size={18} />
                             </button>
                         </>
                     )}
@@ -79,7 +79,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                 <div className="modal-foot">
                     <button className="btn btn-primary btn-block" onClick={onClose}>
                         <Icon name="plus" size="sm" />
-                        New dialogue
+                        Новый диалог
                     </button>
                 </div>
             </div>

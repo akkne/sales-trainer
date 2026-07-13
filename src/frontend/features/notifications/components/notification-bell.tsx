@@ -30,13 +30,13 @@ export function NotificationBell() {
                 type="button"
                 onClick={() => setIsPanelOpen((previouslyOpen) => !previouslyOpen)}
                 className="icon-btn"
-                aria-label="Notifications"
+                aria-label="Уведомления"
                 aria-expanded={isPanelOpen}
             >
                 <Icon name="bell" size="md" className="text-ink-3" />
                 {unreadCount > 0 && (
                     <span
-                        aria-label={`${unreadCount} unread`}
+                        aria-label={`${unreadCount} непрочитанных`}
                         className="absolute -top-0.5 -right-0.5 min-w-4 h-4 flex items-center justify-center rounded-full bg-primary text-on-primary text-[10px] font-bold px-1"
                     >
                         {unreadCount > 9 ? "9+" : unreadCount}

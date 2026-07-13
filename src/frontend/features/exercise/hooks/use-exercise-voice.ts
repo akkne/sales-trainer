@@ -108,12 +108,12 @@ export function useExerciseVoice(options: UseExerciseVoiceOptions) {
                 const limit = Math.round(((body.limitSeconds as number) ?? 0) / 60);
                 throw new Error(
                     period === "monthly"
-                        ? `Monthly voice limit (${limit} min) reached`
-                        : `Daily voice limit (${limit} min) reached`,
+                        ? `Достигнут месячный лимит голоса (${limit} мин)`
+                        : `Достигнут дневной лимит голоса (${limit} мин)`,
                 );
             }
             if (!response.ok) {
-                throw new Error(`Voice request failed: ${response.status}`);
+                throw new Error(`Ошибка голосового запроса: ${response.status}`);
             }
 
             audioPlayerRef.current?.beginQueue();
@@ -147,7 +147,7 @@ export function useExerciseVoice(options: UseExerciseVoiceOptions) {
             }
         } catch (error) {
             if ((error as Error).name !== "AbortError" && !controller.signal.aborted) {
-                onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
+                onError?.(error instanceof Error ? error : new Error("Ошибка обработки голоса"));
                 setState("error");
             }
             speechClientRef.current?.resume();
@@ -206,7 +206,7 @@ export function useExerciseVoice(options: UseExerciseVoiceOptions) {
 
             await speechClientRef.current.start();
         } catch (error) {
-            onError?.(error instanceof Error ? error : new Error("Voice initialization failed"));
+            onError?.(error instanceof Error ? error : new Error("Ошибка инициализации голоса"));
             setState("error");
         }
     }, [isVoiceAvailable, voiceConfig, onError, processSpeech]);

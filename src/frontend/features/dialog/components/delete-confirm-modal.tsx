@@ -28,26 +28,26 @@ export function DeleteConfirmModal({ onConfirm, onCancel }: DeleteConfirmModalPr
                         <span className="itile heart" style={{ width: 40, height: 40 }}>
                             <Icon name="delete" size="md" />
                         </span>
-                        <h3 className="h3">Delete chat?</h3>
+                        <h3 className="h3">Удалить чат?</h3>
                     </div>
-                    <button className="icon-btn" onClick={onCancel} aria-label="Close">
+                    <button className="icon-btn" onClick={onCancel} aria-label="Закрыть">
                         <Icon name="close" size="md" />
                     </button>
                 </div>
 
                 <div className="modal-body">
                     <p className="body" style={{ margin: 0 }}>
-                        Are you sure you want to delete this chat? This action cannot be undone.
+                        Точно хочешь удалить этот чат? Это действие нельзя отменить.
                     </p>
                 </div>
 
                 <div className="modal-foot row gap-3">
                     <button className="btn btn-outline grow" onClick={onCancel}>
-                        Cancel
+                        Отмена
                     </button>
                     <button className="btn btn-danger grow" onClick={onConfirm}>
                         <Icon name="delete" size="sm" />
-                        Delete
+                        Удалить
                     </button>
                 </div>
             </div>

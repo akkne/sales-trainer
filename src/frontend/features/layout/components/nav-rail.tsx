@@ -15,12 +15,12 @@ interface RailItem {
 }
 
 const RAIL_ITEMS: RailItem[] = [
-    { href: "/tree",      icon: "compass",   label: "Path" },
-    { href: "/dialog",    icon: "message",   label: "Practice" },
+    { href: "/tree",      icon: "compass",   label: "Путь" },
+    { href: "/dialog",    icon: "message",   label: "Практика" },
     { href: "/companies", icon: "briefcase", label: "Компании" },
-    { href: "/guidebook", icon: "book",      label: "Guidebook" },
-    { href: "/friends",   icon: "users",     label: "Friends" },
-    { href: "/discuss",   icon: "forum",     label: "Discussions" },
+    { href: "/guidebook", icon: "book",      label: "Справочник" },
+    { href: "/friends",   icon: "users",     label: "Друзья" },
+    { href: "/discuss",   icon: "forum",     label: "Обсуждения" },
 ];
 
 function getInitials(name: string): string {
@@ -46,14 +46,14 @@ export function NavRail() {
     const onProfile = pathname.startsWith("/profile");
 
     return (
-        <aside className="rail" aria-label="Navigation">
+        <aside className="rail" aria-label="Навигация">
             {/* Avatar → /profile */}
             <Link
                 href="/profile"
                 className="rail-avatar"
                 data-active={onProfile}
-                title="Profile"
-                aria-label="Profile"
+                title="Профиль"
+                aria-label="Профиль"
             >
                 <span className="rail-avatar-inner">{initials}</span>
             </Link>
@@ -76,7 +76,7 @@ export function NavRail() {
                     >
                         <Icon name={item.icon} size={20} />
                         {isFriends && incomingRequestCount > 0 && (
-                            <span className="rail-badge" aria-label={`${incomingRequestCount} friend requests`}>
+                            <span className="rail-badge" aria-label={`Заявок в друзья: ${incomingRequestCount}`}>
                                 {incomingRequestCount > 9 ? "9+" : incomingRequestCount}
                             </span>
                         )}
@@ -88,7 +88,7 @@ export function NavRail() {
             <span className="rail-spacer" aria-hidden="true" />
 
             {/* Notifications bell (preserved, above settings) */}
-            <span className="rail-bell" title="Notifications">
+            <span className="rail-bell" title="Уведомления">
                 <NotificationBell />
             </span>
 
@@ -96,8 +96,8 @@ export function NavRail() {
             <Link
                 href="/settings"
                 className={`rail-item${pathname.startsWith("/settings") ? " active" : ""}`}
-                title="Settings"
-                aria-label="Settings"
+                title="Настройки"
+                aria-label="Настройки"
                 aria-current={pathname.startsWith("/settings") ? "page" : undefined}
             >
                 <Icon name="settings" size={19} />

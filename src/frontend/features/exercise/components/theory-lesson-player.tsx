@@ -46,7 +46,7 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
         <div className="session theory-session">
             {/* Header: exit + progress indicator */}
             <div className="session-top">
-                <button className="icon-btn" onClick={onExit} aria-label="Exit">
+                <button className="icon-btn" onClick={onExit} aria-label="Выйти">
                     <Icon name="close" size={22} />
                 </button>
 
@@ -78,8 +78,8 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
 
             {/* Card body with tap zones (left = back, right = forward) */}
             <div className="session-body theory-body">
-                <button className="theory-tap theory-tap-left" onClick={goPrev} aria-label="Back" disabled={currentIndex === 0} />
-                <button className="theory-tap theory-tap-right" onClick={goNext} aria-label="Next" />
+                <button className="theory-tap theory-tap-left" onClick={goPrev} aria-label="Назад" disabled={currentIndex === 0} />
+                <button className="theory-tap theory-tap-right" onClick={goNext} aria-label="Далее" />
 
                 <div key={currentIndex} className="exercise fade-up theory-card-wrap">
                     <TheoryCardView content={cards[currentIndex]} />
@@ -92,12 +92,12 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
                     className="btn btn-ghost"
                     onClick={goPrev}
                     disabled={currentIndex === 0}
-                    aria-label="Back"
+                    aria-label="Назад"
                 >
                     <Icon name="arrow-left" size={18} />
                 </button>
                 <button className="btn btn-primary btn-lg grow" onClick={goNext} disabled={isCompleting}>
-                    {isLast ? (isCompleting ? "Saving…" : "Finish") : "Next"}
+                    {isLast ? (isCompleting ? "Сохранение…" : "Завершить") : "Далее"}
                     {!isLast && <Icon name="arrow-right" size={18} />}
                     {isLast && !isCompleting && <Icon name="check" size={18} />}
                 </button>

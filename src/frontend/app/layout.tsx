@@ -4,7 +4,7 @@ import { AppProviders } from "./providers";
 
 export const metadata: Metadata = {
     title: "Sellevate",
-    description: "Sales skills trainer",
+    description: "Тренажёр навыков продаж",
 };
 
 export const viewport = {

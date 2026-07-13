@@ -14,10 +14,10 @@ interface ErrorStateProps {
 
 /** Shared data-fetch error block with optional retry. */
 export function ErrorState({
-    title = "Something went wrong",
-    message = "Couldn't load data. Check your connection and try again.",
+    title = "Что-то пошло не так",
+    message = "Не удалось загрузить данные. Проверь подключение и попробуй снова.",
     onRetry,
-    retryLabel = "Retry",
+    retryLabel = "Повторить",
     compact = false,
 }: ErrorStateProps) {
     return (

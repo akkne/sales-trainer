@@ -15,11 +15,11 @@ interface ManageSkillsModalProps {
 }
 
 function statusLabel(skill: SkillTreeNode): { text: string; cls: string } {
-    if (skill.slug === ALWAYS_ENROLLED_SLUG) return { text: "Core", cls: "msm-badge core" };
-    if (skill.status === "completed") return { text: "Completed", cls: "msm-badge completed" };
-    if (skill.status === "in_progress") return { text: "In progress", cls: "msm-badge inprogress" };
-    if (skill.status === "locked") return { text: "Not enrolled", cls: "msm-badge locked" };
-    return { text: "Available", cls: "msm-badge available" };
+    if (skill.slug === ALWAYS_ENROLLED_SLUG) return { text: "Основной", cls: "msm-badge core" };
+    if (skill.status === "completed") return { text: "Завершён", cls: "msm-badge completed" };
+    if (skill.status === "in_progress") return { text: "В процессе", cls: "msm-badge inprogress" };
+    if (skill.status === "locked") return { text: "Не выбран", cls: "msm-badge locked" };
+    return { text: "Доступен", cls: "msm-badge available" };
 }
 
 export function ManageSkillsModal({
@@ -55,7 +55,7 @@ export function ManageSkillsModal({
             onClick={onClose}
             role="dialog"
             aria-modal="true"
-            aria-label="Manage skills"
+            aria-label="Управление навыками"
         >
             <div
                 className="modal fade-up"
@@ -64,12 +64,12 @@ export function ManageSkillsModal({
             >
                 <div className="modal-head">
                     <div>
-                        <h3 className="h3" style={{ margin: 0 }}>Manage skills</h3>
+                        <h3 className="h3" style={{ margin: 0 }}>Управление навыками</h3>
                         <p className="msm-subline">
-                            {enrolledCount} of {totalCount} enrolled · {completedCount} completed
+                            {enrolledCount} из {totalCount} выбрано · {completedCount} завершено
                         </p>
                     </div>
-                    <button className="icon-btn" onClick={onClose} aria-label="Close">
+                    <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
                         <Icon name="close" size="md" />
                     </button>
                 </div>
@@ -103,10 +103,10 @@ export function ManageSkillsModal({
                                         disabled={toggleDisabled}
                                         aria-label={
                                             isAlwaysOn
-                                                ? `${skill.title} — core skill, always on`
+                                                ? `${skill.title} — основной навык, всегда включён`
                                                 : isEnrolled
-                                                ? `Unenroll from ${skill.title}`
-                                                : `Enroll in ${skill.title}`
+                                                ? `Отписаться от ${skill.title}`
+                                                : `Подписаться на ${skill.title}`
                                         }
                                     >
                                         <div
@@ -129,8 +129,8 @@ export function ManageSkillsModal({
                                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                                     <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
                                         {isAlwaysOn
-                                            ? "Core — always on"
-                                            : `${skill.completedLessonCount}/${skill.totalLessonCount} lessons`}
+                                            ? "Основной — всегда включён"
+                                            : `${skill.completedLessonCount}/${skill.totalLessonCount} уроков`}
                                     </span>
                                     <span className="pv2-skill-pct">{pct}%</span>
                                 </div>
@@ -140,7 +140,7 @@ export function ManageSkillsModal({
 
                     {isError && (
                         <p style={{ fontSize: 12, color: "var(--heart)", marginTop: 12, textAlign: "center" }}>
-                            Couldn&apos;t save. Please try again.
+                            Не удалось сохранить. Попробуй ещё раз.
                         </p>
                     )}
                 </div>

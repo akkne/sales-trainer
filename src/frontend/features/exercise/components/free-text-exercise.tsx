@@ -41,7 +41,7 @@ export function FreeTextExercise({
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {/* Exercise type chip */}
-            <div><span className="ex-chip ex-chip--free">Free response</span></div>
+            <div><span className="ex-chip ex-chip--free">Свободный ответ</span></div>
 
             {/* Context bubble — client speech */}
             {content.situation && (
@@ -49,7 +49,7 @@ export function FreeTextExercise({
                     <GeoAvatar seed="client" size={48} />
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Client</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Клиент</span>
                         </div>
                         <div className="ex-bubble-client">
                             {content.situation}
@@ -71,7 +71,7 @@ export function FreeTextExercise({
                 }}
             >
                 <textarea
-                    placeholder="At least 20 characters…"
+                    placeholder="Минимум 20 символов…"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     disabled={isAnswered}
@@ -101,9 +101,9 @@ export function FreeTextExercise({
                 >
                     <span>
                         {charCount < minLength ? (
-                            <span style={{ color: "var(--amber)" }}>min {minLength} · now {charCount}</span>
+                            <span style={{ color: "var(--amber)" }}>мин. {minLength} · сейчас {charCount}</span>
                         ) : (
-                            <span style={{ color: "var(--success)" }}>{charCount} characters ✓</span>
+                            <span style={{ color: "var(--success)" }}>{charCount} символов ✓</span>
                         )}
                     </span>
                     <button
@@ -122,7 +122,7 @@ export function FreeTextExercise({
                             fontFamily: "var(--font-mono)",
                         }}
                     >
-                        <Icon name="mic" size="xs" /> Voice
+                        <Icon name="mic" size="xs" /> Голос
                     </button>
                 </div>
             </div>
@@ -146,7 +146,7 @@ export function FreeTextExercise({
                             fontWeight: 500,
                         }}
                     >
-                        Scoring criteria
+                        Критерии оценки
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 13, lineHeight: 1.8 }}>
                         {content.evaluation_criteria.map((criterion, idx) => (
@@ -169,7 +169,7 @@ export function FreeTextExercise({
                 <ExerciseActionFooter
                     onSkip={onSkip}
                     onSubmit={() => onSubmit({ text })}
-                    submitLabel="Submit"
+                    submitLabel="Отправить"
                     canSubmit={isValidLength}
                     isSubmitting={isSubmitting}
                 />

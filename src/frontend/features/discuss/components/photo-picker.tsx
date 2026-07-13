@@ -59,11 +59,11 @@ export function PhotoPicker({ files, onChange, disabled = false }: PhotoPickerPr
         }
 
         if (rejectedLimit) {
-            setRejectionMessage(`You can attach up to ${MAXIMUM_PHOTO_COUNT} photos`);
+            setRejectionMessage(`Можно прикрепить не больше ${MAXIMUM_PHOTO_COUNT} фото`);
         } else if (rejectedSize) {
-            setRejectionMessage("Each photo must be 5 MB or less");
+            setRejectionMessage("Каждое фото должно быть не больше 5 МБ");
         } else if (rejectedType) {
-            setRejectionMessage("Only PNG, JPG, or WEBP files are allowed");
+            setRejectionMessage("Разрешены только файлы PNG, JPG или WEBP");
         } else {
             setRejectionMessage(null);
         }
@@ -85,7 +85,7 @@ export function PhotoPicker({ files, onChange, disabled = false }: PhotoPickerPr
                     disabled={disabled || isAtMaximum}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    Add photo
+                    Добавить фото
                 </Button>
                 <span className="text-xs" style={{ color: "var(--ink-3)" }}>
                     {files.length}/{MAXIMUM_PHOTO_COUNT}
@@ -114,7 +114,7 @@ export function PhotoPicker({ files, onChange, disabled = false }: PhotoPickerPr
                             {!disabled && (
                                 <button
                                     type="button"
-                                    aria-label="Delete photo"
+                                    aria-label="Удалить фото"
                                     onClick={() => removeFile(index)}
                                     style={{
                                         position: "absolute",
@@ -142,7 +142,7 @@ export function PhotoPicker({ files, onChange, disabled = false }: PhotoPickerPr
 
             {isAtMaximum && (
                 <span className="text-xs" style={{ color: "var(--ink-3)" }}>
-                    Photo limit reached
+                    Достигнут лимит фото
                 </span>
             )}
             {rejectionMessage && <span className="text-xs text-bad">{rejectionMessage}</span>}

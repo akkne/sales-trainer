@@ -22,8 +22,8 @@ export default function LoginPage() {
                 <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h1 className="auth-heading">Welcome back</h1>
-                <p className="auth-sub">Log in and keep building your skills</p>
+                <h1 className="auth-heading">С возвращением</h1>
+                <p className="auth-sub">Войди и продолжай прокачивать навыки</p>
 
                 <form onSubmit={handleSubmit} className="col gap-3">
                     <input
@@ -36,7 +36,7 @@ export default function LoginPage() {
                     />
                     <input
                         type="password"
-                        placeholder="Password"
+                        placeholder="Пароль"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         required
@@ -45,7 +45,7 @@ export default function LoginPage() {
 
                     {loginMutation.isError && (
                         <p className="auth-error">
-                            {loginMutation.error?.message ?? "Login failed"}
+                            {loginMutation.error?.message ?? "Не удалось войти"}
                         </p>
                     )}
 
@@ -55,19 +55,19 @@ export default function LoginPage() {
                         className="btn btn-dark btn-block btn-lg"
                         style={{ marginTop: 4 }}
                     >
-                        {loginMutation.isPending ? "Logging in..." : "Log in"}
+                        {loginMutation.isPending ? "Выполняется вход..." : "Войти"}
                     </button>
                 </form>
 
                 <div className="auth-or">
-                    <span>or</span>
+                    <span>или</span>
                 </div>
 
                 <GoogleLoginButton />
 
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    No account?{" "}
-                    <Link href="/register">Sign up</Link>
+                    Нет аккаунта?{" "}
+                    <Link href="/register">Зарегистрироваться</Link>
                 </p>
             </div>
         </div>

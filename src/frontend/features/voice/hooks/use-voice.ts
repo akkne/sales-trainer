@@ -108,12 +108,12 @@ export function useVoice(options: UseVoiceOptions) {
                 const limit = Math.round(((body.limitSeconds as number) ?? 0) / 60);
                 throw new Error(
                     period === "monthly"
-                        ? `Monthly call limit (${limit} min) reached`
-                        : `Daily call limit (${limit} min) reached`,
+                        ? `Месячный лимит звонков (${limit} мин) исчерпан`
+                        : `Дневной лимит звонков (${limit} мин) исчерпан`,
                 );
             }
             if (!response.ok) {
-                throw new Error(`Voice request failed: ${response.status}`);
+                throw new Error(`Ошибка голосового запроса: ${response.status}`);
             }
 
             audioPlayerRef.current?.beginQueue();
@@ -145,7 +145,7 @@ export function useVoice(options: UseVoiceOptions) {
             }
         } catch (error) {
             if ((error as Error).name !== "AbortError" && !controller.signal.aborted) {
-                onError?.(error instanceof Error ? error : new Error("Voice processing failed"));
+                onError?.(error instanceof Error ? error : new Error("Не удалось обработать голос"));
                 setState("error");
             }
             speechClientRef.current?.resume();
@@ -174,14 +174,14 @@ export function useVoice(options: UseVoiceOptions) {
                 currentSessionIdRef.current = activeSessionId;
                 onSessionCreated?.(activeSessionId);
             } catch (error) {
-                onError?.(error instanceof Error ? error : new Error("Failed to create session"));
+                onError?.(error instanceof Error ? error : new Error("Не удалось создать сессию"));
                 setState("error");
                 return;
             }
         }
 
         if (!activeSessionId) {
-            onError?.(new Error("No session available"));
+            onError?.(new Error("Сессия недоступна"));
             setState("error");
             return;
         }
@@ -231,7 +231,7 @@ export function useVoice(options: UseVoiceOptions) {
 
             await speechClientRef.current.start();
         } catch (error) {
-            onError?.(error instanceof Error ? error : new Error("Voice initialization failed"));
+            onError?.(error instanceof Error ? error : new Error("Не удалось инициализировать голосовой режим"));
             setState("error");
         }
     }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionCreated, onError, processSpeech]);

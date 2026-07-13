@@ -38,10 +38,10 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                             <Icon name="message" size="lg" className="text-ink-4" />
                         </div>
                         <p className="text-sm font-medium text-ink-3">
-                            No messages
+                            Нет сообщений
                         </p>
                         <p className="text-xs text-ink-4 mt-1">
-                            Start a conversation with a friend!
+                            Начни переписку с другом!
                         </p>
                     </div>
                 ) : (
@@ -75,10 +75,10 @@ export function ChatsPane({ selectedConversationId, onSelectConversation }: Chat
                             <Icon name="message" size="lg" className="text-ink-4" />
                         </div>
                         <p className="text-sm font-medium text-ink">
-                            Select a chat on the left
+                            Выбери чат слева
                         </p>
                         <p className="text-xs text-ink-4 mt-1">
-                            Or start a new one by clicking the chat icon on a friend's card
+                            Или начни новый — нажми на иконку чата в карточке друга
                         </p>
                     </div>
                 )}

@@ -40,9 +40,9 @@ export function RewriteExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--rewrite">Rewrite</span></div>
+            <div><span className="ex-chip ex-chip--rewrite">Перепиши</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                {content.instruction || "Rewrite this line better:"}
+                {content.instruction || "Перепиши эту реплику лучше:"}
             </h2>
 
             <div
@@ -68,7 +68,7 @@ export function RewriteExercise({
                 }}
             >
                 <textarea
-                    placeholder="Your version…"
+                    placeholder="Твой вариант…"
                     value={rewrittenText}
                     onChange={(e) => setRewrittenText(e.target.value)}
                     disabled={isAnswered}
@@ -98,9 +98,9 @@ export function RewriteExercise({
                 >
                     <span>
                         {charCount < minLength ? (
-                            <span style={{ color: "var(--amber)" }}>min {minLength} · now {charCount}</span>
+                            <span style={{ color: "var(--amber)" }}>мин. {minLength} · сейчас {charCount}</span>
                         ) : (
-                            <span style={{ color: "var(--success)" }}>{charCount} characters ✓</span>
+                            <span style={{ color: "var(--success)" }}>{charCount} символов ✓</span>
                         )}
                     </span>
                 </div>
@@ -125,7 +125,7 @@ export function RewriteExercise({
                             fontWeight: 500,
                         }}
                     >
-                        Scoring criteria
+                        Критерии оценки
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 13, lineHeight: 1.8 }}>
                         {content.evaluation_criteria.map((criterion, idx) => (
@@ -145,7 +145,7 @@ export function RewriteExercise({
                     }}
                 >
                     <p style={{ margin: 0, fontSize: 14, color: "var(--heart)" }}>
-                        An error occurred while checking. Please try again.
+                        Произошла ошибка при проверке. Попробуй ещё раз.
                     </p>
                 </div>
             )}
@@ -163,7 +163,7 @@ export function RewriteExercise({
                 <ExerciseActionFooter
                     onSkip={onSkip}
                     onSubmit={() => onSubmit({ rewrittenText })}
-                    submitLabel="Submit"
+                    submitLabel="Отправить"
                     canSubmit={isValidLength}
                     isSubmitting={isSubmitting}
                 />

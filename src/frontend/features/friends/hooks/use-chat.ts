@@ -39,7 +39,7 @@ export function useCreateConversation() {
         onError: (error) => {
             const message = (error as Error).message;
             clientLogger.warn("Failed to open chat", { error: message });
-            toast.error(`Couldn't open chat: ${message}`);
+            toast.error(`Не удалось открыть чат: ${message}`);
         },
     });
 }
@@ -69,7 +69,7 @@ export function useSendChatMessage() {
                 conversationId: variables.conversationId,
                 error: message,
             });
-            toast.error(`Couldn't send message: ${message}`);
+            toast.error(`Не удалось отправить сообщение: ${message}`);
         },
     });
 }

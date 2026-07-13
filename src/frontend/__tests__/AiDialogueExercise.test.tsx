@@ -42,8 +42,8 @@ describe("AiDialogueExercise", () => {
                 submittedResult={null}
             />
         );
-        expect(screen.getByText("Text")).toBeTruthy();
-        expect(screen.getByText("Voice")).toBeTruthy();
+        expect(screen.getByText("Текст")).toBeTruthy();
+        expect(screen.getByText("Голос")).toBeTruthy();
         // User speaks first — no greeting request fired on mount.
         expect(postMock).not.toHaveBeenCalled();
     });
@@ -58,9 +58,9 @@ describe("AiDialogueExercise", () => {
                 submittedResult={null}
             />
         );
-        fireEvent.click(screen.getByText("Text"));
-        expect(screen.getByPlaceholderText("Your line…")).toBeTruthy();
-        expect(screen.getByText("Write your first line")).toBeTruthy();
+        fireEvent.click(screen.getByText("Текст"));
+        expect(screen.getByPlaceholderText("Твоя реплика…")).toBeTruthy();
+        expect(screen.getByText("Напиши первую реплику")).toBeTruthy();
     });
 
     it("sends the user's first message to the chat endpoint", async () => {
@@ -74,8 +74,8 @@ describe("AiDialogueExercise", () => {
                 submittedResult={null}
             />
         );
-        fireEvent.click(screen.getByText("Text"));
-        const input = screen.getByPlaceholderText("Your line…") as HTMLInputElement;
+        fireEvent.click(screen.getByText("Текст"));
+        const input = screen.getByPlaceholderText("Твоя реплика…") as HTMLInputElement;
         fireEvent.change(input, { target: { value: "Hi, this is Max from FinTech Pro" } });
         fireEvent.keyDown(input, { key: "Enter" });
 
@@ -96,7 +96,7 @@ describe("AiDialogueExercise", () => {
                 submittedResult={null}
             />
         );
-        const voiceButton = screen.getByText("Voice").closest("button") as HTMLButtonElement;
+        const voiceButton = screen.getByText("Голос").closest("button") as HTMLButtonElement;
         expect(voiceButton.disabled).toBe(true);
     });
 });

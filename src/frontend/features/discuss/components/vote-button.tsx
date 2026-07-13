@@ -23,7 +23,7 @@ export function VoteButton({ count, active, onToggle, disabled }: VoteButtonProp
                 }}
                 disabled={disabled}
                 aria-pressed={active}
-                aria-label={active ? "Remove vote" : "Upvote"}
+                aria-label={active ? "Убрать голос" : "Голосовать"}
             >
                 <Icon name="chevron-up" size={16} />
             </button>

@@ -18,8 +18,8 @@ const PERSONA_LABELS: Record<string, string> = {
     sdr: "SDR",
     account_executive: "Account Executive",
     account_manager: "Account Manager",
-    founder: "Founder",
-    other: "Other",
+    founder: "Основатель",
+    other: "Другое",
 };
 
 /** Derive user initials from display name (up to 2 chars). */
@@ -162,7 +162,7 @@ export default function ProfilePage() {
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>
-                            Edit profile
+                            Редактировать профиль
                         </button>
                     </div>
                 </div>
@@ -178,7 +178,7 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Accuracy</div>
+                            <div className="pv2-stat-label">Точность</div>
                             <div className="pv2-stat-value">
                                 {profileStats.averageExerciseScore}
                                 <small>%</small>
@@ -195,10 +195,10 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Best streak</div>
+                            <div className="pv2-stat-label">Лучшая серия</div>
                             <div className="pv2-stat-value">
                                 {profileStats.longestStreakDayCount}
-                                <small>d</small>
+                                <small>д</small>
                             </div>
                         </div>
                     </div>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Skills</div>
+                            <div className="pv2-stat-label">Навыки</div>
                             <div className="pv2-stat-value">{profileStats.completedSkillCount}</div>
                         </div>
                     </div>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                             </svg>
                         </div>
                         <div>
-                            <div className="pv2-stat-label">Lessons</div>
+                            <div className="pv2-stat-label">Уроки</div>
                             <div className="pv2-stat-value">{totalLessonsDone}</div>
                         </div>
                     </div>
@@ -237,13 +237,13 @@ export default function ProfilePage() {
                     {/* Left: Enrolled skills — recent activity, no toggles */}
                     <div className="pv2-card">
                         <div className="pv2-card-head">
-                            <span className="pv2-card-title">Enrolled skills</span>
+                            <span className="pv2-card-title">Изучаемые навыки</span>
                             <button
                                 type="button"
                                 className="pv2-manage-link"
                                 onClick={() => setManageOpen(true)}
                             >
-                                Manage
+                                Управлять
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m9 18 6-6-6-6"/>
                                 </svg>
@@ -258,18 +258,18 @@ export default function ProfilePage() {
                             </div>
                         ) : !allSkills || allSkills.length === 0 ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                                No skills added yet. Contact your administrator.
+                                Пока нет навыков. Обратись к администратору.
                             </p>
                         ) : displaySkills.length === 0 ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                                No enrolled skills yet.{" "}
+                                Пока нет изучаемых навыков.{" "}
                                 <button
                                     type="button"
                                     className="pv2-manage-link"
                                     style={{ fontSize: 13 }}
                                     onClick={() => setManageOpen(true)}
                                 >
-                                    Manage →
+                                    Управлять →
                                 </button>
                             </p>
                         ) : (
@@ -302,7 +302,7 @@ export default function ProfilePage() {
                                                 />
                                             </div>
                                             <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                                                {skill.completedLessonCount}/{skill.totalLessonCount} lessons
+                                                {skill.completedLessonCount}/{skill.totalLessonCount} уроков
                                             </span>
                                         </Link>
                                     );
@@ -314,31 +314,31 @@ export default function ProfilePage() {
                     {/* Right: Voice minutes */}
                     <div className="pv2-card">
                         <div className="pv2-card-head">
-                            <span className="pv2-card-title">Voice minutes</span>
+                            <span className="pv2-card-title">Минуты озвучки</span>
                         </div>
 
                         {!hasVoiceQuota ? (
                             <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                                Voice calls are unlimited.
+                                Голосовые звонки без ограничений.
                             </p>
                         ) : (
                             <div className="pv2-quota-row">
                                 {voiceUsage.dailyLimitSeconds > 0 && (
                                     <VoiceBar
-                                        label="Today"
+                                        label="Сегодня"
                                         usedSeconds={voiceUsage.dailyUsedSeconds}
                                         limitSeconds={voiceUsage.dailyLimitSeconds}
                                         tone="violet"
-                                        resetNote="Resets daily"
+                                        resetNote="Обновляется ежедневно"
                                     />
                                 )}
                                 {voiceUsage.monthlyLimitSeconds > 0 && (
                                     <VoiceBar
-                                        label="This month"
+                                        label="В этом месяце"
                                         usedSeconds={voiceUsage.monthlyUsedSeconds}
                                         limitSeconds={voiceUsage.monthlyLimitSeconds}
                                         tone="green"
-                                        resetNote="Resets monthly"
+                                        resetNote="Обновляется ежемесячно"
                                     />
                                 )}
                             </div>
@@ -408,7 +408,7 @@ function VoiceBar({
             <div className="pv2-quota-head">
                 <span>{label}</span>
                 <span className={`pv2-quota-num${isExceeded ? " exceeded" : ""}`}>
-                    {usedMin} / {limitMin} min
+                    {usedMin} / {limitMin} мин
                 </span>
             </div>
             <div className="pv2-quota-bar">
@@ -416,8 +416,8 @@ function VoiceBar({
             </div>
             {isExceeded ? (
                 <span className="pv2-quota-note warn">
-                    Limit reached — calls resume{" "}
-                    {label === "Today" ? "tomorrow" : "next month"}
+                    Лимит исчерпан — звонки возобновятся{" "}
+                    {label === "Сегодня" ? "завтра" : "в следующем месяце"}
                 </span>
             ) : (
                 <span className="pv2-quota-note">{resetNote}</span>

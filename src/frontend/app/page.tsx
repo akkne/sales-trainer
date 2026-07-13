@@ -19,26 +19,26 @@ const FEATURE_LIST: {
     {
         icon: "phone",
         tint: "primary",
-        title: "Real scenarios",
-        description: "The AI prospect argues, doubts, and interrupts — just like a real decision-maker.",
+        title: "Реальные сценарии",
+        description: "ИИ-клиент спорит, сомневается и перебивает — совсем как настоящий ЛПР.",
     },
     {
         icon: "mic",
         tint: "success",
-        title: "Voice calls",
-        description: "Practice cold calls by voice and get a breakdown of every line.",
+        title: "Голосовые звонки",
+        description: "Отрабатывай холодные звонки голосом и получай разбор каждой реплики.",
     },
     {
         icon: "zap",
         tint: "violet",
-        title: "XP, streaks & leagues",
-        description: "Game mechanics keep you sharp and turn skills into muscle memory.",
+        title: "XP, серии и лиги",
+        description: "Игровые механики держат в тонусе и превращают навыки в привычку.",
     },
     {
         icon: "book",
         tint: "amber",
-        title: "Technique guidebook",
-        description: "SPIN, price anchoring, objection handling — with examples.",
+        title: "Справочник техник",
+        description: "SPIN, ценовое якорение, работа с возражениями — с примерами.",
     },
 ];
 
@@ -58,7 +58,7 @@ export default function LandingPage() {
             <header className="land-top container">
                 <Wordmark size={28} />
                 <Link href="/login" className="btn btn-ghost">
-                    Log in
+                    Войти
                 </Link>
             </header>
 
@@ -73,26 +73,26 @@ export default function LandingPage() {
                     }}
                 >
                     <Icon name="bolt" size={15} />
-                    Next-generation sales trainer
+                    Тренажёр продаж нового поколения
                 </span>
 
                 <h1 className="display land-title">
-                    Level up your sales
+                    Прокачай свои продажи
                     <br />
-                    <span className="grad-text">in 5 minutes</span> a day
+                    <span className="grad-text">за 5 минут</span> в день
                 </h1>
 
                 <p
                     className="lead"
                     style={{ maxWidth: 560, margin: "0 auto 32px", textWrap: "pretty" }}
                 >
-                    Learn from real AI dialogues, practice voice calls, and climb
-                    the leagues alongside other sales reps.
+                    Учись на реальных диалогах с ИИ, отрабатывай голосовые звонки
+                    и поднимайся в лигах вместе с другими продавцами.
                 </p>
 
                 <div className="row gap-3 center wrap">
                     <Link href="/register" className="btn btn-dark btn-lg">
-                        Get started free
+                        Начать бесплатно
                         <Icon name="arrow-right" size={18} />
                     </Link>
                 </div>

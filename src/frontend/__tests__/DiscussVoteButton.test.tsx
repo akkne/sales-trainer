@@ -32,11 +32,11 @@ describe("VoteButton", () => {
 describe("discuss format helpers", () => {
     it("formatTimeAgo returns hours for a few-hours-old date", () => {
         const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-        expect(formatTimeAgo(threeHoursAgo)).toBe("3 h");
+        expect(formatTimeAgo(threeHoursAgo)).toBe("3 ч");
     });
 
     it("formatTimeAgo returns 'just now' for now", () => {
-        expect(formatTimeAgo(new Date().toISOString())).toBe("just now");
+        expect(formatTimeAgo(new Date().toISOString())).toBe("только что");
     });
 
     it("pluralizeRu picks the correct English plural form", () => {

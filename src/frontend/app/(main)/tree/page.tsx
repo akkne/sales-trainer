@@ -34,7 +34,7 @@ function chipStyle(kind: string) {
 function Spinner() {
     return (
         <div
-            aria-label="Loading"
+            aria-label="Загрузка"
             style={{
                 width: 36,
                 height: 36,
@@ -54,15 +54,15 @@ function SkillStatusNode({ skill }: { skill: SkillTreeNode }) {
 
     if (completed) {
         return (
-            <span className="path-skill-node done" aria-label="Completed">
+            <span className="path-skill-node done" aria-label="Завершено">
                 ✓
             </span>
         );
     }
     if (inProgress) {
-        return <span className="path-skill-node in-progress" aria-label="In progress" />;
+        return <span className="path-skill-node in-progress" aria-label="В процессе" />;
     }
-    return <span className="path-skill-node available" aria-label="Available" />;
+    return <span className="path-skill-node available" aria-label="Доступно" />;
 }
 
 // ─── Skill row inside accordion ──────────────────────────────────────────────
@@ -85,7 +85,7 @@ function PathSkillRow({
             <SkillStatusNode skill={skill} />
             <span className="path-skill-name">{skill.title}</span>
             {isCurrentlyActive && !selected && (
-                <span className="path-skill-now">now</span>
+                <span className="path-skill-now">сейчас</span>
             )}
         </button>
     );
@@ -180,7 +180,7 @@ function PathLeftColumn({
     return (
         <aside className="path-left">
             <div className="path-left-head">
-                <span className="path-left-title">Learning path</span>
+                <span className="path-left-title">Путь обучения</span>
                 {activeStageLabel && (
                     <span className="path-stage-pill">
                         <span className="path-stage-pill-dot" aria-hidden="true" />
@@ -207,9 +207,9 @@ function PathLeftColumn({
                     </>
                 ) : enrolledSkills.length === 0 ? (
                     <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", paddingTop: 20, lineHeight: 1.5 }}>
-                        No active skills.{" "}
+                        Нет активных навыков.{" "}
                         <Link href="/profile" style={{ color: "var(--primary)", fontWeight: 600 }}>
-                            Add in profile
+                            Добавить в профиле
                         </Link>
                     </p>
                 ) : (
@@ -249,10 +249,10 @@ function lessonNodeClass(status: LessonSummary["status"]) {
 }
 
 function lessonStatusLabel(status: LessonSummary["status"]) {
-    if (status === "completed") return "Completed";
-    if (status === "in_progress") return "In progress";
-    if (status === "available") return "Available";
-    return "Locked";
+    if (status === "completed") return "Завершён";
+    if (status === "in_progress") return "В процессе";
+    if (status === "available") return "Доступен";
+    return "Заблокирован";
 }
 
 function lessonStatusClass(status: LessonSummary["status"]) {
@@ -262,9 +262,9 @@ function lessonStatusClass(status: LessonSummary["status"]) {
 }
 
 function lessonActionLabel(lesson: LessonSummary) {
-    if (lesson.status === "completed") return "Review";
-    if (lesson.status === "in_progress") return "Continue";
-    return "Start";
+    if (lesson.status === "completed") return "Повторить";
+    if (lesson.status === "in_progress") return "Продолжить";
+    return "Начать";
 }
 
 // ─── Center column: skill detail + lesson timeline ───────────────────────────
@@ -295,9 +295,9 @@ function PathCenterColumn({
     const skillStatus = skillNode?.status ?? "available";
 
     function skillStatusLabel(s: typeof skillStatus) {
-        if (s === "completed") return "Mastered";
-        if (s === "in_progress") return "In progress";
-        return "Available";
+        if (s === "completed") return "Освоено";
+        if (s === "in_progress") return "В процессе";
+        return "Доступен";
     }
     function skillStatusClass(s: typeof skillStatus) {
         if (s === "completed") return "path-skill-status done";
@@ -312,14 +312,14 @@ function PathCenterColumn({
         <div className="path-center">
             <div className="path-center-scroll">
                 {/* Breadcrumb */}
-                <nav className="path-breadcrumb" aria-label="Breadcrumb">
+                <nav className="path-breadcrumb" aria-label="Навигация по разделам">
                     <span className="path-bc-stage">{stageLabel}</span>
                     <span className="path-bc-chev" aria-hidden="true">
                         <Icon name="chevron-right" size={13} />
                     </span>
                     <span className="path-bc-skill">{skillTitle}</span>
                     <span className="path-bc-meta">
-                        {completedCount} / {totalCount} lessons
+                        {completedCount} / {totalCount} уроков
                     </span>
                 </nav>
 
@@ -349,22 +349,22 @@ function PathCenterColumn({
                     {/* 4-cell stat grid */}
                     <div className="path-stat-grid" role="list">
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Lessons</div>
+                            <div className="path-stat-label">Уроки</div>
                             <div className="path-stat-val">{totalCount}</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Completed</div>
+                            <div className="path-stat-label">Завершено</div>
                             <div className="path-stat-val">{completedCount}</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Accuracy</div>
+                            <div className="path-stat-label">Точность</div>
                             {/* bestScore is per-lesson; aggregate not available from API — show dash */}
-                            <div className="path-stat-val" aria-label="No data">—</div>
+                            <div className="path-stat-val" aria-label="Нет данных">—</div>
                         </div>
                         <div className="path-stat-cell" role="listitem">
-                            <div className="path-stat-label">Time</div>
+                            <div className="path-stat-label">Время</div>
                             {/* time_spent not returned by backend — omit gracefully */}
-                            <div className="path-stat-val" aria-label="No data">—</div>
+                            <div className="path-stat-val" aria-label="Нет данных">—</div>
                         </div>
                     </div>
                 </div>
@@ -377,8 +377,8 @@ function PathCenterColumn({
                 ) : sorted.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "48px 0", color: "var(--ink-4)" }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>📂</div>
-                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No lessons added yet</p>
-                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Ask your administrator to add lessons</p>
+                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Уроки пока не добавлены</p>
+                        <p style={{ fontSize: 13, color: "var(--ink-4)" }}>Попроси администратора добавить уроки</p>
                     </div>
                 ) : (
                     <div className="path-timeline" role="list">
@@ -398,7 +398,7 @@ function PathCenterColumn({
                                 >
                                     {/* Node column */}
                                     <div className="path-tl-node-col">
-                                        <div className={lessonNodeClass(lesson.status)} aria-label={`Lesson ${i + 1}: ${lessonStatusLabel(lesson.status)}`}>
+                                        <div className={lessonNodeClass(lesson.status)} aria-label={`Урок ${i + 1}: ${lessonStatusLabel(lesson.status)}`}>
                                             <TimelineNodeLabel lesson={lesson} index={i} />
                                         </div>
                                     </div>
@@ -406,7 +406,7 @@ function PathCenterColumn({
                                     {/* Card */}
                                     <div className={"path-tl-card" + (lesson.status === "in_progress" ? " active" : "")}>
                                         <div className="path-tl-card-top">
-                                            <span className="path-tl-eyebrow">LESSON {i + 1}</span>
+                                            <span className="path-tl-eyebrow">УРОК {i + 1}</span>
                                             <span className={lessonStatusClass(lesson.status)}>
                                                 {lessonStatusLabel(lesson.status)}
                                             </span>
@@ -429,7 +429,7 @@ function PathCenterColumn({
                                                             className="btn btn-secondary"
                                                             style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
                                                         >
-                                                            Review
+                                                            Повторить
                                                         </button>
                                                     </Link>
                                                 </span>
@@ -444,7 +444,7 @@ function PathCenterColumn({
                                                 className="path-tl-chip"
                                                 style={chipStyle(chipKind)}
                                             >
-                                                {chipKind === "theory" ? "Theory" : "Practice"}
+                                                {chipKind === "theory" ? "Теория" : "Практика"}
                                             </span>
                                         </div>
                                     </div>
@@ -457,14 +457,14 @@ function PathCenterColumn({
 
             {/* Floating action bar — shown when there is a resumable lesson */}
             {fabLesson && (
-                <div className="path-fab" role="complementary" aria-label="Quick start">
+                <div className="path-fab" role="complementary" aria-label="Быстрый старт">
                     <div className="path-fab-text">
-                        <span className="path-fab-eyebrow">Start next lesson</span>
+                        <span className="path-fab-eyebrow">Начать следующий урок</span>
                         <span className="path-fab-lesson">{fabLesson.title}</span>
                     </div>
                     <Link href={`/session/${fabLesson.lessonId}`}>
                         <button className="path-fab-btn">
-                            Start →
+                            Начать →
                         </button>
                     </Link>
                 </div>
@@ -492,25 +492,25 @@ function PathRightColumn({
                 <div className="path-right-icon" aria-hidden="true">
                     <Icon name="clock" size={16} />
                 </div>
-                <span className="path-right-title">Overview</span>
+                <span className="path-right-title">Обзор</span>
             </div>
 
             <div className="path-right-scroll">
                 {!skill ? (
                     <p style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
-                        Select a skill on the left to see an overview.
+                        Выбери навык слева, чтобы увидеть обзор.
                     </p>
                 ) : (
                     <>
                         {/* About the skill */}
                         <div className="path-overview-section">
-                            <div className="path-overview-label">About</div>
+                            <div className="path-overview-label">О навыке</div>
                             {/* Skill description not returned by backend SkillTreeNode —
                                 showing progress summary as the "about" content instead */}
                             <p className="path-overview-body">
-                                <strong>{skill.title}</strong> — {progressPct}% completed.
-                                {skill.totalLessonCount} {pluralLessons(skill.totalLessonCount)} total,
-                                {skill.completedLessonCount} done.
+                                <strong>{skill.title}</strong> — завершено {progressPct}%.
+                                Всего {pluralLessons(skill.totalLessonCount)}: {skill.totalLessonCount},
+                                выполнено: {skill.completedLessonCount}.
                             </p>
                         </div>
 
@@ -531,8 +531,8 @@ function PathRightColumn({
                             }}>
                                 <span style={{ fontSize: 18 }}>✓</span>
                                 <div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--success)" }}>Skill mastered</div>
-                                    <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>All lessons completed</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--success)" }}>Навык освоен</div>
+                                    <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Все уроки завершены</div>
                                 </div>
                             </div>
                         )}
@@ -544,7 +544,7 @@ function PathRightColumn({
 }
 
 function pluralLessons(n: number) {
-    return n === 1 ? "lesson" : "lessons";
+    return n === 1 ? "урок" : "уроков";
 }
 
 // ─── Page root ───────────────────────────────────────────────────────────────
@@ -566,7 +566,7 @@ export default function SkillTreePage() {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
                 <ErrorState
-                    title="Failed to load skill tree"
+                    title="Не удалось загрузить дерево навыков"
                     onRetry={() => refetch()}
                 />
             </div>
@@ -609,10 +609,10 @@ export default function SkillTreePage() {
                     <div style={{ textAlign: "center", color: "var(--ink-4)", padding: 40 }}>
                         <div style={{ fontSize: 40, marginBottom: 12 }}>🧭</div>
                         <p style={{ fontSize: 15, fontWeight: 700, color: "var(--ink-2)", marginBottom: 6 }}>
-                            Select a skill
+                            Выбери навык
                         </p>
                         <p style={{ fontSize: 13, color: "var(--ink-4)", maxWidth: 240 }}>
-                            Click a skill on the left to see lessons
+                            Нажми на навык слева, чтобы увидеть уроки
                         </p>
                     </div>
                 </div>

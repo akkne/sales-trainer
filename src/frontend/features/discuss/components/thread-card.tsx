@@ -27,13 +27,13 @@ export function ThreadCard({ thread }: { thread: DiscussThreadSummary }) {
                 {(thread.isPinned || thread.isSolved || thread.isHot) && (
                     <div className="dsc-badges">
                         {thread.isPinned && (
-                            <span className="dsc-badge pinned">Pinned</span>
+                            <span className="dsc-badge pinned">Закреплено</span>
                         )}
                         {thread.isSolved && (
-                            <span className="dsc-badge solved">Solved</span>
+                            <span className="dsc-badge solved">Решено</span>
                         )}
                         {thread.isHot && (
-                            <span className="dsc-badge hot">Hot</span>
+                            <span className="dsc-badge hot">Популярное</span>
                         )}
                     </div>
                 )}
@@ -77,7 +77,7 @@ export function ThreadCard({ thread }: { thread: DiscussThreadSummary }) {
                             size={18}
                             circle
                         />
-                        {thread.authorName || "Anonymous"}
+                        {thread.authorName || "Аноним"}
                     </span>
 
                     <span className="dsc-meta-sep">·</span>

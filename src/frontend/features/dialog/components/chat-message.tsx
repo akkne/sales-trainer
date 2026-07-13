@@ -32,7 +32,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{message.content}</p>
                 </div>
                 {timeLabel && (
-                    <span className="dc-ts" aria-label={`Sent at ${timeLabel}`}>{timeLabel}</span>
+                    <span className="dc-ts" aria-label={`Отправлено в ${timeLabel}`}>{timeLabel}</span>
                 )}
             </div>
         </div>

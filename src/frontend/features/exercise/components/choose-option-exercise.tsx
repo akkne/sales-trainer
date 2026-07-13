@@ -53,7 +53,7 @@ export function ChooseOptionExercise({
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {/* Exercise type chip */}
-            <div><span className="ex-chip ex-chip--choice">Choose the answer</span></div>
+            <div><span className="ex-chip ex-chip--choice">Выбери ответ</span></div>
 
             {/* Context bubble — client speech (white bordered, left-tail) */}
             {content.situation && (
@@ -61,7 +61,7 @@ export function ChooseOptionExercise({
                     <GeoAvatar seed="prospect" size={48} />
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Client</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Клиент</span>
                         </div>
                         <div className="ex-bubble-client">
                             {content.situation}
@@ -71,7 +71,7 @@ export function ChooseOptionExercise({
             )}
 
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                Choose the best answer:
+                Выбери лучший ответ:
             </h2>
 
             <div className="col gap-3">
@@ -128,7 +128,7 @@ export function ChooseOptionExercise({
                     }}
                     canSubmit={selectedOptionIndex !== null}
                     isSubmitting={isSubmitting}
-                    keyboardHint="1–4 select · Enter — check"
+                    keyboardHint="1–4 выбор · Enter — проверить"
                 />
             )}
         </div>

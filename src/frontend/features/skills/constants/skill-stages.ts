@@ -12,16 +12,16 @@ export interface SkillStageMeta {
 }
 
 export const SKILL_STAGES: readonly SkillStageMeta[] = [
-    { key: "preparation", label: "Preparation", order: 1, accent: "var(--indigo)" },
-    { key: "discovery", label: "Discovery & offer", order: 2, accent: "#7C3AED" },
-    { key: "engagement", label: "Content & communication", order: 3, accent: "#0EA5E9" },
-    { key: "closing", label: "Closing", order: 4, accent: "#F97316" },
-    { key: "retention", label: "Retention", order: 5, accent: "#10B981" },
+    { key: "preparation", label: "Подготовка", order: 1, accent: "var(--indigo)" },
+    { key: "discovery", label: "Выявление потребности и оффер", order: 2, accent: "#7C3AED" },
+    { key: "engagement", label: "Контент и коммуникация", order: 3, accent: "#0EA5E9" },
+    { key: "closing", label: "Закрытие сделки", order: 4, accent: "#F97316" },
+    { key: "retention", label: "Удержание", order: 5, accent: "#10B981" },
 ];
 
 const FALLBACK_STAGE: SkillStageMeta = {
     key: "general",
-    label: "Other",
+    label: "Другое",
     order: 99,
     accent: "var(--ink-3)",
 };

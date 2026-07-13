@@ -8,27 +8,27 @@ import { Button } from "@/shared/components/button";
 import { Wordmark } from "@/shared/components/wordmark";
 
 const PERSONA_OPTIONS = [
-    { id: "sdr", label: "SDR", desc: "Cold outbound, qualification", shape: "square" },
-    { id: "account_executive", label: "Account Executive", desc: "Negotiations, closing", shape: "circle" },
-    { id: "account_manager", label: "Account Manager", desc: "Account growth, upsell", shape: "triangle" },
-    { id: "founder", label: "Founder", desc: "Founder-led sales", shape: "diamond" },
-    { id: "other", label: "Other", desc: "Sales in any form", shape: "arc" },
+    { id: "sdr", label: "SDR", desc: "Холодные звонки, квалификация", shape: "square" },
+    { id: "account_executive", label: "Account Executive", desc: "Переговоры, закрытие сделок", shape: "circle" },
+    { id: "account_manager", label: "Account Manager", desc: "Развитие клиентов, допродажи", shape: "triangle" },
+    { id: "founder", label: "Основатель", desc: "Продажи от лица основателя", shape: "diamond" },
+    { id: "other", label: "Другое", desc: "Продажи в любой форме", shape: "arc" },
 ];
 
 const SALES_TYPE_OPTIONS = [
     { id: "b2b_saas", label: "B2B SaaS" },
-    { id: "enterprise", label: "Enterprise / complex" },
-    { id: "smb", label: "SMB / transactional" },
-    { id: "services", label: "Services / consulting" },
-    { id: "agency", label: "Agency" },
-    { id: "other", label: "Other" },
+    { id: "enterprise", label: "Enterprise / сложные продажи" },
+    { id: "smb", label: "SMB / транзакционные" },
+    { id: "services", label: "Услуги / консалтинг" },
+    { id: "agency", label: "Агентство" },
+    { id: "other", label: "Другое" },
 ];
 
 const EXPERIENCE_OPTIONS = [
-    { id: "0-1", label: "< 1 year", desc: "just starting" },
-    { id: "1-3", label: "1–3 years", desc: "got a routine" },
-    { id: "3-5", label: "3–5 years", desc: "I get the system" },
-    { id: "5+", label: "5+ years", desc: "I lead a team" },
+    { id: "0-1", label: "< 1 года", desc: "только начинаю" },
+    { id: "1-3", label: "1–3 года", desc: "есть рутина" },
+    { id: "3-5", label: "3–5 лет", desc: "понимаю систему" },
+    { id: "5+", label: "5+ лет", desc: "руковожу командой" },
 ];
 
 const DEFAULT_SKILL_SLUG = "sales-basics";
@@ -112,7 +112,7 @@ export default function OnboardingPage() {
                     <span className="ob-step-label">{step + 1} / {totalSteps}</span>
                 </div>
                 <button className="ob-skip" onClick={handleSubmit} type="button">
-                    Skip
+                    Пропустить
                 </button>
             </div>
 
@@ -131,8 +131,8 @@ export default function OnboardingPage() {
                             >
                                 <div className="ob-step-head">
                                     <div className="ob-eyebrow">{STEP_LABELS[0]}</div>
-                                    <h1 className="ob-title">Who are you in sales?</h1>
-                                    <p className="ob-desc">We'll tailor scenarios to your role. You can change it later.</p>
+                                    <h1 className="ob-title">Кто ты в продажах?</h1>
+                                    <p className="ob-desc">Мы подберём сценарии под твою роль. Позже это можно изменить.</p>
                                 </div>
                                 <div className="ob-persona-grid">
                                     {PERSONA_OPTIONS.map((p) => {
@@ -169,7 +169,7 @@ export default function OnboardingPage() {
                             >
                                 <div className="ob-step-head">
                                     <div className="ob-eyebrow">{STEP_LABELS[1]}</div>
-                                    <h1 className="ob-title">What do you sell?</h1>
+                                    <h1 className="ob-title">Что ты продаёшь?</h1>
                                 </div>
                                 <div className="ob-sales-grid">
                                     {SALES_TYPE_OPTIONS.map((t) => {
@@ -200,7 +200,7 @@ export default function OnboardingPage() {
                             >
                                 <div className="ob-step-head">
                                     <div className="ob-eyebrow">{STEP_LABELS[2]}</div>
-                                    <h1 className="ob-title">How long have you been in sales?</h1>
+                                    <h1 className="ob-title">Сколько лет ты в продажах?</h1>
                                 </div>
                                 <div className="ob-exp-grid">
                                     {EXPERIENCE_OPTIONS.map((l) => {
@@ -232,8 +232,8 @@ export default function OnboardingPage() {
                             >
                                 <div className="ob-step-head">
                                     <div className="ob-eyebrow">{STEP_LABELS[3]}</div>
-                                    <h1 className="ob-title">Where do we start?</h1>
-                                    <p className="ob-desc">Pick 2–3 skills. The rest unlock as you go.</p>
+                                    <h1 className="ob-title">С чего начнём?</h1>
+                                    <p className="ob-desc">Выбери 2–3 навыка. Остальные откроются по ходу дела.</p>
                                 </div>
 
                                 {skillsLoading ? (
@@ -244,8 +244,8 @@ export default function OnboardingPage() {
                                     </div>
                                 ) : !allSkills || allSkills.length === 0 ? (
                                     <p style={{ textAlign: "center", color: "var(--ink-3)", fontSize: 14, lineHeight: 1.6 }}>
-                                        Skills didn't load yet. Hit "Get started" — they'll appear
-                                        in the skill tree and you can pick them there.
+                                        Навыки пока не загрузились. Нажми «Начать» — они появятся
+                                        в дереве навыков, и ты сможешь выбрать их там.
                                     </p>
                                 ) : (
                                     <div className="ob-skills-grid">
@@ -275,7 +275,7 @@ export default function OnboardingPage() {
 
                                 {completeOnboardingMutation.isError && (
                                     <p className="ob-error">
-                                        Something went wrong. Please try again.
+                                        Что-то пошло не так. Попробуй ещё раз.
                                     </p>
                                 )}
                             </motion.div>

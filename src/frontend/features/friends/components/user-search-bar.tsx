@@ -27,9 +27,9 @@ export function FriendSearchBar() {
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Find people by name…"
+                placeholder="Найти людей по имени…"
                 className="frd-search"
-                aria-label="Search users"
+                aria-label="Поиск пользователей"
                 autoComplete="off"
             />
 
@@ -87,7 +87,7 @@ export function FriendSearchBar() {
                             </div>
                         ))
                     ) : (
-                        <p className="frd-search-empty">No one found</p>
+                        <p className="frd-search-empty">Никого не найдено</p>
                     )}
                 </div>
             )}

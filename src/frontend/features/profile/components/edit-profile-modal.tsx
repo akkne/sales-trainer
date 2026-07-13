@@ -8,8 +8,8 @@ const PERSONA_OPTIONS: { value: string; label: string }[] = [
     { value: "sdr", label: "SDR" },
     { value: "account_executive", label: "Account Executive" },
     { value: "account_manager", label: "Account Manager" },
-    { value: "founder", label: "Founder" },
-    { value: "other", label: "Other" },
+    { value: "founder", label: "Основатель" },
+    { value: "other", label: "Другое" },
 ];
 
 interface EditProfileModalProps {
@@ -70,7 +70,7 @@ export function EditProfileModal({
             onClick={onClose}
             role="dialog"
             aria-modal="true"
-            aria-label="Edit profile"
+            aria-label="Редактировать профиль"
         >
             <form
                 className="modal fade-up"
@@ -79,12 +79,12 @@ export function EditProfileModal({
                 onSubmit={handleSubmit}
             >
                 <div className="modal-head">
-                    <h3 className="h3" style={{ margin: 0 }}>Edit profile</h3>
+                    <h3 className="h3" style={{ margin: 0 }}>Редактировать профиль</h3>
                     <button
                         type="button"
                         className="icon-btn"
                         onClick={onClose}
-                        aria-label="Close"
+                        aria-label="Закрыть"
                     >
                         <Icon name="close" size="md" />
                     </button>
@@ -115,10 +115,10 @@ export function EditProfileModal({
                                 onClick={uploading ? undefined : onPickPhoto}
                                 disabled={uploading}
                             >
-                                {uploading ? "Uploading…" : "Change photo"}
+                                {uploading ? "Загрузка…" : "Изменить фото"}
                             </button>
                             <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>
-                                PNG, JPG or WebP · up to 5 MB
+                                PNG, JPG или WebP · до 5 МБ
                             </span>
                             {uploadError && (
                                 <span style={{ fontSize: 11.5, color: "var(--heart)" }}>
@@ -137,13 +137,13 @@ export function EditProfileModal({
 
                     {/* Name */}
                     <label className="epm-field-label">
-                        Name
+                        Имя
                         <input
                             className="field"
                             type="text"
                             value={name}
                             maxLength={100}
-                            placeholder="Your name"
+                            placeholder="Твоё имя"
                             onChange={(e) => setName(e.target.value)}
                             autoFocus
                         />
@@ -151,13 +151,13 @@ export function EditProfileModal({
 
                     {/* Position / persona */}
                     <label className="epm-field-label">
-                        Position
+                        Должность
                         <select
                             className="field"
                             value={persona}
                             onChange={(e) => setPersona(e.target.value)}
                         >
-                            <option value="">Not set</option>
+                            <option value="">Не указано</option>
                             {PERSONA_OPTIONS.map((option) => (
                                 <option key={option.value} value={option.value}>
                                     {option.label}
@@ -168,17 +168,17 @@ export function EditProfileModal({
 
                     {isError && (
                         <p style={{ fontSize: 12, color: "var(--heart)", margin: 0, textAlign: "center" }}>
-                            Couldn&apos;t save. Please try again.
+                            Не удалось сохранить. Попробуй ещё раз.
                         </p>
                     )}
                 </div>
 
                 <div className="modal-foot" style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                     <button type="button" className="btn btn-ghost" onClick={onClose}>
-                        Cancel
+                        Отмена
                     </button>
                     <button type="submit" className="btn btn-primary" disabled={!canSave}>
-                        {isSaving ? "Saving…" : "Save"}
+                        {isSaving ? "Сохранение…" : "Сохранить"}
                     </button>
                 </div>
             </form>

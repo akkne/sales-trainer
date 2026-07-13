@@ -19,7 +19,7 @@ interface ExerciseActionFooterProps {
 export function ExerciseActionFooter({
     onSkip,
     onSubmit,
-    submitLabel = "Check",
+    submitLabel = "Проверить",
     canSubmit,
     isSubmitting,
     keyboardHint,
@@ -40,7 +40,7 @@ export function ExerciseActionFooter({
             <div className="session-foot-inner between grow">
                 {onSkip ? (
                     <button className="btn btn-ghost" onClick={onSkip} disabled={isSubmitting}>
-                        Skip
+                        Пропустить
                     </button>
                 ) : (
                     <span />

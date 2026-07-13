@@ -6,9 +6,9 @@ import { Icon, IconName } from "@/shared/components/icon";
 type Theme = "light" | "dark" | "system";
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: IconName }[] = [
-    { value: "light", label: "Light", icon: "sun" },
-    { value: "dark", label: "Dark", icon: "moon" },
-    { value: "system", label: "System", icon: "settings" },
+    { value: "light", label: "Светлая", icon: "sun" },
+    { value: "dark", label: "Тёмная", icon: "moon" },
+    { value: "system", label: "Системная", icon: "settings" },
 ];
 
 export function ThemeToggle() {
@@ -20,7 +20,7 @@ export function ThemeToggle() {
             style={{ boxShadow: "var(--sh-1)" }}
         >
             <div className="text-[10px] font-mono tracking-[1px] uppercase text-ink-4 mb-3">
-                Theme
+                Тема
             </div>
             <div className="flex gap-2">
                 {THEME_OPTIONS.map((option) => (

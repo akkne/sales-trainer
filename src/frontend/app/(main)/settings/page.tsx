@@ -15,7 +15,7 @@ type Theme = "light" | "dark";
 const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
     {
         value: "light",
-        label: "Light",
+        label: "Светлая",
         icon: (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="4"/>
@@ -25,7 +25,7 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = 
     },
     {
         value: "dark",
-        label: "Dark",
+        label: "Тёмная",
         icon: (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -60,14 +60,14 @@ export default function SettingsPage() {
             <div className="stg-inner">
                 {/* Header */}
                 <div className="stg-header">
-                    <h1 className="stg-title">Settings</h1>
-                    <p className="stg-sub">Manage appearance and account</p>
+                    <h1 className="stg-title">Настройки</h1>
+                    <p className="stg-sub">Управление внешним видом и аккаунтом</p>
                 </div>
 
                 {/* Appearance */}
                 <div className="stg-card">
-                    <p className="stg-card-title">Appearance</p>
-                    <div className="stg-seg" role="group" aria-label="Theme">
+                    <p className="stg-card-title">Внешний вид</p>
+                    <div className="stg-seg" role="group" aria-label="Тема">
                         {THEME_OPTIONS.map((opt) => (
                             <button
                                 key={opt.value}
@@ -85,12 +85,12 @@ export default function SettingsPage() {
 
                 {/* Notifications */}
                 <div className="stg-card">
-                    <p className="stg-card-title">Notifications</p>
+                    <p className="stg-card-title">Уведомления</p>
 
                     <div className="stg-toggle-row">
                         <div className="stg-toggle-body">
-                            <p className="stg-toggle-label">Practice reminders</p>
-                            <p className="stg-toggle-sub">Daily nudge to keep your streak</p>
+                            <p className="stg-toggle-label">Напоминания о практике</p>
+                            <p className="stg-toggle-sub">Ежедневное напоминание, чтобы не терять серию</p>
                         </div>
                         <button
                             type="button"
@@ -98,14 +98,14 @@ export default function SettingsPage() {
                             aria-checked={isPracticeRemindersEnabled}
                             className="stg-switch"
                             onClick={() => setPracticeRemindersEnabled(!isPracticeRemindersEnabled)}
-                            aria-label="Practice reminders"
+                            aria-label="Напоминания о практике"
                         />
                     </div>
 
                     <div className="stg-toggle-row">
                         <div className="stg-toggle-body">
-                            <p className="stg-toggle-label">Product updates</p>
-                            <p className="stg-toggle-sub">News about new skills and features</p>
+                            <p className="stg-toggle-label">Обновления продукта</p>
+                            <p className="stg-toggle-sub">Новости о новых навыках и функциях</p>
                         </div>
                         <button
                             type="button"
@@ -113,14 +113,14 @@ export default function SettingsPage() {
                             aria-checked={isProductUpdatesEnabled}
                             className="stg-switch"
                             onClick={() => setProductUpdatesEnabled(!isProductUpdatesEnabled)}
-                            aria-label="Product updates"
+                            aria-label="Обновления продукта"
                         />
                     </div>
                 </div>
 
                 {/* Account */}
                 <div className="stg-card">
-                    <p className="stg-card-title">Account</p>
+                    <p className="stg-card-title">Аккаунт</p>
 
                     {/* Email — read-only: no email-change flow in the app */}
                     <div className="stg-row">
@@ -139,11 +139,11 @@ export default function SettingsPage() {
                     {isAdmin && (
                         <div className="stg-row">
                             <div className="stg-row-body">
-                                <p className="stg-row-label">Admin panel</p>
-                                <p className="stg-row-sub">Manage content and users</p>
+                                <p className="stg-row-label">Панель администратора</p>
+                                <p className="stg-row-sub">Управление контентом и пользователями</p>
                             </div>
                             <Link href="/admin/skills" className="stg-row-action">
-                                Open
+                                Открыть
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m9 18 6-6-6-6"/>
                                 </svg>
@@ -162,7 +162,7 @@ export default function SettingsPage() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                     </svg>
-                    {logoutMutation.isPending ? "Logging out…" : "Log out"}
+                    {logoutMutation.isPending ? "Выходим…" : "Выйти"}
                 </button>
             </div>
         </div>

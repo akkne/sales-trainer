@@ -55,7 +55,7 @@ function ToastChip({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
             <button
                 type="button"
                 onClick={() => onDismiss(toast.id)}
-                aria-label="Dismiss notification"
+                aria-label="Закрыть уведомление"
                 className="flex-shrink-0 mt-0.5 text-ink-4 hover:text-ink-2 transition-colors"
             >
                 <Icon name="close" size="sm" />
@@ -76,7 +76,7 @@ export function Toaster() {
 
     return createPortal(
         <div
-            aria-label="Notifications"
+            aria-label="Уведомления"
             style={{
                 position: "fixed",
                 top: "max(1rem, env(safe-area-inset-top, 1rem))",

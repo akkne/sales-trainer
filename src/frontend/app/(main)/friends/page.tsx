@@ -74,7 +74,7 @@ function FriendsPageContent() {
         <div className="frd-screen">
             {/* ── Header ── */}
             <div className="frd-header">
-                <h1 className="frd-title">Friends</h1>
+                <h1 className="frd-title">Друзья</h1>
                 <div className="frd-search-wrap" ref={searchInputRef}>
                     <FriendSearchBar />
                 </div>
@@ -88,7 +88,7 @@ function FriendsPageContent() {
                     {(incomingRequests.length > 0 || outgoingRequests.length > 0) && (
                         <div>
                             <p className="frd-section-label">
-                                Requests
+                                Заявки
                                 {incomingRequestCount > 0 && (
                                     <span
                                         style={{
@@ -113,7 +113,7 @@ function FriendsPageContent() {
                             {outgoingRequests.length > 0 && (
                                 <>
                                     <p className="frd-section-label" style={{ marginTop: 16 }}>
-                                        Outgoing
+                                        Исходящие
                                     </p>
                                     {outgoingRequests.map((request) => (
                                         <FriendRequestCard key={request.friendshipId} request={request} />
@@ -124,7 +124,7 @@ function FriendsPageContent() {
                     )}
 
                     {/* All friends section */}
-                    <p className="frd-section-label">All friends</p>
+                    <p className="frd-section-label">Все друзья</p>
 
                     {friendsLoading ? (
                         <div className="frd-grid">
@@ -147,9 +147,9 @@ function FriendsPageContent() {
                             <div className="frd-empty-icon">
                                 <Icon name="users" size={20} />
                             </div>
-                            <p className="frd-empty-title">Find your first partner!</p>
+                            <p className="frd-empty-title">Найди своего первого напарника!</p>
                             <p className="frd-empty-sub">
-                                Use the search above to find colleagues
+                                Используй поиск выше, чтобы найти коллег
                             </p>
                         </div>
                     )}

@@ -15,9 +15,9 @@ import {
 } from "@/features/discuss/hooks/use-discuss";
 
 const SORTS: { id: DiscussSort; label: string }[] = [
-    { id: "hot",        label: "Popular" },
-    { id: "new",        label: "New" },
-    { id: "unanswered", label: "Unanswered" },
+    { id: "hot",        label: "Популярные" },
+    { id: "new",        label: "Новые" },
+    { id: "unanswered", label: "Без ответа" },
 ];
 
 export default function DiscussPage() {
@@ -46,13 +46,13 @@ export default function DiscussPage() {
                 {/* ── Header ── */}
                 <div className="dsc-header">
                     <div className="dsc-header-left">
-                        <h1 className="dsc-header-title">Discussions</h1>
+                        <h1 className="dsc-header-title">Обсуждения</h1>
                         <p className="dsc-header-sub">
-                            Ask questions, share scripts — the best answers rise to the top
+                            Задавай вопросы, делись скриптами — лучшие ответы поднимаются наверх
                         </p>
                     </div>
                     <Button variant="primary" iconLeft="plus" onClick={() => setShowNewThread(true)}>
-                        New question
+                        Новый вопрос
                     </Button>
                 </div>
 
@@ -69,7 +69,7 @@ export default function DiscussPage() {
                         <Icon name="search" className="lead-ic" size={18} />
                         <input
                             className="field"
-                            placeholder="Search discussions…"
+                            placeholder="Поиск по обсуждениям…"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
                         />
@@ -102,13 +102,13 @@ export default function DiscussPage() {
                             </div>
                         )}
                         {error && (
-                            <ErrorState title="Failed to load" message={error.message} onRetry={() => refetch()} />
+                            <ErrorState title="Не удалось загрузить" message={error.message} onRetry={() => refetch()} />
                         )}
                         {page && page.items.length === 0 && (
                             <div className="empty" style={{ paddingTop: 60 }}>
                                 <div className="ic"><Icon name="forum" size="lg" /></div>
-                                <h2 className="h4" style={{ marginBottom: 8 }}>No discussions yet</h2>
-                                <p className="small">Start the first thread — click "New question".</p>
+                                <h2 className="h4" style={{ marginBottom: 8 }}>Пока нет обсуждений</h2>
+                                <p className="small">Создай первую тему — нажми «Новый вопрос».</p>
                             </div>
                         )}
                         {page && page.items.length > 0 && (
@@ -127,28 +127,28 @@ export default function DiscussPage() {
 
                         {/* Community stats */}
                         <div className="dsc-sidebar-card">
-                            <p className="dsc-sidebar-title">Community</p>
+                            <p className="dsc-sidebar-title">Сообщество</p>
                             <div className="dsc-stats-grid">
                                 <div className="dsc-stat-cell">
                                     <span className="dsc-stat-value">{stats?.totalThreads ?? "—"}</span>
-                                    <span className="dsc-stat-label">Threads</span>
+                                    <span className="dsc-stat-label">Тем</span>
                                 </div>
                                 <div className="dsc-stat-cell">
                                     <span className="dsc-stat-value">{stats?.totalReplies ?? "—"}</span>
-                                    <span className="dsc-stat-label">Replies</span>
+                                    <span className="dsc-stat-label">Ответов</span>
                                 </div>
                                 <div className="dsc-stat-cell">
                                     <span className="dsc-stat-value green">
                                         {solvedPct !== null ? `${solvedPct}%` : "—"}
                                     </span>
-                                    <span className="dsc-stat-label">% solved</span>
+                                    <span className="dsc-stat-label">% решено</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Popular tags */}
                         <div className="dsc-sidebar-card">
-                            <p className="dsc-sidebar-title">Popular tags</p>
+                            <p className="dsc-sidebar-title">Популярные теги</p>
                             <div className="dsc-tag-cloud">
                                 {(popularTags ?? []).map((tag) => (
                                     <button
@@ -160,14 +160,14 @@ export default function DiscussPage() {
                                     </button>
                                 ))}
                                 {(!popularTags || popularTags.length === 0) && (
-                                    <span style={{ fontSize: 13, color: "var(--ink-3)" }}>No tags yet</span>
+                                    <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Пока нет тегов</span>
                                 )}
                             </div>
                         </div>
 
                         {/* Top authors */}
                         <div className="dsc-sidebar-card">
-                            <p className="dsc-sidebar-title">Top authors this week</p>
+                            <p className="dsc-sidebar-title">Топ авторов недели</p>
                             <div>
                                 {(stats?.topAuthorsOfWeek ?? []).map((author, index) => (
                                     <div key={author.authorId} className="dsc-author">
@@ -179,7 +179,7 @@ export default function DiscussPage() {
                                             circle
                                         />
                                         <span className="dsc-author-name">
-                                            {author.authorName || "Anonymous"}
+                                            {author.authorName || "Аноним"}
                                         </span>
                                         <span className="dsc-author-pts">
                                             <Icon name="arrow-up" size={12} />
@@ -188,7 +188,7 @@ export default function DiscussPage() {
                                     </div>
                                 ))}
                                 {(!stats || stats.topAuthorsOfWeek.length === 0) && (
-                                    <span style={{ fontSize: 13, color: "var(--ink-3)" }}>No data yet</span>
+                                    <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Пока нет данных</span>
                                 )}
                             </div>
                         </div>

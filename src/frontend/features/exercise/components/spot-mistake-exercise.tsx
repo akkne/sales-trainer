@@ -76,9 +76,9 @@ export function SpotMistakeExercise({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <div><span className="ex-chip ex-chip--spot">Spot the mistake</span></div>
+            <div><span className="ex-chip ex-chip--spot">Найди ошибку</span></div>
             <h2 className="h3" style={{ margin: 0, lineHeight: 1.3 }}>
-                Find the line where the salesperson made a mistake:
+                Найди реплику, где продавец допустил ошибку:
             </h2>
 
             <div
@@ -136,12 +136,12 @@ export function SpotMistakeExercise({
             {selectedLineIndex !== null && !isAnswered && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <label style={{ fontWeight: 500, fontSize: 14 }}>
-                        Explain why this is a mistake (optional):
+                        Объясни, почему это ошибка (необязательно):
                     </label>
                     <textarea
                         value={explanation}
                         onChange={(e) => setExplanation(e.target.value)}
-                        placeholder="Write your explanation..."
+                        placeholder="Напиши своё объяснение..."
                         style={{
                             width: "100%",
                             padding: 16,

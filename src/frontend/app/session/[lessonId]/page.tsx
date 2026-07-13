@@ -45,8 +45,8 @@ interface QueuedExercise {
 function formatSessionDuration(totalSeconds: number): string {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    if (minutes === 0) return `${seconds} sec`;
-    return `${minutes} min ${seconds} sec`;
+    if (minutes === 0) return `${seconds} сек`;
+    return `${minutes} мин ${seconds} сек`;
 }
 
 function SessionFlow({ lessonId }: SessionFlowProps) {
@@ -154,7 +154,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     if (!currentExercise) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "var(--ink-3)", background: "var(--bg)" }}>
-                No exercises found
+                Упражнения не найдены
             </div>
         );
     }
@@ -166,7 +166,7 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                 <button
                     className="icon-btn"
                     onClick={() => router.back()}
-                    aria-label="Exit"
+                    aria-label="Выйти"
                     style={{ flex: "none" }}
                 >
                     <Icon name="close" size={20} />
@@ -336,7 +336,7 @@ interface CompletionScreenProps {
     heading?: string;
 }
 
-function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebrow = "Lesson complete", heading = "Great work!" }: CompletionScreenProps) {
+function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebrow = "Урок завершён", heading = "Отличная работа!" }: CompletionScreenProps) {
     return (
         <div className="complete">
             <Confetti />
@@ -362,20 +362,20 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
                     <div className="cs">
                         <Icon name="bolt" size={22} style={{ color: "var(--primary)" }} />
                         <b>+{xp}</b>
-                        <span>XP earned</span>
+                        <span>получено XP</span>
                     </div>
                     {accuracyPercent !== undefined && (
                         <div className="cs">
                             <Icon name="target" size={22} style={{ color: "var(--success)" }} />
                             <b>{accuracyPercent}%</b>
-                            <span>accuracy</span>
+                            <span>точность</span>
                         </div>
                     )}
                     {durationSeconds > 0 && (
                         <div className="cs">
                             <Icon name="clock" size={22} style={{ color: "var(--violet)" }} />
                             <b>{formatSessionDuration(durationSeconds)}</b>
-                            <span>time</span>
+                            <span>время</span>
                         </div>
                     )}
                 </div>
@@ -386,7 +386,7 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
                     style={{ marginTop: 28 }}
                     onClick={onBack}
                 >
-                    Back to path
+                    Вернуться к пути
                     <Icon name="arrow-right" size={18} />
                 </button>
             </div>
@@ -443,8 +443,8 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
                 xp={xpEarned}
                 durationSeconds={durationSeconds}
                 onBack={() => router.back()}
-                eyebrow="Theory complete"
-                heading="Now you know more!"
+                eyebrow="Теория пройдена"
+                heading="Теперь ты знаешь больше!"
             />
         );
     }

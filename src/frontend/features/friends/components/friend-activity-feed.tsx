@@ -11,11 +11,11 @@ function formatRelativeTime(dateString: string): string {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMinutes < 1) return "just now";
-    if (diffMinutes < 60) return `${diffMinutes} min`;
-    if (diffHours < 24) return `${diffHours} h`;
-    if (diffDays < 7) return `${diffDays} d`;
-    return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    if (diffMinutes < 1) return "только что";
+    if (diffMinutes < 60) return `${diffMinutes} мин`;
+    if (diffHours < 24) return `${diffHours} ч`;
+    if (diffDays < 7) return `${diffDays} д`;
+    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 /** Derive initials from a display name for the activity avatar */
@@ -32,7 +32,7 @@ export function FriendActivityFeed() {
         <>
             {/* Rail header */}
             <div className="frd-rail-head">
-                <p className="frd-rail-title">Activity</p>
+                <p className="frd-rail-title">Активность</p>
             </div>
 
             <div className="frd-activity-scroll">
@@ -51,9 +51,9 @@ export function FriendActivityFeed() {
                         <div className="frd-empty-icon">
                             <Icon name="users" size={18} />
                         </div>
-                        <p className="frd-empty-title">Nothing yet</p>
+                        <p className="frd-empty-title">Пока ничего нет</p>
                         <p className="frd-empty-sub">
-                            Your friends' activity will appear here
+                            Здесь будет отображаться активность твоих друзей
                         </p>
                     </div>
                 ) : (

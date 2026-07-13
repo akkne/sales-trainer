@@ -45,7 +45,7 @@ export function FriendshipButton({
                 onMouseLeave={() => setHovered(false)}
                 onClick={() => removeFriendMutation.mutate(userId)}
             >
-                {hovered ? "Remove friend" : "Friends"}
+                {hovered ? "Удалить из друзей" : "Друзья"}
             </Button>
         );
     }
@@ -54,7 +54,7 @@ export function FriendshipButton({
         if (!friendshipId) {
             return (
                 <Button variant="secondary" size={size} fullWidth={fullWidth} disabled>
-                    Request sent
+                    Заявка отправлена
                 </Button>
             );
         }
@@ -69,7 +69,7 @@ export function FriendshipButton({
                 onMouseLeave={() => setHovered(false)}
                 onClick={() => cancelRequestMutation.mutate(friendshipId)}
             >
-                {hovered ? "Cancel request" : "Request sent"}
+                {hovered ? "Отменить заявку" : "Заявка отправлена"}
             </Button>
         );
     }
@@ -84,7 +84,7 @@ export function FriendshipButton({
                 loading={acceptRequestMutation.isPending}
                 onClick={() => acceptRequestMutation.mutate(friendshipId)}
             >
-                Accept
+                Принять
             </Button>
         );
     }
@@ -98,7 +98,7 @@ export function FriendshipButton({
             loading={sendRequestMutation.isPending}
             onClick={() => sendRequestMutation.mutate(userId)}
         >
-            Add
+            Добавить
         </Button>
     );
 }
