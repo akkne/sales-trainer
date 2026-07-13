@@ -71,7 +71,7 @@ export interface UpdateModeRequest {
 
 export interface AdminSkill {
     id: string;
-    slug: string;
+    iconicName: string;
     title: string;
 }
 

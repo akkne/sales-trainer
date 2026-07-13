@@ -116,8 +116,12 @@ CREATE TABLE "DialogModes" (
 
 `POST /admin/dialog/import` (`multipart/form-data`, `file=<JSON>`, ≤20 MB) loads
 whole dialog bundles with their modes in one file — the same import/template UX as
-content (Download Template + paste/upload on the `/admin/dialog` page). Bundles
-reference their skill by `skillIconicName`. Upsert is idempotent: bundles by
+content (Download Template + paste/upload on the `/admin/dialog` page). In the
+JSON, bundles reference their skill by the friendly `skillIconicName`; the admin
+page resolves it to a `skillId` (GUID) client-side before upload — the endpoint
+itself keys bundles by `skillId` because the ai-service does not own the `Skills`
+table. A bundle that already carries a `skillId` (e.g. a re-imported export)
+passes through untouched. Upsert is idempotent: bundles by
 `(skillId, title)`, modes by `(bundleId, key)`. Bad items (unknown skill, empty
 key/title) are skipped into `errors[]`; everything else is still written. See the
 import-shape contract in [API_CONTRACTS.md](API_CONTRACTS.md). Tested by

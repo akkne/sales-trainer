@@ -168,7 +168,12 @@ export default function AdminDialogPage() {
                     bundles.forEach((b, i) => {
                         const bundle = b as Record<string, unknown>;
                         const name = typeof bundle?.title === "string" && bundle.title ? bundle.title : `#${i + 1}`;
-                        if (typeof bundle?.skillIconicName !== "string" || !bundle.skillIconicName.trim()) problems.push(`Bundle ${name}: skillIconicName is required.`);
+                        const hasSkillId = typeof bundle?.skillId === "string" && bundle.skillId.trim();
+                        const iconicName = typeof bundle?.skillIconicName === "string" ? bundle.skillIconicName.trim() : "";
+                        if (!hasSkillId && !iconicName) problems.push(`Bundle ${name}: skillIconicName is required.`);
+                        // Skills may still be loading (undefined) — skip the existence check then; onImport re-guards.
+                        else if (!hasSkillId && skills && !skills.some((skill) => skill.iconicName === iconicName))
+                            problems.push(`Bundle ${name}: skill "${iconicName}" not found. Create the skill first or fix skillIconicName.`);
                         if (typeof bundle?.title !== "string" || !bundle.title.trim()) problems.push(`Bundle #${i + 1}: title is required.`);
                         const modes = bundle?.modes;
                         if (modes !== undefined && !Array.isArray(modes)) { problems.push(`Bundle ${name}: modes must be an array.`); return; }
@@ -180,8 +185,31 @@ export default function AdminDialogPage() {
                     });
                     return problems;
                 }}
-                onImport={async ({ text }) => {
-                    const file = new File([text], "dialog.json", { type: "application/json" });
+                onImport={async ({ parsed }) => {
+                    // The backend import keys bundles by skillId (GUID). The JSON humans
+                    // paste uses the friendly skillIconicName, so resolve it to a skillId
+                    // here before uploading. Bundles that already carry a skillId (e.g. a
+                    // re-imported export) pass through untouched.
+                    const skillIdByIconicName = new Map((skills ?? []).map((skill) => [skill.iconicName, skill.id]));
+                    const root = parsed as Record<string, unknown> | unknown[];
+                    const bundles = Array.isArray(root) ? root : ((root as Record<string, unknown>)?.bundles as unknown[]);
+                    const unresolved: string[] = [];
+                    (Array.isArray(bundles) ? bundles : []).forEach((entry, i) => {
+                        const bundle = entry as Record<string, unknown>;
+                        if (typeof bundle.skillId === "string" && bundle.skillId.trim()) return;
+                        const iconicName = typeof bundle.skillIconicName === "string" ? bundle.skillIconicName.trim() : "";
+                        const resolvedId = skillIdByIconicName.get(iconicName);
+                        if (!resolvedId) {
+                            const name = typeof bundle.title === "string" && bundle.title ? bundle.title : `#${i + 1}`;
+                            unresolved.push(`Bundle ${name}: skill "${iconicName}" not found.`);
+                            return;
+                        }
+                        bundle.skillId = resolvedId;
+                    });
+                    if (unresolved.length > 0) throw new Error(unresolved.join("\n"));
+
+                    const payload = Array.isArray(root) ? bundles : { ...(root as Record<string, unknown>), bundles };
+                    const file = new File([JSON.stringify(payload)], "dialog.json", { type: "application/json" });
                     const result = await importDialog.mutateAsync(file);
                     return {
                         created: result.bundlesCreated + result.modesCreated,
@@ -212,7 +240,7 @@ export default function AdminDialogPage() {
                                 <option value="">Select skill...</option>
                                 {skills?.map((skill) => (
                                     <option key={skill.id} value={skill.id}>
-                                        {skill.title} ({skill.slug})
+                                        {skill.title} ({skill.iconicName})
                                     </option>
                                 ))}
                             </select>
