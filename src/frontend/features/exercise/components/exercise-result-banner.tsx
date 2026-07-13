@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
 import { Icon, IconName } from "@/shared/components/icon";
 
 interface ExerciseResultBannerProps {
@@ -10,6 +9,10 @@ interface ExerciseResultBannerProps {
     aiFeedback: string | null;
     xpEarned: number;
     onContinue: () => void;
+    /** The answer the user actually gave (shown in red when incorrect). */
+    userAnswer?: string | null;
+    /** The real correct answer (shown in green when the user was incorrect). */
+    correctAnswer?: string | null;
 }
 
 type Tone = "good" | "warn" | "bad";
@@ -36,25 +39,31 @@ export function ExerciseResultBanner({
     aiFeedback,
     xpEarned,
     onContinue,
+    userAnswer,
+    correctAnswer,
 }: ExerciseResultBannerProps) {
     const tone = pickTone(isCorrect, score);
     const t = TONE_STYLES[tone];
 
     const feedback = (aiFeedback ?? "").trim();
+    const explanationText = (explanation ?? "").trim();
+    const detailed = feedback.length > 0;
+    // The main review text: AI feedback if present, otherwise the static explanation.
+    const reviewText = detailed ? feedback : explanationText;
+    const hasReview = reviewText.length > 0;
+
     const fallback = isCorrect
         ? "Отличный ответ."
         : "Попробуй не подсказывать решение — дай клиенту раскрыться самому.";
-    const detailed = feedback.length > 0;
+
     const ratingOutOfTen = detailed ? Math.max(0, Math.min(10, Math.round(score / 10))) : null;
-    const compactSubtitle = explanation ?? fallback;
-    const scrollerRef = useRef<HTMLDivElement | null>(null);
-    const [isScrollable, setIsScrollable] = useState(false);
-    useEffect(() => {
-        if (!detailed) return;
-        const el = scrollerRef.current;
-        if (!el) return;
-        setIsScrollable(el.scrollHeight > el.clientHeight + 1);
-    }, [detailed, feedback]);
+
+    // Show the answer comparison only when the user got it wrong and we know the answers.
+    const trimmedUser = (userAnswer ?? "").trim();
+    const trimmedCorrect = (correctAnswer ?? "").trim();
+    const showAnswers = !isCorrect && trimmedCorrect.length > 0;
+
+    const hasCard = hasReview || showAnswers;
 
     return (
         <div
@@ -69,7 +78,7 @@ export function ExerciseResultBanner({
         >
             <div
                 className="session-foot-inner"
-                style={{ flexDirection: "column", gap: detailed ? 12 : 0 }}
+                style={{ flexDirection: "column", gap: hasCard ? 12 : 0 }}
             >
                 {/* Main row: icon+title left, score+XP+continue right */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, width: "100%" }}>
@@ -85,14 +94,8 @@ export function ExerciseResultBanner({
                         </span>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink-heading)" }}>{t.title}</div>
-                            <div
-                                style={{
-                                    marginTop: 2, fontSize: 13, color: "var(--ink-3)",
-                                    maxWidth: 480,
-                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                }}
-                            >
-                                {detailed ? "Разбор от AI ↓" : compactSubtitle}
+                            <div style={{ marginTop: 2, fontSize: 13, color: "var(--ink-3)" }}>
+                                {hasCard ? "Разбор ниже ↓" : fallback}
                             </div>
                         </div>
                     </div>
@@ -134,8 +137,8 @@ export function ExerciseResultBanner({
                     </div>
                 </div>
 
-                {/* AI feedback card */}
-                {detailed && (
+                {/* Review card: answer comparison + full explanation */}
+                {hasCard && (
                     <div
                         style={{
                             width: "100%",
@@ -143,29 +146,59 @@ export function ExerciseResultBanner({
                             border: `1px solid ${t.tileColor}`,
                             borderRadius: 12,
                             padding: "12px 16px",
+                            maxHeight: "42vh",
+                            overflowY: "auto",
                         }}
                     >
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                            <Icon name="sparkle" size="xs" style={{ color: t.tileColor }} />
-                            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: t.tileColor }}>
-                                Разбор ответа
-                            </span>
-                        </div>
-                        <div
-                            ref={scrollerRef}
-                            style={{
-                                fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)",
-                                whiteSpace: "pre-wrap", maxHeight: 140, overflowY: "auto",
-                                WebkitMaskImage: isScrollable
-                                    ? "linear-gradient(to bottom, black calc(100% - 24px), transparent 100%)"
-                                    : undefined,
-                                maskImage: isScrollable
-                                    ? "linear-gradient(to bottom, black calc(100% - 24px), transparent 100%)"
-                                    : undefined,
-                            }}
-                        >
-                            {feedback}
-                        </div>
+                        {/* Wrong answer (red) / correct answer (green) */}
+                        {showAnswers && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: hasReview ? 12 : 0 }}>
+                                {trimmedUser.length > 0 && (
+                                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                                        <Icon name="close" size={16} style={{ color: "var(--heart)", flex: "none", marginTop: 2 }} />
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--heart)" }}>
+                                                Твой ответ
+                                            </div>
+                                            <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--heart)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                                {trimmedUser}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                                    <Icon name="check" size={16} style={{ color: "var(--success)", flex: "none", marginTop: 2 }} />
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--success)" }}>
+                                            Правильный ответ
+                                        </div>
+                                        <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--success)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                            {trimmedCorrect}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Full explanation / AI review text (never truncated) */}
+                        {hasReview && (
+                            <>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                                    <Icon name="sparkle" size="xs" style={{ color: t.tileColor }} />
+                                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: t.tileColor }}>
+                                        Разбор ответа
+                                    </span>
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)",
+                                        whiteSpace: "pre-wrap", wordBreak: "break-word",
+                                    }}
+                                >
+                                    {reviewText}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
