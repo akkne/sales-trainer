@@ -143,19 +143,48 @@ internal sealed class StreamingChatReplyParser
 
         if (ReplyStarted)
         {
-            return new ChatReplyParseResult(
-                Reply: _decodedReply.ToString().Trim(),
-                EndCall: ResolveEndCallFlag(rawText),
-                UsedFallback: false,
-                EndCallReason: ResolveEndCallReason(rawText));
+            var reply = _decodedReply.ToString().Trim();
+            return BuildResult(reply, ResolveEndCallFlag(rawText), ResolveEndCallReason(rawText), usedFallback: false);
         }
 
         var fallbackReply = ExtractFallbackReply(rawText);
-        return new ChatReplyParseResult(
-            Reply: fallbackReply,
-            EndCall: ResolveEndCallFlag(rawText) || rawText.Contains("[DIALOG_END]", StringComparison.Ordinal),
-            UsedFallback: true,
-            EndCallReason: ResolveEndCallReason(rawText));
+        var fallbackEndCall = ResolveEndCallFlag(rawText) || rawText.Contains("[DIALOG_END]", StringComparison.Ordinal);
+        return BuildResult(fallbackReply, fallbackEndCall, ResolveEndCallReason(rawText), usedFallback: true);
+    }
+
+    // Safety net: models sometimes voice a goodbye in the reply but leave endCall=false, so the call never
+    // hangs up (observed with abusive callers). A persona farewell always terminates the call, so force it.
+    private static ChatReplyParseResult BuildResult(string reply, bool endCall, string? endCallReason, bool usedFallback)
+    {
+        if (!endCall && LooksLikeFarewell(reply))
+        {
+            endCall = true;
+            endCallReason ??= "farewell";
+        }
+
+        return new ChatReplyParseResult(reply, endCall, usedFallback, endCallReason);
+    }
+
+    private static readonly string[] FarewellMarkers =
+    {
+        "всего доброго",
+        "всего хорошего",
+        "до свидания",
+        "всего наилучшего",
+        "кладу трубку",
+        "разговор окончен",
+        "на этом закончим",
+        "на этом всё",
+        "разговор закончен",
+    };
+
+    private static bool LooksLikeFarewell(string reply)
+    {
+        if (string.IsNullOrWhiteSpace(reply))
+            return false;
+
+        var normalized = reply.ToLowerInvariant();
+        return FarewellMarkers.Any(marker => normalized.Contains(marker, StringComparison.Ordinal));
     }
 
     private bool TryLocateReplyKey()

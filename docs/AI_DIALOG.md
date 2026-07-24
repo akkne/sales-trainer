@@ -203,7 +203,12 @@ The persona model decides on its own when to hang up and returns `endCall: true`
 When `endCall: true`, the model fills `endCallReason` with a short tag
 (`оскорбления`, `манипуляция`, `договорились`, `отказ`, …); otherwise it returns `null`.
 `endCallReason` is parsed by `StreamingChatReplyParser` and logged server-side (chat and
-voice paths). `endCall` still maps to `isStopSignal` on the stored message, the stream
+voice paths).
+
+**Farewell safety net:** models sometimes voice a goodbye in `reply` but leave
+`endCall: false`, leaving the call hanging. `StreamingChatReplyParser` therefore forces
+`endCall: true` (reason `farewell`) whenever the reply contains a clear terminal farewell
+(«всего доброго», «до свидания», «кладу трубку», …). A persona goodbye always ends the call. `endCall` still maps to `isStopSignal` on the stored message, the stream
 frame flags and the chat DTOs (wire/storage names unchanged); the frontend ends the call
 and requests feedback.
 

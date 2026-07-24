@@ -57,6 +57,42 @@ public class StreamingChatReplyParserTests
     }
 
     [Test]
+    public void Complete_ForcesEndCall_WhenReplyIsFarewellButFlagIsFalse()
+    {
+        var parser = new StreamingChatReplyParser();
+
+        parser.Push("""{"reply": "Так со мной разговаривать не нужно. Всего доброго.", "endCall": false, "endCallReason": null}""");
+        var result = parser.Complete();
+
+        result.EndCall.Should().BeTrue();
+        result.EndCallReason.Should().Be("farewell");
+    }
+
+    [Test]
+    public void Complete_KeepsModelReason_WhenFarewellAlsoHasExplicitEndCall()
+    {
+        var parser = new StreamingChatReplyParser();
+
+        parser.Push("""{"reply": "Всего доброго.", "endCall": true, "endCallReason": "оскорбления"}""");
+        var result = parser.Complete();
+
+        result.EndCall.Should().BeTrue();
+        result.EndCallReason.Should().Be("оскорбления");
+    }
+
+    [Test]
+    public void Complete_DoesNotForceEndCall_ForOrdinaryReply()
+    {
+        var parser = new StreamingChatReplyParser();
+
+        parser.Push("""{"reply": "Интересно, а что именно вы предлагаете?", "endCall": false, "endCallReason": null}""");
+        var result = parser.Complete();
+
+        result.EndCall.Should().BeFalse();
+        result.EndCallReason.Should().BeNull();
+    }
+
+    [Test]
     public void Complete_FallsBackToPlainText_WhenModelIgnoresContract()
     {
         var parser = new StreamingChatReplyParser();
