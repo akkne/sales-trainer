@@ -4,7 +4,8 @@ namespace Sellevate.Identity.Features.Auth.Services.Abstract;
 
 public interface IAuthenticationService
 {
-    Task RegisterWithEmailAsync(
+    // TEMP: email confirmation disabled — registration issues tokens immediately.
+    Task<IssuedTokenPair> RegisterWithEmailAsync(
         string email,
         string password,
         string displayName,
