@@ -2324,10 +2324,13 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 
 /* ════════ GUIDEBOOK V2 ════════ */
 
-/* Layout: main area + slide-in detail panel */
-.ref-layout { display: flex; gap: 0; height: 100%; min-height: 0; flex: 1; }
-.ref-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Layout: left content column + full-height detail panel side by side */
+.ref-page { height: 100%; min-height: 0; gap: 0; }
+.ref-content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .ref-main-scroll { flex: 1; overflow-y: auto; padding: 24px 28px 32px; }
+/* Narrow the grid a touch when the reading panel is open so cards keep a sane width */
+.ref-page.has-panel .ref-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ref-panel-scrim { display: none; }
 
 /* Header */
 .ref-header { padding: 22px 28px 0; }
@@ -2381,20 +2384,20 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 .ref-empty span { font-size: 13px; color: var(--ink-4); }
 
 /* ── Detail Panel ── */
-.ref-panel { width: 392px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--line-2); background: var(--surface); overflow: hidden; animation: refPanelIn .2s cubic-bezier(.22,1,.36,1); }
+.ref-panel { width: clamp(440px, 36vw, 560px); flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--line-2); background: var(--surface); overflow: hidden; box-shadow: -18px 0 40px -28px rgba(24,20,55,.28); animation: refPanelIn .24s cubic-bezier(.22,1,.36,1); }
 @keyframes refPanelIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
 @media (prefers-reduced-motion: reduce) { .ref-panel { animation: none; } }
 
-.ref-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 16px; border-bottom: 1px solid var(--line-2); flex: none; }
+.ref-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--line-2); flex: none; background: var(--surface); }
 .ref-panel-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); }
 .ref-panel-close { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-4); display: grid; place-items: center; cursor: pointer; transition: background var(--transition), color var(--transition); }
 .ref-panel-close:hover { background: var(--surface-3); color: var(--ink); }
 .ref-panel-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-.ref-panel-scroll { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.ref-panel-scroll { flex: 1; overflow-y: auto; padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 22px; }
 
 .ref-panel-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.ref-panel-name { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-heading); line-height: 1.2; }
+.ref-panel-name { font-size: 25px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-heading); line-height: 1.22; }
 .ref-panel-hashtags { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Mastery ring in panel — full size */
@@ -2405,8 +2408,8 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 
 /* "How it works" section */
 .ref-section-label { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-4); margin: 0 0 8px; }
-.ref-body-text { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
-.ref-body-text p { margin: 0 0 8px; }
+.ref-body-text { font-size: 14.5px; color: var(--ink-2); line-height: 1.68; }
+.ref-body-text p { margin: 0 0 10px; }
 .ref-body-text p:last-child { margin: 0; }
 
 /* Dialogue bubbles */
@@ -2444,16 +2447,19 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 /* Divider inside panel */
 .ref-divider { height: 1px; background: var(--line-2); flex: none; }
 
-/* ── Responsive: panel becomes full-screen sheet on narrow viewports ── */
+/* ── Responsive: panel becomes an overlay sheet on narrow viewports ── */
 @media (max-width: 900px) {
-  .ref-layout { position: relative; }
-  .ref-panel { position: fixed; inset: 0; width: 100%; max-width: 480px; right: 0; left: auto; z-index: 40; box-shadow: var(--sh-3); border-left: none; border-radius: var(--r-xl) 0 0 var(--r-xl); }
+  .ref-page.has-panel .ref-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .ref-panel-scrim { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(24,20,55,.32); animation: refScrimIn .2s ease; }
+  .ref-panel { position: fixed; inset: 0; width: 100%; max-width: 520px; right: 0; left: auto; z-index: 40; box-shadow: var(--sh-3); border-left: none; border-radius: var(--r-xl) 0 0 var(--r-xl); }
 }
+@keyframes refScrimIn { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 560px) {
   .ref-panel { max-width: 100%; border-radius: 0; }
+  .ref-panel-scroll { padding: 20px 18px 32px; }
   .ref-main-scroll { padding: 16px 16px 28px; }
   .ref-header { padding: 16px 16px 0; }
-  .ref-grid { grid-template-columns: 1fr; }
+  .ref-grid, .ref-page.has-panel .ref-grid { grid-template-columns: 1fr; }
 }
 
 /* ════════ PROFILE (legacy helpers — kept for responsive media query refs below) ════════ */

@@ -162,7 +162,9 @@ export default function GuidebookPage() {
     const selectedCard = cards.find((c) => c.slug === selectedSlug) ?? null;
 
     return (
-        <div className="page" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className={"page ref-page" + (selectedSlug ? " has-panel" : "")} style={{ display: "flex", overflow: "hidden" }}>
+            {/* Left column: header + cards grid */}
+            <div className="ref-content">
             {/* Header — always visible, outside the scrolling area */}
             <div className="ref-header">
                 <h1 className="ref-title">Справочник техник</h1>
@@ -227,49 +229,48 @@ export default function GuidebookPage() {
                 </div>
             </div>
 
-            {/* Two-panel layout */}
-            <div className="ref-layout">
-                {/* Left: cards grid */}
-                <div className="ref-main">
-                    <div className="ref-main-scroll">
-                        {isLoading ? (
-                            <div className="ref-grid">
-                                {[1, 2, 3, 4, 5, 6].map((i) => (
-                                    <Skeleton key={i} height={160} rounded={15} />
-                                ))}
-                            </div>
-                        ) : cards.length === 0 ? (
-                            <div className="ref-empty">
-                                <Icon name="search" size="lg" color="var(--ink-4)" />
-                                <p>Ничего не найдено</p>
-                                <span>Попробуй другой запрос или навык</span>
-                            </div>
-                        ) : (
-                            <div className="ref-grid">
-                                {cards.map((card) => (
-                                    <TechniqueCardItem
-                                        key={card.id}
-                                        card={card}
-                                        isSelected={selectedSlug === card.slug}
-                                        activeTags={activeTags}
-                                        onSelect={() => selectCard(card.slug)}
-                                        onTagClick={toggleTag}
-                                    />
-                                ))}
-                            </div>
-                        )}
+            {/* Cards grid (scrolls independently) */}
+            <div className="ref-main-scroll">
+                {isLoading ? (
+                    <div className="ref-grid">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <Skeleton key={i} height={160} rounded={15} />
+                        ))}
                     </div>
-                </div>
+                ) : cards.length === 0 ? (
+                    <div className="ref-empty">
+                        <Icon name="search" size="lg" color="var(--ink-4)" />
+                        <p>Ничего не найдено</p>
+                        <span>Попробуй другой запрос или навык</span>
+                    </div>
+                ) : (
+                    <div className="ref-grid">
+                        {cards.map((card) => (
+                            <TechniqueCardItem
+                                key={card.id}
+                                card={card}
+                                isSelected={selectedSlug === card.slug}
+                                activeTags={activeTags}
+                                onSelect={() => selectCard(card.slug)}
+                                onTagClick={toggleTag}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+            </div>
 
-                {/* Right: detail panel — rendered only when a card is selected */}
-                {selectedSlug && (
+            {/* Right: detail panel — full-height column anchored to the top */}
+            {selectedSlug && (
+                <>
+                    <div className="ref-panel-scrim" onClick={closePanel} aria-hidden="true" />
                     <DetailPanel
                         card={selectedCard}
                         detail={detail ?? null}
                         onClose={closePanel}
                     />
-                )}
-            </div>
+                </>
+            )}
         </div>
     );
 }
