@@ -33,16 +33,19 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
 ```
  idle ──«Позвонить»──▶ dialing ──first AI reply──▶ connected ──hangup/endCall──▶ ended
   ▲                       │ ringback tone 425Hz        │ call timer, live          │ busy beeps,
-  └──«Позвонить ещё раз»──┘ (1s on / 4s off)           │ subtitles, barge-in       ▼ feedback modal
+  └──«Позвонить ещё раз»──┘ (1s on / 4s off)           │ subtitles, no barge-in    ▼ feedback modal
                                                        │ vibrate on connect     /complete
 ```
 
 - **Sounds** (`lib/voice/callSounds.ts`): ringback while `dialing`, triple busy
   beep on `ended` — synthesized with Web Audio oscillators, no binary assets.
 - **Vibration**: `navigator.vibrate(80)` on `dialing → connected` (mobile).
-- **Barge-in**: user speech during playback stops audio, aborts the in-flight
-  `/voice/stream` fetch; the cut-off AI subtitle fades to 60% opacity with a
-  «· прервано» label and dashed border.
+- **No barge-in (persona finishes first)**: the microphone is paused for the whole
+  AI turn (paused before the `/voice/stream` request, resumed only when playback
+  ends). We deliberately do **not** listen while the persona is speaking — barge-in
+  used to fire on the slightest noise and cut the AI off mid-sentence. The persona
+  finishes, then the frontend starts listening. (The legacy `interrupted`/«· перебито»
+  subtitle state is kept but is now unreachable.)
 - **Live subtitles**: interim recognizer text shown italic/dashed; committed
   phrases become user bubbles; AI reply streams chunk-by-chunk into one bubble.
 - **End-of-speech detection** (`features/voice/services/speech-endpointer.ts`):
@@ -85,8 +88,8 @@ Microphone → Web Speech API (browser STT, ru-RU, interim results → live subt
    Length-prefixed frames (text / mp3) → Web Audio queued playback + streamed AI subtitles
 ```
 
-Barge-in: if the user starts talking during playback, audio stops and the
-in-flight stream is aborted.
+No barge-in: the mic stays paused for the entire AI turn and only resumes once
+playback ends, so the persona always finishes speaking before the frontend listens.
 
 ### Backend Voice Endpoint
 

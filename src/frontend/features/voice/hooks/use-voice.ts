@@ -119,7 +119,6 @@ export function useVoice(options: UseVoiceOptions) {
             audioPlayerRef.current?.beginQueue();
             const aggregatedText: string[] = [];
             let stopSignal = false;
-            let firstAudioPlayed = false;
 
             const streamReader = new VoiceStreamReader(response);
             for await (const frame of streamReader.read(controller.signal)) {
@@ -130,11 +129,12 @@ export function useVoice(options: UseVoiceOptions) {
                 }
                 if (frame.isStopSignal) stopSignal = true;
                 if (frame.audio.byteLength > 0) {
+                    // Recognition stays paused for the whole AI turn (paused above before the
+                    // request, resumed only on AudioPlayer "ended"). We intentionally do NOT
+                    // resume the mic while the persona is still speaking: barge-in was firing on
+                    // the slightest noise and cutting the AI off mid-sentence. Let the persona
+                    // finish, then listen.
                     await audioPlayerRef.current?.enqueue(frame.audio);
-                    if (!firstAudioPlayed) {
-                        firstAudioPlayed = true;
-                        speechClientRef.current?.resume();
-                    }
                 }
                 if (frame.isFinal) break;
             }
@@ -215,11 +215,11 @@ export function useVoice(options: UseVoiceOptions) {
                     else if (speechState === "error") setState("error");
                 },
                 onSpeechStart: () => {
-                    if (stateRef.current === "playing") {
-                        audioPlayerRef.current?.stop();
-                        streamAbortRef.current?.abort();
-                        streamAbortRef.current = null;
-                    }
+                    // No barge-in: the mic is paused for the whole AI turn and only resumes once
+                    // playback ends, so the persona always finishes speaking first. If a
+                    // stop()/onend race still delivers an onset while we are playing or mid-request,
+                    // ignore it rather than cutting the persona off.
+                    if (stateRef.current === "playing" || stateRef.current === "processing") return;
                     setState("speaking");
                 },
                 onSpeechEnd: () => {
