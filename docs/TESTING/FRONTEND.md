@@ -93,3 +93,22 @@ Covers the reworked cold-call exercise: user-first flow and the text/voice mode 
 The voice pipeline (`useExerciseVoice`) is mocked — it reuses the live-call STT/VAD/TTS
 services (`features/voice/services/*`) but streams from `/exercises/:id/voice/stream`.
 Manual voice checks follow the live-call checklist in [VOICE_CALL.md](VOICE_CALL.md).
+
+## FreeTextExercise — Voice dictation into the answer field
+
+**File:** `__tests__/FreeTextExercise.test.tsx`
+
+Covers the "Голос" button on free-text (свободный ответ) exercises. Previously the
+button was a dead stub with no `onClick` — voice input never worked. It now drives
+`useSpeechDictation` (plain STT that appends finalized speech into the textarea, with
+no AI streaming, unlike `useExerciseVoice`).
+
+| Case | Expectation |
+|---|---|
+| Button rendered | "Голос" shown when `useSpeechDictation().isAvailable` is true |
+| Button wired | Clicking "Голос" calls `dictation.toggle()` |
+| Dictation appends | Final transcript fragments are appended to the answer field (space-separated) |
+| Voice unavailable | "Голос" button hidden when dictation is unavailable |
+
+`useSpeechDictation` is mocked in the test. It gates on `voiceConfig.enabled &&
+isWebSpeechSupported()`, and stops automatically once the answer is submitted.

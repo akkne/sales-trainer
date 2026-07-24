@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ExerciseSubmissionResult } from "@/features/exercise/hooks/use-lesson";
+import { useSpeechDictation } from "@/features/exercise/hooks/use-speech-dictation";
 import { Icon } from "@/shared/components/icon";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
 import { ExerciseResultBanner } from "./exercise-result-banner";
@@ -33,7 +34,19 @@ export function FreeTextExercise({
 }: FreeTextExerciseProps) {
     const [text, setText] = useState("");
 
+    const dictation = useSpeechDictation({
+        onFinalTranscript: (fragment) => {
+            setText((prev) => (prev ? `${prev.replace(/\s+$/, "")} ${fragment}` : fragment));
+        },
+    });
+
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
+
+    const stopDictation = dictation.stop;
+    useEffect(() => {
+        if (isAnswered) stopDictation();
+    }, [isAnswered, stopDictation]);
+
     const minLength = 20;
     const charCount = text.length;
     const isValidLength = charCount >= minLength;
@@ -72,7 +85,7 @@ export function FreeTextExercise({
             >
                 <textarea
                     placeholder="Минимум 20 символов…"
-                    value={text}
+                    value={dictation.interimText ? `${text}${text ? " " : ""}${dictation.interimText}` : text}
                     onChange={(e) => setText(e.target.value)}
                     disabled={isAnswered}
                     rows={5}
@@ -103,24 +116,28 @@ export function FreeTextExercise({
                         {charCount}/{minLength}
                         {isValidLength && " ✓"}
                     </span>
-                    <button
-                        type="button"
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            background: "var(--bg-2)",
-                            border: "1px solid var(--line)",
-                            borderRadius: 8,
-                            padding: "4px 10px",
-                            color: "var(--ink-2)",
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontFamily: "var(--font-mono)",
-                        }}
-                    >
-                        <Icon name="mic" size="xs" /> Голос
-                    </button>
+                    {dictation.isAvailable && !isAnswered && (
+                        <button
+                            type="button"
+                            onClick={dictation.toggle}
+                            aria-pressed={dictation.isListening}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                background: dictation.isListening ? "var(--danger-soft, var(--bg-2))" : "var(--bg-2)",
+                                border: `1px solid ${dictation.isListening ? "var(--danger, var(--line))" : "var(--line)"}`,
+                                borderRadius: 8,
+                                padding: "4px 10px",
+                                color: dictation.isListening ? "var(--danger, var(--ink-2))" : "var(--ink-2)",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontFamily: "var(--font-mono)",
+                            }}
+                        >
+                            <Icon name="mic" size="xs" /> {dictation.isListening ? "Стоп" : "Голос"}
+                        </button>
+                    )}
                 </div>
             </div>
 
