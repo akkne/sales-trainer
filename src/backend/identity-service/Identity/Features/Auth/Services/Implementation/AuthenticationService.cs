@@ -26,7 +26,9 @@ internal sealed class AuthenticationService(
     IOptions<GoogleAuthConfiguration> googleOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
 {
-    public async Task RegisterWithEmailAsync(
+    // TEMP: email confirmation disabled — the new user is created already verified
+    // and receives tokens immediately, so no verification email is sent.
+    public async Task<IssuedTokenPair> RegisterWithEmailAsync(
         string email,
         string password,
         string displayName,
@@ -52,7 +54,8 @@ internal sealed class AuthenticationService(
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
             DisplayName = displayName,
             CreatedAt = DateTime.UtcNow,
-            IsEmailVerified = false,
+            // TEMP: email confirmation disabled — mark verified on registration.
+            IsEmailVerified = true,
             DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
         };
 
@@ -68,20 +71,11 @@ internal sealed class AuthenticationService(
             throw new InvalidOperationException("Email already registered.");
         }
 
-        try
-        {
-            await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, displayName, cancellationToken);
-        }
-        catch (Exception verificationEmailException)
-        {
-            logger.LogError(
-                verificationEmailException,
-                "User {Email} UserId={UserId} registered but the verification email failed to send; client must use resend-code",
-                normalizedEmail, newUser.Id);
-        }
-
         logger.LogInformation(
-            "User registered pending email verification {Email} UserId={UserId}", normalizedEmail, newUser.Id);
+            "User registered and auto-verified {Email} UserId={UserId}", normalizedEmail, newUser.Id);
+
+        // TEMP: log the user in immediately instead of requiring email verification.
+        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false, cancellationToken);
     }
 
     public async Task<IssuedTokenPair> VerifyEmailAsync(
@@ -156,11 +150,7 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException("Invalid email or password.");
         }
 
-        if (!user.IsEmailVerified)
-        {
-            logger.LogWarning("Login blocked — email not verified {Email}", normalizedEmail);
-            throw new EmailNotVerifiedException(normalizedEmail);
-        }
+        // TEMP: email confirmation disabled — do not block unverified accounts on login.
 
         var isOnboardingCompleted = await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);

@@ -1,5 +1,12 @@
 # Email Verification by Code
 
+> ⚠️ **TEMPORARILY DISABLED** on branch `temp/disable-email-verification` (2026-07-24).
+> Email confirmation is bypassed: `POST /auth/register` creates the user already
+> verified (`IsEmailVerified = true`) and returns tokens immediately (auto-login),
+> `POST /auth/login` no longer blocks unverified accounts, and the frontend skips the
+> `/verify-email` page. The verification code endpoints/service remain in the codebase
+> but are unreachable in the normal flow. Revert this branch to restore the flow below.
+
 Implemented 2026-06-15. Email/password registration now requires the user to confirm
 ownership of their address with a short numeric code before they can log in.
 

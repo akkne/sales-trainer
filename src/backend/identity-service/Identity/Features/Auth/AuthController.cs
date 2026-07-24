@@ -47,22 +47,21 @@ public sealed class AuthController(
         });
     }
 
+    // TEMP: email confirmation disabled — registration logs the user in immediately.
     [HttpPost("register")]
-    public async Task<ActionResult<RegistrationResultDto>> RegisterWithEmail(
+    public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(
         [FromBody] RegisterRequestDto registerRequest,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            await authenticationService.RegisterWithEmailAsync(
+            var issuedTokenPair = await authenticationService.RegisterWithEmailAsync(
                 registerRequest.Email,
                 registerRequest.Password,
                 registerRequest.DisplayName,
                 cancellationToken);
 
-            return Ok(new RegistrationResultDto(
-                Email: registerRequest.Email,
-                RequiresEmailVerification: true));
+            return OkWithRefreshTokenCookie(issuedTokenPair);
         }
         catch (InvalidOperationException exception)
         {

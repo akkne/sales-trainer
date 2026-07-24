@@ -15,11 +15,6 @@ interface AuthTokenResponse {
     role: UserRole;
 }
 
-interface RegistrationResult {
-    email: string;
-    requiresEmailVerification: boolean;
-}
-
 export function readPendingVerificationEmail(): string {
     if (typeof window === "undefined") return "";
     return window.sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) ?? "";
@@ -77,20 +72,21 @@ export function useInitAuth() {
 }
 
 export function useRegister() {
-    const router = useRouter();
+    // TEMP: email confirmation disabled — registration returns tokens and logs in immediately.
+    const handleSuccessfulAuth = useHandleSuccessfulAuth();
 
     return useMutation({
         mutationFn: (credentials: {
             email: string;
             password: string;
             displayName: string;
-        }) => apiClient.post<RegistrationResult>("/auth/register", credentials),
+        }) => apiClient.post<AuthTokenResponse>("/auth/register", credentials),
         onSuccess: (data, variables) => {
-            clientLogger.info("Registration pending email verification", {
+            clientLogger.info("Registration successful", {
+                userId: data.userId,
                 email: variables.email,
             });
-            storePendingVerificationEmail(data.email);
-            router.push("/verify-email");
+            handleSuccessfulAuth(data);
         },
         onError: (error, variables) => {
             clientLogger.warn("Registration failed", {

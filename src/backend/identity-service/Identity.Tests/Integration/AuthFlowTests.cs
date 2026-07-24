@@ -22,8 +22,9 @@ public class AuthFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    // TEMP: email confirmation disabled — registration returns tokens immediately.
     [Test]
-    public async Task Register_RequiresVerification_SendsEmail_AndEmitsUserRegistered()
+    public async Task Register_ReturnsTokens_AndEmitsUserRegistered()
     {
         var client = Factory.CreateClient();
         var email = UniqueEmail();
@@ -32,10 +33,9 @@ public class AuthFlowTests
             new { email, password = "Password123!", displayName = "Reg User" });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<RegistrationResult>();
-        body!.RequiresEmailVerification.Should().BeTrue();
+        var body = await response.Content.ReadFromJsonAsync<AuthTokenResult>();
+        body!.AccessToken.Should().NotBeNullOrEmpty();
 
-        Factory.EmailSender.SentMessages.Should().Contain(m => m.RecipientEmail == email);
         Factory.UserEventPublisher.Registered.Should().Contain(e => e.Email == email);
     }
 
@@ -52,8 +52,9 @@ public class AuthFlowTests
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+    // TEMP: email confirmation disabled — login succeeds immediately after registration.
     [Test]
-    public async Task Login_BeforeVerification_IsForbidden_ThenSucceeds_AfterVerify()
+    public async Task Login_AfterRegister_Succeeds_WithoutVerification()
     {
         var client = Factory.CreateClient();
         var email = UniqueEmail();
@@ -61,31 +62,10 @@ public class AuthFlowTests
 
         await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Flow" });
 
-        var blocked = await client.PostAsJsonAsync("/auth/login", new { email, password });
-        blocked.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-
-        var emailMessage = Factory.EmailSender.SentMessages.Last(m => m.RecipientEmail == email);
-        var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
-
-        var verify = await client.PostAsJsonAsync("/auth/verify-email", new { email, code });
-        verify.StatusCode.Should().Be(HttpStatusCode.OK);
-        var verified = await verify.Content.ReadFromJsonAsync<AuthTokenResult>();
-        verified!.AccessToken.Should().NotBeNullOrEmpty();
-
         var login = await client.PostAsJsonAsync("/auth/login", new { email, password });
         login.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Test]
-    public async Task VerifyEmail_WithWrongCode_IsUnauthorized()
-    {
-        var client = Factory.CreateClient();
-        var email = UniqueEmail();
-        await client.PostAsJsonAsync("/auth/register",
-            new { email, password = "Password123!", displayName = "Bad" });
-
-        var verify = await client.PostAsJsonAsync("/auth/verify-email", new { email, code = "000000" });
-        verify.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await login.Content.ReadFromJsonAsync<AuthTokenResult>();
+        body!.AccessToken.Should().NotBeNullOrEmpty();
     }
 
     [Test]
@@ -98,10 +78,8 @@ public class AuthFlowTests
         var email = UniqueEmail();
         const string password = "Password123!";
 
+        // TEMP: registration sets the refresh cookie directly (no verify-email step).
         await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Refresh" });
-        var emailMessage = Factory.EmailSender.SentMessages.Last(m => m.RecipientEmail == email);
-        var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
-        await client.PostAsJsonAsync("/auth/verify-email", new { email, code });
 
         var refresh = await client.PostAsync("/auth/refresh", null);
         refresh.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -117,12 +95,9 @@ public class AuthFlowTests
         var email = UniqueEmail();
         const string password = "Password123!";
 
-        await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Reuse" });
-        var emailMessage = Factory.EmailSender.SentMessages.Last(message => message.RecipientEmail == email);
-        var code = TestCodeExtractor.ExtractSixDigitCode(emailMessage.TextBody);
-
-        var verify = await client.PostAsJsonAsync("/auth/verify-email", new { email, code });
-        var firstRefreshToken = ExtractRefreshTokenCookie(verify);
+        // TEMP: registration returns the refresh cookie directly (no verify-email step).
+        var register = await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Reuse" });
+        var firstRefreshToken = ExtractRefreshTokenCookie(register);
 
         var firstRefresh = await PostRefreshWithCookie(client, firstRefreshToken);
         firstRefresh.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -148,6 +123,5 @@ public class AuthFlowTests
         return client.SendAsync(request);
     }
 
-    private sealed record RegistrationResult(string Email, bool RequiresEmailVerification);
     private sealed record AuthTokenResult(string AccessToken, string UserId, string DisplayName, bool IsOnboardingCompleted, string Role);
 }
