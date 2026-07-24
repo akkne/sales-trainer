@@ -98,10 +98,12 @@ public sealed class ExerciseServiceEventEmissionTests
     }
 
     [Test]
-    public async Task SubmitWrongAnswer_EmitsOnlyExerciseCompleted()
+    public async Task SubmitWrongAnswer_SingleExerciseLesson_StillCompletesLesson()
     {
+        // Lesson completion is attempt-based: attempting the only exercise (even wrongly)
+        // means every exercise has been attempted, so the lesson can still be passed.
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
-        var (_, _, exerciseId) = await SeedSingleLessonSkillAsync(databaseContext);
+        var (skillId, lessonId, exerciseId) = await SeedSingleLessonSkillAsync(databaseContext);
 
         var eventPublisher = Substitute.For<ILearningEventPublisher>();
         var service = new ExerciseService(
@@ -117,9 +119,13 @@ public sealed class ExerciseServiceEventEmissionTests
 
         await eventPublisher.Received(1).PublishExerciseCompletedAsync(
             Arg.Is<ExerciseCompletedEvent>(payload => !payload.IsCorrect), Arg.Any<CancellationToken>());
-        await eventPublisher.DidNotReceive().PublishLessonCompletedAsync(
-            Arg.Any<LessonCompletedEvent>(), Arg.Any<CancellationToken>());
-        await eventPublisher.DidNotReceive().PublishSkillCompletedAsync(
-            Arg.Any<SkillCompletedEvent>(), Arg.Any<CancellationToken>());
+        await eventPublisher.Received(1).PublishLessonCompletedAsync(
+            Arg.Is<LessonCompletedEvent>(payload =>
+                payload.UserId == userId && payload.LessonId == lessonId),
+            Arg.Any<CancellationToken>());
+        await eventPublisher.Received(1).PublishSkillCompletedAsync(
+            Arg.Is<SkillCompletedEvent>(payload =>
+                payload.UserId == userId && payload.SkillId == skillId),
+            Arg.Any<CancellationToken>());
     }
 }

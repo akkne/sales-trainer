@@ -302,12 +302,12 @@ internal sealed class ExerciseService(
         // when querying passed exercises (required for LE3 all-exercises-passed gate).
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        var (lessonWasCompleted, lessonBestScore) = (false, 0);
-        if (evaluationResult.IsCorrect)
-        {
-            (lessonWasCompleted, lessonBestScore) = await UpdateLessonProgressAsync(
-                userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
-        }
+        // Lesson completion is attempt-based: a lesson is "passed" once the user has
+        // attempted EVERY exercise in it, regardless of correctness. This runs on every
+        // submission (correct or wrong) so a lesson can always be completed by going
+        // through all of its exercises.
+        var (lessonWasCompleted, lessonBestScore) = await UpdateLessonProgressAsync(
+            userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
 
         // Stage the exercise/lesson outbox rows BEFORE the commit so the progress mutations
         // and their integration events are persisted in the SAME transaction (no lost events
@@ -344,9 +344,9 @@ internal sealed class ExerciseService(
     }
 
     /// <summary>
-    /// Updates lesson progress after a correct answer.
-    /// Lesson is marked complete only when the user has at least one correct attempt
-    /// for EVERY exercise in the lesson (all exercises passed).
+    /// Updates lesson progress after an answer submission.
+    /// Lesson is marked complete once the user has at least one attempt (correct or wrong)
+    /// for EVERY exercise in the lesson — a lesson can always be passed by going through it.
     /// BestScore = max(existing best, current score).
     /// Returns (transitionedToCompleted, bestScore).
     /// </summary>
@@ -361,9 +361,9 @@ internal sealed class ExerciseService(
             .Where(e => e.LessonId == lessonId)
             .CountAsync(cancellationToken);
 
-        // Count how many distinct exercises the user has at least one correct attempt for.
-        var passedExercises = await databaseContext.UserExerciseAttempts
-            .Where(a => a.UserId == userId && a.IsCorrect)
+        // Count how many distinct exercises the user has attempted (correct or wrong).
+        var attemptedExercises = await databaseContext.UserExerciseAttempts
+            .Where(a => a.UserId == userId)
             .Join(databaseContext.Exercises,
                 attempt => attempt.ExerciseId,
                 exercise => exercise.Id,
@@ -373,7 +373,7 @@ internal sealed class ExerciseService(
             .Distinct()
             .CountAsync(cancellationToken);
 
-        var allPassed = totalExercises > 0 && passedExercises >= totalExercises;
+        var allAttempted = totalExercises > 0 && attemptedExercises >= totalExercises;
 
         var progressRecord = await databaseContext.UserLessonProgressRecords
             .FirstOrDefaultAsync(record => record.UserId == userId && record.LessonId == lessonId, cancellationToken);
@@ -384,7 +384,7 @@ internal sealed class ExerciseService(
         if (progressRecord is null)
         {
             bestScore = currentScore;
-            var newStatus = allPassed ? LessonProgressStatuses.Completed : LessonProgressStatuses.Available;
+            var newStatus = allAttempted ? LessonProgressStatuses.Completed : LessonProgressStatuses.Available;
             progressRecord = new UserLessonProgress
             {
                 Id = Guid.NewGuid(),
@@ -392,17 +392,17 @@ internal sealed class ExerciseService(
                 LessonId = lessonId,
                 Status = newStatus,
                 BestScore = bestScore,
-                CompletedAt = allPassed ? DateTime.UtcNow : null
+                CompletedAt = allAttempted ? DateTime.UtcNow : null
             };
             databaseContext.UserLessonProgressRecords.Add(progressRecord);
-            transitionedToCompleted = allPassed;
+            transitionedToCompleted = allAttempted;
         }
         else
         {
             bestScore = Math.Max(progressRecord.BestScore, currentScore);
             progressRecord.BestScore = bestScore;
 
-            if (allPassed && progressRecord.Status != LessonProgressStatuses.Completed)
+            if (allAttempted && progressRecord.Status != LessonProgressStatuses.Completed)
             {
                 progressRecord.Status = LessonProgressStatuses.Completed;
                 progressRecord.CompletedAt = DateTime.UtcNow;

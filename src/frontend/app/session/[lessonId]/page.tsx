@@ -24,13 +24,18 @@ import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
 import { Icon } from "@/shared/components/icon";
 
 const PASSING_SCORE_THRESHOLD = 7;
-const MAX_RETRY_ATTEMPTS = 2;
 
 interface SessionPageProps {
     params: Promise<{ lessonId: string }>;
 }
 
-type SessionState = "playing" | "complete";
+// "playing" — going through the active queue; "mistakes-intro" — the gate screen shown
+// after the first pass when mistakes were made; "complete" — final results screen.
+type SessionState = "playing" | "mistakes-intro" | "complete";
+
+// "first" — the initial run over every exercise; "review" — the single mistakes-practice
+// round over the exercises the user got wrong in the first pass.
+type SessionPhase = "first" | "review";
 
 interface SessionFlowProps {
     lessonId: string;
@@ -38,7 +43,6 @@ interface SessionFlowProps {
 
 interface QueuedExercise {
     exercise: ExerciseData;
-    attemptNumber: number;
     queueKey: string;
 }
 
@@ -57,26 +61,30 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     const sessionEndTimeRef = useRef<number>(0);
     const [lastSubmissionResult, setLastSubmissionResult] = useState<ExerciseSubmissionResult | null>(null);
     const [sessionState, setSessionState] = useState<SessionState>("playing");
+    const [phase, setPhase] = useState<SessionPhase>("first");
     const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
     const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
+    const [reviewQueue, setReviewQueue] = useState<QueuedExercise[]>([]);
+    // Exercises answered incorrectly during the first pass — replayed once in the review phase.
+    const [mistakeExercises, setMistakeExercises] = useState<ExerciseData[]>([]);
     const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
 
     useEffect(() => {
         if (exercises && exercises.length > 0 && exerciseQueue.length === 0) {
             const initialQueue: QueuedExercise[] = exercises.map((ex) => ({
                 exercise: ex,
-                attemptNumber: 1,
-                queueKey: `${ex.exerciseId}-1`,
+                queueKey: `${ex.exerciseId}-first`,
             }));
             setExerciseQueue(initialQueue);
         }
     }, [exercises, exerciseQueue.length]);
 
-    const currentQueued = exerciseQueue[currentQueueIndex];
+    const activeQueue = phase === "review" ? reviewQueue : exerciseQueue;
+    const currentQueued = activeQueue[currentQueueIndex];
     const currentExercise = currentQueued?.exercise;
     const originalExerciseCount = exercises?.length ?? 0;
-    const progressPercent = exerciseQueue.length > 0 ? Math.round((currentQueueIndex / exerciseQueue.length) * 100) : 0;
+    const progressPercent = activeQueue.length > 0 ? Math.round((currentQueueIndex / activeQueue.length) * 100) : 0;
 
     function handleExerciseSubmit(answer: unknown) {
         if (!currentExercise || !currentQueued) return;
@@ -89,16 +97,17 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
                     if (isPassing) {
                         setTotalXpEarned((prev) => prev + result.xpEarned);
-                        setCorrectAnswerCount((prev) => prev + 1);
-                    } else {
-                        if (currentQueued.attemptNumber < MAX_RETRY_ATTEMPTS) {
-                            const retryEntry: QueuedExercise = {
-                                exercise: currentExercise,
-                                attemptNumber: currentQueued.attemptNumber + 1,
-                                queueKey: `${currentExercise.exerciseId}-${currentQueued.attemptNumber + 1}`,
-                            };
-                            setExerciseQueue((prev) => [...prev, retryEntry]);
+                        // Accuracy reflects the first pass only.
+                        if (phase === "first") {
+                            setCorrectAnswerCount((prev) => prev + 1);
                         }
+                    } else if (phase === "first") {
+                        // Queue the exercise for the single end-of-lesson review round (dedupe).
+                        setMistakeExercises((prev) =>
+                            prev.some((ex) => ex.exerciseId === currentExercise.exerciseId)
+                                ? prev
+                                : [...prev, currentExercise]
+                        );
                     }
                 },
             }
@@ -109,23 +118,39 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
         sessionEndTimeRef.current = Date.now();
     }
 
-    function handleSkip() {
-        if (currentQueueIndex + 1 >= exerciseQueue.length) {
-            recordSessionEnd();
-            setSessionState("complete");
-        } else {
+    // Advance to the next exercise in the active queue, or finish the current phase:
+    // after the first pass, go to the mistakes-intro gate if any mistakes were made;
+    // after the review round (or a clean first pass), show the completion screen.
+    function advanceToNext() {
+        if (currentQueueIndex + 1 < activeQueue.length) {
             setCurrentQueueIndex((prev) => prev + 1);
+            return;
         }
+        if (phase === "first" && mistakeExercises.length > 0) {
+            setSessionState("mistakes-intro");
+            return;
+        }
+        recordSessionEnd();
+        setSessionState("complete");
+    }
+
+    function handleSkip() {
+        advanceToNext();
     }
 
     function handleContinueAfterResult() {
         setLastSubmissionResult(null);
-        if (currentQueueIndex + 1 >= exerciseQueue.length) {
-            recordSessionEnd();
-            setSessionState("complete");
-        } else {
-            setCurrentQueueIndex((prev) => prev + 1);
-        }
+        advanceToNext();
+    }
+
+    function handleStartMistakesReview() {
+        setReviewQueue(
+            mistakeExercises.map((ex) => ({ exercise: ex, queueKey: `${ex.exerciseId}-review` }))
+        );
+        setPhase("review");
+        setCurrentQueueIndex(0);
+        setLastSubmissionResult(null);
+        setSessionState("playing");
     }
 
     if (isLoading || exerciseQueue.length === 0) {
@@ -147,6 +172,17 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                 accuracyPercent={accuracyPercent}
                 durationSeconds={sessionDurationSeconds}
                 onBack={() => router.back()}
+            />
+        );
+    }
+
+    // Gate shown after the first pass when the user made mistakes: explain the review
+    // round, then reveal the exercises they got wrong.
+    if (sessionState === "mistakes-intro") {
+        return (
+            <MistakesIntroScreen
+                mistakeCount={mistakeExercises.length}
+                onStart={handleStartMistakesReview}
             />
         );
     }
@@ -177,6 +213,16 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                         <div className="session-prog-fill" style={{ width: `${progressPercent}%` }} />
                     </div>
                 </div>
+
+                {phase === "review" && (
+                    <span
+                        className="eyebrow"
+                        style={{ flex: "none", color: "var(--amber)", whiteSpace: "nowrap" }}
+                    >
+                        <Icon name="target" size={14} />
+                        Работа над ошибками
+                    </span>
+                )}
             </div>
 
             {/* Exercise content */}
@@ -387,6 +433,44 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
                     onClick={onBack}
                 >
                     Вернуться к пути
+                    <Icon name="arrow-right" size={18} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+interface MistakesIntroScreenProps {
+    mistakeCount: number;
+    onStart: () => void;
+}
+
+function MistakesIntroScreen({ mistakeCount, onStart }: MistakesIntroScreenProps) {
+    const exercisesWord =
+        mistakeCount % 10 === 1 && mistakeCount % 100 !== 11
+            ? "упражнении"
+            : "упражнениях";
+
+    return (
+        <div className="complete">
+            <div className="complete-inner">
+                <div className="check-circle" style={{ background: "var(--amber)" }}>
+                    <Icon name="target" size={44} color="#fff" />
+                </div>
+
+                <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 8 }}>
+                    Работа над ошибками
+                </div>
+                <h1 className="h1" style={{ margin: "0 0 16px", fontSize: 26, letterSpacing: "-0.02em" }}>
+                    Теперь обработаем ошибки
+                </h1>
+                <p style={{ margin: "0 0 28px", color: "var(--ink-3)", lineHeight: 1.5 }}>
+                    Вы прошли все упражнения! В {mistakeCount} {exercisesWord} были ошибки — давайте
+                    разберём их ещё раз, чтобы закрепить материал.
+                </p>
+
+                <button className="btn btn-primary btn-lg btn-block" onClick={onStart}>
+                    Начать работу над ошибками
                     <Icon name="arrow-right" size={18} />
                 </button>
             </div>

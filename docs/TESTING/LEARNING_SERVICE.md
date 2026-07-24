@@ -25,7 +25,7 @@ InMemory). No Postgres/Kafka/Redis/AI service is required.
 |---|---|
 | Deterministic grading (choose_option, fill_blank, reorder, match_pairs partial credit, categorize, theory_card) | `DeterministicEvaluationStrategyTests` |
 | AI grading path delegates to ai-service `/ai/evaluate` with the global prompt, maps the verdict | `AiExerciseEvaluationStrategyTests` (mocks `IAiEvaluationClient`) |
-| Submission emits `exercise.completed` always, `lesson.completed` + `skill.completed` on completion; no events of the latter two on a wrong answer; `XpEarned` is 0 | `ExerciseServiceEventEmissionTests` (mocks `ILearningEventPublisher`) |
+| Submission emits `exercise.completed` always; lesson completion is **attempt-based** — `lesson.completed` + `skill.completed` fire once every exercise has been attempted (correct or wrong), so a wrong answer on a single-exercise lesson still completes it; `XpEarned` is 0 | `ExerciseServiceEventEmissionTests` (mocks `ILearningEventPublisher`) |
 | Skill-tree progress aggregation (completed/total lessons, status) and gamification aggregates returned as 0 | `SkillTreeServiceTests` |
 | Technique cards (IsNew flag), MarkTechniqueSeen creates progress once (idempotent) | `TechniqueServiceTests` |
 | Admin technique export returns all techniques (ordered by SortOrder) in the re-importable `AdminTechniqueWriteRequestDto[]` shape, preserving tags/dialog/case/coach | `AdminTechniquesExportTests` |

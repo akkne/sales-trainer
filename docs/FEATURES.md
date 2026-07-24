@@ -111,7 +111,8 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Full-screen session with progress bar
 - 11 exercise types: multiple_choice, fill_blank, free_text, ordering, matching, categorizing, find_error, rewrite_better, ai_dialog, rate_call, written_answer
 - AI evaluation for free-text and complex types (passing threshold: score >= 7/10)
-- Exercise retry queue: failed exercises are queued at end of lesson (max 2 attempts per exercise)
+- A lesson can always be passed: completion is attempt-based (going through every exercise once completes it, regardless of correctness)
+- Mistakes review (once): after the first pass, if any exercises were answered wrong, an intro screen ("Работа над ошибками") gates a single review round replaying only those exercises
 - Keyboard shortcuts (1-4 select, Enter submit)
 - Skip button, post-session stats (XP, accuracy, time)
 - Completion screen with session summary
