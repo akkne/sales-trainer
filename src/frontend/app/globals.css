@@ -867,6 +867,29 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   .has-bottom-nav { padding-bottom: 76px; }
 }
 
+/* ── Mobile top bar (≤767px) — rail-only destinations + notifications ── */
+.mobile-topbar { display: none; }
+@media (max-width: 767px) {
+  .mobile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-topbar-actions { display: flex; align-items: center; gap: 8px; }
+  /* comfortable touch targets — base .icon-btn is 30×30 */
+  .mobile-topbar .icon-btn { width: 40px; height: 40px; border-radius: 12px; }
+  .mobile-topbar .icon-btn.active { color: var(--primary); border-color: var(--primary-tint-border-2); background: var(--primary-soft); }
+}
+
 /* ── Left nav rail (desktop) ── */
 .rail {
   width: 72px;
@@ -1320,7 +1343,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .league-mini:hover { border-color: var(--primary-ring); }
 
 /* ════════ SESSION (V2) ════════ */
-.session { min-height: 100vh; display: flex; flex-direction: column; background: var(--surface-2); }
+.session { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--surface-2); }
 
 /* Top bar: ✕ left + animated violet progress bar */
 .session-top {
@@ -1489,7 +1512,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 
 /* ════════ COMPLETE (V2) ════════ */
 .complete {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden; background: var(--surface-2); padding: 20px;
 }
 .complete-inner {
@@ -1712,7 +1735,7 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
 .mentor-tex { position: absolute; right: -60px; top: -60px; width: 280px; height: 280px; background: radial-gradient(circle, rgba(124,92,255,0.4), transparent 70%); pointer-events: none; }
 
 /* ════════ VOICE (V2) ════════ */
-.voice { min-height: 100vh; display: flex; flex-direction: column; background: var(--surface-2); }
+.voice { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--surface-2); }
 
 /* top bar */
 .voice-top {
@@ -1836,7 +1859,7 @@ html[data-theme="dark"] .state-pill { background: var(--surface-2); border-color
 /* ════════ TEXT CHAT — AI Dialog (V2) ════════ */
 .chat-screen {
   display: grid; grid-template-columns: 280px 1fr;
-  height: 100vh; background: var(--surface-2);
+  height: 100vh; height: 100dvh; background: var(--surface-2);
 }
 
 /* sidebar */
@@ -2977,7 +3000,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .land-features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 64px; text-align: left; }
 .land-feat { display: flex; flex-direction: column; }
 /* ── Auth shell ── */
-.auth { min-height: 100vh; background: var(--surface-2); display: flex; align-items: center; justify-content: center; padding: 24px 20px; position: relative; }
+.auth { min-height: 100vh; min-height: 100dvh; background: var(--surface-2); display: flex; align-items: center; justify-content: center; padding: 24px 20px; position: relative; }
 .auth-card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 40px 36px; position: relative; z-index: 2; box-shadow: 0 2px 8px rgba(20,20,40,.06), 0 1px 2px rgba(20,20,40,.04); }
 .auth-wordmark { display: flex; justify-content: center; margin-bottom: 24px; }
 .auth-heading { font-size: 22px; font-weight: 800; color: var(--ink-heading); text-align: center; letter-spacing: -0.02em; margin: 0 0 6px; }
@@ -3006,7 +3029,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .auth-code-box.filled { border-color: var(--primary-tint-border); background: var(--primary-softer); }
 
 /* ── Onboarding shell ── */
-.ob-shell { min-height: 100vh; background: var(--surface-2); display: flex; flex-direction: column; }
+.ob-shell { min-height: 100vh; min-height: 100dvh; background: var(--surface-2); display: flex; flex-direction: column; }
 .ob-topbar { padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line-2); background: var(--surface); }
 .ob-wordmark { font-size: 16px; font-weight: 800; color: var(--ink-heading); letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
 .ob-progress { display: flex; gap: 6px; align-items: center; }
@@ -3221,6 +3244,15 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   /* guidebook thread paddings */
   .gb-top { padding: 18px; gap: 14px; }
   .gb-body { padding: 0 18px 20px; }
+
+  /* theory (stories) player: tighter reading area */
+  .theory-body { padding: 24px 16px 120px; }
+
+  /* tree page floating action bar: let it shrink below 320px */
+  .path-fab { min-width: 0; width: calc(100% - 24px); }
+
+  /* edit-profile modal: avatar + text can wrap */
+  .epm-photo-row { flex-wrap: wrap; }
 }
 
 /* ── Legacy Tailwind class helpers ── */
@@ -3725,4 +3757,28 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .co-cta-row .btn { width: 100%; }
   .co-date { max-width: 100%; }
   .co-page { padding: 16px 16px 64px; }
+
+  /* header: smaller avatar, name+badge may wrap, keep actions on the row */
+  .co-header { flex-wrap: wrap; }
+  .co-header-av { width: 48px; height: 48px; border-radius: 12px; font-size: 17px; }
+  .co-header-name { flex-wrap: wrap; }
+
+  /* search takes the full row */
+  .co-search-wrap { max-width: 100%; }
+
+  /* status dropdown: never wider than the viewport */
+  .co-status-menu-list { max-width: calc(100vw - 32px); }
+
+  /* readiness ring stacks above the details column */
+  .co-readiness-body { flex-direction: column; }
+
+  /* form footers: full-width stacked buttons, primary on top */
+  .co-log-form-foot { flex-direction: column-reverse; }
+  .co-log-form-foot .btn { width: 100%; }
+
+  /* timeline card top row can wrap instead of overflowing */
+  .co-tl-top { flex-wrap: wrap; }
+
+  /* persona chip delete: comfortable touch target */
+  .co-persona-chip-delete { width: 28px; height: 28px; }
 }

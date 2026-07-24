@@ -48,7 +48,7 @@ export function NotificationPanel({ isOpen, onRequestClose }: NotificationPanelP
             <div
                 role="dialog"
                 aria-label="Уведомления"
-                className="fixed top-14 right-0 left-0 md:absolute md:top-auto md:bottom-0 md:left-full md:right-auto md:ml-3 md:w-96 z-50 bg-surface border border-line rounded-[var(--r-md)] md:rounded-[var(--r-lg)] shadow-lg overflow-hidden max-h-[80vh] flex flex-col"
+                className="fixed top-14 right-0 left-0 md:absolute md:top-auto md:bottom-0 md:left-full md:right-auto md:ml-3 md:w-96 z-50 bg-surface border border-line rounded-[var(--r-md)] md:rounded-[var(--r-lg)] shadow-lg overflow-hidden max-h-[calc(100dvh-150px)] md:max-h-[80vh] flex flex-col"
             >
                 <header className="flex items-center justify-between px-4 py-3 border-b border-line bg-bg-2">
                     <h2 className="text-sm font-semibold text-ink">Уведомления</h2>

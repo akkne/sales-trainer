@@ -5,6 +5,19 @@ lives almost entirely in `src/frontend/app/globals.css` (shared grid/layout
 classes) plus per-page Tailwind modifiers; the admin panel has a dedicated
 mobile drawer in `src/frontend/app/(admin)/layout.tsx`.
 
+Mobile shell (redesign V2): the desktop left nav rail is hidden ≤767px and
+replaced by two bars rendered from `src/frontend/app/(main)/layout.tsx`:
+- **`MobileTopbar`** (`features/layout/components/mobile-topbar.tsx`) — sticky
+  top bar with the wordmark plus the rail-only destinations that have no slot
+  in the bottom nav: Справочник, Обсуждения, Настройки, and the notification
+  bell (panel opens full-width under the bar).
+- **`BottomNav`** — fixed bottom tab bar: Путь, Практика, Компании, Друзья,
+  Профиль (safe-area aware; content reserves space via `.has-bottom-nav`).
+
+Full-screen flows (session player, AI chat/voice, company calls, auth,
+onboarding) size themselves with `100dvh` (with a `100vh` fallback) so the
+mobile browser address bar doesn't crush the layout.
+
 ## Breakpoints in use
 - `768px` (Tailwind `md`) — desktop/mobile boundary; top nav ↔ bottom nav + hamburger.
 - `1000px` — multi-column grids collapse to a single column (tree, league, friends, discuss, profile, guidebook).
@@ -16,7 +29,7 @@ mobile drawer in `src/frontend/app/(admin)/layout.tsx`.
 Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or resize the window. Check both light and dark theme.
 
 ## User-facing checklist (no horizontal page scroll anywhere)
-- [ ] **Top bar / nav** — desktop nav hidden, hamburger + bottom nav visible; profile chip / streak pill hidden in appbar.
+- [ ] **Top bar / nav** — nav rail hidden; mobile top bar (wordmark + справочник/обсуждения/настройки/уведомления) and bottom nav visible; notification panel opens full-width under the top bar and doesn't cover the bottom nav.
 - [ ] **Tree** — sidebar, lesson path, stats stack into one column; lesson-path nodes fit without overflow.
 - [ ] **League** — countdown digits fit on one row; leaderboard rows don't overflow.
 - [ ] **Dialog list** — bundle/mode cards are one per row (no clipped 300px cards); mentor card padding sane.
@@ -29,6 +42,11 @@ Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or re
 - [ ] **Guidebook** — cards single column; expanded card readable.
 - [ ] **Landing / auth** — hero scales (clamp); features single column; auth card fits.
 - [ ] **Modals** — near-fullscreen, scroll internally, never overflow viewport.
+- [ ] **Companies list** — header stacks, "Добавить компанию" full-width; search takes the full row; status filter chips wrap.
+- [ ] **Company page** — header wraps (smaller avatar, name + status badge can break to a new line); status dropdown stays inside the viewport; readiness ring stacks above its details; timeline card top rows wrap instead of overflowing; call-log/contact form buttons stack full-width.
+- [ ] **Company practice call (chat/voice)** — same as AI chat/voice: no 100vh clipping, input reachable with the keyboard open.
+- [ ] **Theory (stories) player** — reading area uses tighter phone padding.
+- [ ] **Tree FAB** — floating "continue" bar shrinks below 320px viewports instead of overflowing.
 
 ## Admin checklist
 - [ ] Mobile top bar with hamburger appears (<768px); tapping it opens the drawer over a dimmed backdrop.
