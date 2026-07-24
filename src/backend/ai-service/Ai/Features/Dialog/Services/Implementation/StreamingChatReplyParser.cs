@@ -146,14 +146,16 @@ internal sealed class StreamingChatReplyParser
             return new ChatReplyParseResult(
                 Reply: _decodedReply.ToString().Trim(),
                 EndCall: ResolveEndCallFlag(rawText),
-                UsedFallback: false);
+                UsedFallback: false,
+                EndCallReason: ResolveEndCallReason(rawText));
         }
 
         var fallbackReply = ExtractFallbackReply(rawText);
         return new ChatReplyParseResult(
             Reply: fallbackReply,
             EndCall: ResolveEndCallFlag(rawText) || rawText.Contains("[DIALOG_END]", StringComparison.Ordinal),
-            UsedFallback: true);
+            UsedFallback: true,
+            EndCallReason: ResolveEndCallReason(rawText));
     }
 
     private bool TryLocateReplyKey()
@@ -187,6 +189,29 @@ internal sealed class StreamingChatReplyParser
 
         var endCallMatch = Regex.Match(rawText, "\"endCall\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
         return endCallMatch.Success && bool.Parse(endCallMatch.Groups[1].Value.ToLowerInvariant());
+    }
+
+    private static string? ResolveEndCallReason(string rawText)
+    {
+        try
+        {
+            using var parsedDocument = JsonDocument.Parse(StripMarkdownCodeFence(rawText));
+            if (parsedDocument.RootElement.ValueKind == JsonValueKind.Object &&
+                parsedDocument.RootElement.TryGetProperty("endCallReason", out var reasonElement) &&
+                reasonElement.ValueKind == JsonValueKind.String)
+            {
+                var reason = reasonElement.GetString()?.Trim();
+                return string.IsNullOrEmpty(reason) ? null : reason;
+            }
+        }
+        catch (JsonException) { }
+
+        var reasonMatch = Regex.Match(rawText, "\"endCallReason\"\\s*:\\s*\"([^\"]*)\"", RegexOptions.IgnoreCase);
+        if (!reasonMatch.Success)
+            return null;
+
+        var matchedReason = reasonMatch.Groups[1].Value.Trim();
+        return string.IsNullOrEmpty(matchedReason) ? null : matchedReason;
     }
 
     private static string ExtractFallbackReply(string rawText)

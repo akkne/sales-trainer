@@ -33,6 +33,30 @@ public class StreamingChatReplyParserTests
     }
 
     [Test]
+    public void Complete_ReadsEndCallReason_WhenCharacterHangsUp()
+    {
+        var parser = new StreamingChatReplyParser();
+
+        parser.Push("""{"reply": "Так со мной разговаривать не нужно. Всего доброго.", "endCall": true, "endCallReason": "оскорбления"}""");
+        var result = parser.Complete();
+
+        result.EndCall.Should().BeTrue();
+        result.EndCallReason.Should().Be("оскорбления");
+    }
+
+    [Test]
+    public void Complete_EndCallReasonIsNull_WhenModelReturnsNull()
+    {
+        var parser = new StreamingChatReplyParser();
+
+        parser.Push("""{"reply": "Слушаю вас.", "endCall": false, "endCallReason": null}""");
+        var result = parser.Complete();
+
+        result.EndCall.Should().BeFalse();
+        result.EndCallReason.Should().BeNull();
+    }
+
+    [Test]
     public void Complete_FallsBackToPlainText_WhenModelIgnoresContract()
     {
         var parser = new StreamingChatReplyParser();

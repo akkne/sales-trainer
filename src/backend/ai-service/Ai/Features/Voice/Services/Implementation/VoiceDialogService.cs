@@ -139,8 +139,8 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             cancellationToken: ct);
 
         _logger.LogInformation(
-            "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}",
-            sessionId, transcript.Length, parseResult.Reply.Length, parseResult.EndCall);
+            "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}, endCallReason={EndCallReason}",
+            sessionId, transcript.Length, parseResult.Reply.Length, parseResult.EndCall, parseResult.EndCallReason ?? "unspecified");
 
         yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: true);
     }

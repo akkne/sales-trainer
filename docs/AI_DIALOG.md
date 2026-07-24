@@ -172,7 +172,7 @@ Tested / supported gateways:
 instruction: the model must answer ONLY with a JSON object
 
 ```json
-{"reply": "<реплика персонажа>", "endCall": true|false}
+{"reply": "<реплика персонажа>", "endCall": true|false, "endCallReason": "<причина или null>"}
 ```
 
 enforced via `response_format` (json_schema; flat OpenRouter shape for the f5ai proxy,
@@ -184,15 +184,28 @@ can stream it to TTS while the model is still generating
 rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block format
 and the `[XP:число]` tag requirement (see Progress Point Rewards below).
 
-### Call Termination (endCall)
+### Conversation style
 
-The persona model returns `endCall: true` when it hangs up:
-- Immediately on critical user mistakes — swearing, rudeness, rambling nonsense,
-  begging, weak openers without specifics, repeating a rejected argument, lying.
-- Normally when the conversation reached its logical end.
+The appended instruction tells the persona to behave like a real person: greet back,
+answer in full natural sentences (not curt one-liners), react to what the caller says,
+ask follow-ups, and warm up when the caller is polite and on-topic. Nervousness, pauses
+or a weak opener are explicitly **not** grounds to be rude or hang up — the persona gives
+the caller a chance to recover. Toughness scales with the persona difficulty.
 
-`endCall` maps to `isStopSignal` on the stored message, the stream frame flags and the
-chat DTOs (wire/storage names unchanged). The frontend ends the call and requests feedback.
+### Call Termination (endCall / endCallReason)
+
+The persona model decides on its own when to hang up and returns `endCall: true`:
+- When genuinely disrespected — swearing, insults, threats, aggression.
+- When the caller lies/manipulates or the talk turns into nonsense that doesn't recover
+  after one clarification.
+- Normally, when the conversation reached its logical end (agreed / final refusal).
+
+When `endCall: true`, the model fills `endCallReason` with a short tag
+(`оскорбления`, `манипуляция`, `договорились`, `отказ`, …); otherwise it returns `null`.
+`endCallReason` is parsed by `StreamingChatReplyParser` and logged server-side (chat and
+voice paths). `endCall` still maps to `isStopSignal` on the stored message, the stream
+frame flags and the chat DTOs (wire/storage names unchanged); the frontend ends the call
+and requests feedback.
 
 ### Progress Point Rewards
 
