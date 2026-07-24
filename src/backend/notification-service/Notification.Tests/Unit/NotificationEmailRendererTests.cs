@@ -19,7 +19,6 @@ public class NotificationEmailRendererTests
                 new FriendRequestAcceptedEmailTemplate(),
                 new ChatMessageEmailTemplate(),
                 new DiscussReplyEmailTemplate(),
-                new LeagueUpdatedEmailTemplate(),
                 new WelcomeEmailTemplate(),
             },
             new GenericNotificationEmailTemplate(),
@@ -77,15 +76,6 @@ public class NotificationEmailRendererTests
     }
 
     [Test]
-    public void Render_LeagueUpdated_UsesLeagueTemplate()
-    {
-        var content = CreateRenderer().Render(Context(NotificationType.LeagueUpdated, actionUrl: "/league"));
-
-        content.Subject.Should().Be("Your Sellevate league was updated");
-        content.HtmlBody.Should().Contain("View league");
-    }
-
-    [Test]
     public void Render_Welcome_UsesWelcomeTemplate()
     {
         var content = CreateRenderer().Render(Context(NotificationType.UserWelcome, actionUrl: "/"));
@@ -121,9 +111,9 @@ public class NotificationEmailRendererTests
     [Test]
     public void Render_NoActionUrl_OmitsButton()
     {
-        var content = CreateRenderer().Render(Context(NotificationType.LeagueUpdated, actionUrl: null));
+        var content = CreateRenderer().Render(Context(NotificationType.DiscussReplyReceived, actionUrl: null));
 
-        content.HtmlBody.Should().NotContain("View league");
+        content.HtmlBody.Should().NotContain("View discussion");
     }
 
     [Test]

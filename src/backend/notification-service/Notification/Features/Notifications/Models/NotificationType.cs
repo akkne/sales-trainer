@@ -8,7 +8,8 @@ public enum NotificationType
     AchievementUnlocked = 4,
     StreakMilestone = 5,
     DiscussReplyReceived = 6,
-    LeagueUpdated = 7,
+    // 7 was LeagueUpdated — league notifications were removed; the value is retired
+    // (never reused) so any pre-existing stored notifications still deserialize.
     UserWelcome = 8,
     CompanyFollowUpDue = 9
 }

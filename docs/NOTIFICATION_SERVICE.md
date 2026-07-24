@@ -71,9 +71,9 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
 - **Consumes (idempotent, dedupe on `eventId`):**
   - `NotificationEventConsumer` — `achievement.unlocked`, `streak.milestone`,
     `friend.request.received`, `friend.request.accepted`, `chat.message.sent`,
-    `chat.message.read`, `discuss.reply.created`, `league.updated`. Each maps to a
+    `chat.message.read`, `discuss.reply.created`. Each maps to a
     notification written to the recipient's Redis inbox via `INotificationEventMapper`.
-    `discuss.reply.created` and `league.updated` also email immediately; `chat.message.sent`
+    `discuss.reply.created` also emails immediately; `chat.message.sent`
     schedules a delayed unread-email and `chat.message.read` cancels it. Unmappable or
     malformed payloads are skipped (logged), never crash the consumer.
   - `UserReplicaConsumer` — `user.registered`/`user.updated`/`user.deleted`, projecting a

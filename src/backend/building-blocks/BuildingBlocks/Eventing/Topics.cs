@@ -40,9 +40,6 @@ public static class Topics
     public const string ChatMessageRead = "chat.message.read";
     public const string DiscussReplyCreated = "discuss.reply.created";
 
-    // ── Gamification (produces) — league lifecycle ─────────────────────────
-    public const string LeagueUpdated = "league.updated";
-
     // ── Company (produces) ─────────────────────────────────────────────────
     public const string CompanyFollowUpDue = "company.followup.due";
 

@@ -10,8 +10,6 @@ public static class NotificationActionRoutes
 
     public static string ChatConversation(Guid conversationId) => $"/friends/chat/{conversationId}";
 
-    public const string League = "/league";
-
     public static string DiscussThread(Guid threadId) => $"/discuss/{threadId}";
 
     public static string CompanyDetails(Guid companyId) => $"/companies/{companyId}";

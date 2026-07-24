@@ -8,7 +8,5 @@ public interface IGamificationEventPublisher
 
     Task PublishStreakMilestoneAsync(StreakMilestoneEvent payload, CancellationToken cancellationToken = default);
 
-    Task PublishLeagueUpdatedAsync(LeagueUpdatedEvent payload, CancellationToken cancellationToken = default);
-
     Task PublishDialogWeightsUpdatedAsync(GamificationDialogWeightsUpdatedEvent payload, CancellationToken cancellationToken = default);
 }

@@ -45,17 +45,6 @@ public sealed record DiscussReplyCreatedEvent(
     Guid ReplyId,
     string Preview);
 
-/// <summary>Published by Gamification when the weekly league rolls over. One event per member;
-/// <see cref="Outcome"/> is "promoted", "demoted" or "stayed". <see cref="LeagueId"/> identifies
-/// the resulting week's league so each weekly rollover yields a fresh (dedupe-distinct) notification.</summary>
-public sealed record LeagueUpdatedEvent(
-    Guid UserId,
-    Guid LeagueId,
-    string PreviousTier,
-    string NewTier,
-    string Outcome,
-    int Rank);
-
 /// <summary>Published by company-service's follow-up reminder poll when a scheduled
 /// <c>Company.NextActionAt</c> becomes due and has not yet been notified. Field names match the
 /// wire contract in <c>company-service</c>'s <c>CompanyIntegrationEvents.CompanyFollowUpDueEvent</c>.</summary>

@@ -46,7 +46,6 @@ public static class NotificationServiceCollectionExtensions
         services.AddSingleton<INotificationEmailTemplate, FriendRequestAcceptedEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, ChatMessageEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, DiscussReplyEmailTemplate>();
-        services.AddSingleton<INotificationEmailTemplate, LeagueUpdatedEmailTemplate>();
         services.AddSingleton<INotificationEmailTemplate, WelcomeEmailTemplate>();
         services.AddSingleton<GenericNotificationEmailTemplate>();
 

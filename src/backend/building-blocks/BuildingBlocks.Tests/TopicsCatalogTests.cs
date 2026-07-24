@@ -23,7 +23,6 @@ public sealed class TopicsCatalogTests
             Topics.ChatMessageSent,
             Topics.ChatMessageRead,
             Topics.DiscussReplyCreated,
-            Topics.LeagueUpdated,
             Topics.AchievementUnlocked,
             Topics.StreakMilestone,
             Topics.CompanyFollowUpDue,

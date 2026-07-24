@@ -267,7 +267,6 @@ a composition of those per-service admin APIs.
 | `chat.message.sent` | Social | Notifications | recipientId, senderName, preview |
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
-| `league.updated` | Gamification | Notifications | userId, leagueId, previousTier, newTier, outcome, rank |
 | `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering

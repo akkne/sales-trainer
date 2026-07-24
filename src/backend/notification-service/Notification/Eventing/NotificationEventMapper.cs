@@ -56,7 +56,6 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.FriendRequestAccepted => MapFriendRequestAccepted(envelope),
             Topics.ChatMessageSent => MapChatMessageSent(envelope),
             Topics.DiscussReplyCreated => MapDiscussReplyCreated(envelope),
-            Topics.LeagueUpdated => MapLeagueUpdated(envelope),
             Topics.CompanyFollowUpDue => MapCompanyFollowUpDue(envelope),
             _ => null
         };
@@ -205,34 +204,6 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             SendEmail: true);
     }
 
-    private static CreateNotificationRequest? MapLeagueUpdated(EventEnvelope envelope)
-    {
-        var payload = envelope.DataAs<LeagueUpdatedEvent>();
-        if (payload is null || payload.UserId == Guid.Empty)
-        {
-            return null;
-        }
-
-        var newTier = FormatTier(payload.NewTier);
-        var body = payload.Outcome switch
-        {
-            "promoted" => $"You were promoted to the {newTier} league. Keep it up!",
-            "demoted" => $"You dropped to the {newTier} league. Time for a comeback!",
-            _ => $"A new league week has started. You're in the {newTier} league."
-        };
-
-        return new CreateNotificationRequest(
-            payload.UserId,
-            NotificationType.LeagueUpdated,
-            NotificationTitles.LeagueUpdated,
-            body,
-            NotificationActionRoutes.League,
-            // Dedupe on the resulting league id — one notification per user per weekly rollover,
-            // while replays of the same rollover event are collapsed.
-            payload.LeagueId.ToString(),
-            SendEmail: true);
-    }
-
     private static CreateNotificationRequest? MapCompanyFollowUpDue(EventEnvelope envelope)
     {
         var payload = envelope.DataAs<CompanyFollowUpDueEvent>();
@@ -261,15 +232,5 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             // collapse two distinct-but-close due dates onto the same dedupe key.
             $"{payload.CompanyId}:{payload.NextActionAt:O}");
         // SendEmail stays false: follow-up due reminders are in-app only per product spec.
-    }
-
-    private static string FormatTier(string? tierKey)
-    {
-        if (string.IsNullOrWhiteSpace(tierKey))
-        {
-            return "new";
-        }
-
-        return char.ToUpperInvariant(tierKey[0]) + tierKey[1..].ToLowerInvariant();
     }
 }
