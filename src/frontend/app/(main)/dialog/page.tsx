@@ -212,7 +212,6 @@ export default function DialogPage() {
                                             {bundle.skillTitle}
                                         </span>
                                     )}
-                                    <span className="bundle-modes-count">режимы →</span>
                                 </div>
 
                                 {/* footer: Chat + Call buttons */}
@@ -272,9 +271,9 @@ export default function DialogPage() {
                                         </div>
                                         <span className="session-ts">{ts}</span>
                                         <Link
-                                            href={`/dialog/${session.bundleId}`}
+                                            href={`/dialog/${session.bundleId}/${session.modeId}?session=${session.id}`}
                                             className="session-open-link"
-                                            aria-label={`Открыть сессию: ${session.modeTitle}`}
+                                            aria-label={`Открыть транскрипт сессии: ${session.modeTitle}`}
                                         >
                                             Открыть →
                                         </Link>

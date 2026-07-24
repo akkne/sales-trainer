@@ -1648,16 +1648,24 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-4);
 }
 
-/* Confetti — respects reduced-motion */
-.confetti { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+/* Confetti — layered fall + drift + spin, plays once. Respects reduced-motion */
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .confetti span {
-  position: absolute; top: -10px; width: 9px; height: 14px;
-  border-radius: 2px; opacity: 0.9;
-  animation: cfall 2.6s linear infinite;
+  position: absolute; top: -24px;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(20,20,40,0.12);
+  will-change: transform, opacity;
+  animation-name: cfall;
+  animation-timing-function: cubic-bezier(0.25, 0.6, 0.5, 1);
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
 }
+.confetti span.confetti-circle { border-radius: 50%; }
 @keyframes cfall {
-  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
-  100% { transform: translateY(105vh) rotate(540deg); opacity: 0; }
+  0%   { transform: translate3d(0, -24px, 0) rotate(0deg); opacity: 0; }
+  8%   { opacity: 1; }
+  55%  { transform: translate3d(calc(var(--cf-x) * 0.55), 46vh, 0) rotate(calc(var(--cf-rot) * 0.55)); opacity: 1; }
+  100% { transform: translate3d(var(--cf-x), 104vh, 0) rotate(var(--cf-rot)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .confetti span { animation: none; opacity: 0; } }
 

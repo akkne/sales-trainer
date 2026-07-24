@@ -96,12 +96,9 @@ export function RewriteExercise({
                         fontFamily: "var(--font-mono)",
                     }}
                 >
-                    <span>
-                        {charCount < minLength ? (
-                            <span style={{ color: "var(--amber)" }}>мин. {minLength} · сейчас {charCount}</span>
-                        ) : (
-                            <span style={{ color: "var(--success)" }}>{charCount} символов ✓</span>
-                        )}
+                    <span style={{ color: isValidLength ? "var(--success)" : "var(--ink-3)" }}>
+                        {charCount}/{minLength}
+                        {isValidLength && " ✓"}
                     </span>
                 </div>
             </div>

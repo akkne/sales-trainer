@@ -356,21 +356,40 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
 const CONFETTI_COLORS = ["var(--primary)", "var(--violet)", "var(--flame)", "var(--success)", "var(--amber)"];
 
+// Deterministic pseudo-random so SSR and client render identically
+function seeded(i: number, salt: number): number {
+    const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+}
+
 function Confetti() {
-    return (
-        <div className="confetti">
-            {Array.from({ length: 40 }).map((_, i) => (
-                <span
-                    key={i}
-                    style={{
-                        left: `${i * 2.5}%`,
-                        animationDelay: `${(i % 10) * 0.12}s`,
-                        background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-                    }}
-                />
-            ))}
-        </div>
-    );
+    const pieces = Array.from({ length: 70 }).map((_, i) => {
+        const left = seeded(i, 1) * 100;
+        const drift = (seeded(i, 2) - 0.5) * 160; // px horizontal sway
+        const delay = seeded(i, 3) * 1.2;
+        const duration = 2.4 + seeded(i, 4) * 2.2;
+        const rotate = 360 + Math.round(seeded(i, 5) * 720);
+        const size = 7 + Math.round(seeded(i, 6) * 7);
+        const circle = seeded(i, 7) > 0.62;
+        return (
+            <span
+                key={i}
+                className={circle ? "confetti-circle" : undefined}
+                style={{
+                    left: `${left}%`,
+                    width: size,
+                    height: circle ? size : size * 1.5,
+                    background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+                    // @ts-expect-error CSS custom properties
+                    "--cf-x": `${drift}px`,
+                    "--cf-rot": `${rotate}deg`,
+                    animationDelay: `${delay}s`,
+                    animationDuration: `${duration}s`,
+                }}
+            />
+        );
+    });
+    return <div className="confetti" aria-hidden="true">{pieces}</div>;
 }
 
 interface CompletionScreenProps {
@@ -403,13 +422,8 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
                     {heading}
                 </h1>
 
-                {/* Stat grid — XP / accuracy / time (NO hearts) */}
+                {/* Stat grid — accuracy / time (NO XP, NO hearts) */}
                 <div className="complete-stats">
-                    <div className="cs">
-                        <Icon name="bolt" size={22} style={{ color: "var(--primary)" }} />
-                        <b>+{xp}</b>
-                        <span>получено XP</span>
-                    </div>
                     {accuracyPercent !== undefined && (
                         <div className="cs">
                             <Icon name="target" size={22} style={{ color: "var(--success)" }} />

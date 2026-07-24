@@ -38,6 +38,7 @@ export default function ChatPage() {
     const bundleId = params.bundleId as string;
     const modeId = params.modeId as string;
     const chatMode = searchParams.get("mode") || "text";
+    const initialSessionId = searchParams.get("session");
 
     const { data: bundles } = useDialogBundles();
     const { data: modes } = useDialogModes(bundleId);
@@ -126,7 +127,10 @@ export default function ChatPage() {
             (session) => session.bundleId === bundleId && session.modeId === modeId
         );
 
-        if (existingSessions.length === 0) {
+        if (initialSessionId && existingSessions.some((session) => session.id === initialSessionId)) {
+            // Opened from "Recent sessions → Open": load that session's transcript
+            handleSessionClick(initialSessionId);
+        } else if (existingSessions.length === 0) {
             initializeNewSession();
         } else {
             setIsLoading(false);

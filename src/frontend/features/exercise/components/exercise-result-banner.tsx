@@ -18,7 +18,8 @@ interface ExerciseResultBannerProps {
 type Tone = "good" | "warn" | "bad";
 
 function pickTone(isCorrect: boolean, score: number): Tone {
-    if (isCorrect) return "good";
+    // 7/10 (score >= 70) and above counts as a pass → green
+    if (isCorrect || score >= 70) return "good";
     if (score >= 40) return "warn";
     return "bad";
 }
