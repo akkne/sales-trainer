@@ -44,6 +44,10 @@ All unit tests use EF Core InMemory DB. No Docker required.
 - [x] `Submit_IncorrectAnswer_NoXpRecord`
 - [x] `Submit_UnknownExercise_ThrowsKeyNotFoundException`
 
+**File:** `Unit/ExerciseServiceEventEmissionTests.cs`
+
+- [x] `CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic` — cross-topic rollover: finishing a topic's last lesson unlocks the first lesson of the next topic
+
 ## Block 4 — LeagueService
 **File:** `Unit/LeagueServiceTests.cs`
 **Status:** [x]

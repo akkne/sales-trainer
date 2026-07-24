@@ -59,6 +59,52 @@ public sealed class ExerciseServiceEventEmissionTests
     }
 
     [Test]
+    public async Task CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic()
+    {
+        // Regression: finishing a topic's last lesson must roll over and unlock the
+        // first lesson of the next topic, not leave it Locked.
+        await using var databaseContext = LearningDbContextFactory.CreateInMemory();
+
+        var skillId = Guid.NewGuid();
+        var topic1Id = Guid.NewGuid();
+        var topic2Id = Guid.NewGuid();
+        var lesson1Id = Guid.NewGuid();
+        var lesson2Id = Guid.NewGuid();
+        var exercise1Id = Guid.NewGuid();
+
+        databaseContext.Skills.Add(new Skill { Id = skillId, IconicName = "cold-calling", Title = "Cold calling" });
+        databaseContext.Topics.Add(new Topic { Id = topic1Id, SkillId = skillId, IconicName = "basics", Title = "Basics", OrderInSkill = 1 });
+        databaseContext.Topics.Add(new Topic { Id = topic2Id, SkillId = skillId, IconicName = "advanced", Title = "Advanced", OrderInSkill = 2 });
+        databaseContext.Lessons.Add(new Lesson { Id = lesson1Id, TopicId = topic1Id, Title = "Opening", OrderInTopic = 1 });
+        databaseContext.Lessons.Add(new Lesson { Id = lesson2Id, TopicId = topic2Id, Title = "Objections", OrderInTopic = 1 });
+        databaseContext.Exercises.Add(new Exercise
+        {
+            Id = exercise1Id,
+            LessonId = lesson1Id,
+            Type = ExerciseTypes.ChooseOption,
+            OrderInLesson = 1,
+            SerializedContent = """{"options":[{"text":"a","is_correct":true},{"text":"b","is_correct":false}]}""",
+        });
+        await databaseContext.SaveChangesAsync();
+
+        var service = new ExerciseService(
+            databaseContext, CreateFactory(databaseContext),
+            Substitute.For<ILearningEventPublisher>(),
+            Substitute.For<IExerciseDialogService>());
+
+        var userId = Guid.NewGuid();
+        var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
+
+        await service.SubmitExerciseAnswerAsync(userId, exercise1Id, answer);
+
+        var lesson2Progress = databaseContext.UserLessonProgressRecords
+            .SingleOrDefault(record => record.UserId == userId && record.LessonId == lesson2Id);
+
+        lesson2Progress.Should().NotBeNull("finishing the last lesson of topic 1 should unlock topic 2");
+        lesson2Progress!.Status.Should().Be(LessonProgressStatuses.Available);
+    }
+
+    [Test]
     public async Task SubmitCorrectAnswer_EmitsExerciseLessonAndSkillCompletedEvents()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();

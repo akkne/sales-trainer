@@ -429,12 +429,7 @@ internal sealed class ExerciseService(
         Lesson completedLesson,
         CancellationToken cancellationToken = default)
     {
-        var nextLesson = await databaseContext.Lessons
-            .Where(lesson => lesson.TopicId == completedLesson.TopicId
-                        && lesson.OrderInTopic > completedLesson.OrderInTopic)
-            .OrderBy(lesson => lesson.OrderInTopic)
-            .ThenBy(lesson => lesson.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        var nextLesson = await ResolveNextLessonInSkillAsync(completedLesson, cancellationToken);
 
         if (nextLesson is null) return;
 
@@ -455,6 +450,47 @@ internal sealed class ExerciseService(
         {
             nextProgress.Status = LessonProgressStatuses.Available;
         }
+    }
+
+    /// <summary>
+    /// Resolves the lesson that follows <paramref name="completedLesson"/> in the skill's global
+    /// order (topics by OrderInSkill, then lessons by OrderInTopic). This rolls over topic
+    /// boundaries: finishing a topic's last lesson unlocks the first lesson of the next topic.
+    /// </summary>
+    private async Task<Lesson?> ResolveNextLessonInSkillAsync(
+        Lesson completedLesson,
+        CancellationToken cancellationToken)
+    {
+        // Next lesson within the same topic wins first.
+        var nextInTopic = await databaseContext.Lessons
+            .Where(lesson => lesson.TopicId == completedLesson.TopicId
+                        && lesson.OrderInTopic > completedLesson.OrderInTopic)
+            .OrderBy(lesson => lesson.OrderInTopic)
+            .ThenBy(lesson => lesson.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (nextInTopic is not null) return nextInTopic;
+
+        // Topic exhausted → find the first lesson of the next topic in the same skill.
+        var currentTopic = await databaseContext.Topics
+            .FirstOrDefaultAsync(topic => topic.Id == completedLesson.TopicId, cancellationToken);
+
+        if (currentTopic is null) return null;
+
+        var nextTopic = await databaseContext.Topics
+            .Where(topic => topic.SkillId == currentTopic.SkillId
+                        && topic.OrderInSkill > currentTopic.OrderInSkill)
+            .OrderBy(topic => topic.OrderInSkill)
+            .ThenBy(topic => topic.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (nextTopic is null) return null;
+
+        return await databaseContext.Lessons
+            .Where(lesson => lesson.TopicId == nextTopic.Id)
+            .OrderBy(lesson => lesson.OrderInTopic)
+            .ThenBy(lesson => lesson.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private async Task PublishSkillCompletionIfFinishedAsync(

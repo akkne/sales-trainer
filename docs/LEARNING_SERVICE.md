@@ -68,6 +68,19 @@ Reuses the shared Redis (Kafka idempotency store) and Kafka broker.
 | AI grading strategies calling OpenAI directly + reading `ExerciseTypePrompt` | The deterministic strategies stay local. The 5 AI types call ai-service `POST /ai/evaluate`, passing the global `ExerciseTypePrompt` text (Learning still owns the prompts) plus the raw exercise content + user answer; ai-service runs the LLM grading and returns the verdict. |
 | `SkillTreeService` reading XP/streak/goals for the `/skill-tree` aggregate | Those fields are owned by Gamification (Phase 7). Learning serves the skill-progress fields truthfully (computed from its own lesson progress) and returns `currentStreakDayCount`/`totalXp`/`weeklyXp`/`dailyXp`/goals as `0` — DTO shape unchanged, composed for real once the frontend reads gamification aggregates. |
 
+## Lesson progression / unlocking
+
+Lessons unlock sequentially. On the first correct/attempted submission that transitions a
+lesson to `completed`, `ExerciseService.UnlockNextLessonInTopicAsync` marks the **next**
+lesson `Available` (creating its `UserLessonProgress` row if missing).
+
+"Next" is resolved across the whole skill, not just the current topic
+(`ResolveNextLessonInSkillAsync`): the next lesson in the same topic by `OrderInTopic` wins
+first; when a topic's last lesson is completed it **rolls over** to the first lesson
+(`OrderInTopic`) of the next topic by `Topic.OrderInSkill`. This is what lets the next topic
+open once the current one is finished. Regression covered by
+`ExerciseServiceEventEmissionTests.CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic`.
+
 ## Events produced
 
 | Topic | When | Payload (camelCase on the wire) |
