@@ -188,7 +188,7 @@ export function useVoice(options: UseVoiceOptions) {
 
         try {
             endpointerRef.current = new SpeechEndpointer({
-                silenceMs: voiceConfig?.vadSilenceMs ?? 600,
+                silenceMs: voiceConfig?.vadSilenceMs ?? 1200,
                 onUtterance: (utterance: string) => {
                     processSpeech(utterance);
                 },

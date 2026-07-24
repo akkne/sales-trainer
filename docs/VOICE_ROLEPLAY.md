@@ -16,7 +16,7 @@ Voice-based sales conversation practice in the existing Dialog tab. Stack:
 /dialog/[bundleId]/[modeId]
     ├── Text mode (existing) — keyboard input
     └── Voice mode (new) — microphone input
-        ├── User speaks → VAD detects end (~450ms silence)
+        ├── User speaks → VAD detects end (~1200ms silence)
         ├── Deepgram transcript ready (streamed parallel)
         ├── GPT evaluates + generates character response
         ├── ElevenLabs streams audio → playback starts
@@ -153,7 +153,7 @@ gets the reply as text, and the stream finishes normally with the final sentinel
   "Voice": {
     "Enabled": true,
     "TtsProvider": "yandex",
-    "VadSilenceMs": 450,
+    "VadSilenceMs": 1200,
     "MaxRecordingSeconds": 60,
     "DailyLimitMinutes": 30,
     "MonthlyLimitMinutes": 300
@@ -288,7 +288,8 @@ If any service is not configured:
 ## Latency Optimization
 
 1. **Parallel STT**: Deepgram streams transcription while user speaks
-2. **Short VAD silence**: 450ms end-of-speech detection
+2. **VAD silence window**: 1200ms end-of-speech detection — wide enough that the
+   speaker can pause mid-thought without being cut off before finishing
 3. **Pipelined TTS**: sentence N is synthesized concurrently with LLM streaming
    of sentence N+1; audio frames flush in reply order as soon as they are ready
 4. **WebSocket reuse**: Keep Deepgram connection open during session
