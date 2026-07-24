@@ -38,6 +38,6 @@ dotnet build src/backend/ai-service/Ai/Sellevate.Ai.csproj
    - Voice stream `POST /dialog/sessions/{id}/voice/stream` → length-prefixed frames.
 4. Confirm a completed session emits `dialog.evaluated` (Kafka UI on `:8085`).
 5. Publish a `gamification.dialog-weights.updated` event and confirm the next session's
-   XP reflects the new weights/multiplier.
+   progress points reflect the new weights/multiplier.
 6. `POST /ai/evaluate` (internal, hit `http://localhost:5003/ai/evaluate` directly) with
    `{ exerciseType, systemPrompt, exerciseContent, userAnswer }` → `{ isCorrect, score, ... }`.

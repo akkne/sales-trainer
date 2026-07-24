@@ -377,8 +377,8 @@ compact `N / M` counter when there are too many segments to read.
 - On the **last card**, "Далее" becomes "Завершить". Finishing submits **once** (the
   last card) to `POST /exercises/:id/submit` with an empty answer `{}` — this is the
   only graded-shaped call and it always succeeds, so the lesson is completed and the
-  fixed theory XP is awarded a single time (it does not multiply per card).
-- XP is the base reward for `theory_card` in the `ExerciseTypeRewards` table
+  fixed theory reward is awarded a single time (it does not multiply per card).
+- Progress points are the base reward for `theory_card` in the `ExerciseTypeRewards` table
   (seeded at **5**, admin-editable) — intentionally smaller than a practice exercise.
 
 ### Content Schema

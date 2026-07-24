@@ -10,7 +10,7 @@
 User-to-user interaction:
 
 - **Friends** — friend requests (send/accept/decline/remove), friend list, pending
-  requests, user search, public profile, friend leaderboard, friend activity feed.
+  requests, user search, public profile, friend progress overview, friend activity feed.
 - **Discuss** — the community forum: threads, replies, upvotes, accepted (solved)
   replies, free-form + curated tags, photo attachments (S3/MinIO), stats, and the
   admin moderation surface (`/admin/discuss/*`).
@@ -27,7 +27,7 @@ src/backend/social-service/
     Common/Constants/                  AvatarUrls
     Eventing/                          friend/chat event publisher + UserReplica consumer
     Features/
-      Friends/                         friendships CRUD, search, leaderboard, profile
+      Friends/                         friendships CRUD, search, progress overview, profile
       Chat/                            Mongo conversations + messages
       Discuss/                         forum threads/replies/votes/tags/photos + admin
     Identity/                          UserReplica entity
@@ -60,7 +60,7 @@ src/backend/social-service/
 | `FriendService`/`ChatService`/`DiscussService` joining the `Users`/`UserProfiles` tables for display names + avatars | Read from the local `UserReplica` (seeded from `user.*` events); avatar URL is the stable `/avatars/{userId}`. |
 | `FriendService` → `INotificationService.CreateAsync` (friend request received/accepted) | Emits the `friend.request.received` / `friend.request.accepted` Kafka events; notification-service writes the inbox entry. |
 | `ChatService` → `INotificationService.CreateAsync` (new message) | Emits the `chat.message.sent` Kafka event. |
-| Friends leaderboard / public profile / activity feed reading `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserExerciseAttempts` | Those tables are owned by Gamification/Learning (phases 7 & 8, not extracted yet). Social serves identity fields truthfully and returns the aggregate fields as `0`/empty; the DTO shapes are unchanged. Composed for real once those services exist. (See the `[~]` caveat in the roadmap.) |
+| Friends progress overview / public profile / activity feed reading `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserExerciseAttempts` | Those tables are owned by Progress & Recognition/Learning (phases 7 & 8, not extracted yet). Social serves identity fields truthfully and returns the aggregate fields as `0`/empty; the DTO shapes are unchanged. Composed for real once those services exist. (See the `[~]` caveat in the roadmap.) |
 | `MongoDbContext` exposing `dialog_sessions` (AI) | Removed — Social owns only `chat_conversations`. |
 
 ## Kafka

@@ -29,7 +29,7 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 ## Hangup & feedback
 
 - [ ] «Положить трубку» → triple busy beep, status «Звонок завершён», «Готовим разбор...»
-- [ ] Feedback modal opens with score/XP; «Закрыть разбор» resets to idle
+- [ ] Feedback modal opens with score/progress points; «Закрыть разбор» resets to idle
 - [ ] AI-initiated end (endCall=true) triggers the same completion flow
 - [ ] Empty call (no phrases) completes without a feedback modal
 - [ ] Leaving the page mid-call: session completed in background, no stuck tones

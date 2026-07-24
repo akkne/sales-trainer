@@ -11,7 +11,7 @@
 ### Variables and Fields
 - Long, descriptive names: `currentAuthenticatedUser`, `totalCompletedExerciseCount`
 - Booleans prefixed with `is`, `has`, `can`, `should`, `was`
-- Collections — plural with content indicator: `unlockedSkillNodes`, `weeklyLeagueScoresByUserId`
+- Collections — plural with content indicator: `unlockedSkillNodes`, `weeklyCohortProgressByUserId`
 
 ### Methods
 - Verb + full noun: `ProcessExerciseSubmission`, `FindUserByIdentifier`
@@ -146,7 +146,7 @@ Different exercise types (multiple choice, free text, voice) are implemented as 
 Creation of complex objects (skill tree, personalized onboarding) via factories.
 
 ### Observer
-Events after user actions (completed exercise -> update streak, update league, award XP) via observers.
+Events after user actions (completed exercise -> update activity consistency, update team progress, award progress points) via observers.
 
 ### Custom Hook (Frontend)
 All logic extracted from components into hooks. Component only renders.

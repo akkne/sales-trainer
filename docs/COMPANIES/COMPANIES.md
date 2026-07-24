@@ -41,7 +41,7 @@ that doesn't exist — both return `404`, never `403`.
 ### ai-service — company-context sessions
 
 Practice calls are ordinary `DialogSession`s (same Mongo document, same voice/chat pipeline,
-feedback, XP, and minute quotas as any other dialog mode) with two additions:
+feedback, progress points, and minute quotas as any other dialog mode) with two additions:
 
 - **Seeded hidden mode.** `CompanyCallModeSeeder` (`src/backend/ai-service/Ai/Features/Dialog/Seeders/CompanyCallModeSeeder.cs`)
   creates one `DialogBundle` (`IsHidden: true`, so it never appears in `GET /dialog/bundles`) and
@@ -61,7 +61,7 @@ feedback, XP, and minute quotas as any other dialog mode) with two additions:
   and feedback system prompts at session-start time. The context is **not** persisted in
   PostgreSQL — it's folded into the prompt text and separately stored verbatim on the Mongo
   `DialogSession` document (`companyCallContext`) purely for the record; nothing downstream
-  (voice stream, feedback generation, XP weighting, minute quotas) changes — they all operate on
+  (voice stream, feedback generation, progress-point weighting, minute quotas) changes — they all operate on
   the composed prompt exactly as with any other mode.
 - **Validation asymmetry (500 vs 1000).** `CompanyCallContextDto.CallGoal` on the ai-service side
   caps at **500 chars** — this is what actually reaches the AI prompt. `company-service`'s
@@ -95,7 +95,7 @@ Three entities, all owned by `UserId`, cascade-deleted with their parent `Compan
   `Id, CompanyId, UserId, DialogSessionId (≤100, the ai-service Mongo session id, stored as
   string), Goal (≤1000), CreatedAt`. Index `(CompanyId, CreatedAt DESC)`. There is no foreign key
   into ai-service's Mongo store — `DialogSessionId` is an opaque reference the frontend uses to
-  fetch feedback/XP from ai-service directly.
+  fetch feedback/progress points from ai-service directly.
 
 `CompanySummaryDto`/`CompanyDetailDto` also carry a live `callLogCount`/`practiceCallCount`
 (computed via `EF` `Count()`, not denormalized columns).

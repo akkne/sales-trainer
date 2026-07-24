@@ -1,7 +1,7 @@
 # Testing: Header Profile Button Cleanup
 
 > Scope: Phase 32 in [ROADMAP.md](../ROADMAP.md). Verifies that the trophy
-> "achievements" button is gone from the desktop header and that the profile
+> "milestones" button is gone from the desktop header and that the profile
 > chip uses a first-letter avatar instead of the medal icon.
 
 ## Manual Test Checklist
@@ -9,8 +9,8 @@
 ### Desktop header (≥ md breakpoint)
 
 **Right-side cluster**
-- [ ] Order of items is: streak flame (if streak > 0) → notification bell → profile chip
-- [ ] There is NO trophy / achievements button (`emoji_events`) between the bell and the profile chip
+- [ ] Order of items is: activity-consistency indicator (if streak > 0) → notification bell → profile chip
+- [ ] There is NO trophy / milestones button (`emoji_events`) between the bell and the profile chip
 - [ ] Profile chip uses `bg-primary-container` with rounded-full shape
 - [ ] Profile chip shows a circular avatar filled with `bg-primary` on the left
 - [ ] Avatar displays the UPPERCASE first letter of the authenticated user's display name
@@ -29,7 +29,7 @@
 ### Navigation (untouched)
 
 - [ ] `Лиги` link (`/league`) still present in the main nav with its trophy icon
-- [ ] `/league` page loads normally with leaderboard and promotion/demotion zones
+- [ ] `/league` page loads normally with team progress list and promotion/demotion zones
 - [ ] `Мастерство`, `Лиги`, `Библиотека`, `Диалоги`, `Друзья` order unchanged
 
 ### Mobile (< md breakpoint)

@@ -26,7 +26,7 @@
 ### [x] Lesson screen — free text + AI evaluation
 ### [x] Reference materials
 ### [x] Profile and statistics
-### [x] Leagues — weekly leaderboard
+### [x] Leagues — weekly team progress
 
 ## Phase 2 — Packaging
 ### [x] Landing page
@@ -111,31 +111,31 @@
 
 ---
 
-## Phase 5 — Streaks & Gamification
+## Phase 5 — Activity Consistency & Progress Tracking
 
-### [x] Daily streak calculation job
+### [x] Daily activity consistency calculation job
 - [x] Hangfire recurring job (runs daily at 00:05): for each user check `LastActivityDate`
-  - if yesterday → streak continues (no-op, updated on exercise submit)
+  - if yesterday → activity streak continues (no-op, updated on exercise submit)
   - if > 1 day ago → reset `CurrentStreakDayCount` to 0
-- [x] Update `ExerciseService` to set `LastActivityDate = today` and increment streak on submit
+- [x] Update `ExerciseService` to set `LastActivityDate = today` and increment consistency count on submit
 - [x] Expose `currentStreak` in Profile API response
-- [x] Show streak on profile page
+- [x] Show activity consistency on profile page
 
-### [x] XP source tracking
+### [x] Progress points source tracking
 - [x] `UserXp` records created on exercise completion (source: `exercise`)
-- [x] Streak bonus XP on 7-day and 30-day milestones (source: `streak_bonus`)
-- [x] Weekly XP totals fed into league standings
+- [x] Consistency bonus progress points on 7-day and 30-day milestones (source: `streak_bonus`)
+- [x] Weekly progress point totals fed into team progress standings
 
 ---
 
-## Phase 6 — League Promotion
+## Phase 6 — Team Progress Promotion
 
-### [x] League promotion/demotion logic
+### [x] Team progress promotion/demotion logic
 - [x] `WeeklyLeagueClosureJob` — full logic implemented:
-  - Top-10 in each league promoted to next tier
+  - Top-10 in each cohort promoted to next tier
   - Bottom-5 demoted
   - New week: reset `weekly_xp`, create new `LeagueMembership` rows
-- [x] Frontend league page shows promotion/demotion zone highlights
+- [x] Frontend team progress page shows promotion/demotion zone highlights
 - [x] Push notification / banner on week close (in-app only)
 
 ---
@@ -152,14 +152,14 @@
 
 ### [x] SkillNode component redesign
 - [x] `positionClass` prop (node-center / node-left / node-right)
-- [x] Completed: yellow circle `#FFC800`, gold medal badge top-right
+- [x] Completed: yellow circle `#FFC800`, completed-state badge top-right
 - [x] Active: green circle `#58CC02`, `animate-ping` outer ring, popover card above node
 - [x] Locked: gray `#F7F7F7` circle, lock icon SVG, `cursor-not-allowed`
 - [x] Zigzag offset via `node-left` / `node-right` / `node-center` CSS classes
 - [x] Popover card: skill title, mini progress bar, X/total lessons, "Старт" green button
 
 ### [x] StatsWidget redesign
-- [x] 3 separate border cards: 🔥 Streak (yellow), ⚡ XP (blue), 🏆 XP Total (red)
+- [x] 3 separate border cards: Daily Activity (yellow), Progress Points (blue), Total Progress Points (red)
 - [x] Each card: `border-2 border-border-color rounded-2xl`, hover accent border
 - [x] Mascot card below with motivational tip text
 
@@ -212,7 +212,7 @@
 - [x] Fix bottom nav overlap — bumped layout padding-bottom to `6rem + safe-area`
 
 ### [ ] Performance
-- [ ] Redis leaderboard sorted set for league rankings
+- [ ] Redis sorted set for team progress standings
 
 ---
 
@@ -237,7 +237,7 @@
 - [x] New route outside `(main)` layout (no BottomNav)
 - [x] Header: close (✕), progress bar (per-exercise), hearts (4, lose on wrong answer)
 - [x] Character speech bubble + numbered 3D choice buttons
-- [x] Session completion screen: XP earned, "Вернуться к пути" button
+- [x] Session completion screen: progress points earned, "Вернуться к пути" button
 - [x] Hearts = 0 → failure screen with "Попробовать снова"
 - [x] Restart session resets state without navigation
 
@@ -249,8 +249,8 @@
 - [x] Skip advances to next exercise without penalty or submission
 - [x] Button only visible when `onSkip` prop provided (session context)
 
-### [x] League countdown timer
-- [x] "До конца недели Xд Xч" computed from `weekEndDate` and displayed above leaderboard
+### [x] Team progress countdown timer
+- [x] "До конца недели Xд Xч" computed from `weekEndDate` and displayed above team progress list
 - [x] Updates every minute; shows minutes when < 1 hour remaining
 
 ### [x] Animated dashed path line
@@ -266,14 +266,14 @@
 ### [x] Session result screen enhancements
 - [x] Track session duration (start time → end time) via `useRef`
 - [x] Track per-exercise correctness (correct / total) via `correctAnswerCount` state
-- [x] Show on completion screen: time spent, accuracy %, XP earned, hearts remaining (2×2 grid)
+- [x] Show on completion screen: time spent, accuracy %, progress points earned, hearts remaining (2×2 grid)
 - [x] `formatSessionDuration(seconds)` pure utility: "X сек" or "X мин Y сек"
 
 ---
 
-## Phase 11 — Achievements & Badges
+## Phase 11 — Milestones & Recognition
 
-> Design source: project `16384358117617625529` — "Profile & Statistics (Vivid)" screen shows badges section.
+> Design source: project `16384358117617625529` — "Profile & Statistics (Vivid)" screen shows milestones section.
 > Also noted as missing in [docs/STITCH_ANALYSIS.md](STITCH_ANALYSIS.md).
 
 ### [x] Backend — Achievement system
@@ -286,9 +286,9 @@
 - [x] `ExerciseSubmissionResultDto` extended with `NewlyUnlockedAchievementKeys`
 - [x] API_CONTRACTS.md updated
 
-### [x] Frontend — Badges on Profile
+### [x] Frontend — Milestones on Profile
 - [x] `useAchievements()` hook — fetches `/profile/achievements`
-- [x] Badges 5-col grid on `/profile` page: locked (grayscale) vs unlocked (green border)
+- [x] Milestones 5-col grid on `/profile` page: locked (grayscale) vs unlocked (green border)
 - [x] Footer: "X из 10 разблокировано"
 - [x] `ExerciseSubmissionResult` type extended with `newlyUnlockedAchievementKeys`
 
@@ -323,7 +323,7 @@
 
 ### [x] Frontend — Skill course map page `/skill/[id]/map`
 - [x] Header: skill title, icon, total lessons, completion %
-- [x] List of lesson cards: lesson number, title, description excerpt, status (locked/active/completed), XP reward
+- [x] List of lesson cards: lesson number, title, description excerpt, status (locked/active/completed), progress points reward
 - [x] Completed lessons: green check, duration shown
 - [x] Active lesson: highlighted card with "Начать" CTA
 - [x] Locked lessons: dimmed, lock icon, shows what unlocks them
@@ -434,9 +434,9 @@
 
 ---
 
-## Phase 18 — Achievement Unlock Notification
+## Phase 18 — Milestone Unlock Notification
 
-> После получения достижения показывать всплывающее уведомление (toast / modal) с анимацией.
+> После разблокировки вехи показывать всплывающее уведомление (toast / modal) с анимацией.
 
 ### [x] Achievement toast component
 - [x] `AchievementToast` component: badge emoji, title, description, green border, slide-in animation
@@ -461,55 +461,55 @@
 ## ~~Phase 19 — Profile Stats & Weekly Target~~ [SKIP]
 
 > Design source: project `16384358117617625529` screen "Profile & Statistics (Vivid)" (`f1f97c280d784009a583743912f9fb6c`).
-> Profile currently shows streak/XP/achievements but lacks mastery %, league badge, and weekly XP target progress.
+> Profile currently shows activity consistency/progress points/milestones but lacks mastery %, team progress badge, and weekly progress-point target.
 
-### [ ] Weekly XP target panel
+### [ ] Weekly progress-point target panel
 - [ ] Backend: `GET /profile` returns `weeklyXpGoal` (configurable, default 600) and `weeklyXpCurrent`
-- [ ] Frontend: progress bar "X / Y XP" with motivational subtitle on profile page
-- [ ] Show "Top 5% learner" style motivational copy when near/over goal
+- [ ] Frontend: progress bar "X / Y points" with subtitle on profile page
+- [ ] Show encouraging copy when near/over goal
 
 ### [ ] Mastery % stat
 - [ ] Backend: compute mastery as % of completed exercises across all enrolled skills
 - [ ] Expose `masteryPercent` in `GET /profile` response
-- [ ] Show as 4th stat card on profile page (alongside streak, XP, league)
+- [ ] Show as 4th stat card on profile page (alongside activity consistency, progress points, team progress)
 
-### [ ] League badge on profile
-- [ ] Show current league tier name ("Ruby", "Elite", etc.) as a stat card on profile page
-- [ ] Link from profile league card → `/league` page
+### [ ] Team progress badge on profile
+- [ ] Show current team progress tier name ("Ruby", "Elite", etc.) as a stat card on profile page
+- [ ] Link from profile team progress card → `/league` page
 
 ---
 
-## ~~Phase 20 — Leaderboard Podium (Top-3 highlight)~~ [SKIP]
+## ~~Phase 20 — Team Progress Highlights (Top-3 highlight)~~ [SKIP]
 
 > Design source: project `16384358117617625529` screen "League Leaderboard (Vivid)" (`866d49cb3eb64879beff714b05b53fd5`).
-> Current league page has a flat list. Design shows top-3 as large podium cards with avatars and crown/medal icons.
+> Current team progress page has a flat list. Design shows top-3 as large highlighted cards with avatars and recognition icons.
 
-### [ ] Top-3 podium section
-- [ ] Replace first 3 rows in league list with large featured cards: avatar, crown/medal rank icon, name, XP
-- [ ] 🥇 1st gets crown icon, 🥈 🥉 get medal icons
-- [ ] Remaining ranks (4–N) keep standard row layout
+### [ ] Top-3 highlight section
+- [ ] Replace first 3 rows in team progress list with large featured cards: avatar, recognition icon, name, progress points
+- [ ] 1st place gets a distinct icon, 2nd/3rd get secondary recognition icons
+- [ ] Remaining positions (4–N) keep standard row layout
 
 ### [ ] Current user highlight row
-- [ ] User's own row always visible (even if rank > 10), highlighted with "Current Promotion Zone" badge if in top-10
-- [ ] Show rank number prominently
+- [ ] User's own row always visible (even if position > 10), highlighted with "Current Promotion Zone" badge if in top-10
+- [ ] Show position number prominently
 
 ### [ ] Motivational banner
-- [ ] "KEEP PUSHING!" or similar banner between podium and the rest of the list
+- [ ] Encouraging progress banner between the top cards and the rest of the list
 
 ---
 
-## ~~Phase 21 — Daily Goal & Streak Widget on Dashboard~~ [SKIP]
+## ~~Phase 21 — Daily Goal & Activity Consistency Widget on Dashboard~~ [SKIP]
 
 > Design source: project `16384358117617625529` screens "Skill Tree Dashboard (Duo-Style)" (`7acba62367db4bdd8e576d3a07353ba3`) and "Дашборд: Дерево навыков" (`1404814a34ac48c49fc0411a00df3d31`).
-> Both show a "Daily Progress" panel and a daily XP goal bar on the main skill tree page.
+> Both show a "Daily Progress" panel and a daily progress-point goal bar on the main skill tree page.
 
-### [ ] Daily XP goal bar on /tree
-- [ ] Backend: `GET /profile` adds `dailyXpGoal` (default 50 XP) and `dailyXpToday`
-- [ ] Frontend: progress bar "X / Y XP today" shown in StatsWidget or dedicated card on `/tree`
+### [ ] Daily progress-point goal bar on /tree
+- [ ] Backend: `GET /profile` adds `dailyXpGoal` (default 50 points) and `dailyXpToday`
+- [ ] Frontend: progress bar "X / Y points today" shown in StatsWidget or dedicated card on `/tree`
 - [ ] Visual: near-complete state (green fill) vs incomplete (gray)
 
-### [ ] Daily streak widget upgrade
-- [ ] Current streak card on `/tree` shows only number — add "X days!" label with flame + progress prompt ("One more lesson to keep your streak!")
+### [ ] Daily activity consistency widget upgrade
+- [ ] Current activity consistency card on `/tree` shows only number — add "X days" label with a progress prompt ("One more lesson keeps your progress going!")
 - [ ] Show days-of-week mini calendar (M T W T F S S) with completed days highlighted
 
 ---
@@ -554,12 +554,12 @@
 ### [ ] Backend — Daily quests system
 - [ ] `Quest` entity: id, type (daily/weekly), title, description, conditionType, conditionThreshold, xpReward, expiresAt
 - [ ] `UserQuest` entity: userId, questId, progress, completedAt
-- [ ] `QuestSeeder` — seeds 3 daily quests refreshed each day (e.g., "Complete 3 exercises", "Earn 100 XP", "Log in 3 days in a row")
+- [ ] `QuestSeeder` — seeds 3 daily quests refreshed each day (e.g., "Complete 3 exercises", "Earn 100 points", "Log in 3 days in a row")
 - [ ] `GET /quests` — returns active quests with user progress
 - [ ] `QuestProgressJob` — evaluates quest progress after exercise submit
 
 ### [ ] Frontend — /quests page
-- [ ] Quest cards: title, description, progress bar (X/Y), XP reward badge
+- [ ] Quest cards: title, description, progress bar (X/Y), progress-point reward badge
 - [ ] Completed quests: green check, "Completed" label
 - [ ] Expired/missed quests: grayed out
 - [ ] "КВЕСТЫ" tab added to bottom navigation
@@ -583,12 +583,12 @@
 
 ---
 
-## ~~Phase 26 — Performance: Redis Leaderboard~~ [SKIP]
+## ~~Phase 26 — Performance: Redis-backed Team Progress~~ [SKIP]
 
 > Deferred from Phase 7.
 
-### [ ] Redis leaderboard sorted set
-- [ ] Replace DB query for league rankings with Redis sorted set (`ZADD`, `ZRANK`, `ZRANGE`)
+### [ ] Redis sorted set for team progress
+- [ ] Replace DB query for team progress standings with Redis sorted set (`ZADD`, `ZRANK`, `ZRANGE`)
 - [ ] Update `WeeklyLeagueClosureJob` to sync Redis on week close
 - [ ] Update `GET /league` to read from Redis with DB fallback
 
@@ -627,7 +627,7 @@
 - [x] `POST /dialog/sessions` — create session, AI sends first message
 - [x] `GET /dialog/sessions/{sessionId}` — get session with messages
 - [x] `POST /dialog/sessions/{sessionId}/messages` — send user message, get AI response
-- [x] `POST /dialog/sessions/{sessionId}/complete` — end session, generate feedback, award XP
+- [x] `POST /dialog/sessions/{sessionId}/complete` — end session, generate feedback, award progress points
 - [x] Return 503 if OpenAI not configured
 
 ### [x] Backend — Admin dialog endpoints
@@ -661,7 +661,7 @@
 
 ### [x] Frontend — Chat page with history sidebar
 - [x] `useDialogSessions()` hook — fetches user's session history
-- [x] `SessionHistorySidebar` — sessions grouped by date, XP badges
+- [x] `SessionHistorySidebar` — sessions grouped by date, progress-point badges
 - [x] `/dialog/[bundleId]/[modeId]/page.tsx` — full-screen chat with sidebar
 - [x] Toggle sidebar, load previous sessions
 - [x] "Новый диалог" button starts fresh session
@@ -670,7 +670,7 @@
 - [x] Detect `isStopSignal` from AI response
 - [x] Show "Завершить диалог" button when stop detected
 - [x] On complete → call `/sessions/{id}/complete` → show `FeedbackModal`
-- [x] FeedbackModal: XP badge, feedback text, "Новый диалог" button
+- [x] FeedbackModal: progress-point badge, feedback text, "Новый диалог" button
 
 ### [x] Frontend — Admin dialog management
 - [x] `/admin/dialog/page.tsx` — bundles table with skill selector
@@ -812,7 +812,7 @@
 
 ## Phase 30 — Friends & Chat
 
-> Social layer: friendships, public profiles, user search, friend leaderboard, activity feed, and 1-to-1 chat.
+> Social layer: friendships, public profiles, user search, friend progress list, activity feed, and 1-to-1 chat.
 > Spec: [docs/FRIENDS.md](FRIENDS.md)
 
 ### [x] Backend — Friendship system (PostgreSQL)
@@ -821,7 +821,7 @@
 - [x] Migration `AddFriendships`
 - [x] DTOs: FriendDto, FriendRequestDto, PublicProfileDto, UserSearchResultDto, FriendLeaderboardEntryDto, FriendActivityDto
 - [x] `IFriendService` interface + `FriendService` implementation
-- [x] `FriendController` — 10 endpoints (CRUD, search, leaderboard, activity, public profile)
+- [x] `FriendController` — 10 endpoints (CRUD, search, progress list, activity, public profile)
 - [x] DI registration via `AddFriendFeatureServices()`
 
 ### [x] Backend — Chat system (MongoDB)
@@ -837,7 +837,7 @@
 - [x] Add "Друзья" tab to BottomNav and TopAppBar with pending request badge
 
 ### [x] Frontend — Friends pages
-- [x] `/friends` page — tabbed view (friends list, requests, leaderboard)
+- [x] `/friends` page — tabbed view (friends list, requests, progress list)
 - [x] `/friends/[userId]` page — public profile with friendship button
 - [x] `/friends/chat` page — conversations list
 - [x] `/friends/chat/[conversationId]` page — chat view with polling
@@ -852,7 +852,7 @@
 
 ## Phase 31 — Notifications
 
-> In-app notification center behind the bell icon in the top bar. Covers social events (friend requests, friend request accepted, new chat messages) and gamification (achievement unlocked, streak milestones 7/30 days).
+> In-app notification center behind the bell icon in the top bar. Covers social events (friend requests, friend request accepted, new chat messages) and progress recognition (milestone unlocked, activity consistency milestones 7/30 days).
 > Spec: [docs/NOTIFICATIONS.md](NOTIFICATIONS.md)
 
 ### [x] Backend — Notification storage
@@ -934,12 +934,12 @@
 
 - [x] Update session header: close button, progress bar, hearts counter with indigo/rust tones
 - [x] Update session footer: result banner with slide-up animation
-- [x] Update completion screen: confetti, stat tiles grid (XP, accuracy, time, hearts)
+- [x] Update completion screen: confetti, stat tiles grid (progress points, accuracy, time, hearts)
 - [x] ChooseOptionExercise: numbered badge + selected state (ink background, sh-2 shadow)
 - [x] FillBlankExercise: inline blank styling with dashed border, rust-soft background when filled
 - [x] ReorderExercise: ordering cards with up/down buttons, numbered position badges
 - [x] Add "1–4 выбрать · Enter — проверить" keyboard hint below footer
-- [x] Add achievement toast slide-in animation on completion
+- [x] Add milestone toast slide-in animation on completion
 
 ### Phase 33.2 — Exercise Components Polish
 
@@ -985,21 +985,21 @@
 - [x] Step 4 (Skills): skill cards with checkbox, icon, lesson count
 - [x] Footer with back/continue buttons
 
-### Phase 33.6 — League Page Redesign
+### Phase 33.6 — Team Progress Page Redesign
 
 > Redesign `/league` with improved visual hierarchy.
 
-- [x] Week countdown timer above leaderboard
+- [x] Week countdown timer above team progress list
 - [x] Current user highlight row with promotion zone badge
-- [x] Stat tiles for user's XP and rank
+- [x] Stat tiles for user's progress points and position
 - [x] Responsive mobile layout
 
 ### Phase 33.7 — Profile Page Redesign
 
-> Redesign `/profile` with stat tiles and badges grid.
+> Redesign `/profile` with stat tiles and milestones grid.
 
-- [x] Stat tiles grid: streak, XP, level, accuracy
-- [x] Achievements section with mastery rings
+- [x] Stat tiles grid: activity consistency, progress points, level, accuracy
+- [x] Milestones section with mastery rings
 - [x] Persona badge display
 - [x] Settings section styling
 
@@ -1009,7 +1009,7 @@
 
 - [x] Friends list with GeoAvatar, status indicators
 - [x] Friend request cards with accept/decline buttons
-- [x] Leaderboard tab styling
+- [x] Team progress tab styling
 - [x] Chat page with message bubbles, input styling
 
 ### Phase 33.9 — Dark Theme Polish
@@ -1057,7 +1057,7 @@
 
 ### [ ] Public profile `/friends/[userId]`
 - [ ] Header: `GeoAvatar` + name + persona `Chip`, back link styled with ink palette
-- [ ] Stats grid: 4× `StatTile` (rust streak / indigo XP / olive achievements / neutral avg score)
+- [ ] Stats grid: 4× `StatTile` (rust activity consistency / indigo progress points / olive milestones / neutral avg score)
 - [ ] Drop `font-headline`, `bg-*-container`, `text-on-*`, `ring-primary-container`
 
 ### [ ] Chat stack
@@ -1073,7 +1073,7 @@
 - [ ] `UserSearchBar`: dropdown avatars → `GeoAvatar`
 
 ### [ ] Dark theme & docs
-- [ ] Verify dark theme parity on every Friends screen (list, requests, leaderboard, chats, public profile)
+- [ ] Verify dark theme parity on every Friends screen (list, requests, progress list, chats, public profile)
 - [ ] Update `docs/TESTING/FRIENDS.md` with visual-parity checklist
 - [ ] `grep` sweep: no MD3 tokens (`on-surface`, `primary-container`, `outline-variant`,
       `tonal-transition`, `font-headline`, `bg-surface-container*`, `*-container`) in
@@ -1181,7 +1181,7 @@
 - [x] Shared `Skeleton` UI primitive (pulse shimmer on `bg-surface-2`)
 - [x] Skeletons: `/dialog`, `/guidebook`, `/league` (friends/profile already had them)
 - [x] Error states with retry button on data-fetch failures (shared `ErrorState`)
-- [x] Empty states: league, chat history, guidebook (where missing)
+- [x] Empty states: team progress, chat history, guidebook (where missing)
 
 ### Phase 37.7 — Admin pages MD3 cleanup
 - [x] Admin layout + sidebar → April palette
@@ -1227,7 +1227,7 @@
 > - **ai-service** gains optional per-session context injection: company practice calls
 >   are normal `DialogSession`s created with a seeded admin-editable "company-call"
 >   `DialogMode` template + injected `{companyName, companyDescription, callGoal}`.
->   The voice pipeline (`/voice/stream`), feedback, XP, and quotas are reused unchanged.
+>   The voice pipeline (`/voice/stream`), feedback, progress points, and quotas are reused unchanged.
 > - `company-service` stores the link `PracticeCall {companyId, dialogSessionId, goal}`;
 >   the company timeline merges practice calls and real-call logs client-side.
 >
@@ -1239,7 +1239,7 @@
 > `feature/companies` → `main` for the product owner.
 >
 > **Scope decision (2026-07-09):** the product owner approved ALL eight extension
-> features (Stage B below) — this is the flagship feature of the project.
+> features (Stage B below) — this is a cornerstone feature of the project.
 > Mobile bottom nav: «Компании» replaces «Справочник» in the 5-slot bar
 > (guidebook stays reachable from the desktop rail), per DESIGN_SPEC §1.4.
 
@@ -1269,7 +1269,7 @@
 - [ ] Seed admin-editable `DialogMode` template (key `company-call`, voiceEnabled, hidden from `/dialog/bundles` listing)
 - [ ] `DialogService.StartSessionAsync`: when context present → compose chat + feedback
       system prompts from the template with context appended; persist context in the Mongo `DialogSession`
-- [ ] Voice stream, complete/feedback, XP weights, minute quotas — unchanged and verified with context sessions
+- [ ] Voice stream, complete/feedback, progress-point weights, minute quotas — unchanged and verified with context sessions
 - [ ] Unit tests (prompt composition, context persistence); update `docs/API_CONTRACTS.md`, `docs/AI_DIALOG.md`
 
 ### [x] 39.4 Infra — gateway, compose, dev scripts

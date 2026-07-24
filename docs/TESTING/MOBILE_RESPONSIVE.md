@@ -23,7 +23,7 @@ mobile browser address bar doesn't crush the layout.
 - `1000px` — multi-column grids collapse to a single column (tree, league, friends, discuss, profile, guidebook).
 - `760px` — AI text-chat sidebar hides.
 - `640px` — phone refinements block in `globals.css`: tighter gutters/paddings, single-column dialog grids, shrunk countdown, wider chat bubbles, smaller lesson-path nodes, near-fullscreen modals.
-- `560px` — achievements grid → 3 cols, landing features → 1 col.
+- `560px` — milestones grid → 3 cols, landing features → 1 col.
 
 ## How to test
 Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or resize the window. Check both light and dark theme.
@@ -32,14 +32,14 @@ Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or re
 - [ ] **Top bar / nav** — nav rail hidden; mobile top bar (wordmark + справочник/обсуждения/настройки/уведомления) and bottom nav visible; notification panel opens full-width under the top bar and doesn't cover the bottom nav.
 - [ ] **Tree (phone ≤767px)** — dedicated layout: desktop sidebar/overview hidden; sticky skill-picker bar under the topbar opens a bottom sheet with the stage/skill accordion; picking a skill closes the sheet. Header card shows 2 stat cells (placeholder "Точность/Время" hidden); timeline nodes 30px; "Начать/Повторить" buttons enlarged; FAB fixed above the bottom nav, full-width.
 - [ ] **Exercises on touch** — match-pairs columns stack vertically (tap left item, then right); categorize works without drag-and-drop: tap a phrase → highlighted, tap a category → placed (letter shortcut buttons hidden on touch); reorder up/down arrows are comfortably tappable; submit footer has 16px side padding.
-- [ ] **League** — countdown digits fit on one row; leaderboard rows don't overflow.
+- [ ] **League** — countdown digits fit on one row; team progress rows don't overflow.
 - [ ] **Dialog list** — bundle/mode cards are one per row (no clipped 300px cards); mentor card padding sane.
 - [ ] **AI text chat** — conversation sidebar hidden ≤760px; bubbles ~85% width; input row fits.
 - [ ] **Voice** — avatar shrinks; CTA is full-width.
 - [ ] **Session/exercise** — options, footer buttons fit; reduced top/body padding.
 - [ ] **Friends / chat** — list/window stack; message bubbles ~88% width.
 - [ ] **Discuss** — tag sidebar stacks below threads; thread rows fit.
-- [ ] **Profile** — header wraps; stats 2-up; achievements 3-up.
+- [ ] **Profile** — header wraps; stats 2-up; milestones 3-up.
 - [ ] **Guidebook** — cards single column; expanded card readable.
 - [ ] **Landing / auth** — hero scales (clamp); features single column; auth card fits.
 - [ ] **Modals** — near-fullscreen, scroll internally, never overflow viewport.

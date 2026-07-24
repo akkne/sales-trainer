@@ -8,7 +8,7 @@ Next.js 15 (TypeScript, App Router)
     → ASP.NET Core 9 Web API (C#)
         ├── PostgreSQL 17   (main relational data)
         ├── MongoDB 8       (chat messages, future transcripts)
-        ├── Redis 7         (cache, sessions, leaderboards)
+        ├── Redis 7         (cache, sessions, team progress views)
         └── OpenAI API      (free-text exercise evaluation)
 ```
 
@@ -28,7 +28,7 @@ app/
     skill/[id]/        ← lesson list inside a skill
     exercise/[id]/     ← exercise screen
     reference/[id]/    ← reference material
-    league/            ← weekly leaderboard
+    league/            ← weekly team progress view
     profile/           ← profile & stats
 lib/
   api/apiClient.ts           ← single fetch wrapper (auto JWT + 401 refresh)

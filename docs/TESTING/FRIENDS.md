@@ -16,7 +16,7 @@
 - [ ] Addressee B cannot cancel an incoming request (only A may); A cannot cancel after B accepts
 
 ### Friend Management
-- [ ] View friends list with stats (XP, streak, achievements)
+- [ ] View friends list with stats (progress points, activity streak, milestones)
 - [ ] Remove a friend — verify they disappear from both friend lists
 - [ ] After removal, can send new friend request
 
@@ -32,17 +32,17 @@
 - [ ] View profile after sending request — shows "Запрос отправлен"
 - [ ] View profile of incoming request — shows "Принять" button
 - [ ] View profile of friend — shows "Уже друзья" + "Написать" button
-- [ ] Stats displayed correctly (streak, XP, achievements, avg score)
+- [ ] Stats displayed correctly (streak, progress points, milestones, avg score)
 
-### Friend Leaderboard
-- [ ] Shows current user + all friends ranked by total XP
+### Friend Progress Overview
+- [ ] Shows current user + all friends ordered by total progress points (non-ranked presentation)
 - [ ] Current user row highlighted
 - [ ] Top 3 have trophy icons
 - [ ] Empty state when no friends
 
 ### Activity Feed
-- [ ] Shows recent friend achievements
-- [ ] Shows recent friend XP earnings
+- [ ] Shows recent friend milestones
+- [ ] Shows recent friend progress-point earnings
 - [ ] Sorted by most recent first
 - [ ] Limited to 20 items
 - [ ] Empty when no friends
@@ -79,11 +79,11 @@
 - [ ] Avatars: every user avatar in friends list, requests, search, chat header,
       conversation rows, and public profile renders via `GeoAvatar` (not a letter in
       a colored square/circle)
-- [ ] Public profile stats: 4× `StatTile` in rust (streak) / indigo (XP) / olive
-      (achievements) / neutral (avg score); persona shown as `Chip`
+- [ ] Public profile stats: 4× `StatTile` in rust (streak) / indigo (progress points) / olive
+      (milestones) / neutral (avg score); persona shown as `Chip`
 - [ ] Active conversation row: dark `bg-ink` with `text-bg` text (same pattern as
       the active tab in the Friends hub)
 - [ ] Shadows: cards use `var(--sh-1)`; elevated/active states use `var(--sh-2)`
 - [ ] Dark theme: toggle theme in profile settings, then walk every Friends screen
-      (friends / requests / leaderboard / chats / public profile). No white
+      (friends / requests / progress overview / chats / public profile). No white
       fragments, all text legible, no hard-coded hex colors visible

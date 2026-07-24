@@ -60,12 +60,12 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
 
 Manual checklist: [TESTING/VOICE_CALL.md](TESTING/VOICE_CALL.md)
 
-## UI Design (Duolingo-style)
+## UI Design
 
 - Round microphone button (centered or bottom)
 - Green ring animation when user is speaking
 - Mic disabled while AI is responding
-- No avatar for now, no XP system changes
+- No avatar for now, no progress-points system changes
 
 ## Architecture
 

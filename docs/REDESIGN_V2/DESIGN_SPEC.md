@@ -173,7 +173,7 @@ Preparation `#4C8DF6` · Discovery `#6C5BD9` · Engagement `#E16BA0` · Closing 
 - **Order (top → bottom):** Avatar button → 24px divider line (`#ECECEF`, `margin:6px 0 5px`) →
   Learning Path → Practice → Reference → Friends → Discuss → (spacer) → **Settings pinned at bottom**
   (Settings item gets `marginTop:auto`).
-- **No "League" item. No leaderboard nav.** Profile is reached only via the avatar
+- **No "League" item. No ranking nav.** Profile is reached only via the avatar
   button at the top (no dedicated profile nav icon).
 
 **Avatar button** (`avatarBtn` / `avatarInner`):
@@ -241,8 +241,8 @@ Main area is `flex:1` to the right of the rail.
 - "About this skill" paragraph; "What you'll learn" check-list (green `#EAF7EF` check
   chips); "Related techniques" rows (chevron, hover violet) linking to Reference.
 
-**Gamification signals here:** progress %, accuracy stat (92%), time-spent, lesson
-completion counts. **No XP, no streak on this screen, no hearts.**
+**Progress signals here:** progress %, accuracy stat (92%), time-spent, lesson
+completion counts. **No progress-points counter, no activity-consistency indicator on this screen, no hearts.**
 
 ### 3.2 PRACTICE (AI Practice) — single column
 Header: "AI Practice" 20px/800 + subtitle. Scroll canvas `#FBFBFC`:
@@ -257,8 +257,8 @@ Header: "AI Practice" 20px/800 + subtitle. Scroll canvas `#FBFBFC`:
 - **Recent sessions** — a single bordered card containing rows: tinted 38px session icon,
   mode title, "bundle · N messages · Voice call/Text chat" meta, timestamp, and "Reopen →".
 
-**Gamification:** difficulty tiers; session history with message counts and voice/chat
-kind. Voice practice is surfaced here (and quota'd on Profile). No XP/streak/hearts.
+**Progress signals:** difficulty tiers; session history with message counts and voice/chat
+kind. Voice practice is surfaced here (and quota'd on Profile). No progress points, no activity-consistency indicator, no hearts.
 
 ### 3.3 REFERENCE (Technique Library) — main + slide-in detail
 Left/main column:
@@ -300,8 +300,8 @@ Right rail (`width:330px`) shows **one of two** states:
   scrollable message thread (me = violet `#6C5BD9` bubble right; them = `#F1F1F4`
   bubble left); composer input (`#F7F7FA`) + violet send button (paper-plane icon).
 
-**Gamification:** social only — activity feed references completing skills / practice /
-questions. No leaderboard, no points shown on friends.
+**Progress signals:** social only — activity feed references completing skills / practice /
+questions. No ranking view, no points shown on friends.
 
 ### 3.5 DISCUSS — main feed + 264px right sidebar
 Left/main column (right border):
@@ -327,7 +327,7 @@ Right sidebar (`width:264px`, bg `#FBFBFC`):
 - **Stat tiles** — 4-up grid of white cards, each: colored icon + grey label + big
   23px/800 value:
   - **Accuracy** 92% (green target icon)
-  - **Best record** 21 days (amber trophy icon) — *this is the streak/days signal*
+  - **Best record** 21 days (amber trophy icon) — *this is the activity-consistency signal*
   - **Skills done** 3 (violet check icon)
   - **Lessons done** 14 (blue book icon)
 - **Two-column row** (`1.4fr 1fr`):
@@ -336,9 +336,10 @@ Right sidebar (`width:264px`, bg `#FBFBFC`):
   - **Voice minutes** card: **Today 12/30 min** (violet bar 40%) and
     **This month 186/500 min** (green bar 37%) + note that quota resets daily/monthly.
 
-**Gamification present:** accuracy %, best streak ("21 days"), skills/lessons completed,
-per-skill progress, **voice quota** (daily + monthly). **Confirmed ABSENT: no leagues/
-leaderboard, no achievements/badges grid, no hearts/lives, no XP counter.**
+**Progress & recognition signals present:** accuracy %, activity-consistency record ("21 days"),
+skills/lessons completed, per-skill progress, **voice quota** (daily + monthly). **Confirmed
+ABSENT: no team/cohort ranking view, no milestone/badge grid, no hearts/lives, no progress-points
+counter.**
 
 ### 3.7 SETTINGS — centered single column (max-width 640px)
 - Header "Settings" 22px/800 + subtitle.
@@ -393,6 +394,7 @@ leaderboard, no achievements/badges grid, no hearts/lives, no XP counter.**
 - Hover affordance on cards is a **violet lift**: border → `#D9D2F7`, shadow → violet.
 - Avatars, stage dots, and chip colors are **algorithmically/seeded**, not fixed per
   entity — reproduce the palettes and the hash in `ava()` / `chipMap()`.
-- Confirmed gamification surface: **XP is NOT shown anywhere; streak is "Best record
-  N days" on Profile; accuracy %, completion counts, and voice quota are present.**
-  **No leagues, no achievements grid, no hearts/lives anywhere.**
+- Confirmed progress & recognition surface: **progress points are NOT shown anywhere;
+  activity consistency is shown as "Best record N days" on Profile; accuracy %, completion
+  counts, and voice quota are present.**
+  **No team/cohort ranking view, no milestone grid, no hearts/lives anywhere.**

@@ -13,9 +13,10 @@ rail, card patterns) and reuses the CSS tokens/classes already in
 
 ## 0. Design decisions (rationale)
 
-- **A private CRM-lite, not a gamified surface.** No XP, no streaks, no difficulty
-  tiers. This tab is the user's real-world prospect ledger. Tone: calm, clerical,
-  trustworthy — closer to Profile/Settings than to Practice.
+- **A private CRM-lite, not a progress/engagement surface.** No progress points, no
+  activity-consistency streaks, no difficulty tiers. This tab is the user's real-world
+  prospect ledger. Tone: calm, clerical, trustworthy — closer to Profile/Settings than
+  to Practice.
 - **List page = compact list, not a card grid.** Companies are personal records
   the user scans by name (like a contact list), not a catalog to browse. A dense
   row list with search reads faster and scales to dozens of entries. (Bundle-style
@@ -684,7 +685,7 @@ older → absolute «d MMM yyyy». Real-log dates always render absolute
 
 ---
 
-## 10. Accessibility & gamification
+## 10. Accessibility & progress framing
 
 - Every row/card link has a descriptive `aria-label`; icon-only buttons carry
   `aria-label` (listed in §9). Modals: `role="dialog" aria-modal="true"`, labelled
@@ -694,7 +695,8 @@ older → absolute «d MMM yyyy». Real-log dates always render absolute
 - Timeline nodes/rails are `aria-hidden` decoration.
 - Respect `prefers-reduced-motion` (already global) — hover lifts/transitions
   collapse automatically.
-- **No gamification** in this tab: no XP, no streaks, no difficulty badges. The only
-  score surfaced is inside the reused `FeedbackModal` for a practice call, opened on
-  demand via «Разбор →». Counts on rows/headers are neutral facts, not points.
+- **No progress/engagement mechanics** in this tab: no progress points, no activity
+  streaks, no difficulty badges. The only score surfaced is inside the reused
+  `FeedbackModal` for a practice call, opened on demand via «Разбор →». Counts on
+  rows/headers are neutral facts, not points.
 ```

@@ -150,21 +150,22 @@ live in `building-blocks`.
   `IAsyncEnumerable` streaming preserved through the gateway.
 - **Sync REST (for other services):** `POST /ai/evaluate` (called by Learning to
   grade AI exercise types).
-- **Kafka (produces):** `dialog.evaluated` (XP-bearing score for a finished roleplay).
+- **Kafka (produces):** `dialog.evaluated` (progress-bearing score for a finished roleplay).
 - **Config replication:** consumes `gamification.dialog-weights.updated` to cache the
   admin-tuned dialog scoring weights locally (no synchronous read of Gamification).
 
 ### 2.4 Gamification Service — `gamification-service`
-**Bounded context:** rewards & competition. **The flagship event-driven service.**
-- **Absorbs:** `Gamification` (XP, streaks, milestones), `Achievements`, `League`.
+**Bounded context:** progress & recognition. **A core event-driven service.**
+- **Absorbs:** `Gamification` (progress points, activity consistency, milestones), `Achievements`, `League`.
 - **Owns (Postgres `gamification-db`):** `UserXpRecords`, `UserStreaks`,
   `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones`, `Achievements`,
   `UserAchievements`, `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`.
 - **Frontend REST:** `/gamification/*`, `/achievements/*`, `/league/*`.
 - **Kafka (consumes):** `exercise.completed`, `dialog.evaluated`, `lesson.completed`,
-  `skill.completed` → grants XP, updates streaks, unlocks achievements, updates the
-  weekly league. **This is pure eventual consistency** — no atomic cross-service
-  transaction with Learning/AI; if an event is late, XP simply lands a moment later.
+  `skill.completed` → grants progress points, updates activity consistency, unlocks
+  milestones, updates the weekly team progress. **This is pure eventual consistency** —
+  no atomic cross-service transaction with Learning/AI; if an event is late, progress
+  simply lands a moment later.
 - **Kafka (produces):** `xp.granted`, `achievement.unlocked`, `streak.milestone`,
   `gamification.dialog-weights.updated`.
 - **Background jobs:** `StreakResetJob`, `WeeklyLeagueClosureJob` (Hangfire on its own DB).
@@ -238,7 +239,7 @@ call history, and practice-call sessions tied to a company.
 The monolith's `Admin` feature was an orchestrator over every other slice. In the
 target state there is **no central Admin service**: each service exposes its own
 `/admin/*` endpoints for the data it owns (Learning admin for skills/exercises,
-Gamification admin for XP economy, etc.). The gateway enforces the `Admin`/`SuperAdmin`
+Gamification admin for progress-points configuration, etc.). The gateway enforces the `Admin`/`SuperAdmin`
 role and routes admin calls to the owning service. The frontend admin panel becomes
 a composition of those per-service admin APIs.
 
@@ -310,7 +311,7 @@ frontend does not change during the migration.
 | `UserStreak` multi-writer | Moves into **Gamification**, single-writer. |
 | `UserProfile` written by Onboarding & Profile | Both live in **Identity**; Onboarding becomes an internal flow, not a cross-service writer. |
 | `UserLessonProgress` written by Lessons & Exercises | Both live in **Learning**; single owner. |
-| Dialog reads Gamification XP weights | AI caches weights from `gamification.dialog-weights.updated`; no live cross-call. |
+| Dialog reads Gamification scoring weights | AI caches weights from `gamification.dialog-weights.updated`; no live cross-call. |
 | League reads UserXp | League is **inside** Gamification — same DB, no cross-service read. |
 
 ---

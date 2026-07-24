@@ -1,24 +1,24 @@
 # GAMIFICATION_SERVICE.md — Gamification Service extraction
 
 > Phase 7 of the [microservices migration](MICROSERVICES_ROADMAP.md). Extracts the
-> rewards-and-competition core (XP, streaks, achievements, league) out of the monolith
-> (`src/backend/api`) into an independently deployable, **event-driven** `gamification-service`.
-> The monolith slices are left in place as reference; the gateway flips the relevant
-> routes to the new service (strangler fig).
+> progress & recognition core (progress points, activity consistency, milestones, team
+> progress) out of the monolith (`src/backend/api`) into an independently deployable,
+> **event-driven** `gamification-service`. The monolith slices are left in place as
+> reference; the gateway flips the relevant routes to the new service (strangler fig).
 
 ## Bounded context
 
-Rewards & competition — the flagship event-driven service:
+Progress & recognition — the event-driven service:
 
-- **XP** — `UserXpRecords`, admin-tunable `GamificationSettings` and `ExerciseTypeRewards`.
-- **Streaks** — `UserStreaks`, admin-tunable `StreakMilestones`, daily reset job.
-- **Achievements** — `Achievements` + `UserAchievements`, unlocked from event-driven progress.
-- **League** — `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`, weekly rollover.
+- **Progress points** — `UserXpRecords`, admin-tunable `GamificationSettings` and `ExerciseTypeRewards`.
+- **Activity consistency** — `UserStreaks`, admin-tunable `StreakMilestones`, daily reset job.
+- **Milestones** — `Achievements` + `UserAchievements`, unlocked from event-driven progress.
+- **Team progress** — `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`, weekly rollover.
 
 Gamification owns **no** write to its inputs — it reacts to Kafka events and is the
-sole writer of XP/streak/achievement/league state. This is pure eventual consistency:
-if an event is late, the XP simply lands a moment later. There is **no** cross-service
-transaction with Learning or AI.
+sole writer of progress-points/activity/milestone/team-progress state. This is pure
+eventual consistency: if an event is late, the progress points simply land a moment
+later. There is **no** cross-service transaction with Learning or AI.
 
 ## Layout
 
@@ -47,10 +47,10 @@ src/backend/gamification-service/
 
 | Store | Owns | Notes |
 |---|---|---|
-| Postgres `gamification` | `UserXpRecords`, `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` | XP economy + streak config. |
-| Postgres `gamification` | `Achievements`, `UserAchievements` | Seeded with the 10 default achievements on startup. |
-| Postgres `gamification` | `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings` | Weekly competition; DB-backed (Phase 26 Redis-leaderboard is **SKIP**). |
-| Postgres `gamification` | `UserReplicas` | Local read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` events; used by league participant lists + admin instead of joining Identity. |
+| Postgres `gamification` | `UserXpRecords`, `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` | Progress-points economy + activity-consistency config. |
+| Postgres `gamification` | `Achievements`, `UserAchievements` | Seeded with the 10 default milestones on startup. |
+| Postgres `gamification` | `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings` | Weekly team/cohort progress; DB-backed (Phase 26 Redis-based ranking is **SKIP**). |
+| Postgres `gamification` | `UserReplicas` | Local read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` events; used by team-progress participant lists + admin instead of joining Identity. |
 | Postgres `gamification` | `UserLearningProgress` | Local projection of completed-lesson count + has-completed-any-skill, fed by `lesson.completed` / `skill.completed`, so achievement evaluation needs no cross-read into Learning. |
 | Postgres `gamification` | Hangfire schema | `StreakResetJob` + `WeeklyLeagueClosureJob` run on this DB. |
 | Redis (shared) | Kafka idempotency store | Dedupe on `eventId`. |
@@ -91,8 +91,9 @@ run (`InitialGamificationSchema`), then the achievement seeder runs.
 
 Flipped to the `gamification` cluster:
 
-- `/gamification/*` — `GET /gamification/progress` (XP totals + daily/weekly amounts and
-  goals + streak; Identity's `/profile` composes this once it consumes the data).
+- `/gamification/*` — `GET /gamification/progress` (progress-point totals + daily/weekly
+  amounts and goals + activity consistency; Identity's `/profile` composes this once it
+  consumes the data).
 - `/league` (+ `/league/*`).
 - `/profile/achievements` — more specific than Identity's `/profile/*`, so it wins.
 - `/admin/gamification/*`, `/admin/leagues` (+ `/admin/leagues/*`).

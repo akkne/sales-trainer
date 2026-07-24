@@ -37,7 +37,7 @@ dotnet test src/backend/tests --verbosity normal
 **Unit tests** — test service business logic in isolation using EF Core InMemory DB.
 - No network, no real Postgres, no Docker needed.
 - Fast (< 1 sec per test).
-- Cover: evaluation strategies, auth logic, exercise submission flow, league rank calculations.
+- Cover: evaluation strategies, auth logic, exercise submission flow, league tier calculations.
 
 **Integration tests** — test full HTTP stack using a real Postgres container (Testcontainers).
 - Require Docker.

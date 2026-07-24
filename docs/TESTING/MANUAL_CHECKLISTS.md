@@ -23,7 +23,7 @@ Consolidated manual testing checklists for major features.
 - [ ] AI responds, typing indicator shows
 - [ ] Messages display correctly (user=right, AI=left)
 - [ ] "Завершить диалог" appears after stop signal
-- [ ] Feedback modal shows with XP
+- [ ] Feedback modal shows with progress points
 
 ### Error Handling
 - [ ] Close button returns to `/dialog`
@@ -61,9 +61,9 @@ Consolidated manual testing checklists for major features.
 ### Call Termination (endCall)
 - [ ] Swearing / rudeness → persona says a closing line and hangs up,
       feedback modal opens automatically
-- [ ] Feedback cites actual quotes from the call, low XP for a failed call
+- [ ] Feedback cites actual quotes from the call, low progress points for a failed call
 - [ ] Pick up and hang up without saying anything → NO feedback modal,
-      no XP, session marked `abandoned` (backend returns 204)
+      no progress points, session marked `abandoned` (backend returns 204)
 
 ### Error Handling
 - [ ] Denied mic → error message shown
@@ -126,7 +126,7 @@ Consolidated manual testing checklists for major features.
 ### Integration
 - [ ] Mixed lessons work
 - [ ] Hearts deducted on wrong
-- [ ] XP awarded on correct
+- [ ] Progress points awarded on correct
 - [ ] Skip works for all types
 - [ ] Mobile responsive
 
@@ -171,7 +171,7 @@ Consolidated manual testing checklists for major features.
 - [ ] Space submits/continues
 - [ ] Works in fill-blank too
 
-### Achievement Notifications
+### Milestone Notifications
 - [ ] Toast appears on unlock
 - [ ] Auto-dismisses after 4s
 - [ ] Queue drains correctly

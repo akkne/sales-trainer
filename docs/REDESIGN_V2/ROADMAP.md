@@ -10,7 +10,7 @@ Frontend-only. **Backend is NOT touched** in this effort.
 
 Re-skin the entire user-facing frontend to the new violet / Hanken Grotesk /
 left-nav-rail design system, **without changing functionality**, while removing
-leagues + achievements from the UI (per product decision).
+the competitive ranking view and achievement-badge UI (per product decision).
 
 ## Locked product decisions
 
@@ -20,19 +20,19 @@ leagues + achievements from the UI (per product decision).
   **No League item.**
 - **Palette:** primary violet `#6C5BD9` (hover `#5C4CCB`), dark emphasis `#1C1C20`,
   canvas `#FBFBFC`, surface `#FFF`. Font: **Hanken Grotesk** (400–800). Frame radius 22px.
-- **Remove from UI — Leagues:** drop from nav + remove `StatsWidget` league mini-card +
-  remove league analytics page-view/event. **Keep `/league` route/page working** (reachable
-  by direct URL only) — do not delete it, do not redesign it.
-- **Remove from UI — Achievements:** remove the profile achievements grid, the in-session
-  `AchievementToast`, the friend-card achievement count, the `earned_achievement` activity
-  type, and the public-profile achievement StatTile. Delete now-dead `AchievementToast`
-  component + test. Backend-facing data fields may stay (ignored).
+- **Remove from UI — competitive ranking (League):** drop from nav + remove `StatsWidget`
+  league mini-card + remove league analytics page-view/event. **Keep `/league` route/page
+  working** (reachable by direct URL only) — do not delete it, do not redesign it.
+- **Remove from UI — achievement badges:** remove the profile achievements grid, the
+  in-session `AchievementToast`, the friend-card achievement count, the `earned_achievement`
+  activity type, and the public-profile achievement StatTile. Delete now-dead
+  `AchievementToast` component + test. Backend-facing data fields may stay (ignored).
 - **Hearts:** **no-op.** There is no hearts/lives mechanic in the frontend — `--heart` is
   only an error-color token; retries are attempt-based (max 2). Nothing to remove.
-- **Keep (per new design):** accuracy %, "Best record · N days" (streak), skills/lessons
-  done, per-skill progress, **voice-minute quotas**, **levels** & **mastery rings**
-  (NOT in removal scope). XP is not surfaced in the new shell (design choice) but stays in
-  backend + completion stats.
+- **Keep (per new design):** accuracy %, "Best record · N days" (activity consistency),
+  skills/lessons done, per-skill progress, **voice-minute quotas**, **levels** & **mastery
+  rings** (NOT in removal scope). Progress points are not surfaced in the new shell (design
+  choice) but stay in backend + completion stats.
 - **Out of scope (not redesigned):** Landing `/`, the `/league` page, the Admin area `/admin/*`.
 
 ## Execution model
@@ -67,7 +67,7 @@ verification is collected into a checklist for the user.
     Friends→`/friends`, Discuss→`/discuss`, Settings (bottom)→`/settings`.
     Friend-request unread dot on Friends item. **No League nav item.** Mobile variant.
 
-- [x] **P3 — Gamification removal (leagues + achievements UI)** ✅ verified (tsc no new errors, vitest 78/78 after dropping 5 AchievementToast tests). League mini-card + analytics removed (page kept); achievements grid/toast/friend-count/activity removed; `achievement-toast.tsx`, its test, and `use-achievements.ts` deleted; notification-meta achievement entry kept for graceful backend notifications.
+- [x] **P3 — Progress & recognition UI cleanup (league ranking + achievement badges)** ✅ verified (tsc no new errors, vitest 78/78 after dropping 5 AchievementToast tests). League mini-card + analytics removed (page kept); achievements grid/toast/friend-count/activity removed; `achievement-toast.tsx`, its test, and `use-achievements.ts` deleted; notification-meta achievement entry kept for graceful backend notifications.
   - League: remove `StatsWidget` league mini-card (`stats-widget.tsx`); remove league entries
     from `analytics/track.ts` + `use-page-view-tracker.ts`. (`/league` page stays.)
   - Achievements: remove grid in `profile/page.tsx`; remove toast mount + capture in
@@ -79,16 +79,16 @@ verification is collected into a checklist for the user.
   - [x] 4.1 Path / `tree` ✅ 3-col accordion + timeline + FAB + overview; tsc clean, vitest 78/78. Omitted "what you'll learn"/related-techniques + accuracy/time stats (no backend data). Lesson task-type chips collapsed to a single Теория/Практика chip — `LessonSummary.kind` carries only theory/practice, not per-exercise types, so the granular chipMap is not surfaced on lesson cards (data-contract omission).
   - [x] 4.2 Practice ✅ mentor banner + bundle grid (Chat/Call) + recent sessions + mode select; tsc clean, vitest 78/78. Mode-count number + dialog stats omitted (no data); difficulty inferred from sortOrder.
   - [x] 4.3 Reference ✅ card grid + 392px slide-in detail panel (example bubbles, metric tiles, coach); MasteryRing kept (sm on card, full in panel); tsc clean, vitest 78/78. Hardcoded quick-tags + old stat-tiles omitted (data contract).
-  - [x] 4.4 Friends ✅ main list (requests + friend grid) + 330px Activity/Chat rail; public profile restyled. Leaderboard tab UNMOUNTED (component kept) per design+gamification removal; online-dot omitted (no backend presence); chat polling + deep-links preserved. tsc clean, vitest 78/78.
+  - [x] 4.4 Friends ✅ main list (requests + friend grid) + 330px Activity/Chat rail; public profile restyled. Leaderboard tab UNMOUNTED (component kept) per design + ranking-removal decision; online-dot omitted (no backend presence); chat polling + deep-links preserved. tsc clean, vitest 78/78.
   - [x] 4.5 Discuss ✅ feed + 44px upvote col + segmented sort + 264px sidebar (community/tags/top-authors); thread detail restyled, all mutations (vote/new/reply/accept/pin/images) preserved. "% решённых"=— (not in API). 1 test updated. tsc clean, vitest 78/78.
   - [x] 4.6 Profile + /settings ✅ profile: dark cover + 4 stat tiles + enrolled-skills (enrollment toggles kept, base always-on) + voice quota. Settings: Appearance/Account(email read-only, admin)/Logout. Theme+logout+admin moved off profile. Omitted edit-profile/password-change/notif-prefs (no backend). tsc clean, vitest 78/78.
-  - [x] 4.7 Session/Exercise ✅ V2 shell (violet gradient progress, no hearts indicator), all 10 exercise types get chipMap chips + V2 bubbles, result banner (ok/warn/bad tones), completion stats XP/accuracy/time. Confirmed hearts never existed in completion props. tsc clean, vitest 78/78, no tests touched.
+  - [x] 4.7 Session/Exercise ✅ V2 shell (violet gradient progress, no hearts indicator), all 10 exercise types get chipMap chips + V2 bubbles, result banner (ok/warn/bad tones), completion stats progress-points/accuracy/time. Confirmed hearts never existed in completion props. tsc clean, vitest 78/78, no tests touched.
   - [x] 4.8 Dialog chat + Voice ✅ V2 chat (history sidebar, asymmetric bubbles, typing dots, feedback modal) + voice (state-ring colors per pipeline state, mic hero, transcript, quota, all states). State machine untouched (restyle only); fixed interrupted-bubble class; removed dead code. tsc clean, vitest 78/78.
   - [x] 4.9 Auth ✅ login/register/onboarding/verify-email on V2 (centered cards, 6-box code input w/ paste+auto-advance, wizard progress pills). Google OAuth + 4-step state machine + skip + resend cooldown preserved. tsc clean, vitest 78/78.
 
 - [x] **4.10 (added) — Skill detail + course map** ✅ `/skill/[id]` + `/skill/[id]/map` restyled to V2 (reuse `.path-*` classes — missed in 4.1, and the guidebook links to them). tsc clean, vitest 78/78.
 
-- [x] **P5 — Final QA pass** ✅ code-reviewer verdict APPROVE (0 Critical/High); tsc no new errors; vitest 78/78; redesign-introduced eslint errors fixed (remaining 4 are pre-existing: geo-avatar immutability, reorder/session impure-in-render, admin setState-in-effect — all predate this work). No league/achievement leakage in the user shell (only `/admin/*`, the kept `/league` page, and backend-facing data fields remain). Dead `top-app-bar.tsx` + `sidebar.tsx` deleted. LOW fixes applied (verify-email OTP autofill, friends `conv` back/forward sync). **App not auto-run (>60s rule) — manual-visual checklist below.**
+- [x] **P5 — Final QA pass** ✅ code-reviewer verdict APPROVE (0 Critical/High); tsc no new errors; vitest 78/78; redesign-introduced eslint errors fixed (remaining 4 are pre-existing: geo-avatar immutability, reorder/session impure-in-render, admin setState-in-effect — all predate this work). No ranking/milestone-UI leakage in the user shell (only `/admin/*`, the kept `/league` page, and backend-facing data fields remain). Dead `top-app-bar.tsx` + `sidebar.tsx` deleted. LOW fixes applied (verify-email OTP autofill, friends `conv` back/forward sync). **App not auto-run (>60s rule) — manual-visual checklist below.**
 
 ## Manual visual checklist (run the app, then verify)
 
@@ -102,7 +102,7 @@ Run `scripts/dev-up.sh` (or `scripts/dev-frontend.sh`) → http://localhost:3000
 7. **Reference `/guidebook` + `/reference/[id]`** — card grid + 392px detail panel + mastery ring + coach.
 8. **Friends `/friends`** — requests + grid + Activity/Chat rail; chat deep-links; no Лидерборд tab.
 9. **Discuss `/discuss` + thread** — segmented sort, upvote, badges, sidebar; vote/new/reply/accept/images.
-10. **Profile `/profile`** — cover + 4 stat tiles + enrolled-skills toggles + voice quota; no achievements grid.
+10. **Profile `/profile`** — cover + 4 stat tiles + enrolled-skills toggles + voice quota; no milestones grid.
 11. **Settings `/settings`** — Appearance Light/Dark, account (email/admin), logout.
 12. **Auth** — login/register/onboarding(4 steps)/verify-email(6-box code); Google OAuth.
 13. **`/league` by direct URL** — still works (absent from nav).

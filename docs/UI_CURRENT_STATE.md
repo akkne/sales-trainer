@@ -8,7 +8,7 @@ Last updated: 2026-06-07.
 
 ## 1. Product in one paragraph
 
-SalesTrainer (brand name in UI: **Sellevate**) is a Duolingo-style sales-training web app. Users learn sales skills through a skill tree of lessons with 10+ exercise types, practice realistic conversations with AI in text chat and **real-time voice calls**, compete in weekly leagues, add friends and chat, browse a guidebook of sales techniques, and track streaks/XP/achievements. UI language is **Russian**. There is also an admin panel for content management.
+SalesTrainer (brand name in UI: **Sellevate**) is a structured sales-training web app. Users learn sales skills through a skill tree of lessons with 10+ exercise types, practice realistic conversations with AI in text chat and **real-time voice calls**, see weekly team progress, add friends and chat, browse a guidebook of sales techniques, and track activity consistency, progress points, and milestones. UI language is **Russian**. There is also an admin panel for content management.
 
 ---
 
@@ -45,7 +45,7 @@ Warm paper-like neutrals + muted earthy accents:
 | `--ink` … `--ink-4` | `#1C1B18` → `#9A9689` | 4-step text hierarchy |
 | `--indigo` | `oklch(0.50 0.18 270)` | primary accent: links, progress, primary actions |
 | `--olive` | `oklch(0.58 0.10 140)` | success, active voice call |
-| `--rust` | `oklch(0.62 0.14 42)` | streaks, highlights, AI speaking |
+| `--rust` | `oklch(0.62 0.14 42)` | activity consistency, highlights, AI speaking |
 | `--clay` | `oklch(0.72 0.10 55)` | neutral accent, "processing" state |
 | `--good` / `--bad` / `--warn` | green / red / amber oklch | semantic states |
 
@@ -58,7 +58,7 @@ Each accent has a `-soft` background variant and (some) a `-ink` text variant. D
 - **Shadows:** `--sh-1` (subtle card), `--sh-2` (hover/buttons), `--sh-3` (modals), `--sh-inner` (pressed).
 - **Type sizes:** 12 / 13 / 15 / 17 / 21 / 28 / 36 / 48 / 64px. Body = 15px.
 - **Typography character:** headings with tight negative letter-spacing (-0.8…-1.5px); section labels in **uppercase mono with +1–2px letter-spacing** (e.g. "НАВЫКИ", "СТАТИСТИКА", "AI ДИАЛОГ · 4 МОДУЛЯ") — this mono-label pattern is used everywhere as a visual signature.
-- **Animations:** pulse, ping, slide-up (toasts/modals), confetti, typing dots, spin, shimmer on achievements. Transitions 0.08–0.2s.
+- **Animations:** pulse, ping, slide-up (toasts/modals), confetti, typing dots, spin, shimmer on milestones. Transitions 0.08–0.2s.
 
 ### 3.3 Recurring page pattern
 
@@ -91,7 +91,7 @@ Most main pages share a "hero header" pattern:
 | `/dialog/[bundleId]/[modeId]/voice` | **Voice call** (own full-screen layout) |
 | `/guidebook` | Technique reference |
 | `/reference/[id]` | Single technique page |
-| `/league` | Weekly league |
+| `/league` | Weekly team progress |
 | `/friends` (+ `/friends/[userId]`, `/friends/chat/[conversationId]`) | Social hub, profiles, DMs |
 | `/profile` | Profile & settings |
 
@@ -109,8 +109,8 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 
 ### TopAppBar (sticky, 60px, all main pages) — `features/layout/components/top-app-bar.tsx`
 - Left: wordmark "SalesTrainer".
-- Center (desktop): 6 nav items with icons — Tree, League, Guidebook, Dialog, Friends, Profile; active item gets `--bg-2` highlight.
-- Right: streak pill (flame + count, rust-soft) → NotificationBell with unread badge → profile chip (GeoAvatar 28px + "Level N") → hamburger on mobile.
+- Center (desktop): 6 nav items with icons — Tree, Team Progress (League), Guidebook, Dialog, Friends, Profile; active item gets `--bg-2` highlight.
+- Right: activity-consistency pill (flame + count, rust-soft) → NotificationBell with unread badge → profile chip (GeoAvatar 28px + "Level N") → hamburger on mobile.
 - Mobile: hamburger opens full-screen stacked nav overlay; there is also a fixed glass-blur BottomNav on mobile.
 
 ### Shared components — `shared/components/`
@@ -137,7 +137,7 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 ### 6.1 Landing `/` — `app/page.tsx`
 - Header: wordmark + login link.
 - Hero: 🚀 emoji, title "Прокачай продажи за 5 минут в день" (accent phrase in rust), subtitle, single CTA — primary dark "Начать бесплатно" (→ register).
-- 4 feature cards (emoji + title + description): real scenarios, AI grading, streaks/leagues, guidebook.
+- 4 feature cards (emoji + title + description): real scenarios, AI grading, activity consistency & team progress, guidebook.
 
 ### 6.2 Login / Register `(auth)/login`, `(auth)/register`
 - Centered card max-width 420px on `--surface`.
@@ -147,13 +147,13 @@ Wide, near-fullscreen layout: `.container` is fluid `width: 100%; max-width: 184
 3-column desktop grid `300px | 1fr | 320px`, stacked on mobile.
 - **Left — skills sidebar:** "НАВЫКИ" mono label; collapsible stage groups (chevron + colored dot + mono stage name + completion ratio); inside — skill rows (icon + title, highlight on selection).
 - **Center — lesson path:** header band with "НАВЫК · X/Y УРОКОВ", skill title (32px), compact indigo progress bar with % and remaining count; below — scrollable area with a **dotted-grid background** (1px dots, 20px pitch) where `LessonPath` renders the vertical lesson chain; empty state if no lessons.
-- **Right — stats sidebar:** "СТАТИСТИКА" label, `StatsWidget`: current streak (flame), total XP (bolt), weekly XP.
+- **Right — stats sidebar:** "СТАТИСТИКА" label, `StatsWidget`: current activity consistency (flame), total progress points (bolt), weekly progress points.
 
 ### 6.4 Exercise session `/session/[lessonId]` — full-screen, no app bar
 - **Header:** close (X) left, full-width progress bar (current/total, indigo fill), 4 hearts right (lost ones faded gray).
 - **Body:** one exercise at a time, centered max 820px. 10 exercise components: ChooseOption, FillBlank, Reorder, MatchPairs, Categorize, SpotMistake, Rewrite, AiDialogue, EvaluateCall, FreeText. Shared props contract (`content`, `onSubmit`, `onContinue`, `submittedResult`).
 - **Result overlay:** correctness banner + expandable AI feedback + continue button.
-- **Completion screen:** confetti (36 CSS particles), pulsing olive check circle (120px), "УРОК ЗАВЕРШЁН" mono label, "Отличная работа!" (48px), 2×2 stats grid (XP / accuracy / duration / hearts), "Вернуться к пути" CTA.
+- **Completion screen:** confetti (36 CSS particles), pulsing olive check circle (120px), "УРОК ЗАВЕРШЁН" mono label, "Отличная работа!" (48px), 2×2 stats grid (progress points / accuracy / duration / hearts), "Вернуться к пути" CTA.
 
 ### 6.5 Dialog list `/dialog`
 - Hero header: "AI ДИАЛОГ · N МОДУЛЕЙ", title "Мастерство разговора." (48px), stat tiles (completed dialogs, avg score).
@@ -183,7 +183,7 @@ Full-height, own layout, **inline styles** (not token classes).
 
 **Footer:** single large pill button — olive "Позвонить" (idle), red "Положить трубку" with rotated phone icon (connected), olive "Позвонить ещё раз" (ended), indigo "Закрыть разбор" (feedback open).
 
-**Feedback modal** (after call): blurred overlay; book icon + "Обратная связь" title + XP badge (indigo-soft pill with bolt); scrollable summary with "Подробнее" markdown expansion; footer "Новый диалог" button.
+**Feedback modal** (after call): blurred overlay; book icon + "Обратная связь" title + progress-points badge (indigo-soft pill with bolt); scrollable summary with "Подробнее" markdown expansion; footer "Новый диалог" button.
 
 **Extras:** ringing sound while dialing, vibration on connect, hang-up beep; unsupported-browser state (bad-soft mic icon circle + "Голосовой режим недоступен").
 
@@ -193,12 +193,12 @@ Full-height, own layout, **inline styles** (not token classes).
 - Technique cards (2-col grid): **MasteryRing** (56px SVG progress ring with "L1"/"—"), chips (skill, tags, "New"), title 22px, summary, difficulty badge, expand chevron.
 - Expanded card spans full width: markdown body, example dialogue as alternating chat bubbles with `[annotation]` labels, case-study box (bg-2, metrics in mono), right 300px **coach sidebar** (GeoAvatar 44px, name, mono role, quote, challenge pills).
 
-### 6.9 League `/league`
-- Tier header (medal emoji + tier name color-coded + description).
-- Dismissible promotion/demotion outcome banner (olive-soft / bad-soft).
+### 6.9 Team progress `/league`
+- Tier header (medal icon + tier name color-coded + description).
+- Dismissible advancement/needs-improvement outcome banner (olive-soft / bad-soft).
 - Countdown timer "ДД : ЧЧ : ММ" (3xl tabular numbers).
-- Stats: current rank badge + weekly XP (tone follows zone).
-- Leaderboard table: sticky "# / УЧАСТНИК / XP" header; rank badges (1st rust, 2nd gray, 3rd clay); rows with GeoAvatar + name (+"(ты)") + mono XP; zone backgrounds (indigo-soft = you with 3px left border, olive-soft = promotion, bad-soft = demotion); zone divider lines "БЕЗОПАСНАЯ ЗОНА" / "ЗОНА ВЫЛЕТА".
+- Stats: current position badge + weekly progress points (tone follows zone).
+- Team progress table: sticky "# / УЧАСТНИК / XP" header; position badges (1st rust, 2nd gray, 3rd clay); rows with GeoAvatar + name (+"(ты)") + mono progress points; zone backgrounds (indigo-soft = you with 3px left border, olive-soft = advancement, bad-soft = needs-improvement); zone divider lines "БЕЗОПАСНАЯ ЗОНА" / "ЗОНА ВЫЛЕТА".
 - CTA banner "Ускорь продвижение" → `/tree`.
 
 ### 6.10 Friends `/friends`
@@ -209,10 +209,10 @@ Full-height, own layout, **inline styles** (not token classes).
 ### 6.11 Profile `/profile`
 Two-column desktop layout (`.profile-grid`, collapses to one column ≤1000px) inside a 1320px container; header + stats span full width:
 - Header card: GeoAvatar 80px square (initials on indigo), name, email, persona pill (e.g. "SDR").
-- Stats grid 4×: streak / XP / record / accuracy (icon circles in rust/indigo/olive/clay).
+- Stats grid 4×: activity consistency / progress points / record / accuracy (icon circles in rust/indigo/olive/clay).
 - "Навыки пройдено" progress bar.
 - Voice minutes section: mic badge, daily + monthly quota bars (red when exceeded).
-- Achievements: 5-col badge grid; locked = grayscale 0.4 opacity, unlocked = indigo-soft; hover tooltip.
+- Milestones: 5-col badge grid; locked = grayscale 0.4 opacity, unlocked = indigo-soft; hover tooltip.
 - Skills enrollment list: search + rows with toggle switches (indigo when on; one always-on skill disabled).
 - Settings: theme toggle, admin link (if Admin), red logout.
 
@@ -221,13 +221,13 @@ Separate sidebar-nav layout. Dashboard + CRUD pages for skills/topics/lessons/re
 
 ---
 
-## 7. Gamification elements present across screens
+## 7. Progress & recognition elements present across screens
 
 These recur everywhere and must survive any redesign:
-- **Streak** (flame icon, rust) — app bar pill, profile, tree stats.
-- **XP** (bolt icon, indigo) — earned per lesson/dialog, weekly XP drives league.
+- **Activity consistency** (flame icon, rust) — app bar pill, profile, tree stats.
+- **Progress points** (bolt icon, indigo) — earned per lesson/dialog, weekly progress points drive team progress.
 - **Hearts** (4 per lesson session) — lost on mistakes.
-- **Levels** ("Level N" in profile chip), **achievements** (badges + slide-up toasts), **leagues** (Bronze/Silver/Gold/Diamond tiers), **mastery rings** (L1+ per technique), **voice minute quotas** (daily/monthly).
+- **Levels** ("Level N" in profile chip), **milestones** (badges + slide-up toasts), **team progress tiers** (Bronze/Silver/Gold/Diamond), **mastery rings** (L1+ per technique), **voice minute quotas** (daily/monthly).
 
 ---
 
@@ -254,5 +254,5 @@ Existing redesign-related material: `docs/REDESIGN_PROMPT.md` (earlier brief), `
 - Voice call page uses **inline styles** instead of shared token classes/components — restyling it means editing the page, not tokens.
 - Two brand names coexist: "SalesTrainer" (app bar, landing header) vs "Sellevate" (login card).
 - Landing and exercise/voice screens each have bespoke layouts outside the shared `(main)` layout.
-- Emoji are used as icons in some places (bundle icons, landing hero, league medals) while the rest of the app uses the custom SVG icon set.
+- Emoji are used as icons in some places (bundle icons, landing hero, team-progress medals) while the rest of the app uses the custom SVG icon set.
 - Admin panel is visually much plainer than the user-facing app.

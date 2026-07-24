@@ -21,7 +21,7 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 | S2 | 🟠 High | Contract tests only validated producer wire-shape (anonymous objects); never deserialized into consumer record types, so S1/S3 passed green. | `[x]` (Analytics incoming-contract tests added; extend to other consumers) |
 | S3 | 🟠 High | `xp.granted` consumer dropped the `source` field (Analytics `ExperiencePointsGrantedEvent` missing `Source`). | `[x]` |
 | S4 | 🟠 High | Gateway header-injection trust model (`X-User-Id`/`X-User-Role`) documented but unenforced — all 7 services re-validate JWT and authorize off token claims; only Analytics reads the headers. Two trust models coexist. | `[x]` (docs converged: JWT-in-each-service is the authz source of truth; forwarded headers are defense-in-depth, not a trust boundary) |
-| S5 | 🟠 High | Inbound event handling non-atomic + Redis-only idempotency. eventId not persisted in service DB → crash mid-handler causes double-apply on redelivery (notably double XP grant). | `[x]` (gamification XP now DB-idempotent; pattern available for other consumers) |
+| S5 | 🟠 High | Inbound event handling non-atomic + Redis-only idempotency. eventId not persisted in service DB → crash mid-handler causes double-apply on redelivery (notably double progress-point grant). | `[x]` (gamification progress-point grant now DB-idempotent; pattern available for other consumers) |
 | S6 | 🟡 Medium | Dual-write (lost-event) risk in 6/7 producers — outbox only implemented in gamification. Documented as roadmap 10.3 `[~]`. | `[~]` (deferred, tracked in roadmap 10.3) |
 | S7 | 🟡 Medium | No consumer validates `envelope.Version`; versioning advertised but unimplemented. | `[x]` (EventMessageProcessor dead-letters version > MaxSupportedVersion) |
 | S8 | 🟡 Medium | `app_users_online` is a per-instance gauge — wrong under >1 analytics replica (`sum` multiplies). | `[x]` (= AN1; documented max() aggregation + jitter) |
@@ -66,12 +66,12 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 ### gamification-service
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| GA1 | 🔴 Critical | Event handlers non-atomic + no per-event idempotency → double XP on redelivery (= S5). | `[x]` (DB-level idempotency: `SourceEventId` + unique filtered index + app-level guard) |
+| GA1 | 🔴 Critical | Event handlers non-atomic + no per-event idempotency → double progress-point grant on redelivery (= S5). | `[x]` (DB-level idempotency: `SourceEventId` + unique filtered index + app-level guard) |
 | GA2 | 🟠 High | No unique constraint on `UserStreaks.UserId` → duplicate streak rows under concurrency. | `[x]` (unique index + race-tolerant get-or-create) |
 | GA3 | 🟠 High | Streak day computed in UTC — breaks streaks for non-UTC users. | `[x]` (configurable StreakTimezone via IStreakClock) |
 | GA4 | 🟠 High | No lock on league rollover (cron + admin endpoint race → duplicate next-week leagues). | `[x]` (DisableConcurrentExecution + transaction + unique index) |
 | GA5 | 🟠 High | `GET /league` performs writes (lazy create/join/sync) — race + unsafe GET. | `[x]` (idempotent get-or-create/join, unique-violation tolerant) |
-| GA6 | 🟡 Medium | Settings getters write-on-read; admin N+1; UTC timestamptz day-bucketing; backdated correction XP. | `[x]` (startup seeding + read-only getters, N+1 removed, Npgsql pinned UTC) |
+| GA6 | 🟡 Medium | Settings getters write-on-read; admin N+1; UTC timestamptz day-bucketing; backdated correction progress points. | `[x]` (startup seeding + read-only getters, N+1 removed, Npgsql pinned UTC) |
 
 ### notification-service
 | # | Sev | Finding | Status |
@@ -104,7 +104,7 @@ gateway + BuildingBlocks) and tracks remediation. Findings are grouped by **syst
 ## Remediation order
 
 1. **S1/S2/S3** — contract drift + consumer-side contract tests. ✅ done.
-2. **GA1/S5** — XP idempotency (DB-level) — highest correctness risk.
+2. **GA1/S5** — progress-point idempotency (DB-level) — highest correctness risk.
 3. **ID1/ID2** — demo-token gate + Email uniqueness — highest auth/data-integrity risk.
 4. **AI1/AI2/AI4** — cost control + secret leakage.
 5. **SO2/SO3/SO4 + NO1** — UGC limits + atomic inbox.

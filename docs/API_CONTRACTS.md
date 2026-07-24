@@ -7,7 +7,7 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 > **Microservices migration:** `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*` and
 > `/avatars/*` are now served by the extracted **Identity service** (gateway base URL
 > `http://localhost:5000`), not the monolith. Paths and request/response shapes are
-> unchanged. One transitional caveat: `GET /profile` returns the streak / XP / completed-
+> unchanged. One transitional caveat: `GET /profile` returns the activity-consistency / progress-points / completed-
 > skill / average-score aggregates as **0** because those are owned by Gamification/Learning
 > (not extracted yet, roadmap phases 7 & 8); the identity fields (displayName, email,
 > persona, avatarUrl) are real. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
@@ -61,9 +61,9 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 > `/techniques/*`, `/daily-quote`, and the content `/admin/*` routes — are served by the
 > extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway. Paths and
 > shapes are unchanged. Two shape-preserving notes: the exercise-submission DTO returns
-> `xpEarned: 0` and an empty `newlyUnlockedAchievementKeys` (XP/achievements now belong
+> `xpEarned: 0` and an empty `newlyUnlockedAchievementKeys` (progress points/milestones now belong
 > to gamification, granted asynchronously from the `exercise.completed` event), and
-> `/skill-tree` returns the streak/XP/goal aggregate fields as `0` (owned by
+> `/skill-tree` returns the activity-consistency/progress-points/goal aggregate fields as `0` (owned by
 > gamification). AI-graded exercise types are scored by the learning-service calling the
 > ai-service `POST /ai/evaluate`.
 
@@ -80,7 +80,7 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 `sales-basics` is always kept enrolled.
 
 `SkillTreeResponseDto`: `{skillNodes[], currentStreakDayCount, totalXpAmount, weeklyXpAmount, dailyXpAmount, dailyXpGoal, weeklyXpGoal}`  
-`dailyXpAmount`/`weeklyXpAmount` = XP earned today / this week (UTC); `dailyXpGoal`/`weeklyXpGoal` = targets from the admin-editable `GamificationSettings` table (defaults 100 / 500), not hardcoded config.  
+`dailyXpAmount`/`weeklyXpAmount` = progress points earned today / this week (UTC); `dailyXpGoal`/`weeklyXpGoal` = targets from the admin-editable `GamificationSettings` table (defaults 100 / 500), not hardcoded config.  
 `SkillTreeNodeDto`: `{skillId, slug, title, iconName, sortOrder, status, completedLessonCount, totalLessonCount, isLocked, stage}`. `stage` is the funnel-stage bucket the skill belongs to — see `Skills.Stage` in [DB_SCHEMA](DB_SCHEMA.md).  
 `SkillStageDto`: `{key, label, accent, order}` — the admin-editable display metadata for a funnel stage (label, CSS accent color, sort order). The frontend groups `/tree` by `stage` and resolves each bucket's label/color via this list, falling back to built-in defaults while it loads. Stages are managed via the admin endpoints below; `general` is the implicit fallback bucket for unassigned skills and is not a stored row.
 
@@ -185,7 +185,7 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 
 > **Microservices (Phase 7):** `/profile/achievements` is served by the extracted
 > **[gamification-service](GAMIFICATION_SERVICE.md)** through the gateway (more specific
-> than Identity's `/profile/*`); the response shape is unchanged. The streak/XP/skill
+> than Identity's `/profile/*`); the response shape is unchanged. The activity-consistency/progress-points/skill
 > aggregates inside `GET /profile` (Identity) are composed from gamification's
 > `GET /gamification/progress` once Identity consumes it (Phase 2 caveat).
 
@@ -203,7 +203,7 @@ All routes require auth. Card response includes per-user mastery state; `/meta` 
 > update publishes `UserUpdatedEvent` so replica-holding services (ai, notification, …)
 > refresh their cached display name.
 
-### Gamification progress (Phase 7)
+### Progress tracking data (Phase 7)
 
 Served by the gamification-service through the gateway.
 
@@ -221,11 +221,11 @@ Served by the gamification-service through the gateway.
 
 Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `streak_days` | `skill_completed`
 
-`ExerciseSubmissionResultDto` now includes `newlyUnlockedAchievementKeys: string[]` — keys of achievements unlocked in this submit.
+`ExerciseSubmissionResultDto` now includes `newlyUnlockedAchievementKeys: string[]` — keys of milestones unlocked in this submit.
 
 ---
 
-## League
+## League / Team Progress
 
 > **Microservices (Phase 7):** `/league` (and `/admin/leagues/*`, `/admin/gamification/*`)
 > are served by the extracted **[gamification-service](GAMIFICATION_SERVICE.md)** through
@@ -240,9 +240,9 @@ Achievement condition types: `first_lesson` | `lesson_count` | `xp_total` | `str
 
 `CurrentLeagueResponseDto`: `{leagueId, tier, tierName, tierColor, weekStartDate, weekEndDate, periodEndsAt, participantsByRank[], currentUserRank, previousWeekOutcome: "promoted"|"demoted"|null, promotionZoneSize, demotionZoneSize, maximumLeagueParticipantCount}`
 
-- `promotionZoneSize`/`demotionZoneSize`/`maximumLeagueParticipantCount`: live from `LeagueSettings` (admin-configurable). The user league page must render zones from these, not hardcoded constants.
+- `promotionZoneSize`/`demotionZoneSize`/`maximumLeagueParticipantCount`: live from `LeagueSettings` (admin-configurable). The user team-progress page must render zones from these, not hardcoded constants.
 - `tierName`/`tierColor`: presentation for `tier`, resolved from the admin-editable `LeagueTiers` table (fall back to the tier key + neutral color if the tier was deleted).
-- `periodEndsAt` (ISO-8601 instant): exact moment the current period closes. The league-tab countdown MUST target this, not the day-start of `weekEndDate`.
+- `periodEndsAt` (ISO-8601 instant): exact moment the current period closes. The team-progress-tab countdown MUST target this, not the day-start of `weekEndDate`.
 `LeagueParticipantDto`: `{userId, displayName, weeklyXpAmount, rank, isCurrentUser, avatarUrl}`
 
 Tiers: configurable via the `LeagueTiers` table (admin CRUD below). Default ladder `bronze → silver → gold → diamond`; the promotion ladder follows `Order` ascending (entry tier = lowest order).
@@ -340,8 +340,8 @@ All routes prefixed `/admin`. Unauthorized → 403.
 
 `ExerciseTypePromptDto`: `{id, exerciseType, systemPrompt, updatedAt}`
 
-### Gamification (XP)
-All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
+### Progress & Recognition (Progress Points)
+All progress-point economy knobs are DB-driven and admin-editable (no hardcoded constants).
 
 > **Microservices (Phase 7):** `/admin/gamification/*` is served by the
 > **[gamification-service](GAMIFICATION_SERVICE.md)** through the gateway — shapes
@@ -362,9 +362,9 @@ All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
 
 `GamificationSettingsDto` / `UpdateGamificationSettingsRequestDto`: `{dailyXpGoal, weeklyXpGoal, dialogXpMultiplier, dialogWeightConfidence, dialogWeightStructure, dialogWeightObjection, dialogWeightGoal}`
 - `dailyXpGoal`/`weeklyXpGoal` must be positive; `dialogXpMultiplier` must be positive; criterion weights are non-negative and must sum to > 0.
-- **Dialog XP**: the AI scores a completed dialog on four criteria, each capped at its weight (raw score range `0..Σweights`). Earned XP = `round(rawScore × dialogXpMultiplier)`. The criterion maximums are injected into the feedback prompt, so editing weights re-shapes how the AI distributes points.
-- **Exercise XP**: `baseXpReward` per exercise type is awarded on a correct/passed answer (historic flat value 10; seeded for all 10 types). Unknown/unseeded types fall back to 10.
-- **Streak milestones**: a one-off bonus when the daily streak first reaches `dayCount`. When the table is non-empty it is authoritative; when empty the historic ladder (7→50, 30→200) applies.
+- **Dialog progress points**: the AI scores a completed dialog on four criteria, each capped at its weight (raw score range `0..Σweights`). Earned progress points = `round(rawScore × dialogXpMultiplier)`. The criterion maximums are injected into the feedback prompt, so editing weights re-shapes how the AI distributes points.
+- **Exercise progress points**: `baseXpReward` per exercise type is awarded on a correct/passed answer (historic flat value 10; seeded for all 10 types). Unknown/unseeded types fall back to 10.
+- **Activity consistency milestones**: a one-off bonus when the daily activity streak first reaches `dayCount`. When the table is non-empty it is authoritative; when empty the historic ladder (7→50, 30→200) applies.
 
 `ExerciseTypeRewardDto`: `{id, exerciseType, baseXpReward}`  
 `StreakMilestoneDto`: `{id, dayCount, xpReward}`
@@ -403,7 +403,7 @@ All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
 
 `AdminTechniqueImportResultDto`: `{createdCount, updatedCount, failedCount, errors: string[]}` — import upserts each entry by `slug`, validates it, and rolls through the list, returning per-slug errors instead of aborting the whole batch.
 
-### Leagues
+### Leagues / Team Progress
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/leagues | — (`?weekStart=YYYY-MM-DD&tier=gold`) | `AdminLeagueListItemDto[]` |
@@ -426,15 +426,15 @@ All XP-economy knobs are DB-driven and admin-editable (no hardcoded constants).
 `AdminLeagueMemberDto`: `{membershipId, userId, displayName, email, weeklyXpAmount, rank, promotionOutcome}`
 `AdminLeagueTierDto`: `{id, key, name, color, order}`
 `LeagueSettingsDto`: `{maximumLeagueParticipantCount, promotionZoneSize, demotionZoneSize, currentPeriodEndsAt, periodLengthDays}`
-`UpdateLeagueSettingsRequestDto`: same as above but `currentPeriodEndsAt`/`periodLengthDays` are optional — when omitted the period is left unchanged, so zones can be edited alone. Setting `currentPeriodEndsAt` also realigns the active period's leagues' `WeekEndDate` so the XP window tracks the new end.
+`UpdateLeagueSettingsRequestDto`: same as above but `currentPeriodEndsAt`/`periodLengthDays` are optional — when omitted the period is left unchanged, so zones can be edited alone. Setting `currentPeriodEndsAt` also realigns the active period's leagues' `WeekEndDate` so the progress-point window tracks the new end.
 
-XP adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the league's week start — a direct `WeeklyXpAmount` write would be erased by the next XP sync, while a correction record survives every re-sync and stays auditable.
+Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the team progress period's week start — a direct `WeeklyXpAmount` write would be erased by the next progress-point sync, while a correction record survives every re-sync and stays auditable.
 
 ### Users (`RequireAdmin`; role change requires `RequireSuperAdmin`)
 
 > Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
 > Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
-> shapes are unchanged. The `AdminUserDetailDto` activity stats (streak/XP/skills/score)
+> shapes are unchanged. The `AdminUserDetailDto` activity stats (activity-consistency/progress-points/skills/score)
 > are owned by gamification/learning, so identity returns them as `0` for now — same
 > caveat as `GET /profile`.
 
@@ -509,7 +509,7 @@ involvement.
 > **Microservices (Phase 6):** `/dialog/*`, `/transcription/*`, `/admin/dialog/*` and
 > `/admin/voice/*` are served by the extracted **[ai-service](AI_SERVICE.md)** through the
 > YARP gateway — paths unchanged. On `/complete` the service now emits a `dialog.evaluated`
-> Kafka event (Gamification grants the XP) instead of writing `UserXpRecords` directly.
+> Kafka event (the gamification-service grants the progress points) instead of writing `UserXpRecords` directly.
 > Internal-only (not via the gateway): `POST /ai/evaluate` `{exerciseType, systemPrompt?,
 > exerciseContent, userAnswer}` → `{isCorrect, score, explanation?, aiFeedback?}`, called
 > by Learning to grade AI exercise types. `DialogBundleDto.skillTitle` is now empty
@@ -584,7 +584,7 @@ involvement.
 
 **Stop signal:** AI adds `[DIALOG_END]` tag when conversation should end. Tag is parsed and `isStopSignal: true` set on message.
 
-**XP reward:** AI generates XP (0-100) via `[XP:number]` tag in feedback. Saved to `UserXpRecords` with source `"dialog"`.
+**Progress-point reward:** AI generates progress points (0-100) via the `[XP:number]` tag in feedback. Saved to `UserXpRecords` with source `"dialog"`.
 
 **Graceful degradation:**
 - If `OpenAI:ApiKey` is not configured, `GET /dialog/bundles` returns `[]`
@@ -725,7 +725,7 @@ The final sentinel frame has empty text/audio and carries the `isStopSignal` fla
 
 > Served by the **social-service** (Phase 5) — the gateway flips `/friends/*` and
 > `/chat/*` to the `social` cluster. Paths and DTO shapes are unchanged. The
-> leaderboard/profile/activity XP-and-achievement aggregate fields currently return
+> progress-list/profile/activity progress-point-and-milestone aggregate fields currently return
 > `0`/empty until Gamification/Learning are extracted (see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md)).
 
 | Method | Path | Body | Response |

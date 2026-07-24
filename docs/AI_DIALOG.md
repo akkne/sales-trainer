@@ -11,7 +11,7 @@ New tab "Диалог" (left of Profile) where users practice sales skills via A
     └── Skill bundles grid (e.g., "Холодные звонки")
             └── Mode selection (e.g., "Обход секретаря")
                     └── Chat screen with GPT-4.1-mini + history sidebar
-                            └── Conversation ends → GPT-4.1 feedback popup + XP reward
+                            └── Conversation ends → GPT-4.1 feedback popup + progress points
 ```
 
 ## Data Model
@@ -96,7 +96,7 @@ CREATE TABLE "DialogModes" (
 | POST | `/dialog/sessions` | Start new session (body: `{bundleId, modeId}`) |
 | GET | `/dialog/sessions/{sessionId}` | Get session with messages |
 | POST | `/dialog/sessions/{sessionId}/messages` | Send user message, get AI response |
-| POST | `/dialog/sessions/{sessionId}/complete` | End session, generate feedback, award XP. Returns `204` (session abandoned, no feedback) when the user never sent a message |
+| POST | `/dialog/sessions/{sessionId}/complete` | End session, generate feedback, award progress points. Returns `204` (session abandoned, no feedback) when the user never sent a message |
 
 ### Admin CRUD
 
@@ -182,7 +182,7 @@ can stream it to TTS while the model is still generating
 
 **FeedbackSystemPrompt** — AI evaluation instructions. Backend appends honest-evaluation
 rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block format
-and the `[XP:число]` tag requirement (see XP Rewards below).
+and the `[XP:число]` tag requirement (see Progress Point Rewards below).
 
 ### Call Termination (endCall)
 
@@ -194,23 +194,23 @@ The persona model returns `endCall: true` when it hangs up:
 `endCall` maps to `isStopSignal` on the stored message, the stream frame flags and the
 chat DTOs (wire/storage names unchanged). The frontend ends the call and requests feedback.
 
-### XP Rewards
+### Progress Point Rewards
 
-AI generates XP (sum 0-100), each criterion counted only if it actually occurred:
-- Confidence and tone: up to 25 XP
-- Argument structure and substance: up to 25 XP
-- Objection handling (if there were objections): up to 25 XP
-- Achieving the call goal (passed secretary, scheduled meeting): up to 25 XP
+AI generates progress points (sum 0-100), each criterion counted only if it actually occurred:
+- Confidence and tone: up to 25 points
+- Argument structure and substance: up to 25 points
+- Objection handling (if there were objections): up to 25 points
+- Achieving the call goal (passed secretary, scheduled meeting): up to 25 points
 
 Calibration: 0-20 fail (client hung up due to user mistakes), 21-45 weak,
 46-70 normal, 71-85 good, 86-100 exceptional (rare).
 
 Hard rules enforced in code:
-- A response without an `[XP:N]` tag awards **0 XP** (no silent defaults).
+- A response without an `[XP:N]` tag awards **0 points** (no silent defaults).
 - A session with **no user messages** is marked `abandoned` without calling the
-  feedback model at all — `/complete` returns `204 No Content`, no XP, no feedback modal.
+  feedback model at all — `/complete` returns `204 No Content`, no progress points, no feedback modal.
 
-XP is saved to `UserXpRecords` with source `"dialog"`.
+Progress points are saved to `UserXpRecords` with source `"dialog"`.
 
 ### Graceful Degradation
 
@@ -226,7 +226,7 @@ If `OpenAI:ApiKey` is not configured:
 Left sidebar in chat screen showing:
 - "Новый диалог" button at top
 - Sessions grouped by date (Сегодня, Вчера, X дн. назад)
-- Each session shows: mode title, bundle title, message count, XP earned
+- Each session shows: mode title, bundle title, message count, points earned
 - Click session → load its messages
 - Click "К выбору навыка" → return to `/dialog`
 
@@ -238,7 +238,7 @@ Left sidebar in chat screen showing:
 - Messages: green (user, right), gray (AI, left)
 - Typing indicator while waiting
 - "Завершить диалог" button when `isStopSignal: true`
-- Feedback modal with XP badge
+- Feedback modal showing points earned
 
 ## File Structure
 

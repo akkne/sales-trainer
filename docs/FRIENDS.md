@@ -1,6 +1,6 @@
 # Friends & Chat
 
-Social layer for Sellevate: friendships, public profiles, user search, friend leaderboard, activity feed, and 1-to-1 chat.
+Social layer for Sellevate: friendships, public profiles, user search, friend progress overview, activity feed, and 1-to-1 chat.
 
 > **Microservices migration (Phase 5):** Friends + Chat were extracted into the
 > `social-service` — see [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md). The gateway flips
@@ -9,7 +9,7 @@ Social layer for Sellevate: friendships, public profiles, user search, friend le
 > (fed by `user.*` events) instead of joining the `Users` table, and the
 > friend-request notifications are now the `friend.request.received` /
 > `friend.request.accepted` / `chat.message.sent` Kafka events consumed by the
-> notification-service. Leaderboard/profile/activity XP-and-achievement aggregates are
+> notification-service. Profile/activity progress-point-and-milestone aggregates are
 > owned by Gamification/Learning (not yet extracted) and currently return `0`/empty.
 
 ---
@@ -74,7 +74,7 @@ All endpoints require `Authorization: Bearer` token.
 | PUT | `/friends/requests/{friendshipId}/decline` | — | `204` |
 | DELETE | `/friends/{friendUserId}` | — | `204` |
 | GET | `/friends/search?query={q}` | — | `UserSearchResultDto[]` |
-| GET | `/friends/leaderboard` | — | `FriendLeaderboardEntryDto[]` |
+| GET | `/friends/leaderboard` | — | `FriendLeaderboardEntryDto[]` (non-ranked progress overview) |
 | GET | `/friends/activity` | — | `FriendActivityDto[]` |
 | GET | `/friends/profile/{userId}` | — | `PublicProfileDto` |
 
@@ -102,6 +102,7 @@ All endpoints require `Authorization: Bearer` token.
   "achievementCount": 0
 }
 ```
+(`totalXpAmount` = total progress points, `currentStreakDayCount` = current activity-consistency streak, `achievementCount` = milestones reached — field names preserved for API compatibility.)
 
 ### FriendRequestDto
 ```json
@@ -147,6 +148,8 @@ cancel the outgoing request and the **"Уже друзья"** button can end the
 directly, without first loading `/friends/requests`.
 
 ### FriendLeaderboardEntryDto
+Friend progress overview entry (field names preserved for API compatibility; presented in the
+UI as shared progress visibility among friends, not a competitive ranking):
 ```json
 {
   "userId": "guid",
@@ -212,13 +215,13 @@ directly, without first loading `/friends/requests`.
 - Active tab and selected conversation synced to URL (`?tab=...&conv=...`)
 - Friends tab: search bar, activity feed, friend cards with avatar, stats, Chat/Profile buttons
 - Requests tab: incoming + outgoing friend requests
-- Leaderboard tab: friend XP ranking
+- Progress tab: friend progress-points overview (non-ranked)
 - Chats tab: two-pane messenger (list left, chat right on desktop; stacked on mobile)
 - Empty state: "Найди первого напарника!"
 
 ### Public Profile (`/friends/[userId]`)
 - Avatar, displayName, persona badge
-- Stats grid: streak, XP, achievements, avg score
+- Stats grid: activity consistency, progress points, milestones, avg score
 - Friendship button (contextual)
 - "Написать" button if friends
 

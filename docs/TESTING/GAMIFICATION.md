@@ -1,7 +1,8 @@
-# Testing — DB-driven XP / Gamification
+# Testing — DB-driven Progress Points / Progress & Recognition
 
-Covers the admin-editable XP economy: per-exercise-type base XP, dialog scoring
-(multiplier + criterion weights), daily/weekly goals, and streak milestones.
+Covers the admin-editable progress-points economy: per-exercise-type base progress
+points, dialog scoring (multiplier + criterion weights), daily/weekly goals, and
+activity-consistency milestones.
 See [DB_SCHEMA](../DB_SCHEMA.md) (`GamificationSettings`, `ExerciseTypeRewards`,
 `StreakMilestones`) and [API_CONTRACTS](../API_CONTRACTS.md#gamification-xp).
 

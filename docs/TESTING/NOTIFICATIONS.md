@@ -38,16 +38,16 @@
 - [ ] Body preview is truncated to 160 chars with `…` for long messages
 - [ ] Clicking notification navigates to the chat conversation
 
-**Achievement unlocked**
-- [ ] User triggers an achievement (e.g., completes first lesson)
+**Milestone completed**
+- [ ] User reaches a milestone (e.g., completes first lesson)
 - [ ] Notification with type `AchievementUnlocked` appears
-- [ ] Title includes the achievement emoji + name
+- [ ] Title includes the milestone name
 - [ ] Clicking notification navigates to `/profile`
 
-**Streak milestone**
-- [ ] User hits a streak milestone (3, 7, 14, 30, 60, 90, 180, 365)
+**Activity-consistency milestone**
+- [ ] User reaches an activity-consistency milestone (3, 7, 14, 30, 60, 90, 180, 365)
 - [ ] Notification with type `StreakMilestone` appears
-- [ ] Title shows the current streak day count
+- [ ] Title shows the current activity-consistency day count
 - [ ] Clicking notification navigates to `/profile`
 
 ### Read State

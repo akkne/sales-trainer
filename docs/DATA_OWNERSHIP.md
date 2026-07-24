@@ -52,11 +52,11 @@ it used to be foreign-keyed.
 | `UserXp` (`UserXpRecords`) | **Gamification** | gamification-db (PG) | Written only by Gamification reacting to `exercise.completed` / `dialog.evaluated`. |
 | `UserStreak` | **Gamification** | gamification-db (PG) | Single-writer (was multi-writer in monolith). |
 | `GamificationSettings` | **Gamification** | gamification-db (PG) | |
-| `ExerciseTypeReward` | **Gamification** | gamification-db (PG) | XP economy config. |
+| `ExerciseTypeReward` | **Gamification** | gamification-db (PG) | Progress-points configuration. |
 | `StreakMilestone` | **Gamification** | gamification-db (PG) | |
 | `Achievement` | **Gamification** | gamification-db (PG) | |
 | `UserAchievement` | **Gamification** | gamification-db (PG) | Emits `achievement.unlocked`. |
-| `League` | **Gamification** | gamification-db (PG) | League is inside Gamification — reads XP from same DB. |
+| `League` | **Gamification** | gamification-db (PG) | League is inside Gamification — reads progress-point data from same DB. |
 | `LeagueTier` | **Gamification** | gamification-db (PG) | |
 | `LeagueMembership` | **Gamification** | gamification-db (PG) | |
 | `LeagueSettings` | **Gamification** | gamification-db (PG) | |
@@ -83,11 +83,11 @@ must be replaced (by a `UserReplica` read or a Kafka event) before extraction:
 | Cross-reference in the monolith | Breaks boundary | Resolution |
 |---|---|---|
 | Everything joining `User` for name/avatar | every service ↔ Identity | Local `UserReplica`, synced via `user.*` events. |
-| `Exercises` / `Dialog` writing `UserXp` | Learning/AI ↔ Gamification | Gamification writes XP, reacting to `exercise.completed` / `dialog.evaluated`. |
+| `Exercises` / `Dialog` writing `UserXp` | Learning/AI ↔ Gamification | Gamification writes progress points, reacting to `exercise.completed` / `dialog.evaluated`. |
 | `Exercises` updating `UserStreak` | Learning ↔ Gamification | Gamification owns streaks (single writer). |
 | `League` reading `UserXp` | (same service) | League stays **inside** Gamification — no cross-service read. |
 | `Exercises` AI grading strategies calling OpenAI | Learning ↔ AI | Learning calls AI `POST /ai/evaluate` (sync). |
-| `Dialog` reading Gamification XP weights | AI ↔ Gamification | AI caches weights from `gamification.dialog-weights.updated`. |
+| `Dialog` reading Gamification scoring weights | AI ↔ Gamification | AI caches weights from `gamification.dialog-weights.updated`. |
 | `Lessons` + `Exercises` both writing `UserLessonProgress` | (same service) | Both live in Learning — single owner. |
 | `Onboarding` + `Profile` both writing `UserProfile` | (same service) | Both live in Identity — Onboarding becomes an internal flow. |
 | `Notifications` triggered by Achievements/Streak/Friends/Chat | many ↔ Notifications | Notifications consumes events instead of being called in-process. |

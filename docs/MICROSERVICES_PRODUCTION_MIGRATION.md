@@ -224,7 +224,7 @@ Then functional smoke test (through the public gateway):
 - [ ] `https://DOMAIN` loads (Vercel frontend) and talks to `api.DOMAIN`
 - [ ] Log in (Google OAuth + super-admin) — exercises identity + JWT
 - [ ] Open a skill/lesson — learning content present (counts match the monolith)
-- [ ] Profile shows real XP / streak — gamification replica + data intact
+- [ ] Profile shows real progress points / activity consistency — gamification replica + data intact
 - [ ] Friends / discuss list loads — social data intact
 - [ ] Start a roleplay dialog — ai-service + Mongo `dialog_sessions`
 - [ ] Notifications panel loads (Redis)

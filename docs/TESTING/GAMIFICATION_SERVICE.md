@@ -40,9 +40,9 @@ dotnet build src/backend/gamification-service/Gamification/Sellevate.Gamificatio
 1. `scripts/dev-infra.sh` then `scripts/dev-gamification.sh` (or `docker compose up --build -d gamification gateway`).
 2. `GET http://localhost:5007/healthz` → `{ "status": "ok", "service": "gamification" }`.
 3. Through the gateway (`http://localhost:5000`, with a valid JWT):
-   - `GET /gamification/progress` → XP totals + daily/weekly amounts and goals + streak.
-   - `GET /profile/achievements` → the seeded achievements with `isUnlocked` flags.
-   - `GET /league` → current league with participants ranked by weekly XP.
+   - `GET /gamification/progress` → progress-point totals + daily/weekly amounts and goals + activity consistency.
+   - `GET /profile/achievements` → the seeded milestones with `isUnlocked` flags.
+   - `GET /league` → current team/cohort progress with participants ordered by weekly progress points.
    - `GET /admin/gamification/settings`, `PUT /admin/gamification/settings` (admin JWT).
    - `GET /admin/leagues`, `POST /admin/leagues/close-current`, tier/membership admin.
 4. Publish an `exercise.completed` / `dialog.evaluated` / `lesson.completed` / `skill.completed`

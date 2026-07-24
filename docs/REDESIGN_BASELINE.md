@@ -21,9 +21,10 @@ Last updated: 2026-06-24.
 ## What the product is
 
 SalesTrainer is a sales-training web app. Users learn sales skills, practice
-realistic conversations with an AI client (by text and by voice), compete with
-others, add friends, study a reference of sales techniques, and track their
-progress through gamification. The UI language is Russian.
+realistic conversations with an AI client (by text and by voice), see their
+progress alongside others on their team, add friends, study a reference of
+sales techniques, and track their progress through structured engagement
+mechanics. The UI language is Russian.
 
 ---
 
@@ -48,8 +49,8 @@ progress through gamification. The UI language is Russian.
 - Solving exercises one at a time, with a correctness result after each.
 - Written **AI feedback** on AI-graded exercises.
 - A limited pool of **hearts** per lesson, spent on mistakes.
-- **XP** awarded for correct answers.
-- A lesson **completion** result summarizing XP earned, accuracy, time, and hearts remaining.
+- **Progress points** awarded for correct answers.
+- A lesson **completion** result summarizing progress points earned, accuracy, time, and hearts remaining.
 
 ### AI practice conversations
 - **Dialog bundles**: themed practice packs tied to a skill.
@@ -62,9 +63,9 @@ progress through gamification. The UI language is Russian.
 - A live **call timer**.
 - Audio/haptic cues for ringing, connecting, and hanging up; an unsupported-browser fallback.
 - The AI **ends the call itself** (logical end, or abruptly on bad user behavior).
-- **Session history**: past practice sessions grouped by date, each showing its mode, bundle, message count and XP; reopenable.
+- **Session history**: past practice sessions grouped by date, each showing its mode, bundle, message count and progress points; reopenable.
 - A working/typing indicator while the AI thinks.
-- Post-conversation **feedback**: an honest written critique citing the conversation, plus an XP reward (0–100, composed from confidence/tone, argument structure, objection handling, and goal achievement). A conversation with no user messages is abandoned — no feedback, no XP.
+- Post-conversation **feedback**: an honest written critique citing the conversation, plus a progress-points reward (0–100, composed from confidence/tone, argument structure, objection handling, and goal achievement). A conversation with no user messages is abandoned — no feedback, no progress points.
 - A featured **NPC mentor** persona that challenges the user.
 
 ### Reference / guidebook
@@ -73,20 +74,20 @@ progress through gamification. The UI language is Russian.
 - Each technique provides: a full explanation, an annotated example dialogue, a case study with metrics, associated skill and tags, a difficulty signal, a "new" marker, and a **coach persona** (a named character with a quote and challenge prompts).
 - **Mastery** tracking per technique (a level that progresses).
 
-### Competition
-- **Weekly leagues** with tiers (Bronze, Silver, Gold, Diamond).
-- A **leaderboard** of participants with their weekly XP.
-- The user's current **rank** and weekly XP.
-- **Promotion / safe / relegation** bands.
+### Team progress
+- **Weekly team progress tiers** (Bronze, Silver, Gold, Diamond).
+- A **team progress view** of participants with their weekly progress points.
+- The user's current **position** and weekly progress points.
+- **Advancement / steady / needs-improvement** bands.
 - A **countdown** to the end of the week.
-- End-of-week **promotion / demotion** outcome.
+- End-of-week **advancement / needs-improvement** outcome.
 
 ### Social
 - A **friends** list.
 - **Search** for other users.
 - Friend **requests** (incoming and outgoing) with accept / decline.
 - A **friend activity feed**.
-- A **friends-only leaderboard**.
+- A **friends-only progress view**.
 - **Direct messaging** with friends (conversations, threads, sending messages).
 - Viewing another user's **public profile**.
 
@@ -105,20 +106,20 @@ progress through gamification. The UI language is Russian.
 
 ### Profile & identity
 - A user profile with name, email, avatar, and persona.
-- Personal **stats**: streak, total XP, personal record, accuracy.
+- Personal **stats**: activity consistency, total progress points, personal record, accuracy.
 - **Skills-completed** progress.
 - **Voice-minute quota** usage (daily and monthly caps on voice practice).
-- **Achievements**: unlockable badges with locked and unlocked states, and celebratory notifications when earned.
+- **Milestones**: unlockable markers with locked and unlocked states, and confirmation notifications when earned.
 - **Skill enrollment**: choosing which skills to be enrolled in.
 - **Settings**: light/dark appearance toggle, logout, and (for admins) an entry to the admin area.
 
-### Gamification signals (recur throughout)
-- **Streak** — consecutive-day counter.
-- **XP** — earned from exercises and conversations; weekly XP feeds the leagues.
+### Progress & engagement signals (recur throughout)
+- **Activity consistency** — consecutive-day counter.
+- **Progress points** — earned from exercises and conversations; weekly progress points feed team progress.
 - **Hearts** — limited mistakes per lesson.
 - **Levels** — a user level.
-- **Achievements** — unlockable badges.
-- **Leagues** — tiered weekly competition.
+- **Milestones** — unlockable markers.
+- **Team progress tiers** — tiered weekly progress visibility.
 - **Mastery** — per-technique progress.
 - **Voice-minute quotas** — daily and monthly voice-practice caps.
 

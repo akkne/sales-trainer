@@ -4,8 +4,8 @@
 
 | Role | Value | Capabilities |
 |---|---|---|
-| `User` | 0 | Regular player — existing experience unchanged |
-| `Admin` | 1 | Manage content (skills, lessons, exercises, reference), view player list |
+| `User` | 0 | Regular learner — existing experience unchanged |
+| `Admin` | 1 | Manage content (skills, lessons, exercises, reference), view learner list |
 | `SuperAdmin` | 2 | All admin functions + manage admin roles (promote/demote users) |
 
 Role is stored as an integer column on the `User` table and emitted as a `role` claim in the JWT access token.
@@ -149,13 +149,13 @@ The final prompt sent to the model is: `[global] + "Additional criteria:" + [per
 | PUT | /admin/leagues/tiers/:id | `{name, color, order}` | `AdminLeagueTierDto` |
 | DELETE | /admin/leagues/tiers/:id | — | 204 |
 
-XP adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every league fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the league's week start, then the league is re-synced. League zone sizes / max participants, and the period schedule (`CurrentPeriodEndsAt`, `PeriodLengthDays`) live in the single-row `LeagueSettings` table. The tier ladder (key/name/color/order) lives in `LeagueTiers` and is managed at `/admin/leagues/tiers`; the key is immutable once created and a tier with existing leagues cannot be deleted.
+Progress-point adjustments are NOT direct writes to `LeagueMemberships.WeeklyXpAmount` — that value is recomputed from `UserXpRecords` on every team-progress fetch and a direct write would be silently erased. Instead the adjustment is saved as a `UserXpRecords` row with `Source = "admin_correction"` (negative `Amount` allowed) stamped at the period's week start, then the group is re-synced. Group size / max participants, and the period schedule (`CurrentPeriodEndsAt`, `PeriodLengthDays`) live in the single-row `LeagueSettings` table. The tier ladder (key/name/color/order) lives in `LeagueTiers` and is managed at `/admin/leagues/tiers`; the key is immutable once created and a tier with existing groups cannot be deleted.
 
-### Gamification (XP economy)
-The XP economy is fully DB-driven; the controls are **distributed across the relevant admin sections**, not a single hub:
-- **Per-exercise-type base XP** → on the Exercise Type Prompts page (`/admin/prompts`).
-- **Dialog XP multiplier + criterion weights** → on the Dialog page (`/admin/dialog`).
-- **Daily/weekly XP goals + streak milestones** → on the Gamification page (`/admin/gamification`).
+### Progress & Recognition (progress points economy)
+The progress points economy is fully DB-driven; the controls are **distributed across the relevant admin sections**, not a single hub:
+- **Per-exercise-type base points** → on the Exercise Type Prompts page (`/admin/prompts`).
+- **Dialog points multiplier + criterion weights** → on the Dialog page (`/admin/dialog`).
+- **Daily/weekly points goals + activity-consistency milestones** → on the Gamification page (`/admin/gamification`).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -168,7 +168,7 @@ The XP economy is fully DB-driven; the controls are **distributed across the rel
 | PUT | /admin/gamification/streak-milestones/:id | `{dayCount, xpReward}` | `StreakMilestoneDto` |
 | DELETE | /admin/gamification/streak-milestones/:id | — | 204 |
 
-See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the XP formulas. Validation: goals & multiplier positive, weights non-negative summing to > 0, `baseXpReward` non-negative, `dayCount` positive & unique.
+See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the points formulas. Validation: goals & multiplier positive, weights non-negative summing to > 0, `baseXpReward` non-negative, `dayCount` positive & unique.
 
 ### Daily Quotes
 | Method | Path | Body | Response |
@@ -244,9 +244,9 @@ app/(admin)/
     dialog/
       page.tsx         ← dialog bundles management
     leagues/
-      page.tsx         ← league list (week/tier filters) + settings + manual week closure
+      page.tsx         ← team-progress period list (week/tier filters) + settings + manual week closure
       [id]/
-        page.tsx       ← league members: move tier, adjust XP, remove, force re-sync
+        page.tsx       ← period members: move tier, adjust progress points, remove, force re-sync
     users/
       page.tsx         ← user list + role management (superadmin only)
 ```

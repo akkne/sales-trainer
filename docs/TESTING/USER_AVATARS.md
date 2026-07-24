@@ -37,6 +37,6 @@
 
 ### Regression
 
-- [ ] The rest of the profile page (stats, skills, achievements, theme switcher, logout) is unaffected
+- [ ] The rest of the profile page (stats, skills, milestones, theme switcher, logout) is unaffected
 - [ ] Header profile chip avatar (top-right) updates after re-loading the page (profile query is invalidated on success)
 - [ ] No console errors or React warnings during the upload interaction

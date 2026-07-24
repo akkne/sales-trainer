@@ -136,7 +136,7 @@ See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) for the implementation writeup.
       upload + `user.*` event emission (unit InMemory + integration Testcontainers). Updated
       [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md), [API_CONTRACTS.md](API_CONTRACTS.md),
       [docs/TESTING/IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md).
-- [~] **Caveat (2.2/2.4):** `GET /profile` aggregates (streak/XP/skills/score) are owned by
+- [~] **Caveat (2.2/2.4):** `GET /profile` aggregates (activity/progress points/skills/score) are owned by
       Gamification/Learning (phases 7 & 8, not extracted yet), so Identity returns them as
       `0` while serving identity fields truthfully — DTO shape unchanged. Composed for real
       once those services exist.
@@ -217,9 +217,9 @@ See [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md) for the implementation writeup.
       [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md) + [docs/TESTING/SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md);
       updated [FRIENDS.md](FRIENDS.md), [DISCUSS.md](DISCUSS.md), [API_CONTRACTS.md](API_CONTRACTS.md),
       [DB_SCHEMA.md](DB_SCHEMA.md).
-- [~] **Caveat (5.2):** the friends leaderboard / public-profile / activity-feed aggregates
-      (XP, streak, achievement count, average exercise score, recent XP/achievement activity)
-      are owned by Gamification/Learning (phases 7 & 8, not extracted yet), so Social returns
+- [~] **Caveat (5.2):** the friends progress view / public-profile / activity-feed aggregates
+      (progress points, activity consistency, milestone count, average exercise score, recent
+      progress/milestone activity) are owned by Gamification/Learning (phases 7 & 8, not extracted yet), so Social returns
       them as `0`/empty while serving identity fields (display name, avatar) truthfully via the
       `UserReplica` — DTO shapes unchanged. Composed for real once those services exist.
 
@@ -257,7 +257,8 @@ See [AI_SERVICE.md](AI_SERVICE.md) for the implementation writeup.
 ---
 
 ## Phase 7 — Gamification Service (event-driven core) `[x]`
-Goal: the flagship — XP/streaks/achievements/league, fed entirely by Kafka events.
+Goal: the event-driven core — progress points/activity consistency/milestones/team
+progress, fed entirely by Kafka events.
 See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) for the implementation writeup.
 
 - [x] **7.1** Scaffolded `src/backend/gamification-service/Gamification` (+ `Gamification.Tests`)
@@ -268,9 +269,10 @@ See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) for the implementation wr
       (plus a local `UserReplica` and a `UserLearningProgress` projection). Health endpoint,
       Dockerfile, `scripts/dev-gamification.sh`, docker-compose wiring, `Sellevate.sln` entries.
 - [x] **7.2** Consumes `exercise.completed`, `dialog.evaluated`, `lesson.completed`,
-      `skill.completed` → grants XP / updates streaks / unlocks achievements / feeds the
-      league XP sync. Idempotent (dedupe on `eventId`), eventual consistency, **no
-      cross-service transaction**. (Learning producers arrive in Phase 8; consumers wired now.)
+      `skill.completed` → grants progress points / updates activity consistency /
+      unlocks milestones / feeds the team progress sync. Idempotent (dedupe on
+      `eventId`), eventual consistency, **no cross-service transaction**. (Learning
+      producers arrive in Phase 8; consumers wired now.)
 - [x] **7.3** Produces `xp.granted` (`userId`/`amount`/`source`), `achievement.unlocked`
       (`userId`/`achievementKey`/`title`), `streak.milestone` (`userId`/`dayCount`/`bonusXp`)
       and `gamification.dialog-weights.updated` (`confidence`/`structure`/`objection`/`goal`/
@@ -280,7 +282,7 @@ See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md) for the implementation wr
       DB, same crons). Exposes `/gamification/progress`, `/profile/achievements`, `/league`
       and the `/admin/gamification/*` + `/admin/leagues/*` CRUD; the gateway flips those routes
       to the `gamification` cluster and stops routing them to the monolith (its code stays).
-- [x] **7.5** Tests (NUnit, offline/mocked): XP grant from each event type, idempotency/dedupe
+- [x] **7.5** Tests (NUnit, offline/mocked): progress-point grant from each event type, idempotency/dedupe
       (achievement re-eval + dedup contract), streak reset, achievement unlock → event
       emission, league rollover, outgoing event-contract shapes, and gateway route-flip
       config. Updated [DB_SCHEMA.md](DB_SCHEMA.md) + [API_CONTRACTS.md](API_CONTRACTS.md);
@@ -312,7 +314,7 @@ See [LEARNING_SERVICE.md](LEARNING_SERVICE.md) for the implementation writeup.
       `lesson.completed` `{userId,lessonId,bestScore}`, `skill.completed` `{userId,skillId}`
       (shapes verbatim-matching the gamification-service consumer) and
       `technique.mastery.changed` `{userId,techniqueId,level,masteryPercent}`. Emitted on the
-      real grading/completion flow, replacing the monolith's direct XP/streak/achievement writes.
+      real grading/completion flow, replacing the monolith's direct progress-point/activity/milestone writes.
 - [x] **8.4** Gateway flips `/skills/*`, `/skills`, `/skill-tree`, `/lessons/*`, `/lessons`,
       `/topics/*`, `/exercises/*`, `/reference/*`, `/reference`, `/techniques/*`,
       `/techniques`, `/daily-quote` and the learning `/admin/*` content routes to the

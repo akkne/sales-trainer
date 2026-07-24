@@ -11,7 +11,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [Microservices Review & Remediation](REVIEW_MICROSERVICES.md) | Post-migration code-review findings (7 services + gateway + BuildingBlocks), severity-rated, with remediation status tracker |
 | [AI Engine Service](AI_SERVICE.md) | Phase 6: extracted `ai-service` (Dialog, Voice, Transcription, `/ai/evaluate`); Postgres+Mongo, `dialog.evaluated`, cached scoring weights |
-| [Gamification Service](GAMIFICATION_SERVICE.md) | Phase 7: extracted event-driven `gamification-service` (XP, streaks, achievements, league) on Postgres `gamification`; consumes `exercise.completed`/`dialog.evaluated`/`lesson.completed`/`skill.completed`, produces `xp.granted`/`achievement.unlocked`/`streak.milestone`/`gamification.dialog-weights.updated`; Hangfire streak-reset + weekly-league-closure jobs; `/gamification/*`, `/league/*`, `/profile/achievements`, `/admin/gamification/*`, `/admin/leagues/*` flipped at the gateway |
+| [Gamification Service](GAMIFICATION_SERVICE.md) | Phase 7: extracted event-driven `gamification-service` (progress points, activity consistency, milestones, team progress) on Postgres `gamification`; consumes `exercise.completed`/`dialog.evaluated`/`lesson.completed`/`skill.completed`, produces `xp.granted`/`achievement.unlocked`/`streak.milestone`/`gamification.dialog-weights.updated`; Hangfire streak-reset + weekly-team-progress-closure jobs; `/gamification/*`, `/league/*`, `/profile/achievements`, `/admin/gamification/*`, `/admin/leagues/*` flipped at the gateway |
 | [Analytics Service](ANALYTICS_SERVICE.md) | Phase 1: extracted Redis-only `analytics-service` (tracking, presence, funnels); `/tracking/*` flipped at the gateway; consumes `user.registered`/`exercise.completed`/`xp.granted`; owns the product Prometheus metrics |
 | [Notification Service](NOTIFICATION_SERVICE.md) | Phase 4: extracted `notification-service` (Redis-only); consumes 5 social/gamification events, per-user capped inbox + unread counter with 30-day TTL (replaces Hangfire cleanup job) |
 | [Data Ownership Matrix](DATA_OWNERSHIP.md) | Phase 0.7: every `AppDbContext` entity → owning service, plus cross-feature references to break |
@@ -40,7 +40,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Frontend English & Toasts](FRONTEND_ENGLISH_TOASTS.md) | Implemented 2026-06-28 — full RU→EN UI translation (no i18n framework, English-only) + new Zustand/Framer-Motion toast system replacing `window.alert()`; notification-center styling fixes |
 | [Mobile Responsive Testing](TESTING/MOBILE_RESPONSIVE.md) | Breakpoints + manual phone checklist for the full mobile adaptation (user-facing screens + admin drawer) |
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
-| [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes leagues + achievements from UI; phase status |
+| [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes team-progress view + milestones from UI; phase status |
 | [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
 
 ## Feature Documentation
@@ -51,9 +51,9 @@ All significant features, architectural decisions, and infrastructure docs.
 | [New Exercise Types](NEW_EXERCISE_TYPES.md) | 11 exercise types: 5 basic + 5 AI-evaluated + theory cards |
 | [AI Dialog](AI_DIALOG.md) | GPT-powered sales conversation practice |
 | [Voice Roleplay](VOICE_ROLEPLAY.md) | Voice-based practice with VAD, Deepgram STT, ElevenLabs TTS |
-| [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, leaderboard, 1-to-1 chat |
-| [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and gamification triggers, 30-day cleanup |
-| [Email Notifications](EMAIL_NOTIFICATIONS.md) | Opt-in email channel: welcome (on registration), friend request received/accepted, unread direct message (delayed 5 min), discuss reply, league update; OOP HTML templates in notification-service; shared MailerSend transport in BuildingBlocks |
+| [Friends & Chat](FRIENDS.md) | Friendships, public profiles, user search, team progress view, 1-to-1 chat |
+| [Notifications](NOTIFICATIONS.md) | In-app notification bell, social and progress/engagement triggers, 30-day cleanup |
+| [Email Notifications](EMAIL_NOTIFICATIONS.md) | Opt-in email channel: welcome (on registration), friend request received/accepted, unread direct message (delayed 5 min), discuss reply, team progress update; OOP HTML templates in notification-service; shared MailerSend transport in BuildingBlocks |
 | [Discuss](DISCUSS.md) | Community forum: threads, replies, upvotes, hybrid tags, solved/hot, admin moderation |
 | [Email Verification](EMAIL_VERIFICATION.md) | Registration confirmed by an emailed numeric code (MailerSend); login gated on a verified address |
 | [Seeder](SEEDER.md) | Bulk import content: skills, topics, lessons with exercises via JSON |
@@ -71,7 +71,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [BACKEND_INTEGRATION.md](TESTING/BACKEND_INTEGRATION.md) | Integration test roadmap |
 | [FRONTEND.md](TESTING/FRONTEND.md) | Vitest setup, component tests |
 | [EXERCISE_CONTENT_VALIDATION.md](TESTING/EXERCISE_CONTENT_VALIDATION.md) | Per-type content validation: unit tests, integration tests, frontend type checking |
-| [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and achievement button cleanup |
+| [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and milestone button cleanup |
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
 | [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
 | [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
@@ -81,7 +81,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [MICROSERVICES_FOUNDATIONS.md](TESTING/MICROSERVICES_FOUNDATIONS.md) | Phase 0: building-blocks (envelope, idempotency, identity headers) + YARP gateway passthrough/anti-spoof tests |
 | [ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) | Phase 1: presence window math, usage-event counters, funnel event consumption, gateway route-flip config |
 | [NOTIFICATION_SERVICE.md](TESTING/NOTIFICATION_SERVICE.md) | Phase 4: notification-service unit tests (event→inbox, unread count, mark-read, capping, TTL, mapper) + gateway route-flip |
-| [GAMIFICATION_SERVICE.md](TESTING/GAMIFICATION_SERVICE.md) | Phase 7: gamification-service unit tests (XP grant per event type, streak increment/reset/milestone, achievement unlock + idempotency, league rollover, outgoing event contracts) + gateway route-flip |
+| [GAMIFICATION_SERVICE.md](TESTING/GAMIFICATION_SERVICE.md) | Phase 7: gamification-service unit tests (progress points grant per event type, activity-consistency increment/reset/milestone, milestone unlock + idempotency, team-progress period rollover, outgoing event contracts) + gateway route-flip |
 | [IDENTITY_SERVICE.md](TESTING/IDENTITY_SERVICE.md) | Phase 2: identity microservice — auth flow, onboarding/profile, avatar + `user.*` event unit/integration tests |
 | [SOCIAL_SERVICE.md](TESTING/SOCIAL_SERVICE.md) | Phase 5: social-service unit tests (friend lifecycle + events, forum CRUD/voting/photos, chat friendship guard, `user.*` replica consumer, event contract) + gateway route-flip |
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
@@ -114,30 +114,30 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - A lesson can always be passed: completion is attempt-based (going through every exercise once completes it, regardless of correctness)
 - Mistakes review (once): after the first pass, if any exercises were answered wrong, an intro screen ("Работа над ошибками") gates a single review round replaying only those exercises
 - Keyboard shortcuts (1-4 select, Enter submit)
-- Skip button, post-session stats (XP, accuracy, time)
+- Skip button, post-session stats (progress points, accuracy, time)
 - Completion screen with session summary
 - **Theory lessons** (`theory_card` type): stories-style cards (text / dialogue / bullets / quote)
   the learner swipes through before practice — no answer, no AI. Dialogue cards reuse the
   Guidebook bubble renderer. Marked with a book icon on the path; reaching the last card
-  completes the lesson and awards a small fixed XP (seeded 5, admin-editable)
+  completes the lesson and awards a small fixed number of progress points (seeded 5, admin-editable)
 
-### Gamification
-- **Fully DB-driven, admin-editable XP economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
-  - Per-exercise-type base XP (edited at `/admin/gamification/exercise-rewards`)
-  - Dialog XP = `round(AI score × multiplier)` with admin-tunable multiplier + per-criterion weights (edited at `/admin/dialog`)
-  - Daily & weekly XP goals (edited at `/admin/gamification`)
-  - Streak milestone bonuses as a CRUD ladder (edited at `/admin/gamification`)
-- Daily streak tracking with reset job
-- Achievement system with 10 default achievements
-- Achievement unlock toasts during session
+### Progress & Recognition
+- **Fully DB-driven, admin-editable progress-points economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
+  - Per-exercise-type base progress points (edited at `/admin/gamification/exercise-rewards`)
+  - Dialog points = `round(AI score × multiplier)` with admin-tunable multiplier + per-criterion weights (edited at `/admin/dialog`)
+  - Daily & weekly progress-point goals (edited at `/admin/gamification`)
+  - Activity-consistency milestone bonuses as a CRUD ladder (edited at `/admin/gamification`)
+- Daily activity-consistency tracking with reset job
+- Milestone system with 10 default competency milestones
+- Milestone-unlock toasts during session
 
-### Leagues
-- Period leaderboards over a configurable tier ladder (default Bronze → Silver → Gold → Diamond)
+### Team progress (cohort view)
+- Non-ranked period-based progress visibility over a configurable tier ladder (default Bronze → Silver → Gold → Diamond), used to group cohorts rather than rank individuals
 - Editable tiers (key/name/color/order) via `/admin/leagues/tiers` — full CRUD, no hardcoded list
-- Top-N promotion, bottom-M demotion (zone sizes configurable in DB via admin)
+- Top-N promotion, bottom-M demotion between tiers (zone sizes configurable in DB via admin)
 - Countdown timer to the exact period end (`periodEndsAt`); the period end date & length are admin-settable for a custom schedule
 - Rollover job (every 15 min) closes the period only once its configured end has passed
-- Admin management at `/admin/leagues`: browse leagues by period/tier with full history, view members (XP, rank, outcome), move members between tiers, adjust weekly XP (via `admin_correction` XP records), remove members, force XP re-sync, manually close the period, edit settings (zones, period end date, period length), and manage the tier ladder
+- Admin management at `/admin/leagues`: browse periods by tier with full history, view members (progress points, position, outcome), move members between tiers, adjust weekly progress points (via `admin_correction` records), remove members, force progress re-sync, manually close the period, edit settings (zones, period end date, period length), and manage the tier ladder
 
 ### Reference & Handbook
 - **Techniques** ("Коллекция") — first-class entities with per-user mastery ring (Unseen/Novice/Practitioner/Expert/Master), category + tag filtering, sample dialog with annotations, case study, and optional coach sidecar
@@ -148,7 +148,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Bundle/mode structure linked to skills
 - Multi-turn conversations with GPT-4.1-mini
 - Feedback generation with GPT-4.1
-- XP rewards based on AI evaluation
+- Progress-point rewards based on AI evaluation
 - Session history sidebar
 
 ### Voice Roleplay
@@ -161,8 +161,8 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Friend request system (send, accept, decline, cancel own pending request, remove)
 - Public profiles with stats and friendship status
 - User search by display name and email
-- Friend XP leaderboard
-- Friend activity feed (achievements, XP earned)
+- Friend progress-points overview (non-ranked)
+- Friend activity feed (milestones, progress points earned)
 - 1-to-1 chat between friends (MongoDB, 5s polling)
 - Conversations list with last message preview
 - Navigation badge for pending friend requests
@@ -170,7 +170,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 ### Notifications
 - In-app bell with unread badge in top app bar
 - Dropdown panel with recent notifications and "Mark all as read"
-- Triggers: welcome (on registration), friend request received/accepted, chat message received, achievement unlocked, streak milestone
+- Triggers: welcome (on registration), friend request received/accepted, chat message received, milestone unlocked, activity-consistency milestone
 - 20s unread count polling, 30s list polling
 - Deep-links via actionUrl on notification activation
 - Hangfire daily cleanup job deletes read notifications older than 30 days
@@ -183,7 +183,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Dialog bundle/mode management with prompt editors
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
-- User management (`/admin/users`, admins): rich user list (avatar, email + verification, auth provider, role), per-user detail modal with activity stats (XP, streaks, skills, avg score, persona), moderation rename of inappropriate nicknames, and removal of inappropriate uploaded photos (resets to default avatar). Role changes remain SuperAdmin-only.
+- User management (`/admin/users`, admins): rich user list (avatar, email + verification, auth provider, role), per-user detail modal with activity stats (progress points, activity consistency, skills, avg score, persona), moderation rename of inappropriate nicknames, and removal of inappropriate uploaded photos (resets to default avatar). Role changes remain SuperAdmin-only.
 
 ### Edit Profile
 - "Edit profile" button on `/profile` opens a modal (same pattern as "Manage skills") to edit **name**, **position (persona)** and **photo** together

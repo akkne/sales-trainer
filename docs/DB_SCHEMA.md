@@ -8,7 +8,7 @@ Last updated: 2026-06-12
 |------------|----------------------------------------------|
 | PostgreSQL | Primary — all structured data                |
 | MongoDB    | Chat messages and unstructured dialogue data |
-| Redis      | Cache, sessions, leaderboard rankings        |
+| Redis      | Cache, sessions, team-progress rankings      |
 
 > **Microservices migration:** as each service is extracted it owns its own logical
 > Postgres database on the shared cluster, with its own EF migrations and
@@ -464,7 +464,7 @@ Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migra
 
 ### `GamificationSettings`
 
-Single-row table holding the admin-editable XP economy (daily/weekly goals + dialog scoring) that was previously hardcoded. Created and seeded by migration `20260616130000_AddGamificationSettings`. Loaded-or-created on first access by `GamificationService`; edited via `/admin/gamification/settings`. Consumed by `SkillTreeService` (goals) and `DialogService`/`OpenAiChatService` (dialog scoring).
+Single-row table holding the admin-editable progress-points economy (daily/weekly goals + dialog scoring) that was previously hardcoded. Created and seeded by migration `20260616130000_AddGamificationSettings`. Loaded-or-created on first access by `GamificationService`; edited via `/admin/gamification/settings`. Consumed by `SkillTreeService` (goals) and `DialogService`/`OpenAiChatService` (dialog scoring).
 
 | Column                   | Type               | Nullable | Notes                                                        |
 |--------------------------|--------------------|----------|--------------------------------------------------------------|
@@ -479,7 +479,7 @@ Single-row table holding the admin-editable XP economy (daily/weekly goals + dia
 
 ### `ExerciseTypeRewards`
 
-Per-exercise-type base XP, replacing the hardcoded flat 10. Seeded with all 10 exercise types → 10 by `20260616130000_AddGamificationSettings`. Read by `GamificationService.GetExerciseBaseXpAsync` (falls back to 10 for unknown types); edited via `/admin/gamification/exercise-rewards/:exerciseType` (upsert).
+Per-exercise-type base progress points, replacing the hardcoded flat 10. Seeded with all 10 exercise types → 10 by `20260616130000_AddGamificationSettings`. Read by `GamificationService.GetExerciseBaseXpAsync` (falls back to 10 for unknown types); edited via `/admin/gamification/exercise-rewards/:exerciseType` (upsert).
 
 | Column         | Type                     | Nullable | Notes                                  |
 |----------------|--------------------------|----------|----------------------------------------|
@@ -489,7 +489,7 @@ Per-exercise-type base XP, replacing the hardcoded flat 10. Seeded with all 10 e
 
 ### `StreakMilestones`
 
-Admin-editable streak-bonus ladder, replacing the hardcoded `7→50, 30→200` switch. Seeded with those two rows. Read by `GamificationService.GetStreakBonusXpAsync` — authoritative when non-empty, otherwise the historic ladder is used. Managed via `/admin/gamification/streak-milestones` (CRUD).
+Admin-editable activity-consistency bonus ladder, replacing the hardcoded `7→50, 30→200` switch. Seeded with those two rows. Read by `GamificationService.GetStreakBonusXpAsync` — authoritative when non-empty, otherwise the historic ladder is used. Managed via `/admin/gamification/streak-milestones` (CRUD).
 
 | Column     | Type      | Nullable | Notes                                     |
 |------------|-----------|----------|-------------------------------------------|
@@ -522,7 +522,7 @@ Quote of the day shown in the stats widget ("Совет дня"). One quote per 
 | `Key`                | `text`    | NOT NULL | Unique machine key, e.g. `first_lesson`, `streak_7`        |
 | `Title`              | `text`    | NOT NULL |                                                             |
 | `Description`        | `text`    | NOT NULL |                                                             |
-| `IconEmoji`          | `text`    | NOT NULL | Emoji shown in the badge UI                                 |
+| `IconEmoji`          | `text`    | NOT NULL | Emoji shown in the milestone UI                             |
 | `ConditionType`      | `text`    | NOT NULL | `first_lesson` / `lesson_count` / `xp_total` / `streak_days` / `skill_completed` |
 | `ConditionThreshold` | `integer` | NOT NULL | Numeric threshold; 0 for event-based conditions             |
 | `SortOrder`          | `integer` | NOT NULL |                                                             |
@@ -613,7 +613,7 @@ Skills
 | Key pattern                        | Type   | TTL      | Purpose                              |
 |------------------------------------|--------|----------|--------------------------------------|
 | `session:{userId}`                 | Hash   | 24h      | Session data                         |
-| `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly XP leaderboard                |
+| `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly team-progress ranking          |
 | `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
 | `presence:online`                  | Sorted | —        | Online-presence (member=userId, score=last-seen unix sec); pruned to a 5-min window by the metrics updater — see [MONITORING.md](MONITORING.md) |
 
@@ -644,7 +644,7 @@ Skills
 | `InitialSocialSchema` (social-service) | 2026-06-21 | Standalone `social` database: `Friendships`, all `Discuss*` tables, and `UserReplicas` (read-model). Owned by social-service, not the monolith `AppDbContext`. |
 | `InitialLearningSchema` (learning-service) | 2026-06-21 | Standalone `learning` database: `Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`, `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress`, and `UserReplicas` (read-model). Owned by learning-service, not the monolith `AppDbContext`. |
 | `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
-| `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven XP economy, all seeded with historic defaults |
+| `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven progress-points economy, all seeded with historic defaults |
 | `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
 | `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
 | `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |

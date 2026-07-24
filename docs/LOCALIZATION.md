@@ -5,7 +5,7 @@ The **user-facing frontend is in Russian**. This covers everything a regular use
 sees: auth (login/register/onboarding/verify-email), the main app shell and
 navigation, the learning path (skill tree, skills, topics, lessons, exercises,
 theory, guidebook, reference), dialog practice + voice, the social area (friends,
-chat, discussions, league/leaderboard), profile, settings, notifications, and the
+chat, discussions, team/cohort progress), profile, settings, notifications, and the
 companies module.
 
 The **admin panel** (`app/(admin)/**`, `features/admin/**`) is intentionally left
