@@ -42,6 +42,8 @@ export function CategorizeExercise({
 }: CategorizeExerciseProps) {
     const [mapping, setMapping] = useState<Record<number, string>>({});
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+    // tap-to-place fallback: HTML5 drag-and-drop does not fire on touch screens
+    const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
 
     const isAnswered = submittedResult !== null && submittedResult !== undefined;
 
@@ -88,6 +90,17 @@ export function CategorizeExercise({
     function assignToCategory(itemIdx: number, categoryName: string) {
         if (isAnswered) return;
         setMapping({ ...mapping, [itemIdx]: categoryName });
+        setSelectedItemIndex(null);
+    }
+
+    function toggleItemSelection(itemIdx: number) {
+        if (isAnswered) return;
+        setSelectedItemIndex(itemIdx === selectedItemIndex ? null : itemIdx);
+    }
+
+    function handleCategoryClick(categoryName: string) {
+        if (isAnswered || selectedItemIndex === null) return;
+        assignToCategory(selectedItemIndex, categoryName);
     }
 
     const canSubmit = Object.keys(mapping).length === content.items.length;
@@ -119,72 +132,85 @@ export function CategorizeExercise({
                             marginBottom: 8,
                         }}
                     >
-                        ЕЩЁ НЕ РАСПРЕДЕЛЕНО
+                        ЕЩЁ НЕ РАСПРЕДЕЛЕНО — НАЖМИ РЕПЛИКУ, ЗАТЕМ КАТЕГОРИЮ
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {unplacedItems.map((item) => (
-                            <div
-                                key={item.idx}
-                                draggable
-                                onDragStart={() => handleDragStart(item.idx)}
-                                style={{
-                                    padding: "8px 14px",
-                                    background: "var(--bg-2)",
-                                    borderRadius: 20,
-                                    fontSize: 13,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    cursor: "grab",
-                                }}
-                            >
-                                {item.text}
-                                <span style={{ display: "flex", gap: 4 }}>
-                                    {content.categories.map((cat, catIdx) => {
-                                        const catColor = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
-                                        return (
-                                            <button
-                                                key={cat}
-                                                onClick={() => assignToCategory(item.idx, cat)}
-                                                title={cat}
-                                                style={{
-                                                    width: 20,
-                                                    height: 20,
-                                                    borderRadius: 6,
-                                                    border: "none",
-                                                    background: catColor.color,
-                                                    cursor: "pointer",
-                                                    fontSize: 10,
-                                                    color: "white",
-                                                    fontWeight: 600,
-                                                }}
-                                            >
-                                                {cat[0]}
-                                            </button>
-                                        );
-                                    })}
-                                </span>
-                            </div>
-                        ))}
+                        {unplacedItems.map((item) => {
+                            const isSelected = selectedItemIndex === item.idx;
+                            return (
+                                <div
+                                    key={item.idx}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-pressed={isSelected}
+                                    draggable
+                                    onDragStart={() => handleDragStart(item.idx)}
+                                    onClick={() => toggleItemSelection(item.idx)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            toggleItemSelection(item.idx);
+                                        }
+                                    }}
+                                    style={{
+                                        padding: "10px 14px",
+                                        background: isSelected ? "var(--primary-softer)" : "var(--bg-2)",
+                                        border: isSelected ? "1.5px solid var(--primary)" : "1.5px solid transparent",
+                                        borderRadius: 20,
+                                        fontSize: 13,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    {item.text}
+                                    <span className="cat-assign-keys">
+                                        {content.categories.map((cat, catIdx) => {
+                                            const catColor = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
+                                            return (
+                                                <button
+                                                    key={cat}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        assignToCategory(item.idx, cat);
+                                                    }}
+                                                    title={cat}
+                                                    style={{
+                                                        width: 20,
+                                                        height: 20,
+                                                        borderRadius: 6,
+                                                        border: "none",
+                                                        background: catColor.color,
+                                                        cursor: "pointer",
+                                                        fontSize: 10,
+                                                        color: "white",
+                                                        fontWeight: 600,
+                                                    }}
+                                                >
+                                                    {cat[0]}
+                                                </button>
+                                            );
+                                        })}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
 
             {/* Category columns */}
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${content.categories.length}, 1fr)`,
-                    gap: 10,
-                }}
-            >
+            <div className="cat-grid">
                 {content.categories.map((category, catIdx) => {
                     const catColor = CATEGORY_COLORS[catIdx % CATEGORY_COLORS.length];
+                    const isDropTarget = selectedItemIndex !== null && !isAnswered;
                     return (
                         <div
                             key={category}
                             onDragOver={handleDragOver}
                             onDrop={() => handleDrop(category)}
+                            onClick={() => handleCategoryClick(category)}
                             style={{
                                 padding: 14,
                                 background: "var(--surface)",
@@ -192,6 +218,9 @@ export function CategorizeExercise({
                                 borderTop: `3px solid ${catColor.color}`,
                                 borderRadius: 12,
                                 minHeight: 140,
+                                outline: isDropTarget ? "2px dashed var(--primary-tint-border)" : "none",
+                                outlineOffset: 2,
+                                cursor: isDropTarget ? "pointer" : "default",
                             }}
                         >
                             <div
@@ -230,13 +259,20 @@ export function CategorizeExercise({
                                             {item.text}
                                             {!isAnswered && (
                                                 <button
-                                                    onClick={() => removeFromCategory(item.idx)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        removeFromCategory(item.idx);
+                                                    }}
+                                                    aria-label="Убрать из категории"
                                                     style={{
                                                         background: "transparent",
                                                         border: "none",
                                                         color: "var(--ink-4)",
                                                         cursor: "pointer",
-                                                        fontSize: 12,
+                                                        fontSize: 13,
+                                                        padding: "6px 8px",
+                                                        margin: "-6px -8px",
+                                                        flex: "none",
                                                     }}
                                                 >
                                                     ✕

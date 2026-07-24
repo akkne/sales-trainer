@@ -30,7 +30,8 @@ Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or re
 
 ## User-facing checklist (no horizontal page scroll anywhere)
 - [ ] **Top bar / nav** — nav rail hidden; mobile top bar (wordmark + справочник/обсуждения/настройки/уведомления) and bottom nav visible; notification panel opens full-width under the top bar and doesn't cover the bottom nav.
-- [ ] **Tree** — sidebar, lesson path, stats stack into one column; lesson-path nodes fit without overflow.
+- [ ] **Tree (phone ≤767px)** — dedicated layout: desktop sidebar/overview hidden; sticky skill-picker bar under the topbar opens a bottom sheet with the stage/skill accordion; picking a skill closes the sheet. Header card shows 2 stat cells (placeholder "Точность/Время" hidden); timeline nodes 30px; "Начать/Повторить" buttons enlarged; FAB fixed above the bottom nav, full-width.
+- [ ] **Exercises on touch** — match-pairs columns stack vertically (tap left item, then right); categorize works without drag-and-drop: tap a phrase → highlighted, tap a category → placed (letter shortcut buttons hidden on touch); reorder up/down arrows are comfortably tappable; submit footer has 16px side padding.
 - [ ] **League** — countdown digits fit on one row; leaderboard rows don't overflow.
 - [ ] **Dialog list** — bundle/mode cards are one per row (no clipped 300px cards); mentor card padding sane.
 - [ ] **AI text chat** — conversation sidebar hidden ≤760px; bubbles ~85% width; input row fits.

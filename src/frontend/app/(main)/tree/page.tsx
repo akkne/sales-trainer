@@ -144,12 +144,8 @@ function PathStageGroup({ stageKey, skills, selectedSlug, onSelect, defaultOpen,
     );
 }
 
-// ─── Left sidebar: funnel-stage accordion ───────────────────────────────────
-function PathLeftColumn({
-    activeStageLabel,
-}: {
-    activeStageLabel: string | undefined;
-}) {
+// ─── Skill accordion list (shared: desktop sidebar + mobile bottom sheet) ───
+function PathSkillList({ onSelected }: { onSelected?: () => void }) {
     const { data: allSkills, isLoading } = useSkills();
     const { stages } = useSkillStages();
     const { selectedSkill, setSelectedSkill } = useSelectedSkillStore();
@@ -177,6 +173,66 @@ function PathLeftColumn({
         ...Array.from(byStage.keys()).filter((k) => !knownOrder.includes(k)).sort(),
     ];
 
+    if (isLoading) {
+        return (
+            <>
+                {[1, 2, 3].map((i) => (
+                    <div
+                        key={i}
+                        style={{
+                            height: 44,
+                            borderRadius: 9,
+                            background: "var(--surface-3)",
+                            marginBottom: 6,
+                            animation: "pulse 2s ease-in-out infinite",
+                        }}
+                    />
+                ))}
+            </>
+        );
+    }
+
+    if (enrolledSkills.length === 0) {
+        return (
+            <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", paddingTop: 20, lineHeight: 1.5 }}>
+                Нет активных навыков.{" "}
+                <Link href="/profile" style={{ color: "var(--primary)", fontWeight: 600 }}>
+                    Добавить в профиле
+                </Link>
+            </p>
+        );
+    }
+
+    return (
+        <>
+            {orderedStages.map((stageKey) => {
+                const stageSkills = (byStage.get(stageKey) ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+                const containsSelected = stageSkills.some((s) => s.slug === selectedSkill?.slug);
+                return (
+                    <PathStageGroup
+                        key={stageKey + (containsSelected ? ":open" : "")}
+                        stageKey={stageKey}
+                        skills={stageSkills}
+                        selectedSlug={selectedSkill?.slug}
+                        onSelect={(skill) => {
+                            setSelectedSkill(skill);
+                            onSelected?.();
+                        }}
+                        defaultOpen={containsSelected}
+                        stages={stages}
+                    />
+                );
+            })}
+        </>
+    );
+}
+
+// ─── Left sidebar: funnel-stage accordion (desktop) ─────────────────────────
+function PathLeftColumn({
+    activeStageLabel,
+}: {
+    activeStageLabel: string | undefined;
+}) {
     return (
         <aside className="path-left">
             <div className="path-left-head">
@@ -190,47 +246,58 @@ function PathLeftColumn({
             </div>
 
             <div className="path-left-scroll">
-                {isLoading ? (
-                    <>
-                        {[1, 2, 3].map((i) => (
-                            <div
-                                key={i}
-                                style={{
-                                    height: 44,
-                                    borderRadius: 9,
-                                    background: "var(--surface-3)",
-                                    marginBottom: 6,
-                                    animation: "pulse 2s ease-in-out infinite",
-                                }}
-                            />
-                        ))}
-                    </>
-                ) : enrolledSkills.length === 0 ? (
-                    <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", paddingTop: 20, lineHeight: 1.5 }}>
-                        Нет активных навыков.{" "}
-                        <Link href="/profile" style={{ color: "var(--primary)", fontWeight: 600 }}>
-                            Добавить в профиле
-                        </Link>
-                    </p>
-                ) : (
-                    orderedStages.map((stageKey) => {
-                        const stageSkills = (byStage.get(stageKey) ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
-                        const containsSelected = stageSkills.some((s) => s.slug === selectedSkill?.slug);
-                        return (
-                            <PathStageGroup
-                                key={stageKey + (containsSelected ? ":open" : "")}
-                                stageKey={stageKey}
-                                skills={stageSkills}
-                                selectedSlug={selectedSkill?.slug}
-                                onSelect={setSelectedSkill}
-                                defaultOpen={containsSelected}
-                                stages={stages}
-                            />
-                        );
-                    })
-                )}
+                <PathSkillList />
             </div>
         </aside>
+    );
+}
+
+// ─── Mobile skill picker: sticky bar + bottom sheet (≤767px) ────────────────
+function PathMobilePicker({ activeStageLabel }: { activeStageLabel: string | undefined }) {
+    const [isSheetOpen, setSheetOpen] = useState(false);
+    const { data: allSkills } = useSkills();
+    const { selectedSkill } = useSelectedSkillStore();
+    const skillNode = allSkills?.find((s) => s.slug === selectedSkill?.slug);
+
+    return (
+        <>
+            <button
+                className="path-mob-picker"
+                onClick={() => setSheetOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={isSheetOpen}
+            >
+                <span className="path-mob-picker-body">
+                    <span className="path-mob-picker-eyebrow">{activeStageLabel ?? "Путь обучения"}</span>
+                    <span className="path-mob-picker-title">{selectedSkill?.title ?? "Выбери навык"}</span>
+                </span>
+                {skillNode && skillNode.totalLessonCount > 0 && (
+                    <span className="path-mob-picker-count">
+                        {skillNode.completedLessonCount}/{skillNode.totalLessonCount}
+                    </span>
+                )}
+                <span className="path-mob-picker-chev" aria-hidden="true">
+                    <Icon name="chevron-down" size={16} />
+                </span>
+            </button>
+
+            {isSheetOpen && (
+                <>
+                    <div className="path-sheet-overlay" aria-hidden onClick={() => setSheetOpen(false)} />
+                    <div className="path-sheet" role="dialog" aria-label="Выбор навыка">
+                        <div className="path-sheet-head">
+                            <span className="path-sheet-title">Путь обучения</span>
+                            <button className="icon-btn" onClick={() => setSheetOpen(false)} aria-label="Закрыть">
+                                <Icon name="close" size={16} />
+                            </button>
+                        </div>
+                        <div className="path-sheet-scroll">
+                            <PathSkillList onSelected={() => setSheetOpen(false)} />
+                        </div>
+                    </div>
+                </>
+            )}
+        </>
     );
 }
 
@@ -356,12 +423,12 @@ function PathCenterColumn({
                             <div className="path-stat-label">Завершено</div>
                             <div className="path-stat-val">{completedCount}</div>
                         </div>
-                        <div className="path-stat-cell" role="listitem">
+                        <div className="path-stat-cell path-stat-cell--na" role="listitem">
                             <div className="path-stat-label">Точность</div>
                             {/* bestScore is per-lesson; aggregate not available from API — show dash */}
                             <div className="path-stat-val" aria-label="Нет данных">—</div>
                         </div>
-                        <div className="path-stat-cell" role="listitem">
+                        <div className="path-stat-cell path-stat-cell--na" role="listitem">
                             <div className="path-stat-label">Время</div>
                             {/* time_spent not returned by backend — omit gracefully */}
                             <div className="path-stat-val" aria-label="Нет данных">—</div>
@@ -413,10 +480,7 @@ function PathCenterColumn({
                                             {isActive && !isLocked && (
                                                 <span className="path-tl-action">
                                                     <Link href={`/session/${lesson.lessonId}`}>
-                                                        <button
-                                                            className="btn btn-accent"
-                                                            style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
-                                                        >
+                                                        <button className="btn btn-primary path-tl-btn">
                                                             {lessonActionLabel(lesson)} →
                                                         </button>
                                                     </Link>
@@ -425,10 +489,7 @@ function PathCenterColumn({
                                             {lesson.status === "completed" && (
                                                 <span className="path-tl-action">
                                                     <Link href={`/session/${lesson.lessonId}`}>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ padding: "5px 13px", fontSize: 12, fontWeight: 700 }}
-                                                        >
+                                                        <button className="btn btn-ghost path-tl-btn">
                                                             Повторить
                                                         </button>
                                                     </Link>
@@ -591,7 +652,10 @@ export default function SkillTreePage() {
         : "";
 
     return (
-        <div className="path-grid" style={{ height: "calc(100vh - 52px)" }}>
+        <div className="path-grid">
+            {/* MOBILE: sticky skill picker + bottom sheet (hidden on desktop) */}
+            <PathMobilePicker activeStageLabel={activeStageLabel} />
+
             {/* LEFT: funnel-stage accordion */}
             <PathLeftColumn activeStageLabel={activeStageLabel} />
 

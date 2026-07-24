@@ -1191,7 +1191,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .stat-2x2 .stat-num { font-size: 22px; }
 
 /* 3-column grid: [256px left] [flex center] [300px right] */
-.path-grid { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; height: 100%; overflow: hidden; }
+.path-grid { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; height: calc(100vh - 52px); overflow: hidden; }
 
 /* ── Left categories column ── */
 .path-left { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
@@ -1299,6 +1299,75 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-fab-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background var(--transition); flex: none; }
 .path-fab-btn:hover { background: var(--primary-strong); }
 .path-fab-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── Lesson card action button (desktop: compact; mobile: enlarged below) ── */
+.path-tl-btn { padding: 5px 13px; font-size: 12px; font-weight: 700; }
+
+/* ── Mobile skill picker bar + bottom sheet (hidden ≥768px) ── */
+.path-mob-picker { display: none; }
+.path-sheet-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(10,9,18,0.45); }
+.path-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+  background: var(--surface); border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0; box-shadow: var(--sh-3);
+  max-height: 75dvh; display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .path-sheet { animation: sheetUp 0.22s cubic-bezier(0.22,1,0.36,1); }
+  @keyframes sheetUp { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+}
+.path-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 16px 12px; border-bottom: 1px solid var(--line-2); flex: none; }
+.path-sheet-title { font-size: 15.5px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; }
+.path-sheet-scroll { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
+
+/* ── Path page: phone layout (≤767px) ── */
+@media (max-width: 767px) {
+  /* single flowing column: picker bar + lessons; sidebar & overview replaced */
+  .path-grid { display: block; height: auto; overflow: visible; }
+  .path-left { display: none; }
+  .path-right { display: none; }
+  .path-breadcrumb { display: none; }
+  .path-center { overflow: visible; }
+  .path-center-scroll { overflow: visible; padding: 14px 16px 190px; }
+
+  /* sticky picker bar under the mobile topbar */
+  .path-mob-picker {
+    position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 30;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+    box-shadow: var(--sh-1); padding: 10px 14px; margin: 12px 16px 0;
+    width: calc(100% - 32px); text-align: left; cursor: pointer;
+    font-family: var(--font-ui);
+  }
+  .path-mob-picker-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .path-mob-picker-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); }
+  .path-mob-picker-title { font-size: 14.5px; font-weight: 700; color: var(--ink-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .path-mob-picker-count { font-size: 12px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: var(--r-pill); padding: 3px 9px; flex: none; }
+  .path-mob-picker-chev { color: var(--ink-4); display: inline-flex; flex: none; }
+
+  /* header card: tighter, 2-up stats, placeholder cells hidden */
+  .path-skill-header { padding: 16px; margin-bottom: 16px; }
+  .path-skill-header-title { font-size: 18px; }
+  .path-stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .path-stat-cell--na { display: none; }
+  .path-stat-grid .path-stat-cell:nth-child(2) { border-right: none; }
+
+  /* timeline: smaller nodes, tighter cards, bigger action buttons */
+  .path-tl-node-col { width: 30px; }
+  .path-tl-node { width: 30px; height: 30px; font-size: 12px; }
+  .path-tl-line { left: 15px; }
+  .path-tl-item { gap: 12px; padding-bottom: 14px; }
+  .path-tl-card { padding: 12px 14px; }
+  .path-tl-btn { padding: 9px 15px; font-size: 13px; }
+
+  /* FAB: fixed above the bottom nav, full width */
+  .path-fab {
+    position: fixed; left: 16px; right: 16px; transform: none;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    min-width: 0; max-width: none; width: auto; z-index: 40;
+  }
+}
 
 /* ── Right overview panel ── */
 .path-right { border-left: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
@@ -1436,6 +1505,20 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 
 /* Dim: unselected options after answer */
 .opt.dim { opacity: 0.45; pointer-events: none; }
+
+/* ── Match-pairs / categorize exercise layouts ── */
+.mp-grid { display: grid; grid-template-columns: 1fr 80px 1fr; gap: 16px; align-items: center; }
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cat-assign-keys { display: flex; gap: 4px; }
+@media (max-width: 640px) {
+  /* columns stack: pick from the top list, answer in the bottom list */
+  .mp-grid { grid-template-columns: 1fr; gap: 18px; align-items: stretch; }
+  .mp-spacer { display: none; }
+}
+/* touch devices place items by tap-select, letter shortcuts are noise */
+@media (pointer: coarse) {
+  .cat-assign-keys { display: none; }
+}
 
 /* ── Context / speech bubble (V2) ── */
 /* Client bubble: white bordered, left-tail */
@@ -3205,6 +3288,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .session-top { padding: 12px 16px; gap: 12px; }
   .session-body { padding: 16px; }
   .session-foot { padding: 14px 0; }
+  .session-foot-inner { padding: 0 16px; }
 
   /* text chat (AI dialog): wider bubbles, tighter padding */
   .dc-head { padding: 12px 16px; }
@@ -3247,9 +3331,6 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 
   /* theory (stories) player: tighter reading area */
   .theory-body { padding: 24px 16px 120px; }
-
-  /* tree page floating action bar: let it shrink below 320px */
-  .path-fab { min-width: 0; width: calc(100% - 24px); }
 
   /* edit-profile modal: avatar + text can wrap */
   .epm-photo-row { flex-wrap: wrap; }

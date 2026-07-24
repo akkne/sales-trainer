@@ -156,16 +156,17 @@ export function ReorderExercise({
                             </div>
                             <div style={{ flex: 1, fontSize: 14 }}>{item.text}</div>
                             {!isAnswered && (
-                                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                     <button
                                         onClick={() => moveItem(position, "up")}
                                         disabled={position === 0}
+                                        aria-label="Выше"
                                         style={{
                                             background: "var(--bg-2)",
                                             border: "none",
                                             borderRadius: 6,
-                                            width: 28,
-                                            height: 22,
+                                            width: 36,
+                                            height: 28,
                                             cursor: "pointer",
                                             color: position === 0 ? "var(--ink-4)" : "var(--ink-2)",
                                             display: "flex",
@@ -178,12 +179,13 @@ export function ReorderExercise({
                                     <button
                                         onClick={() => moveItem(position, "down")}
                                         disabled={position === orderedIndices.length - 1}
+                                        aria-label="Ниже"
                                         style={{
                                             background: "var(--bg-2)",
                                             border: "none",
                                             borderRadius: 6,
-                                            width: 28,
-                                            height: 22,
+                                            width: 36,
+                                            height: 28,
                                             cursor: "pointer",
                                             color: position === orderedIndices.length - 1 ? "var(--ink-4)" : "var(--ink-2)",
                                             display: "flex",

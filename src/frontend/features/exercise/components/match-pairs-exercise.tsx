@@ -105,14 +105,7 @@ export function MatchPairsExercise({
                     padding: 20,
                 }}
             >
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 80px 1fr",
-                        gap: 16,
-                        alignItems: "center",
-                    }}
-                >
+                <div className="mp-grid">
                     {/* Left column */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         <div
@@ -166,7 +159,7 @@ export function MatchPairsExercise({
                         })}
                     </div>
 
-                    <div />
+                    <div className="mp-spacer" />
 
                     {/* Right column */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
