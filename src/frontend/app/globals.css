@@ -1201,6 +1201,16 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-stage-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex: none; }
 .path-left-scroll { flex: 1; overflow-y: auto; padding: 8px 10px 24px; }
 
+/* Overall path progress (left column head / mobile sheet) */
+.path-overall { padding: 12px 16px 14px; border-bottom: 1px solid var(--line-2); flex: none; }
+.path-overall-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.path-overall-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); }
+.path-overall-count { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.path-overall-bar { height: 6px; background: #EFEFF2; border-radius: 6px; overflow: hidden; }
+.path-overall-fill { height: 100%; background: linear-gradient(90deg,#6C5BD9,#9B8CF0); border-radius: 6px; transition: width 0.4s ease; }
+.path-overall-fill.complete { background: #34C36B; }
+.path-sheet-scroll .path-overall { border-bottom: none; padding: 8px 8px 12px; }
+
 /* Stage accordion */
 .path-stage { margin-bottom: 2px; }
 .path-stage-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; padding: 9px 8px; border-radius: 8px; cursor: pointer; transition: background var(--transition); }
@@ -1290,6 +1300,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-tl-title { font-size: 15px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; margin: 0 0 8px; line-height: 1.3; }
 .path-tl-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .path-tl-chip { font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 2px 7px; }
+.path-tl-chip--score { background: var(--success-soft); color: var(--success); }
 
 /* ── Floating action bar (FAB) ── */
 .path-fab { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1C1C20; border-radius: 14px; box-shadow: 0 12px 34px rgba(20,20,40,.28); padding: 12px 18px 12px 16px; display: flex; align-items: center; gap: 14px; z-index: 20; min-width: 320px; max-width: calc(100% - 32px); }
@@ -1346,12 +1357,12 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   .path-mob-picker-count { font-size: 12px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: var(--r-pill); padding: 3px 9px; flex: none; }
   .path-mob-picker-chev { color: var(--ink-4); display: inline-flex; flex: none; }
 
-  /* header card: tighter, 2-up stats, placeholder cells hidden */
+  /* header card: tighter, stats fold into a 2×2 grid */
   .path-skill-header { padding: 16px; margin-bottom: 16px; }
   .path-skill-header-title { font-size: 18px; }
   .path-stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .path-stat-cell--na { display: none; }
-  .path-stat-grid .path-stat-cell:nth-child(2) { border-right: none; }
+  .path-stat-cell:nth-child(even) { border-right: none; }
+  .path-stat-cell:nth-child(n+3) { border-top: 1px solid #EFEFF2; }
 
   /* timeline: smaller nodes, tighter cards, bigger action buttons */
   .path-tl-node-col { width: 30px; }
@@ -1378,6 +1389,24 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-overview-section { margin-bottom: 22px; }
 .path-overview-label { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 10px; }
 .path-overview-body { font-size: 13px; color: var(--ink-3); line-height: 1.6; }
+
+/* "Today" block in the overview panel */
+.path-ov-goal-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.path-ov-goal-cap { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.path-ov-goal-nums { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.path-ov-goal-bar { height: 7px; background: #EFEFF2; border-radius: 7px; overflow: hidden; margin-bottom: 10px; }
+.path-ov-goal-fill { height: 100%; background: linear-gradient(90deg,#6C5BD9,#9B8CF0); border-radius: 7px; transition: width 0.4s ease; }
+.path-ov-goal-fill.complete { background: #34C36B; }
+.path-ov-stat { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.path-ov-stat-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.path-ov-stat-ic.flame { background: #FFF1E8; color: #D9722E; }
+.path-ov-stat-ic.zap { background: #EDEAFB; color: var(--primary); }
+.path-ov-stat-val { font-size: 14px; font-weight: 800; color: var(--ink-heading); line-height: 1.2; }
+.path-ov-stat-cap { font-size: 11.5px; font-weight: 600; color: var(--ink-4); }
+
+/* "Next lesson" quick-start card in the overview panel */
+.path-next-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: var(--sh-1); }
+.path-next-title { font-size: 13.5px; font-weight: 700; color: var(--ink-heading); line-height: 1.35; margin: 0 0 10px; }
 
 /* lesson path serpentine (kept for LessonPath component used in other contexts) */
 .lesson-path { display: flex; flex-direction: column; gap: 8px; position: relative; max-width: 680px; margin: 0 auto; }

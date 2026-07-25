@@ -36,10 +36,11 @@ export function useAllLessons() {
     });
 }
 
-export function useLessonsForSkill(skillSlug: string) {
+export function useLessonsForSkill(skillSlug: string | undefined) {
     return useQuery({
         queryKey: ["lessons", skillSlug],
         queryFn: () => apiClient.get<LessonSummary[]>(`/skills/${skillSlug}/lessons`),
+        enabled: !!skillSlug,
     });
 }
 

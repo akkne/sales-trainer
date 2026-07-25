@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSkillTree, useSkills, useSkillStages, type SkillTreeNode } from "@/features/skills/hooks/use-skill-tree";
 import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSelectedSkillStore } from "@/shared/stores/selected-skill-store";
 import { Icon } from "@/shared/components/icon";
 import { ErrorState } from "@/shared/components/error-state";
 import { getStageMeta, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
+import { formatTimeAgo } from "@/features/discuss/lib/format";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
+import type { SkillTreeData } from "@/features/skills/hooks/use-skill-tree";
 
 // ─── Chip color map from DESIGN_SPEC §1.1 ───────────────────────────────────
 const CHIP_MAP: Record<string, { bg: string; color: string }> = {
@@ -152,9 +154,13 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
 
     const enrolledSkills = (allSkills ?? []).filter((s) => s.status !== "locked");
 
+    // Auto-select the skill the user is currently working on; also recover when the
+    // stored selection points to a skill that is no longer enrolled.
     useEffect(() => {
-        if (!selectedSkill && enrolledSkills.length > 0) {
-            const first = enrolledSkills[0];
+        if (enrolledSkills.length === 0) return;
+        const stillEnrolled = selectedSkill && enrolledSkills.some((s) => s.slug === selectedSkill.slug);
+        if (!stillEnrolled) {
+            const first = enrolledSkills.find((s) => s.status === "in_progress") ?? enrolledSkills[0];
             setSelectedSkill({ slug: first.slug, title: first.title, iconName: first.iconName });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +233,33 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
     );
 }
 
+// ─── Overall path progress (skills mastered across the whole path) ──────────
+function PathOverallProgress() {
+    const { data: allSkills } = useSkills();
+    const enrolled = (allSkills ?? []).filter((s) => s.status !== "locked");
+    if (enrolled.length === 0) return null;
+
+    const doneCount = enrolled.filter(
+        (s) => s.totalLessonCount > 0 && s.completedLessonCount === s.totalLessonCount
+    ).length;
+    const pct = Math.round((doneCount / enrolled.length) * 100);
+
+    return (
+        <div className="path-overall">
+            <div className="path-overall-row">
+                <span className="path-overall-label">Освоено навыков</span>
+                <span className="path-overall-count">{doneCount}/{enrolled.length}</span>
+            </div>
+            <div className="path-overall-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                <div
+                    className={"path-overall-fill" + (pct === 100 ? " complete" : "")}
+                    style={{ width: `${pct}%` }}
+                />
+            </div>
+        </div>
+    );
+}
+
 // ─── Left sidebar: funnel-stage accordion (desktop) ─────────────────────────
 function PathLeftColumn({
     activeStageLabel,
@@ -244,6 +277,8 @@ function PathLeftColumn({
                     </span>
                 )}
             </div>
+
+            <PathOverallProgress />
 
             <div className="path-left-scroll">
                 <PathSkillList />
@@ -292,6 +327,7 @@ function PathMobilePicker({ activeStageLabel }: { activeStageLabel: string | und
                             </button>
                         </div>
                         <div className="path-sheet-scroll">
+                            <PathOverallProgress />
                             <PathSkillList onSelected={() => setSheetOpen(false)} />
                         </div>
                     </div>
@@ -304,7 +340,7 @@ function PathMobilePicker({ activeStageLabel }: { activeStageLabel: string | und
 // ─── Lesson timeline node label ──────────────────────────────────────────────
 function TimelineNodeLabel({ lesson, index }: { lesson: LessonSummary; index: number }) {
     if (lesson.status === "completed") return <>✓</>;
-    if (lesson.status === "in_progress" || lesson.status === "available") return <>{index + 1}</>;
+    if (lesson.status === "locked") return <Icon name="lock" size={13} />;
     return <>{index + 1}</>;
 }
 
@@ -340,22 +376,27 @@ function PathCenterColumn({
     skillTitle,
     stageLabel,
     allSkills,
-    stages,
 }: {
     skillSlug: string;
     skillTitle: string;
     stageLabel: string;
     allSkills: SkillTreeNode[];
-    stages: readonly SkillStageMeta[];
 }) {
     const { data: lessons, isLoading } = useLessonsForSkill(skillSlug);
 
     const sorted = (lessons ?? [])
         .slice()
         .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic);
-    const completedCount = sorted.filter((l) => l.status === "completed").length;
+    const completedLessons = sorted.filter((l) => l.status === "completed");
+    const completedCount = completedLessons.length;
     const totalCount = sorted.length;
     const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+    // Real aggregate accuracy: average of bestScore over completed lessons.
+    const avgAccuracy = completedLessons.length > 0
+        ? Math.round(completedLessons.reduce((sum, l) => sum + l.bestScore, 0) / completedLessons.length)
+        : null;
+    const remainingCount = totalCount - completedCount;
 
     // Skill node data for the header status
     const skillNode = allSkills.find((s) => s.slug === skillSlug);
@@ -375,9 +416,38 @@ function PathCenterColumn({
     // FAB: first resumable/available lesson
     const fabLesson = sorted.find((l) => l.status === "in_progress" || l.status === "available");
 
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const activeItemRef = useRef<HTMLDivElement | null>(null);
+    const [isFabVisible, setFabVisible] = useState(true);
+
+    // When switching skills, bring the current lesson into view instead of making
+    // the user scroll past all completed ones.
+    useEffect(() => {
+        const container = scrollRef.current;
+        const target = activeItemRef.current;
+        if (!container || !target) return;
+        const delta = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+        if (delta > container.clientHeight * 0.6) {
+            container.scrollTo({ top: container.scrollTop + delta - container.clientHeight / 3 });
+        }
+    }, [skillSlug, isLoading]);
+
+    // Hide the floating bar while the active lesson card is already on screen —
+    // otherwise it just duplicates the card's own button and covers content.
+    useEffect(() => {
+        const target = activeItemRef.current;
+        if (!target) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => setFabVisible(!entry.isIntersecting),
+            { threshold: 0.4 }
+        );
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [skillSlug, isLoading, fabLesson?.lessonId]);
+
     return (
         <div className="path-center">
-            <div className="path-center-scroll">
+            <div className="path-center-scroll" ref={scrollRef}>
                 {/* Breadcrumb */}
                 <nav className="path-breadcrumb" aria-label="Навигация по разделам">
                     <span className="path-bc-stage">{stageLabel}</span>
@@ -423,15 +493,16 @@ function PathCenterColumn({
                             <div className="path-stat-label">Завершено</div>
                             <div className="path-stat-val">{completedCount}</div>
                         </div>
-                        <div className="path-stat-cell path-stat-cell--na" role="listitem">
+                        <div className="path-stat-cell" role="listitem">
                             <div className="path-stat-label">Точность</div>
-                            {/* bestScore is per-lesson; aggregate not available from API — show dash */}
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                            {/* average bestScore over completed lessons; dash until something is completed */}
+                            <div className="path-stat-val" aria-label={avgAccuracy === null ? "Нет данных" : undefined}>
+                                {avgAccuracy === null ? "—" : `${avgAccuracy}%`}
+                            </div>
                         </div>
-                        <div className="path-stat-cell path-stat-cell--na" role="listitem">
-                            <div className="path-stat-label">Время</div>
-                            {/* time_spent not returned by backend — omit gracefully */}
-                            <div className="path-stat-val" aria-label="Нет данных">—</div>
+                        <div className="path-stat-cell" role="listitem">
+                            <div className="path-stat-label">Осталось</div>
+                            <div className="path-stat-val">{remainingCount}</div>
                         </div>
                     </div>
                 </div>
@@ -462,6 +533,7 @@ function PathCenterColumn({
                                     key={lesson.lessonId}
                                     className="path-tl-item"
                                     role="listitem"
+                                    ref={lesson.lessonId === fabLesson?.lessonId ? activeItemRef : undefined}
                                 >
                                     {/* Node column */}
                                     <div className="path-tl-node-col">
@@ -507,6 +579,11 @@ function PathCenterColumn({
                                             >
                                                 {chipKind === "theory" ? "Теория" : "Практика"}
                                             </span>
+                                            {lesson.status === "completed" && lesson.bestScore > 0 && (
+                                                <span className="path-tl-chip path-tl-chip--score">
+                                                    Результат {lesson.bestScore}%
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -516,8 +593,8 @@ function PathCenterColumn({
                 )}
             </div>
 
-            {/* Floating action bar — shown when there is a resumable lesson */}
-            {fabLesson && (
+            {/* Floating action bar — shown while the active lesson card is off-screen */}
+            {fabLesson && isFabVisible && (
                 <div className="path-fab" role="complementary" aria-label="Быстрый старт">
                     <div className="path-fab-text">
                         <span className="path-fab-eyebrow">Начать следующий урок</span>
@@ -538,31 +615,95 @@ function PathCenterColumn({
 function PathRightColumn({
     skillSlug,
     allSkills,
+    skillTree,
 }: {
     skillSlug: string | undefined;
     allSkills: SkillTreeNode[];
+    skillTree: SkillTreeData | undefined;
 }) {
     const skill = allSkills.find((s) => s.slug === skillSlug);
+    const { data: lessons } = useLessonsForSkill(skillSlug);
     const progressPct = skill && skill.totalLessonCount > 0
         ? Math.round((skill.completedLessonCount / skill.totalLessonCount) * 100)
+        : 0;
+
+    const nextLesson = (lessons ?? [])
+        .slice()
+        .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic)
+        .find((l) => l.status === "in_progress" || l.status === "available");
+
+    const dailyGoalPct = skillTree && skillTree.dailyXpGoal > 0
+        ? Math.min(100, Math.round((skillTree.dailyXpAmount / skillTree.dailyXpGoal) * 100))
         : 0;
 
     return (
         <aside className="path-right">
             <div className="path-right-head">
                 <div className="path-right-icon" aria-hidden="true">
-                    <Icon name="clock" size={16} />
+                    <Icon name="compass" size={16} />
                 </div>
                 <span className="path-right-title">Обзор</span>
             </div>
 
             <div className="path-right-scroll">
+                {/* Today: daily XP goal, streak, weekly XP */}
+                {skillTree && (
+                    <div className="path-overview-section">
+                        <div className="path-overview-label">Сегодня</div>
+                        <div className="path-ov-goal-row">
+                            <span className="path-ov-goal-cap">Дневная цель</span>
+                            <span className="path-ov-goal-nums">
+                                {skillTree.dailyXpAmount} / {skillTree.dailyXpGoal} XP
+                            </span>
+                        </div>
+                        <div className="path-ov-goal-bar" role="progressbar" aria-valuenow={dailyGoalPct} aria-valuemin={0} aria-valuemax={100}>
+                            <div
+                                className={"path-ov-goal-fill" + (dailyGoalPct >= 100 ? " complete" : "")}
+                                style={{ width: `${dailyGoalPct}%` }}
+                            />
+                        </div>
+                        <div className="path-ov-stat">
+                            <span className="path-ov-stat-ic flame" aria-hidden="true">
+                                <Icon name="flame" size={15} />
+                            </span>
+                            <div>
+                                <div className="path-ov-stat-val">{skillTree.currentStreakDayCount} {pluralDays(skillTree.currentStreakDayCount)}</div>
+                                <div className="path-ov-stat-cap">стрик</div>
+                            </div>
+                        </div>
+                        <div className="path-ov-stat">
+                            <span className="path-ov-stat-ic zap" aria-hidden="true">
+                                <Icon name="zap" size={15} />
+                            </span>
+                            <div>
+                                <div className="path-ov-stat-val">{skillTree.weeklyXpAmount} XP</div>
+                                <div className="path-ov-stat-cap">за эту неделю</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {!skill ? (
                     <p style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
                         Выбери навык слева, чтобы увидеть обзор.
                     </p>
                 ) : (
                     <>
+                        {/* Next lesson quick-start */}
+                        {nextLesson && (
+                            <div className="path-overview-section">
+                                <div className="path-overview-label">Следующий урок</div>
+                                <div className="path-next-card">
+                                    <p className="path-next-title">{nextLesson.title}</p>
+                                    <Link href={`/session/${nextLesson.lessonId}`}>
+                                        <button className="btn btn-primary path-tl-btn">
+                                            {nextLesson.status === "in_progress" ? "Продолжить" : "Начать"} →
+                                        </button>
+                                    </Link>
+                                </div>
+                            </div>
+                        )}
+
                         {/* About the skill */}
                         <div className="path-overview-section">
                             <div className="path-overview-label">О навыке</div>
@@ -573,11 +714,12 @@ function PathRightColumn({
                                 Всего {pluralLessons(skill.totalLessonCount)}: {skill.totalLessonCount},
                                 выполнено: {skill.completedLessonCount}.
                             </p>
+                            {skill.lastActivityAt && (
+                                <p className="path-overview-body" style={{ marginTop: 6 }}>
+                                    Последняя активность: {lastActivityText(skill.lastActivityAt)}.
+                                </p>
+                            )}
                         </div>
-
-                        {/* What you'll learn — omitted: backend has no "learning outcomes" field */}
-
-                        {/* Related techniques — omitted: backend SkillTreeNode has no related techniques */}
 
                         {/* Completion indicator */}
                         {skill.completedLessonCount === skill.totalLessonCount && skill.totalLessonCount > 0 && (
@@ -606,6 +748,19 @@ function PathRightColumn({
 
 function pluralLessons(n: number) {
     return n === 1 ? "урок" : "уроков";
+}
+
+function pluralDays(n: number) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return "день";
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
+    return "дней";
+}
+
+function lastActivityText(isoDate: string) {
+    const ago = formatTimeAgo(isoDate);
+    return ago === "только что" ? ago : `${ago} назад`;
 }
 
 // ─── Page root ───────────────────────────────────────────────────────────────
@@ -666,7 +821,6 @@ export default function SkillTreePage() {
                     skillTitle={selectedSkill.title}
                     stageLabel={centerStageLabel}
                     allSkills={allSkills}
-                    stages={stages}
                 />
             ) : (
                 <div className="path-center" style={{ alignItems: "center", justifyContent: "center" }}>
@@ -686,6 +840,7 @@ export default function SkillTreePage() {
             <PathRightColumn
                 skillSlug={selectedSkill?.slug}
                 allSkills={allSkills}
+                skillTree={skillTreeData}
             />
         </div>
     );
