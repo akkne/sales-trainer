@@ -70,7 +70,9 @@ CREATE TABLE "DialogModes" (
     }
   ],
   "feedback": {
+    "summary": "string",
     "content": "string",
+    "score": number,          // 0–10 balanced grade (carrot-and-stick)
     "generatedAt": ISODate
   },
   "xpEarned": number,
@@ -181,8 +183,9 @@ can stream it to TTS while the model is still generating
 (`StreamingChatReplyParser` extracts it incrementally and tolerates plain-text fallback).
 
 **FeedbackSystemPrompt** — AI evaluation instructions. Backend appends honest-evaluation
-rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block format
-and the `[XP:число]` tag requirement (see Progress Point Rewards below).
+rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block format,
+the balanced `[SCORE:число]` grade (see Overall Score below) and the `[XP:число]` tag
+requirement (see Progress Point Rewards below).
 
 ### Conversation style
 
@@ -211,6 +214,20 @@ voice paths).
 («всего доброго», «до свидания», «кладу трубку», …). A persona goodbye always ends the call. `endCall` still maps to `isStopSignal` on the stored message, the stream
 frame flags and the chat DTOs (wire/storage names unchanged); the frontend ends the call
 and requests feedback.
+
+### Overall Score (0–10)
+
+Every completed session (voice **call** and **text** practice alike) gets a single
+0–10 grade shown at the top of the feedback modal. It is deliberately **carrot-and-stick**:
+the prompt requires the model to name at least one genuine strength when one exists (pryanik)
+and to point out key mistakes firmly but without condescension (knut). Calibration:
+`0–2` fail, `3–4` weak, `5–6` normal (a working result, not a punishment), `7–8` good,
+`9–10` excellent (rare); a one-to-two-line dialog caps at `4`.
+
+The model emits a `[SCORE:N]` tag on its own line; the backend parses and clamps it to
+`0–10` (`OpenAiChatService.ExtractScore`), stores it on `DialogFeedback.Score`, and returns
+it via `/complete` and session DTOs. A missing tag defaults to `0`. The frontend
+`FeedbackModal` renders it as a colored badge (bad / warn / success) with a label.
 
 ### Progress Point Rewards
 

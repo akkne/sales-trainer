@@ -33,7 +33,8 @@ dotnet build src/backend/ai-service/Ai/Sellevate.Ai.csproj
 3. Through the gateway (`http://localhost:5000`):
    - `GET /dialog/bundles` (empty `[]` when `OpenAI:ApiKey` unset — graceful degradation).
    - Create a bundle/mode via `POST /admin/dialog/bundles` (+ `/modes`), then start a
-     session, send a message, complete it → feedback + `xpEarned`.
+     session, send a message, complete it → feedback + `xpEarned` + `score` (0–10 grade,
+     shown as a colored badge with a label in the feedback modal for both call and text practice).
    - `POST /transcription/transcribe` (multipart audio) → `{ text, language }`.
    - Voice stream `POST /dialog/sessions/{id}/voice/stream` → length-prefixed frames.
 4. Confirm a completed session emits `dialog.evaluated` (Kafka UI on `:8085`).

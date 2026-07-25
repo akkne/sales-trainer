@@ -10,6 +10,10 @@ public sealed class DialogFeedback
     [BsonElement("content")]
     public string Content { get; set; } = null!;
 
+    /// <summary>Overall performance grade from 0 to 10 shown to the user.</summary>
+    [BsonElement("score")]
+    public int Score { get; set; }
+
     [BsonElement("generatedAt")]
     public DateTime GeneratedAt { get; set; } = DateTime.UtcNow;
 }

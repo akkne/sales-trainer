@@ -9,6 +9,14 @@ interface FeedbackModalProps {
     onClose: () => void;
 }
 
+function scoreColor(score: number): { soft: string; ink: string; label: string } {
+    if (score <= 2) return { soft: "var(--bad-soft)", ink: "var(--bad)", label: "Провал" };
+    if (score <= 4) return { soft: "var(--bad-soft)", ink: "var(--bad)", label: "Слабо" };
+    if (score <= 6) return { soft: "var(--warn-soft)", ink: "var(--warn)", label: "Нормально" };
+    if (score <= 8) return { soft: "var(--success-soft)", ink: "var(--success)", label: "Хорошо" };
+    return { soft: "var(--success-soft)", ink: "var(--success)", label: "Отлично" };
+}
+
 export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -39,6 +47,36 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                 </div>
 
                 <div className="modal-body">
+                    {typeof feedback.score === "number" && (
+                        <div
+                            className="row gap-3"
+                            style={{ alignItems: "center", marginBottom: 16 }}
+                        >
+                            <span
+                                className="itile"
+                                style={{
+                                    width: 56,
+                                    height: 56,
+                                    background: scoreColor(feedback.score).soft,
+                                    color: scoreColor(feedback.score).ink,
+                                    fontWeight: 700,
+                                    fontSize: 18,
+                                    borderRadius: 14,
+                                }}
+                            >
+                                {feedback.score}<span style={{ fontSize: 12, opacity: 0.7 }}>/10</span>
+                            </span>
+                            <div className="col" style={{ gap: 2 }}>
+                                <span style={{ fontWeight: 600, fontSize: 15 }}>
+                                    {scoreColor(feedback.score).label}
+                                </span>
+                                <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
+                                    Оценка за диалог
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     {feedback.xpEarned > 0 && (
                         <span
                             className="badge"

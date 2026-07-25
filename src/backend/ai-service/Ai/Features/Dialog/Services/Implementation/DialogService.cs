@@ -260,6 +260,7 @@ internal sealed class DialogService : IDialogService
         {
             Summary = feedbackResult.Summary,
             Content = feedbackResult.Content,
+            Score = feedbackResult.Score,
             GeneratedAt = DateTime.UtcNow
         };
 

@@ -245,6 +245,7 @@ public sealed class DialogController : ControllerBase
             {
                 summary = result.Feedback.Summary,
                 content = result.Feedback.Content,
+                score = result.Feedback.Score,
                 generatedAt = result.Feedback.GeneratedAt,
                 xpEarned = result.XpEarned
             });
