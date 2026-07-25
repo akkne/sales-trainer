@@ -73,3 +73,10 @@ logs/
 
 docs/АРХИТЕКТУРА_МИКРОСЕРВИСОВ.md
 RESUME_PROJECT.txt
+
+# B2B sales presentation material (internal, do not publish)
+docs/ПРОДАЖИ_B2B.md
+docs/Sellevate_Presentation_RU.pptx
+
+# Presentation (local only)
+presentation/
