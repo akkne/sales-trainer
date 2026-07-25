@@ -71,6 +71,13 @@ export function RewriteExercise({
                     placeholder="Твой вариант…"
                     value={rewrittenText}
                     onChange={(e) => setRewrittenText(e.target.value)}
+                    onKeyDown={(keyboardEvent) => {
+                        // Enter submits (Shift+Enter inserts a newline) — same as the AI dialogue.
+                        if (keyboardEvent.key === "Enter" && !keyboardEvent.shiftKey) {
+                            keyboardEvent.preventDefault();
+                            if (isValidLength && !isSubmitting) onSubmit({ rewrittenText });
+                        }
+                    }}
                     disabled={isAnswered}
                     rows={5}
                     style={{
@@ -163,6 +170,7 @@ export function RewriteExercise({
                     submitLabel="Отправить"
                     canSubmit={isValidLength}
                     isSubmitting={isSubmitting}
+                    keyboardHint="Enter — отправить · Shift+Enter — перенос"
                 />
             )}
         </div>

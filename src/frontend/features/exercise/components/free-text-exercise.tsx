@@ -87,6 +87,13 @@ export function FreeTextExercise({
                     placeholder="Минимум 20 символов…"
                     value={dictation.interimText ? `${text}${text ? " " : ""}${dictation.interimText}` : text}
                     onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(keyboardEvent) => {
+                        // Enter submits (Shift+Enter inserts a newline) — same as the AI dialogue.
+                        if (keyboardEvent.key === "Enter" && !keyboardEvent.shiftKey) {
+                            keyboardEvent.preventDefault();
+                            if (isValidLength && !isSubmitting) onSubmit({ text });
+                        }
+                    }}
                     disabled={isAnswered}
                     rows={5}
                     style={{
@@ -186,6 +193,7 @@ export function FreeTextExercise({
                     submitLabel="Отправить"
                     canSubmit={isValidLength}
                     isSubmitting={isSubmitting}
+                    keyboardHint="Enter — отправить · Shift+Enter — перенос"
                 />
             )}
         </div>

@@ -112,3 +112,26 @@ no AI streaming, unlike `useExerciseVoice`).
 
 `useSpeechDictation` is mocked in the test. It gates on `voiceConfig.enabled &&
 isWebSpeechSupported()`, and stops automatically once the answer is submitted.
+
+## Enter key — primary action shortcut in the session flow
+
+**File:** `__tests__/EnterKeyActions.test.tsx`
+
+Enter presses the primary action of the current session screen. One shared hook —
+`features/exercise/hooks/use-enter-action.ts` (`useEnterAction`) — is wired into
+`ExerciseActionFooter` ("Проверить"/"Отправить"), `ExerciseResultBanner` ("Далее"),
+`TheoryLessonPlayer` ("Далее"/"Завершить"), and the session gate/completion screens
+("Начать работу над ошибками", "Вернуться к пути"), so every exercise gets it for free.
+Rewrite and free-text additionally submit on plain Enter typed inside their answer
+textarea (Shift+Enter inserts a newline — same convention as the AI dialogue composer).
+
+| Case | Expectation |
+|---|---|
+| Footer submit | Enter calls `onSubmit` when `canSubmit && !isSubmitting` |
+| Footer gated | Enter is a no-op when submission is disabled or in flight |
+| Key repeat | Held-Enter repeats are ignored (one press = one action, can't blast through screens) |
+| Textarea guard | Plain Enter inside a textarea is ignored by the global hook; Ctrl/Cmd+Enter submits |
+| Focused button | Enter on a focused button is left to the browser's native click (no double-fire) |
+| Result banner | Enter calls `onContinue` ("Далее") |
+| Theory next/finish | Enter advances the card; on the last card calls `onComplete`; inert while completing |
+| Theory arrows | ←/→ page between cards but never trigger completion (safe to hold) |

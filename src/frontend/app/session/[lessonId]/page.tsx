@@ -21,6 +21,7 @@ import { EvaluateCallExercise } from "@/features/exercise/components/evaluate-ca
 import { FreeTextExercise } from "@/features/exercise/components/free-text-exercise";
 import { TheoryLessonPlayer } from "@/features/exercise/components/theory-lesson-player";
 import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
+import { useEnterAction } from "@/features/exercise/hooks/use-enter-action";
 import { Icon } from "@/shared/components/icon";
 
 const PASSING_SCORE_THRESHOLD = 7;
@@ -402,6 +403,9 @@ interface CompletionScreenProps {
 }
 
 function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebrow = "Урок завершён", heading = "Отличная работа!" }: CompletionScreenProps) {
+    // Enter presses the primary CTA ("Вернуться к пути").
+    useEnterAction(onBack);
+
     return (
         <div className="complete">
             <Confetti />
@@ -460,6 +464,9 @@ interface MistakesIntroScreenProps {
 }
 
 function MistakesIntroScreen({ mistakeCount, onStart }: MistakesIntroScreenProps) {
+    // Enter presses the primary CTA ("Начать работу над ошибками").
+    useEnterAction(onStart);
+
     const exercisesWord =
         mistakeCount % 10 === 1 && mistakeCount % 100 !== 11
             ? "упражнении"

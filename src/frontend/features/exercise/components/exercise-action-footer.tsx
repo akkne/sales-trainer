@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/shared/components/icon";
+import { useEnterAction } from "@/features/exercise/hooks/use-enter-action";
 
 interface ExerciseActionFooterProps {
     onSkip?: () => void;
@@ -25,6 +26,9 @@ export function ExerciseActionFooter({
     keyboardHint,
 }: ExerciseActionFooterProps) {
     const disabled = !canSubmit || isSubmitting;
+
+    // Enter anywhere on the page presses "Проверить" (see the hook for guards).
+    useEnterAction(disabled ? null : onSubmit);
 
     return (
         <div

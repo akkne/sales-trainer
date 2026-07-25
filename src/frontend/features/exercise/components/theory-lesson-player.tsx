@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TheoryCardContent } from "@/features/exercise/types/theory-card";
 import { TheoryCardView } from "@/features/exercise/components/theory-card-view";
+import { useEnterAction } from "@/features/exercise/hooks/use-enter-action";
 import { Icon } from "@/shared/components/icon";
 
 // Above this many cards, segmented stories bars become too thin to read — switch
@@ -41,6 +42,26 @@ export function TheoryLessonPlayer({ cards, onComplete, isCompleting, onExit }: 
         }
         setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
     }
+
+    // Enter = "Далее" (and "Завершить" on the last card).
+    useEnterAction(isCompleting ? null : goNext);
+
+    // Arrow keys page between cards. Deliberately never complete the lesson —
+    // holding → to scrub through cards must not fire the finish action.
+    useEffect(() => {
+        function handleKeyDown(keyboardEvent: KeyboardEvent) {
+            if (keyboardEvent.defaultPrevented) return;
+            if (keyboardEvent.key === "ArrowRight") {
+                keyboardEvent.preventDefault();
+                setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
+            } else if (keyboardEvent.key === "ArrowLeft") {
+                keyboardEvent.preventDefault();
+                setCurrentIndex((prev) => Math.max(0, prev - 1));
+            }
+        }
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [total]);
 
     return (
         <div className="session theory-session">

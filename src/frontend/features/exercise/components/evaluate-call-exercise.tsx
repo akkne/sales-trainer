@@ -216,6 +216,7 @@ export function EvaluateCallExercise({
                     submitLabel="Отправить оценку"
                     canSubmit={allRated}
                     isSubmitting={isSubmitting}
+                    keyboardHint="Enter — отправить"
                 />
             )}
         </div>

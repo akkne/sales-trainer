@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon, IconName } from "@/shared/components/icon";
+import { useEnterAction } from "@/features/exercise/hooks/use-enter-action";
 
 interface ExerciseResultBannerProps {
     isCorrect: boolean;
@@ -45,6 +46,9 @@ export function ExerciseResultBanner({
 }: ExerciseResultBannerProps) {
     const tone = pickTone(isCorrect, score);
     const t = TONE_STYLES[tone];
+
+    // Enter anywhere on the page presses "Далее" (see the hook for guards).
+    useEnterAction(onContinue);
 
     const feedback = (aiFeedback ?? "").trim();
     const explanationText = (explanation ?? "").trim();

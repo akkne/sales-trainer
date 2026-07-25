@@ -173,6 +173,7 @@ export function SpotMistakeExercise({
                     onSubmit={handleSubmit}
                     canSubmit={canSubmit}
                     isSubmitting={isSubmitting}
+                    keyboardHint="Enter — проверить"
                 />
             )}
         </div>
