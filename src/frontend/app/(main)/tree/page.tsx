@@ -10,7 +10,6 @@ import { ErrorState } from "@/shared/components/error-state";
 import { getStageMeta, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
 import { formatTimeAgo } from "@/features/discuss/lib/format";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
-import type { SkillTreeData } from "@/features/skills/hooks/use-skill-tree";
 
 // ─── Chip color map from DESIGN_SPEC §1.1 ───────────────────────────────────
 const CHIP_MAP: Record<string, { bg: string; color: string }> = {
@@ -615,11 +614,9 @@ function PathCenterColumn({
 function PathRightColumn({
     skillSlug,
     allSkills,
-    skillTree,
 }: {
     skillSlug: string | undefined;
     allSkills: SkillTreeNode[];
-    skillTree: SkillTreeData | undefined;
 }) {
     const skill = allSkills.find((s) => s.slug === skillSlug);
     const { data: lessons } = useLessonsForSkill(skillSlug);
@@ -632,10 +629,6 @@ function PathRightColumn({
         .sort((a, b) => a.topicOrder - b.topicOrder || a.orderInTopic - b.orderInTopic)
         .find((l) => l.status === "in_progress" || l.status === "available");
 
-    const dailyGoalPct = skillTree && skillTree.dailyXpGoal > 0
-        ? Math.min(100, Math.round((skillTree.dailyXpAmount / skillTree.dailyXpGoal) * 100))
-        : 0;
-
     return (
         <aside className="path-right">
             <div className="path-right-head">
@@ -646,43 +639,6 @@ function PathRightColumn({
             </div>
 
             <div className="path-right-scroll">
-                {/* Today: daily XP goal, streak, weekly XP */}
-                {skillTree && (
-                    <div className="path-overview-section">
-                        <div className="path-overview-label">Сегодня</div>
-                        <div className="path-ov-goal-row">
-                            <span className="path-ov-goal-cap">Дневная цель</span>
-                            <span className="path-ov-goal-nums">
-                                {skillTree.dailyXpAmount} / {skillTree.dailyXpGoal} XP
-                            </span>
-                        </div>
-                        <div className="path-ov-goal-bar" role="progressbar" aria-valuenow={dailyGoalPct} aria-valuemin={0} aria-valuemax={100}>
-                            <div
-                                className={"path-ov-goal-fill" + (dailyGoalPct >= 100 ? " complete" : "")}
-                                style={{ width: `${dailyGoalPct}%` }}
-                            />
-                        </div>
-                        <div className="path-ov-stat">
-                            <span className="path-ov-stat-ic flame" aria-hidden="true">
-                                <Icon name="flame" size={15} />
-                            </span>
-                            <div>
-                                <div className="path-ov-stat-val">{skillTree.currentStreakDayCount} {pluralDays(skillTree.currentStreakDayCount)}</div>
-                                <div className="path-ov-stat-cap">стрик</div>
-                            </div>
-                        </div>
-                        <div className="path-ov-stat">
-                            <span className="path-ov-stat-ic zap" aria-hidden="true">
-                                <Icon name="zap" size={15} />
-                            </span>
-                            <div>
-                                <div className="path-ov-stat-val">{skillTree.weeklyXpAmount} XP</div>
-                                <div className="path-ov-stat-cap">за эту неделю</div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {!skill ? (
                     <p style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.6 }}>
                         Выбери навык слева, чтобы увидеть обзор.
@@ -748,14 +704,6 @@ function PathRightColumn({
 
 function pluralLessons(n: number) {
     return n === 1 ? "урок" : "уроков";
-}
-
-function pluralDays(n: number) {
-    const mod10 = n % 10;
-    const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return "день";
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
-    return "дней";
 }
 
 function lastActivityText(isoDate: string) {
@@ -840,7 +788,6 @@ export default function SkillTreePage() {
             <PathRightColumn
                 skillSlug={selectedSkill?.slug}
                 allSkills={allSkills}
-                skillTree={skillTreeData}
             />
         </div>
     );

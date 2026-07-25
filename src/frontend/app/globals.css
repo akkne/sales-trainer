@@ -1390,20 +1390,6 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-overview-label { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 10px; }
 .path-overview-body { font-size: 13px; color: var(--ink-3); line-height: 1.6; }
 
-/* "Today" block in the overview panel */
-.path-ov-goal-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-.path-ov-goal-cap { font-size: 12px; font-weight: 600; color: var(--ink-3); }
-.path-ov-goal-nums { font-size: 12px; font-weight: 700; color: var(--ink-2); }
-.path-ov-goal-bar { height: 7px; background: #EFEFF2; border-radius: 7px; overflow: hidden; margin-bottom: 10px; }
-.path-ov-goal-fill { height: 100%; background: linear-gradient(90deg,#6C5BD9,#9B8CF0); border-radius: 7px; transition: width 0.4s ease; }
-.path-ov-goal-fill.complete { background: #34C36B; }
-.path-ov-stat { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
-.path-ov-stat-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; }
-.path-ov-stat-ic.flame { background: #FFF1E8; color: #D9722E; }
-.path-ov-stat-ic.zap { background: #EDEAFB; color: var(--primary); }
-.path-ov-stat-val { font-size: 14px; font-weight: 800; color: var(--ink-heading); line-height: 1.2; }
-.path-ov-stat-cap { font-size: 11.5px; font-weight: 600; color: var(--ink-4); }
-
 /* "Next lesson" quick-start card in the overview panel */
 .path-next-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: var(--sh-1); }
 .path-next-title { font-size: 13.5px; font-weight: 700; color: var(--ink-heading); line-height: 1.35; margin: 0 0 10px; }
