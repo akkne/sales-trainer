@@ -19,6 +19,11 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
       unit tests: `__tests__/speechEndpointer.test.ts`)
 - [ ] AI reply streams into a single assistant bubble chunk-by-chunk; audio plays sentence-by-sentence
 - [ ] Subtitles auto-scroll to the newest line
+- [ ] **Mobile mic continuity:** after the AI's reply finishes, the mic re-activates and
+      keeps working for the 2nd, 3rd … user turn (regression: it used to die after the
+      first reply because the recognition instance was reused). `WebSpeechClient` now
+      spins up a fresh `SpeechRecognition` on every start/resume/auto-end.
+      Unit tests: `features/voice/services/__tests__/web-speech-client.test.ts`
 
 ## Barge-in
 

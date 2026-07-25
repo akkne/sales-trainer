@@ -73,6 +73,9 @@ export class WebSpeechClient {
     private state: WebSpeechState = "idle";
     private shouldRestartAfterEnd = false;
     private isRecognitionStarted = false;
+    // True between start() and stop(); stays true across pause()/resume() so the
+    // onend handler and resume() know the session is still meant to be listening.
+    private isActive = false;
 
     constructor(options: WebSpeechClientOptions) {
         this.options = options;
@@ -93,6 +96,45 @@ export class WebSpeechClient {
             return;
         }
 
+        this.isActive = true;
+        this.shouldRestartAfterEnd = true;
+        this.launchRecognition();
+    }
+
+    stop(): void {
+        this.isActive = false;
+        this.shouldRestartAfterEnd = false;
+        this.disposeRecognition();
+        this.isRecognitionStarted = false;
+        this.setState("idle");
+    }
+
+    pause(): void {
+        this.shouldRestartAfterEnd = false;
+        // Tear the instance down completely rather than just stopping it. Mobile
+        // browsers reject start() on a SpeechRecognition that has already ended,
+        // so resume() must spin up a fresh instance instead of reusing this one.
+        this.disposeRecognition();
+        this.isRecognitionStarted = false;
+        this.setState("idle");
+    }
+
+    resume(): void {
+        if (!this.isActive) return;
+        this.shouldRestartAfterEnd = true;
+        // Already have a live (or starting) recognition — nothing to do.
+        if (this.recognition) return;
+        this.launchRecognition();
+    }
+
+    getState(): WebSpeechState {
+        return this.state;
+    }
+
+    // Builds a brand-new SpeechRecognition and starts it. A fresh instance every
+    // time is what keeps the mic alive across turns on mobile, where reusing an
+    // ended instance silently fails.
+    private launchRecognition(): void {
         const recognition = this.createRecognition();
         if (!recognition) {
             this.setState("error");
@@ -101,53 +143,24 @@ export class WebSpeechClient {
         }
 
         this.recognition = recognition;
-        this.shouldRestartAfterEnd = true;
 
         try {
-            this.recognition.start();
-        } catch (error) {
-            this.setState("error");
-            this.options.onError?.(error instanceof Error ? error : new Error("Failed to start recognition"));
+            recognition.start();
+        } catch {
+            // start() can throw InvalidStateError if the previous instance has not
+            // fully released the mic yet; onend will retry the relaunch.
         }
     }
 
-    stop(): void {
-        this.shouldRestartAfterEnd = false;
+    private disposeRecognition(): void {
         if (this.recognition) {
             this.recognition.onend = null;
-            this.recognition.stop();
-            this.recognition = null;
-        }
-        this.isRecognitionStarted = false;
-        this.setState("idle");
-    }
-
-    pause(): void {
-        this.shouldRestartAfterEnd = false;
-        if (this.recognition) {
             try {
                 this.recognition.stop();
             } catch {
             }
+            this.recognition = null;
         }
-        this.setState("idle");
-    }
-
-    resume(): void {
-        if (!this.recognition) return;
-
-        this.shouldRestartAfterEnd = true;
-
-        if (this.isRecognitionStarted) return;
-
-        try {
-            this.recognition.start();
-        } catch {
-        }
-    }
-
-    getState(): WebSpeechState {
-        return this.state;
     }
 
     private createRecognition(): SpeechRecognition | null {
@@ -204,11 +217,12 @@ export class WebSpeechClient {
 
         recognition.onend = () => {
             this.isRecognitionStarted = false;
-            if (this.shouldRestartAfterEnd && this.state !== "error") {
-                try {
-                    this.recognition?.start();
-                } catch {
-                }
+            // Mobile browsers auto-end recognition after each utterance even in
+            // continuous mode. Relaunch a fresh instance (not this ended one) to
+            // keep the mic alive between turns.
+            if (this.shouldRestartAfterEnd && this.isActive && this.state !== "error") {
+                this.recognition = null;
+                this.launchRecognition();
             } else if (this.state !== "error") {
                 this.setState("idle");
             }
