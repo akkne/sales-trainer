@@ -318,3 +318,36 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 - **Fix:** Added `OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}` to both ai and learning service env
   blocks in `docker-compose.yml`; set `OPENAI_PROVIDER=F5Ai` in `.env` (documented default `OpenAi`
   in `.env.example`). No code change — the enum path was already correct, only unconfigured.
+
+### Frontend adaptivity: sizing rules over per-page breakpoints
+
+- **Bug (user-reported):** on some devices buttons stopped being visible — with no zoom and no
+  change of screen resolution. Three independent root causes, all the same underlying mistake:
+  layout boxes were given **hard, absolute sizes** (`100vh`, hand-counted pixel constants,
+  fixed-count grid tracks) instead of intrinsic sizes with floors and ceilings. Each is correct
+  on the developer's monitor and drifts on every other device.
+  1. **Landscape phones got the desktop shell.** The rail is `height: 100vh` with every child
+     `flex-shrink: 0`, summing to ~516px. A landscape phone reports ≥768px wide but 375–430px
+     tall, so it matched the desktop branch and the notification bell + settings gear rendered
+     below the fold with no scroll affordance.
+  2. **`/tree` FAB anchored to the timeline, not the viewport.** At ≤1000px `.path-grid` becomes
+     `height: auto`, so `.path-center` grows to the full height of the lesson list — but the
+     `position: absolute` FAB was only switched to `fixed` at ≤767px. In the 768–1000px band
+     (every iPad in portrait) the "Начать" CTA sat ~2000px below the fold.
+  3. **A 1px breakpoint dead zone.** `max-width: 767px` and `min-width: 768px` both fail to match
+     at fractional widths (non-integer `devicePixelRatio`, Windows display scaling), so the rail
+     and the bottom nav rendered simultaneously and the nav covered content.
+- **Decision:** fix the *sizing rules*, not the individual pages. Codified in
+  `docs/TESTING/MOBILE_RESPONSIVE.md`: always ship the `100vh`/`100dvh` fallback pair; every
+  bottom-anchored control carries `env(safe-area-inset-bottom)` (`viewportFit: "cover"` is set,
+  so the inset is real); text-bearing flex/grid children get `min-width: 0` / `minmax(0, 1fr)`;
+  rows of unshrinkable buttons get `flex-wrap: wrap`. Added one **height** tier
+  (`max-height: 520px`) — the axis the breakpoint system had no concept of.
+- **Alternative rejected:** a full re-tier of all ~23 media queries onto Tailwind's scale. It is
+  the right end state, but it touches every page layout at once and a regression could not be
+  attributed. Deferred until there are screenshot tests; the `.98` suffix closes the dead zone
+  in the meantime.
+- **Why the tests missed it:** all 272 frontend tests are jsdom unit/hook tests, which have no
+  layout engine — jsdom does not compute `vh`, `env()`, flex overflow, or media queries. This
+  class of bug is only reachable through visual/viewport testing, so it is covered by the manual
+  checklist rather than by assertions.

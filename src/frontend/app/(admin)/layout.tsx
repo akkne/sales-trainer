@@ -163,7 +163,11 @@ export default function AdminLayout({
                         <Icon name="close" size="sm" />
                     </button>
                 </div>
-                <nav className="flex-1 py-2 px-2 space-y-0.5">
+                {/* min-h-0 is required for overflow-y-auto to take effect: a flex item's
+                    auto minimum size otherwise refuses to shrink below its content height.
+                    Without this the ~760px of nav links overflowed the fixed inset-y-0
+                    aside on short viewports and the last entries were unreachable. */}
+                <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-0.5">
                     {navItems.map((item) => {
                         const isActive = pathname.startsWith(item.href);
                         return (

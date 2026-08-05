@@ -310,6 +310,7 @@ html, body {
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -529,7 +530,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 
 /* Unlayered .profile-chip/.streak-pill beat Tailwind's layered `hidden`,
    so hide them in the appbar on mobile explicitly */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .appbar .profile-chip { display: none; }
 }
 
@@ -862,32 +863,40 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   .mobile-menu-btn { display: none; }
 }
 
-/* reserve space for the fixed bottom nav on mobile */
-@media (max-width: 767px) {
-  .has-bottom-nav { padding-bottom: 76px; }
+/* reserve space for the fixed bottom nav on mobile.
+   The bar is ~61px tall plus the safe-area inset (viewportFit: "cover" is set in
+   app/layout.tsx, so the inset is a real 24-34px on gesture-nav devices). Reserving a
+   flat 76px left the last ~19px of the page — often a CTA — under the nav. */
+@media (max-width: 767.98px) {
+  .has-bottom-nav { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 
-/* ── Mobile top bar (≤767px) — rail-only destinations + notifications ── */
-.mobile-topbar { display: none; }
-@media (max-width: 767px) {
-  .mobile-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 45;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    backdrop-filter: blur(var(--glass-blur));
-    border-bottom: 1px solid var(--line);
-  }
-  .mobile-topbar-actions { display: flex; align-items: center; gap: 8px; }
-  /* comfortable touch targets — base .icon-btn is 30×30 */
-  .mobile-topbar .icon-btn { width: 40px; height: 40px; border-radius: 12px; }
-  .mobile-topbar .icon-btn.active { color: var(--primary); border-color: var(--primary-tint-border-2); background: var(--primary-soft); }
+/* ── Mobile top bar — rail-only destinations + notifications ──
+   Appearance is defined unconditionally so that every breakpoint which shows the bar
+   (narrow viewports, and short landscape viewports further down) only has to flip
+   `display`. Keeping the styling inside a width query meant any other breakpoint that
+   revealed the bar got an unstyled row. */
+.mobile-topbar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--line);
+}
+.mobile-topbar-actions { display: flex; align-items: center; gap: 8px; }
+/* comfortable touch targets — base .icon-btn is 30×30 */
+.mobile-topbar .icon-btn { width: 40px; height: 40px; border-radius: 12px; }
+.mobile-topbar .icon-btn.active { color: var(--primary); border-color: var(--primary-tint-border-2); background: var(--primary-soft); }
+
+@media (max-width: 767.98px) {
+  .mobile-topbar { display: flex; }
 }
 
 /* ── Left nav rail (desktop) ── */
@@ -897,11 +906,17 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0 18px;
-  gap: 9px;
+  /* Every rail child is flex-shrink: 0, so the rail needs a hard ~516px of vertical
+     space. On short viewports (landscape phones report >=768px wide but only 375-430px
+     tall) the bell and settings gear rendered below the fold with no way to scroll to
+     them. Compressing padding, gap and item size with vh keeps the whole rail on screen;
+     above ~820px tall every clamp sits at its max, so desktop is visually unchanged. */
+  padding: clamp(8px, 1.6vh, 16px) 0 clamp(8px, 1.8vh, 18px);
+  gap: clamp(3px, 0.9vh, 9px);
   background: #FCFCFD;
   border-right: 1px solid var(--line-2);
   height: 100vh;
+  height: 100dvh;
   position: sticky;
   top: 0;
   overflow: visible;
@@ -917,8 +932,8 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 
 /* Avatar button */
 .rail-avatar {
-  width: 44px;
-  height: 44px;
+  width: clamp(34px, 5.5vh, 44px);
+  height: clamp(34px, 5.5vh, 44px);
   border-radius: 14px;
   padding: 2px;
   display: flex;
@@ -965,8 +980,8 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 /* Nav item */
 .rail-item {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: clamp(34px, 5.2vh, 42px);
+  height: clamp(34px, 5.2vh, 42px);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -1030,8 +1045,8 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: clamp(34px, 5.2vh, 42px);
+  height: clamp(34px, 5.2vh, 42px);
   flex-shrink: 0;
 }
 /* override icon-btn inside the rail to match rail sizing */
@@ -1045,20 +1060,35 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--surface-2);
 }
 .shell-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   height: 100vh;
+  height: 100dvh;
 }
 
 /* Hide rail on mobile, show bottom-nav */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .rail { display: none; }
   .shell { display: block; }
   .shell-content { height: auto; overflow-y: visible; }
+}
+
+/* Landscape phones report >=768px wide and get the desktop shell, but they are far too
+   short for a 72px vertical rail. Fall back to mobile chrome there. Scoped to <1024px so
+   a short-but-wide desktop window keeps the rail (which now compresses via clamp). */
+@media (max-height: 520px) and (max-width: 1023.98px) {
+  .rail { display: none; }
+  .shell { display: block; }
+  .shell-content { height: auto; overflow-y: visible; }
+  .mobile-topbar { display: flex; }
+  .bottom-nav { display: flex; }
+  .has-bottom-nav { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 
 /* ── Layout helpers ── */
@@ -1191,7 +1221,11 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .stat-2x2 .stat-num { font-size: 22px; }
 
 /* 3-column grid: [256px left] [flex center] [300px right] */
-.path-grid { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; height: calc(100vh - 52px); overflow: hidden; }
+/* Fills .shell-content (which is the dynamic viewport height). The previous
+   `calc(100vh - 52px)` subtracted a header that does not exist at this breakpoint — the
+   mobile topbar is display:none from 768px up — so the columns stopped 52px short and
+   `overflow: hidden` clipped whatever landed in that strip. */
+.path-grid { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; height: 100%; overflow: hidden; }
 
 /* ── Left categories column ── */
 .path-left { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
@@ -1263,8 +1297,11 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-prog-fill.complete { background: #34C36B; }
 
 /* 4-cell stat grid */
-.path-stat-grid { display: grid; grid-template-columns: repeat(4,1fr); margin-top: 16px; border: 1px solid #EFEFF2; border-radius: 10px; overflow: hidden; }
-.path-stat-cell { padding: 12px 14px; border-right: 1px solid #EFEFF2; }
+/* minmax(0,1fr) + min-width: 0 let the cells actually shrink. With plain 1fr each track
+   floored at its content width, so between 1001-1200px — where the centre column is only
+   ~370px — the fourth value overran its cell and the grid's overflow:hidden clipped it. */
+.path-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; border: 1px solid #EFEFF2; border-radius: 10px; overflow: hidden; }
+.path-stat-cell { padding: 12px 14px; border-right: 1px solid #EFEFF2; min-width: 0; }
 .path-stat-cell:last-child { border-right: none; }
 .path-stat-label { font-size: 11px; font-weight: 600; color: var(--ink-4); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
 .path-stat-val { font-size: 17px; font-weight: 700; color: var(--ink-heading); letter-spacing: -0.01em; }
@@ -1333,7 +1370,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-sheet-scroll { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
 
 /* ── Path page: phone layout (≤767px) ── */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   /* single flowing column: picker bar + lessons; sidebar & overview replaced */
   .path-grid { display: block; height: auto; overflow: visible; }
   .path-left { display: none; }
@@ -1360,7 +1397,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   /* header card: tighter, stats fold into a 2×2 grid */
   .path-skill-header { padding: 16px; margin-bottom: 16px; }
   .path-skill-header-title { font-size: 18px; }
-  .path-stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .path-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .path-stat-cell:nth-child(even) { border-right: none; }
   .path-stat-cell:nth-child(n+3) { border-top: 1px solid #EFEFF2; }
 
@@ -1588,7 +1625,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .theory-progress-fill { height: 100%; background: var(--primary); border-radius: 999px; transition: width var(--transition); }
 .theory-progress-count { font-size: 13px; color: var(--ink-3); flex: none; }
 
-.theory-body { position: relative; flex: 1; align-items: flex-start; overflow-y: auto; padding: 40px 24px 140px; }
+.theory-body { position: relative; flex: 1; align-items: flex-start; overflow-y: auto; padding: 40px 24px calc(140px + env(safe-area-inset-bottom)); }
 .theory-card-wrap { max-width: 720px; margin: 0 auto; }
 /* Invisible tap zones for stories navigation (back / forward) */
 .theory-tap { position: absolute; top: 0; bottom: 0; width: 33%; background: none; border: none; cursor: pointer; z-index: 1; }
@@ -1606,7 +1643,9 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .theory-card-quote blockquote { font-family: var(--font-display); font-size: 24px; line-height: 1.4; color: var(--ink); margin: 0 0 16px; }
 .theory-card-quote cite { font-style: normal; font-size: 14px; color: var(--ink-3); }
 
-.theory-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 18px 24px; max-width: 760px; margin: 0 auto; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5; }
+/* padding-bottom keeps the Continue button clear of the home-indicator strip, matching
+   what ExerciseActionFooter/ExerciseResultBanner already do inline. */
+.theory-footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; background: linear-gradient(to top, var(--bg) 60%, transparent); z-index: 5; }
 
 /* ════════ COMPLETE (V2) ════════ */
 .complete {
@@ -1639,7 +1678,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 /* Stat grid — 3 tiles (XP / accuracy / time) */
 .complete-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 24px;
 }
@@ -1852,8 +1891,13 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
 .voice-status {
   display: flex; align-items: center; gap: 8px;
   font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.1em; font-weight: 600;
-  color: var(--ink-2); flex: 1; justify-content: center;
+  /* min-width: 0 — without it this flex: 1 item floors at the min-content width of the
+     status label (~111px with the mono letter-spacing), which combined with an
+     untruncated company name pushed the right side of the bar off a 360px screen. */
+  color: var(--ink-2); flex: 1; min-width: 0; justify-content: center;
 }
+.voice-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-top .back-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* animated connected dot */
 .vdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 @media (prefers-reduced-motion: no-preference) {
@@ -1894,7 +1938,7 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
 
 /* live transcript */
 .transcript {
-  width: 100%; max-width: 560px; max-height: 30vh; overflow-y: auto;
+  width: 100%; max-width: 560px; max-height: 30vh; max-height: 30dvh; overflow-y: auto;
   margin: 24px 0 18px; display: flex; flex-direction: column; gap: 10px;
   scroll-behavior: smooth;
 }
@@ -1950,7 +1994,8 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
 
 /* footer call controls */
 .voice-foot {
-  padding: 22px; display: flex; justify-content: center;
+  padding: 22px 22px max(22px, env(safe-area-inset-bottom));
+  display: flex; justify-content: center;
   border-top: 1px solid var(--line); background: var(--surface);
 }
 .voice-cta { min-width: 260px; height: 60px; border-radius: var(--r-pill); font-size: 17px; font-weight: 700; }
@@ -2008,8 +2053,11 @@ html[data-theme="dark"] .state-pill { background: var(--surface-2); border-color
 .dc-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-2); }
 
 /* header bar */
+/* flex-wrap is load-bearing: every child except the title is flex: none, so on a 360px
+   screen the rigid content (~372px) overflowed and the last child — the ✕ close button —
+   was pushed off the right edge, leaving no visible way out of the chat. */
 .dc-head {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 14px 20px; border-bottom: 1px solid var(--line);
   background: var(--surface); flex: none;
 }
@@ -2116,11 +2164,22 @@ html[data-theme="dark"] .dc-msg.ai .dc-bubble { background: var(--surface-2); bo
 html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 @media (prefers-reduced-motion: reduce) { .dc-conv { transition: none; } }
 
-/* mobile: sidebar becomes hidden (toggle via JS show/hide), chat fills screen */
-@media (max-width: 760px) {
+/* Collapsed by the desktop toggle. The element stays mounted so that the same toggle can
+   still open it as a drawer on mobile. */
+.dc-side--hidden { display: none; }
+
+/* Clickable dismiss layer for the mobile drawer. The drawer previously relied on a
+   `box-shadow: 0 0 0 100vw` spread, which paints a scrim but cannot receive clicks. */
+.dc-side-scrim { display: none; }
+
+/* mobile: sidebar becomes an overlay drawer, chat fills screen */
+@media (max-width: 767.98px) {
   .chat-screen { grid-template-columns: 1fr; }
   .dc-side { display: none; }
-  .dc-side.mobile-open { display: flex; position: fixed; inset: 0; z-index: 50; width: 85vw; max-width: 320px; box-shadow: 0 0 0 100vw rgba(10,9,18,0.45); }
+  /* Two classes (0,2,0) so this beats .dc-side--hidden (0,1,0) — the desktop toggle sets
+     both, and on mobile the drawer state has to win. */
+  .dc-side.mobile-open { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 50; width: 85vw; max-width: 320px; }
+  .dc-side-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: rgba(10,9,18,0.45); }
 }
 
 /* ════════ VOICE MIC BUTTON (in-chat voice mode) ════════ */
@@ -2164,8 +2223,12 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 .vmb-label.vmb-label-active { color: var(--primary); }
 
 /* ════════ MODAL ════════ */
-.modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(10,9,18,0.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
-.modal { width: 100%; max-width: 560px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--sh-3); max-height: 86vh; display: flex; flex-direction: column; border: 1px solid var(--line); }
+/* `overflow-y: auto` + dvh matter here: `vh` resolves against the large viewport, so with
+   a mobile browser toolbar showing, a centred 86vh modal overflowed the visible area and
+   `align-items: center` cut the footer (and its confirm button) off the bottom with no
+   way to scroll to it. */
+.modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(10,9,18,0.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; overflow-y: auto; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+.modal { width: 100%; max-width: 560px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--sh-3); max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; border: 1px solid var(--line); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 24px; border-bottom: 1px solid var(--line); }
 .modal-body { padding: 22px 24px; overflow-y: auto; }
 .modal-foot { padding: 18px 24px; border-top: 1px solid var(--line); }
@@ -2236,7 +2299,7 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 .frd-section-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #9A9AA2; margin: 20px 0 10px; }
 
 /* Request cards */
-.frd-req-card { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--sh-1); padding: 14px 16px; margin-bottom: 8px; }
+.frd-req-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--sh-1); padding: 14px 16px; margin-bottom: 8px; }
 .frd-req-card:last-child { margin-bottom: 0; }
 .frd-req-meta { flex: 1; min-width: 0; }
 .frd-req-name { font-size: 14px; font-weight: 700; color: var(--ink-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2328,7 +2391,9 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 
 /* Responsive: stack rail below main on narrow screens */
 @media (max-width: 1000px) {
-  .frd-body { grid-template-columns: 1fr; }
+  /* Explicit rows: with two auto tracks holding scroll containers, grid's stretch step
+     split the height exactly 50/50 and squeezed the friends list to about two rows. */
+  .frd-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(220px, auto); }
   .frd-main { border-right: none; border-bottom: 1px solid var(--line-2); }
   .frd-rail { width: 100%; }
 }
@@ -2339,6 +2404,12 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
   .frd-profile-identity { padding: 0 16px; }
   .frd-profile-body { padding: 20px 16px 32px; }
   .frd-profile-stats { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 400px) {
+  /* Accept + Decline are ~198px of unshrinkable buttons — wrap them onto their own row
+     instead of clipping "Отклонить" off the card. */
+  .frd-req-actions { flex: 1 0 100%; }
+  .frd-req-accept, .frd-req-decline { flex: 1; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   .frd-card, .frd-req-accept, .frd-req-decline, .frd-card-msg-btn, .frd-composer-send, .frd-rail-back { transition: none; }
@@ -2520,6 +2591,7 @@ html[data-theme="dark"] .dc-status-bar { background: var(--surface-2); }
 .pv2-identity {
   display: flex;
   align-items: flex-end;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 0 28px;
   margin-top: -42px;
@@ -2893,7 +2965,11 @@ html[data-theme="dark"] .pv2-quota-bar { background: var(--surface-3); }
   .pv2-stats    { padding: 20px 16px 0; }
   .pv2-body     { padding: 14px 16px 0; }
   .pv2-identity-name { font-size: 18px; }
-  .pv2-stats { grid-template-columns: repeat(2, 1fr); }
+  .pv2-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* "Редактировать профиль" is ~200px and cannot shrink; give it its own full-width row
+     rather than letting it squeeze the name to zero and clip off the right edge. */
+  .pv2-identity-actions { flex: 1 0 100%; padding-bottom: 0; }
+  .pv2-edit-profile-button { width: 100%; justify-content: center; }
 }
 
 /* ════════ SETTINGS V2 (§3.7) ════════ */
@@ -3105,7 +3181,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 }
 
 /* ════════ LANDING / AUTH ════════ */
-.landing { min-height: 100vh; position: relative; }
+.landing { min-height: 100vh; min-height: 100dvh; position: relative; }
 .land-top { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px; position: relative; z-index: 2; }
 .land-hero { text-align: center; padding: 60px 0 80px; position: relative; z-index: 2; }
 .land-title { font-size: clamp(40px, 7vw, 76px); margin: 22px 0; line-height: 1.02; }
@@ -3158,7 +3234,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .ob-title { font-size: 32px; font-weight: 800; color: var(--ink-heading); letter-spacing: -0.025em; margin: 0 0 10px; line-height: 1.1; }
 .ob-desc { font-size: 14px; color: var(--ink-3); margin: 0; line-height: 1.55; }
 /* Persona grid */
-.ob-persona-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.ob-persona-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .ob-persona-btn {
   padding: 20px 16px;
   background: var(--surface);
@@ -3184,7 +3260,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .ob-persona-desc { font-size: 12px; color: var(--ink-3); line-height: 1.45; margin-top: 2px; }
 .ob-persona-btn.selected .ob-persona-label { color: var(--primary-strong); }
 /* Sales-type grid */
-.ob-sales-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 680px; margin: 0 auto; }
+.ob-sales-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 680px; margin: 0 auto; }
 .ob-sales-btn {
   padding: 18px 20px;
   background: var(--surface);
@@ -3199,7 +3275,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .ob-sales-btn:hover { border-color: var(--primary-tint-border); box-shadow: 0 4px 12px rgba(108,91,217,.09); }
 .ob-sales-btn.selected { border-color: var(--primary); background: var(--primary-softer); color: var(--primary-strong); box-shadow: 0 0 0 3px var(--primary-ring); }
 /* Experience grid */
-.ob-exp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ob-exp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .ob-exp-btn {
   padding: 24px 20px;
   background: var(--surface);
@@ -3217,7 +3293,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .ob-exp-desc { font-size: 12px; color: var(--ink-3); }
 .ob-exp-btn.selected .ob-exp-desc { color: var(--primary-strong); opacity: .7; }
 /* Skills grid */
-.ob-skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ob-skills-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .ob-skill-btn {
   padding: 16px 18px;
   background: var(--surface);
@@ -3234,25 +3310,25 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .ob-skill-btn:disabled { opacity: 0.55; cursor: default; }
 .ob-skill-icon { width: 40px; height: 40px; border-radius: 9px; background: var(--surface-3); display: flex; align-items: center; justify-content: center; flex: none; transition: background .15s; }
 .ob-skill-btn.selected .ob-skill-icon { background: var(--primary-soft); }
-.ob-skill-name { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--ink-2); text-align: left; }
+.ob-skill-name { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--ink-2); text-align: left; }
 .ob-skill-btn.selected .ob-skill-name { color: var(--primary-strong); }
 .ob-skill-check { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line); background: transparent; display: flex; align-items: center; justify-content: center; flex: none; transition: background .15s, border-color .15s; }
 .ob-skill-btn.selected .ob-skill-check { background: var(--primary); border-color: var(--primary); }
 /* Loading skeleton for skills */
 .ob-skill-skeleton { height: 72px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); animation: pulse 2s infinite; }
 /* Onboarding bottom bar */
-.ob-bottombar { padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line-2); background: var(--surface); }
+.ob-bottombar { padding: 20px 32px max(20px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line-2); background: var(--surface); }
 .ob-error { margin-top: 16px; font-size: 13px; color: var(--heart); text-align: center; }
 
 /* ── Responsive: auth ── */
 @media (max-width: 640px) {
   .auth-card { padding: 28px 20px; }
-  .ob-persona-grid { grid-template-columns: repeat(2, 1fr); }
-  .ob-sales-grid { grid-template-columns: repeat(2, 1fr); }
-  .ob-exp-grid { grid-template-columns: repeat(2, 1fr); }
-  .ob-skills-grid { grid-template-columns: repeat(2, 1fr); }
+  .ob-persona-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-sales-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-exp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-skills-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ob-topbar { padding: 16px 20px; }
-  .ob-bottombar { padding: 16px 20px; }
+  .ob-bottombar { padding: 16px 20px max(16px, env(safe-area-inset-bottom)); }
   .ob-body { padding: 32px 16px 24px; }
   .ob-title { font-size: 26px; }
   .auth-code-box { width: 42px; height: 52px; font-size: 20px; }
@@ -3271,6 +3347,11 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .path-left { border-right: none; border-bottom: 1px solid var(--line-2); max-height: 280px; }
   .path-right { border-left: none; border-top: 1px solid var(--line-2); order: 3; }
   .path-center-scroll { padding-bottom: 120px; }
+  /* Once the grid stacks, .path-center grows to the full height of the lesson timeline.
+     It must stop clipping, and the FAB (absolute, bottom: 20px) must stop anchoring to
+     the bottom of that 2000px-tall box — otherwise the "Начать" CTA sits far below the
+     fold even though it is rendered and marked visible. */
+  .path-center { overflow: visible; }
   /* legacy (kept for safety) */
   .tree-grid-a { grid-template-columns: 1fr; }
   .tree-grid-a aside:last-child { order: 3; }
@@ -3281,6 +3362,17 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .chat-wrap { grid-template-columns: 1fr; }
   .chat-list { display: none; }
 }
+/* Tablet band only — deliberately a non-overlapping range, not `max-width: 1000px`, so it
+   cannot override the phone FAB offset (which has to clear the fixed bottom nav) defined
+   earlier in this file. */
+@media (min-width: 768px) and (max-width: 1000px) {
+  .path-fab {
+    position: fixed; left: 16px; right: 16px; transform: none;
+    bottom: 20px;
+    min-width: 0; max-width: none; width: auto; z-index: 40;
+  }
+}
+
 @media (max-width: 560px) {
   .ach-grid { grid-template-columns: repeat(3, 1fr); }
   .land-features { grid-template-columns: 1fr; }
@@ -3322,7 +3414,9 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   /* text chat (AI dialog): wider bubbles, tighter padding */
   .dc-head { padding: 12px 16px; }
   .dc-thread-inner { padding: 18px 16px; gap: 12px; }
-  .dc-bubble { max-width: 85%; }
+  /* .dc-bubble-wrap is the element that actually carries the 72% cap, so targeting
+     .dc-bubble here was a no-op and phones never got the wider bubbles. */
+  .dc-bubble-wrap { max-width: 85%; }
   .dc-input { padding: 12px 16px; gap: 8px; }
 
   /* friends chat + voice transcript bubbles wider */
@@ -3343,8 +3437,8 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .lp-title { font-size: 15px; }
 
   /* modals: near-fullscreen feel */
-  .modal-overlay { padding: 12px; }
-  .modal { max-height: 92vh; }
+  .modal-overlay { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .modal { max-height: 92vh; max-height: 92dvh; }
   .modal-head { padding: 16px 18px; }
   .modal-body { padding: 18px; }
   .modal-foot { padding: 14px 18px; }
@@ -3359,7 +3453,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
   .gb-body { padding: 0 18px 20px; }
 
   /* theory (stories) player: tighter reading area */
-  .theory-body { padding: 24px 16px 120px; }
+  .theory-body { padding: 24px 16px calc(120px + env(safe-area-inset-bottom)); }
 
   /* edit-profile modal: avatar + text can wrap */
   .epm-photo-row { flex-wrap: wrap; }
@@ -3860,7 +3954,7 @@ html[data-theme="dark"] .stg-logout:hover { background: rgba(217,80,62,.26); }
 .co-contact-notes { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-secondary); white-space: pre-wrap; }
 
 /* ── Responsive ── */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .co-list-head { flex-direction: column; }
   .co-list-head .btn-primary { width: 100%; }
   .co-cta-row { flex-direction: column; }

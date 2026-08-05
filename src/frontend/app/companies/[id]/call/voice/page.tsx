@@ -478,7 +478,7 @@ export default function CompanyVoiceCallPage() {
                     </span>
                 </div>
 
-                <div style={{ minWidth: 100, display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ minWidth: 0, flex: "none", display: "flex", justifyContent: "flex-end" }}>
                     {usage && usage.dailyLimitSeconds > 0 && (
                         <div
                             className={"voice-quota num" + (usage.dailyExceeded ? " exceeded" : "")}

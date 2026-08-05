@@ -232,7 +232,12 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                 className="session-body"
                 style={{
                     overflowY: "auto",
-                    padding: lastSubmissionResult?.aiFeedback ? "48px 24px 320px" : "48px 24px 180px",
+                    // The AI-feedback banner is 42dvh of review card plus ~120px of chrome,
+                    // so a flat 320px of runway left the bottom of the exercise (often the
+                    // user's own answer) stuck behind it on taller screens.
+                    padding: lastSubmissionResult?.aiFeedback
+                        ? "48px 24px calc(42dvh + 120px)"
+                        : "48px 24px 180px",
                     alignItems: "flex-start",
                 }}
             >

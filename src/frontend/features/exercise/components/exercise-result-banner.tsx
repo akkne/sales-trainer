@@ -151,7 +151,7 @@ export function ExerciseResultBanner({
                             border: `1px solid ${t.tileColor}`,
                             borderRadius: 12,
                             padding: "12px 16px",
-                            maxHeight: "42vh",
+                            maxHeight: "42dvh",
                             overflowY: "auto",
                         }}
                     >

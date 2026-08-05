@@ -19,11 +19,39 @@ onboarding) size themselves with `100dvh` (with a `100vh` fallback) so the
 mobile browser address bar doesn't crush the layout.
 
 ## Breakpoints in use
-- `768px` (Tailwind `md`) — desktop/mobile boundary; top nav ↔ bottom nav + hamburger.
+- `767.98px` / `768px` (Tailwind `md`) — desktop/mobile boundary; top nav ↔ bottom nav + hamburger.
+  The mobile side is written as `max-width: 767.98px` rather than `767px` on purpose: at a
+  fractional viewport width (Android devices with a non-integer `devicePixelRatio`, Windows
+  display scaling) `767px` and `min-width: 768px` *both* failed to match, so the rail and the
+  bottom nav rendered at the same time and the nav covered content with no reserved padding.
 - `1000px` — multi-column grids collapse to a single column (tree, league, friends, discuss, profile, guidebook).
-- `760px` — AI text-chat sidebar hides.
+- `768–1000px` (tablet band, expressed as a non-overlapping range) — the tree FAB becomes
+  `position: fixed`. It must not be folded into `max-width: 1000px`, or it would override the
+  phone offset that clears the bottom nav.
 - `640px` — phone refinements block in `globals.css`: tighter gutters/paddings, single-column dialog grids, shrunk countdown, wider chat bubbles, smaller lesson-path nodes, near-fullscreen modals.
 - `560px` — milestones grid → 3 cols, landing features → 1 col.
+- `400px` — friend-request Accept/Decline buttons move to their own full-width row.
+- **`max-height: 520px` (with `max-width: 1023.98px`)** — the only *height* breakpoint.
+  Landscape phones report ≥768px wide but only 375–430px tall, so they were served the desktop
+  shell; the 72px rail needs ~516px of vertical space and its last items (notification bell,
+  settings) fell below the fold unreachable. This tier forces mobile chrome instead. The rail
+  additionally sizes its padding/gap/items with `clamp(..., vh, ...)` so it compresses rather
+  than overflowing; above ~820px tall every clamp sits at its max and desktop is unchanged.
+
+## Sizing rules to preserve
+- **Never size a layout box with `100vh` alone.** `vh` resolves against the *large* viewport
+  (toolbars retracted), so on mobile browsers the box is taller than what is visible and its
+  bottom — usually where a CTA lives — is permanently off-screen. Always ship the
+  `height: 100vh; height: 100dvh;` fallback pair. This applies to `body`, `.shell`,
+  `.shell-content`, `.rail`, `.landing`, `.modal` and every full-screen flow.
+- **Every bottom-anchored control needs `env(safe-area-inset-bottom)`.** `viewportFit: "cover"`
+  is set in `app/layout.tsx`, so the page really does render under the home indicator (34px on
+  notched iPhones, ~24px on Android gesture nav). Use
+  `padding-bottom: max(<base>, env(safe-area-inset-bottom))`.
+- **A flex/grid child that holds text needs `min-width: 0`** (and `minmax(0, 1fr)` for grid
+  tracks), otherwise it floors at its min-content width and pushes siblings off-screen.
+- **A row of unshrinkable buttons needs `flex-wrap: wrap`** on its parent — without it the last
+  button is pushed past the edge and clipped.
 
 ## How to test
 Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or resize the window. Check both light and dark theme.
@@ -34,7 +62,8 @@ Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or re
 - [ ] **Exercises on touch** — match-pairs columns stack vertically (tap left item, then right); categorize works without drag-and-drop: tap a phrase → highlighted, tap a category → placed (letter shortcut buttons hidden on touch); reorder up/down arrows are comfortably tappable; submit footer has 16px side padding.
 - [ ] **League** — countdown digits fit on one row; team progress rows don't overflow.
 - [ ] **Dialog list** — bundle/mode cards are one per row (no clipped 300px cards); mentor card padding sane.
-- [ ] **AI text chat** — conversation sidebar hidden ≤760px; bubbles ~85% width; input row fits.
+- [ ] **AI text chat** — conversation sidebar hidden ≤767.98px and opens as an overlay drawer when the header toggle is tapped; tapping the scrim closes it; bubbles ~85% width; input row fits.
+- [ ] **AI text chat header (≤360px)** — the ✕ close button stays on screen (the header row wraps rather than pushing it off the right edge).
 - [ ] **Voice** — avatar shrinks; CTA is full-width.
 - [ ] **Session/exercise** — options, footer buttons fit; reduced top/body padding.
 - [ ] **Friends / chat** — list/window stack; message bubbles ~88% width.
@@ -49,8 +78,25 @@ Open Chrome DevTools → device toolbar (iPhone SE 375px and Pixel 414px), or re
 - [ ] **Theory (stories) player** — reading area uses tighter phone padding.
 - [ ] **Tree FAB** — floating "continue" bar shrinks below 320px viewports instead of overflowing.
 
+## Landscape / short-viewport checklist
+Rotate a phone to landscape (or use DevTools at 812×375 and 932×430) — this is the case that
+used to hide the notification bell and settings gear entirely.
+- [ ] Mobile top bar + bottom nav appear (not the desktop rail), fully styled.
+- [ ] No content sits under the bottom nav.
+- [ ] On a short *desktop* window (e.g. 1400×500) the rail stays, but compresses to fit — the
+      settings gear at the bottom is still visible and clickable.
+
+## Safe-area checklist (notched iPhone / Android gesture nav)
+- [ ] Theory ("stories") player — the Далее/Завершить button clears the home indicator.
+- [ ] Voice call — the Завершить звонок button clears the home indicator.
+- [ ] Onboarding — the Далее button clears the home indicator.
+- [ ] Bottom nav — the last row of page content is fully visible above it.
+- [ ] Modals with a footer (post-call feedback, delete confirm) — the confirm button is
+      reachable with the browser toolbar showing; the overlay scrolls if the modal is tall.
+
 ## Admin checklist
 - [ ] Mobile top bar with hamburger appears (<768px); tapping it opens the drawer over a dimmed backdrop.
+- [ ] On a short viewport (e.g. iPhone SE, 375×667) the drawer's nav list **scrolls** — every section including Users and "Back to app" is reachable.
 - [ ] Drawer closes on backdrop tap, on the X button, and automatically after navigating to a section.
 - [ ] On desktop (≥768px) the sidebar is static as before — no drawer behavior.
 - [ ] Every admin **table** scrolls horizontally inside its own region (`overflow-x-auto`) instead of breaking the page layout.
