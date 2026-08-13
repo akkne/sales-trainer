@@ -22,6 +22,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Branding](BRANDING.md) | Logo source of truth (`public/logo.svg`), favicon/apple-icon files, `Wordmark` component, how to replace the mark |
 | [Localization](LOCALIZATION.md) | User-facing frontend is Russian (admin stays English); in-place translation, no i18n library, translate/leave rules + glossary |
 | [Codestyle Enforcement](CODESTYLE_ENFORCEMENT.md) | PR CI gate for CODESTYLE.md — custom linter (no comments, no abbreviations) + `dotnet format` + `.editorconfig` |
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |

@@ -1,7 +1,5 @@
 "use client";
 
-import { Icon } from "./icon";
-
 interface WordmarkProps {
     size?: number;
     color?: string;
@@ -18,21 +16,19 @@ export function Wordmark({
     const markSize = Math.round(size * 1.2);
 
     const mark = (
-        <span
+        <img
+            src="/logo.svg"
+            alt={variant === "mark" ? "Sellevate" : ""}
+            width={markSize}
+            height={markSize}
             style={{
-                display: "grid",
-                placeItems: "center",
+                display: "block",
                 width: markSize,
                 height: markSize,
-                background: "linear-gradient(135deg, var(--primary), var(--violet))",
                 borderRadius: Math.round(markSize * 0.32),
-                color: "#fff",
-                boxShadow: "var(--sh-primary)",
                 flex: "none",
             }}
-        >
-            <Icon name="bolt" size={Math.round(markSize * 0.6)} />
-        </span>
+        />
     );
 
     if (variant === "mark") {
