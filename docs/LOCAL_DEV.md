@@ -53,6 +53,108 @@ Open http://localhost:3000 (frontend) → talks to http://localhost:5001 (backen
 > free ports 5001/3000:
 > `docker stop code-backend-1 code-frontend-1`
 
+## Running the full stack in Docker on this machine
+
+`docker-compose.yml` on its own is the **server** shape and does not come up on a
+Mac: it publishes the gateway on `:5000` (macOS ControlCenter holds that port for
+AirPlay Receiver) and builds the frontend against the production API. Overlay
+`docker-compose.local.yml` to fix exactly those two things:
+
+```bash
+scripts/docker-local-up.sh     # build sequentially + up -d
+scripts/docker-local-down.sh   # stop, keep volumes
+```
+
+which is a wrapper around:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+| | Deploy (`docker-compose.yml`) | + `docker-compose.local.yml` |
+|---|---|---|
+| Gateway host port | `5000` | **`5001`** (override `GATEWAY_HOST_PORT`) |
+| Frontend `NEXT_PUBLIC_API_URL` | `https://api.sellevate.site` (from `src/frontend/.env.production`) | **`http://localhost:5001`** (build arg) |
+| NuGet packages | downloaded from nuget.org | **host `~/.nuget/packages`** mounted in (override `NUGET_CACHE_DIR`) |
+
+The NuGet cache is wired through an overridable build stage: each service
+Dockerfile declares `FROM scratch AS nugetcache` (empty, so the deploy build is
+unchanged) and mounts it as a NuGet fallback folder for `restore` and `publish`.
+The overlay replaces that stage via `additional_contexts` — a named build context
+wins over a stage of the same name.
+
+The API URL is baked into the client bundle at **build time**, so switching it
+requires rebuilding the `frontend` image — a restart is not enough. The frontend
+Dockerfile writes `.env.production.local` (higher priority than `.env.production`)
+only when the `NEXT_PUBLIC_API_URL` build arg is non-empty, so the deploy build is
+unaffected.
+
+`ports:` entries **merge by appending** across compose files, so the override uses
+the `!override` tag; without it the gateway would still try to bind the
+unavailable `:5000` as well.
+
+### Three things that break a cold build on a Mac
+
+**1. `exit code 132` / `Illegal instruction` — the .NET JIT, not your machine.**
+On arm64 under Apple's Virtualization Framework the JIT in the **glibc** .NET SDK
+image dies with SIGILL. It surfaces as `Illegal instruction` during `dotnet restore`
+or `csc.dll exited with code 132` during `dotnet publish`. Reproduce it bare:
+
+```bash
+docker run --rm mcr.microsoft.com/dotnet/sdk:9.0 sh -c \
+  'cd /tmp && dotnet new console -o a >/dev/null && cd a && dotnet build -v q; echo rc=$?'
+# rc=132
+```
+
+It is **probabilistic, and scales with project size** — which makes it easy to
+misdiagnose. Small services often squeeze through (sometimes on the 3rd attempt),
+while `learning` failed 5/5 runs. Measured on `learning`:
+
+| Build stage image | extra flags | result |
+|---|---|---|
+| `sdk:9.0` (glibc) | none | fails |
+| `sdk:9.0` | `DOTNET_EnableWriteXorExecute=0` | fails |
+| `sdk:9.0` | `+ /p:UseSharedCompilation=false` | fails |
+| `sdk:9.0` | `+ DOTNET_TieredCompilation=0 DOTNET_TieredPGO=0` | 1/4 runs — luck, not a fix |
+| **`sdk:9.0-alpine` (musl)** | none | **4/4 clean** |
+
+So the fix is the SDK image, not a JIT flag. Each Dockerfile takes
+`ARG SDK_IMAGE` (glibc by default, unchanged for deploys) and the overlay switches
+it to `-alpine`. The published output is portable IL — no `-r`, and `runtimes/`
+carries every RID's native assets — so the glibc runtime image still runs it.
+
+> Careful with `DOTNET_EnableWriteXorExecute=0`: on a *trivial* project it flips
+> `rc=132` to `rc=0`, which looks like a fix. On a real one it changes nothing. A
+> single green run proves nothing here — repeat it before believing it.
+
+**The Alpine switch is a workaround, not the cure.** The same SIGILL hits the JVM:
+the Kafka container dies on startup with
+
+```
+SIGILL (0x4) at pc=…  JRE 21.0.4  linux-aarch64
+Problematic frame: j java.lang.System.registerNatives()V+0
+```
+
+Two unrelated JIT runtimes crashing the same way points at the VM, not at .NET or
+Kafka. Observed on **macOS 26.3.1 / Apple M4 Pro / Docker Desktop 4.37.2** — a
+Docker Desktop that predates both the OS and the CPU generation it is running on.
+**Fix: update Docker Desktop.** Until then Kafka (and `kafka-exporter`) will not
+start on this machine; everything else runs, but cross-service events do not flow.
+
+**2. A slow link makes `dotnet restore` fail.** It aborts after 60 s without data
+(`The operation has timed out`, `Received an unexpected EOF`). A cold build pulls
+hundreds of MB per service, so on a ~100 KB/s link it never finishes. The host's
+`~/.nuget/packages` is mounted in as a NuGet fallback folder instead — see the
+compose overlay above. With it, `restore` completes in ~25 s with no network at all.
+
+**3. Resizing the Docker VM restarts the daemon**, killing any in-flight build with
+`failed to receive status: rpc error … EOF`. Set memory first, then build. Give the
+VM ~8 GiB: this is 20 containers, and Kafka alone wants ~1 GiB.
+
+The build is also run **one service at a time** — `docker compose build` otherwise
+starts all nine concurrently, and nine parallel `dotnet publish` runs are enough to
+exhaust a modest VM.
+
 ## Run pieces individually
 
 ```bash
@@ -106,6 +208,10 @@ scripts/dev-company.sh    # Company microservice on host, port 5009 (own company
 | `scripts/dev-gateway.sh` | Run the YARP API gateway on host (port 5000), proxying to the host backend. |
 | `scripts/dev-up.sh` | Start infra + backend + frontend (apps backgrounded, logs in `logs/`). |
 | `scripts/dev-down.sh` | Stop host apps + Docker infra. |
+| `docker-compose.local.yml` | Overlay that makes the full-Docker stack runnable on a Mac (gateway port, frontend API URL). |
+| `scripts/docker-local-up.sh` | Build sequentially + start the full Docker stack. |
+| `scripts/docker-local-down.sh` | Stop the full Docker stack, keeping volumes. |
+| `src/backend/.dockerignore` | Keeps `bin/`+`obj/` out of the build context (2.1 GB → 2.2 MB per service). |
 
 `src/frontend/.env.local` and `logs/` / `.local-run/` are gitignored.
 

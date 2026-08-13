@@ -1,0 +1,96 @@
+# Local full-Docker overrides.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   (or: scripts/docker-local-up.sh, which wraps exactly that)
+#
+# docker-compose.yml alone is the *deploy* shape and does not come up on a dev
+# machine. This overlay changes three things and nothing else:
+#   1. gateway host port  — macOS holds :5000 for AirPlay Receiver
+#   2. frontend API URL   — the deploy image is baked against the production API
+#   3. NuGet package cache — see below
+# Everything else (services, volumes, ports) comes from docker-compose.yml.
+#
+# --- On the NuGet cache ---
+# A cold .NET build downloads hundreds of MB from nuget.org per service. On a slow
+# link `dotnet restore` aborts after 60s of no data ("The operation has timed out"
+# / "Received an unexpected EOF") and the build fails. The host already has these
+# packages in ~/.nuget/packages, so each Dockerfile declares an overridable
+# `nugetcache` stage (empty by default) that is mounted as a NuGet fallback folder.
+# Pointing it at the host cache here makes a local build resolve offline.
+# The deploy build passes no such context and keeps restoring from nuget.org.
+x-nuget-cache: &nuget-cache
+  nugetcache: ${NUGET_CACHE_DIR:-${HOME}/.nuget/packages}
+
+# --- On the SDK image ---
+# The glibc .NET SDK image's JIT dies with SIGILL on arm64 under Apple's
+# Virtualization Framework — "Illegal instruction", or "csc.dll exited with code
+# 132". It is probabilistic: small services usually squeeze through, learning never
+# did (0/5 runs), and no combination of DOTNET_EnableWriteXorExecute /
+# TieredCompilation / TieredPGO / UseSharedCompilation fixed it. The Alpine (musl)
+# SDK is unaffected — 4/4 clean runs on the same project.
+# Output is portable IL (published without -r), so the glibc runtime image in
+# docker-compose.yml still runs it; `runtimes/` carries every RID's native assets.
+x-build-args: &build-args
+  SDK_IMAGE: ${SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:9.0-alpine}
+
+services:
+  gateway:
+    # macOS binds :5000 to ControlCenter (AirPlay Receiver), so the deploy port
+    # cannot be published locally. 5001 is the port docs/LOCAL_DEV.md already
+    # documents as "the backend" for host-side dev.
+    # `!override` is required: compose *appends* to a `ports` list by default,
+    # which would keep the unbindable :5000 entry alongside the new one.
+    ports: !override
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-5001}:8080"
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  identity:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  ai:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  analytics:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  notification:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  gamification:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  social:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  learning:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  company:
+    build:
+      additional_contexts: *nuget-cache
+      args: *build-args
+
+  frontend:
+    build:
+      args:
+        # Baked into the client bundle at build time. Must be a URL the *browser*
+        # can reach, so it is the published host port, not the compose hostname.
+        - NEXT_PUBLIC_API_URL=http://localhost:${GATEWAY_HOST_PORT:-5001}
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

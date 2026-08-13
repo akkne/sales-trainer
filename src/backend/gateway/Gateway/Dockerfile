@@ -1,3 +1,11 @@
+# SDK image used for the build stage. The glibc default is what deploys build with.
+# On arm64 under Apple's Virtualization Framework that image's JIT dies with SIGILL
+# ("Illegal instruction" / "csc.dll exited with code 132") often enough that large
+# projects never finish; the Alpine/musl SDK does not. docker-compose.local.yml
+# switches this to -alpine locally. The published output is portable IL either way
+# (no -r), so the runtime image below is unchanged. See docs/LOCAL_DEV.md.
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:9.0
+
 # Build context is src/backend (the backend root) so the gateway can reference the
 # shared building-blocks project that lives next to it:
 #   docker build -f gateway/Gateway/Dockerfile src/backend
@@ -6,21 +14,31 @@ USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+# Optional NuGet package cache. Defaults to an EMPTY stage, so the deploy build
+# restores from nuget.org exactly as before. docker-compose.local.yml overrides
+# this stage with the host's ~/.nuget/packages (a named build context wins over a
+# stage of the same name), which is what makes a cold local build survive a slow
+# link — see docs/LOCAL_DEV.md.
+FROM scratch AS nugetcache
+
+FROM ${SDK_IMAGE} AS build
 ARG BUILD_CONFIGURATION=Release
+ENV NUGET_FALLBACK_PACKAGES=/nuget-fallback
 WORKDIR /src
 
 # Restore against just the project files first for better layer caching.
 COPY building-blocks/BuildingBlocks/Sellevate.BuildingBlocks.csproj building-blocks/BuildingBlocks/
 COPY gateway/Gateway/Sellevate.Gateway.csproj gateway/Gateway/
-RUN dotnet restore gateway/Gateway/Sellevate.Gateway.csproj
+RUN --mount=type=bind,from=nugetcache,target=/nuget-fallback,ro \
+    dotnet restore gateway/Gateway/Sellevate.Gateway.csproj
 
 COPY building-blocks/ building-blocks/
 COPY gateway/ gateway/
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish gateway/Gateway/Sellevate.Gateway.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN --mount=type=bind,from=nugetcache,target=/nuget-fallback,ro \
+    dotnet publish gateway/Gateway/Sellevate.Gateway.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

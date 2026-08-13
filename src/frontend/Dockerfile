@@ -7,7 +7,14 @@ FROM node:23-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_API_URL comes from .env.production (copied with the source)
+# NEXT_PUBLIC_API_URL comes from .env.production (copied with the source).
+# docker-compose.local.yml overrides it to the host gateway so a locally built
+# image does not point at the production API. The file is only written when the
+# build arg is non-empty, so the deploy build is untouched.
+ARG NEXT_PUBLIC_API_URL=""
+RUN if [ -n "$NEXT_PUBLIC_API_URL" ]; then \
+        echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" > .env.production.local; \
+    fi
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 RUN npm run build
