@@ -1,0 +1,96 @@
+# LLM_FAILURE_HANDLING.md — how a failing AI call must behave
+
+> Cross-cutting contract for every code path that calls an LLM or a speech API.
+> Applies to `ai-service` (Dialog, Voice, Transcription, Evaluation, Companies) and
+> `learning-service` (exercise chat + voice).
+
+## The rule
+
+**A provider failure is an upstream condition, not a defect in our service.**
+
+An invalid request to the LLM, a quota wall, a flapping gateway or a garbage response
+body must degrade into a meaningful status code and a `Warning` log line. It must never
+become an unhandled exception — which the ASP.NET pipeline turns into a 500 and logs at
+`Error`, making an ordinary bad prompt look like the service is broken.
+
+## Exception hierarchy
+
+Both services define the same shape (`Sellevate.Ai.Features.Dialog.Models` /
+`Sellevate.Learning.Infrastructure.Ai`):
+
+```
+OpenAiException                  (abstract base — controllers catch THIS)
+├── OpenAiRequestException       provider rejected the request / returned an unusable body
+│                                  carries the upstream StatusCode
+├── OpenAiPaymentRequiredException   402
+├── OpenAiRateLimitException         429
+└── OpenAiAuthenticationException    401 / 403
+```
+
+Controllers catch the **base type**, so a failure mode added later cannot bypass them
+just because nobody wrote a new `catch` clause for it.
+
+## Status mapping
+
+| Upstream | Exception | HTTP out | Log level |
+|---|---|---|---|
+| 400 and other 4xx | `OpenAiRequestException` | 502 (dialog) / 503 (elsewhere) | `Warning` |
+| 401 / 403 | `OpenAiAuthenticationException` | 503 | `Warning` |
+| 402 | `OpenAiPaymentRequiredException` | 402 | `Warning` |
+| 429 | `OpenAiRateLimitException` | 429 | `Warning` |
+| 5xx | `OpenAiRequestException` | 502 / 503 | `Error` |
+| non-JSON / unexpected shape on a 200 | `OpenAiRequestException` | 502 / 503 | `Warning` |
+| transport failure, retries exhausted, circuit open | `HttpRequestException` | 503 | `Warning` |
+
+Only a genuine provider-side failure (5xx) is logged at `Error`. Everything the provider
+*chose* to reject is a `Warning`.
+
+## Never leak the provider body
+
+`TranslateProviderError` logs the response body through `RedactAndTruncate` (strips
+`sk-…` keys and `Authorization` / `X-Auth-Token` values, caps at 500 chars) and throws a
+**generic** message — `"AI provider error"`. The raw body never reaches the exception
+message, and therefore never reaches the client through `ProblemDetails` or a controller
+that echoes `exception.Message`.
+
+## Streaming endpoints
+
+Once a stream has written its 200 headers, no status code can be sent. Both
+`VoiceDialogController` and `ExerciseController.StreamVoiceMessage` therefore catch
+`OpenAiException` and `HttpRequestException` and **end the stream cleanly** — the client
+gets a short reply instead of a torn connection.
+
+Client cancellation (`OperationCanceledException`) is logged at `Information` and is never
+answered with a fallback reply.
+
+## Graceful degradation, where it exists
+
+Some paths prefer a canned answer over an error:
+
+- `ExerciseDialogService.GenerateAiResponseAsync` — falls back to a neutral reply when the
+  provider is unavailable (`Warning`, not `Error`). Cancellation is re-thrown, never faked.
+- TTS synthesis failures — the reply is still delivered as text (`Warning`).
+- `AiEvaluationStrategyBase.ParseAiResponse` — an unparseable grading response becomes a
+  failed-but-valid result rather than a 503.
+
+## Transport resilience
+
+Both services wrap the `OpenAI` and `YandexTts` named clients in the same Polly stack
+(`Microsoft.Extensions.Http.Resilience`):
+
+- 30s per attempt, up to 2 retries (≤3 attempts), 90s total
+- circuit breaker: 5 failures in a 60s window (`SamplingDuration` ≥ 2 × `AttemptTimeout`,
+  otherwise Polly fails host startup validation)
+- `HttpClient.Timeout` 90s — the outer bound; Polly controls each attempt
+
+Without this a stalled provider pins a request thread for the default 100s.
+
+## Tests
+
+`OpenAiProviderErrorTests` exists in both test projects and pins the whole contract:
+status→exception mapping, the shared base type, body redaction, non-JSON bodies, and
+unexpected JSON shapes. `DialogControllerProviderFailureTests` proves the controller
+returns 502/503/429 instead of throwing.
+
+See [TESTING/AI_SERVICE.md](TESTING/AI_SERVICE.md) and
+[TESTING/LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md).

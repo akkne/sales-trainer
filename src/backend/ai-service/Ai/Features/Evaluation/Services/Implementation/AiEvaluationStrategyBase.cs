@@ -90,7 +90,11 @@ internal abstract class AiEvaluationStrategyBase(
 
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogError("OpenAI evaluation API error: {StatusCode} - {Body}", response.StatusCode, RedactAndTruncate(responseBody));
+            // A rejected request (bad payload, quota, auth) is an expected upstream state, not a defect here.
+            if ((int)response.StatusCode >= 500)
+                logger.LogError("OpenAI evaluation API failed: {StatusCode} - {Body}", response.StatusCode, RedactAndTruncate(responseBody));
+            else
+                logger.LogWarning("OpenAI evaluation API rejected the request: {StatusCode} - {Body}", response.StatusCode, RedactAndTruncate(responseBody));
             throw new HttpRequestException("AI provider error");
         }
 
@@ -102,7 +106,7 @@ internal abstract class AiEvaluationStrategyBase(
                 if (errorDocument.RootElement.ValueKind == JsonValueKind.Object &&
                     errorDocument.RootElement.TryGetProperty("error", out _))
                 {
-                    logger.LogError("OpenAI evaluation returned error body: {Body}", RedactAndTruncate(responseBody));
+                    logger.LogWarning("OpenAI evaluation returned an error body: {Body}", RedactAndTruncate(responseBody));
                     throw new HttpRequestException("AI provider error");
                 }
             }
@@ -111,7 +115,17 @@ internal abstract class AiEvaluationStrategyBase(
             }
         }
 
-        var responseJson = JsonDocument.Parse(responseBody);
+        JsonDocument responseJson;
+        try
+        {
+            responseJson = JsonDocument.Parse(responseBody);
+        }
+        catch (JsonException jsonException)
+        {
+            // A proxy error page or a truncated body — degrade to a 503, never an unhandled 500.
+            logger.LogWarning(jsonException, "AI evaluation returned a non-JSON body: {Body}", RedactAndTruncate(responseBody));
+            throw new InvalidOperationException("AI provider returned an unreadable response");
+        }
 
         string aiResponseText;
         if (responseJson.RootElement.TryGetProperty("message", out var messageEl) &&
@@ -120,16 +134,16 @@ internal abstract class AiEvaluationStrategyBase(
             aiResponseText = contentEl.GetString() ?? "{}";
         }
         else if (responseJson.RootElement.TryGetProperty("choices", out var choices) &&
-                 choices.GetArrayLength() > 0)
+                 choices.ValueKind == JsonValueKind.Array &&
+                 choices.GetArrayLength() > 0 &&
+                 choices[0].TryGetProperty("message", out var choiceMessage) &&
+                 choiceMessage.TryGetProperty("content", out var choiceContent))
         {
-            aiResponseText = choices[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString() ?? "{}";
+            aiResponseText = choiceContent.GetString() ?? "{}";
         }
         else
         {
-            logger.LogError("Unexpected AI response format: {Body}", RedactAndTruncate(responseBody));
+            logger.LogWarning("Unexpected AI response format: {Body}", RedactAndTruncate(responseBody));
             throw new InvalidOperationException("Unexpected AI response format");
         }
 

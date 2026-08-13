@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Abstract;
 using Sellevate.Ai.Features.Evaluation;
@@ -41,6 +42,12 @@ public sealed class ReadinessController : ControllerBase
                 return NoContent();
 
             return Ok(readiness);
+        }
+        catch (OpenAiException openAiException)
+        {
+            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
+            _logger.LogWarning(openAiException, "AI provider error during readiness generation");
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
         catch (InvalidOperationException invalidOperationException)
         {

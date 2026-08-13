@@ -50,12 +50,26 @@ internal sealed class WhisperTranscriptionService(
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogError("Whisper API returned {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
+            // A rejected request (bad audio, quota, auth) is an expected upstream state, not a defect here.
+            if ((int)response.StatusCode >= 500)
+                logger.LogError("Whisper API failed with {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
+            else
+                logger.LogWarning("Whisper API rejected the request with {StatusCode}: {Body}", (int)response.StatusCode, RedactAndTruncate(errorBody));
             throw new InvalidOperationException("AI provider error");
         }
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        var json = JsonDocument.Parse(responseBody).RootElement;
+
+        JsonElement json;
+        try
+        {
+            json = JsonDocument.Parse(responseBody).RootElement.Clone();
+        }
+        catch (JsonException jsonException)
+        {
+            logger.LogWarning(jsonException, "Whisper API returned a non-JSON body: {Body}", RedactAndTruncate(responseBody));
+            throw new InvalidOperationException("AI provider returned an unreadable response");
+        }
 
         var text = json.TryGetProperty("text", out var textElement)
             ? textElement.GetString() ?? string.Empty

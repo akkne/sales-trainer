@@ -179,7 +179,8 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Exercise TTS synthesis failed ({TextLength} chars); reply delivered as text only", text.Length);
+            // Text still reaches the user — degraded, not broken.
+            _logger.LogWarning(exception, "Exercise TTS synthesis failed ({TextLength} chars); reply delivered as text only", text.Length);
             return null;
         }
     }
@@ -273,6 +274,21 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
                 Response: result.Content,
                 IsComplete: result.IsStopSignal,
                 IsFinished: result.IsStopSignal);
+        }
+        catch (OperationCanceledException)
+        {
+            // The client went away — not a failure, and it must not be answered with a fake reply.
+            throw;
+        }
+        catch (Exception exception) when (exception is OpenAiException or HttpRequestException)
+        {
+            // Provider rejected the request or is unreachable. The chat degrades to a neutral
+            // reply rather than failing the turn, so this is expected noise, not a defect.
+            _logger.LogWarning(exception, "AI provider unavailable for chat, using fallback response");
+            return new AiChatResponse(
+                Response: "Понял вас. Что ещё вы хотели бы обсудить?",
+                IsComplete: false,
+                IsFinished: false);
         }
         catch (Exception exception)
         {

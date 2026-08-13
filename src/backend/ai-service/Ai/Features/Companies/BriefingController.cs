@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Abstract;
 using Sellevate.Ai.Features.Evaluation;
@@ -47,6 +48,12 @@ public sealed class BriefingController : ControllerBase
         {
             var content = await _briefingService.GenerateBriefingAsync(request, cancellationToken);
             return Ok(new BriefingResultDto(content, DateTime.UtcNow));
+        }
+        catch (OpenAiException openAiException)
+        {
+            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
+            _logger.LogWarning(openAiException, "AI provider error during briefing generation");
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
         catch (InvalidOperationException invalidOperationException)
         {

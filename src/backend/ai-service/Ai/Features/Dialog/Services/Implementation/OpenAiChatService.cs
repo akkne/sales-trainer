@@ -219,8 +219,7 @@ endCall: false ЗАПРЕЩЕНО.
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(errorBody));
-            throw new HttpRequestException("AI provider error");
+            throw TranslateProviderError(response.StatusCode, errorBody, "streaming chat");
         }
 
         var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -466,29 +465,55 @@ endCall: false ЗАПРЕЩЕНО.
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(responseContent));
-
-            if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
-                throw new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance.");
-
-            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                throw new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later.");
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                throw new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration.");
-
-            throw new HttpRequestException("AI provider error");
-        }
+            throw TranslateProviderError(response.StatusCode, responseContent, $"chat completion ({model})");
 
         _logger.LogDebug("OpenAI API response: {Response}", responseContent);
 
         return ExtractContentFromCompletionResponse(responseContent, _logger);
     }
 
+    /// <summary>
+    /// Maps a non-2xx provider response onto a typed exception the controllers can turn into a
+    /// proper status code. A rejected request (bad payload, quota, auth) is an expected operational
+    /// state and is logged as a warning; only genuine provider-side failures are logged as errors,
+    /// so a malformed prompt no longer shows up as a service defect in the logs.
+    /// </summary>
+    private Exception TranslateProviderError(System.Net.HttpStatusCode statusCode, string responseBody, string operation)
+    {
+        var redactedBody = RedactAndTruncate(responseBody);
+
+        if ((int)statusCode >= 500)
+            _logger.LogError("AI provider failed on {Operation}: {StatusCode} - {Content}", operation, statusCode, redactedBody);
+        else
+            _logger.LogWarning("AI provider rejected {Operation}: {StatusCode} - {Content}", operation, statusCode, redactedBody);
+
+        return statusCode switch
+        {
+            System.Net.HttpStatusCode.PaymentRequired =>
+                new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance."),
+            System.Net.HttpStatusCode.TooManyRequests =>
+                new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later."),
+            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden =>
+                new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration."),
+            _ => new OpenAiRequestException("AI provider error", (int)statusCode),
+        };
+    }
+
     private static string ExtractContentFromCompletionResponse(string responseContent, ILogger logger)
     {
-        using var responseJson = JsonDocument.Parse(responseContent);
+        JsonDocument responseJson;
+        try
+        {
+            responseJson = JsonDocument.Parse(responseContent);
+        }
+        catch (JsonException jsonException)
+        {
+            // A proxy error page or a truncated body — the provider's problem, not ours.
+            logger.LogWarning(jsonException, "AI provider returned a non-JSON body: {Response}", RedactAndTruncate(responseContent));
+            throw new OpenAiRequestException("AI provider returned an unreadable response");
+        }
+
+        using var _ = responseJson;
         var root = responseJson.RootElement;
 
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
@@ -521,8 +546,8 @@ endCall: false ЗАПРЕЩЕНО.
                 return resultText.GetString() ?? string.Empty;
         }
 
-        logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
-        throw new InvalidOperationException($"Unexpected API response format: {responseContent}");
+        logger.LogWarning("Unable to parse OpenAI response format: {Response}", RedactAndTruncate(responseContent));
+        throw new OpenAiRequestException("AI provider returned an unexpected response format");
     }
 
     private static string RedactAndTruncate(string body)

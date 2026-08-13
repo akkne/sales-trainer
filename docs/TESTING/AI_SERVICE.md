@@ -19,6 +19,8 @@ Unit suite (NUnit, no external dependencies — runs offline):
 | `StreamingChatReplyParserTests` | Incremental `reply` extraction from streamed JSON, chunked reassembly, `endCall`, plain-text fallback. |
 | `SentenceChunkerTests` | Sentence-ender splitting, minimum-length buffering, tail drain. |
 | `AdminDialogExportTests` | `GET /admin/dialog/export` returns bundles with nested modes (ordered by SortOrder) in the re-importable `{ bundles: [...] }` shape. |
+| `OpenAiProviderErrorTests` | Provider status → typed exception mapping (400/401/402/403/429/5xx), the shared `OpenAiException` base, redaction of the provider body out of exception messages, non-JSON and unexpected-shape 200 responses. See [LLM_FAILURE_HANDLING.md](../LLM_FAILURE_HANDLING.md). |
+| `DialogControllerProviderFailureTests` | A rejected or unreachable LLM returns 502/503/429 from `/dialog/*` instead of escaping as an unhandled 500. |
 
 ## Build
 

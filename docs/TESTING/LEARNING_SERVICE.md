@@ -31,6 +31,7 @@ InMemory). No Postgres/Kafka/Redis/AI service is required.
 | Admin technique export returns all techniques (ordered by SortOrder) in the re-importable `AdminTechniqueWriteRequestDto[]` shape, preserving tags/dialog/case/coach | `AdminTechniquesExportTests` |
 | Seeder content export (skills, topics, lessons, bundle) returns the re-importable seeder shapes: icon names resolved from ids, exercises nested, exercise `content` emitted as a JSON object | `AdminSeederExportTests` |
 | Produced event payload shapes match the gamification consumer contract + canonical topic names | `OutgoingEventContractTests` |
+| A failing LLM call maps onto the typed `OpenAiException` hierarchy (400/401/402/403/429/5xx), never leaks the provider body into the exception message, and survives non-JSON 200 responses. See [LLM_FAILURE_HANDLING.md](../LLM_FAILURE_HANDLING.md) | `OpenAiProviderErrorTests` |
 | Gateway flips `/skills`, `/skill-tree`, `/lessons`, `/topics`, `/exercises`, `/reference`, `/techniques`, `/daily-quote`, learning `/admin/*` to the learning cluster and not the monolith; `/profile` is not captured | `Gateway.Tests/LearningRouteFlipTests` |
 
 ## Manual smoke (full stack)

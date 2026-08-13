@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Evaluation.Services.Abstract;
 
@@ -43,6 +44,12 @@ public sealed class EvaluationController : ControllerBase
         catch (NotSupportedException notSupportedException)
         {
             return BadRequest(new { message = notSupportedException.Message });
+        }
+        catch (OpenAiException openAiException)
+        {
+            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
+            _logger.LogWarning(openAiException, "AI provider error during evaluation");
+            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
         }
         catch (InvalidOperationException invalidOperationException)
         {

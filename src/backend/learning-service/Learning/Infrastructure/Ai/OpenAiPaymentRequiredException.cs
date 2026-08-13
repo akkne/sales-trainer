@@ -1,3 +1,3 @@
 namespace Sellevate.Learning.Infrastructure.Ai;
 
-public sealed class OpenAiPaymentRequiredException(string message) : Exception(message);
+public sealed class OpenAiPaymentRequiredException(string message) : OpenAiException(message);

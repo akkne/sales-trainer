@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -152,6 +153,17 @@ public sealed class VoiceDialogController : ControllerBase
             // AI6: Polly retry exhausted / upstream read timeout — distinct from client cancel.
             upstreamTimedOut = true;
             _logger.LogWarning(ex, "Voice stream upstream timeout (HttpRequestException) for session {SessionId}", sessionId);
+        }
+        catch (OpenAiException ex)
+        {
+            // The provider rejected the request or answered with something unusable. Headers are
+            // already sent, so we can only end the stream cleanly — the client sees a short reply
+            // instead of a torn connection, and this is logged as upstream noise, not a defect.
+            _logger.LogWarning(ex, "Voice stream aborted by AI provider error for session {SessionId}", sessionId);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Voice stream aborted — AI provider unreachable for session {SessionId}", sessionId);
         }
         finally
         {

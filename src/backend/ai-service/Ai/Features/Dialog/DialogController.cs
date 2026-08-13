@@ -153,6 +153,19 @@ public sealed class DialogController : ControllerBase
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
         }
+        catch (OpenAiRequestException openAiRequestException)
+        {
+            // The provider rejected the request or answered with something unusable — an upstream
+            // problem, not a defect here, so it must not surface as an unhandled 500.
+            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
+            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            // Transport failure / retries exhausted / circuit open.
+            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
+            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
+        }
         catch (InvalidOperationException invalidOperationException)
         {
             return BadRequest(new { message = invalidOperationException.Message });
@@ -211,6 +224,19 @@ public sealed class DialogController : ControllerBase
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
         }
+        catch (OpenAiRequestException openAiRequestException)
+        {
+            // The provider rejected the request or answered with something unusable — an upstream
+            // problem, not a defect here, so it must not surface as an unhandled 500.
+            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
+            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            // Transport failure / retries exhausted / circuit open.
+            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
+            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
+        }
         catch (InvalidOperationException invalidOperationException)
         {
             return BadRequest(new { message = invalidOperationException.Message });
@@ -261,6 +287,19 @@ public sealed class DialogController : ControllerBase
         catch (OpenAiAuthenticationException)
         {
             return StatusCode(503, new { message = "AI service authentication failed." });
+        }
+        catch (OpenAiRequestException openAiRequestException)
+        {
+            // The provider rejected the request or answered with something unusable — an upstream
+            // problem, not a defect here, so it must not surface as an unhandled 500.
+            _logger.LogWarning(openAiRequestException, "AI provider request failed (upstream status {UpstreamStatus})", openAiRequestException.StatusCode);
+            return StatusCode(502, new { message = "AI service is temporarily unavailable. Please try again." });
+        }
+        catch (HttpRequestException httpRequestException)
+        {
+            // Transport failure / retries exhausted / circuit open.
+            _logger.LogWarning(httpRequestException, "AI provider is unreachable");
+            return StatusCode(503, new { message = "AI service is temporarily unavailable. Please try again." });
         }
         catch (InvalidOperationException invalidOperationException)
         {

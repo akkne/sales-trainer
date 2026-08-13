@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
+using Sellevate.Learning.Infrastructure.Ai;
 
 
 namespace Sellevate.Learning.Features.Exercises;
@@ -66,14 +67,20 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         {
             return BadRequest(new { message = exception.Message });
         }
+        catch (OpenAiException exception)
+        {
+            logger.LogWarning(exception, "AI provider error during evaluation of exercise {ExerciseId}", exerciseId);
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+        }
         catch (InvalidOperationException exception)
         {
-            logger.LogError(exception, "AI evaluation service error");
+            // Upstream unavailability, already mapped to a 503 — warning, not an error.
+            logger.LogWarning(exception, "AI evaluation service error");
             return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
         }
         catch (HttpRequestException exception)
         {
-            logger.LogError(exception, "AI evaluation service HTTP error");
+            logger.LogWarning(exception, "AI evaluation service HTTP error");
             return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
         }
     }
@@ -99,6 +106,17 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         catch (NotSupportedException exception)
         {
             return BadRequest(new { message = exception.Message });
+        }
+        catch (OpenAiException exception)
+        {
+            // Provider rejected the request / quota / auth — upstream state, never a 500 here.
+            logger.LogWarning(exception, "AI provider error during exercise chat for exercise {ExerciseId}", exerciseId);
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogWarning(exception, "AI provider unreachable during exercise chat for exercise {ExerciseId}", exerciseId);
+            return StatusCode(503, new { message = "AI сервис временно недоступен. Попробуйте позже." });
         }
     }
 
@@ -159,6 +177,16 @@ public sealed class ExerciseController(IExerciseService exerciseService, ILogger
         catch (OperationCanceledException)
         {
             logger.LogInformation("Exercise voice stream cancelled by client for exercise {ExerciseId}", exerciseId);
+        }
+        catch (OpenAiException exception)
+        {
+            // Headers are already sent, so we can only end the stream cleanly — the client sees a
+            // short reply instead of a torn connection, and this stays upstream noise, not a defect.
+            logger.LogWarning(exception, "Exercise voice stream aborted by AI provider error for exercise {ExerciseId}", exerciseId);
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogWarning(exception, "Exercise voice stream aborted — AI provider unreachable for exercise {ExerciseId}", exerciseId);
         }
     }
 

@@ -157,7 +157,8 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "TTS synthesis failed for session {SessionId} ({TextLength} chars); reply delivered as text only", sessionId, text.Length);
+            // Text still reaches the user — degraded, not broken.
+            _logger.LogWarning(ex, "TTS synthesis failed for session {SessionId} ({TextLength} chars); reply delivered as text only", sessionId, text.Length);
             return null;
         }
     }
