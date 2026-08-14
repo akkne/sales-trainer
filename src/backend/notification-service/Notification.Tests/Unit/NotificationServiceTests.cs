@@ -266,13 +266,13 @@ public class NotificationServiceTests
         var dispatcher = new RecordingEmailDispatcher();
         var service = CreateService(store, emailDispatcher: dispatcher);
         var request = new CreateNotificationRequest(
-            RecipientUserId, NotificationType.LeagueUpdated, "League", "You were promoted",
-            "/league", "league-1", SendEmail: true);
+            RecipientUserId, NotificationType.CompanyFollowUpDue, "Follow-up", "A follow-up is due",
+            "/companies", "company-1", SendEmail: true);
 
         await service.CreateAsync(request);
 
         dispatcher.Dispatched.Should().ContainSingle();
-        dispatcher.Dispatched[0].Type.Should().Be(NotificationType.LeagueUpdated);
+        dispatcher.Dispatched[0].Type.Should().Be(NotificationType.CompanyFollowUpDue);
         dispatcher.Dispatched[0].Recipient.Should().Be(RecipientUserId);
     }
 
