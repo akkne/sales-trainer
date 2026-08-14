@@ -206,7 +206,6 @@ export function EvaluateCallExercise({
                     score={submittedResult.score}
                     explanation={submittedResult.explanation ?? null}
                     aiFeedback={submittedResult.aiFeedback ?? null}
-                    xpEarned={submittedResult.xpEarned}
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (

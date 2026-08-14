@@ -31,8 +31,8 @@ const FEATURE_LIST: {
     {
         icon: "zap",
         tint: "violet",
-        title: "XP, серии и лиги",
-        description: "Игровые механики держат в тонусе и превращают навыки в привычку.",
+        title: "Разбор каждой попытки",
+        description: "ИИ объясняет, что сработало, а что стоило сказать иначе.",
     },
     {
         icon: "book",
@@ -87,7 +87,7 @@ export default function LandingPage() {
                     style={{ maxWidth: 560, margin: "0 auto 32px", textWrap: "pretty" }}
                 >
                     Учись на реальных диалогах с ИИ, отрабатывай голосовые звонки
-                    и поднимайся в лигах вместе с другими продавцами.
+                    и получай разбор каждой реплики.
                 </p>
 
                 <div className="row gap-3 center wrap">

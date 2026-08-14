@@ -183,7 +183,6 @@ export function FreeTextExercise({
                     score={submittedResult.score}
                     explanation={submittedResult.explanation ?? null}
                     aiFeedback={submittedResult.aiFeedback ?? null}
-                    xpEarned={submittedResult.xpEarned}
                     onContinue={onContinue ?? (() => {})}
                 />
             ) : (

@@ -4,6 +4,32 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — Gamification is gone from the product, not from the backend
+
+- **Context (user decision):** points, streaks and leagues are out. The removal had already started
+  (the `/league` route was unlinked from the nav, the friends leaderboard was commented out, the
+  skill tree stopped rendering its gamification fields), leaving the product half-way: a call still
+  ended with «+N XP получено», the lesson path still promised «60 XP», the profile still showed
+  «Лучшая серия», and `/league` was still reachable by URL.
+- **Decision:** finish it in the **frontend only**. Removed from the user-facing app: XP on the
+  lesson path, on the exercise result banner, in the call analysis and session history; the streak
+  tiles on `/profile` and on a friend's profile; the `/league` route and its hook; the friends
+  leaderboard (component + `/friends/leaderboard` query) and the dead `StatsWidget`; the landing
+  page's "XP, серии и лиги" pitch; and the now-dead league/leaderboard CSS. Achievement and streak
+  notifications are dropped on arrival — the notification service can still hold older ones, and an
+  "achievement unlocked" toast in a product without achievements is pure confusion.
+- **Kept deliberately:** every backend service, endpoint, event and DB table, plus the admin panel
+  that configures them, and the DTO fields the API returns (`xpEarned`, `currentStreakDayCount`, …).
+  The same pattern the skill tree already used. Reasons: the score still drives the AI feedback
+  criteria; deleting `gamification-service` is a migration across four services' Kafka contracts and
+  three databases, not a UI cleanup; and a reversal costs one commit this way instead of a rebuild.
+- **Alternative rejected:** ripping out the service and its events now. It would put a large,
+  irreversible backend migration behind a request that was about what the user sees.
+- **Regression tests:** `FeedbackModal.test.tsx` (no XP even when the backend sends it); the
+  remaining suites cover the touched exercise components.
+
+---
+
 ## 2026-08-14 — A domain event must never hold a user request hostage
 
 - **Context (user-reported):** «разбор не генерируется, бесконечная генерация», console showing a

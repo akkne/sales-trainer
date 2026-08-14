@@ -8,7 +8,6 @@ interface ExerciseResultBannerProps {
     score: number;
     explanation: string | null;
     aiFeedback: string | null;
-    xpEarned: number;
     onContinue: () => void;
     /** The answer the user actually gave (shown in red when incorrect). */
     userAnswer?: string | null;
@@ -39,7 +38,6 @@ export function ExerciseResultBanner({
     score,
     explanation,
     aiFeedback,
-    xpEarned,
     onContinue,
     userAnswer,
     correctAnswer,
@@ -85,7 +83,7 @@ export function ExerciseResultBanner({
                 className="session-foot-inner"
                 style={{ flexDirection: "column", gap: hasCard ? 12 : 0 }}
             >
-                {/* Main row: icon+title left, score+XP+continue right */}
+                {/* Main row: icon+title left, score+continue right */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, width: "100%" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                         <span
@@ -121,19 +119,6 @@ export function ExerciseResultBanner({
                                 <span style={{ fontSize: 15, fontWeight: 700 }}>{ratingOutOfTen}</span>
                                 <span style={{ fontSize: 11, opacity: 0.65 }}>/10</span>
                             </div>
-                        )}
-                        {isCorrect && xpEarned > 0 && (
-                            <span
-                                style={{
-                                    fontSize: 13, fontWeight: 600,
-                                    color: t.tileColor,
-                                    padding: "4px 9px",
-                                    background: t.tileBg,
-                                    borderRadius: 8,
-                                }}
-                            >
-                                +{xpEarned} XP
-                            </span>
                         )}
                         <button className={"btn btn-lg " + t.btnClass} onClick={onContinue}>
                             Далее

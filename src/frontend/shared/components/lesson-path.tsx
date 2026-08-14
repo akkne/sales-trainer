@@ -72,10 +72,6 @@ function LessonNode({
                     <span className="lp-title" style={isLocked ? { color: "var(--ink-4)" } : undefined}>
                         {lesson.title}
                     </span>
-                    <span className="lp-xp">
-                        <Icon name="bolt" size={13} />
-                        {isTheory ? "5 XP" : "60 XP"}
-                    </span>
                 </div>
 
                 {isPopoverOpen && !isLocked && (
@@ -114,9 +110,6 @@ function LessonNode({
                                     <Icon name="layers" size={13} /> 6 упр.
                                 </span>
                             )}
-                            <span className="row gap-1">
-                                <Icon name="bolt" size={13} /> {isTheory ? "5 XP" : "60 XP"}
-                            </span>
                         </div>
 
                         <Link href={`/session/${lesson.lessonId}`} onClick={onClosePopover}>

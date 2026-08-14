@@ -24,14 +24,6 @@ const VISUAL_META_BY_TYPE: Record<NotificationTypeKey, NotificationVisualMeta> =
         iconName: "message",
         iconColorClassName: "text-indigo",
     },
-    AchievementUnlocked: {
-        iconName: "trophy",
-        iconColorClassName: "text-amber",
-    },
-    StreakMilestone: {
-        iconName: "flame",
-        iconColorClassName: "text-flame",
-    },
 };
 
 export function getNotificationVisualMeta(notificationType: string): NotificationVisualMeta {

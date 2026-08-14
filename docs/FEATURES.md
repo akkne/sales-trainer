@@ -118,14 +118,21 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - A lesson can always be passed: completion is attempt-based (going through every exercise once completes it, regardless of correctness)
 - Mistakes review (once): after the first pass, if any exercises were answered wrong, an intro screen ("Работа над ошибками") gates a single review round replaying only those exercises
 - Keyboard shortcuts (1-4 select, Enter submit)
-- Skip button, post-session stats (progress points, accuracy, time)
+- Skip button, post-session stats (accuracy, time)
 - Completion screen with session summary
 - **Theory lessons** (`theory_card` type): stories-style cards (text / dialogue / bullets / quote)
   the learner swipes through before practice — no answer, no AI. Dialogue cards reuse the
   Guidebook bubble renderer. Marked with a book icon on the path; reaching the last card
-  completes the lesson and awards a small fixed number of progress points (seeded 5, admin-editable)
+  completes the lesson
 
 ### Progress & Recognition
+
+> **Not shown to the user (2026-08-14).** The whole points/streak/league layer was removed from the
+> product UI: no XP anywhere (lesson path, exercise result, call analysis, session history), no
+> streak tiles, no `/league` route, no friends leaderboard, and achievement/streak notifications are
+> dropped on arrival. The services below still run and still compute all of it — the numbers are
+> reachable only through the admin panel. See [DECISIONS.md](DECISIONS.md).
+
 - **Fully DB-driven, admin-editable progress-points economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
   - Per-exercise-type base progress points (edited at `/admin/gamification/exercise-rewards`)
   - Dialog points = `round(AI score × multiplier)` with admin-tunable multiplier + per-criterion weights (edited at `/admin/dialog`)
@@ -169,8 +176,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Friend request system (send, accept, decline, cancel own pending request, remove)
 - Public profiles with stats and friendship status
 - User search by display name and email
-- Friend progress-points overview (non-ranked)
-- Friend activity feed (milestones, progress points earned)
+- Friend activity feed (milestones, progress points earned) — backend feed; the leaderboard is gone
 - 1-to-1 chat between friends (MongoDB, 5s polling)
 - Conversations list with last message preview
 - Navigation badge for pending friend requests

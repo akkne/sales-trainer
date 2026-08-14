@@ -5,9 +5,20 @@ import { clientLogger } from "@/shared/utils/client-logger";
 export type NotificationTypeKey =
     | "FriendRequestReceived"
     | "FriendRequestAccepted"
-    | "ChatMessageReceived"
-    | "AchievementUnlocked"
-    | "StreakMilestone";
+    | "ChatMessageReceived";
+
+/**
+ * Notification types the product no longer has. The notification service can still hold older
+ * ones, and a service that was never told about the removal could still emit them — an
+ * "achievement unlocked" toast in a product with no achievements is pure confusion, so they are
+ * dropped on arrival instead of rendered with a fallback icon.
+ */
+const RETIRED_NOTIFICATION_TYPES = ["AchievementUnlocked", "StreakMilestone"];
+
+function withoutRetiredTypes(notifications: NotificationData[]): NotificationData[] {
+    return notifications.filter(
+        (notification) => !RETIRED_NOTIFICATION_TYPES.includes(notification.notificationType));
+}
 
 export interface NotificationData {
     id: string;
@@ -33,7 +44,9 @@ const LIST_POLLING_INTERVAL_MILLISECONDS = 30000;
 export function useNotifications(enabled = true) {
     return useQuery({
         queryKey: NOTIFICATIONS_LIST_QUERY_KEY,
-        queryFn: () => apiClient.get<NotificationData[]>("/notifications?limit=20&includeRead=true"),
+        queryFn: async () =>
+            withoutRetiredTypes(
+                await apiClient.get<NotificationData[]>("/notifications?limit=20&includeRead=true")),
         enabled,
         refetchInterval: LIST_POLLING_INTERVAL_MILLISECONDS,
     });

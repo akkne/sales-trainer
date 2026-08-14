@@ -31,9 +31,14 @@ dotnet test Sellevate.Tests.csproj --filter "FullyQualifiedName~AdminGamificatio
 
 ## Manual checks
 
+> **The user-facing UI is gone (2026-08-14).** No XP, streak, league or achievement surface exists
+> in the app any more — verify these through the admin panel and the API responses, never by
+> looking for a number on a user screen. See [DECISIONS.md](../DECISIONS.md).
+
+
 1. Admin → `/admin/gamification`: change the daily goal; the skill-tree progress ring uses it.
 2. Admin → `/admin/prompts`: raise a type's base XP; submit that exercise type → the awarded
-   XP matches.
-3. Admin → `/admin/dialog`: set the multiplier to 2.0; complete a dialog → earned XP is the
-   AI score doubled. Adjust a criterion weight → the feedback prompt's per-criterion caps change.
+   XP matches in the `/exercises/{id}/submit` response (nothing is rendered).
+3. Admin → `/admin/dialog`: set the multiplier to 2.0; complete a dialog → `xpEarned` in the
+   `/complete` response is the AI score doubled (the modal never shows it). Adjust a criterion weight → the feedback prompt's per-criterion caps change.
 4. Add a streak milestone (e.g. 3 → 30); reach a 3-day streak → bonus is awarded once.

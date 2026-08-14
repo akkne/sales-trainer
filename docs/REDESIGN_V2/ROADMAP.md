@@ -106,7 +106,7 @@ Run `scripts/dev-up.sh` (or `scripts/dev-frontend.sh`) → http://localhost:3000
 10. **Profile `/profile`** — cover + 4 stat tiles + enrolled-skills toggles + voice quota; no milestones grid.
 11. **Settings `/settings`** — Appearance Light/Dark, account (email/admin), logout.
 12. **Auth** — login/register/onboarding(4 steps)/verify-email(6-box code); Google OAuth.
-13. **`/league` by direct URL** — still works (absent from nav).
+13. ~~**`/league` by direct URL** — still works (absent from nav).~~ **Superseded 2026-08-14:** the route, its hook, the friends leaderboard and every remaining XP/streak surface were deleted from the frontend — `/league` now 404s. See [DECISIONS.md](../DECISIONS.md).
 
 ---
 

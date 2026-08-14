@@ -63,7 +63,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
     const [lastSubmissionResult, setLastSubmissionResult] = useState<ExerciseSubmissionResult | null>(null);
     const [sessionState, setSessionState] = useState<SessionState>("playing");
     const [phase, setPhase] = useState<SessionPhase>("first");
-    const [totalXpEarned, setTotalXpEarned] = useState(0);
     const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
     const [exerciseQueue, setExerciseQueue] = useState<QueuedExercise[]>([]);
     const [reviewQueue, setReviewQueue] = useState<QueuedExercise[]>([]);
@@ -97,7 +96,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
                     const isPassing = result.isCorrect || (result.score !== undefined && result.score >= PASSING_SCORE_THRESHOLD * 10);
 
                     if (isPassing) {
-                        setTotalXpEarned((prev) => prev + result.xpEarned);
                         // Accuracy reflects the first pass only.
                         if (phase === "first") {
                             setCorrectAnswerCount((prev) => prev + 1);
@@ -169,7 +167,6 @@ function SessionFlow({ lessonId }: SessionFlowProps) {
 
         return (
             <CompletionScreen
-                xp={totalXpEarned}
                 accuracyPercent={accuracyPercent}
                 durationSeconds={sessionDurationSeconds}
                 onBack={() => router.back()}
@@ -399,7 +396,6 @@ function Confetti() {
 }
 
 interface CompletionScreenProps {
-    xp: number;
     accuracyPercent?: number;
     durationSeconds: number;
     onBack: () => void;
@@ -407,7 +403,7 @@ interface CompletionScreenProps {
     heading?: string;
 }
 
-function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebrow = "Урок завершён", heading = "Отличная работа!" }: CompletionScreenProps) {
+function CompletionScreen({ accuracyPercent, durationSeconds, onBack, eyebrow = "Урок завершён", heading = "Отличная работа!" }: CompletionScreenProps) {
     // Enter presses the primary CTA ("Вернуться к пути").
     useEnterAction(onBack);
 
@@ -431,7 +427,7 @@ function CompletionScreen({ xp, accuracyPercent, durationSeconds, onBack, eyebro
                     {heading}
                 </h1>
 
-                {/* Stat grid — accuracy / time (NO XP, NO hearts) */}
+                {/* Stat grid — accuracy / time */}
                 <div className="complete-stats">
                     {accuracyPercent !== undefined && (
                         <div className="cs">
@@ -522,7 +518,6 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
     const submitExerciseMutation = useSubmitExercise();
     const startTimeRef = useRef<number>(0);
     const [completed, setCompleted] = useState(false);
-    const [xpEarned, setXpEarned] = useState(0);
     const [durationSeconds, setDurationSeconds] = useState(0);
 
     useEffect(() => {
@@ -535,14 +530,12 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
         // The backend marks a lesson complete only when every exercise in it has a
         // correct attempt. Theory cards always evaluate as correct, so we must submit
         // ALL cards (not just the last one) or a multi-card lesson never completes.
-        let lastResult: ExerciseSubmissionResult | undefined;
         for (const exercise of exercises) {
-            lastResult = await submitExerciseMutation.mutateAsync({
+            await submitExerciseMutation.mutateAsync({
                 exerciseId: exercise.exerciseId,
                 answer: {},
             });
         }
-        setXpEarned(lastResult?.xpEarned ?? 0);
         setDurationSeconds(Math.round((Date.now() - startTimeRef.current) / 1000));
         setCompleted(true);
     }
@@ -550,7 +543,6 @@ function TheoryLessonFlow({ exercises }: { exercises: ExerciseData[] }) {
     if (completed) {
         return (
             <CompletionScreen
-                xp={xpEarned}
                 durationSeconds={durationSeconds}
                 onBack={() => router.back()}
                 eyebrow="Теория пройдена"

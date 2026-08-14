@@ -69,7 +69,6 @@ describe("ExerciseResultBanner — Enter continues", () => {
                 score={100}
                 explanation={null}
                 aiFeedback={null}
-                xpEarned={10}
                 onContinue={onContinue}
             />
         );

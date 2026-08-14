@@ -11,8 +11,6 @@ import { FriendActivityFeed } from "@/features/friends/components/friend-activit
 import { FriendSearchBar } from "@/features/friends/components/user-search-bar";
 import { RailChatView } from "@/features/friends/components/chat-window";
 
-// FriendLeaderboard import is kept (component file not deleted) — just not rendered in this hub.
-// import { FriendLeaderboard } from "@/features/friends/components/friend-leaderboard";
 
 export default function FriendsPage() {
     return (
