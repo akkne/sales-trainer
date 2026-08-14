@@ -101,6 +101,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
 | [COMPANIES.md](TESTING/COMPANIES.md) | Phase 39: company-service CRUD/ownership unit tests, ai-service company-context prompt tests, gateway route-flip, frontend vitest coverage + manual checklist (CRUD, ownership isolation, goal handoff, voice/chat practice calls, timeline, real-call log, mobile nav) |
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
+| [TENANCY.md](TESTING/TENANCY.md) | Phase 40 (Stage A): write guard, gateway header/middleware, event envelope, and Postgres RLS isolation checklist — includes the real-Postgres `TenantRowLevelSecurityIntegrationTests` (raw SQL + `ExecuteDelete` under the application role) |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
