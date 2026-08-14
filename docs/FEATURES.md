@@ -22,6 +22,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
+| [Dont Forget](DONT_FORGET.md) | Written in Russian — what the agent must never do on its own (server-side work, destructive SQL, asking questions during unattended runs) and the manual follow-ups it has deferred to a human |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
 | [Branding](BRANDING.md) | Logo source of truth (`public/logo.svg`), favicon/apple-icon files, `Wordmark` component, how to replace the mark |
 | [Localization](LOCALIZATION.md) | User-facing frontend is Russian (admin stays English); in-place translation, no i18n library, translate/leave rules + glossary |

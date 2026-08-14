@@ -24,6 +24,37 @@ public sealed class EventContractCatalogTests
     }
 
     [Test]
+    public void Envelope_CarriesOrganizationId_AlongsideTheFrozenOuterShape()
+    {
+        var organizationId = Guid.NewGuid();
+        var envelope = EventEnvelope.Create(
+            Topics.ExerciseCompleted,
+            new { userId = Guid.NewGuid(), exerciseType = "spot_mistake", score = 80, isCorrect = true },
+            organizationId: organizationId);
+
+        var root = Serialize(envelope);
+
+        root.GetProperty("eventId").GetGuid().Should().Be(envelope.EventId);
+        root.GetProperty("occurredAt").GetDateTimeOffset().Should().Be(envelope.OccurredAt);
+        root.GetProperty("type").GetString().Should().Be(Topics.ExerciseCompleted);
+        root.GetProperty("version").GetInt32().Should().Be(envelope.Version);
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.TryGetProperty("data", out _).Should().BeTrue();
+    }
+
+    [Test]
+    public void Envelope_OrganizationId_IsNullOnTheWire_WhenNoProducerHasPopulatedItYet()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.UserRegistered,
+            new { userId = Guid.NewGuid(), email = "a@b.com", displayName = "Ann", avatarKey = "k" });
+
+        var root = Serialize(envelope);
+
+        root.GetProperty("organizationId").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Test]
     public void UserRegistered_IdentityProducer_MatchesReplicaConsumers()
     {
         Topics.UserRegistered.Should().Be("user.registered");

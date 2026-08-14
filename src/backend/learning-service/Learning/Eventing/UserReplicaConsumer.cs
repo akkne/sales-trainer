@@ -26,6 +26,12 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.UserAvatarChanged,
     ];
 
+    /// <summary>
+    /// Identity users are cross-org identities with no organization column
+    /// (docs/TENANCY/TENANCY.md §4.2), so this replica projection is platform-global by design.
+    /// </summary>
+    protected override bool RequiresOrganization => false;
+
     protected override async Task HandleAsync(EventEnvelope envelope, IServiceProvider scopedServices, CancellationToken cancellationToken)
     {
         var databaseContext = scopedServices.GetRequiredService<LearningDbContext>();
