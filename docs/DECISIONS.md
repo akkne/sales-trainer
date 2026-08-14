@@ -4,6 +4,58 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — Multi-tenancy: the tenant is `Organization`, and isolation is enforced by Postgres
+
+- **Status:** design recorded, **nothing implemented**. Full design in
+  [docs/TENANCY/](TENANCY/TENANCY.md). Verified starting point: zero `tenant` identifiers exist
+  anywhere in the codebase.
+- **Naming (the decision with the widest blast radius):** the tenant is **`Organization`**, not
+  `Company`. `company-service` + `docs/COMPANIES/` already own `Company` as *a prospect a
+  salesperson practises calling* — a per-user private CRM. Reusing the name would make `CompanyId`
+  mean two different things across services, in JWT claims and Kafka payloads, where a mix-up is a
+  data leak rather than a compile error. Russian UI copy may still say «Компания».
+- **Isolation:** the proposal's "one database, `tenant_id` everywhere" does not describe this
+  system — DB-per-service is already the shape (7 Postgres DBs + Mongo + Redis). So
+  `organization_id` is added per database, and the RLS/`SET LOCAL` plumbing lives in
+  BuildingBlocks rather than being written seven times. Three layers: (1) the gateway injects
+  `X-Organization-Id` from the validated JWT and strips client copies — reusing the existing
+  `IdentityHeaders` contract, never reading the org from a query parameter; (2) EF global query
+  filters, explicitly labelled convenience, not security; (3) Postgres RLS with `FORCE`, `WITH
+  CHECK`, and an app role without `BYPASSRLS` — the only layer that survives
+  `ExecuteUpdate`/Dapper/raw SQL.
+- **Write guard:** a `SaveChangesInterceptor` in BuildingBlocks (not a base `DbContext` — there are
+  seven contexts) that stamps `organization_id` on insert and rejects cross-tenant writes by
+  comparing against `OriginalValues`, making the column immutable after creation. Both
+  `SavingChanges` **and** `SavingChangesAsync` must be implemented — sync-only is a no-op in this
+  codebase, which is async throughout.
+- **Content:** per-customer curriculum forks are rejected outright — 15 customers would mean 15
+  forks and no reachable content roadmap. Instead: global library (`organization_id IS NULL`) +
+  copy-on-write overrides + immutable `lesson_version` snapshots, with progress pinned to a version.
+  The existing schema has the bug this prevents: `UserExerciseAttempt.ExerciseId` points at mutable
+  content, so editing a correct answer silently rewrites historical accuracy — the exact number
+  sold to the РОП. Note the model adaptation: `Lesson` has no body today (only `Title`); all
+  content is in `Exercise.SerializedContent`, so the versioned unit is the lesson **plus its
+  ordered exercise set** as one JSON snapshot.
+- **Access:** no public registration route at all (deleting `POST /auth/register`, not guarding
+  it); `memberships (user_id, organization_id, role)` from day one even while the UI allows one org
+  per user; the global `UserRole` enum splits into a platform role and a per-membership org role,
+  so a РОП is an admin *of one organization*, never of the platform; offboarding deactivates,
+  never deletes, because the manager's history belongs to the customer.
+- **Deliberately deferred:** per-tenant subdomains (wildcard TLS, DNS, per-tenant CORS, OAuth
+  callbacks — defer until someone pays for branding) and SSO itself. But the *seam* for SSO is
+  built now — `organization_auth_config`, an `IAuthProvider` with a single password implementation,
+  and a three-step login (email → resolve org → dispatch to provider) — because a 200-seat customer
+  requiring Azure AD otherwise forces a simultaneous rewrite of login, sessions, invites and
+  provisioning under their deadline.
+- **The non-technical risk this design exists to defuse:** per-customer customization is a linear
+  cost of delivery disguised as a feature. If Sellevate adapts the content, ~20 customers turns the
+  company into a content agency. Hence the organization profile (product / ICP / objections /
+  script / tone) with parameterized base content, and an explicit pilot measurement: if more than a
+  third of adaptation needs hand-editing lesson text, the parameterization is wrong and must be
+  fixed before the tenth customer.
+
+---
+
 ## 2026-08-14 — Gamification is gone from the product, not from the backend
 
 - **Context (user decision):** points, streaks and leagues are out. The removal had already started

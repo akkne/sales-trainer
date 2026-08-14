@@ -47,6 +47,14 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
 | [Custom Scenario](CUSTOM_SCENARIO.md) | **Shipped** — user-authored practice scenarios on «Практика»: compose dialog, LLM sales-relevance gate with a Redis verdict cache, prompt fencing, hidden seeded `custom-scenario` mode. Tests: [TESTING/CUSTOM_SCENARIO.md](TESTING/CUSTOM_SCENARIO.md) |
 
+## Multi-tenancy (design only — not implemented)
+
+| Document | Description |
+|----------|-------------|
+| [Tenancy — isolation & access](TENANCY/TENANCY.md) | **Design** — `Organization` as the tenant (NOT `Company`, which is the prospect CRM); three isolation layers (gateway header → EF query filter → Postgres RLS), the `SaveChanges` write guard, composite-index column order, background-job/Kafka/Redis/Mongo tenant propagation, no public registration, `memberships` from day one, per-org auth method |
+| [Tenancy — content model](TENANCY/CONTENT_MODEL.md) | **Design** — why not to fork the curriculum per customer; immutable lesson versioning (`lesson` / `lesson_version` / programme pinning), copy-on-write overrides + stale review, and the organization profile that removes most forks by substitution |
+| [Tenancy — assignments & AI admin](TENANCY/ASSIGNMENTS.md) | **Design** — the post-training practice loop (РОП → managers), `Assignment` with a quality-threshold completion rule and auto-repeats, six ways AI removes admin work, what the РОП sees, and the two adoption mines |
+
 ## Feature Documentation
 
 | Feature | Description |
