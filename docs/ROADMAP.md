@@ -1485,20 +1485,20 @@
 
 ### Этап A — фундамент (без него нельзя начинать остальное)
 
-### [ ] 40.1 BuildingBlocks — примитивы тенанта
-- [ ] `ITenantScoped { Guid OrganizationId { get; set; } }`
-- [ ] `ITenantContext { Guid? OrganizationId; bool IsSystem; }` + scoped-реализация
+### [x] 40.1 BuildingBlocks — примитивы тенанта
+- [x] `ITenantScoped { Guid OrganizationId { get; set; } }`
+- [x] `ITenantContext { Guid? OrganizationId; bool IsSystem; }` + scoped-реализация
       `TenantContext` с явным `SetOrganization` / `EnterSystemMode`
-- [ ] `CrossTenantWriteException` (имя сущности + ожидаемая организация; без утечки
+- [x] `CrossTenantWriteException` (имя сущности + ожидаемая организация; без утечки
       чужого id в сообщение)
-- [ ] `TenantSaveChangesInterceptor : SaveChangesInterceptor` — проставляет
+- [x] `TenantSaveChangesInterceptor : SaveChangesInterceptor` — проставляет
       `OrganizationId` на `Added`, на `Modified`/`Deleted` сверяет с `OriginalValues`
       и запрещает менять колонку после создания
-- [ ] **Обязательно обе перегрузки:** `SavingChanges` И `SavingChangesAsync` — sync-only
+- [x] **Обязательно обе перегрузки:** `SavingChanges` И `SavingChangesAsync` — sync-only
       интерцептор в этой кодовой базе не сработает никогда (весь код async)
-- [ ] Юнит-тесты: вставка без контекста, вставка с чужим id, подмена `OrganizationId` у
+- [x] Юнит-тесты: вставка без контекста, вставка с чужим id, подмена `OrganizationId` у
       загруженной через `IgnoreQueryFilters()` сущности, `IsSystem` обходит проверку
-- [ ] Обновить `docs/ARCHITECTURE.md` (раздел BuildingBlocks)
+- [x] Обновить `docs/ARCHITECTURE.md` (раздел BuildingBlocks)
 
 ### [ ] 40.2 Гейтвей и распространение контекста
 - [ ] `IdentityHeaders`: константа `OrganizationId = "X-Organization-Id"` + `ResolveOrganizationId(ClaimsPrincipal)`

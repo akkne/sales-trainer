@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sellevate.BuildingBlocks.Idempotency;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.BuildingBlocks.DependencyInjection;
 
@@ -40,6 +41,14 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IOutboxEventForwarder>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
+        return services;
+    }
+
+    public static IServiceCollection AddSellevateTenancy(this IServiceCollection services)
+    {
+        services.AddScoped<TenantContext>();
+        services.AddScoped<ITenantContext>(serviceProvider => serviceProvider.GetRequiredService<TenantContext>());
+        services.AddScoped<TenantSaveChangesInterceptor>();
         return services;
     }
 }
