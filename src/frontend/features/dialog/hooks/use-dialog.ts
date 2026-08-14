@@ -86,10 +86,14 @@ export function useDialogSessions() {
     });
 }
 
+export async function fetchDialogSession(sessionId: string): Promise<DialogSession> {
+    return apiClient.get<DialogSession>(`/dialog/sessions/${sessionId}`);
+}
+
 export function useDialogSession(sessionId: string | null) {
     return useQuery({
         queryKey: ["dialog", "sessions", sessionId],
-        queryFn: () => apiClient.get<DialogSession>(`/dialog/sessions/${sessionId}`),
+        queryFn: () => fetchDialogSession(sessionId!),
         enabled: !!sessionId,
     });
 }
@@ -149,7 +153,7 @@ export async function completeDialogSession(sessionId: string): Promise<DialogFe
     } catch (error) {
         if (!(error instanceof ApiError) || error.status !== 400) throw error;
 
-        const session = await apiClient.get<DialogSession>(`/dialog/sessions/${sessionId}`);
+        const session = await fetchDialogSession(sessionId);
         if (session.status === "active") throw error;
         return session.feedback;
     }

@@ -39,6 +39,10 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 - [ ] AI-initiated end (endCall=true) triggers the same completion flow and releases the mic
 - [ ] Empty call (no phrases) completes without a feedback modal, hint reads «Разбирать нечего…» — never a stuck «Готовим разбор…»
 - [ ] **Second call**: «Позвонить снова» connects and can be hung up again (a new session each time)
+- [ ] Custom scenario (`?session=…`): after the call the CTA is «К сценариям», not «Позвонить снова»;
+      re-opening the page on a played-out session refuses to dial with «Этот сценарий уже отыгран»
+- [ ] A turn the backend refuses (409) or that returns nothing shows an error — the persona is never
+      silently mute
 - [ ] Analysis failure/timeout → error badge + «Повторить разбор»; the retry produces the feedback
 - [ ] Leaving the page mid-call: session completed in background
 

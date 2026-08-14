@@ -12,12 +12,14 @@ vi.mock("next/navigation", () => ({
 
 let mockBundles: { id: string; title: string }[] | undefined;
 const completeDialogSession = vi.fn(async () => null);
+const fetchDialogSession = vi.fn(async () => ({ id: "sess-7", status: "active" }));
 vi.mock("@/features/dialog/hooks/use-dialog", () => ({
     useDialogBundles: () => ({ data: mockBundles }),
     useDialogModes: () => ({
         data: [{ id: "mode-1", title: "Свой сценарий", description: "", voiceEnabled: true }],
     }),
     completeDialogSession: (...args: unknown[]) => completeDialogSession(...args),
+    fetchDialogSession: (...args: unknown[]) => fetchDialogSession(...args),
 }));
 
 vi.mock("@/features/voice/hooks/use-voice-usage", () => ({
@@ -62,6 +64,8 @@ describe("VoiceCallPage — pre-started sessions", () => {
         mockPush.mockReset();
         completeDialogSession.mockReset();
         completeDialogSession.mockResolvedValue(null);
+        fetchDialogSession.mockReset();
+        fetchDialogSession.mockResolvedValue({ id: "sess-7", status: "active" });
         startVoiceMock.mockClear();
         stopVoiceMock.mockClear();
         endSessionMock.mockClear();
@@ -107,6 +111,33 @@ describe("VoiceCallPage — pre-started sessions", () => {
 
         await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-7"));
         await waitFor(() => expect(screen.queryByText("Готовим разбор…")).toBeNull());
+    });
+
+    it("refuses to call a scenario session that was already played out", async () => {
+        // Regression: calling on a finished session produced a persona that never said a word —
+        // the backend refuses the turn and the stream comes back empty.
+        mockSessionParam = "sess-7";
+        fetchDialogSession.mockResolvedValue({ id: "sess-7", status: "completed" });
+        renderPage();
+
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+
+        expect(await screen.findByRole("alert")).toBeTruthy();
+        expect(startVoiceMock).not.toHaveBeenCalled();
+        fireEvent.click(await screen.findByRole("button", { name: "К сценариям" }));
+        expect(mockPush).toHaveBeenCalledWith("/dialog/bundle-1");
+    });
+
+    it("sends the user back for a new scenario instead of redialling a spent one", async () => {
+        mockSessionParam = "sess-7";
+        renderPage();
+
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
+        await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-7"));
+        expect(await screen.findByRole("button", { name: "К сценариям" })).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Позвонить" })).toBeNull();
     });
 
     it("goes back to the bundle when the bundle is a visible one", () => {

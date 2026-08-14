@@ -7,6 +7,7 @@ import {
     useDialogBundles,
     useDialogModes,
     completeDialogSession,
+    fetchDialogSession,
     DialogFeedback,
 } from "@/features/dialog/hooks/use-dialog";
 import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
@@ -149,6 +150,8 @@ export default function VoiceCallPage() {
     const [error, setError] = useState<string | null>(null);
     const [sessionTimer, setSessionTimer] = useState(0);
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
+    // The pre-started scenario session has already been played out — only a new one can be called.
+    const [isScenarioSpent, setIsScenarioSpent] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const callHapticsRef = useRef<CallHaptics>(new CallHaptics());
@@ -298,6 +301,19 @@ export default function VoiceCallPage() {
 
     const handlePickUp = useCallback(async () => {
         if (callStatus !== "idle" && callStatus !== "ended") return;
+
+        // A pre-started session is single-use: it carries scenario text this page never sees, so it
+        // cannot be recreated here, and calling on a finished one used to produce a persona that
+        // never said a word (the backend refuses the turn, the stream comes back empty).
+        if (preStartedSessionId) {
+            const preStartedSession = await fetchDialogSession(preStartedSessionId).catch(() => null);
+            if (preStartedSession && preStartedSession.status !== "active") {
+                setIsScenarioSpent(true);
+                setError("Этот сценарий уже отыгран. Создайте новый, чтобы позвонить снова");
+                return;
+            }
+        }
+
         setCallStatus("dialing");
         setError(null);
         setAnalysisError(null);
@@ -316,7 +332,7 @@ export default function VoiceCallPage() {
         } catch {
             setCallStatus("idle");
         }
-    }, [callStatus, startVoice]);
+    }, [callStatus, preStartedSessionId, startVoice]);
 
     const handleHangUp = useCallback(() => {
         if (callStatus !== "connected" && callStatus !== "dialing") return;
@@ -355,6 +371,10 @@ export default function VoiceCallPage() {
         setCallStatus("idle");
     }, [preStartedSessionId, router, backHref]);
 
+    // A scenario session is played once. After that (or if it was already spent when we got here)
+    // the only honest next step is going back to start a new scenario — dialling again would
+    // create a session with no scenario attached, which the backend rejects outright.
+    const mustReturnForNewScenario = !!preStartedSessionId && (isScenarioSpent || callStatus === "ended");
     const canRetryAnalysis = callStatus === "ended" && !!analysisError && !isCompleting && !!sessionId;
     const info = describePipeline(
         voiceState,
@@ -521,7 +541,18 @@ export default function VoiceCallPage() {
                     </button>
                 )}
 
-                {!isCallActive && !feedback && (
+                {!isCallActive && !feedback && mustReturnForNewScenario && (
+                    <button
+                        className="btn btn-primary btn-lg voice-cta"
+                        onClick={() => router.push(backHref)}
+                        disabled={isCompleting}
+                        style={isCompleting ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                    >
+                        К сценариям
+                    </button>
+                )}
+
+                {!isCallActive && !feedback && !mustReturnForNewScenario && (
                     <button
                         className="btn btn-success btn-lg voice-cta"
                         onClick={handlePickUp}

@@ -4,6 +4,33 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — A persona that says nothing is a bug in the contract, not in the LLM
+
+- **Context (user-reported):** «собеседник вообще не отвечает». The ai-service log showed
+  `POST /dialog/sessions/{id}/voice/stream` answering **200 in 11ms** with
+  `WRN Voice stream aborted … Session … is not active`. `VoiceDialogController` sets
+  `Response.StatusCode = 200` and the streaming content type *before* it asks the service for the
+  first chunk, so every domain rejection (session completed, session missing, voice disabled)
+  reached the browser as a 200 with an empty body. The frontend read zero frames, showed nothing,
+  and the call looked alive with a mute persona. The same log also showed
+  `POST /dialog/sessions → 400`: «Позвонить снова» on a custom-scenario page tried to create a
+  session for the hidden `custom-scenario` mode without scenario text, which the backend rejects.
+- **Decision:** three layers, because each one alone still leaves a silent failure.
+  1. Backend: in the `InvalidOperationException` handler, if `!Response.HasStarted`, answer
+     **409** with the message instead of an empty stream.
+  2. Client: `409` → «Этот звонок уже завершён», and any stream that yields **zero frames** raises
+     «Собеседник не ответил» rather than returning quietly.
+  3. Page: a pre-started (`?session=`) scenario session is single-use — its status is checked
+     before dialling, and once played out the CTA becomes «К сценариям», since this page never sees
+     the scenario text and cannot legally create a replacement session.
+- **Alternative rejected:** buffering the first chunk before committing the status code. It delays
+  the first audible frame for every healthy call to improve the error path only, and the failure is
+  always known before the first chunk anyway.
+- **Regression tests:** `useVoice.test.tsx` (empty stream → error, 409 → error),
+  `DialogVoiceCallPage.test.tsx` (a spent scenario refuses to dial and offers «К сценариям»).
+
+---
+
 ## 2026-08-14 — Silent calls, and an analysis that cannot hang
 
 ### Call tones removed entirely

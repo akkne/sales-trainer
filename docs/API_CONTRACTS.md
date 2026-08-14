@@ -649,6 +649,11 @@ involvement.
 | GET | /dialog/voice/usage | — | `{dailyUsedSeconds, dailyLimitSeconds, dailyExceeded, monthlyUsedSeconds, monthlyLimitSeconds, monthlyExceeded}` |
 | POST | /dialog/sessions/{sessionId}/voice/stream | `{transcript}` | `application/octet-stream` — length-prefixed frames (see below) |
 
+`voice/stream` errors before the first frame are real status codes, not an empty 200 body:
+`400` empty transcript, `401` no user, `429` voice limit reached, `503` voice not configured, and
+**`409 {error}`** when the session is missing, already completed, or its mode has voice disabled —
+without it the client received a 200 with zero frames and the persona simply stayed silent.
+
 ### Admin endpoints
 
 | Method | Path | Body | Response |

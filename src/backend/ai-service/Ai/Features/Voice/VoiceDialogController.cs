@@ -128,6 +128,16 @@ public sealed class VoiceDialogController : ControllerBase
         catch (InvalidOperationException exception)
         {
             _logger.LogWarning(exception, "Voice stream aborted for session {SessionId}", sessionId);
+
+            // The session is gone, finished, or not voice-enabled — the failure happens before the
+            // first chunk, so nothing has been written yet and we can still answer with a real
+            // status. Otherwise the client gets a 200 with an empty body and the persona just
+            // stays silent with no explanation.
+            if (!Response.HasStarted)
+            {
+                Response.StatusCode = 409;
+                await Response.WriteAsJsonAsync(new { error = exception.Message }, CancellationToken.None);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !capCts.IsCancellationRequested)
         {

@@ -50,6 +50,15 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
   session id inside `useVoice`, so «Позвонить снова» always creates a fresh one.
   Reusing a completed session made the backend reject every turn and left the page
   hanging on «Соединение…» → «Готовим разбор…» with nothing in flight.
+- **A refused turn is never silent.** `POST .../voice/stream` answers `409` when the
+  session is finished/missing/not voice-enabled (it used to set `200` before calling
+  the service, so a rejected turn arrived as an empty body — the persona just never
+  spoke). The client turns `409` into «Этот звонок уже завершён», and a stream that
+  yields zero frames for any other reason raises «Собеседник не ответил».
+- **A pre-started scenario session is single-use.** `/dialog/[bundleId]/[modeId]/voice?session=…`
+  checks the session's status before dialling; once it is played out the CTA becomes
+  «К сценариям» instead of «Позвонить снова» — the page cannot recreate the scenario
+  text, and a session started here without it is rejected by the backend (400).
 - **No barge-in (persona finishes first)**: the microphone is paused for the whole
   AI turn (paused before the `/voice/stream` request, resumed only when playback
   ends). We deliberately do **not** listen while the persona is speaking — barge-in

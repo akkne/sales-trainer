@@ -112,6 +112,10 @@ export function useVoice(options: UseVoiceOptions) {
                         : `Дневной лимит звонков (${limit} мин) исчерпан`,
                 );
             }
+            if (response.status === 409) {
+                // The session is finished or gone — every further turn would be silent.
+                throw new Error("Этот звонок уже завершён. Начните новый");
+            }
             if (!response.ok) {
                 throw new Error(`Ошибка голосового запроса: ${response.status}`);
             }
@@ -120,9 +124,11 @@ export function useVoice(options: UseVoiceOptions) {
             const aggregatedText: string[] = [];
             let stopSignal = false;
 
+            let receivedAnyFrame = false;
             const streamReader = new VoiceStreamReader(response);
             for await (const frame of streamReader.read(controller.signal)) {
                 if (controller.signal.aborted) break;
+                receivedAnyFrame = true;
                 if (frame.text) {
                     aggregatedText.push(frame.text);
                     onAiText?.(frame.text);
@@ -141,6 +147,13 @@ export function useVoice(options: UseVoiceOptions) {
 
             if (!controller.signal.aborted) {
                 audioPlayerRef.current?.markQueueComplete();
+
+                // An empty stream is a failed turn, not an answer. Saying nothing at all looks
+                // exactly like a broken microphone from the user's side, so name it.
+                if (!receivedAnyFrame) {
+                    throw new Error("Собеседник не ответил. Попробуйте сказать ещё раз");
+                }
+
                 onAiResponse?.(aggregatedText.join(" "), stopSignal);
             }
         } catch (error) {
