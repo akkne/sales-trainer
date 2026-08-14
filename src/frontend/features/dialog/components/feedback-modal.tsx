@@ -80,7 +80,7 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                     {feedback.xpEarned > 0 && (
                         <span
                             className="badge"
-                            style={{ background: "var(--primary-soft)", color: "var(--primary)", fontSize: 13, padding: "6px 12px", marginBottom: 16 }}
+                            style={{ background: "var(--primary-soft)", color: "var(--primary-ink)", fontSize: 13, padding: "6px 12px", marginBottom: 16 }}
                         >
                             <Icon name="bolt" size={15} />
                             +{feedback.xpEarned} XP получено

@@ -170,7 +170,7 @@ export default function AdminQuotesPage() {
                                     <span
                                         className={`text-xs font-medium self-end ${
                                             isToday
-                                                ? "bg-indigo text-white rounded-full w-5 h-5 flex items-center justify-center"
+                                                ? "bg-indigo text-on-primary rounded-full w-5 h-5 flex items-center justify-center"
                                                 : "text-ink-3"
                                         }`}
                                     >

@@ -94,7 +94,7 @@ function FriendsPageContent() {
                                         style={{
                                             marginLeft: 6,
                                             background: "var(--primary)",
-                                            color: "#fff",
+                                            color: "var(--on-primary)",
                                             borderRadius: 5,
                                             fontSize: 10,
                                             fontWeight: 700,

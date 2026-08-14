@@ -108,7 +108,7 @@ export default function AdminBundleModesPage() {
     if (isLoading) {
         return (
             <div className="p-6">
-                <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
+                <Link href="/admin/dialog" className="text-indigo-ink hover:underline mb-4 inline-block">
                     ← Back to Bundles
                 </Link>
                 <h1 className="text-xl font-bold text-ink mb-6">Modes</h1>
@@ -120,7 +120,7 @@ export default function AdminBundleModesPage() {
     if (error) {
         return (
             <div className="p-6">
-                <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
+                <Link href="/admin/dialog" className="text-indigo-ink hover:underline mb-4 inline-block">
                     ← Back to Bundles
                 </Link>
                 <h1 className="text-xl font-bold text-ink mb-6">Modes</h1>
@@ -131,7 +131,7 @@ export default function AdminBundleModesPage() {
 
     return (
         <div className="p-6">
-            <Link href="/admin/dialog" className="text-indigo hover:underline mb-4 inline-block">
+            <Link href="/admin/dialog" className="text-indigo-ink hover:underline mb-4 inline-block">
                 ← Back to Bundles
             </Link>
 
@@ -310,7 +310,7 @@ export default function AdminBundleModesPage() {
                                     <span
                                         className={`px-2 py-1 text-xs rounded-full ${
                                             mode.isActive
-                                                ? "bg-indigo-soft text-indigo"
+                                                ? "bg-indigo-soft text-indigo-ink"
                                                 : "bg-bg-2 text-ink-3"
                                         }`}
                                     >
@@ -319,7 +319,7 @@ export default function AdminBundleModesPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                     {mode.voiceEnabled ? (
-                                        <span className="px-2 py-1 text-xs rounded-full bg-accent-soft text-accent">
+                                        <span className="px-2 py-1 text-xs rounded-full bg-accent-soft text-accent-ink">
                                             🎤 Voice
                                         </span>
                                     ) : (
@@ -330,7 +330,7 @@ export default function AdminBundleModesPage() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => startEditing(mode)}
-                                            className="text-indigo hover:underline text-sm"
+                                            className="text-indigo-ink hover:underline text-sm"
                                         >
                                             Edit
                                         </button>

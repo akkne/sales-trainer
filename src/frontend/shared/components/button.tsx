@@ -60,7 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             },
             secondary: {
                 background: "var(--primary-soft)",
-                color: "var(--primary)",
+                color: "var(--primary-ink)",
             },
             ghost: {
                 background: "transparent",

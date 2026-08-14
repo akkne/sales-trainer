@@ -67,7 +67,7 @@ export default function LandingPage() {
                     className="badge"
                     style={{
                         background: "var(--primary-soft)",
-                        color: "var(--primary)",
+                        color: "var(--primary-ink)",
                         padding: "7px 14px",
                         fontSize: 13,
                     }}

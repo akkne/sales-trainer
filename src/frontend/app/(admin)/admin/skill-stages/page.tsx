@@ -251,7 +251,7 @@ export default function AdminSkillStagesPage() {
                     <button
                         onClick={handleCreate}
                         disabled={createStage.isPending || !newStage.key.trim() || !newStage.label.trim()}
-                        className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                        className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
                         {createStage.isPending ? "Adding..." : "Add stage"}
                     </button>

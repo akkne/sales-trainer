@@ -14,7 +14,7 @@ interface SkillPageProps {
 // ─── Chip colour map (DESIGN_SPEC §1.1) ─────────────────────────────────────
 const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     choice:     { bg: "#EAF2FF", color: "#2F6FE0" },
-    blank:      { bg: "#E9F7EF", color: "#1F9E5A" },
+    blank:      { bg: "#E2F8F0", color: "#0E9F6E" },
     reorder:    { bg: "#FFF1E8", color: "#D9722E" },
     match:      { bg: "#F1ECFB", color: "#6C5BD9" },
     categorize: { bg: "#FDEBF3", color: "#C44E8A" },
@@ -23,8 +23,8 @@ const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     dialogue:   { bg: "#EEF0FE", color: "#4658D6" },
     evaluate:   { bg: "#F4F0E6", color: "#9A7B2E" },
     free:       { bg: "#EFEFF2", color: "#6A6A72" },
-    theory:     { bg: "#EFEAFE", color: "#6C5BD9" },
-    practice:   { bg: "#E9F7EF", color: "#1F9E5A" },
+    theory:     { bg: "#E7FCC6", color: "#4A7C00" },
+    practice:   { bg: "#E2F8F0", color: "#0E9F6E" },
 };
 function chipStyle(kind: string) {
     return CHIP_MAP[kind] ?? CHIP_MAP.free;
@@ -135,7 +135,7 @@ export default function SkillPage({ params }: SkillPageProps) {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
                         <Link
                             href={`/skill/${skillSlug}/map`}
-                            style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textDecoration: "none" }}
+                            style={{ fontSize: 12, fontWeight: 700, color: "var(--primary-ink)", textDecoration: "none" }}
                         >
                             Карта курса →
                         </Link>

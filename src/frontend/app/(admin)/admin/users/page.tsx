@@ -8,7 +8,7 @@ import { useAuthStore } from "@/shared/stores/auth-store";
 
 const roleBadgeClass: Record<string, string> = {
     User: "bg-bg-2 text-ink-3",
-    Admin: "bg-accent-soft text-accent",
+    Admin: "bg-accent-soft text-accent-ink",
     SuperAdmin: "bg-olive-soft text-olive",
 };
 
@@ -117,7 +117,7 @@ export default function AdminUsersPage() {
                                                 e.stopPropagation();
                                                 setSelectedId(user.id);
                                             }}
-                                            className="text-xs text-indigo hover:underline"
+                                            className="text-xs text-indigo-ink hover:underline"
                                         >
                                             Manage
                                         </button>

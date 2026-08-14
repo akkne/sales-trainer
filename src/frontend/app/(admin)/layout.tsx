@@ -176,7 +176,7 @@ export default function AdminLayout({
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-colors ${
                                     isActive
-                                        ? "bg-indigo-soft text-indigo font-medium"
+                                        ? "bg-indigo-soft text-indigo-ink font-medium"
                                         : "text-ink-3 hover:text-ink hover:bg-bg-2"
                                 }`}
                             >

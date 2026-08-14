@@ -503,7 +503,7 @@ export default function ChatPage() {
                     <div className="dc-thread-inner">
                         {!sessionId && messages.length === 0 && (
                             <div className="empty" style={{ padding: "80px 20px" }}>
-                                <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                                <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary-ink)" }}>
                                     <Icon name="phone" size="xl" />
                                 </div>
                                 <p className="h4" style={{ marginBottom: 8 }}>Начни разговор</p>

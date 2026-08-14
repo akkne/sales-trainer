@@ -51,7 +51,7 @@ export function Wordmark({
         >
             {mark}
             <span>
-                Sellevate<span style={{ color: "var(--primary)" }}>.</span>
+                Sellevate<span style={{ color: "var(--primary-ink)" }}>.</span>
             </span>
         </span>
     );

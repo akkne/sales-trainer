@@ -19,7 +19,7 @@ const TONE_STYLES: Record<ChipTone, { bg: string; color: string; border: string 
     neutral: { bg: "var(--bg-2)", color: "var(--ink-2)", border: "var(--line)" },
     rust: { bg: "var(--rust-soft)", color: "var(--rust-ink)", border: "transparent" },
     olive: { bg: "var(--olive-soft)", color: "var(--olive)", border: "transparent" },
-    indigo: { bg: "var(--indigo-soft)", color: "var(--indigo)", border: "transparent" },
+    indigo: { bg: "var(--indigo-soft)", color: "var(--indigo-ink)", border: "transparent" },
     good: { bg: "var(--good-soft)", color: "var(--good)", border: "transparent" },
     bad: { bg: "var(--bad-soft)", color: "var(--bad)", border: "transparent" },
     warn: { bg: "var(--warn-soft)", color: "oklch(0.45 0.10 80)", border: "transparent" },

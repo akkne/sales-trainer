@@ -16,6 +16,13 @@ from the source.
 
 ### 1.1 Color palette
 
+> **Superseded.** The violet ramp below is the V2 design canvas as extracted, kept
+> for provenance. The live palette is **V3 electric lime (`#96F500`)** — see
+> [docs/BRAND_PALETTE.md](../BRAND_PALETTE.md). Where this section says
+> `#6C5BD9`/`#9B8CF0`/`#EFEAFE`, the app now uses `--primary`/`--primary-ink`/
+> `--primary-soft`; success green moved from `#1F9E5A` to emerald `#0E9F6E`.
+> Violet survives only as a categorical accent (`--violet`).
+
 **Backgrounds / canvas**
 | Token | Hex | Usage |
 |---|---|---|

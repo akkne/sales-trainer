@@ -44,6 +44,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
 | [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes team-progress view + milestones from UI; phase status |
 | [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
+| [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
 
 ## Feature Documentation
 

@@ -237,7 +237,7 @@ export function AiDialogueExercise({
                                     padding: "10px 14px",
                                     borderRadius: message.role === "user" ? "14px 14px 4px 14px" : "4px 14px 14px 14px",
                                     background: message.role === "user" ? "var(--primary)" : "var(--bg-2)",
-                                    color: message.role === "user" ? "white" : "var(--ink)",
+                                    color: message.role === "user" ? "var(--on-primary)" : "var(--ink)",
                                     fontSize: 14,
                                     lineHeight: 1.4,
                                 }}

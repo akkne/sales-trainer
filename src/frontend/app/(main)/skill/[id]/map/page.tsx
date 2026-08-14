@@ -14,7 +14,7 @@ interface SkillMapPageProps {
 // ─── Chip colour map (DESIGN_SPEC §1.1) ─────────────────────────────────────
 const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     choice:     { bg: "#EAF2FF", color: "#2F6FE0" },
-    blank:      { bg: "#E9F7EF", color: "#1F9E5A" },
+    blank:      { bg: "#E2F8F0", color: "#0E9F6E" },
     reorder:    { bg: "#FFF1E8", color: "#D9722E" },
     match:      { bg: "#F1ECFB", color: "#6C5BD9" },
     categorize: { bg: "#FDEBF3", color: "#C44E8A" },
@@ -23,8 +23,8 @@ const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     dialogue:   { bg: "#EEF0FE", color: "#4658D6" },
     evaluate:   { bg: "#F4F0E6", color: "#9A7B2E" },
     free:       { bg: "#EFEFF2", color: "#6A6A72" },
-    theory:     { bg: "#EFEAFE", color: "#6C5BD9" },
-    practice:   { bg: "#E9F7EF", color: "#1F9E5A" },
+    theory:     { bg: "#E7FCC6", color: "#4A7C00" },
+    practice:   { bg: "#E2F8F0", color: "#0E9F6E" },
 };
 function chipStyle(kind: string) {
     return CHIP_MAP[kind] ?? CHIP_MAP.free;
@@ -134,7 +134,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                                 cy="40"
                                 r={RADIUS}
                                 fill="none"
-                                stroke={completionPercent === 100 ? "#34C36B" : "#6C5BD9"}
+                                stroke={completionPercent === 100 ? "#16C48A" : "#7CD100"}
                                 strokeWidth="8"
                                 strokeLinecap="round"
                                 strokeDasharray={`${(completionPercent / 100) * CIRC} ${CIRC}`}
@@ -143,7 +143,7 @@ export default function SkillMapPage({ params }: SkillMapPageProps) {
                         </svg>
                         <span
                             className="map-ring-pct"
-                            style={{ color: completionPercent === 100 ? "var(--success)" : "var(--primary)" }}
+                            style={{ color: completionPercent === 100 ? "var(--success)" : "var(--primary-ink)" }}
                         >
                             {completionPercent}%
                         </span>

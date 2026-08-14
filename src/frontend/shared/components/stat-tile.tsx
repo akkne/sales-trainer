@@ -28,10 +28,10 @@ const TONE_STYLES: Record<StatTileTone, { color: string; bg: string }> = {
     // legacy tone names mapped to the new palette
     rust: { color: "var(--flame)", bg: "var(--flame-soft)" },
     olive: { color: "var(--success)", bg: "var(--success-soft)" },
-    indigo: { color: "var(--primary)", bg: "var(--primary-soft)" },
+    indigo: { color: "var(--primary-ink)", bg: "var(--primary-soft)" },
     // new palette tones
     flame: { color: "var(--flame)", bg: "var(--flame-soft)" },
-    primary: { color: "var(--primary)", bg: "var(--primary-soft)" },
+    primary: { color: "var(--primary-ink)", bg: "var(--primary-soft)" },
     violet: { color: "var(--violet)", bg: "var(--violet-soft)" },
     success: { color: "var(--success)", bg: "var(--success-soft)" },
     amber: { color: "var(--amber)", bg: "var(--amber-soft)" },

@@ -14,7 +14,7 @@ import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
 // ─── Chip color map from DESIGN_SPEC §1.1 ───────────────────────────────────
 const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     choice:     { bg: "#EAF2FF", color: "#2F6FE0" },
-    blank:      { bg: "#E9F7EF", color: "#1F9E5A" },
+    blank:      { bg: "#E2F8F0", color: "#0E9F6E" },
     reorder:    { bg: "#FFF1E8", color: "#D9722E" },
     match:      { bg: "#F1ECFB", color: "#6C5BD9" },
     categorize: { bg: "#FDEBF3", color: "#C44E8A" },
@@ -23,8 +23,8 @@ const CHIP_MAP: Record<string, { bg: string; color: string }> = {
     dialogue:   { bg: "#EEF0FE", color: "#4658D6" },
     evaluate:   { bg: "#F4F0E6", color: "#9A7B2E" },
     free:       { bg: "#EFEFF2", color: "#6A6A72" },
-    theory:     { bg: "#EFEAFE", color: "#6C5BD9" },
-    practice:   { bg: "#E9F7EF", color: "#1F9E5A" },
+    theory:     { bg: "#E7FCC6", color: "#4A7C00" },
+    practice:   { bg: "#E2F8F0", color: "#0E9F6E" },
 };
 
 function chipStyle(kind: string) {
@@ -201,7 +201,7 @@ function PathSkillList({ onSelected }: { onSelected?: () => void }) {
         return (
             <p style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", paddingTop: 20, lineHeight: 1.5 }}>
                 Нет активных навыков.{" "}
-                <Link href="/profile" style={{ color: "var(--primary)", fontWeight: 600 }}>
+                <Link href="/profile" style={{ color: "var(--primary-ink)", fontWeight: 600 }}>
                     Добавить в профиле
                 </Link>
             </p>
@@ -681,7 +681,7 @@ function PathRightColumn({
                         {skill.completedLessonCount === skill.totalLessonCount && skill.totalLessonCount > 0 && (
                             <div style={{
                                 background: "var(--success-soft)",
-                                border: "1px solid #C0EDCF",
+                                border: "1px solid #B8EDDD",
                                 borderRadius: 12,
                                 padding: "12px 14px",
                                 display: "flex",

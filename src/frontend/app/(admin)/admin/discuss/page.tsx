@@ -97,7 +97,7 @@ export default function AdminDiscussPage() {
                                 {threads.items.map((thread) => (
                                     <tr key={thread.id} className="hover:bg-bg-2">
                                         <td className="px-4 py-3">
-                                            <Link href={`/discuss/${thread.id}`} className="text-indigo hover:underline font-medium">
+                                            <Link href={`/discuss/${thread.id}`} className="text-indigo-ink hover:underline font-medium">
                                                 {thread.title}
                                             </Link>
                                         </td>
@@ -105,7 +105,7 @@ export default function AdminDiscussPage() {
                                         <td className="px-4 py-3 text-ink-3">{thread.upvoteCount}</td>
                                         <td className="px-4 py-3 text-ink-3">{thread.replyCount}</td>
                                         <td className="px-4 py-3 text-xs text-ink-3 space-x-1">
-                                            {thread.isPinned && <span className="px-2 py-1 rounded-full bg-indigo-soft text-indigo">Pinned</span>}
+                                            {thread.isPinned && <span className="px-2 py-1 rounded-full bg-indigo-soft text-indigo-ink">Pinned</span>}
                                             {thread.isHot && <span className="px-2 py-1 rounded-full bg-bg-2">Hot</span>}
                                             {thread.isSolved && <span className="px-2 py-1 rounded-full bg-bg-2">Solved</span>}
                                         </td>
@@ -113,13 +113,13 @@ export default function AdminDiscussPage() {
                                             <div className="flex gap-3 text-sm">
                                                 <button
                                                     onClick={() => setPin.mutate({ threadId: thread.id, isPinned: !thread.isPinned })}
-                                                    className="text-indigo hover:underline"
+                                                    className="text-indigo-ink hover:underline"
                                                 >
                                                     {thread.isPinned ? "Unpin" : "Pin"}
                                                 </button>
                                                 <button
                                                     onClick={() => setHot.mutate({ threadId: thread.id, isHot: !thread.isHot })}
-                                                    className="text-indigo hover:underline"
+                                                    className="text-indigo-ink hover:underline"
                                                 >
                                                     {thread.isHot ? "Unhot" : "Hot"}
                                                 </button>
@@ -213,7 +213,7 @@ export default function AdminDiscussPage() {
                                     </td>
                                     <td className="px-4 py-3 text-ink-3 text-sm font-mono">{tag.slug}</td>
                                     <td className="px-4 py-3 text-xs">
-                                        <span className={`px-2 py-1 rounded-full ${tag.isCurated ? "bg-indigo-soft text-indigo" : "bg-bg-2 text-ink-3"}`}>
+                                        <span className={`px-2 py-1 rounded-full ${tag.isCurated ? "bg-indigo-soft text-indigo-ink" : "bg-bg-2 text-ink-3"}`}>
                                             {tag.isCurated ? "Curated" : "User"}
                                         </span>
                                     </td>
@@ -221,7 +221,7 @@ export default function AdminDiscussPage() {
                                         <div className="flex gap-3 text-sm">
                                             {editingTagId === tag.id ? (
                                                 <>
-                                                    <button onClick={() => handleSaveTag(tag.id)} className="text-indigo hover:underline">Save</button>
+                                                    <button onClick={() => handleSaveTag(tag.id)} className="text-indigo-ink hover:underline">Save</button>
                                                     <button onClick={() => setEditingTagId(null)} className="text-ink-3 hover:underline">Cancel</button>
                                                 </>
                                             ) : (
@@ -231,7 +231,7 @@ export default function AdminDiscussPage() {
                                                             setEditingTagId(tag.id);
                                                             setEditingTagName(tag.name);
                                                         }}
-                                                        className="text-indigo hover:underline"
+                                                        className="text-indigo-ink hover:underline"
                                                     >
                                                         Edit
                                                     </button>

@@ -166,7 +166,7 @@ export default function AdminLeaguesPage() {
                             <button
                                 onClick={handleSaveSettings}
                                 disabled={updateSettings.isPending}
-                                className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                                className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
                             >
                                 {updateSettings.isPending ? "Saving..." : "Save"}
                             </button>
@@ -258,7 +258,7 @@ export default function AdminLeaguesPage() {
                                     <td className="py-2.5 px-3 text-right">
                                         <Link
                                             href={`/admin/leagues/${league.id}`}
-                                            className="text-xs text-indigo hover:underline"
+                                            className="text-xs text-indigo-ink hover:underline"
                                         >
                                             Manage
                                         </Link>

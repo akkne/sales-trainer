@@ -341,7 +341,7 @@ export default function AdminDialogPage() {
                                 <td className="px-4 py-3">
                                     <Link
                                         href={`/admin/dialog/${bundle.id}`}
-                                        className="text-indigo hover:underline font-medium"
+                                        className="text-indigo-ink hover:underline font-medium"
                                     >
                                         {bundle.title}
                                     </Link>
@@ -355,7 +355,7 @@ export default function AdminDialogPage() {
                                     <span
                                         className={`px-2 py-1 text-xs rounded-full ${
                                             bundle.isActive
-                                                ? "bg-indigo-soft text-indigo"
+                                                ? "bg-indigo-soft text-indigo-ink"
                                                 : "bg-bg-2 text-ink-3"
                                         }`}
                                     >
@@ -366,7 +366,7 @@ export default function AdminDialogPage() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => startEditing(bundle)}
-                                            className="text-indigo hover:underline text-sm"
+                                            className="text-indigo-ink hover:underline text-sm"
                                         >
                                             Edit
                                         </button>
@@ -491,7 +491,7 @@ function DialogXpScoringCard() {
                 <button
                     onClick={() => updateSettings.mutate(current)}
                     disabled={updateSettings.isPending || weightTotal <= 0}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                    className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                     {updateSettings.isPending ? "Saving..." : "Save"}
                 </button>
