@@ -51,11 +51,7 @@ export default function AdminLayout({
             router.replace("/login");
             return;
         }
-        if (
-            authenticatedUser &&
-            authenticatedUser.role !== "Admin" &&
-            authenticatedUser.role !== "SuperAdmin"
-        ) {
+        if (authenticatedUser && authenticatedUser.role !== "SuperAdmin") {
             clientLogger.warn("Admin panel access denied — insufficient role", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -66,11 +62,7 @@ export default function AdminLayout({
     }, [accessToken, authenticatedUser, router, pathname]);
 
     useEffect(() => {
-        if (
-            accessToken &&
-            authenticatedUser &&
-            (authenticatedUser.role === "Admin" || authenticatedUser.role === "SuperAdmin")
-        ) {
+        if (accessToken && authenticatedUser && authenticatedUser.role === "SuperAdmin") {
             clientLogger.info("Admin panel opened", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -90,16 +82,14 @@ export default function AdminLayout({
         );
     }
 
-    if (
-        !accessToken ||
-        !authenticatedUser ||
-        (authenticatedUser.role !== "Admin" && authenticatedUser.role !== "SuperAdmin")
-    ) {
+    if (!accessToken || !authenticatedUser || authenticatedUser.role !== "SuperAdmin") {
         return null;
     }
 
-    const isSuperAdmin = authenticatedUser.role === "SuperAdmin";
-
+    // Phase 40.6: every admin screen below is Sellevate-staff-only (RequireSuperAdmin on
+    // the backend) — there is no org-scoped admin panel yet (that is roadmap block 40.20),
+    // so reaching this point already implies SuperAdmin and the "Users" link no longer
+    // needs a separate gate.
     const navItems = [
         { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
@@ -115,7 +105,7 @@ export default function AdminLayout({
         { href: "/admin/voice/usage", label: "Voice Usage" },
         { href: "/admin/leagues", label: "Leagues" },
         { href: "/admin/gamification", label: "Gamification" },
-        ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
+        { href: "/admin/users", label: "Users" },
     ];
 
     return (

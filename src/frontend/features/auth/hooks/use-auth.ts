@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiClient } from "@/shared/api/api-client";
-import { useAuthStore, type UserRole } from "@/shared/stores/auth-store";
+import { useAuthStore, type OrgRole, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 
 const PENDING_VERIFICATION_EMAIL_KEY = "pendingVerificationEmail";
@@ -13,6 +13,8 @@ interface AuthTokenResponse {
     displayName: string;
     isOnboardingCompleted: boolean;
     role: UserRole;
+    orgId?: string | null;
+    orgRole?: OrgRole | null;
 }
 
 export function readPendingVerificationEmail(): string {
@@ -40,6 +42,8 @@ function useHandleSuccessfulAuth() {
             displayName: authResponse.displayName,
             isOnboardingCompleted: authResponse.isOnboardingCompleted,
             role: authResponse.role ?? "User",
+            orgId: authResponse.orgId ?? null,
+            orgRole: authResponse.orgRole ?? null,
         });
 
         if (authResponse.isOnboardingCompleted) {
@@ -63,6 +67,8 @@ export function useInitAuth() {
                 email: string;
                 displayName: string;
                 role: UserRole;
+                orgId?: string | null;
+                orgRole?: OrgRole | null;
                 isOnboardingCompleted: boolean;
             }>("/auth/me")
             .then((user) => setAuthenticatedUser(user))

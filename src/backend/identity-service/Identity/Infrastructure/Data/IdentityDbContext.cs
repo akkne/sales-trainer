@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars.Models;
+using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Features.Onboarding.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
@@ -14,6 +15,7 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<DefaultAvatar> DefaultAvatars => Set<DefaultAvatar>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<Membership> Memberships => Set<Membership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

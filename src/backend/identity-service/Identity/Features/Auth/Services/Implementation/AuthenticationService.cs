@@ -13,6 +13,7 @@ using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Features.Avatars;
+using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 
@@ -311,7 +312,18 @@ internal sealed class AuthenticationService(
         bool isOnboardingCompleted,
         CancellationToken cancellationToken = default)
     {
-        var accessToken = BuildJwtAccessToken(user);
+        // Phase 40.6: at most one active membership is expected while the UI only allows
+        // a single organization per user; ordering by JoinedAt keeps the choice deterministic
+        // if that ever stops being true before multi-org support lands. A user with no
+        // membership gets no org_id/org_role claim — absent membership is never implicit
+        // organization access.
+        var membership = await databaseContext.Memberships
+            .AsNoTracking()
+            .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
+            .OrderBy(candidate => candidate.JoinedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var accessToken = BuildJwtAccessToken(user, membership);
         var rawRefreshToken = GenerateSecureRandomToken();
 
         var newRefreshToken = new RefreshToken
@@ -332,24 +344,34 @@ internal sealed class AuthenticationService(
             UserId: user.Id.ToString(),
             DisplayName: user.DisplayName,
             IsOnboardingCompleted: isOnboardingCompleted,
-            Role: user.Role
+            Role: user.Role,
+            OrgId: membership?.OrganizationId.ToString(),
+            OrgRole: membership?.Role.ToString()
         );
     }
 
-    private string BuildJwtAccessToken(User user)
+    private string BuildJwtAccessToken(User user, Features.Membership.Models.Membership? membership)
     {
         var signingKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtOptions.Value.Key));
 
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("displayName", user.DisplayName),
+            new(ClaimTypes.Role, user.Role.ToString())
+        };
+
+        if (membership is not null)
+        {
+            claims.Add(new Claim("org_id", membership.OrganizationId.ToString()));
+            claims.Add(new Claim("org_role", membership.Role.ToString()));
+        }
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(
-            [
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("displayName", user.DisplayName),
-                new Claim(ClaimTypes.Role, user.Role.ToString())
-            ]),
+            Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(jwtOptions.Value.AccessTokenLifetimeMinutes),
             Issuer = jwtOptions.Value.Issuer,
             Audience = jwtOptions.Value.Audience,

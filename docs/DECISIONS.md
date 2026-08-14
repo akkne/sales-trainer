@@ -692,3 +692,113 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
   layout engine — jsdom does not compute `vh`, `env()`, flex overflow, or media queries. This
   class of bug is only reachable through visual/viewport testing, so it is covered by the manual
   checklist rather than by assertions.
+
+---
+
+## Phase 40.6 — Identity: memberships and the role split (2026-08-15)
+
+### The `RequireAdmin` audit — every call site, decided deliberately
+
+The block's instruction was explicit: don't mechanically rename `RequireAdmin` to
+`RequireSuperAdmin`, decide each call site. The deciding question for every one of them was
+the same: **is this endpoint scoped to one organization, or is it still global/platform
+content?** As of this branch, the organization-scoped admin screen (roadmap block 40.20,
+"Разделение админки" — a separate `/admin` surface for a РОП's own program, overrides and
+company profile) does not exist yet. Every current `/admin/*` endpoint manages a *global*
+resource (the shared content library, platform-wide user list, platform-wide gamification
+config, platform-wide discuss moderation) with **no** `organization_id` anywhere in its
+query — confirmed by reading each controller, not assumed. So every single one resolved the
+same way:
+
+| Call site | Old policy | New policy | Why |
+|---|---|---|---|
+| `identity-service` `AdminUsersController` (whole controller, incl. `GET /admin/users`, `GET/PUT /admin/users/:id`, `DELETE .../avatar`) | `RequireAdmin` (class-level) | `RequireSuperAdmin` | Lists/manages users **platform-wide**, not scoped to one org. `PUT .../role` was already `RequireSuperAdmin`; now the whole controller is, so that per-method attribute was redundant and removed. |
+| `identity-service` `AdminUsersController.ChangeRole` | `RequireSuperAdmin` (unchanged) | `RequireSuperAdmin` | Already correct — role changes only ever move between the two remaining platform roles (`User`/`SuperAdmin`). `Enum.TryParse<UserRole>("Admin", …)` now fails with 400, same as any other unknown role (locked in by `ChangeRole_RejectsRemovedAdminRole`). |
+| `ai-service` `AdminDialogController` (dialog bundles/modes) | `RequireAdmin` | `RequireSuperAdmin` | Global dialog-content library; no `organizationId` in ai-service today. |
+| `ai-service` `AdminVoiceUsageController` (`GET /admin/voice/usage`) | `RequireAdmin` | `RequireSuperAdmin` | Platform-wide voice usage/cost view across *all* users — a cost-control screen for Sellevate, not an org-scoped one. |
+| `gamification-service` `AdminGamificationController` | `RequireAdmin` | `RequireSuperAdmin` | Global gamification config (XP sources, thresholds). |
+| `gamification-service` `AdminLeaguesController` | `RequireAdmin` | `RequireSuperAdmin` | Team-progress/league administration is a single global ladder today, not per-organization. |
+| `learning-service` — `AdminSkillsController`, `AdminSkillStagesController`, `AdminTopicsController`, `AdminLessonsController`, `AdminExercisesController`, `AdminExerciseTypePromptsController`, `AdminReferenceController`, `AdminTechniquesController`, `AdminDailyQuotesController`, `AdminSeederController` (10 controllers) | `RequireAdmin` | `RequireSuperAdmin` | All manage the shared, nullable-`organization_id` content library (skills/lessons/exercises/reference/techniques/quotes) — see TENANCY.md §1.2. Per-organization content overrides are 40.18 (copy-on-write), not shipped yet; until then editing this content is still Sellevate-staff work. |
+| `social-service` `AdminDiscussController` | `RequireAdmin` | `RequireSuperAdmin` | Platform-wide discuss moderation; no org scoping in social-service. |
+| `social-service` `DiscussController.IsAdmin()` (private helper — **not** a named policy, a raw `User.IsInRole("Admin") \|\| User.IsInRole("SuperAdmin")` check gating "delete any thread/reply, not just your own") | n/a (inline role check) | `User.IsInRole("SuperAdmin")` | Same underlying question (platform moderator vs. thread author) — caught by grep for `IsInRole("Admin")`, not by the `RequireAdmin` policy-name search, so called out explicitly here. |
+
+**Net effect:** every existing admin surface is Sellevate-staff-only now. `RequireOrgAdmin`
+is registered in every service that had `RequireAdmin` (identity, ai, gamification,
+learning, social) as pure infrastructure — `policy.RequireAssertion(... HasClaim("org_role",
+"OrgAdmin") ...)` — with **zero call sites** in this block. It exists for 40.7 (an OrgAdmin
+inviting their own organization's managers) and 40.20 (the org admin screen). Leaving it
+unused-but-present, rather than adding it only when 40.7 needs it, means the claim shape and
+policy name are locked in now and 40.7 doesn't have to touch every service's `Program.cs`
+again.
+
+### `Admin` role value: left unassigned, not reused
+
+`UserRole` was `{User = 0, Admin = 1, SuperAdmin = 2}`. Removing `Admin` leaves value `1`
+unassigned rather than renumbering `SuperAdmin` down to `1` or reusing `1` for something new.
+**Why:** a pre-existing row with `Role = 1` (if any exist in a real database before 40.9's
+migration runs) fails to deserialize loudly (`InvalidOperationException` from EF's enum
+conversion) instead of silently becoming whatever the next thing assigned to `1` happens to
+be. Loud failure on stale data is the correct default until 40.9 explicitly decides what a
+former `Admin` user becomes (most likely: an `OrgAdmin` membership in whatever organization
+40.9 backfills them into).
+
+### JWT `org_id`/`org_role`: looked up at token-issue time, not decoded from a header
+
+`AuthenticationService.IssueTokensForUserAsync` queries the user's memberships
+(`Status == Active`, ordered by `JoinedAt`, first-or-default) and adds `org_id`/`org_role`
+claims to the JWT only when one exists. **Why not push this into the gateway or a header
+instead:** every downstream service already validates the JWT directly via its own
+`AddJwtBearer` (shared HMAC signing key) — `org_role` doesn't need a header round-trip the
+way `X-Organization-Id` does for `ITenantContext`, because the authorization policies read
+`HttpContext.User.Claims` off the already-validated token. Only `identity-service` needed
+code changes to *produce* the claims; every other service only needed the new
+`RequireOrgAdmin` policy definition, not a new header consumer.
+
+**Ordering by `JoinedAt` when multiple active memberships could theoretically exist:** the
+schema (composite PK `(UserId, OrganizationId)`) does not prevent a user from having two
+active memberships even though nothing in the product creates that today ("even while the UI
+only allows one organization per user" per the spec). Picking deterministically now avoids a
+silent behavior change if that assumption is relaxed later without anyone revisiting token
+issuance.
+
+### `Membership` is a plain EF entity — not `ITenantScoped`, no RLS, in this block
+
+`Membership.OrganizationId` is the tenant-defining column for `membership` conceptually, but
+the entity does **not** implement `ITenantScoped` and no RLS policy was added to it in 40.6.
+**Why:** `ITenantScoped`/RLS assume `ITenantContext.OrganizationId` is already known when the
+row is written — but establishing membership (accepting an invite, an OrgAdmin inviting a
+manager) is exactly the moment that context doesn't exist yet for the invitee, and superadmin
+actions (creating the *first* membership in a brand-new organization, 40.9) are inherently
+cross-tenant. This mirrors `organization-service`'s own `Organization` registry entity, which
+is likewise not tenant-scoped — both are cross-organization registries by nature, not
+per-tenant data. No membership CRUD endpoints ship in this block (that's 40.7/40.9), so this
+is a forward-looking note, not yet a tested boundary.
+
+**Follow-up for 40.7/40.9:** when membership *write* endpoints ship, guard them with
+application-level checks (actor's `org_id`/`org_role` claim against the target
+`organization_id`), not RLS — and revisit this decision if a read-heavy membership-listing
+endpoint would benefit from RLS instead of an app-level filter.
+
+### `Membership.UserId` gets a real FK; `OrganizationId` does not
+
+`UserId` references `Users.Id` in the **same** database (identity-service owns both tables),
+so a normal FK with `ON DELETE CASCADE` applies — unlike `OrganizationId`, which is a
+cross-service reference under DB-per-service and per the block's explicit instruction stays a
+bare `uuid` with no FK. Cascade (not `Restrict`) was chosen because there is no
+delete-account endpoint yet (per IDENTITY_SERVICE.md) and an orphaned membership row pointing
+at a deleted user would be meaningless; revisit if/when account deletion ships and offboarding
+semantics (`membership.status = deactivated`, never delete) need to apply to the user row too.
+
+### Frontend: dropping `Admin` collapses the admin-panel gate to `SuperAdmin`-only
+
+`shared/stores/auth-store.ts`'s `UserRole` type drops `"Admin"`; every frontend call site that
+checked `role === "Admin" || role === "SuperAdmin"` (`app/(admin)/layout.tsx` — both the
+redirect guard and the nav-item list, `app/(admin)/admin/users/page.tsx`,
+`app/(main)/settings/page.tsx`'s admin-area visibility, `app/(main)/discuss/[threadId]/page.tsx`'s
+moderation check, `features/admin/components/user-detail-modal.tsx`'s role dropdown) now
+checks `role === "SuperAdmin"` alone — a mechanical consequence of the backend audit above,
+not a separate decision, since every guarded surface maps to a `RequireSuperAdmin` endpoint.
+Added `orgId`/`orgRole` (optional) to `AuthenticatedUser` and threaded them through
+`useHandleSuccessfulAuth`/`useInitAuth` so the org claims introduced this block are actually
+reachable from the frontend once 40.20 needs them — leaving JWT claims with no client-visible
+counterpart would have been a dangling reference in the other direction.

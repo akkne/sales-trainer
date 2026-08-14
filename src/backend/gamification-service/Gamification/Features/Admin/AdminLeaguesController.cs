@@ -12,7 +12,7 @@ namespace Sellevate.Gamification.Features.Admin;
 
 [ApiController]
 [Route(RouteConstants.AdminLeagues)]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
 public sealed class AdminLeaguesController(
     GamificationDbContext databaseContext,
     ILeagueService leagueService,

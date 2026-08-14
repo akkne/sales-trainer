@@ -8,7 +8,6 @@ import { useAuthStore } from "@/shared/stores/auth-store";
 
 const roleBadgeClass: Record<string, string> = {
     User: "bg-bg-2 text-ink-3",
-    Admin: "bg-accent-soft text-accent-ink",
     SuperAdmin: "bg-olive-soft text-olive",
 };
 
@@ -17,9 +16,9 @@ export default function AdminUsersPage() {
     const { data: users = [], isLoading } = useAdminUsers();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    const role = authenticatedUser?.role;
-    const isAdmin = role === "Admin" || role === "SuperAdmin";
-    const canChangeRole = role === "SuperAdmin";
+    // Phase 40.6: this whole controller is RequireSuperAdmin on the backend now.
+    const isAdmin = authenticatedUser?.role === "SuperAdmin";
+    const canChangeRole = isAdmin;
 
     if (!isAdmin) {
         return (

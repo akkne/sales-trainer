@@ -52,10 +52,10 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
     }
 
     public HttpClient CreateAuthenticatedClient(Guid userId, string email, string displayName,
-        UserRole role = UserRole.User)
+        UserRole role = UserRole.User, Guid? organizationId = null, string? orgRole = null)
     {
         var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
-        var token = JwtTestHelper.BuildToken(userId, email, displayName, role);
+        var token = JwtTestHelper.BuildToken(userId, email, displayName, role, organizationId, orgRole);
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         return client;

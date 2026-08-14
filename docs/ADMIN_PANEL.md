@@ -2,24 +2,44 @@
 
 ## Roles
 
+> **Phase 40.6 update:** the global `Admin` role is **removed**. A РОП (sales manager
+> lead) is the admin of one organization, never of the platform — that role now lives on
+> `membership.role` (`Manager` / `OrgAdmin`), not on `User.Role`. See
+> [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) and `docs/DECISIONS.md` (2026-08-15) for the
+> full `RequireAdmin` audit that drove this.
+
+### Platform role (`User.Role`)
+
 | Role | Value | Capabilities |
 |---|---|---|
 | `User` | 0 | Regular learner — existing experience unchanged |
-| `Admin` | 1 | Manage content (skills, lessons, exercises, reference), view learner list |
-| `SuperAdmin` | 2 | All admin functions + manage admin roles (promote/demote users) |
+| `SuperAdmin` | 2 | Sellevate staff. All current `/admin/*` endpoints below (every one is still global/platform content today — no org-scoped admin screen exists yet, that is roadmap block 40.20) + manage admin roles (promote/demote users) |
+
+(Value 1, formerly `Admin`, is deliberately left unassigned rather than reused.)
 
 Role is stored as an integer column on the `User` table and emitted as a `role` claim in the JWT access token.
+
+### Organization role (`membership.role`, Phase 40.6 — not yet exposed in any admin screen)
+
+| Role | Value | Meaning |
+|---|---|---|
+| `Manager` | 0 | The salesperson practicing in one organization |
+| `OrgAdmin` | 1 | The РОП — admin of that one organization |
+
+Emitted as the `org_role` JWT claim (alongside `org_id`) when the user has an active
+`membership` row; absent for a user with none. No admin panel screen manages `membership`
+yet — that starts with 40.7 (invites) and 40.20 (the org admin screen itself).
 
 ---
 
 ## Authorization policies (backend)
 
-| Policy | Required role | Applied to |
+| Policy | Required claim | Applied to |
 |---|---|---|
-| `RequireAdmin` | Admin OR SuperAdmin | All `/admin/*` endpoints except user management |
-| `RequireSuperAdmin` | SuperAdmin only | `PUT /admin/users/:id/role` |
+| `RequireSuperAdmin` | `role` = SuperAdmin | All `/admin/*` endpoints today (Phase 40.6 — was `RequireAdmin`, Admin-or-SuperAdmin) |
+| `RequireOrgAdmin` | `org_role` = OrgAdmin | New infrastructure, Phase 40.6. No call site yet — ready for 40.7's invite endpoints and 40.20's org admin screen |
 
-Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireAdmin")]`.
+Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireSuperAdmin")]`.
 
 ---
 
@@ -27,9 +47,11 @@ Policies are registered in each service's `Program.cs`. Controllers use `[Author
 
 Every `/admin/*` endpoint now lives in the **service that owns the data**, not in a
 central admin app. The frontend is unaffected: it calls the same paths through the
-API gateway, which routes each `/admin/*` prefix to its owning service and injects the
-trusted `X-User-Id`/`X-User-Role` headers. Each service registers its own
-`RequireAdmin`/`RequireSuperAdmin` policies and enforces them locally.
+API gateway, which routes each `/admin/*` prefix to its owning service. `org_role`/`role`
+are read straight off the JWT the service already validates (no header round-trip); the
+gateway still injects `X-User-Id`/`X-User-Role`/`X-Organization-Id` for the cases that do
+use headers. Each service registers its own `RequireSuperAdmin`/`RequireOrgAdmin` policies
+and enforces them locally.
 
 | Admin prefix | Owning service |
 |---|---|

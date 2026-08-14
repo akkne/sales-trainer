@@ -26,7 +26,9 @@ public sealed record AuthTokenResponseDto(
     string UserId,
     string DisplayName,
     bool IsOnboardingCompleted,
-    string Role
+    string Role,
+    string? OrgId,
+    string? OrgRole
 );
 
 public sealed record IssuedTokenPair(
@@ -35,5 +37,7 @@ public sealed record IssuedTokenPair(
     string UserId,
     string DisplayName,
     bool IsOnboardingCompleted,
-    UserRole Role
+    UserRole Role,
+    string? OrgId,
+    string? OrgRole
 );

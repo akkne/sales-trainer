@@ -222,7 +222,9 @@ public sealed class DiscussController : ControllerBase
             _ => NotFound(new { message = "Thread or reply not found" })
         };
 
-    private bool IsAdmin() => User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    // Phase 40.6 audit: "can moderate any thread/reply" — the global `Admin` role is gone,
+    // so this collapses to the one remaining platform role.
+    private bool IsAdmin() => User.IsInRole("SuperAdmin");
 
     private Guid? GetUserId()
     {

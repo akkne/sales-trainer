@@ -54,7 +54,7 @@ All tables managed by EF Core migrations (`Infrastructure/Data/Migrations/`).
 | `PasswordHash` | `text`                      | NULL     | NULL for Google-only accounts      |
 | `DisplayName`  | `text`                      | NOT NULL |                                    |
 | `GoogleId`     | `text`                      | NULL     | NULL for email/password accounts   |
-| `Role`                | `integer`                   | NOT NULL | 0=User, 1=Admin, 2=SuperAdmin      |
+| `Role`                | `integer`                   | NOT NULL | Platform role. 0=User, 2=SuperAdmin (1 was `Admin`, removed Phase 40.6 — see below; deliberately left unassigned) |
 | `AvatarType`          | `integer`                   | NOT NULL | 0=Default, 1=Uploaded (default 0)  |
 | `AvatarKey`           | `text`                      | NULL     | S3 object key for uploaded avatar; NULL when using a default |
 | `DefaultAvatarIndex`  | `integer`                   | NOT NULL | Index into `DefaultAvatars` catalog (default 0) |
@@ -108,6 +108,34 @@ Indexes: `IX_DefaultAvatars_Index` (unique).
 | `IsRevoked` | `boolean`                  | NOT NULL |                              |
 
 Indexes: `IX_RefreshTokens_UserId`
+
+---
+
+### `Memberships` (Phase 40.6)
+
+A user's role within one organization — split out of the old global `Users.Role` (which
+kept `Admin`, now removed). Composite PK from day one, even though the current UI only
+ever creates one row per user: retrofitting a join table later would mean rewriting the
+JWT, every authorization check and the invite flow at once. See
+[docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.2 and `docs/DECISIONS.md` (2026-08-15).
+
+| Column           | Type                        | Nullable | Notes                              |
+|------------------|------------------------------|----------|------------------------------------|
+| `UserId`         | `uuid`                       | NOT NULL | PK (part 1). FK → `Users.Id` ON DELETE CASCADE (same database) |
+| `OrganizationId` | `uuid`                       | NOT NULL | PK (part 2). **No FK** — bare uuid; `organization-service` owns the registry in its own database (DB-per-service) |
+| `Role`           | `integer`                    | NOT NULL | Org-scoped role. 0=Manager, 1=OrgAdmin |
+| `Status`         | `integer`                    | NOT NULL | 0=Active (default), 1=Deactivated. Offboarding sets `Deactivated`, never deletes — attempt history/scores belong to the organization |
+| `InvitedBy`      | `uuid`                       | NULL     | The inviting user's id (40.7 invite flow; not populated yet) |
+| `JoinedAt`        | `timestamp with time zone`  | NOT NULL |                                    |
+| `DeactivatedAt`   | `timestamp with time zone`  | NULL     |                                    |
+
+Indexes: `IX_Memberships_OrganizationId`. `UserId` needs no separate index — it is the
+leading column of the composite PK (leftmost-prefix rule).
+
+A user with no `Memberships` row has no organization access — absent membership is never
+implicit privilege. Migrating existing users into a default organization's `Memberships`
+is 40.9's job, not this table's; the schema is nullable/backfillable where needed (`InvitedBy`)
+to leave that migration room.
 
 ---
 

@@ -75,10 +75,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(authorizationOptions =>
 {
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireAdministrator, policy =>
+    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireOrgAdmin, policy =>
         policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.IsInRole(AuthorizationPolicies.AdministratorRole)
-            || authorizationContext.User.IsInRole(AuthorizationPolicies.SuperAdministratorRole)));
+            authorizationContext.User.HasClaim(claim =>
+                claim.Type == "org_role" && claim.Value == AuthorizationPolicies.OrgAdminOrgRole)));
     authorizationOptions.AddPolicy(AuthorizationPolicies.RequireSuperAdministrator, policy =>
         policy.RequireRole(AuthorizationPolicies.SuperAdministratorRole));
 });

@@ -9,7 +9,8 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { UserAvatar } from "@/shared/components/user-avatar";
 
-const ROLES = ["User", "Admin", "SuperAdmin"];
+// Phase 40.6: "Admin" (global platform admin) no longer exists as a backend UserRole value.
+const ROLES = ["User", "SuperAdmin"];
 
 interface UserDetailModalProps {
     userId: string;

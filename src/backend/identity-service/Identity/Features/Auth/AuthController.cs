@@ -33,6 +33,8 @@ public sealed class AuthController(
         var email = User.FindFirstValue(ClaimTypes.Email);
         var displayName = User.FindFirstValue("displayName");
         var role = User.FindFirstValue(ClaimTypes.Role);
+        var orgId = User.FindFirstValue("org_id");
+        var orgRole = User.FindFirstValue("org_role");
 
         var isOnboardingCompleted = Guid.TryParse(userId, out var parsedUserId) && await databaseContext.UserProfiles
             .AnyAsync(profile => profile.UserId == parsedUserId && profile.IsOnboardingCompleted, cancellationToken);
@@ -43,6 +45,8 @@ public sealed class AuthController(
             email,
             displayName,
             role,
+            orgId,
+            orgRole,
             isOnboardingCompleted
         });
     }
@@ -208,6 +212,8 @@ public sealed class AuthController(
             UserId: issuedTokenPair.UserId,
             DisplayName: issuedTokenPair.DisplayName,
             IsOnboardingCompleted: issuedTokenPair.IsOnboardingCompleted,
-            Role: issuedTokenPair.Role.ToString()));
+            Role: issuedTokenPair.Role.ToString(),
+            OrgId: issuedTokenPair.OrgId,
+            OrgRole: issuedTokenPair.OrgRole));
     }
 }

@@ -46,9 +46,9 @@ export default function SettingsPage() {
         setProductUpdatesEnabled,
     } = useNotificationPreferencesStore();
 
-    const isAdmin =
-        authenticatedUser?.role === "Admin" ||
-        authenticatedUser?.role === "SuperAdmin";
+    // Phase 40.6: the global "Admin" role no longer exists — SuperAdmin is the only
+    // platform-wide role left.
+    const isAdmin = authenticatedUser?.role === "SuperAdmin";
 
     // Collapse "system" to the nearest explicit choice for the 2-segment selector.
     // The underlying store still records "system" — we just display it as the

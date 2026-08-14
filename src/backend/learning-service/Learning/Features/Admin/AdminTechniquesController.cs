@@ -12,7 +12,7 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
 public sealed class AdminTechniquesController(
     LearningDbContext databaseContext,
     ILogger<AdminTechniquesController> logger) : ControllerBase
