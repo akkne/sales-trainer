@@ -318,6 +318,17 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 - **Fix:** Added `OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}` to both ai and learning service env
   blocks in `docker-compose.yml`; set `OPENAI_PROVIDER=F5Ai` in `.env` (documented default `OpenAi`
   in `.env.example`). No code change — the enum path was already correct, only unconfigured.
+- **Recurrence in the Local Dev profile (custom-scenario validation 503):** the fix above only
+  covered `docker-compose.yml`. The host scripts — `scripts/dev-ai.sh` and the
+  `export_backend_env` / `export_learning_env` blocks in `scripts/lib-local-env.sh` — exported
+  `OpenAI__ApiKey` / `BaseUrl` / `ChatCompletionsPath` but **not** `OpenAI__Provider`, so the
+  default Local Dev profile still sent Bearer to F5Ai. Symptom: `POST /dialog/scenario/validate`
+  → 401 `{"error":{"message":"API key is missing"}}` → `ScenarioValidationUnavailableException`
+  → **503**, surfaced in the UI as «Не удалось проверить сценарий». The scenario text was never
+  the cause. Fix: export `OpenAI__Provider` (plus the model/token tunables compose already passed)
+  from the host scripts too. **Rule: any new `OpenAI__*` key added to `docker-compose.yml` must be
+  mirrored into the host dev scripts, and vice versa** — the two profiles are the same config
+  surface and drift between them is invisible until a live call fails.
 
 ### Frontend adaptivity: sizing rules over per-page breakpoints
 

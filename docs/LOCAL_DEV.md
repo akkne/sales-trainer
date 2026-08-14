@@ -240,6 +240,13 @@ injects these as env-var config overrides (same keys docker-compose sets):
 Secrets (JWT, Google, OpenAI, Deepgram, Yandex, SuperAdmin) come from the root
 `.env`, parsed the same way docker-compose reads it.
 
+> **LLM config must stay in sync with `docker-compose.yml`.** The host scripts re-export
+> the `OpenAI__*` keys by hand, so a key added to compose but not to `scripts/dev-ai.sh` /
+> `scripts/lib-local-env.sh` silently falls back to its in-code default under Local Dev.
+> `OpenAI__Provider` is the one that bites: it must be `F5Ai` for `api.f5ai.ru` (that gateway
+> authenticates via `X-Auth-Token`), otherwise every LLM call comes back `401 API key is
+> missing` — see [DECISIONS.md](DECISIONS.md).
+
 ## Kafka & the API gateway (microservices migration)
 
 Phase 0 of the [microservices migration](MICROSERVICES_ROADMAP.md) added a Kafka

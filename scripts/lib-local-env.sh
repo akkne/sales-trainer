@@ -87,6 +87,12 @@ export_backend_env() {
   export OpenAI__ApiKey="${OPENAI_API_KEY}"
   export OpenAI__BaseUrl="${OPENAI_BASE_URL}"
   export OpenAI__ChatCompletionsPath="${OPENAI_CHAT_COMPLETIONS_PATH}"
+  # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
+  # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
+  export OpenAI__Provider="${OPENAI_PROVIDER:-OpenAi}"
+  export OpenAI__DialogModel="${OPENAI_DIALOG_MODEL:-gpt-4o}"
+  export OpenAI__DialogTemperature="${OPENAI_DIALOG_TEMPERATURE:-0.7}"
+  export OpenAI__MaximumDialogTokenCount="${OPENAI_MAX_TOKENS_DIALOG:-500}"
   export Deepgram__ApiKey="${DEEPGRAM_API_KEY}"
   export YandexTts__ApiKey="${YANDEX_TTS_API_KEY}"
   export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
@@ -200,6 +206,13 @@ export_learning_env() {
   export OpenAI__ApiKey="${OPENAI_API_KEY}"
   export OpenAI__BaseUrl="${OPENAI_BASE_URL}"
   export OpenAI__ChatCompletionsPath="${OPENAI_CHAT_COMPLETIONS_PATH}"
+  # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
+  # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
+  export OpenAI__Provider="${OPENAI_PROVIDER:-OpenAi}"
+  # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
+  export OpenAI__DialogModel="${OPENAI_DIALOG_MODEL:-gpt-4o}"
+  export OpenAI__DialogTemperature="${OPENAI_DIALOG_TEMPERATURE:-0.7}"
+  export OpenAI__MaximumDialogTokenCount="${OPENAI_MAX_TOKENS_DIALOG:-500}"
 }
 
 # Config overrides for running the Company microservice on the host. It owns its own
