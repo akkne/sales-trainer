@@ -4,6 +4,48 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-15 — organization-service scaffold (40.5): registry vs profile tenancy scope, deferred authorization
+
+- **Which table is tenant-scoped, and why the answer isn't "both":** `Organizations` (the tenant
+  registry, one row per customer) does **not** implement `ITenantScoped` and never gets
+  `EnableTenantRls`. `OrganizationProfiles` (product/ICP/objections/script/tone/glossary/banned
+  claims, [CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md)) does both. The registry can't be
+  tenant-scoped by its own `organization_id` — addressing "which organizations exist" is
+  inherently a cross-tenant, platform-level query, the same reason `40.5`'s registry endpoints are
+  not `[TenantScoped]`. The profile is exactly the shape RLS exists for: one row that belongs to
+  exactly one organization, reachable only through `ITenantContext`.
+- **The registry's `{id:guid}` route parameter does not violate the "organization id never in the
+  route" boundary rule.** `scripts/tenancy-boundary-lint.py` forbids a route/query/body parameter
+  literally named `organizationId` (the value that would answer "which tenant is making this
+  request"). `OrganizationController`'s `{id:guid}` answers a different question — "which registry
+  row should the platform operator act on" — the same category of thing `CompanyController`'s
+  `{companyId:guid}` already does for a different resource. Naming the parameter `id` rather than
+  `organizationId` keeps this distinction visible to the linter and to a future reader.
+- **`OrganizationController` has no role restriction yet beyond `[Authorize]`.** Any authenticated
+  user can create/list/update/suspend/reactivate an organization today. This is deliberately
+  deferred, not an oversight: `RequireSuperAdmin` in its post-40.6 shape (platform role, split from
+  the current global `Admin`) does not exist until 40.6/40.9. Locking this controller down is
+  explicit 40.9 scope ("платформенная суперадминка"). Recorded here so it is not mistaken for a
+  security gap in 40.5's own review — it is a known, roadmapped gap.
+- **Reactivation publishes `organization.updated`, not a fourth topic.** The roadmap names exactly
+  three: `organization.created` / `organization.updated` / `organization.suspended`. Treating
+  "status flipped back to Active" as a case of "the registry row changed" rather than minting
+  `organization.reactivated` keeps the contract at the size the roadmap specified; a consumer that
+  cares about the transition reads `status` off the `organization.updated` payload.
+- **RLS on `OrganizationProfiles` is wired but not yet the layer doing the isolating locally.** The
+  service connects with the same Postgres superuser every other service uses
+  (`ConnectionStrings:Postgres`), not the restricted `sellevate_app` role — that role's real-server
+  rollout is still pending a human (`docs/DONT_FORGET.md`), and superusers bypass RLS regardless of
+  `FORCE`. Locally, the EF query filter and `TenantSaveChangesInterceptor` are what actually
+  prevent cross-tenant reads/writes today; the migration-level `EnableTenantRls` call is correct
+  and ready for when a service starts connecting as `sellevate_app` (Stage C territory, 40.10+,
+  though nothing in the roadmap currently schedules organization-service itself for that switch).
+- **`jsonb` columns stored as plain `string` properties**, matching the existing
+  `Exercise.SerializedContent` convention (`learning-service`) rather than typed EF-owned JSON
+  columns — the codebase already has this pattern in exactly the place a new service should copy
+  it from, and it keeps `OrganizationDbContext` free of a JSON-column-mapping abstraction that
+  nothing else in the service needs.
+
 ## 2026-08-15 — RLS infrastructure: `SET LOCAL` vs `SET`, and the read-transaction requirement (40.4)
 
 - **Problem the roadmap names directly:** `SET LOCAL` is transaction-scoped — safe against

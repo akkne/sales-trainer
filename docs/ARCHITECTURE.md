@@ -94,7 +94,7 @@ repo and the solution as a reference only (not built or run as a container):
 src/backend/
   api/                         ← RETIRED monolith (reference only; not deployed)
   tests/                       ← monolith tests (reference only)
-  {identity,learning,gamification,ai,social,analytics,notification,company}-service/
+  {identity,learning,gamification,ai,social,analytics,notification,company,organization}-service/
                                ← the extracted services, each with its own DB + tests
   building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
                                        idempotent-consumer base, Redis idempotency
@@ -149,6 +149,15 @@ src/backend/
   were the named scope of roadmap 10.3 (the producers whose events drive cross-service state).
   Other producers (social, ai) still publish directly and can adopt the same shared building
   blocks if/when their events need the same guarantee.
+- **Organization service (Phase 40.5):** new microservice `organization-service` (not an
+  extraction — the tenant registry did not exist before), port 5010, database `organization`.
+  Owns the tenant registry (`Organizations`, not tenant-scoped, no RLS — see docs/DECISIONS.md)
+  and the per-organization content profile (`OrganizationProfiles`, tenant-scoped: `ITenantScoped`,
+  `EnableTenantRls`, EF query filter, `[TenantScoped]` on its controller). Producer-only, same
+  registration pattern as `company-service`: `KafkaTopicProvisioner` + `KafkaEventPublisher`
+  directly, no `AddSellevateEventing` (no consumer, so no need for the Redis idempotency store).
+  Publishes `organization.created` / `organization.updated` / `organization.suspended`. See
+  [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md).
 - **Producer-only service (Phase 39.11):** `company-service` produces `company.followup.due`
   (a hosted `FollowUpReminderBackgroundService` polling every `FollowUpReminder:PollIntervalMinutes`,
   default 5 min, for companies whose `NextActionAt` is due and not yet notified) but never
@@ -216,8 +225,9 @@ src/backend/
   pattern in TENANCY.md §1.6). The organization-boundary rule — never read `organizationId` from
   body/query/route — is enforced by `scripts/tenancy-boundary-lint.py`, wired into CI as the
   `tenancy-boundary` workflow, scanning the whole backend (not just one service, unlike
-  `codestyle-lint.py`). Nothing wires `TenantContextMiddleware` into a live service's pipeline yet —
-  that follows once a service actually has tenant-scoped routes.
+  `codestyle-lint.py`). `organization-service` (Phase 40.5) is the first live consumer:
+  `UseSellevateTenantContext()` is wired into its pipeline and `OrganizationProfileController` is
+  `[TenantScoped]`.
 - **Postgres RLS infrastructure (Phase 40.4):** this is Layer 3 of TENANCY.md §1 — the layer that
   survives a forgotten EF filter, Dapper, or `ExecuteUpdate`/`ExecuteDelete`. Two new pieces in
   `BuildingBlocks/Tenancy`, both provider-agnostic (no `Npgsql` package reference in
@@ -231,8 +241,8 @@ src/backend/
     testable `BuildSetLocalCommandText()`) in system mode or with no organization set. Registered
     scoped by `AddSellevateTenancy()`, same as `TenantSaveChangesInterceptor`; a consuming service
     still adds it to its own `DbContext` via `AddInterceptors` when it actually gets tenant-scoped
-    tables (Stage C, 40.10+) — this block ships the mechanism, nothing wires it into a live
-    service's `DbContext` yet.
+    tables. `organization-service` (Phase 40.5) is the first to do so, on `OrganizationProfiles` —
+    the Stage C rollout (40.10+) repeats the same pattern per service.
   - `TenantRlsMigrationBuilderExtensions.EnableTenantRls(table)` /
     `EnableTenantRlsForContent(table)` — migration-time helpers that emit `ENABLE` + `FORCE ROW
     LEVEL SECURITY` and a policy with both `USING` and `WITH CHECK`, comparing

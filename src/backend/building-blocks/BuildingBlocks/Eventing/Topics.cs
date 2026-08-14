@@ -43,6 +43,11 @@ public static class Topics
     // ── Company (produces) ─────────────────────────────────────────────────
     public const string CompanyFollowUpDue = "company.followup.due";
 
+    // ── Organization (produces) ────────────────────────────────────────────
+    public const string OrganizationCreated = "organization.created";
+    public const string OrganizationUpdated = "organization.updated";
+    public const string OrganizationSuspended = "organization.suspended";
+
     /// <summary>
     /// Suffix appended to a source topic to form its dead-letter topic. A message that
     /// still fails after the configured retries is published to <c>&lt;topic&gt;.dlt</c>
