@@ -7,7 +7,6 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-local-env.sh"
 
 load_root_env
 
-LOCAL_AI_PORT="${LOCAL_AI_PORT:-5003}"
 
 export ASPNETCORE_ENVIRONMENT="Development"
 export ASPNETCORE_URLS="http://localhost:${LOCAL_AI_PORT}"

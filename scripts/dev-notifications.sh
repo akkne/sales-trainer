@@ -8,7 +8,6 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-local-env.sh"
 
 load_root_env
 
-LOCAL_NOTIFICATION_PORT="${LOCAL_NOTIFICATION_PORT:-5004}"
 
 export ASPNETCORE_ENVIRONMENT="Development"
 export ASPNETCORE_URLS="http://localhost:${LOCAL_NOTIFICATION_PORT}"

@@ -4,10 +4,17 @@
 > It is no longer part of the dev stack — `scripts/dev-up.sh` only starts the frontend
 > + infra, and the per-service backends + gateway are run individually
 > (`scripts/dev-gateway.sh`, `scripts/dev-identity.sh`, `scripts/dev-learning.sh`, …).
-> The frontend talks to the gateway (port **5000**), which routes each path to its
+> The frontend talks to the gateway (port **5001**), which routes each path to its
 > owning service. `scripts/dev-backend.sh` now only launches the reference monolith on
 > demand (`--force`); the references to "backend"/port 5001 below are that retired
 > monolith.
+>
+> **The host gateway binds 5001, not 5000.** On macOS the ControlCenter AirPlay
+> Receiver holds `:5000`, so the gateway cannot bind it — the same reason
+> `docker-compose.local.yml` remaps the containerised gateway. 5001 is also where
+> `src/frontend/.env.local` already points, so the frontend reaches the gateway with no
+> extra config. The retired monolith used 5001 too, so never run it and the gateway at
+> the same time. Override with `LOCAL_GATEWAY_PORT` if you need a different port.
 
 This is the **default way to run SalesTrainer during development.** The
 full-Docker stack still exists (it's the production/deploy shape) but is no
@@ -205,7 +212,7 @@ scripts/dev-company.sh    # Company microservice on host, port 5009 (own company
 | `scripts/dev-infra.sh` | Start the Docker infra. |
 | `scripts/dev-backend.sh` | Run backend on host, pointed at infra on `localhost`. |
 | `scripts/dev-frontend.sh` | Run frontend on host (`next dev`); auto-generates `src/frontend/.env.local`. |
-| `scripts/dev-gateway.sh` | Run the YARP API gateway on host (port 5000), proxying to the host backend. |
+| `scripts/dev-gateway.sh` | Run the YARP API gateway on host (port 5001), proxying each route to its owning service. |
 | `scripts/dev-up.sh` | Start infra + backend + frontend (apps backgrounded, logs in `logs/`). |
 | `scripts/dev-down.sh` | Stop host apps + Docker infra. |
 | `docker-compose.local.yml` | Overlay that makes the full-Docker stack runnable on a Mac (gateway port, frontend API URL). |
@@ -243,13 +250,19 @@ the gateway runs on the host like the other apps.
 |---|---|---|
 | Kafka broker | `localhost:9092` | Single-broker KRaft (no Zookeeper). In-Docker clients use `kafka:29092`. |
 | Kafka UI | http://localhost:8085 | Inspect topics, consumer groups, messages. |
-| API gateway (YARP) | http://localhost:5000 | Catch-all proxy → backend on `5001`; validates JWT, injects `X-User-*`. |
+| API gateway (YARP) | http://localhost:5001 | Per-route proxy → the owning service; validates JWT, injects `X-User-*`. Unknown routes 404. |
 
 - `scripts/dev-infra.sh` now starts Kafka + Kafka UI alongside Postgres/Mongo/Redis.
-- `scripts/dev-gateway.sh` runs the gateway on the host (after the backend is up).
-  It is **optional** during the migration — the monolith still serves the frontend
-  directly on `5001` until routes are flipped at the gateway per service.
-- The monolith does not yet produce/consume Kafka events; extracted services will.
+- `scripts/dev-gateway.sh` runs the gateway on the host. It is now **required** — the
+  monolith catch-all is gone, so the frontend reaches every service through it.
+- Start the services it proxies to before (or alongside) it: `dev-identity.sh`,
+  `dev-ai.sh`, `dev-notifications.sh`, `dev-analytics.sh`, `dev-social.sh`,
+  `dev-gamification.sh`, `dev-learning.sh`, `dev-company.sh`. A route whose service is
+  down returns 502.
+- `export_gateway_env()` in `scripts/lib-local-env.sh` must override **every** cluster in
+  the gateway's `appsettings.json`. The committed defaults are Docker hostnames
+  (`http://ai:8080/`) that do not resolve on the host, so a cluster missing from that
+  function 502s at request time rather than failing loudly at startup.
 
 The event envelope, topic names, idempotency store and the gateway's identity-header
 forwarding live in the shared `src/backend/building-blocks` library. See
