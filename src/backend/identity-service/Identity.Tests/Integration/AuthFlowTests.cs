@@ -71,14 +71,16 @@ public class AuthFlowTests
     [Test]
     public async Task Refresh_RotatesToken_ViaCookie()
     {
+        // Outside Development the refresh cookie is issued with Secure=true, so the client has
+        // to talk https or the cookie container never sends it back and /auth/refresh sees none.
         var client = Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
-            HandleCookies = true
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
         });
         var email = UniqueEmail();
         const string password = "Password123!";
 
-        // TEMP: registration sets the refresh cookie directly (no verify-email step).
         await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Refresh" });
 
         var refresh = await client.PostAsync("/auth/refresh", null);

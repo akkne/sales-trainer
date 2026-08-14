@@ -77,12 +77,6 @@
       следующего агента/CI локальный Postgres не поднят — тесты сами уходят в `Skipped` за
       секунды (проверено: `LOCAL_POSTGRES_PORT=59999` → 4 `Skipped`, 0 `Failed`), билд не виснет.
       См. `docs/TESTING/TENANCY.md`.
-- [ ] **`Identity.Tests` — 22 падения из 57 на чистой машине.** Не регрессия: проверено
-      стэшем на чистом `feature/tenancy`, падает ровно так же. Причина одна и та же —
-      `OneTimeSetUp: Jwt:Key must be configured and at least 32 bytes (256 bits) long`:
-      интеграционные тесты поднимают `Program.cs`, а `Jwt:Key` в окружении не задан.
-      Чинится конфигом окружения (или тестовым `appsettings.Testing.json`), не кодом.
-      До этого «зелёный прогон identity» локально недостижим.
 - [ ] **Долгие перестройки индексов** (`CREATE INDEX CONCURRENTLY`) — по роадмапу это
       отдельный операционный шаг, намеренно **не** в `DatabaseBootstrapper`.
       Запускать вручную в окно обслуживания и проверять `pg_index.indisvalid`.
