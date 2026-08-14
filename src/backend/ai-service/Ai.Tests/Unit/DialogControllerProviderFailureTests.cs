@@ -35,7 +35,11 @@ public class DialogControllerProviderFailureTests
             .UseInMemoryDatabase("dialog-provider-failure-" + Guid.NewGuid())
             .Options);
 
-        _controller = new DialogController(_dialogService, _databaseContext, NullLogger<DialogController>.Instance)
+        _controller = new DialogController(
+            _dialogService,
+            Substitute.For<IScenarioValidationService>(),
+            _databaseContext,
+            NullLogger<DialogController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -106,7 +110,7 @@ public class DialogControllerProviderFailureTests
     {
         _dialogService
             .StartSessionAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(),
-                Arg.Any<CompanyCallContext?>(), Arg.Any<CancellationToken>())
+                Arg.Any<CompanyCallContext?>(), Arg.Any<CustomScenarioContext?>(), Arg.Any<CancellationToken>())
             .Returns<DialogSession>(_ => throw new OpenAiRequestException("AI provider error", 400));
 
         var result = await _controller.StartSession(new StartSessionRequestDto

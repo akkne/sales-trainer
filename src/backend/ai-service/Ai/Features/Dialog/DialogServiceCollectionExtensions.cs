@@ -13,6 +13,7 @@ public static class DialogServiceCollectionExtensions
         services.Configure<OpenAiConfiguration>(configuration.GetSection(OpenAiConfiguration.SectionName));
         services.AddScoped<IOpenAiChatService, OpenAiChatService>();
         services.AddScoped<IDialogService, DialogService>();
+        services.AddScoped<IScenarioValidationService, ScenarioValidationService>();
         return services;
     }
 }

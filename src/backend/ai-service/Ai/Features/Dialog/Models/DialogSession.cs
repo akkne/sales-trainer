@@ -36,6 +36,9 @@ public sealed class DialogSession
     [BsonElement("companyCallContext")]
     public CompanyCallContext? CompanyCallContext { get; set; }
 
+    [BsonElement("customScenarioContext")]
+    public CustomScenarioContext? CustomScenarioContext { get; set; }
+
     [BsonElement("voiceSeconds")]
     public int VoiceSeconds { get; set; }
 

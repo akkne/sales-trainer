@@ -24,11 +24,15 @@ public interface IDialogService
     Task<DialogMode?> GetCompanyCallModeAsync(
         CancellationToken cancellationToken = default);
 
+    Task<DialogMode?> GetCustomScenarioModeAsync(
+        CancellationToken cancellationToken = default);
+
     Task<DialogSession> StartSessionAsync(
         Guid userId,
         Guid bundleId,
         Guid modeId,
         CompanyCallContext? companyCallContext,
+        CustomScenarioContext? customScenarioContext,
         CancellationToken cancellationToken = default);
 
     Task<DialogSession?> GetSessionByIdAsync(

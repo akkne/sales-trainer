@@ -197,6 +197,7 @@ using (var serviceScope = application.Services.CreateScope())
     databaseContext.Database.Migrate();
 
     await CompanyCallModeSeeder.SeedAsync(databaseContext);
+    await CustomScenarioModeSeeder.SeedAsync(databaseContext);
 }
 
 application.Run();

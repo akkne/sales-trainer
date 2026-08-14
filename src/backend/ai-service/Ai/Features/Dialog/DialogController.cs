@@ -14,12 +14,18 @@ namespace Sellevate.Ai.Features.Dialog;
 public sealed class DialogController : ControllerBase
 {
     private readonly IDialogService _dialogService;
+    private readonly IScenarioValidationService _scenarioValidationService;
     private readonly AiDbContext _databaseContext;
     private readonly ILogger<DialogController> _logger;
 
-    public DialogController(IDialogService dialogService, AiDbContext databaseContext, ILogger<DialogController> logger)
+    public DialogController(
+        IDialogService dialogService,
+        IScenarioValidationService scenarioValidationService,
+        AiDbContext databaseContext,
+        ILogger<DialogController> logger)
     {
         _dialogService = dialogService;
+        _scenarioValidationService = scenarioValidationService;
         _databaseContext = databaseContext;
         _logger = logger;
     }
@@ -70,6 +76,58 @@ public sealed class DialogController : ControllerBase
             BundleId = mode.BundleId,
             ModeId = mode.Id
         });
+    }
+
+    [HttpGet("custom-scenario-mode")]
+    public async Task<IActionResult> GetCustomScenarioMode(CancellationToken cancellationToken = default)
+    {
+        var mode = await _dialogService.GetCustomScenarioModeAsync(cancellationToken);
+        if (mode == null)
+        {
+            return NotFound(new { message = "Custom-scenario mode is not seeded yet." });
+        }
+
+        return Ok(new DialogModeIdentifierDto
+        {
+            BundleId = mode.BundleId,
+            ModeId = mode.Id
+        });
+    }
+
+    /// <summary>
+    /// Pre-flight sales-relevance check for a user-authored scenario, so the compose dialog can
+    /// reject off-topic text before the user is dropped into a conversation. Advisory only —
+    /// POST /dialog/sessions re-checks server-side.
+    /// </summary>
+    [HttpPost("scenario/validate")]
+    public async Task<IActionResult> ValidateScenario(
+        [FromBody] ValidateScenarioRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_dialogService.IsOpenAiConfigured)
+        {
+            return StatusCode(503, new { message = "AI service is not configured" });
+        }
+
+        if (GetUserIdFromClaims() == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var verdict = await _scenarioValidationService.ValidateAsync(request.Scenario ?? "", cancellationToken);
+            return Ok(new ValidateScenarioResponseDto
+            {
+                IsValid = verdict.IsValid,
+                RejectionReason = verdict.RejectionReason
+            });
+        }
+        catch (ScenarioValidationUnavailableException unavailableException)
+        {
+            _logger.LogWarning(unavailableException, "Scenario relevance check is unavailable");
+            return StatusCode(503, new { message = "Не удалось проверить сценарий. Попробуйте ещё раз через минуту." });
+        }
     }
 
     [HttpGet("sessions")]
@@ -138,8 +196,22 @@ public sealed class DialogController : ControllerBase
                 };
             }
 
-            var session = await _dialogService.StartSessionAsync(userId.Value, request.BundleId, request.ModeId, companyCallContext, cancellationToken);
+            var customScenarioContext = string.IsNullOrWhiteSpace(request.CustomScenario)
+                ? null
+                : new CustomScenarioContext { Scenario = request.CustomScenario };
+
+            var session = await _dialogService.StartSessionAsync(
+                userId.Value, request.BundleId, request.ModeId, companyCallContext, customScenarioContext, cancellationToken);
             return Ok(DialogSessionDto.FromEntity(session));
+        }
+        catch (ScenarioRejectedException scenarioRejectedException)
+        {
+            return UnprocessableEntity(new { message = scenarioRejectedException.Message });
+        }
+        catch (ScenarioValidationUnavailableException unavailableException)
+        {
+            _logger.LogWarning(unavailableException, "Scenario relevance check is unavailable");
+            return StatusCode(503, new { message = "Не удалось проверить сценарий. Попробуйте ещё раз через минуту." });
         }
         catch (OpenAiPaymentRequiredException)
         {

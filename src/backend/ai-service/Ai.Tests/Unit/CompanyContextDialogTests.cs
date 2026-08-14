@@ -118,6 +118,7 @@ public class CompanyContextDialogTests
             openAiChatService,
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
+            Substitute.For<IScenarioValidationService>(),
             NullLogger<DialogService>.Instance);
 
         var bundles = await dialogService.GetActiveBundlesAsync();
@@ -416,6 +417,7 @@ public class CompanyContextDialogTests
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
+            Substitute.For<IScenarioValidationService>(),
             NullLogger<DialogService>.Instance);
 
         var companyCallContext = new CompanyCallContext
@@ -424,7 +426,7 @@ public class CompanyContextDialogTests
             CompanyDescription = "Test Description"
         };
 
-        var act = () => dialogService.StartSessionAsync(Guid.NewGuid(), bundleId, regularModeId, companyCallContext);
+        var act = () => dialogService.StartSessionAsync(Guid.NewGuid(), bundleId, regularModeId, companyCallContext, null);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*company-call*");
@@ -442,6 +444,7 @@ public class CompanyContextDialogTests
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
+            Substitute.For<IScenarioValidationService>(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();
@@ -463,6 +466,7 @@ public class CompanyContextDialogTests
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
+            Substitute.For<IScenarioValidationService>(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();

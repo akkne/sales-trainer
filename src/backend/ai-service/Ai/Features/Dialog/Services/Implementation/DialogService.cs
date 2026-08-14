@@ -18,6 +18,7 @@ internal sealed class DialogService : IDialogService
     private readonly IOpenAiChatService _openAiChatService;
     private readonly IDialogScoringWeightsProvider _scoringWeightsProvider;
     private readonly IDialogEventPublisher _dialogEventPublisher;
+    private readonly IScenarioValidationService _scenarioValidationService;
     private readonly ILogger<DialogService> _logger;
 
     public DialogService(
@@ -26,6 +27,7 @@ internal sealed class DialogService : IDialogService
         IOpenAiChatService openAiChatService,
         IDialogScoringWeightsProvider scoringWeightsProvider,
         IDialogEventPublisher dialogEventPublisher,
+        IScenarioValidationService scenarioValidationService,
         ILogger<DialogService> logger)
     {
         _databaseContext = databaseContext;
@@ -33,6 +35,7 @@ internal sealed class DialogService : IDialogService
         _openAiChatService = openAiChatService;
         _scoringWeightsProvider = scoringWeightsProvider;
         _dialogEventPublisher = dialogEventPublisher;
+        _scenarioValidationService = scenarioValidationService;
         _logger = logger;
     }
 
@@ -83,11 +86,22 @@ internal sealed class DialogService : IDialogService
                 cancellationToken);
     }
 
+    public async Task<DialogMode?> GetCustomScenarioModeAsync(CancellationToken cancellationToken = default)
+    {
+        return await _databaseContext.DialogModes
+            .Include(mode => mode.Bundle)
+            .FirstOrDefaultAsync(
+                mode => mode.Id == CustomScenarioModeSeeder.CustomScenarioModeId
+                    && mode.Key == DialogModeKeys.CustomScenario,
+                cancellationToken);
+    }
+
     public async Task<DialogSession> StartSessionAsync(
         Guid userId,
         Guid bundleId,
         Guid modeId,
         CompanyCallContext? companyCallContext,
+        CustomScenarioContext? customScenarioContext,
         CancellationToken cancellationToken = default)
     {
         var mode = await GetModeByIdAsync(modeId, cancellationToken);
@@ -103,6 +117,36 @@ internal sealed class DialogService : IDialogService
                 "Obtain the correct bundleId and modeId from GET /dialog/company-call-mode.");
         }
 
+        if (customScenarioContext != null && mode.Key != DialogModeKeys.CustomScenario)
+        {
+            throw new InvalidOperationException(
+                "customScenario may only be used with the custom-scenario mode. " +
+                "Obtain the correct bundleId and modeId from GET /dialog/custom-scenario-mode.");
+        }
+
+        if (mode.Key == DialogModeKeys.CustomScenario && customScenarioContext == null)
+        {
+            throw new InvalidOperationException("The custom-scenario mode requires a customScenario.");
+        }
+
+        if (customScenarioContext != null)
+        {
+            // The client already validated through POST /dialog/scenario/validate, but that call is
+            // only there to give fast feedback in the dialog — it proves nothing about what arrives
+            // here. Re-checking is what actually enforces the rule, and it is near-free: the text
+            // hashes to the same cache key the client's call just populated.
+            var verdict = await _scenarioValidationService.ValidateAsync(
+                customScenarioContext.Scenario, cancellationToken);
+
+            if (!verdict.IsValid)
+            {
+                throw new ScenarioRejectedException(
+                    verdict.RejectionReason ?? "Недопустимый сценарий: он не связан с продажами.");
+            }
+
+            customScenarioContext.Scenario = customScenarioContext.Scenario.Trim();
+        }
+
         var session = new DialogSession
         {
             UserId = userId,
@@ -110,7 +154,8 @@ internal sealed class DialogService : IDialogService
             ModeId = modeId,
             Status = DialogSessionStatus.Active,
             Messages = [],
-            CompanyCallContext = companyCallContext
+            CompanyCallContext = companyCallContext,
+            CustomScenarioContext = customScenarioContext
         };
 
         await _mongoContext.DialogSessions.InsertOneAsync(session, cancellationToken: cancellationToken);
@@ -182,6 +227,7 @@ internal sealed class DialogService : IDialogService
         session.Messages.Add(userMessage);
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        chatSystemPrompt = CustomScenarioPromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.CustomScenarioContext);
         var chatResult = await _openAiChatService.SendChatMessageAsync(chatSystemPrompt, session.Messages, cancellationToken);
 
         var aiMessage = new DialogMessage
@@ -252,6 +298,7 @@ internal sealed class DialogService : IDialogService
             scoringWeights.Goal);
 
         var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(mode.FeedbackSystemPrompt, session.CompanyCallContext);
+        feedbackSystemPrompt = CustomScenarioPromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.CustomScenarioContext);
         var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(feedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
 
         var earnedXp = (int)Math.Round(feedbackResult.XpReward * scoringWeights.Multiplier);
