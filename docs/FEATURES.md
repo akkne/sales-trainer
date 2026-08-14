@@ -54,6 +54,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Tenancy — isolation & access](TENANCY/TENANCY.md) | **Design** — `Organization` as the tenant (NOT `Company`, which is the prospect CRM); three isolation layers (gateway header → EF query filter → Postgres RLS), the `SaveChanges` write guard, composite-index column order, background-job/Kafka/Redis/Mongo tenant propagation, no public registration, `memberships` from day one, per-org auth method |
 | [Tenancy — content model](TENANCY/CONTENT_MODEL.md) | **Design** — why not to fork the curriculum per customer; immutable lesson versioning (`lesson` / `lesson_version` / programme pinning), copy-on-write overrides + stale review, and the organization profile that removes most forks by substitution |
 | [Tenancy — assignments & AI admin](TENANCY/ASSIGNMENTS.md) | **Design** — the post-training practice loop (РОП → managers), `Assignment` with a quality-threshold completion rule and auto-repeats, six ways AI removes admin work, what the РОП sees, and the two adoption mines |
+| [Tenancy — execution plan](ROADMAP.md) | **Phase 40** in the main roadmap (Russian) — stages A–G: BuildingBlocks primitives → gateway/events → organizations & access → per-service `organization_id` rollout → content versioning → assignments → AI admin → quotas & release |
 
 ## Feature Documentation
 

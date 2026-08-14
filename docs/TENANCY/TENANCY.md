@@ -6,6 +6,9 @@ the codebase today (verified: zero matches across `*.cs`, `*.ts`, `*.tsx`).
 Companion docs: [CONTENT_MODEL.md](CONTENT_MODEL.md) (customization & versioning),
 [ASSIGNMENTS.md](ASSIGNMENTS.md) (admin → manager workflow, AI in the admin panel).
 
+**Execution plan:** [docs/ROADMAP.md](../ROADMAP.md) → **Phase 40** (in Russian) — stages A–G,
+34 actionable blocks. Read this document before starting any of them.
+
 ---
 
 ## 0. Naming — the tenant is NOT called "Company"
