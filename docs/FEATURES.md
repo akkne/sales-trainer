@@ -161,6 +161,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - ElevenLabs Flash v2.5 TTS
 - Target latency: ≤700ms end-to-end
 - Calls are silent — no ringback or busy tones, only a connect vibration on mobile
+- No XP shown for a call: the analysis is the reward (the backend still returns `xpEarned`)
 - Post-call analysis is bounded: a fresh session per call, a 120s cap on `/complete`,
   an honest ended-state hint, and a «Повторить разбор» retry on failure
 

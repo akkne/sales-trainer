@@ -35,7 +35,9 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 ## Hangup & feedback
 
 - [ ] «Положить трубку» → status «Звонок завершён», «Готовим разбор...» (silently)
-- [ ] Feedback modal opens with score/progress points; «Закрыть разбор» resets to idle
+- [ ] Feedback modal opens with the score and the analysis; «Закрыть разбор» resets to idle
+- [ ] **No XP anywhere for a call**: no «+N XP получено» in the modal, no `+N` badge in the session
+      history — even though the backend still returns `xpEarned`
 - [ ] AI-initiated end (endCall=true) triggers the same completion flow and releases the mic
 - [ ] Empty call (no phrases) completes without a feedback modal, hint reads «Разбирать нечего…» — never a stuck «Готовим разбор…»
 - [ ] **Second call**: «Позвонить снова» connects and can be hung up again (a new session each time)

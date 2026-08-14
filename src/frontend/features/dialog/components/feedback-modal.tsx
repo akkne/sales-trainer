@@ -77,15 +77,8 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                         </div>
                     )}
 
-                    {feedback.xpEarned > 0 && (
-                        <span
-                            className="badge"
-                            style={{ background: "var(--primary-soft)", color: "var(--primary-ink)", fontSize: 13, padding: "6px 12px", marginBottom: 16 }}
-                        >
-                            <Icon name="bolt" size={15} />
-                            +{feedback.xpEarned} XP получено
-                        </span>
-                    )}
+                    {/* No XP for a call: the analysis is the reward. `xpEarned` is still on the
+                        contract (the backend scores the session) but is never shown. */}
 
                     <div
                         className="body [&_strong]:font-semibold [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5"

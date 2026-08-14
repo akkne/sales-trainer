@@ -11,7 +11,7 @@ New tab "Диалог" (left of Profile) where users practice sales skills via A
     └── Skill bundles grid (e.g., "Холодные звонки")
             └── Mode selection (e.g., "Обход секретаря")
                     └── Chat screen with GPT-4.1-mini + history sidebar
-                            └── Conversation ends → GPT-4.1 feedback popup + progress points
+                            └── Conversation ends → GPT-4.1 feedback popup (no points shown)
 ```
 
 ## Data Model
@@ -230,6 +230,12 @@ it via `/complete` and session DTOs. A missing tag defaults to `0`. The frontend
 `FeedbackModal` renders it as a colored badge (bad / warn / success) with a label.
 
 ### Progress Point Rewards
+
+> **Not shown to the user (2026-08-14).** A call awards no visible experience: the analysis is the
+> reward. `xpEarned` stays on the `/complete` response and on `dialog.evaluated` — the model still
+> scores the session and the score drives the criteria below — but neither the feedback modal nor
+> the session history renders it. Same pattern as the skill tree, which still returns its
+> gamification fields without displaying them.
 
 AI generates progress points (sum 0-100), each criterion counted only if it actually occurred:
 - Confidence and tone: up to 25 points

@@ -121,11 +121,6 @@ export function SessionHistorySidebar({
                                                 {session.modeTitle}
                                             </span>
                                             <span className="row gap-1" style={{ flex: "none" }}>
-                                                {session.status === "completed" && session.xpEarned > 0 && (
-                                                    <span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary-ink)" }}>
-                                                        +{session.xpEarned}
-                                                    </span>
-                                                )}
                                                 <span
                                                     onClick={(e) => handleDeleteClick(e, session.id)}
                                                     role="button"
