@@ -99,6 +99,14 @@ describe("describeCompletionError", () => {
         );
     });
 
+    it("explains a request that never reached the server", () => {
+        // fetch rejects with a TypeError for a dropped connection or a response without CORS
+        // headers — a gateway timeout looks exactly like this from the browser.
+        expect(describeCompletionError(new TypeError("Failed to fetch"))).toBe(
+            "Сервер не ответил. Проверьте соединение и попробуйте ещё раз"
+        );
+    });
+
     it("keeps a backend error message as-is", () => {
         expect(describeCompletionError(new Error("AI service is temporarily unavailable"))).toBe(
             "AI service is temporarily unavailable"

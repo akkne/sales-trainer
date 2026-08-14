@@ -73,6 +73,10 @@ var application = builder.Build();
 
 application.UseSerilogRequestLogging();
 
+// Must wrap the proxy: a gateway-generated error carries no downstream CORS headers, and the
+// browser then reports it as a CORS block instead of the status code that explains the failure.
+application.UseMiddleware<GatewayErrorCorsMiddleware>();
+
 application.MapSellevateHealthChecks();
 
 application.UseAuthentication();

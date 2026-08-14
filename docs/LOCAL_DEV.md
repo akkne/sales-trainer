@@ -148,6 +148,14 @@ Docker Desktop that predates both the OS and the CPU generation it is running on
 **Fix: update Docker Desktop.** Until then Kafka (and `kafka-exporter`) will not
 start on this machine; everything else runs, but cross-service events do not flow.
 
+> **A dead broker no longer breaks user-facing requests.** It used to: publishing
+> `dialog.evaluated` blocked inside librdkafka for its 5-minute `message.timeout.ms`,
+> so `POST /dialog/sessions/{id}/complete` hung past the 100 s gateway timeout and the
+> call analysis never arrived (2026-08-14). `KafkaEventPublisher` now queues domain events
+> without waiting (delivery is reported to the log) and caps librdkafka's own retrying at
+> `Kafka:PublishTimeoutSeconds` (10 s). Expect one error line per undelivered event while
+> Kafka is down — that, and no XP/progress from events, is the whole visible cost.
+
 **2. A slow link makes `dotnet restore` fail.** It aborts after 60 s without data
 (`The operation has timed out`, `Received an unexpected EOF`). A cold build pulls
 hundreds of MB per service, so on a ~100 KB/s link it never finishes. The host's

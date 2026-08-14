@@ -4,6 +4,46 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — A domain event must never hold a user request hostage
+
+- **Context (user-reported):** «разбор не генерируется, бесконечная генерация», console showing a
+  401 and `blocked by CORS policy`. The ai-service log tells the real story:
+  `15:49:09 Calling OpenAI API` → `15:49:25 Extracted feedback summary … score: 6` →
+  `15:50:49 ERR POST /dialog/sessions/{id}/complete responded 500 in 100010 ms`. The feedback was
+  ready in 16s; the request then sat for another 100s and died. What happens after the feedback is
+  saved is `PublishEvaluatedAsync` → `KafkaEventPublisher.ProduceAsync`, and the local Kafka
+  container was not running (`repository-kafka-1` absent; the log is a wall of
+  `localhost:9092 … Connection refused`). librdkafka's default `message.timeout.ms` is **5 minutes**,
+  so the produce blocked until the 100s server/gateway timeout killed the request. The gateway then
+  answered `504` — a response it writes itself, with no downstream CORS headers — so the browser
+  reported "blocked by CORS" and the status code never reached the client. (The 401s were unrelated:
+  an expired access token that the client refreshed.)
+- **Decision:**
+  1. `IEventPublisher.PublishAsync` no longer waits at all: the message is queued locally
+     (`Produce` + delivery-report callback), so the request that produced it pays nothing whether
+     the broker is healthy or absent, and a failed delivery is logged as an error rather than
+     thrown. `Kafka:PublishTimeoutSeconds` (default 10) becomes librdkafka's `message.timeout.ms`,
+     i.e. how long it keeps retrying in the background instead of the 5-minute default.
+     `ForwardAsync` (outbox) and the dead-letter publisher still await and still throw — bounded by
+     the same timeout — because their callers retry, and a silently "sent" outbox row would be lost
+     forever. Ordering per partition is unaffected: the producer queues in call order.
+  2. The gateway adds CORS headers to responses **it** generates (`GatewayErrorCorsMiddleware`),
+     skipping anything that already carries them so proxied answers never get a duplicate
+     `Access-Control-Allow-Origin` (browsers reject that outright).
+  3. The client renders a `TypeError` from fetch as «Сервер не ответил…» rather than
+     "Failed to fetch".
+- **Alternative rejected:** an outbox for ai-service (write the event in the same transaction, let
+  a relay retry it). That is the correct end state and `IOutboxEventForwarder` already exists — but
+  ai-service has no outbox table and its session state lives in Mongo, so it is a migration, not a
+  fix. The bounded publish is what stops a user-facing hang today; the outbox remains the follow-up.
+- **Note for local dev:** Kafka *is* in `docker-compose.infra.yml`; that container simply was not
+  up. With the bound in place a missing broker now costs a logged error, not a dead request.
+- **Regression tests:** `KafkaEventPublisherTests` (an unreachable broker neither blocks nor throws;
+  outbox forwarding still throws), `GatewayErrorCorsTests` (gateway-generated responses carry the
+  headers for an allowed origin only).
+
+---
+
 ## 2026-08-14 — A persona that says nothing is a bug in the contract, not in the LLM
 
 - **Context (user-reported):** «собеседник вообще не отвечает». The ai-service log showed
