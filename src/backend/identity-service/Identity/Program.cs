@@ -87,9 +87,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(authorizationOptions =>
 {
-    authorizationOptions.AddPolicy("RequireAdmin", policy =>
+    // Phase 40.6: the global `Admin` role is gone. `RequireSuperAdmin` gates platform-staff
+    // endpoints (unchanged). `RequireOrgAdmin` is new infrastructure for the organization-scoped
+    // admin role (`org_role` claim) — no call site in this service yet; ready for the invite
+    // endpoints (40.7) and the org admin screen (40.20).
+    authorizationOptions.AddPolicy("RequireOrgAdmin", policy =>
         policy.RequireAssertion(context =>
-            context.User.IsInRole("Admin") || context.User.IsInRole("SuperAdmin")));
+            context.User.HasClaim(claim => claim.Type == "org_role" && claim.Value == "OrgAdmin")));
     authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
         policy.RequireRole("SuperAdmin"));
 });

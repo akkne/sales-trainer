@@ -1566,19 +1566,25 @@
       (`LOCAL_ORGANIZATION_PORT=5010`), подключить в `scripts/dev-up.sh`
 - [x] Обновить `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/LOCAL_DEV.md`
 
-### [ ] 40.6 Identity — memberships и разделение ролей
-- [ ] Таблица `membership (user_id, organization_id, role, status, invited_by, joined_at,
+### [x] 40.6 Identity — memberships и разделение ролей
+- [x] Таблица `membership (user_id, organization_id, role, status, invited_by, joined_at,
       deactivated_at)`, PK `(user_id, organization_id)` — **с первого дня**, даже пока UI
-      разрешает одну организацию
-- [ ] `users.email` остаётся глобально уникальным; у пользователя **нет** колонки организации
-- [ ] Разделить роли: платформенная (`SuperAdmin` — сотрудники Sellevate) остаётся на
+      разрешает одну организацию — `Memberships` в identity-db, миграция `AddMembership`
+- [x] `users.email` остаётся глобально уникальным; у пользователя **нет** колонки организации
+- [x] Разделить роли: платформенная (`SuperAdmin` — сотрудники Sellevate) остаётся на
       `user`; организационная (`Manager` / `OrgAdmin`) переезжает в `membership`
-- [ ] Глобальный `Admin` из `UserRole` исчезает: РОП — админ одной организации, не платформы
-- [ ] JWT: клеймы `org_id` + `org_role` рядом с существующим `role`
-- [ ] Политики авторизации `RequireOrgAdmin` / `RequireSuperAdmin`; ревизия всех текущих
-      `RequireAdmin` — каждое использование решить осознанно
-- [ ] Миграция существующих пользователей → см. 40.9 (выполняется там, не здесь)
-- [ ] Обновить `docs/IDENTITY_SERVICE.md`, `docs/ADMIN_PANEL.md`, `docs/API_CONTRACTS.md`
+- [x] Глобальный `Admin` из `UserRole` исчезает: РОП — админ одной организации, не платформы —
+      значение `1` осознанно не переиспользуется (см. `docs/DECISIONS.md`)
+- [x] JWT: клеймы `org_id` + `org_role` рядом с существующим `role` — проставляются при
+      выпуске токена по активному membership пользователя; отсутствуют, если membership нет
+- [x] Политики авторизации `RequireOrgAdmin` / `RequireSuperAdmin`; ревизия всех текущих
+      `RequireAdmin` — каждое использование решено осознанно (полная таблица аудита —
+      `docs/DECISIONS.md`, 2026-08-15): весь существующий `/admin/*` контент — платформенный,
+      `RequireOrgAdmin` — новая инфраструктура без вызовов пока (готова к 40.7/40.20)
+- [x] Миграция существующих пользователей → см. 40.9 (выполняется там, не здесь) — схема
+      оставляет для этого место (`InvitedBy` nullable, отдельная таблица, не колонка на `user`)
+- [x] Обновить `docs/IDENTITY_SERVICE.md`, `docs/ADMIN_PANEL.md`, `docs/API_CONTRACTS.md`,
+      `docs/DB_SCHEMA.md`
 
 ### [ ] 40.7 Закрытие регистрации и инвайты
 - [ ] **Удалить** `POST /auth/register` — не спрятать, не закрыть флагом, а удалить маршрут

@@ -11,9 +11,13 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Admin;
 
+// Phase 40.6 audit: this controller lists and manages ALL users platform-wide (not scoped
+// to one organization) and role changes only ever move between the two remaining platform
+// roles (User/SuperAdmin) — there is no org-scoped admin screen yet (that is 40.20). So the
+// whole controller, not just role changes, is Sellevate-staff-only now: RequireSuperAdmin.
 [ApiController]
 [Route("admin/users")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = "RequireSuperAdmin")]
 public sealed class AdminUsersController(
     IdentityDbContext database,
     IAvatarService avatarService,
@@ -136,7 +140,6 @@ public sealed class AdminUsersController(
     }
 
     [HttpPut("{id:guid}/role")]
-    [Authorize(Policy = "RequireSuperAdmin")]
     public async Task<ActionResult<AdminUserDto>> ChangeRole(
         Guid id,
         [FromBody] ChangeUserRoleRequestDto request,

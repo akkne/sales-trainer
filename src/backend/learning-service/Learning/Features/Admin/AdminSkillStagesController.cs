@@ -11,7 +11,7 @@ namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
 [Route("admin/skill-stages")]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
 public sealed class AdminSkillStagesController(LearningDbContext database, ILogger<AdminSkillStagesController> logger) : ControllerBase
 {
     [HttpGet]

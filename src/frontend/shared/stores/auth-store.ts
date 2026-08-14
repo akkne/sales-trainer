@@ -1,6 +1,10 @@
 import { create } from "zustand";
 
-export type UserRole = "User" | "Admin" | "SuperAdmin";
+// Phase 40.6: the global "Admin" role no longer exists on the backend — a РОП is the
+// admin of one organization (org_role "OrgAdmin" on the JWT/`/auth/me`), never of the
+// platform. "SuperAdmin" is the only remaining platform-wide role.
+export type UserRole = "User" | "SuperAdmin";
+export type OrgRole = "Manager" | "OrgAdmin";
 
 interface AuthenticatedUser {
     id: string;
@@ -8,6 +12,8 @@ interface AuthenticatedUser {
     displayName: string;
     isOnboardingCompleted: boolean;
     role: UserRole;
+    orgId?: string | null;
+    orgRole?: OrgRole | null;
 }
 
 interface AuthStoreState {

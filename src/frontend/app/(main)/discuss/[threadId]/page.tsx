@@ -38,12 +38,12 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
     const [replyFiles, setReplyFiles] = useState<File[]>([]);
     const [replyError, setReplyError] = useState<string | null>(null);
 
+    // Phase 40.6: the global "Admin" role no longer exists — SuperAdmin is the only
+    // platform-wide role left.
     const canModerate =
         !!thread &&
         !!authenticatedUser &&
-        (authenticatedUser.id === thread.authorId ||
-            authenticatedUser.role === "Admin" ||
-            authenticatedUser.role === "SuperAdmin");
+        (authenticatedUser.id === thread.authorId || authenticatedUser.role === "SuperAdmin");
 
     const isViewingOwnThread =
         !!thread && !!authenticatedUser && authenticatedUser.id === thread.authorId;

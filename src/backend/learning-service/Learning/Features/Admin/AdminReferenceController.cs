@@ -9,7 +9,7 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
 public sealed class AdminReferenceController(LearningDbContext database, ILogger<AdminReferenceController> logger) : ControllerBase
 {
     [HttpGet("admin/reference")]

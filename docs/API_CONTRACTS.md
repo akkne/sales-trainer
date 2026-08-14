@@ -27,6 +27,11 @@ spoof them. See `src/backend/gateway/Gateway/IdentityForwarding.cs` and
 | `X-User-Role` | JWT `role` claim | present when the token carries a role |
 | `X-Organization-Id` | JWT `org_id` claim | present once `identity-service` issues `org_id` (Phase 40.6); absent on tokens without it |
 
+`org_role` (Phase 40.6) is **not** forwarded as a gateway header — unlike `X-User-Id`/
+`X-User-Role`/`X-Organization-Id`, every service already validates the JWT itself
+(`AddJwtBearer`, shared signing key), so `RequireOrgAdmin`/`RequireSuperAdmin` read the
+`org_role`/`role` claims straight off the validated token; no header round-trip needed.
+
 `X-Organization-Id` populates `Sellevate.BuildingBlocks.Tenancy.ITenantContext` via
 `TenantContextMiddleware`. A route marked `[TenantScoped]` (or built with
 `.RequireTenantScope()`) returns `403 Forbidden` when the header is missing or malformed — the
@@ -50,8 +55,12 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 | POST | /auth/logout | — | 204 |
 | POST | /demo/token `[public]` | — | `{accessToken, expiresInSeconds}` |
 
-`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role}`
+`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role, orgId, orgRole}`
 `RegistrationResultDto`: `{email, requiresEmailVerification}`
+
+`orgId`/`orgRole` (Phase 40.6) are `null` unless the user has an active `membership` row —
+absent membership is never implicit organization access. `GET /auth/me` mirrors the same
+two fields (`orgId`, `orgRole`) alongside `id`/`email`/`displayName`/`role`/`isOnboardingCompleted`.
 
 **Email verification flow.** `/auth/register` creates an unverified user and emails a
 short-lived numeric code (MailerSend); it returns `RegistrationResultDto` instead of tokens.
@@ -287,13 +296,23 @@ Tiers: configurable via the `LeagueTiers` table (admin CRUD below). Default ladd
 
 ## Auth — updated response
 
-`AuthTokenResponseDto` now includes `role: "User" | "Admin" | "SuperAdmin"`.
+`AuthTokenResponseDto` now includes `role: "User" | "SuperAdmin"` (the global `Admin` role
+was removed in Phase 40.6 — see below) plus the nullable `orgId`/`orgRole` pair.
 
 ---
 
-## Admin (requires `RequireAdmin` policy — role Admin or SuperAdmin)
+## Admin (requires `RequireSuperAdmin` policy — Phase 40.6)
 
 All routes prefixed `/admin`. Unauthorized → 403.
+
+> **Phase 40.6 — the global `Admin` role is gone.** Every `/admin/*` endpoint below now
+> requires `RequireSuperAdmin` (Sellevate platform staff), not the old `RequireAdmin`
+> (Admin-or-SuperAdmin) policy — there is no org-scoped admin screen yet (roadmap block
+> 40.20 builds one; the organization role `OrgAdmin` lives on `membership`, not on `user`,
+> and has no admin endpoints of its own in this phase). `RequireOrgAdmin` exists as
+> authorization infrastructure (checks the JWT `org_role` claim) but has zero call sites
+> today. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) and `docs/DECISIONS.md` (2026-08-15)
+> for the full audit.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -457,13 +476,16 @@ On update and on re-import the child rows (`TechniqueSkills`, `TechniqueCoaches`
 
 Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the team progress period's week start — a direct `WeeklyXpAmount` write would be erased by the next progress-point sync, while a correction record survives every re-sync and stays auditable.
 
-### Users (`RequireAdmin`; role change requires `RequireSuperAdmin`)
+### Users (`RequireSuperAdmin` — whole controller, Phase 40.6)
 
 > Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
 > Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
 > shapes are unchanged. The `AdminUserDetailDto` activity stats (activity-consistency/progress-points/skills/score)
 > are owned by gamification/learning, so identity returns them as `0` for now — same
-> caveat as `GET /profile`.
+> caveat as `GET /profile`. Lists/manages users platform-wide (not scoped to one
+> organization), so as of Phase 40.6 the whole controller — not just role changes — is
+> `RequireSuperAdmin`-only; role changes only ever move between the two remaining platform
+> roles (`User`/`SuperAdmin`).
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -623,7 +645,7 @@ involvement.
 - If `OpenAI:ApiKey` is not configured, `GET /dialog/bundles` returns `[]`
 - Session endpoints return `503 Service Unavailable` if OpenAI not configured
 
-### Admin endpoints (RequireAdmin)
+### Admin endpoints (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`)
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -681,7 +703,7 @@ without it the client received a 200 with zero frames and the persona simply sta
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (RequireAdmin) |
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`) |
 
 ```jsonc
 // AdminVoiceUsageDto
@@ -897,7 +919,7 @@ All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are
 Tags are hybrid: a thread's `tags` array mixes existing curated/free slugs and brand-new labels;
 unknown labels are created on the fly as non-curated tags (slug = lowercased, whitespace→`-`).
 
-### Admin endpoints (`RequireAdmin`)
+### Admin endpoints (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`)
 
 | Method | Path | Body | Response |
 |---|---|---|---|

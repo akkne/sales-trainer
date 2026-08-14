@@ -26,11 +26,42 @@ src/backend/identity-service/
 
 ## Owns (Postgres database `identity-db`)
 
-`Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatar`.
-The service has **its own database**, separate from the monolith's. `DatabaseBootstrapper`
-creates the `identity` database on startup if missing (idempotent), then EF `Migrate()`
-builds the schema — so it works against a fresh or an already-populated shared Postgres
-instance.
+`Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatar`,
+`Memberships` (Phase 40.6 — see below). The service has **its own database**, separate
+from the monolith's. `DatabaseBootstrapper` creates the `identity` database on startup if
+missing (idempotent), then EF `Migrate()` builds the schema — so it works against a fresh
+or an already-populated shared Postgres instance.
+
+## Memberships and role split (Phase 40.6)
+
+The global `UserRole.Admin` is **removed**. Roles now split into two:
+
+- **Platform role** (`User.Role`, unchanged column): `User` or `SuperAdmin` — Sellevate
+  staff only.
+- **Organization role** (`Membership.Role`, new table): `Manager` or `OrgAdmin` — a РОП is
+  the admin of one organization, never of the platform.
+
+`Membership (UserId, OrganizationId, Role, Status, InvitedBy, JoinedAt, DeactivatedAt)`,
+PK `(UserId, OrganizationId)` — from day one, even though the current UI only ever creates
+one row per user. `OrganizationId` is a bare `uuid` with **no FK**: `organization-service`
+owns the registry in its own database (DB-per-service). A user with no `Membership` row has
+no organization access. See [DB_SCHEMA.md](DB_SCHEMA.md) and
+[TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.2.
+
+Token issuance (`AuthenticationService.IssueTokensForUserAsync`) looks up the user's single
+active membership (ordered by `JoinedAt`, deterministic if that assumption ever breaks
+before multi-org support lands) and adds `org_id`/`org_role` claims to the JWT when one
+exists; both claims are simply absent otherwise. `AuthTokenResponseDto` and `GET /auth/me`
+mirror `orgId`/`orgRole` for the frontend.
+
+Authorization policies: `RequireSuperAdmin` (unchanged shape, `role` claim) and the new
+`RequireOrgAdmin` (checks the `org_role` claim for `OrgAdmin`) — see
+[ADMIN_PANEL.md](ADMIN_PANEL.md) for the full policy table and the audit of every former
+`RequireAdmin` call site across services.
+
+Migrating existing users into a default organization's `Membership` row is **40.9's job**,
+not this block's — the schema is intentionally nullable/backfillable (`InvitedBy`) to leave
+that migration room without a follow-up schema change.
 
 ## Frontend REST (unchanged paths, served via the gateway)
 

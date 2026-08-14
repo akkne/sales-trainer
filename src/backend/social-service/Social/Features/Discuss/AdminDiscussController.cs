@@ -6,9 +6,11 @@ using Sellevate.Social.Features.Discuss.Services.Abstract;
 
 namespace Sellevate.Social.Features.Discuss;
 
+// Phase 40.6 audit: platform-wide discuss moderation (no org scoping exists yet in
+// social-service) — Sellevate-staff-only. RequireSuperAdmin.
 [ApiController]
 [Route("admin/discuss")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = "RequireSuperAdmin")]
 public sealed class AdminDiscussController : ControllerBase
 {
     private readonly IDiscussService _discussService;

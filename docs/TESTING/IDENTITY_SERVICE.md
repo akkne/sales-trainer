@@ -41,7 +41,8 @@ a Kafka broker, while still asserting the right email/`user.*` event would be pr
 | `VerifyEmail_WithWrongCode_IsUnauthorized` | 401 |
 | `Refresh_RotatesToken_ViaCookie` | refresh cookie rotation 200 |
 | `ProfileAndOnboardingTests` | `/profile` needs auth; onboarding + persona update; invalid persona 400; unknown avatar 404 |
-| `AdminUsersTests` (Phase 9) | `/admin/users` authz (anon 401, User 403, Admin 200); detail 404 for unknown; rename updates name + rejects <2 chars; role change forbidden for Admin, allowed for SuperAdmin, rejects unknown role |
+| `AdminUsersTests` (Phase 9, updated 40.6) | `/admin/users` authz (anon 401, User 403, SuperAdmin 200 — whole controller is `RequireSuperAdmin` now, the global `Admin` role is gone); detail 404 for unknown; rename updates name + rejects <2 chars; role change forbidden for a regular User, allowed for SuperAdmin, rejects unknown roles including the removed `"Admin"` value |
+| `MembershipClaimsTests` (Phase 40.6) | Login issues `org_id`/`org_role` JWT claims (and mirrors them in `AuthTokenResponseDto`) for a user with an active `Membership`; omits both for a user with no membership; omits both when the only membership is `Deactivated` |
 
 The verification code is recovered from the recorded email body (`TestCodeExtractor`),
 since only its hash is persisted.

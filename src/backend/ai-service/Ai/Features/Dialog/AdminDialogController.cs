@@ -8,9 +8,11 @@ using Sellevate.Ai.Infrastructure.Data;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+// Phase 40.6 audit: manages the global dialog-content library (no org scoping exists yet
+// in ai-service) — Sellevate-staff-only. RequireSuperAdmin.
 [ApiController]
 [Route("admin/dialog")]
-[Authorize(Policy = "RequireAdmin")]
+[Authorize(Policy = "RequireSuperAdmin")]
 public sealed class AdminDialogController : ControllerBase
 {
     private readonly AiDbContext _dbContext;
