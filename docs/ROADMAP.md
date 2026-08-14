@@ -1553,17 +1553,18 @@
 
 ### Этап B — организации, пользователи, доступ
 
-### [ ] 40.5 `organization-service` — скаффолд и реестр
-- [ ] Проект `src/backend/organization-service/Organization` + `.Tests`, в `Sellevate.sln`
-- [ ] По образцу `notification-service`: Serilog→Loki, JWT-валидация, CORS, health checks, ProblemDetails
-- [ ] Postgres БД `organization`, авто-миграция на старте (`DatabaseBootstrapper`)
-- [ ] Сущность `Organization` (Id, Name, Slug, Status: active/suspended, CreatedAt, ...)
-- [ ] `organization_profile` (продукт, ICP, возражения jsonb, скрипт jsonb, тон,
-      глоссарий, `banned_claims`) — см. CONTENT_MODEL.md §3
-- [ ] Kafka-продюсер: `organization.created` / `organization.updated` / `organization.suspended`
-- [ ] Гейтвей: YARP-кластер `organization`, `docker-compose.yml`, `scripts/dev-organization.sh`
+### [x] 40.5 `organization-service` — скаффолд и реестр
+- [x] Проект `src/backend/organization-service/Organization` + `.Tests`, в `Sellevate.sln`
+- [x] По образцу `notification-service`/`company-service`: Serilog→Loki, JWT-валидация, CORS, health checks, ProblemDetails
+- [x] Postgres БД `organization`, авто-миграция на старте (`DatabaseBootstrapper`)
+- [x] Сущность `Organization` (Id, Name, Slug, Status: active/suspended, CreatedAt, ...)
+- [x] `organization_profile` (продукт, ICP, возражения jsonb, скрипт jsonb, тон,
+      глоссарий, `banned_claims`) — см. CONTENT_MODEL.md §3; реализовано как `OrganizationProfile`,
+      tenant-scoped (`ITenantScoped`, RLS, `[TenantScoped]`) — см. `docs/DECISIONS.md` (2026-08-15)
+- [x] Kafka-продюсер: `organization.created` / `organization.updated` / `organization.suspended`
+- [x] Гейтвей: YARP-кластер `organization`, `docker-compose.yml`, `scripts/dev-organization.sh`
       (`LOCAL_ORGANIZATION_PORT=5010`), подключить в `scripts/dev-up.sh`
-- [ ] Обновить `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/LOCAL_DEV.md`
+- [x] Обновить `docs/DB_SCHEMA.md`, `docs/ARCHITECTURE.md`, `docs/LOCAL_DEV.md`
 
 ### [ ] 40.6 Identity — memberships и разделение ролей
 - [ ] Таблица `membership (user_id, organization_id, role, status, invited_by, joined_at,

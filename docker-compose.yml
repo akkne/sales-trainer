@@ -428,6 +428,33 @@ services:
       kafka:
         condition: service_started
 
+  organization:
+    build:
+      context: ./src/backend
+      dockerfile: organization-service/Organization/Dockerfile
+    pull_policy: build
+    # Localhost only — reached through the gateway over the docker network.
+    ports:
+      - "127.0.0.1:5010:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Jwt__Key=${JWT_KEY}
+      - Logging__Loki__Url=http://loki:3100
+      - Kafka__BootstrapServers=kafka:29092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      loki:
+        condition: service_started
+      # service_started (not a broker readiness check) is intentionally lenient: the topic
+      # provisioner tolerates a not-yet-ready broker at startup (logged, not fatal) and
+      # self-heals once Kafka accepts connections.
+      kafka:
+        condition: service_started
+
   gateway:
     build:
       context: ./src/backend
@@ -449,6 +476,7 @@ services:
       - ReverseProxy__Clusters__social__Destinations__d1__Address=http://social:8080/
       - ReverseProxy__Clusters__learning__Destinations__d1__Address=http://learning:8080/
       - ReverseProxy__Clusters__company__Destinations__d1__Address=http://company:8080/
+      - ReverseProxy__Clusters__organization__Destinations__d1__Address=http://organization:8080/
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
       - ai
@@ -459,6 +487,7 @@ services:
       - social
       - learning
       - company
+      - organization
       - kafka
       - loki
 

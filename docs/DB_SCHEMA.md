@@ -31,6 +31,11 @@ Last updated: 2026-06-12
 > read-model fed by `user.*` events. Created by `DatabaseBootstrapper` + EF migration
 > `InitialLearningSchema`. The monolith's copies remain as reference until Phase 9. See
 > [LEARNING_SERVICE.md](LEARNING_SERVICE.md).
+>
+> **`organization` (Phase 40.5)** — the tenant registry, new (not extracted from the
+> monolith). Owns `Organizations` (the registry — deliberately not tenant-scoped, no RLS)
+> and `OrganizationProfiles` (tenant-scoped, RLS enabled via `EnableTenantRls`). See
+> [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md) and [TENANCY.md](TENANCY/TENANCY.md).
 
 ---
 
@@ -654,6 +659,7 @@ Skills
 | `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
 | `AddCompanyReadiness` (company-service)  | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
 | `AddCompanyReadinessNoFeedbackCache` (company-service) | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+| `InitialOrganizationSchema` (organization-service) | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
 
 ---
 
@@ -782,3 +788,58 @@ same pattern as `Companies.Status`) so the column stays human-readable. A `Compa
 either hand-written or the result of a `POST /companies/{id}/personas/generate` draft the user
 chose to save (see `docs/API_CONTRACTS.md`); it is not itself an AI call — generation is stateless
 and proxies to ai-service, only the save step touches this table.
+
+---
+
+## organization database (organization-service)
+
+Standalone Postgres database `organization`. Owned by `organization-service` (port 5010).
+Connection string key: `ConnectionStrings:Postgres`. See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md)
+and [TENANCY.md](TENANCY/TENANCY.md).
+
+### Table: `Organizations` (the tenant registry — NOT tenant-scoped, no RLS)
+
+| Column      | Type          | Constraints                     |
+|-------------|---------------|----------------------------------|
+| `Id`        | uuid          | PK                                |
+| `Name`      | varchar(200)  | NOT NULL                          |
+| `Slug`      | varchar(120)  | NOT NULL, UNIQUE (global)         |
+| `Status`    | varchar(32)   | NOT NULL, DEFAULT 'Active'        |
+| `CreatedAt` | timestamptz   | NOT NULL                          |
+| `UpdatedAt` | timestamptz   | NOT NULL                          |
+
+**Indexes:** `IX_Organizations_Slug` (unique)
+
+`Status` is `Active | Suspended`, stored as its string name (`HasConversion<string>()`, same
+pattern as `Companies.Status`). This table is the tenant registry itself, so it deliberately does
+**not** implement `ITenantScoped` and is never wrapped in `EnableTenantRls` — see
+[TENANCY.md §1.2](TENANCY/TENANCY.md) and `docs/DECISIONS.md`.
+
+### Table: `OrganizationProfiles` (tenant-scoped — RLS enabled)
+
+| Column              | Type   | Constraints                              |
+|---------------------|--------|--------------------------------------------|
+| `OrganizationId`    | uuid   | PK, no default generation (assigned by the service from `ITenantContext`) |
+| `Product`           | text   | nullable                                    |
+| `Icp`                | text   | nullable                                    |
+| `ObjectionsJson`     | jsonb  | NOT NULL, DEFAULT `'[]'`                    |
+| `ScriptJson`         | jsonb  | NOT NULL, DEFAULT `'[]'`                    |
+| `Tone`               | text   | nullable                                    |
+| `GlossaryJson`       | jsonb  | NOT NULL, DEFAULT `'{}'`                    |
+| `BannedClaimsJson`   | jsonb  | NOT NULL, DEFAULT `'[]'`                    |
+| `CreatedAt`          | timestamptz | NOT NULL                               |
+| `UpdatedAt`          | timestamptz | NOT NULL                               |
+
+`ObjectionsJson`/`ScriptJson`/`GlossaryJson`/`BannedClaimsJson` are `jsonb`-typed `string`
+columns holding raw JSON text (same convention as `Exercise.SerializedContent` in
+`learning-service`) — the service layer serializes/deserializes them via `System.Text.Json`, never
+raw SQL string concatenation. Shape per
+[CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md#3-the-organization-profile--the-part-that-removes-most-forks):
+`ObjectionsJson` is `[{text, frequency?, bestResponse?}]`, `ScriptJson` is an ordered array of call
+stage names, `GlossaryJson` is a flat string→string map.
+
+**RLS:** `EnableTenantRls("OrganizationProfiles")` in `InitialOrganizationSchema` — `ENABLE`/`FORCE`
+row-level security with a `USING`/`WITH CHECK` policy on `OrganizationId = current_setting('app.organization_id', ...)`.
+Also protected by the EF query filter and the Stage A `TenantSaveChangesInterceptor` write guard.
+`OrganizationProfileController` gates access with `[TenantScoped]`, so a request with no
+`X-Organization-Id` header never reaches the service layer at all.

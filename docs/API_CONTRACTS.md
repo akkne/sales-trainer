@@ -1168,3 +1168,49 @@ practice call; the selected persona's `name`/`position`/`personality`/`difficult
 - `event` and `page` are validated against a **server-side whitelist** (`analytics-service/Analytics/Features/Tracking/Constants/TrackedEvents.cs`) to cap label cardinality — unknown values are rejected with `400`, never silently accepted.
 - `/tracking/presence/ping` marks the caller present (Redis sorted set) and bumps `app_authenticated_requests_total`. Identity is taken from the gateway-injected `X-User-Id` header, falling back to the validated JWT subject.
 - All product metrics are scraped from the `/metrics` endpoint (jobs `sallevate-backend` + `sellevate-analytics`); there is no read API for them — query them in Prometheus/Grafana. See [MONITORING.md](MONITORING.md).
+
+---
+
+## Organization service (Phase 40.5)
+
+> **New microservice `organization-service`** (host port **5010**). Routes `/organizations/*` via
+> YARP gateway cluster `organization`. All endpoints require Bearer auth. See
+> [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md) and
+> [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md).
+
+### Organizations (tenant registry — not tenant-scoped)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /organizations | `{name, slug?}` | `201 OrganizationDetailDto`, `400` blank name, `409` slug taken |
+| GET | /organizations | — | `OrganizationSummaryDto[]` newest-created first |
+| GET | /organizations/{id} | — | `OrganizationDetailDto` or `404` |
+| PUT | /organizations/{id} | `{name, slug?}` | `OrganizationDetailDto`, `404`, `400`, or `409` slug taken |
+| POST | /organizations/{id}/suspend | — | `OrganizationDetailDto` or `404` |
+| POST | /organizations/{id}/reactivate | — | `OrganizationDetailDto` or `404` |
+
+`OrganizationSummaryDto`: `{id, name, slug, status, createdAt}`
+`OrganizationDetailDto`: `{id, name, slug, status, createdAt, updatedAt}`
+
+`slug` is normalized (lowercased, non-alphanumerics collapsed to single hyphens) and globally
+unique; omitted → derived from `name`. `status` is `Active | Suspended`. These routes are not
+`[TenantScoped]` — they administer the registry itself, not one organization's own data (see
+docs/TENANCY/TENANCY.md §1.2). Restricting them to platform SuperAdmins is Phase 40.9 scope; today
+any authenticated caller can reach them, tracked in docs/DECISIONS.md.
+
+Publishes `organization.created` on create, `organization.updated` on rename/reactivate,
+`organization.suspended` on suspend (Kafka, no consumer yet).
+
+### Organization profile (tenant-scoped)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /organizations/profile | — | `OrganizationProfileDto` or `404` if not set up yet |
+| PUT | /organizations/profile | `UpdateOrganizationProfileRequestDto` | `OrganizationProfileDto` |
+
+Both routes are `[TenantScoped]`: `TenantContextMiddleware` rejects the request with `403` if the
+gateway-validated `X-Organization-Id` header is absent — there is no organization id anywhere in
+the route or body (docs/TENANCY/TENANCY.md §1.3). The target organization is resolved solely from
+the header.
+
+`OrganizationProfileDto` / `UpdateOrganizationProfileRequestDto`: `{product?, icp?, objections[] ({text, frequency?, bestResponse?}), scriptStages: string[], tone?, glossary: {[key]: string}, bannedClaims: string[], createdAt, updatedAt}` — shape per [CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md#3-the-organization-profile--the-part-that-removes-most-forks). `PUT` upserts: the first call for an organization creates the row.

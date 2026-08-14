@@ -48,13 +48,14 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
 | [Custom Scenario](CUSTOM_SCENARIO.md) | **Shipped** — user-authored practice scenarios on «Практика»: compose dialog, LLM sales-relevance gate with a Redis verdict cache, prompt fencing, hidden seeded `custom-scenario` mode. Tests: [TESTING/CUSTOM_SCENARIO.md](TESTING/CUSTOM_SCENARIO.md) |
 
-## Multi-tenancy (design only — not implemented)
+## Multi-tenancy (Stage A shipped, Stage B in progress — Organization service scaffold live)
 
 | Document | Description |
 |----------|-------------|
 | [Tenancy — isolation & access](TENANCY/TENANCY.md) | **Design** — `Organization` as the tenant (NOT `Company`, which is the prospect CRM); three isolation layers (gateway header → EF query filter → Postgres RLS), the `SaveChanges` write guard, composite-index column order, background-job/Kafka/Redis/Mongo tenant propagation, no public registration, `memberships` from day one, per-org auth method |
 | [Tenancy — content model](TENANCY/CONTENT_MODEL.md) | **Design** — why not to fork the curriculum per customer; immutable lesson versioning (`lesson` / `lesson_version` / programme pinning), copy-on-write overrides + stale review, and the organization profile that removes most forks by substitution |
 | [Tenancy — assignments & AI admin](TENANCY/ASSIGNMENTS.md) | **Design** — the post-training practice loop (РОП → managers), `Assignment` with a quality-threshold completion rule and auto-repeats, six ways AI removes admin work, what the РОП sees, and the two adoption mines |
+| [Organization Service](ORGANIZATION_SERVICE.md) | **Shipped (Phase 40.5)** — new microservice `organization-service` (port 5010): tenant registry (`Organizations`, not tenant-scoped) + per-organization content profile (`OrganizationProfiles`, tenant-scoped with RLS, `[TenantScoped]`); the first live consumer of the Stage A tenancy primitives. Produces `organization.created`/`updated`/`suspended` |
 | [Tenancy — execution plan](ROADMAP.md) | **Phase 40** in the main roadmap (Russian) — stages A–G: BuildingBlocks primitives → gateway/events → organizations & access → per-service `organization_id` rollout → content versioning → assignments → AI admin → quotas & release |
 
 ## Feature Documentation
@@ -102,6 +103,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [COMPANIES.md](TESTING/COMPANIES.md) | Phase 39: company-service CRUD/ownership unit tests, ai-service company-context prompt tests, gateway route-flip, frontend vitest coverage + manual checklist (CRUD, ownership isolation, goal handoff, voice/chat practice calls, timeline, real-call log, mobile nav) |
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
 | [TENANCY.md](TESTING/TENANCY.md) | Phase 40 (Stage A): write guard, gateway header/middleware, event envelope, and Postgres RLS isolation checklist — includes the real-Postgres `TenantRowLevelSecurityIntegrationTests` (raw SQL + `ExecuteDelete` under the application role) |
+| [ORGANIZATION_SERVICE.md](TESTING/ORGANIZATION_SERVICE.md) | Phase 40.5: organization-service unit tests (registry CRUD + Kafka event contracts, profile upsert/tenant-isolation, controller status-code mapping, tenancy-scope structural checks) + gateway route-flip |
 | Feature checklists | Manual test checklists for each feature |
 
 ---

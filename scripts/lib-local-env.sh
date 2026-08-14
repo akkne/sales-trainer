@@ -46,6 +46,8 @@ LOCAL_SOCIAL_PORT="${LOCAL_SOCIAL_PORT:-5006}"
 LOCAL_LEARNING_PORT="${LOCAL_LEARNING_PORT:-5008}"
 # Port the locally-run Company microservice listens on.
 LOCAL_COMPANY_PORT="${LOCAL_COMPANY_PORT:-5009}"
+# Port the locally-run Organization microservice listens on.
+LOCAL_ORGANIZATION_PORT="${LOCAL_ORGANIZATION_PORT:-5010}"
 # Host port published by docker-compose.infra.yml for MinIO (S3 API).
 LOCAL_MINIO_PORT="${LOCAL_MINIO_PORT:-9000}"
 
@@ -126,6 +128,7 @@ export_gateway_env() {
   export ReverseProxy__Clusters__social__Destinations__d1__Address="http://localhost:${LOCAL_SOCIAL_PORT}/"
   export ReverseProxy__Clusters__learning__Destinations__d1__Address="http://localhost:${LOCAL_LEARNING_PORT}/"
   export ReverseProxy__Clusters__company__Destinations__d1__Address="http://localhost:${LOCAL_COMPANY_PORT}/"
+  export ReverseProxy__Clusters__organization__Destinations__d1__Address="http://localhost:${LOCAL_ORGANIZATION_PORT}/"
 }
 
 # Config overrides for running the Identity microservice on the host. It owns its own
@@ -224,6 +227,21 @@ export_company_env() {
   export ASPNETCORE_URLS="http://localhost:${LOCAL_COMPANY_PORT}"
 
   export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
+}
+
+# Config overrides for running the Organization microservice on the host. It owns its own
+# Postgres database (organization) on the shared local Postgres instance. No Redis or Mongo
+# dependency — the tenant registry and the per-organization profile are relational only.
+# Kafka-only for organization.created/updated/suspended (no consumer, per Program.cs).
+export_organization_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_ORGANIZATION_PORT}"
+
+  export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 

@@ -261,4 +261,40 @@ public sealed class EventContractCatalogTests
         root.GetProperty("nextActionAt").GetDateTime().Should().Be(nextActionAt);
         root.GetProperty("note").GetString().Should().Be("Call back about pricing");
     }
+
+    [Test]
+    public void OrganizationCreated_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationCreated.Should().Be("organization.created");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales", slug = "acme-sales" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
+        root.GetProperty("slug").GetString().Should().Be("acme-sales");
+    }
+
+    [Test]
+    public void OrganizationUpdated_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationUpdated.Should().Be("organization.updated");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales", slug = "acme-sales", status = "Active" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
+        root.GetProperty("slug").GetString().Should().Be("acme-sales");
+        root.GetProperty("status").GetString().Should().Be("Active");
+    }
+
+    [Test]
+    public void OrganizationSuspended_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationSuspended.Should().Be("organization.suspended");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
+    }
 }
