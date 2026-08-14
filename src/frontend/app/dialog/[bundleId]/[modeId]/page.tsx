@@ -324,11 +324,14 @@ export default function ChatPage() {
         setTimeout(() => setVoiceError(null), TimingConstants.fiveSecondsMs);
     }, []);
 
-    const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
-        setSessionId(newSessionId);
+    const handleVoiceSessionReady = useCallback((readySessionId: string) => {
+        // Also fires when voice reuses the session this page is already showing — only a
+        // genuinely new session may wipe the transcript.
+        if (readySessionId === sessionId) return;
+        setSessionId(readySessionId);
         setMessages([]);
         refetchSessions();
-    }, [refetchSessions]);
+    }, [sessionId, refetchSessions]);
 
     const {
         state: voiceState,
@@ -341,7 +344,7 @@ export default function ChatPage() {
         modeVoiceEnabled: chatMode === "voice" && (currentMode?.voiceEnabled ?? false),
         bundleId,
         modeId,
-        onSessionCreated: handleVoiceSessionCreated,
+        onSessionReady: handleVoiceSessionReady,
         onTranscript: handleVoiceTranscript,
         onAiResponse: handleVoiceAiResponse,
         onError: handleVoiceError,

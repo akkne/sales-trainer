@@ -17,12 +17,11 @@ Manual checklist for the 2026-06-05 overnight polish (see ROADMAP Phase 37).
 
 ## 37.4 — Voice call polish
 
-- [ ] «Позвонить» → ringback tone (425 Hz, 1s/4s loop) plays while «Соединение...»
-- [ ] First AI reply → tone stops, on mobile a short vibration fires
-- [ ] «Положить трубку» / AI ends call → triple busy beep
+- [ ] «Позвонить» → «Соединение...» is completely silent (call tones were removed 2026-08-14)
+- [ ] Session ready → on mobile a short vibration fires
+- [ ] «Положить трубку» / AI ends call → silent, status «Звонок завершён»
 - [ ] Interrupt AI mid-reply by speaking → its subtitle fades to 60% with «· прервано» label,
       dashed border; new user phrase recognized
-- [ ] Leaving the page mid-call stops all tones
 
 ## 37.5 — Voice usage surfacing
 
@@ -43,7 +42,7 @@ Manual checklist for the 2026-06-05 overnight polish (see ROADMAP Phase 37).
 
 ## Automated
 
-- Frontend: `npx vitest run` — 47 tests (incl. `callSounds.test.ts`, updated
+- Frontend: `npx vitest run` (incl. `callHaptics.test.ts`, updated
   `LessonPath.test.tsx`, new `ChooseOptionExercise.test.tsx`)
 - Backend: `dotnet test` — 122 tests
 - `npx tsc --noEmit` and `npx next build` pass

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mockPush = vi.fn();
@@ -25,6 +25,13 @@ vi.mock("@/features/voice/hooks/use-voice-usage", () => ({
 }));
 
 let capturedVoiceOptions: Record<string, unknown> | null = null;
+// Mirrors the real hook: the session is reported ready whether it was just created or handed in.
+const startVoiceMock = vi.fn(async () => {
+    const sessionId = (capturedVoiceOptions?.sessionId as string | null) ?? "sess-new";
+    (capturedVoiceOptions?.onSessionReady as ((id: string) => void) | undefined)?.(sessionId);
+});
+const stopVoiceMock = vi.fn();
+const endSessionMock = vi.fn();
 vi.mock("@/features/voice/hooks/use-voice", () => ({
     useVoice: (options: Record<string, unknown>) => {
         capturedVoiceOptions = options;
@@ -32,8 +39,9 @@ vi.mock("@/features/voice/hooks/use-voice", () => ({
             state: "idle",
             currentTranscript: "",
             isVoiceAvailable: true,
-            startVoice: vi.fn(),
-            stopVoice: vi.fn(),
+            startVoice: startVoiceMock,
+            stopVoice: stopVoiceMock,
+            endSession: endSessionMock,
         };
     },
 }));
@@ -53,6 +61,10 @@ describe("VoiceCallPage — pre-started sessions", () => {
     beforeEach(() => {
         mockPush.mockReset();
         completeDialogSession.mockReset();
+        completeDialogSession.mockResolvedValue(null);
+        startVoiceMock.mockClear();
+        stopVoiceMock.mockClear();
+        endSessionMock.mockClear();
         capturedVoiceOptions = null;
         mockSessionParam = null;
         mockBundles = [{ id: "bundle-1", title: "Холодные звонки" }];
@@ -71,6 +83,30 @@ describe("VoiceCallPage — pre-started sessions", () => {
         renderPage();
 
         expect(capturedVoiceOptions?.sessionId).toBeNull();
+    });
+
+    it("connects the call when the pre-started session is reused", async () => {
+        // Regression: reusing a session skipped the "session ready" callback, so the call stayed
+        // on «Соединение…» for its whole duration and never started the timer.
+        mockSessionParam = "sess-7";
+        renderPage();
+
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+
+        // The header switches from «ЗВОНИМ» to the running call timer only once the call connects.
+        expect(await screen.findByText("00:00")).toBeTruthy();
+        expect(screen.queryByText("ЗВОНИМ")).toBeNull();
+    });
+
+    it("completes the pre-started session on hang-up instead of hanging on «Готовим разбор…»", async () => {
+        mockSessionParam = "sess-7";
+        renderPage();
+
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
+        await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-7"));
+        await waitFor(() => expect(screen.queryByText("Готовим разбор…")).toBeNull());
     });
 
     it("goes back to the bundle when the bundle is a visible one", () => {

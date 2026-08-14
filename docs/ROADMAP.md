@@ -1167,7 +1167,7 @@
 - [x] `SkillNode.tsx`, `ModeCard.tsx` — removed (dead code, no imports)
 
 ### Phase 37.4 — Voice call polish (Phase 36.2 leftovers)
-- [x] Sound effects: ringback + hangup beeps synthesized via Web Audio (`lib/voice/callSounds.ts`)
+- [x] ~~Sound effects: ringback + hangup beeps synthesized via Web Audio~~ — removed 2026-08-14, calls are silent (see DECISIONS.md)
 - [x] Vibration on "connected" (mobile, `navigator.vibrate`)
 - [x] Barge-in indicator: visual cue when user interrupts AI playback
 

@@ -4,6 +4,45 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — Silent calls, and an analysis that cannot hang
+
+### Call tones removed entirely
+
+- **Context (user-reported):** the synthesized ringback (425 Hz, 1s/4s) and the triple busy beep
+  were noise. A training call is not a phone call — the user already knows they pressed «Позвонить».
+- **Decision:** delete `CallSoundsPlayer` and the Web Audio oscillators with it. The only state cue
+  left is the connect vibration, now in `features/voice/services/call-haptics.ts` (`CallHaptics`).
+- **Alternative rejected:** a volume/mute toggle. Nobody would have turned the tones back on, and it
+  buys a settings row plus persistence for a feature with no demand.
+
+### «Готовим разбор…» could never finish — three causes, all of them state, not the LLM
+
+- **Context (user-reported):** after a call, the page sat on «Готовим разбор…» forever. The feedback
+  request was not slow — in the reported flows it was **never sent at all**, and the hint lied.
+  1. `useVoice` kept the finished session in `currentSessionIdRef`. The next «Позвонить снова»
+     reused it (the page's `setSessionId(null)` lands a tick later, so the sync effect cannot win
+     the race), the "session created" callback never fired, the call hung on «Соединение…», and its
+     hang-up then had no session id to complete → an eternal «Готовим разбор…».
+  2. The companies page latched `callEndedRef = true` on hang-up and never cleared it, so the *next*
+     call's session was swallowed by the same guard — same dead end.
+  3. `describePipeline` printed «Готовим разбор…» for *any* `ended` state, whether a request was in
+     flight, had failed, or was never started.
+- **Decision:** the session id is dropped by `stopVoice()` / the new `endSession()`, so every call
+  gets a fresh session; `callEndedRef` is reset on pick-up; the ended-state hint is derived from what
+  is actually true (`describeEndedCall`: running / failed / ready / nothing to analyse); the
+  in-flight guard is a ref, so a hang-up racing the persona's `endCall` cannot double-post.
+  `POST /dialog/sessions/{id}/complete` is additionally capped at 120s client-side
+  (`ApiRequestOptions.timeoutMs` → `RequestTimeoutError`; the backend's own upstream budget is 90s)
+  and a failure offers «Повторить разбор». A retry against a session the backend already completed
+  reads the stored feedback (`GET /dialog/sessions/{id}`) instead of failing on "not active".
+- **Alternative rejected:** polling the session until feedback appears. It hides the failure instead
+  of surfacing it, and the completion endpoint is synchronous — there is nothing to poll for.
+- **Regression tests:** `__tests__/useVoice.test.tsx` (a fresh session per call, both end paths),
+  `CompanyVoiceCallPage.test.tsx` (second call connects; no analysis promise without a session;
+  retry after failure), `DialogVoiceCallPage.test.tsx` (a reused pre-started session connects).
+
+---
+
 ## 2026-07-11 — AI backend hardening (39.17, PR #22 + PR #26 review fast-follows)
 
 ### `InternalAuth:ServiceSecret` — wire the missing header in learning-service, don't just document

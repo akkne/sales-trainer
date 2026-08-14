@@ -16,7 +16,7 @@ export type { VoicePipelineState } from "@/features/voice/types/voice-pipeline-s
 export type { UseVoiceOptions } from "@/features/voice/types/use-voice-options";
 
 export function useVoice(options: UseVoiceOptions) {
-    const { sessionId, modeVoiceEnabled, bundleId, modeId, companyContext, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
+    const { sessionId, modeVoiceEnabled, bundleId, modeId, companyContext, onSessionReady, onTranscript, onAiText, onAiResponse, onError } = options;
 
     const [state, setState] = useState<VoicePipelineState>("idle");
     const [currentTranscript, setCurrentTranscript] = useState("");
@@ -172,7 +172,6 @@ export function useVoice(options: UseVoiceOptions) {
                 });
                 activeSessionId = session.id;
                 currentSessionIdRef.current = activeSessionId;
-                onSessionCreated?.(activeSessionId);
             } catch (error) {
                 onError?.(error instanceof Error ? error : new Error("Не удалось создать сессию"));
                 setState("error");
@@ -185,6 +184,10 @@ export function useVoice(options: UseVoiceOptions) {
             setState("error");
             return;
         }
+
+        // Fires for a reused session too (a scenario pre-started elsewhere), otherwise the caller
+        // would never learn the line is up and would stay stuck on "dialing" for the whole call.
+        onSessionReady?.(activeSessionId);
 
         try {
             endpointerRef.current = new SpeechEndpointer({
@@ -234,23 +237,40 @@ export function useVoice(options: UseVoiceOptions) {
             onError?.(error instanceof Error ? error : new Error("Не удалось инициализировать голосовой режим"));
             setState("error");
         }
-    }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionCreated, onError, processSpeech]);
+    }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionReady, onError, processSpeech]);
 
-    const stopVoice = useCallback(() => {
+    /**
+     * Releases the microphone and drops the session. The session must never be reused: the caller
+     * completes it right after, and the backend rejects a completed session. Clearing the ref is
+     * what forces the next `startVoice` to create a fresh one — the caller resets its own
+     * `sessionId` state in the same tick as that call, so the sync effect cannot do it in time.
+     */
+    const releaseSession = useCallback(() => {
         endpointerRef.current?.reset();
         endpointerRef.current = null;
+
+        speechClientRef.current?.stop();
+        speechClientRef.current = null;
+
+        currentSessionIdRef.current = null;
+        setCurrentTranscript("");
+    }, []);
+
+    /** The persona hung up: stop listening at once, but let the closing line finish playing. */
+    const endSession = useCallback(() => {
+        releaseSession();
+    }, [releaseSession]);
+
+    const stopVoice = useCallback(() => {
+        releaseSession();
 
         streamAbortRef.current?.abort();
         streamAbortRef.current = null;
 
-        speechClientRef.current?.stop();
         audioPlayerRef.current?.stop();
 
-        speechClientRef.current = null;
-
         setState("idle");
-        setCurrentTranscript("");
-    }, []);
+    }, [releaseSession]);
 
     useEffect(() => {
         return () => {
@@ -266,5 +286,6 @@ export function useVoice(options: UseVoiceOptions) {
         isVoiceAvailable,
         startVoice,
         stopVoice,
+        endSession,
     };
 }

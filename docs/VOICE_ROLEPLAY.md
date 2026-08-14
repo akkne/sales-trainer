@@ -31,15 +31,25 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
 ### Call state machine
 
 ```
- idle ──«Позвонить»──▶ dialing ──first AI reply──▶ connected ──hangup/endCall──▶ ended
-  ▲                       │ ringback tone 425Hz        │ call timer, live          │ busy beeps,
-  └──«Позвонить ещё раз»──┘ (1s on / 4s off)           │ subtitles, no barge-in    ▼ feedback modal
-                                                       │ vibrate on connect     /complete
+ idle ──«Позвонить»──▶ dialing ──session ready──▶ connected ──hangup/endCall──▶ ended
+  ▲                       │                          │ call timer, live         │ /complete,
+  └──«Позвонить ещё раз»──┘                          │ subtitles, no barge-in   ▼ feedback modal
+                                                     │ vibrate on connect
 ```
 
-- **Sounds** (`lib/voice/callSounds.ts`): ringback while `dialing`, triple busy
-  beep on `ended` — synthesized with Web Audio oscillators, no binary assets.
-- **Vibration**: `navigator.vibrate(80)` on `dialing → connected` (mobile).
+- **Silent by design**: no ringback and no busy tones. The synthesized Web Audio
+  tones were removed — they added nothing to a training call and only made the
+  page noisy. The only remaining state cue is haptic.
+- **Vibration** (`features/voice/services/call-haptics.ts`): `navigator.vibrate(80)`
+  on `dialing → connected` (mobile).
+- **The call connects on "session ready"** (`useVoice.onSessionReady`), which fires
+  both for a freshly created session and for one handed in from outside (a custom
+  scenario pre-started on another page). Reused sessions used to skip the callback,
+  leaving the call on «Соединение…» for its whole duration.
+- **Every call gets its own session**: `stopVoice()` / `endSession()` drop the
+  session id inside `useVoice`, so «Позвонить снова» always creates a fresh one.
+  Reusing a completed session made the backend reject every turn and left the page
+  hanging on «Соединение…» → «Готовим разбор…» with nothing in flight.
 - **No barge-in (persona finishes first)**: the microphone is paused for the whole
   AI turn (paused before the `/voice/stream` request, resumed only when playback
   ends). We deliberately do **not** listen while the persona is speaking — barge-in
@@ -59,7 +69,13 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
   exceeded. Per-user spend report for admins: `GET /admin/voice/usage` +
   `/admin/voice/usage` page. Quota bars also shown on `/profile`.
 - Leaving the page mid-call completes the session (fire-and-forget) so minutes
-  and history are recorded; all tones stop on unmount.
+  and history are recorded.
+- **The analysis never spins forever**: `POST /dialog/sessions/{id}/complete` is
+  capped at 120s client-side (`RequestTimeoutError`; the backend's own upstream
+  budget is 90s), a failure shows the reason plus a «Повторить разбор» button, and
+  a call that ended with no session says so («Разбирать нечего…») instead of
+  claiming «Готовим разбор…». A retry on a session the backend already completed
+  returns the stored feedback instead of an error.
 
 Manual checklist: [TESTING/VOICE_CALL.md](TESTING/VOICE_CALL.md)
 

@@ -77,7 +77,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [EXERCISE_CONTENT_VALIDATION.md](TESTING/EXERCISE_CONTENT_VALIDATION.md) | Per-type content validation: unit tests, integration tests, frontend type checking |
 | [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and milestone button cleanup |
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
-| [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
+| [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call vibration/barge-in (call sounds since removed), voice usage report, skeletons & error states |
 | [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
 | [DISCUSS_PHOTOS.md](TESTING/DISCUSS_PHOTOS.md) | Discuss photo attachments: upload, max-count, auth, magic-byte validation, cascade delete, PhotoPicker component |
 | [USER_AVATARS.md](TESTING/USER_AVATARS.md) | User avatar upload on own profile: hover overlay, file picker, cache-busting, fallback |
@@ -160,6 +160,9 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Deepgram Nova-3 streaming STT
 - ElevenLabs Flash v2.5 TTS
 - Target latency: ≤700ms end-to-end
+- Calls are silent — no ringback or busy tones, only a connect vibration on mobile
+- Post-call analysis is bounded: a fresh session per call, a 120s cap on `/complete`,
+  an honest ended-state hint, and a «Повторить разбор» retry on failure
 
 ### Friends & Chat
 - Friend request system (send, accept, decline, cancel own pending request, remove)
