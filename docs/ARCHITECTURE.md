@@ -98,7 +98,8 @@ src/backend/
                                ← the extracted services, each with its own DB + tests
   building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
                                        idempotent-consumer base, Redis idempotency
-                                       store, UserReplica, identity-header helpers)
+                                       store, UserReplica, identity-header helpers,
+                                       tenancy primitives)
   building-blocks/BuildingBlocks.Tests/
   gateway/Gateway/             ← YARP API gateway (per-service routing, no catch-all:
                                   unknown routes 404; central JWT validation,
@@ -171,6 +172,35 @@ src/backend/
 - **Data ownership:** the original single `AppDbContext` (42 entities) is split into a
   database per service per [DATA_OWNERSHIP.md](DATA_OWNERSHIP.md); each service owns its
   own schema + EF migrations.
+- **Tenancy primitives (Phase 40.1):** `BuildingBlocks/Tenancy` (namespace
+  `Sellevate.BuildingBlocks.Tenancy`) holds the foundation multi-tenancy is built on — see
+  [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) for the full design. `ITenantScoped`
+  marks an entity as carrying an `OrganizationId`. `ITenantContext` (`OrganizationId`,
+  `IsSystem`) is the read-only view consumed by application code; its scoped
+  implementation `TenantContext` exposes explicit `SetOrganization(organizationId)` /
+  `EnterSystemMode()` mutators so only the code that actually establishes the tenant for
+  a unit of work (gateway-driven middleware for requests, an explicit per-organization or
+  system-mode setup for background jobs — see TENANCY.md §1.6) can populate it; each
+  method may only run once per scope (calling either after the context is already
+  populated throws `InvalidOperationException`). `TenantSaveChangesInterceptor :
+  SaveChangesInterceptor` is the write-side guard: on `Added` entries it stamps
+  `OrganizationId` from the current tenant (or rejects a foreign one already set), and on
+  `Modified`/`Deleted` it compares against `OriginalValues` so an entity loaded via
+  `IgnoreQueryFilters()` cannot be reassigned to a different organization in-flight;
+  `tenant.IsSystem` bypasses the guard entirely. Both `SavingChanges` and
+  `SavingChangesAsync` are overridden — this codebase is async-only, so a sync-only
+  interceptor would never fire. A mismatch throws `CrossTenantWriteException` (entity
+  name + the *expected* organization id only — the foreign id is never included in the
+  message). Registration: `services.AddSellevateTenancy()` (new method on
+  `BuildingBlocksServiceCollectionExtensions`) registers `TenantContext` scoped as both
+  itself and `ITenantContext`, plus `TenantSaveChangesInterceptor` scoped; a consuming
+  service still adds the interceptor to its own `DbContext` via `AddInterceptors` and is
+  responsible for populating `ITenantContext` per request/job. This building block is
+  registered by nothing yet — wiring it into a service's `DbContext` and populating it
+  from the gateway header is Phase 40.2+; this block only ships the primitives + tests
+  (`BuildingBlocks.Tests/Tenancy`). This is Layer 2 (EF, convenience) of the three-layer
+  isolation model in TENANCY.md §1 — Postgres RLS (Phase 40.4) is the layer that actually
+  survives raw SQL / `ExecuteUpdate`.
 
 ## EF Column Types
 
