@@ -23,8 +23,11 @@ export function useCustomScenarioMode() {
     return useQuery({
         queryKey: ["dialog", "custom-scenario-mode"],
         queryFn: () => apiClient.get<DialogModeIdentifier>("/dialog/custom-scenario-mode"),
+        // The ids never change once seeded, so a hit is cached for the session. A miss is
+        // retried, though: without it one hiccup leaves the practice page with no way in
+        // until a full reload.
         staleTime: Infinity,
-        retry: false,
+        retry: 1,
     });
 }
 

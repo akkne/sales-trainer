@@ -30,6 +30,18 @@ Both screens are the ordinary ones. The custom-scenario bundle is hidden, so it 
 in `GET /dialog/bundles`; the client resolves its ids through `GET /dialog/custom-scenario-mode`,
 exactly like company calls do.
 
+### When the ids do not resolve
+
+The modal cannot open without `bundleId`/`modeId`, so the card's state is tied to that lookup:
+while it is in flight the button reads «Загружаем…» and is disabled; if it failed, the button
+reads «Повторить», the card shows «Режим сейчас недоступен», and clicking refetches.
+
+It must never be a plain disabled «Описать сценарий». That is what shipped first, and with the
+backend a version behind (no `/dialog/custom-scenario-mode` yet) the whole feature looked simply
+broken: an ordinary-looking button that did nothing when clicked, with nothing on screen to say
+why. The query retries for the same reason — one hiccup used to leave the page with no way in
+until a full reload.
+
 ### Text and voice share one session
 
 The modal creates the session — the only place the scenario text exists on the client — and both

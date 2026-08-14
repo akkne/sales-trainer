@@ -79,8 +79,23 @@ function sessionKind(session: DialogSessionSummary): string {
 export default function DialogPage() {
     const { data: bundles, isLoading: bundlesLoading, error: bundlesError, refetch } = useDialogBundles();
     const { data: sessions } = useDialogSessions();
-    const { data: customScenarioMode } = useCustomScenarioMode();
+    const {
+        data: customScenarioMode,
+        isError: customScenarioFailed,
+        isFetching: customScenarioFetching,
+        refetch: refetchCustomScenarioMode,
+    } = useCustomScenarioMode();
     const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+
+    // The compose dialog needs the hidden bundle/mode ids, so it can only open once they
+    // resolve. When they haven't, the button retries instead of sitting there doing nothing.
+    const openScenarioModal = () => {
+        if (customScenarioMode) {
+            setIsScenarioModalOpen(true);
+            return;
+        }
+        void refetchCustomScenarioMode();
+    };
 
     // ── Loading skeleton ──────────────────────────────────────────────────────
     if (bundlesLoading) {
@@ -158,13 +173,22 @@ export default function DialogPage() {
                             Опишите свою ситуацию — клиента, продукт, возражение — и отработайте
                             именно её.
                         </p>
+                        {customScenarioFailed && !customScenarioFetching && (
+                            <p className="scenario-banner-error" role="alert">
+                                Режим сейчас недоступен — попробуйте ещё раз.
+                            </p>
+                        )}
                     </div>
                     <button
                         className="btn btn-primary scenario-banner-btn"
-                        onClick={() => setIsScenarioModalOpen(true)}
-                        disabled={!customScenarioMode}
+                        onClick={openScenarioModal}
+                        disabled={customScenarioFetching}
                     >
-                        Описать сценарий
+                        {customScenarioFetching
+                            ? "Загружаем…"
+                            : customScenarioFailed
+                                ? "Повторить"
+                                : "Описать сценарий"}
                     </button>
                 </div>
 
