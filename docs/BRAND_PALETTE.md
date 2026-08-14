@@ -34,12 +34,17 @@ break this palette.
 | Token | Light | Dark | Use for |
 |---|---|---|---|
 | `--primary` | `#96F500` | `#96F500` | **fills only** — button backgrounds, progress fills, switches, active dots, avatar gradients, focus outlines, borders |
-| `--primary-ink` | `#4A7C00` | `#B0F95C` | **text and icons** on a light/`--primary-soft` surface (4.9 : 1 on white) |
-| `--on-primary` | `#142A00` | `#142A00` | **anything drawn on top of a `--primary` fill** — button labels, bubble text, avatar initials |
+| `--primary-ink` | `#22261C` | `#E6EBDF` | **text and icons** on a light/`--primary-soft` surface (14.6 : 1 on white) |
+| `--on-primary` | `#0F0F0F` | `#0F0F0F` | **anything drawn on top of a `--primary` fill** — button labels, bubble text, avatar initials |
 
 Rule of thumb: `color:` almost never takes `var(--primary)`. If you are writing
 `color:`, you want `--primary-ink` (on a light surface) or `--on-primary` (on a lime
 fill).
+
+`--primary-ink` defaults to graphite rather than a dark lime: the lime family only reads
+as olive once it is dark enough to be legible as type, so the brand stays a fill and text
+stays neutral. Four other inks ship as presets in the dev theme panel below — swap the
+default there and paste the result back if you prefer green type.
 
 Supporting brand tokens:
 
@@ -104,3 +109,40 @@ lime and were unreadable; `bg-indigo text-white` likewise became
 4. Need a "done"/success color? `--success`, never the lime.
 5. Need another categorical hue? `--violet`, `--info`, `--flame`, `--amber` — in that
    order of preference.
+
+## 6. Editing the palette live (dev only)
+
+`features/devtools/components/dev-theme-panel.tsx` mounts a floating swatch button in the
+bottom-right corner under `next dev`. It is **not** a Next.js DevTools panel — Next 16.2's
+overlay has no public API for registering custom panels — it is an in-app panel that is
+tree-shaken out of production builds by the `NODE_ENV` guard in `app/providers.tsx`.
+
+What it edits is exactly the three-token contract from §2, and nothing else:
+
+- **Основной цвет** — a colour picker + hex field for `--primary`.
+- **Текст брендом** — five presets for `--primary-ink`, each carrying both a light and a dark
+  value so the choice survives a theme switch.
+- **Поверх заливки** — four presets for `--on-primary`, all dark, because §1 leaves no choice.
+
+Everything else in the ramp — `--primary-strong`, the tints, the borders, `--primary-tint-deep`,
+the gradients, `--primary-ring` and the two brand shadows — is **derived** from those, so the
+ramp can never drift out of sync with the colour you picked. Light tints are mixed toward white
+so they stay opaque over cards; dark tints are alpha washes so they pick up the surface behind
+them.
+
+Alongside it the panel shows live WCAG ratios for the three pairings that decide whether a choice
+is usable at all (ink on white, ink on the soft tint, on-primary on the fill), so a bad pick is
+visible before it ships.
+
+**How it applies:** the panel injects a `<style>` element with `:root:root` and
+`html[data-theme="dark"]:root` blocks — doubled selectors purely to out-specify `globals.css`
+without depending on stylesheet order. Until you touch a control it injects nothing at all, so
+dev renders byte-identical to production. Choices persist in `localStorage`
+(`sellevate:dev-theme`) and stay in that browser only.
+
+**Скопировать CSS** puts the same ramp on the clipboard with plain `:root` selectors — that is
+what you paste into `app/globals.css` to make a choice real. **Сброс** clears the override.
+
+The derivation and the presets are pure functions in `features/devtools/lib/`, covered by
+`__tests__/DevThemeTokens.test.ts` — including a check that every shipped preset clears 4.5:1 in
+both themes.

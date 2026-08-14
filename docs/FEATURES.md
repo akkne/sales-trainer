@@ -45,6 +45,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes team-progress view + milestones from UI; phase status |
 | [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
 | [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
+| [Custom Scenario](CUSTOM_SCENARIO.md) | **Shipped** — user-authored practice scenarios on «Практика»: compose dialog, LLM sales-relevance gate with a Redis verdict cache, prompt fencing, hidden seeded `custom-scenario` mode. Tests: [TESTING/CUSTOM_SCENARIO.md](TESTING/CUSTOM_SCENARIO.md) |
 
 ## Feature Documentation
 

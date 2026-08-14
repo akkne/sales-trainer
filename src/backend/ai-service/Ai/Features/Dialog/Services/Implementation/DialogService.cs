@@ -126,7 +126,9 @@ internal sealed class DialogService : IDialogService
 
         if (mode.Key == DialogModeKeys.CustomScenario && customScenarioContext == null)
         {
-            throw new InvalidOperationException("The custom-scenario mode requires a customScenario.");
+            // Reachable by hand-editing the URL of a custom-scenario conversation, so the
+            // message is user-facing Russian rather than an API-contract note.
+            throw new InvalidOperationException("Нужно описать сценарий, чтобы начать разговор.");
         }
 
         if (customScenarioContext != null)

@@ -12,7 +12,8 @@
      --primary fill. */
   --primary:        #96F500;   /* brand fill */
   --primary-strong: #7CD100;   /* hover fill / deeper lime */
-  --primary-ink:    #4A7C00;   /* readable lime on light surfaces (4.9:1 on #fff) */
+  --primary-ink:    #22261C;   /* brand text on light surfaces — graphite, so the lime
+                                  never has to work as type (14.6:1 on #fff) */
   --primary-soft:   #E7FCC6;
   --primary-softer: #F4FEE7;
   --primary-ring:   rgba(124, 209, 0, 0.28);
@@ -110,7 +111,7 @@
   --ink-heading:    #26262B;   /* card/lesson titles */
   --ink-secondary:  #52525A;   /* secondary text */
   --ink-idle:       #A2A2AA;   /* idle nav icon */
-  --on-primary:     #142A00;
+  --on-primary:     #0F0F0F;
   --on-dark:        #ffffff;
 
   /* ---- Radii ---- */
@@ -166,7 +167,7 @@ html[data-theme="dark"] {
   /* Primary — the lime holds up as-is on dark; text variant is softened */
   --primary:        #96F500;
   --primary-strong: #AAFF33;
-  --primary-ink:    #B0F95C;
+  --primary-ink:    #E6EBDF;
   --primary-soft:   rgba(150, 245, 0, 0.16);
   --primary-softer: rgba(150, 245, 0, 0.09);
   --primary-ring:   rgba(150, 245, 0, 0.30);
@@ -222,7 +223,7 @@ html[data-theme="dark"] {
   --ink-heading:    #F5F5F8;
   --ink-secondary:  #A8A8B0;
   --ink-idle:       #5A5A62;
-  --on-primary:     #142A00;
+  --on-primary:     #0F0F0F;
 
   /* Shadows — intensified */
   --sh-1:       0 1px 3px rgba(0, 0, 0, 0.35);
@@ -1248,7 +1249,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 /* Overall path progress (left column head / mobile sheet) */
 .path-overall { padding: 12px 16px 14px; border-bottom: 1px solid var(--line-2); flex: none; }
 .path-overall-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-.path-overall-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); }
+.path-overall-label { font-size: 11px; font-weight: 700; letter-spacing: 0.005em; text-transform: uppercase; color: var(--ink-4); }
 .path-overall-count { font-size: 12px; font-weight: 700; color: var(--ink-2); }
 .path-overall-bar { height: 6px; background: #EFEFF2; border-radius: 6px; overflow: hidden; }
 .path-overall-fill { height: 100%; background: var(--grad-bar); border-radius: 6px; transition: width 0.4s ease; }
@@ -1263,7 +1264,7 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .path-stage-chev { color: var(--ink-4); transition: transform var(--transition); flex: none; display: inline-flex; }
 .path-stage-chev.open { transform: rotate(180deg); }
 .path-stage-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-.path-stage-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-4); flex: 1; text-align: left; }
+.path-stage-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.005em; text-transform: uppercase; color: var(--ink-4); flex: 1; text-align: left; }
 .path-stage-badge { background: var(--bg-2); color: var(--ink-4); font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 1px 6px; }
 .path-stage-skills { padding: 2px 0 6px 8px; }
 
@@ -1740,41 +1741,71 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
 .practice-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-heading); line-height: 1.2; margin: 0 0 4px; }
 .practice-subtitle { font-size: 13px; color: var(--ink-3); margin: 0; }
 
-/* ── Featured mentor banner ── */
-.mentor-banner {
-  display: flex; align-items: center; gap: 22px;
-  background: linear-gradient(120deg, #201F2C, #2E2A4A);
-  border-radius: 18px; padding: 26px 28px; margin-bottom: 26px;
-  position: relative; overflow: hidden; flex-wrap: wrap;
+/* ── Custom scenario banner ──
+   Replaces the old featured-mentor banner: a dark violet gradient with a glow blob and a
+   made-up NPC. This one is a plain lime-tinted card that says what it does — the visual
+   weight comes from the brand tint and the CTA, not from a gradient. */
+.scenario-banner {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--primary-softer);
+  border: 1px solid var(--primary-tint-border);
+  border-radius: 16px; padding: 18px 20px; margin-bottom: 26px;
+  flex-wrap: wrap;
 }
-html[data-theme="dark"] .mentor-banner { background: linear-gradient(120deg, #0e0d16, #1a1830); border: 1px solid var(--line); }
-.mentor-banner-glow { position: absolute; right: -80px; top: -80px; width: 320px; height: 320px; background: radial-gradient(circle, rgba(124,92,255,0.35), transparent 70%); pointer-events: none; }
-.mentor-banner-avatar {
-  width: 64px; height: 64px; border-radius: 14px; flex: none;
-  background: linear-gradient(135deg, #7C5CFC, #B79BFF);
+.scenario-banner-mark {
+  width: 44px; height: 44px; border-radius: 12px; flex: none;
   display: grid; place-items: center;
-  font-size: 20px; font-weight: 800; color: #fff;
-  position: relative; z-index: 1;
+  background: var(--primary); color: var(--on-primary);
 }
-.mentor-banner-body { flex: 1; min-width: 0; position: relative; z-index: 1; }
-.mentor-banner-eyebrow {
-  display: inline-flex; align-items: center;
-  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85);
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 3px 9px; border-radius: 6px; margin-bottom: 7px;
+.scenario-banner-body { flex: 1; min-width: 220px; }
+.scenario-banner-title {
+  font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--ink-heading); margin: 0 0 3px;
 }
-.mentor-banner-name { font-size: 18px; font-weight: 800; color: #fff; margin: 0 0 5px; line-height: 1.2; }
-.mentor-banner-blurb { font-size: 13px; color: rgba(255,255,255,0.65); margin: 0; line-height: 1.5; max-width: 520px; }
-.mentor-banner-cta { position: relative; z-index: 1; flex: none; }
-.mentor-banner-btn {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: #fff; color: #1C1C20;
-  font-size: 13px; font-weight: 700; padding: 10px 18px;
-  border-radius: 10px; border: none; cursor: pointer; white-space: nowrap;
-  transition: background 0.15s;
+.scenario-banner-text {
+  font-size: 13px; color: var(--ink-3); margin: 0; line-height: 1.5; max-width: 560px;
 }
-.mentor-banner-btn:hover { background: #F4F4F7; }
-@media (prefers-reduced-motion: reduce) { .mentor-banner-btn { transition: none; } }
+.scenario-banner-btn { flex: none; }
+
+@media (max-width: 640px) {
+  .scenario-banner { padding: 16px; }
+  .scenario-banner-btn { width: 100%; justify-content: center; }
+}
+
+/* ── Custom scenario modal ── */
+.scenario-help { font-size: 13px; color: var(--ink-3); line-height: 1.55; margin: 0 0 14px; }
+.scenario-input {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  resize: vertical;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.scenario-input::placeholder { color: var(--ink-4); }
+.scenario-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.scenario-input[aria-invalid="true"] { border-color: var(--heart); }
+.scenario-input:disabled { opacity: 0.6; cursor: progress; }
+.scenario-meta {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 7px; font-size: 11.5px; color: var(--ink-4);
+}
+.scenario-count { font-variant-numeric: tabular-nums; }
+.scenario-count.over { color: var(--heart); font-weight: 700; }
+.scenario-error {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 12px; padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--heart-soft); color: var(--heart);
+  font-size: 13px; line-height: 1.45; font-weight: 600;
+}
+.scenario-error svg { flex: none; margin-top: 1px; }
 
 /* ── Section label ── */
 .practice-section-label { font-size: 14px; font-weight: 700; color: var(--ink-2); margin: 0 0 12px; }
@@ -1878,9 +1909,7 @@ html[data-theme="dark"] .mentor-banner { background: linear-gradient(120deg, #0e
 /* ── Responsive overrides ── */
 @media (max-width: 640px) {
   .bundle-grid, .mode-grid { grid-template-columns: 1fr; }
-  .mentor-banner { padding: 20px; gap: 16px; }
-  .mentor-banner-cta { width: 100%; }
-  .mentor-banner-btn { width: 100%; justify-content: center; }
+  .scenario-banner { padding: 16px; gap: 14px; }
   .mode-select-header { gap: 14px; }
 }
 
@@ -1975,7 +2004,7 @@ html[data-theme="dark"] .mentor-card { background: #07060d; border: 1px solid va
   background: var(--primary); color: var(--on-primary);
   border-radius: 14px 14px 4px 14px;
 }
-.tr-bubble.user .tr-role { color: rgba(20, 42, 0, 0.62); }
+.tr-bubble.user .tr-role { color: rgba(15, 15, 15, 0.62); }
 /* interim (in-progress speech) — dashed + italic */
 .tr-bubble.interim { border-style: dashed; font-style: italic; opacity: 0.72; }
 /* interrupted AI reply */

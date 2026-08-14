@@ -5,7 +5,9 @@ import type { DialogBundle, DialogSessionSummary } from "@/features/dialog/hooks
 import { Icon } from "@/shared/components/icon";
 import { Skeleton, ErrorState } from "@/shared/components";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useCustomScenarioMode } from "@/features/dialog/hooks/use-custom-scenario";
+import { CustomScenarioModal } from "@/features/dialog/components/custom-scenario-modal";
 
 // ── Avatar seeding ────────────────────────────────────────────────────────────
 // 7-pair gradient palette matching DESIGN_SPEC §1.1
@@ -72,20 +74,13 @@ function sessionKind(session: DialogSessionSummary): string {
         : "Текстовый чат";
 }
 
-// ── NPC mentor static data ────────────────────────────────────────────────────
-const NPC_MENTOR = {
-    initials: "SS",
-    name: "Skeptical Sam",
-    blurb: "«Хочешь, позвоню и попробую разнести твою лучшую презентацию? Пять минут на подготовку.»",
-    // no dedicated route yet — challenge goes to the first bundle's voice mode
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function DialogPage() {
     const { data: bundles, isLoading: bundlesLoading, error: bundlesError, refetch } = useDialogBundles();
     const { data: sessions } = useDialogSessions();
-    const router = useRouter();
+    const { data: customScenarioMode } = useCustomScenarioMode();
+    const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
 
     // ── Loading skeleton ──────────────────────────────────────────────────────
     if (bundlesLoading) {
@@ -96,7 +91,7 @@ export default function DialogPage() {
                         <Skeleton width={120} height={20} />
                         <Skeleton width={260} height={14} style={{ marginTop: 6 }} />
                     </div>
-                    {/* mentor banner skeleton */}
+                    {/* custom-scenario banner skeleton */}
                     <Skeleton height={120} rounded={18} style={{ marginBottom: 26 }} />
                     <Skeleton width={140} height={14} style={{ marginBottom: 12 }} />
                     <div className="bundle-grid">
@@ -138,10 +133,6 @@ export default function DialogPage() {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    // Find the first bundle that has a voice-enabled mode for the mentor CTA
-    // (we don't know which modes are voice here, so just navigate to the first bundle)
-    const firstBundleId = bundles[0]?.id;
-
     const recentSessions = sessions?.slice(0, 5) ?? [];
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -156,28 +147,34 @@ export default function DialogPage() {
                     </p>
                 </div>
 
-                {/* ── Featured mentor banner ── */}
-                <div className="mentor-banner">
-                    <div className="mentor-banner-glow" aria-hidden="true" />
-                    <div className="mentor-banner-avatar" aria-hidden="true">
-                        {NPC_MENTOR.initials}
+                {/* ── Custom scenario ── */}
+                <div className="scenario-banner">
+                    <span className="scenario-banner-mark" aria-hidden="true">
+                        <Icon name="edit" size={20} />
+                    </span>
+                    <div className="scenario-banner-body">
+                        <p className="scenario-banner-title">Кастомный сценарий</p>
+                        <p className="scenario-banner-text">
+                            Опишите свою ситуацию — клиента, продукт, возражение — и отработайте
+                            именно её.
+                        </p>
                     </div>
-                    <div className="mentor-banner-body">
-                        <div className="mentor-banner-eyebrow">Рекомендуемый наставник</div>
-                        <p className="mentor-banner-name">{NPC_MENTOR.name}</p>
-                        <p className="mentor-banner-blurb">{NPC_MENTOR.blurb}</p>
-                    </div>
-                    <div className="mentor-banner-cta">
-                        <button
-                            className="mentor-banner-btn"
-                            onClick={() => firstBundleId && router.push(`/dialog/${firstBundleId}`)}
-                            aria-label="Начать голосовой звонок со Skeptical Sam"
-                        >
-                            <Icon name="mic" size={16} />
-                            Начать звонок
-                        </button>
-                    </div>
+                    <button
+                        className="btn btn-primary scenario-banner-btn"
+                        onClick={() => setIsScenarioModalOpen(true)}
+                        disabled={!customScenarioMode}
+                    >
+                        Описать сценарий
+                    </button>
                 </div>
+
+                {isScenarioModalOpen && customScenarioMode && (
+                    <CustomScenarioModal
+                        bundleId={customScenarioMode.bundleId}
+                        modeId={customScenarioMode.modeId}
+                        onClose={() => setIsScenarioModalOpen(false)}
+                    />
+                )}
 
                 {/* ── Dialog bundles ── */}
                 <p className="practice-section-label">Диалоговые модули</p>

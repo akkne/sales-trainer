@@ -567,13 +567,19 @@ involvement.
 | GET | /dialog/bundles/:bundleId/modes | — | `DialogModeDto[]` |
 | GET | /dialog/company-call-mode | — | `{bundleId, modeId}` — IDs of the seeded company-call mode; `404` if not yet seeded |
 | GET | /dialog/sessions | — | `DialogSessionSummaryDto[]` (user's history) |
-| POST | /dialog/sessions | `{bundleId, modeId, companyContext?}` | `DialogSessionDto` |
+| GET | /dialog/custom-scenario-mode | — | `{bundleId, modeId}` — IDs of the seeded custom-scenario mode; `404` if not yet seeded |
+| POST | /dialog/scenario/validate | `{scenario: string}` | `{isValid: bool, rejectionReason: string\|null}`; `503` when the check itself is unavailable |
+| POST | /dialog/sessions | `{bundleId, modeId, companyContext?, customScenario?}` | `DialogSessionDto`; `422` when `customScenario` is not about sales |
 | GET | /dialog/sessions/:sessionId | — | `DialogSessionDto` |
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
 | POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
 
 **Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500), personaName?: string (≤200), personaPosition?: string (≤200), personaPersonality?: string (≤4000), personaDifficulty?: string (≤16, "Easy"|"Medium"|"Hard")}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
 
+
+**Custom scenario:** `customScenario` is an optional free-text role-play brief on `POST /dialog/sessions` (20–1500 characters after trimming). It is spliced into the mode's prompts at runtime the same way `companyContext` is, fenced in BEGIN/END markers and labelled as data, and persisted only on the MongoDB `DialogSession` document as `customScenarioContext`. **Constraints:** it may only be used with the seeded custom-scenario mode (key `custom-scenario`, IDs from `GET /dialog/custom-scenario-mode`), that mode *requires* it, and it must pass the sales-relevance check — a rejected scenario returns `422 Unprocessable Entity` with the reason in `message`, and no session is created.
+
+`POST /dialog/scenario/validate` runs the same check on its own so the compose dialog can reject off-topic text before starting anything. It is advisory: session start re-validates server-side, so the client's verdict is never trusted. Verdicts are cached in Redis under a SHA-256 of the whitespace/case-normalized scenario (approvals 30d, rejections 7d), which makes the re-check a cache hit. A check that cannot produce a verdict at all is never cached and never treated as approval — both endpoints answer `503`.
 **Persona role-play (Phase 39.14):** the four `persona*` fields are all optional/nullable — a call may have no persona (e.g. `personaName` absent or blank), in which case the prompt output is byte-for-byte identical to pre-39.14 behavior. When `personaName` is non-blank, `CompanyContextPromptBuilder` appends a second block to the chat system prompt instructing the model to **role-play as** that persona (name, position, personality, and a difficulty-derived toughness description), and a related but distinctly-worded "grade with this persona in mind" block to the feedback system prompt. See [AI_DIALOG.md](AI_DIALOG.md) for the full prompt shapes.
 
 **DTOs:**

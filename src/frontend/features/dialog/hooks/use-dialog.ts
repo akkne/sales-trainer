@@ -108,11 +108,13 @@ export async function startDialogSession(
     bundleId: string,
     modeId: string,
     companyContext?: DialogSessionCompanyContext,
+    customScenario?: string,
 ): Promise<DialogSession> {
     return apiClient.post<DialogSession>("/dialog/sessions", {
         bundleId,
         modeId,
         ...(companyContext ? { companyContext } : {}),
+        ...(customScenario ? { customScenario } : {}),
     });
 }
 
