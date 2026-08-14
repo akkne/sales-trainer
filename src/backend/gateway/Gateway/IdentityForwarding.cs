@@ -25,6 +25,7 @@ internal static class IdentityForwarding
     {
         proxyHeaders.Remove(IdentityHeaders.UserId);
         proxyHeaders.Remove(IdentityHeaders.UserRole);
+        proxyHeaders.Remove(IdentityHeaders.OrganizationId);
 
         if (user.Identity?.IsAuthenticated != true)
         {
@@ -41,6 +42,12 @@ internal static class IdentityForwarding
         if (!string.IsNullOrEmpty(role))
         {
             proxyHeaders.Add(IdentityHeaders.UserRole, role);
+        }
+
+        var organizationId = IdentityHeaders.ResolveOrganizationId(user);
+        if (!string.IsNullOrEmpty(organizationId))
+        {
+            proxyHeaders.Add(IdentityHeaders.OrganizationId, organizationId);
         }
     }
 }
