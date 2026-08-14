@@ -201,6 +201,23 @@ src/backend/
   (`BuildingBlocks.Tests/Tenancy`). This is Layer 2 (EF, convenience) of the three-layer
   isolation model in TENANCY.md §1 — Postgres RLS (Phase 40.4) is the layer that actually
   survives raw SQL / `ExecuteUpdate`.
+- **Gateway + context propagation (Phase 40.2):** `IdentityHeaders.OrganizationId` (`X-Organization-Id`)
+  and `IdentityHeaders.ResolveOrganizationId(ClaimsPrincipal)` (reads the `org_id` claim) extend the
+  same trusted-header pattern `X-User-Id`/`X-User-Role` already use. `Gateway/IdentityForwarding.cs`
+  strips any client-supplied `X-Organization-Id` and re-sets it only from the validated token —
+  identical treatment to the user-identity headers, in the same method. Downstream,
+  `BuildingBlocks/Tenancy/TenantContextMiddleware` reads the header, calls `TenantContext.SetOrganization`
+  when it parses as a `Guid`, and returns `403 Forbidden` (not `401` — the caller already has a
+  validated identity, it just lacks organization context) when a route carrying `[TenantScoped]`
+  (or built with the `.RequireTenantScope()` endpoint-convention extension) has no valid header.
+  Because ASP.NET Core opens one DI scope per request and the middleware calls `SetOrganization`
+  at most once per request, the 40.1 set-once guard does not conflict with the request pipeline;
+  it only requires background jobs to open a fresh scope per unit of work (already the documented
+  pattern in TENANCY.md §1.6). The organization-boundary rule — never read `organizationId` from
+  body/query/route — is enforced by `scripts/tenancy-boundary-lint.py`, wired into CI as the
+  `tenancy-boundary` workflow, scanning the whole backend (not just one service, unlike
+  `codestyle-lint.py`). Nothing wires `TenantContextMiddleware` into a live service's pipeline yet —
+  that follows once a service actually has tenant-scoped routes.
 
 ## EF Column Types
 

@@ -1500,16 +1500,19 @@
       загруженной через `IgnoreQueryFilters()` сущности, `IsSystem` обходит проверку
 - [x] Обновить `docs/ARCHITECTURE.md` (раздел BuildingBlocks)
 
-### [ ] 40.2 Гейтвей и распространение контекста
-- [ ] `IdentityHeaders`: константа `OrganizationId = "X-Organization-Id"` + `ResolveOrganizationId(ClaimsPrincipal)`
-- [ ] Гейтвей: **вырезать** клиентские копии `X-Organization-Id` и выставлять только из
+### [x] 40.2 Гейтвей и распространение контекста
+- [x] `IdentityHeaders`: константа `OrganizationId = "X-Organization-Id"` + `ResolveOrganizationId(ClaimsPrincipal)`
+- [x] Гейтвей: **вырезать** клиентские копии `X-Organization-Id` и выставлять только из
       валидированного токена (то же правило, что уже действует для `X-User-Id`)
-- [ ] Middleware в BuildingBlocks: заполняет `ITenantContext` из заголовка; 401/403 если
-      заголовок отсутствует на tenant-scoped маршруте
-- [ ] Правило кодом: организация **никогда** не читается из body/query/route.
-      Линт-проверка или ревью-чеклист на `organizationId` в DTO запросов
-- [ ] Тесты: подделанный клиентом заголовок игнорируется; запрос без заголовка не проходит
-- [ ] Обновить `docs/API_CONTRACTS.md` (раздел про заголовки)
+- [x] Middleware в BuildingBlocks: заполняет `ITenantContext` из заголовка; 401/403 если
+      заголовок отсутствует на tenant-scoped маршруте — реализовано как 403 (`TenantContextMiddleware`
+      + `[TenantScoped]` / `.RequireTenantScope()`), обоснование см. `docs/API_CONTRACTS.md`
+- [x] Правило кодом: организация **никогда** не читается из body/query/route.
+      `scripts/tenancy-boundary-lint.py` (+ CI workflow `tenancy-boundary`) — сканирует
+      `OrganizationId` в `*Request.cs`/`*Dto.cs`, `[FromQuery]`/`[FromRoute]` на `organizationId`,
+      и `{organizationId}` в шаблонах маршрутов
+- [x] Тесты: подделанный клиентом заголовок игнорируется; запрос без заголовка не проходит
+- [x] Обновить `docs/API_CONTRACTS.md` (раздел про заголовки)
 
 ### [ ] 40.3 Контракт событий — `organizationId` в конверте и outbox
 - [ ] `EventEnvelope`: добавить `OrganizationId` (ломающее изменение общего контракта —

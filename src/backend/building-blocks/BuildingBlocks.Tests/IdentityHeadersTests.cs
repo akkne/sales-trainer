@@ -33,12 +33,21 @@ public class IdentityHeadersTests
     }
 
     [Test]
+    public void ResolveOrganizationId_reads_the_org_id_claim()
+    {
+        var principal = PrincipalWith(new Claim("org_id", "organization-789"));
+
+        IdentityHeaders.ResolveOrganizationId(principal).Should().Be("organization-789");
+    }
+
+    [Test]
     public void Resolvers_return_null_for_an_anonymous_principal()
     {
         var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 
         IdentityHeaders.ResolveUserId(anonymous).Should().BeNull();
         IdentityHeaders.ResolveRole(anonymous).Should().BeNull();
+        IdentityHeaders.ResolveOrganizationId(anonymous).Should().BeNull();
     }
 
     private static ClaimsPrincipal PrincipalWith(params Claim[] claims)

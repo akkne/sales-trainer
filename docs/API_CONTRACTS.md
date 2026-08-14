@@ -14,6 +14,29 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 
 ---
 
+## Gateway-injected headers
+
+The gateway validates the JWT once and injects trusted identity headers into every downstream
+request; client-supplied copies of these headers are always stripped first, so a caller cannot
+spoof them. See `src/backend/gateway/Gateway/IdentityForwarding.cs` and
+`src/backend/building-blocks/BuildingBlocks/Identity/IdentityHeaders.cs`.
+
+| Header | Set from | Notes |
+|---|---|---|
+| `X-User-Id` | JWT `sub` (falls back to the `NameIdentifier` claim) | present on any authenticated request |
+| `X-User-Role` | JWT `role` claim | present when the token carries a role |
+| `X-Organization-Id` | JWT `org_id` claim | present once `identity-service` issues `org_id` (Phase 40.6); absent on tokens without it |
+
+`X-Organization-Id` populates `Sellevate.BuildingBlocks.Tenancy.ITenantContext` via
+`TenantContextMiddleware`. A route marked `[TenantScoped]` (or built with
+`.RequireTenantScope()`) returns `403 Forbidden` when the header is missing or malformed — the
+caller is a validated identity that lacks organization context, not an unauthenticated one, so a
+403 (not a 401) is returned. The organization is **never** read from the request body, query
+string, or route — enforced by `scripts/tenancy-boundary-lint.py` (CI: `tenancy-boundary`
+workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
+
+---
+
 ## Auth `[public]`
 
 | Method | Path | Body | Response |
