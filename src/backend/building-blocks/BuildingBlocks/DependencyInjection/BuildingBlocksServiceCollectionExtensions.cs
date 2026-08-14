@@ -25,6 +25,14 @@ public static class BuildingBlocksServiceCollectionExtensions
     /// store). Kafka consumers are registered per service by adding the concrete
     /// <see cref="KafkaConsumerBackgroundService"/> subclasses as hosted services.
     /// </para>
+    ///
+    /// <para>
+    /// Also registers the tenancy primitives (<see cref="AddSellevateTenancy"/>):
+    /// <see cref="KafkaConsumerBackgroundService"/> resolves the scoped <see cref="TenantContext"/>
+    /// per message to enforce the tenant-context rule from the envelope, and outbox writers
+    /// resolve <see cref="ITenantContext"/> to stamp the current organization onto every
+    /// enqueued event.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddSellevateEventing(this IServiceCollection services, IConfiguration configuration)
     {
@@ -41,6 +49,7 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IOutboxEventForwarder>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
+        services.AddSellevateTenancy();
         return services;
     }
 

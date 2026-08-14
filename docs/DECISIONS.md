@@ -4,6 +4,38 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-14 — `EventEnvelope.OrganizationId` is nullable on the wire, strict at the consumer (40.3)
+
+- **Problem:** the roadmap demands the base consumer **fail** when an event carries no tenant, but
+  at the time the envelope changes *nothing publishes an organization yet* (producers only learn
+  their tenant in 40.6/40.9), and some events — Identity's user lifecycle stream, consumed to keep
+  the `UserReplica` read model in sync — are genuinely cross-org and will never carry one. A field
+  that is required on the wire would make every existing producer illegal on the day it lands.
+- **Decision:** split "nullable on the wire" from "permissive at the consumer".
+  `EventEnvelope.OrganizationId` is `Guid?`, but `KafkaConsumerBackgroundService` exposes
+  `protected virtual bool RequiresOrganization => true` and **throws** on a missing organization by
+  default; the throw travels the ordinary retry/dead-letter path. A platform-global consumer must
+  override it to `false`, which puts the message into `ITenantContext.IsSystem`.
+- **Why this preserves the actual rule:** TENANCY.md §1.6 says an unset tenant is *an exception,
+  never a license*. What matters is that cross-org processing be an explicit, auditable, per-consumer
+  opt-in — not that the field be non-nullable in JSON. A required field would have forced a fake
+  sentinel organization id onto genuinely global events, which is strictly worse: it looks like a
+  tenant, filters like a tenant, and silently scopes nothing.
+- **Alternative rejected — bump the envelope twice** (nullable now, required after 40.9). The
+  envelope is the frozen cross-service contract; each bump is a coordinated redeploy of every
+  producer and consumer. The roadmap explicitly calls for doing this **once, before the first
+  tenant-scoped consumer exists**. The strictness that a second bump would buy already exists in
+  `RequiresOrganization`, at zero coordination cost.
+- **`PartitionKey` stays the user id.** Moving it to `org:user` would reshuffle every existing
+  partition assignment and buy no ordering guarantee the user id does not already provide —
+  per-user ordering is the property consumers actually depend on.
+- **`OutboxMessage.OrganizationId` is informational only.** The relay forwards `Payload` verbatim
+  and never filters on the column. This is deliberate: the relay is the one legitimate system-wide
+  reader of all outbox rows, which is exactly why the tenant is carried *inside* the serialized
+  envelope rather than derived at publish time.
+
+---
+
 ## 2026-08-14 — Multi-tenancy: the tenant is `Organization`, and isolation is enforced by Postgres
 
 - **Status:** design recorded, **nothing implemented**. Full design in

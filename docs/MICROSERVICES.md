@@ -271,8 +271,35 @@ a composition of those per-service admin APIs.
 | `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
-per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once
-delivery → **consumers are idempotent** (dedupe on `eventId`).
+per user), envelope = `{ eventId, occurredAt, type, version, organizationId, data }`,
+at-least-once delivery → **consumers are idempotent** (dedupe on `eventId`).
+
+**Tenancy in the envelope (Phase 40.3).** `organizationId` is part of the frozen
+cross-service contract, not a per-event payload field: a consumer must know the tenant
+*before* it deserializes `data`, and the outbox relay must be able to forward a stored
+event without understanding its payload. It is **nullable on the wire** — no producer
+populates it until organization membership exists end to end (blocks 40.6/40.9), and it
+stays `null` for genuinely platform-global events such as Identity's cross-org user
+lifecycle stream.
+
+Nullable on the wire does **not** mean permissive on the consuming side.
+`KafkaConsumerBackgroundService` sets the tenant context from the envelope before invoking
+the handler and exposes `protected virtual bool RequiresOrganization => true`: by default a
+consumer **throws** on an envelope with no organization, and the exception travels the normal
+retry/dead-letter path. A platform-global consumer opts out explicitly by overriding it to
+`false`, which switches the message to `ITenantContext.IsSystem`. This keeps the rule from
+[TENANCY.md](TENANCY/TENANCY.md) §1.6 intact — *an unset tenant is an exception, never a
+license* — while still allowing the handful of consumers that are legitimately cross-org.
+Each consumer runs in a fresh DI scope per message, so the set-once `TenantContext` never
+carries one message's tenant into the next.
+
+`OutboxMessage` carries a matching nullable `organizationId` column, mirrored from the
+envelope at enqueue time and **informational only** — the relay forwards `payload` verbatim
+and never filters on it. The relay stays the one legitimate system-wide reader of all rows,
+which is precisely why the tenant lives inside the serialized envelope rather than being
+derived at publish time. `PartitionKey` remains the **user id**: moving it to `org:user`
+would reshuffle every existing partition assignment and buy no ordering guarantee the
+current key does not already give.
 
 **Topic provisioning:** topics are **not** auto-created by the broker. Every service runs
 `KafkaTopicProvisioner` (a hosted service registered first by `AddSellevateEventing`) which

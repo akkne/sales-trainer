@@ -11,6 +11,14 @@ public sealed class OutboxMessage
 {
     public Guid Id { get; set; }
 
+    /// <summary>
+    /// The organization (tenant) the enqueued <see cref="EventEnvelope"/> belongs to, mirrored
+    /// from <see cref="Sellevate.BuildingBlocks.Eventing.EventEnvelope.OrganizationId"/> at
+    /// enqueue time; <c>null</c> for a platform-global event. Informational only — the relay
+    /// forwards <see cref="Payload"/> verbatim and does not filter or branch on this column.
+    /// </summary>
+    public Guid? OrganizationId { get; set; }
+
     /// <summary>Kafka topic the event must be published to.</summary>
     public string Topic { get; set; } = string.Empty;
 

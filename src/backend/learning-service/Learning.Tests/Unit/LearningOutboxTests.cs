@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Eventing;
 
 namespace Sellevate.Learning.Tests.Unit;
@@ -14,7 +15,7 @@ public sealed class LearningOutboxTests
     public async Task Publisher_EnqueuesAnOutboxRowThatTheStoreReadsBackAsPending()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
-        var writer = new LearningOutboxWriter(databaseContext);
+        var writer = new LearningOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaLearningEventPublisher(writer);
         var userId = Guid.NewGuid();
         var lessonId = Guid.NewGuid();
@@ -35,7 +36,7 @@ public sealed class LearningOutboxTests
     public async Task RelayProcessor_ForwardsThePendingRowAndMarksItDispatched()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
-        var writer = new LearningOutboxWriter(databaseContext);
+        var writer = new LearningOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaLearningEventPublisher(writer);
         var lessonId = Guid.NewGuid();
         await publisher.PublishLessonCompletedAsync(new LessonCompletedEvent(Guid.NewGuid(), lessonId, 80));
@@ -56,7 +57,7 @@ public sealed class LearningOutboxTests
     public async Task EnqueuedPayload_IsAValidEventEnvelopeForTheConsumerContract()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
-        var writer = new LearningOutboxWriter(databaseContext);
+        var writer = new LearningOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaLearningEventPublisher(writer);
         var userId = Guid.NewGuid();
         var skillId = Guid.NewGuid();
@@ -78,7 +79,7 @@ public sealed class LearningOutboxTests
     public async Task MarkDispatchedAsync_ClearsThePendingRow()
     {
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
-        var writer = new LearningOutboxWriter(databaseContext);
+        var writer = new LearningOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaLearningEventPublisher(writer);
         await publisher.PublishExerciseCompletedAsync(new ExerciseCompletedEvent(Guid.NewGuid(), "reorder", 75, true));
         await databaseContext.SaveChangesAsync();
