@@ -218,6 +218,36 @@ src/backend/
   `tenancy-boundary` workflow, scanning the whole backend (not just one service, unlike
   `codestyle-lint.py`). Nothing wires `TenantContextMiddleware` into a live service's pipeline yet —
   that follows once a service actually has tenant-scoped routes.
+- **Postgres RLS infrastructure (Phase 40.4):** this is Layer 3 of TENANCY.md §1 — the layer that
+  survives a forgotten EF filter, Dapper, or `ExecuteUpdate`/`ExecuteDelete`. Two new pieces in
+  `BuildingBlocks/Tenancy`, both provider-agnostic (no `Npgsql` package reference in
+  `Sellevate.BuildingBlocks` itself — only `Microsoft.EntityFrameworkCore.Relational` for the
+  migration-builder types):
+  - `TenantConnectionInterceptor : IDbTransactionInterceptor` hooks `TransactionStarted` /
+    `TransactionStartedAsync` — which fires for every transaction, including EF's own implicit
+    per-`SaveChangesAsync` transaction — and issues `SET LOCAL app.organization_id = '<guid>'`,
+    **never** a bare `SET`, so the value cannot outlive the transaction or leak onto the next
+    request that borrows the same pooled connection. It is a no-op (returns `null` from the
+    testable `BuildSetLocalCommandText()`) in system mode or with no organization set. Registered
+    scoped by `AddSellevateTenancy()`, same as `TenantSaveChangesInterceptor`; a consuming service
+    still adds it to its own `DbContext` via `AddInterceptors` when it actually gets tenant-scoped
+    tables (Stage C, 40.10+) — this block ships the mechanism, nothing wires it into a live
+    service's `DbContext` yet.
+  - `TenantRlsMigrationBuilderExtensions.EnableTenantRls(table)` /
+    `EnableTenantRlsForContent(table)` — migration-time helpers that emit `ENABLE` + `FORCE ROW
+    LEVEL SECURITY` and a policy with both `USING` and `WITH CHECK`, comparing
+    `"OrganizationId" = NULLIF(current_setting('app.organization_id', true), '')::uuid` (the
+    content variant adds `"OrganizationId" IS NULL OR ...`). The `NULLIF` is load-bearing, not
+    decorative — see docs/DECISIONS.md (2026-08-15) for how the real-Postgres integration test
+    caught its absence.
+  - `TenantRowLevelSecurityIntegrationTests` (`BuildingBlocks.Tests/Tenancy`) exercises both
+    against a real, throwaway local Postgres database and a non-superuser, non-owner,
+    `NOBYPASSRLS` role — raw SQL, `ExecuteDelete`, and an `INSERT` carrying a foreign
+    `OrganizationId` — skipping cleanly (not failing) when no local Postgres is reachable. See
+    docs/TESTING/TENANCY.md.
+  - `docs/TENANCY/sql/create_sellevate_app_role.sql` is the (unexecuted) script for the real
+    `sellevate_app` role; `scripts/tenancy-pool-lint.py` (CI: `tenancy-pool`) forbids
+    `AddDbContextPool` anywhere in the backend, per the CODESTYLE.md rule it enforces.
 
 ## EF Column Types
 

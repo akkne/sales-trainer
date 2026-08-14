@@ -4,6 +4,77 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-15 — RLS infrastructure: `SET LOCAL` vs `SET`, and the read-transaction requirement (40.4)
+
+- **Problem the roadmap names directly:** `SET LOCAL` is transaction-scoped — safe against
+  connection-pool leaks by construction, since Postgres reverts it when the transaction ends
+  regardless of what happens to the pooled connection afterward. A bare `SET` is session-scoped and
+  leaks the previous request's tenant onto the next one that borrows the same pooled physical
+  connection — TENANCY.md §1.5 calls this the single highest-risk detail of the whole design. But
+  `SET LOCAL` only has an effect *inside* an active transaction, and EF Core read paths (plain LINQ
+  queries) run with no implicit transaction, so the two halves of the requirement pull against each
+  other.
+- **Decision:** never use a bare `SET`. `TenantConnectionInterceptor`
+  (`BuildingBlocks/Tenancy/TenantConnectionInterceptor.cs`) hooks EF Core's
+  `IDbTransactionInterceptor.TransactionStarted` / `TransactionStartedAsync` — which fires for
+  **every** transaction, not only ones the interceptor itself opens — and issues
+  `SET LOCAL app.organization_id = '<guid>'` as the first statement inside it. EF Core already
+  wraps every `SaveChangesAsync` call in an implicit transaction by default, so every **write**
+  is covered automatically, at zero extra plumbing. Tenant-scoped **reads** have no implicit
+  transaction and must open one explicitly
+  (`await using var transaction = await context.Database.BeginTransactionAsync();`) to get the
+  same protection — this is a requirement carried forward to whichever service rolls tenant-scoped
+  reads out (Stage C, 40.10+), not something this building block can retrofit onto a bare `SELECT`
+  from the outside.
+- **Alternative rejected — set the GUC on connection open with a bare `SET`, reset it on
+  `ConnectionClosing`.** This is the shape TENANCY.md §1.5 gestures at as the pragmatic fallback
+  ("sets the GUC on connection open"). Rejected because the reset only fires on the *ordinary* close
+  path; any code path that disposes a connection without going through EF's close event (a crashed
+  request, a connection returned to the pool by a lower-level ADO.NET failure) leaves the previous
+  tenant's value live for the next borrower. `SET LOCAL` cannot leak this way even in a crash,
+  because Postgres — not application code — is what undoes it, at the transaction boundary.
+- **Alternative rejected — keep a transaction open for the life of every connection
+  (`Database.UseTransaction`, committed at end of request).** This would make reads "just work"
+  without call-site changes, but it means every `DbContext` write becomes an *externally owned*
+  transaction that EF no longer auto-commits on `SaveChanges` — a correctness footgun that would
+  silently stop persisting data the first time this interceptor is wired into a service that isn't
+  expecting it. Not worth the risk for a building block nothing consumes yet.
+- **Verified against a real (local, throwaway) Postgres instance — and it changed the SQL:** the
+  first version of `TenantRlsMigrationBuilderExtensions` compared
+  `organization_id = current_setting('app.organization_id', true)::uuid`, following TENANCY.md's
+  literal text ("missing_ok... yields zero rows"). The integration test
+  (`TenantRowLevelSecurityIntegrationTests`) caught that this is insufficient: once a *pooled
+  physical connection* has run `SET LOCAL app.organization_id = ...` even once, Postgres reverts
+  the GUC to `''` (empty string) — not `NULL` — when that transaction ends, because the first
+  `SET LOCAL` on an unrecognized custom GUC registers a placeholder whose "previous" value is `''`,
+  not "undefined." `''::uuid` then raises a hard Postgres error (`22P02`) on every subsequent query
+  against an RLS-protected table on that connection, instead of filtering to zero rows — the
+  opposite of fail-closed. Fixed by wrapping the setting in `NULLIF(..., '')` before the cast:
+  `NULLIF(current_setting('app.organization_id', true), '')::uuid`. Since Npgsql (and every
+  ADO.NET provider) pools physical connections, essentially *every* long-lived pooled connection in
+  a running service will eventually hit this once it has served one tenant request — this is not an
+  edge case, it is the steady-state behavior, and `NULLIF` is required, not optional.
+- **Column naming departs from TENANCY.md's SQL prose on purpose.** TENANCY.md's examples write
+  `organization_id` (snake_case). The actual schema convention already in this codebase (see
+  `docs/DB_SCHEMA.md`, e.g. `Users.Email`, `Companies.Status`) is EF's default Npgsql naming: the
+  C# property name verbatim, quoted, PascalCase. `EnableTenantRls`/`EnableTenantRlsForContent`
+  default the column to `"OrganizationId"` to match what `ITenantScoped.OrganizationId` actually
+  generates, with an override parameter for the rare table that needs something else. The Postgres
+  GUC name itself, `app.organization_id`, is unrelated to table-column casing (it is a
+  configuration-parameter string, not a SQL identifier) and stays exactly as TENANCY.md specifies.
+- **The migration/owning role must itself tolerate `FORCE ROW LEVEL SECURITY`.** Postgres only
+  exempts a table's *owner* from `FORCE` automatically when that owner is a superuser; a
+  non-superuser owner needs `BYPASSRLS` granted explicitly, or `FORCE` starts filtering migrations
+  too, not only the app role. TENANCY.md's "migrations then run as the owner (policies bypassed,
+  which is what you want)" is only true given this precondition, which it does not spell out.
+  Local dev (`scripts/dev-infra.sh`, role `st`) already satisfies it — `st` is the Postgres image's
+  initial superuser, confirmed via `pg_roles.rolsuper` — but a real server's migration role may not
+  be. Documented as a load-bearing precondition in
+  `docs/TENANCY/sql/create_sellevate_app_role.sql`, and flagged again in `docs/DONT_FORGET.md` so
+  whoever runs that script on a real server does not miss it.
+
+---
+
 ## 2026-08-14 — `EventEnvelope.OrganizationId` is nullable on the wire, strict at the consumer (40.3)
 
 - **Problem:** the roadmap demands the base consumer **fail** when an event carries no tenant, but

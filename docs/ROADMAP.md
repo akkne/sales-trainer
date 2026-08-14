@@ -1525,23 +1525,29 @@
 - [x] Тесты: `EventContractCatalogTests` / `EventEnvelopeTests` расширить на новое поле
 - [x] Обновить `docs/MICROSERVICES.md` (контракт событий)
 
-### [ ] 40.4 Инфраструктура RLS
-- [ ] Роль `sellevate_app` — без `BYPASSRLS`, не владелец таблиц; миграции продолжают
-      идти под ролью-владельцем
-- [ ] `DbConnectionInterceptor` в BuildingBlocks: выставляет `app.organization_id` на
-      открытии соединения / в начале транзакции
-- [ ] **`SET LOCAL`, не `SET`** — иначе значение утечёт на следующий запрос, взявший то же
-      соединение из пула. Это самый опасный пункт всего этапа
-- [ ] Хелпер миграций: `EnableTenantRls(table)` → `ENABLE` + **`FORCE`** ROW LEVEL SECURITY
+### [x] 40.4 Инфраструктура RLS
+- [x] Роль `sellevate_app` — без `BYPASSRLS`, не владелец таблиц; миграции продолжают
+      идти под ролью-владельцем. SQL написан (`docs/TENANCY/sql/create_sellevate_app_role.sql`),
+      создание на реальных серверах — вручную, см. `docs/DONT_FORGET.md`
+- [x] `TenantConnectionInterceptor` в BuildingBlocks: выставляет `app.organization_id` в начале
+      транзакции (`IDbTransactionInterceptor.TransactionStarted`/`TransactionStartedAsync`,
+      покрывает `SaveChangesAsync` автоматически — EF уже оборачивает его в неявную транзакцию)
+- [x] **`SET LOCAL`, не `SET`** — реализовано и задокументировано; для read-путей без явной
+      транзакции требование зафиксировано как обязанность этапа C, см. `docs/DECISIONS.md`
+      (2026-08-15)
+- [x] Хелпер миграций: `EnableTenantRls(table)` → `ENABLE` + **`FORCE`** ROW LEVEL SECURITY
       + политика с `USING` **и** `WITH CHECK`
-- [ ] Политика читает `current_setting('app.organization_id', true)` (missing_ok) — при
-      отсутствии даёт ноль строк, а не ошибку (fail closed)
-- [ ] Отдельный вариант политики для контента: `organization_id IS NULL OR organization_id = ...`
-- [ ] Запрет `AddDbContextPool` на tenant-scoped контекстах (пул закеширует фильтр
-      первого тенанта) — задокументировать в `docs/CODESTYLE.md`
-- [ ] Интеграционный тест на реальном Postgres: под ролью приложения чужие строки не
-      видны даже через raw SQL и `ExecuteDelete`
-- [ ] Новый файл `docs/TESTING/TENANCY.md` — чеклист проверки изоляции
+- [x] Политика читает `NULLIF(current_setting('app.organization_id', true), '')` — простого
+      missing_ok оказалось недостаточно (пул соединений возвращает `''`, не `NULL`, после первого
+      использования; поймано интеграционным тестом на реальном Postgres, см. `docs/DECISIONS.md`)
+- [x] Отдельный вариант политики для контента: `organization_id IS NULL OR organization_id = ...`
+      (`EnableTenantRlsForContent`)
+- [x] Запрет `AddDbContextPool` на tenant-scoped контекстах — задокументировано в
+      `docs/CODESTYLE.md` + линт `scripts/tenancy-pool-lint.py` (CI: `tenancy-pool`)
+- [x] Интеграционный тест на реальном Postgres: под ролью приложения чужие строки не
+      видны даже через raw SQL и `ExecuteDelete` — `TenantRowLevelSecurityIntegrationTests`,
+      прогнан против локальной `scripts/dev-infra.sh` Postgres, 4/4 зелёных
+- [x] Новый файл `docs/TESTING/TENANCY.md` — чеклист проверки изоляции
 
 ---
 
