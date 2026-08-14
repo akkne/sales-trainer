@@ -89,6 +89,28 @@ describe("useVoice — session lifecycle", () => {
         expect(onSessionReady).toHaveBeenCalledWith("pre-started");
     });
 
+    it("keeps the session when only listening is stopped", async () => {
+        // The chat mic button toggles voice input off and on inside one dialog — that must not
+        // abandon the conversation and start a new one.
+        const onSessionReady = vi.fn();
+        const { result } = renderHook(() =>
+            useVoice({ sessionId: null, modeVoiceEnabled: true, bundleId: "b1", modeId: "m1", onSessionReady })
+        );
+
+        await act(async () => {
+            await result.current.startVoice();
+        });
+        act(() => {
+            result.current.stopVoice();
+        });
+        await act(async () => {
+            await result.current.startVoice();
+        });
+
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(onSessionReady).toHaveBeenLastCalledWith("sess-1");
+    });
+
     it("creates a fresh session for the next call after a hang-up", async () => {
         // Regression: the completed session used to be reused, the backend rejected it, and the
         // caller never got a "session ready" — the call hung on «Соединение…» and, once ended,
@@ -103,6 +125,7 @@ describe("useVoice — session lifecycle", () => {
         });
         act(() => {
             result.current.stopVoice();
+            result.current.endSession();
         });
         await act(async () => {
             await result.current.startVoice();

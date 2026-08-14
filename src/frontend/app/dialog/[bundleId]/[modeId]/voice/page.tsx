@@ -339,11 +339,14 @@ export default function VoiceCallPage() {
         callEndedRef.current = true;
         setCallStatus("ended");
         stopVoice();
+        // The conversation is over, not just the microphone: drop the session so «Позвонить снова»
+        // starts a fresh one instead of a completed one the backend refuses.
+        endSession();
         refetchUsage();
         if (sessionId) {
             completeSession(sessionId);
         }
-    }, [callStatus, stopVoice, refetchUsage, sessionId, completeSession]);
+    }, [callStatus, stopVoice, endSession, refetchUsage, sessionId, completeSession]);
 
     const handleRetryAnalysis = useCallback(() => {
         if (sessionId) completeSession(sessionId);
@@ -351,11 +354,12 @@ export default function VoiceCallPage() {
 
     const handleClose = useCallback(() => {
         stopVoice();
+        endSession();
         if ((callStatus === "connected" || callStatus === "dialing") && sessionId) {
             completeDialogSession(sessionId).catch(() => {});
         }
         router.push(backHref);
-    }, [stopVoice, callStatus, sessionId, router, backHref]);
+    }, [stopVoice, endSession, callStatus, sessionId, router, backHref]);
 
     const handleCloseFeedback = useCallback(() => {
         // A pre-started session carries context this page cannot recreate, so "call again" would

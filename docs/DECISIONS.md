@@ -54,8 +54,9 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
      call's session was swallowed by the same guard — same dead end.
   3. `describePipeline` printed «Готовим разбор…» for *any* `ended` state, whether a request was in
      flight, had failed, or was never started.
-- **Decision:** the session id is dropped by `stopVoice()` / the new `endSession()`, so every call
-  gets a fresh session; `callEndedRef` is reset on pick-up; the ended-state hint is derived from what
+- **Decision:** the session id is dropped by the new `endSession()` (the call pages call it on
+  hang-up alongside `stopVoice`, which only stops listening — the chat mic button toggles voice
+  input inside one dialog and must keep its session), so every call gets a fresh session; `callEndedRef` is reset on pick-up; the ended-state hint is derived from what
   is actually true (`describeEndedCall`: running / failed / ready / nothing to analyse); the
   in-flight guard is a ref, so a hang-up racing the persona's `endCall` cannot double-post.
   `POST /dialog/sessions/{id}/complete` is additionally capped at 120s client-side

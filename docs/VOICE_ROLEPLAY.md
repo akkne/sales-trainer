@@ -46,8 +46,10 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
   both for a freshly created session and for one handed in from outside (a custom
   scenario pre-started on another page). Reused sessions used to skip the callback,
   leaving the call on «Соединение…» for its whole duration.
-- **Every call gets its own session**: `stopVoice()` / `endSession()` drop the
-  session id inside `useVoice`, so «Позвонить снова» always creates a fresh one.
+- **Every call gets its own session**: `endSession()` drops the session id inside
+  `useVoice`, so «Позвонить снова» always creates a fresh one. (`stopVoice()` only
+  stops listening and keeps the session — the chat mic button toggles voice input
+  off and on inside one dialog; the call pages call both on hang-up.)
   Reusing a completed session made the backend reject every turn and left the page
   hanging on «Соединение…» → «Готовим разбор…» with nothing in flight.
 - **A refused turn is never silent.** `POST .../voice/stream` answers `409` when the

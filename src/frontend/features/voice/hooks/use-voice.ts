@@ -252,30 +252,33 @@ export function useVoice(options: UseVoiceOptions) {
         }
     }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionReady, onError, processSpeech]);
 
-    /**
-     * Releases the microphone and drops the session. The session must never be reused: the caller
-     * completes it right after, and the backend rejects a completed session. Clearing the ref is
-     * what forces the next `startVoice` to create a fresh one — the caller resets its own
-     * `sessionId` state in the same tick as that call, so the sync effect cannot do it in time.
-     */
-    const releaseSession = useCallback(() => {
+    const releaseMicrophone = useCallback(() => {
         endpointerRef.current?.reset();
         endpointerRef.current = null;
 
         speechClientRef.current?.stop();
         speechClientRef.current = null;
 
-        currentSessionIdRef.current = null;
         setCurrentTranscript("");
     }, []);
 
-    /** The persona hung up: stop listening at once, but let the closing line finish playing. */
+    /**
+     * The conversation itself is over (hang-up, or the persona ended the call). Releases the
+     * microphone — the closing line keeps playing — and drops the session, which must never be
+     * reused: the caller completes it right after and the backend refuses a completed session.
+     * Clearing the ref is what forces the next `startVoice` to create a fresh one; the caller
+     * resets its own `sessionId` state in the same tick, too late for the sync effect.
+     *
+     * Distinct from `stopVoice`, which only stops *listening* and keeps the session alive
+     * (the chat mic button toggles voice input off and on within one dialog).
+     */
     const endSession = useCallback(() => {
-        releaseSession();
-    }, [releaseSession]);
+        releaseMicrophone();
+        currentSessionIdRef.current = null;
+    }, [releaseMicrophone]);
 
     const stopVoice = useCallback(() => {
-        releaseSession();
+        releaseMicrophone();
 
         streamAbortRef.current?.abort();
         streamAbortRef.current = null;
@@ -283,7 +286,7 @@ export function useVoice(options: UseVoiceOptions) {
         audioPlayerRef.current?.stop();
 
         setState("idle");
-    }, [releaseSession]);
+    }, [releaseMicrophone]);
 
     useEffect(() => {
         return () => {
