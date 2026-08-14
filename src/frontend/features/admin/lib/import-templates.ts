@@ -105,6 +105,11 @@ export const LESSONS_TEMPLATE = [
  * `additionalSkillIds` are skill GUIDs; leave them `null` / `[]` here since a fresh
  * template has no real ids — set them in the UI after import. `dialog`, `case` and
  * `coach` are optional (use `null` to omit).
+ *
+ * Shapes the server parses strictly (a mismatch is swallowed and the whole block is
+ * dropped from the technique): every dialog turn needs an `annotations` array of
+ * `{ label, tone }` objects — never bare strings — and `case.metrics` is an object
+ * whose keys are the tile captions, never an array.
  */
 export const TECHNIQUES_TEMPLATE = [
     {
@@ -119,13 +124,23 @@ export const TECHNIQUES_TEMPLATE = [
         sortOrder: 1,
         dialog: [
             { orderIndex: 1, side: "them", text: "We already have a vendor.", annotations: [] },
-            { orderIndex: 2, side: "me", text: "You already have a vendor?", annotations: ["mirror"] },
-            { orderIndex: 3, side: "them", text: "Yeah, but honestly they're slow to respond." },
+            {
+                orderIndex: 2,
+                side: "me",
+                text: "You already have a vendor?",
+                annotations: [{ label: "mirror", tone: "lime" }],
+            },
+            {
+                orderIndex: 3,
+                side: "them",
+                text: "Yeah, but honestly they're slow to respond.",
+                annotations: [],
+            },
         ],
         case: {
             title: "Reviving a stalled deal",
             body: "A rep used a single label — \"It seems like timing is the real blocker\" — and the prospect opened up about a budget freeze.",
-            metrics: [{ label: "Reply rate", value: "+38%" }],
+            metrics: { "Reply rate": "+38%" },
         },
         coach: {
             avatarSeed: "mirror-coach",
@@ -155,8 +170,10 @@ export const TECHNIQUES_TEMPLATE = [
 
 /**
  * `POST /admin/dialog/import` — dialog bundles with nested modes in one file.
- * `skillIconicName` must already exist. Upsert: bundles by (skill, title), modes
- * by (bundle, key). Re-importing the same file is safe.
+ * `skillIconicName` must already exist; the `/admin/dialog` import panel resolves it
+ * to the `skillId` GUID the endpoint expects (posting straight to the API needs
+ * `skillId`). Upsert: bundles by (skill, title), modes by (bundle, key).
+ * Re-importing the same file is safe.
  */
 export const DIALOG_TEMPLATE = {
     bundles: [

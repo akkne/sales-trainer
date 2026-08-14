@@ -111,12 +111,6 @@ public sealed class AdminTechniquesController(
         var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: id, cancellationToken);
         if (validationError is not null) return validationError;
 
-        databaseContext.TechniqueSkills.RemoveRange(technique.AdditionalSkills);
-        if (technique.Coach is not null)
-            databaseContext.TechniqueCoaches.Remove(technique.Coach);
-
-        technique.AdditionalSkills = new List<TechniqueSkill>();
-        technique.Coach = null;
         technique.UpdatedAt = DateTime.UtcNow;
 
         ApplyPayload(technique, payload);
@@ -189,23 +183,19 @@ public sealed class AdminTechniquesController(
                     };
                     ApplyPayload(existing, item);
                     databaseContext.Techniques.Add(existing);
-                    createdCount++;
                 }
                 else
                 {
-                    databaseContext.TechniqueSkills.RemoveRange(existing!.AdditionalSkills);
-                    if (existing.Coach is not null)
-                        databaseContext.TechniqueCoaches.Remove(existing.Coach);
-
-                    existing.AdditionalSkills = new List<TechniqueSkill>();
-                    existing.Coach = null;
-                    existing.UpdatedAt = DateTime.UtcNow;
-
+                    existing!.UpdatedAt = DateTime.UtcNow;
                     ApplyPayload(existing, item);
-                    updatedCount++;
                 }
 
                 await databaseContext.SaveChangesAsync(cancellationToken);
+
+                // Counted only after the row is actually persisted, so a failed item
+                // never shows up as both "updated" and "failed".
+                if (isNewRecord) createdCount++;
+                else updatedCount++;
             }
             catch (Exception exception)
             {
@@ -325,7 +315,7 @@ public sealed class AdminTechniquesController(
         return null;
     }
 
-    private static void ApplyPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
+    private void ApplyPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
     {
         technique.Slug = payload.Slug;
         technique.Name = payload.Name;
@@ -338,7 +328,30 @@ public sealed class AdminTechniquesController(
         technique.DialogJson = SerializeNullable(payload.Dialog);
         technique.CaseJson = SerializeNullable(payload.Case);
 
-        foreach (var skillId in (payload.AdditionalSkillIds ?? Array.Empty<Guid>()).Distinct())
+        SyncAdditionalSkills(technique, payload.AdditionalSkillIds);
+        SyncCoach(technique, payload.Coach);
+    }
+
+    // Child rows are reconciled in place rather than deleted and re-inserted: a delete
+    // plus an insert carrying the same key inside one SaveChanges makes EF fail with a
+    // concurrency error (TechniqueCoaches has a unique TechniqueId, TechniqueSkills a
+    // composite key), which broke every re-import of an existing technique.
+    private void SyncAdditionalSkills(Technique technique, Guid[]? additionalSkillIds)
+    {
+        var desiredSkillIds = (additionalSkillIds ?? Array.Empty<Guid>()).Distinct().ToHashSet();
+
+        var obsoleteLinks = technique.AdditionalSkills
+            .Where(link => !desiredSkillIds.Contains(link.SkillId))
+            .ToList();
+
+        foreach (var link in obsoleteLinks)
+        {
+            technique.AdditionalSkills.Remove(link);
+            databaseContext.TechniqueSkills.Remove(link);
+        }
+
+        var existingSkillIds = technique.AdditionalSkills.Select(link => link.SkillId).ToHashSet();
+        foreach (var skillId in desiredSkillIds.Where(skillId => !existingSkillIds.Contains(skillId)))
         {
             technique.AdditionalSkills.Add(new TechniqueSkill
             {
@@ -346,20 +359,36 @@ public sealed class AdminTechniquesController(
                 SkillId = skillId,
             });
         }
+    }
 
-        if (payload.Coach is not null)
+    private void SyncCoach(Technique technique, AdminTechniqueCoachDto? payload)
+    {
+        if (payload is null)
         {
-            technique.Coach = new TechniqueCoach
+            if (technique.Coach is not null)
+            {
+                databaseContext.TechniqueCoaches.Remove(technique.Coach);
+                technique.Coach = null;
+            }
+            return;
+        }
+
+        var coach = technique.Coach;
+        if (coach is null)
+        {
+            coach = new TechniqueCoach
             {
                 Id = Guid.NewGuid(),
                 TechniqueId = technique.Id,
-                AvatarSeed = payload.Coach.AvatarSeed,
-                Name = payload.Coach.Name,
-                Role = payload.Coach.Role,
-                Quote = payload.Coach.Quote,
-                ChallengesJson = SerializeNullable(payload.Coach.Challenges),
             };
+            technique.Coach = coach;
         }
+
+        coach.AvatarSeed = payload.AvatarSeed;
+        coach.Name = payload.Name;
+        coach.Role = payload.Role;
+        coach.Quote = payload.Quote;
+        coach.ChallengesJson = SerializeNullable(payload.Challenges);
     }
 
     private static string? SerializeNullable(JsonNode? node)

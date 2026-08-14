@@ -387,13 +387,17 @@ All progress-point economy knobs are DB-driven and admin-editable (no hardcoded 
 | GET | /admin/techniques | — (`?skill=&search=`) | `AdminTechniqueDto[]` |
 | GET | /admin/techniques/:id | — | `AdminTechniqueDto` |
 | POST | /admin/techniques | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (409 on slug conflict, 400 on unknown `primarySkillId` or out-of-range `difficulty`) |
-| PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (replaces additional skills + coach) |
+| PUT | /admin/techniques/:id | `AdminTechniqueWriteRequestDto` | `AdminTechniqueDto` (additional skills + coach are synced to the payload) |
 | DELETE | /admin/techniques/:id | — | 204 |
 | POST | /admin/techniques/import | `AdminTechniqueWriteRequestDto[]` | `AdminTechniqueImportResultDto` — upserts by `slug` |
 | GET | /admin/techniques/export | — | `AdminTechniqueWriteRequestDto[]` — all techniques, re-importable verbatim |
 
 `skill` query param filters by `Skills.IconicName` (same convention as the public route).
 `GET /admin/techniques/export` returns every technique (ignores `skill`/`search` filters) shaped exactly like the `import` request body, so an export file feeds straight back into `POST /admin/techniques/import`. UI: "Export JSON" button on `/admin/techniques`.
+
+On update and on re-import the child rows (`TechniqueSkills`, `TechniqueCoaches`) are **synced in place**: links missing from the payload are deleted, new ones inserted, and an existing coach row is updated rather than replaced. Deleting and re-inserting them inside one `SaveChanges` used to fail with an EF concurrency error (`expected to affect 1 row(s), but actually affected 0 row(s)`) for every technique that had a coach. `AdminTechniqueImportResultDto` counters are incremented only after the row is persisted, so a failed item is never counted as both updated and failed.
+
+`dialog` and `case` are deserialized strictly, and a shape mismatch is swallowed — the block simply disappears from the technique. `dialog[].annotations` must be `{label, tone?}` objects (not bare strings) and `case.metrics` must be an object (`{"Reply rate": "+38%"}`), not an array.
 
 `AdminTechniqueDto`: `{id, slug, name, summary, body, tags: string[], primarySkillId?, primarySkillIconicName?, primarySkillTitle?, additionalSkillIds: Guid[], difficulty, difficultyName, sortOrder, createdAt, updatedAt, dialog?: JsonNode, case?: JsonNode, coach?: AdminTechniqueCoachDto}`
 

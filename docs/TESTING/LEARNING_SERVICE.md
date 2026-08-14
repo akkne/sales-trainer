@@ -29,6 +29,7 @@ InMemory). No Postgres/Kafka/Redis/AI service is required.
 | Skill-tree progress aggregation (completed/total lessons, status) and engagement aggregates returned as 0 | `SkillTreeServiceTests` |
 | Technique cards (IsNew flag), MarkTechniqueSeen creates progress once (idempotent) | `TechniqueServiceTests` |
 | Admin technique export returns all techniques (ordered by SortOrder) in the re-importable `AdminTechniqueWriteRequestDto[]` shape, preserving tags/dialog/case/coach | `AdminTechniquesExportTests` |
+| Admin technique import is re-runnable: a technique with a coach re-imports without the EF concurrency error, coach rows are updated in place (or removed when the payload has none), additional skill links are synced without duplicates, and a failed row is counted once | `AdminTechniquesImportTests` |
 | Seeder content export (skills, topics, lessons, bundle) returns the re-importable seeder shapes: icon names resolved from ids, exercises nested, exercise `content` emitted as a JSON object | `AdminSeederExportTests` |
 | Produced event payload shapes match the gamification consumer contract + canonical topic names | `OutgoingEventContractTests` |
 | A failing LLM call maps onto the typed `OpenAiException` hierarchy (400/401/402/403/429/5xx), never leaks the provider body into the exception message, and survives non-JSON 200 responses. See [LLM_FAILURE_HANDLING.md](../LLM_FAILURE_HANDLING.md) | `OpenAiProviderErrorTests` |
