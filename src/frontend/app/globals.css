@@ -1806,6 +1806,16 @@ html[data-theme="dark"] .app-backdrop { opacity: 0.8; }
   font-size: 13px; line-height: 1.45; font-weight: 600;
 }
 .scenario-error svg { flex: none; margin-top: 1px; }
+.scenario-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.scenario-foot .btn-ghost { margin-right: auto; }
+
+@media (max-width: 520px) {
+  /* Three actions do not fit one row on a phone; stack them and drop the auto-margin
+     that would otherwise push Cancel to the top of the stack. */
+  .scenario-foot { flex-direction: column-reverse; align-items: stretch; }
+  .scenario-foot .btn { width: 100%; }
+  .scenario-foot .btn-ghost { margin-right: 0; }
+}
 
 /* ── Section label ── */
 .practice-section-label { font-size: 14px; font-weight: 700; color: var(--ink-2); margin: 0 0 12px; }

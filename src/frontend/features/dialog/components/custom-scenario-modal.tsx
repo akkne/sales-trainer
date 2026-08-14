@@ -21,11 +21,16 @@ const PLACEHOLDER =
     "который уже пользуется таблицами и не понимает, зачем платить за систему. " +
     "У него мало времени и он не любит, когда ему что-то навязывают.";
 
+/** Where a validated scenario sends the user — the same session, two surfaces. */
+type ScenarioTarget = "text" | "voice";
+
 export function CustomScenarioModal({ bundleId, modeId, onClose }: CustomScenarioModalProps) {
     const router = useRouter();
     const [scenario, setScenario] = useState("");
     const [error, setError] = useState<string | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [pendingTarget, setPendingTarget] = useState<ScenarioTarget | null>(null);
+
+    const isSubmitting = pendingTarget !== null;
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -43,10 +48,10 @@ export function CustomScenarioModal({ bundleId, modeId, onClose }: CustomScenari
     const isTooLong = trimmedLength > SCENARIO_MAX_LENGTH;
     const canSubmit = isLongEnough && !isTooLong && !isSubmitting;
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (target: ScenarioTarget) => {
         if (!canSubmit) return;
 
-        setIsSubmitting(true);
+        setPendingTarget(target);
         setError(null);
 
         try {
@@ -58,8 +63,13 @@ export function CustomScenarioModal({ bundleId, modeId, onClose }: CustomScenari
                 return;
             }
 
+            // The session is created here, with the scenario, and both destinations resume it by id
+            // — neither screen ever has to know the scenario text.
             const session = await startDialogSession(bundleId, modeId, undefined, scenario.trim());
-            router.push(`/dialog/${bundleId}/${modeId}?session=${session.id}`);
+            const path = target === "voice"
+                ? `/dialog/${bundleId}/${modeId}/voice`
+                : `/dialog/${bundleId}/${modeId}`;
+            router.push(`${path}?session=${session.id}`);
         } catch (submitError) {
             setError(
                 submitError instanceof Error
@@ -67,7 +77,7 @@ export function CustomScenarioModal({ bundleId, modeId, onClose }: CustomScenari
                     : "Не удалось начать разговор. Попробуйте ещё раз."
             );
         } finally {
-            setIsSubmitting(false);
+            setPendingTarget(null);
         }
     };
 
@@ -132,12 +142,24 @@ export function CustomScenarioModal({ bundleId, modeId, onClose }: CustomScenari
                     )}
                 </div>
 
-                <div className="modal-foot row" style={{ justifyContent: "flex-end", gap: 10 }}>
+                <div className="modal-foot scenario-foot">
                     <button className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>
                         Отмена
                     </button>
-                    <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit}>
-                        {isSubmitting ? "Проверяем…" : "Начать разговор"}
+                    <button
+                        className="btn btn-soft"
+                        onClick={() => handleSubmit("text")}
+                        disabled={!canSubmit}
+                    >
+                        {pendingTarget === "text" ? "Проверяем…" : "Написать"}
+                    </button>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => handleSubmit("voice")}
+                        disabled={!canSubmit}
+                    >
+                        <Icon name="mic" size={15} />
+                        {pendingTarget === "voice" ? "Проверяем…" : "Позвонить"}
                     </button>
                 </div>
             </div>

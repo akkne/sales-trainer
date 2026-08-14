@@ -15,19 +15,37 @@ Endpoints: [docs/API_CONTRACTS.md](API_CONTRACTS.md) → Dialog.
 Практика → «Описать сценарий»
       │
       ▼
- modal: textarea (20–1500 симв.)
+ modal: textarea (20–1500 симв.) + «Написать» / «Позвонить»
       │  POST /dialog/scenario/validate      ← advisory, fast feedback
       ├──── isValid: false ──► показать причину, ничего не создаётся
       ▼
  POST /dialog/sessions { bundleId, modeId, customScenario }
       │  ← re-validates server-side (cache hit); 422 if rejected
       ▼
- /dialog/{bundleId}/{modeId}?session={id}   ← existing chat screen
+ «Написать» ──► /dialog/{bundleId}/{modeId}?session={id}        ← chat screen
+ «Позвонить» ─► /dialog/{bundleId}/{modeId}/voice?session={id}  ← voice screen
 ```
 
-The chat screen is the ordinary one. The custom-scenario bundle is hidden, so it never shows up
+Both screens are the ordinary ones. The custom-scenario bundle is hidden, so it never shows up
 in `GET /dialog/bundles`; the client resolves its ids through `GET /dialog/custom-scenario-mode`,
 exactly like company calls do.
+
+### Text and voice share one session
+
+The modal creates the session — the only place the scenario text exists on the client — and both
+destinations resume it by id. Neither screen ever receives the scenario, so neither can start a
+context-free conversation by accident.
+
+This is why `?session=` matters on the voice screen: `useVoice` creates a session itself when it
+is handed `sessionId: null`, and that path has no scenario to pass. Seeding the id from the URL
+makes it reuse the existing one instead. Two consequences fall out of that:
+
+- **"Позвонить ещё раз" is not offered after feedback.** The old flow reset to `idle` and let
+  `useVoice` mint a new session; for a pre-started one that would silently drop the scenario, so
+  the page navigates back instead.
+- **Back goes to `/dialog`, not `/dialog/{bundleId}`,** whenever the bundle is missing from
+  `GET /dialog/bundles` — a hidden bundle has no mode list to return to. While the list is still
+  loading the old destination is kept, so visible bundles are unaffected.
 
 ## Why it is shaped this way
 
@@ -104,9 +122,10 @@ a model conversation anyway, so it could not work in that state regardless.
 
 | Path | Role |
 |---|---|
-| `features/dialog/components/custom-scenario-modal.tsx` | compose dialog |
+| `features/dialog/components/custom-scenario-modal.tsx` | compose dialog; creates the session and routes to text or voice |
 | `features/dialog/hooks/use-custom-scenario.ts` | mode ids + validate call + shared limits |
 | `app/(main)/dialog/page.tsx` | the "Кастомный сценарий" card |
+| `app/dialog/[bundleId]/[modeId]/voice/page.tsx` | resumes a pre-started session from `?session=` |
 
 ## Known edges
 
@@ -115,4 +134,4 @@ a model conversation anyway, so it could not work in that state regardless.
   The modal is the only real entry point.
 - The chat header shows «Практика диалогов» as the bundle name, because hidden bundles are absent
   from `GET /dialog/bundles` and the page falls back.
-- Voice is enabled on the mode, but the practice card only opens the text conversation today.
+- Voice minutes come out of the same `useVoiceUsage` quota as every other call.

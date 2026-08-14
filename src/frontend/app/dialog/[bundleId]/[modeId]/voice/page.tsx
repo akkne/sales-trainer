@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -113,6 +113,7 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
 export default function VoiceCallPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const bundleId = params.bundleId as string;
     const modeId = params.modeId as string;
@@ -124,7 +125,15 @@ export default function VoiceCallPage() {
     const currentBundle = bundles?.find((bundle) => bundle.id === bundleId);
     const currentMode = modes?.find((mode) => mode.id === modeId);
 
-    const [sessionId, setSessionId] = useState<string | null>(null);
+    // A session created before we got here — a custom scenario, whose text this page never sees.
+    // Seeding it means useVoice reuses it instead of starting a fresh, context-free one.
+    const preStartedSessionId = searchParams.get("session");
+
+    // Hidden bundles (custom scenario, company call) are absent from GET /dialog/bundles, so there
+    // is no mode list to go back to; those land on the practice page instead.
+    const backHref = bundles && !currentBundle ? "/dialog" : `/dialog/${bundleId}`;
+
+    const [sessionId, setSessionId] = useState<string | null>(preStartedSessionId);
     const [callStatus, setCallStatus] = useState<CallStatus>("idle");
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
     const [isCompleting, setIsCompleting] = useState(false);
@@ -300,15 +309,22 @@ export default function VoiceCallPage() {
         if ((callStatus === "connected" || callStatus === "dialing") && sessionId) {
             completeDialogSession(sessionId).catch(() => {});
         }
-        router.push(`/dialog/${bundleId}`);
-    }, [stopVoice, callStatus, sessionId, router, bundleId]);
+        router.push(backHref);
+    }, [stopVoice, callStatus, sessionId, router, backHref]);
 
     const handleCloseFeedback = useCallback(() => {
+        // A pre-started session carries context this page cannot recreate, so "call again" would
+        // silently start a context-free conversation. Send the user back to start a new one properly.
+        if (preStartedSessionId) {
+            router.push(backHref);
+            return;
+        }
+
         setFeedback(null);
         setSessionId(null);
         setSessionTimer(0);
         setCallStatus("idle");
-    }, []);
+    }, [preStartedSessionId, router, backHref]);
 
     const info = describePipeline(voiceState, callStatus);
     const personaSeed = `${currentMode?.id ?? "persona"}-${currentMode?.title ?? ""}`;
