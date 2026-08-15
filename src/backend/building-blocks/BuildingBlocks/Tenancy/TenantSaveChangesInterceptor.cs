@@ -21,6 +21,15 @@ public sealed class TenantSaveChangesInterceptor(ITenantContext tenantContext) :
         return ValueTask.FromResult(result);
     }
 
+    /// <summary>
+    /// The missing-organization guard is evaluated per <see cref="ITenantScoped"/> entry, not once
+    /// up front: a service whose database holds both tenant-scoped and platform-global tables
+    /// (identity-service — <c>Invites</c> alongside <c>Users</c>/<c>RefreshTokens</c>) must still be
+    /// able to write the global ones on an unauthenticated request that carries no
+    /// <c>X-Organization-Id</c> at all, such as login or token refresh. A save that touches no
+    /// tenant-scoped entity is therefore not a tenancy event and needs no organization.
+    /// See docs/DECISIONS.md (2026-08-15, "Tenant write guard is per-entry").
+    /// </summary>
     private void Enforce(DbContext? context)
     {
         if (context is null || tenantContext.IsSystem)
@@ -28,11 +37,11 @@ public sealed class TenantSaveChangesInterceptor(ITenantContext tenantContext) :
             return;
         }
 
-        var currentOrganizationId = tenantContext.OrganizationId
-            ?? throw new InvalidOperationException("Organization context is not set.");
-
         foreach (var entry in context.ChangeTracker.Entries<ITenantScoped>())
         {
+            var currentOrganizationId = tenantContext.OrganizationId
+                ?? throw new InvalidOperationException("Organization context is not set.");
+
             switch (entry.State)
             {
                 case EntityState.Added:

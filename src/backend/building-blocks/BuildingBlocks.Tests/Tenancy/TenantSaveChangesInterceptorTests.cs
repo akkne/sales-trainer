@@ -31,6 +31,19 @@ public class TenantSaveChangesInterceptorTests
     }
 
     [Test]
+    public async Task SaveChangesAsync_with_no_tenant_context_saves_a_platform_global_entity()
+    {
+        var tenantContext = new TenantContext();
+        var interceptor = new TenantSaveChangesInterceptor(tenantContext);
+        await using var databaseContext = TenantTestDatabaseFactory.CreateInMemory(_databaseName, tenantContext, interceptor);
+        databaseContext.PlatformGlobalTestEntities.Add(new PlatformGlobalTestEntity { Id = Guid.NewGuid(), Name = "Global" });
+
+        var act = () => databaseContext.SaveChangesAsync();
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Test]
     public async Task SaveChangesAsync_stamps_organization_id_when_unset()
     {
         var organizationId = Guid.NewGuid();

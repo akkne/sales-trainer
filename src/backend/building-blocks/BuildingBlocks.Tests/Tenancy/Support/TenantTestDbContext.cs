@@ -8,6 +8,8 @@ internal sealed class TenantTestDbContext(DbContextOptions<TenantTestDbContext> 
 {
     public DbSet<TenantScopedTestEntity> TenantScopedTestEntities => Set<TenantScopedTestEntity>();
 
+    public DbSet<PlatformGlobalTestEntity> PlatformGlobalTestEntities => Set<PlatformGlobalTestEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<TenantScopedTestEntity>()
