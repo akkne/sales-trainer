@@ -4,13 +4,6 @@ namespace Sellevate.Identity.Features.Auth.Services.Abstract;
 
 public interface IAuthenticationService
 {
-    // TEMP: email confirmation disabled — registration issues tokens immediately.
-    Task<IssuedTokenPair> RegisterWithEmailAsync(
-        string email,
-        string password,
-        string displayName,
-        CancellationToken cancellationToken = default);
-
     Task<IssuedTokenPair> VerifyEmailAsync(
         string email,
         string code,
@@ -35,5 +28,15 @@ public interface IAuthenticationService
 
     Task RevokeRefreshTokenAsync(
         string rawRefreshToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Issues the access/refresh pair for an already-authenticated user. Exposed for the invite
+    /// acceptance flow (40.7), which authenticates by consuming a single-use signed token rather
+    /// than by password, but must produce exactly the same claims — including <c>org_id</c> and
+    /// <c>org_role</c> from the membership the acceptance just created.
+    /// </summary>
+    Task<IssuedTokenPair> IssueTokensForUserAsync(
+        User user,
         CancellationToken cancellationToken = default);
 }

@@ -46,7 +46,7 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /auth/register | `{email, password, displayName}` | `RegistrationResultDto` (no tokens) |
+| POST | /auth/invites/{token}/accept `[public]` | `{displayName?, password?}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/verify-email | `{email, code}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/resend-code | `{email}` | 204 |
 | POST | /auth/login | `{email, password}` | `AuthTokenResponseDto` + cookie |
@@ -56,15 +56,23 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 | POST | /demo/token `[public]` | — | `{accessToken, expiresInSeconds}` |
 
 `AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role, orgId, orgRole}`
-`RegistrationResultDto`: `{email, requiresEmailVerification}`
+
+> **There is no `POST /auth/register` (Phase 40.7).** The route is deleted, not guarded — see
+> [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.1. The only way an account is created is
+> `POST /auth/invites/{token}/accept`. `POST /auth/google` is a login method only: it rejects an
+> unknown Google identity, and one whose account has no **active** membership, with `401` and a
+> single identical message for both cases (it must not reveal which addresses belong to a
+> customer).
 
 `orgId`/`orgRole` (Phase 40.6) are `null` unless the user has an active `membership` row —
 absent membership is never implicit organization access. `GET /auth/me` mirrors the same
 two fields (`orgId`, `orgRole`) alongside `id`/`email`/`displayName`/`role`/`isOnboardingCompleted`.
 
-**Email verification flow.** `/auth/register` creates an unverified user and emails a
-short-lived numeric code (MailerSend); it returns `RegistrationResultDto` instead of tokens.
-The client then calls `/auth/verify-email` with the code to receive tokens. `/auth/resend-code`
+**Email verification flow.** Since 40.7 the invite replaces this flow for anyone arriving by
+invite: possession of the token already proves control of the address, so an accepted invite
+creates the user with `IsEmailVerified = true` and no code is ever sent. The code endpoints stay
+for accounts that predate invites. `/auth/verify-email` takes a code and returns tokens.
+`/auth/resend-code`
 re-issues a code (silent 204 for unknown/already-verified emails to avoid account enumeration;
 `429` with `Retry-After` + `{retryAfterSeconds}` while a resend cooldown is active).
 `/auth/verify-email` returns `401` on an invalid/expired/exhausted code.
@@ -72,6 +80,53 @@ re-issues a code (silent 204 for unknown/already-verified emails to avoid accoun
 is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
 
 ---
+
+## Invites & memberships `[OrgAdmin]` `[tenant-scoped]`
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /invites | `{email?, emails?, role}` | `CreateInvitesResponseDto` |
+| DELETE | /invites/{inviteId} | — | 204 / 404 |
+| DELETE | /memberships/{userId} | — | 204 / 404 |
+
+All three require the `RequireOrgAdmin` policy (`org_role = OrgAdmin`) **and** the
+gateway-injected `X-Organization-Id` header; they are `[TenantScoped]`, so a request without
+that header gets `403` before the action runs.
+
+`CreateInvitesResponseDto`: `{created: [{id, email, role, expiresAt, token}], rejected: [{email, reason}]}`
+
+- `email` and `emails` are both accepted and merged — one address or a pasted bulk list, so a
+  РОП onboarding forty managers does not click forty times. A bulk request is **partially
+  successful**: bad addresses land in `rejected` with a reason
+  (`invalid-email`, `duplicate-in-request`, `already-a-member`, `invite-already-pending`)
+  while the rest are created.
+- `role` is an `OrgRole` (`Manager` / `OrgAdmin`); an unknown value is `400`.
+- `token` is the raw single-use token and is returned **only here, once** — the database keeps
+  only its SHA-256 hash. It is also mailed to the invitee (MailerSend).
+- The route deliberately carries **no organization segment**. The roadmap sketched
+  `/organizations/{id}/invites`, but the organization must come from the header, never the
+  route (section 1.3 of TENANCY.md), and `/organizations/*` already belongs to
+  organization-service at the gateway. See [DECISIONS.md](DECISIONS.md) (2026-08-15).
+- `DELETE /invites/{inviteId}` revokes a pending invite; an already-accepted invite and an
+  invite belonging to another organization are both `404`.
+- `DELETE /memberships/{userId}` is **offboarding, not deletion**: it sets
+  `status = deactivated` + `deactivatedAt` and keeps the row. There is no endpoint that deletes
+  a membership — the manager's history belongs to the organization.
+
+`POST /auth/invites/{token}/accept` is the public counterpart and is *not* tenant-scoped: the
+caller has no organization yet, so the organization is recovered from the token's own HMAC
+signature. Responses:
+
+| Status | Meaning |
+|---|---|
+| 200 | accepted — `AuthTokenResponseDto` + `refreshToken` cookie, `orgId`/`orgRole` already set |
+| 400 | the address has no account yet and no `password` was supplied |
+| 404 | unknown, malformed, tampered-with, or another organization's token (deliberately indistinguishable) |
+| 409 | the invite was already used |
+| 410 | the invite expired or was revoked |
+
+Accepting an invite for an address that **already has an account** adds a membership to that
+account; it never creates a second user.
 
 ## Onboarding
 

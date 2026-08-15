@@ -1,18 +1,14 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Net;
 using System.Text;
-using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Constants;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
-using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
@@ -22,62 +18,17 @@ namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 internal sealed class AuthenticationService(
     IdentityDbContext databaseContext,
     IEmailVerificationService emailVerificationService,
-    IUserEventPublisher userEventPublisher,
+    IGoogleTokenValidator googleTokenValidator,
     IOptions<JwtConfiguration> jwtOptions,
-    IOptions<GoogleAuthConfiguration> googleOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
 {
-    // TEMP: email confirmation disabled — the new user is created already verified
-    // and receives tokens immediately, so no verification email is sent.
-    public async Task<IssuedTokenPair> RegisterWithEmailAsync(
-        string email,
-        string password,
-        string displayName,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedEmail = email.ToLowerInvariant();
-        logger.LogInformation("Registration attempt {Email}", normalizedEmail);
-
-        var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.Email == normalizedEmail, cancellationToken);
-
-        if (existingUser is not null)
-        {
-            logger.LogWarning("Registration failed — email already registered {Email}", normalizedEmail);
-            throw new InvalidOperationException("Email already registered.");
-        }
-
-        var newUserId = Guid.NewGuid();
-        var newUser = new User
-        {
-            Id = newUserId,
-            Email = normalizedEmail,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            DisplayName = displayName,
-            CreatedAt = DateTime.UtcNow,
-            // TEMP: email confirmation disabled — mark verified on registration.
-            IsEmailVerified = true,
-            DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
-        };
-
-        databaseContext.Users.Add(newUser);
-        await PublishUserRegisteredAsync(newUser, cancellationToken);
-        try
-        {
-            await databaseContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            logger.LogWarning("Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
-            throw new InvalidOperationException("Email already registered.");
-        }
-
-        logger.LogInformation(
-            "User registered and auto-verified {Email} UserId={UserId}", normalizedEmail, newUser.Id);
-
-        // TEMP: log the user in immediately instead of requiring email verification.
-        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false, cancellationToken);
-    }
+    /// <summary>
+    /// Deliberately identical for "no such account" and "account without an active membership":
+    /// a distinguishable answer would turn the Google endpoint into an oracle telling an outsider
+    /// which addresses belong to a Sellevate customer.
+    /// </summary>
+    private const string GoogleLoginRejectedMessage =
+        "This Google account has no access. Access to Sellevate is by invitation only.";
 
     public async Task<IssuedTokenPair> VerifyEmailAsync(
         string email,
@@ -164,18 +115,9 @@ internal sealed class AuthenticationService(
         string googleIdToken,
         CancellationToken cancellationToken = default)
     {
-        var googleClientId = googleOptions.Value.ClientId
-            ?? throw new InvalidOperationException("Google:ClientId not configured.");
+        var googlePayload = await googleTokenValidator.ValidateAsync(googleIdToken, cancellationToken);
 
-        var validationSettings = new GoogleJsonWebSignature.ValidationSettings
-        {
-            Audience = [googleClientId]
-        };
-
-        var googlePayload = await GoogleJsonWebSignature.ValidateAsync(
-            googleIdToken, validationSettings);
-
-        if (!googlePayload.EmailVerified)
+        if (!googlePayload.IsEmailVerified)
         {
             logger.LogWarning("Google login rejected — email not verified by Google {Email}", googlePayload.Email);
             throw new UnauthorizedAccessException("Google account email is not verified.");
@@ -198,29 +140,34 @@ internal sealed class AuthenticationService(
             }
         }
 
-        var displayName = string.IsNullOrWhiteSpace(googlePayload.Name)
-            ? googlePayload.Email
-            : googlePayload.Name;
-
+        // Phase 40.7: Google sign-in is a login method, never a registration channel. With
+        // `POST /auth/register` deleted, an implicit "create the account on first Google login"
+        // branch would have been the last remaining self-service way into the product — the exact
+        // hole docs/TENANCY/TENANCY.md §4.1 closes. An account arrives only through an invite, so
+        // an unknown Google identity is rejected instead of provisioned.
         if (existingUser is null)
         {
-            var newGoogleUserId = Guid.NewGuid();
-            existingUser = new User
-            {
-                Id = newGoogleUserId,
-                Email = googlePayload.Email,
-                DisplayName = displayName,
-                GoogleId = googlePayload.Subject,
-                CreatedAt = DateTime.UtcNow,
-                IsEmailVerified = true,
-                DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
-            };
-            databaseContext.Users.Add(existingUser);
-            await PublishUserRegisteredAsync(existingUser, cancellationToken);
-            await databaseContext.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
+            logger.LogWarning(
+                "Google login rejected — no account for {Email}; access is invite-only", googlePayload.Email);
+            throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
         }
-        else if (existingUser.GoogleId is null)
+
+        // Having an account is not enough: without an active membership the user belongs to no
+        // organization and there is nothing to sign in to.
+        var hasActiveMembership = await databaseContext.Memberships
+            .AnyAsync(
+                candidate => candidate.UserId == existingUser.Id && candidate.Status == MembershipStatus.Active,
+                cancellationToken);
+
+        if (!hasActiveMembership)
+        {
+            logger.LogWarning(
+                "Google login rejected — no active membership for {Email} UserId={UserId}",
+                googlePayload.Email, existingUser.Id);
+            throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
+        }
+
+        if (existingUser.GoogleId is null)
         {
             existingUser.GoogleId = googlePayload.Subject;
             existingUser.IsEmailVerified = true;
@@ -302,10 +249,15 @@ internal sealed class AuthenticationService(
         logger.LogInformation("Refresh token revoked for UserId={UserId}", storedToken.UserId);
     }
 
-    private Task PublishUserRegisteredAsync(User user, CancellationToken cancellationToken) =>
-        userEventPublisher.PublishRegisteredAsync(
-            new UserRegisteredEvent(user.Id, user.Email, user.DisplayName, user.AvatarKey),
-            cancellationToken);
+    public async Task<IssuedTokenPair> IssueTokensForUserAsync(
+        User user,
+        CancellationToken cancellationToken = default)
+    {
+        var isOnboardingCompleted = await databaseContext.UserProfiles
+            .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);
+
+        return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
+    }
 
     private async Task<IssuedTokenPair> IssueTokensForUserAsync(
         User user,

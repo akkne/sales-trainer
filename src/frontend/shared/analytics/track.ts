@@ -20,7 +20,7 @@ export type TrackedPage =
     | "discuss"
     | "session"
     | "login"
-    | "register"
+    | "invite"
     | "onboarding"
     | "admin"
     | "other";

@@ -91,8 +91,8 @@ export default function LandingPage() {
                 </p>
 
                 <div className="row gap-3 center wrap">
-                    <Link href="/register" className="btn btn-dark btn-lg">
-                        Начать бесплатно
+                    <Link href="/login" className="btn btn-dark btn-lg">
+                        Войти
                         <Icon name="arrow-right" size={18} />
                     </Link>
                 </div>

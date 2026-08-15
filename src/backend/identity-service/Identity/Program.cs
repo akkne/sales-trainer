@@ -6,8 +6,10 @@ using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Identity.Eventing;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
+using Sellevate.Identity.Features.Invites;
 using Sellevate.Identity.Features.Onboarding;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
@@ -39,8 +41,18 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Identity");
 });
 
-builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.7: identity-db gained its first tenant-scoped table (Invites), so the context now
+// carries both tenancy interceptors — the write guard and the one that issues SET LOCAL
+// app.organization_id for the row-level-security policy. Never switch this registration to EF
+// Core's pooled-context helper (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py).
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<IdentityDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 // Required by AddSellevateEventing's idempotency store (RedisIdempotencyStore).
 // Without this the DI container fails validation at builder.Build() and the
@@ -88,9 +100,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(authorizationOptions =>
 {
     // Phase 40.6: the global `Admin` role is gone. `RequireSuperAdmin` gates platform-staff
-    // endpoints (unchanged). `RequireOrgAdmin` is new infrastructure for the organization-scoped
-    // admin role (`org_role` claim) — no call site in this service yet; ready for the invite
-    // endpoints (40.7) and the org admin screen (40.20).
+    // endpoints (unchanged). `RequireOrgAdmin` gates the organization-scoped admin role
+    // (`org_role` claim) — the invite and offboarding endpoints added in 40.7.
     authorizationOptions.AddPolicy("RequireOrgAdmin", policy =>
         policy.RequireAssertion(context =>
             context.User.HasClaim(claim => claim.Type == "org_role" && claim.Value == "OrgAdmin")));
@@ -113,6 +124,7 @@ builder.Services.AddHttpClient();
 
 builder.Services
     .AddAuthenticationFeatureServices(builder.Configuration)
+    .AddInviteFeatureServices(builder.Configuration)
     .AddOnboardingFeatureServices()
     .AddProfileFeatureServices();
 
@@ -137,6 +149,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

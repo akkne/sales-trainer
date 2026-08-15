@@ -101,10 +101,10 @@ export default function VerifyEmailPage() {
                     </div>
                     <h1 className="auth-heading">Подтверди свой email</h1>
                     <p className="auth-sub">
-                        Сначала зарегистрируйся — мы отправим код на твой email.
+                        Начни со входа — код придёт на твой email.
                     </p>
-                    <Link href="/register" className="btn btn-dark btn-block btn-lg">
-                        Зарегистрироваться
+                    <Link href="/login" className="btn btn-dark btn-block btn-lg">
+                        Войти
                     </Link>
                 </div>
             </div>

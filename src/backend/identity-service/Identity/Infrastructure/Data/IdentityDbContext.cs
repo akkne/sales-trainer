@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars.Models;
+using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Features.Onboarding.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
-public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
+public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITenantContext tenantContext)
+    : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -16,10 +19,16 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
     public DbSet<DefaultAvatar> DefaultAvatars => Set<DefaultAvatar>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<Membership> Memberships => Set<Membership>();
+    public DbSet<Invite> Invites => Set<Invite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
+
+        // Convenience, not security — the security boundary is the RLS policy created by the
+        // AddInvite migration (docs/TENANCY/TENANCY.md §1.4).
+        modelBuilder.Entity<Invite>()
+            .HasQueryFilter(invite => invite.OrganizationId == tenantContext.OrganizationId);
     }
 }

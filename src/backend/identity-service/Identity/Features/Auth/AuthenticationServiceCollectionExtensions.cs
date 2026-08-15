@@ -14,6 +14,7 @@ public static class AuthenticationServiceCollectionExtensions
         services.Configure<SuperAdminConfiguration>(configuration.GetSection(SuperAdminConfiguration.SectionName));
         services.Configure<GoogleAuthConfiguration>(configuration.GetSection(GoogleAuthConfiguration.SectionName));
         services.Configure<EmailVerificationConfiguration>(configuration.GetSection(EmailVerificationConfiguration.SectionName));
+        services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
         services.AddScoped<SuperAdminSeeder>();

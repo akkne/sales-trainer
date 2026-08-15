@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
+using Sellevate.Identity.Features.Invites.Exceptions;
+using Sellevate.Identity.Features.Invites.Models;
+using Sellevate.Identity.Features.Invites.Services.Abstract;
 using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Auth;
@@ -13,6 +16,7 @@ namespace Sellevate.Identity.Features.Auth;
 [Route("auth")]
 public sealed class AuthController(
     IAuthenticationService authenticationService,
+    IInviteService inviteService,
     IdentityDbContext databaseContext,
     IWebHostEnvironment environment) : ControllerBase
 {
@@ -51,25 +55,38 @@ public sealed class AuthController(
         });
     }
 
-    // TEMP: email confirmation disabled — registration logs the user in immediately.
-    [HttpPost("register")]
-    public async Task<ActionResult<AuthTokenResponseDto>> RegisterWithEmail(
-        [FromBody] RegisterRequestDto registerRequest,
+    /// <summary>
+    /// Consumes a single-use invite token and signs the invitee in. This is the only way into the
+    /// product now that <c>POST /auth/register</c> is gone (docs/TENANCY/TENANCY.md §4.1).
+    ///
+    /// <para>
+    /// Anonymous and deliberately not <c>[TenantScoped]</c>: the caller has no organization yet, so
+    /// there is no <c>X-Organization-Id</c> header to scope by. The organization is recovered from
+    /// the token's HMAC-signed payload instead — see
+    /// <c>Invites.Services.Implementation.InviteTokenFactory</c>.
+    /// </para>
+    /// </summary>
+    [HttpPost("invites/{token}/accept")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthTokenResponseDto>> AcceptInvite(
+        string token,
+        [FromBody] AcceptInviteRequestDto acceptInviteRequest,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var issuedTokenPair = await authenticationService.RegisterWithEmailAsync(
-                registerRequest.Email,
-                registerRequest.Password,
-                registerRequest.DisplayName,
-                cancellationToken);
-
+            var issuedTokenPair = await inviteService.AcceptAsync(token, acceptInviteRequest, cancellationToken);
             return OkWithRefreshTokenCookie(issuedTokenPair);
         }
-        catch (InvalidOperationException exception)
+        catch (InviteNotAcceptableException exception)
         {
-            return Conflict(new { message = exception.Message });
+            return exception.Reason switch
+            {
+                InviteRejectionReason.NotFound => NotFound(new { message = exception.Message }),
+                InviteRejectionReason.AlreadyAccepted => Conflict(new { message = exception.Message }),
+                InviteRejectionReason.PasswordRequired => BadRequest(new { message = exception.Message }),
+                _ => StatusCode(StatusCodes.Status410Gone, new { message = exception.Message })
+            };
         }
     }
 
@@ -153,6 +170,10 @@ public sealed class AuthController(
                 cancellationToken);
 
             return OkWithRefreshTokenCookie(issuedTokenPair);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Unauthorized(new { message = exception.Message });
         }
         catch (Exception exception) when (
             exception is InvalidOperationException
