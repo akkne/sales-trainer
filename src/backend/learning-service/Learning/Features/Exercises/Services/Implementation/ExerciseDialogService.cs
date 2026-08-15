@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
+using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
 using StackExchange.Redis;
@@ -189,9 +190,16 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         Guid exerciseId,
         CancellationToken cancellationToken)
     {
-        var exercise = await _databaseContext.Exercises
-            .FirstOrDefaultAsync(e => e.Id == exerciseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        // Phase 40.10. The only database access on the voice/chat path, and the reason the streaming
+        // endpoint needs no request-wide transaction: the scope closes before a single byte of audio
+        // is generated, so no Postgres transaction is held open across the AI call.
+        Exercise exercise;
+        await using (await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken))
+        {
+            exercise = await _databaseContext.Exercises
+                .FirstOrDefaultAsync(e => e.Id == exerciseId, cancellationToken)
+                ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        }
 
         if (exercise.Type != ExerciseTypes.AiDialogue)
             throw new NotSupportedException("Chat is only supported for ai_dialogue exercises.");

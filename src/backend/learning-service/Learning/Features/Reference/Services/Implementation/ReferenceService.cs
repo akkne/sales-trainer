@@ -11,6 +11,8 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
         Guid skillId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         return await databaseContext.ReferenceMaterials
             .Where(material => material.SkillId == skillId)
             .OrderBy(material => material.SortOrder)
@@ -32,6 +34,8 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
         string? search,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var query = databaseContext.ReferenceMaterials.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(category))
@@ -65,6 +69,8 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
 
     public async Task<IReadOnlyList<string>> GetAllCategoriesAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         return await databaseContext.ReferenceMaterials
             .Where(material => material.Category != null)
             .Select(material => material.Category!)

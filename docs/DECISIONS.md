@@ -4,6 +4,89 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-15 — learning-service gets `organization_id` (40.10, first Stage-C service)
+
+- **Content is nullable-owner, tenant data is not, and they use different RLS helpers.** Progress
+  (`UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`,
+  `UserTechniqueProgress`) is `ITenantScoped` with a `NOT NULL` owner and `EnableTenantRls`. Content
+  (`Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials`) gets a nullable
+  column where `NULL` means "global library, shared by everyone" and `EnableTenantRlsForContent`, so
+  the policy is `IS NULL OR = current`. Content therefore cannot implement `ITenantScoped`, whose
+  `OrganizationId` is a non-nullable `Guid` — that is a consequence of the design, not an oversight.
+- **Every entity declares its own query filter, and a test enforces it by walking the model.** EF
+  does not inherit filters through navigations and every read path here composes
+  `Skill → Topic → Lesson → Exercise`. Listing the entities again in a test would repeat whichever
+  omission the test is supposed to catch, so `Every_entity_with_an_organization_id_has_its_own_query_filter`
+  asks the model instead: anything with an `OrganizationId` and no filter fails the build.
+  `OutboxMessage` is the single asserted exception (platform-global, read only by the relay).
+- **Unique content slugs need two indexes, not one.** `UNIQUE (OrganizationId, IconicName)` is what
+  lets a second customer have its own `objections` skill, but Postgres treats NULLs in a composite
+  unique index as *distinct*, so that index alone would permit two global `objections` skills — a
+  silent weakening of a constraint that holds today. The fix is a second, partial unique index over
+  `IconicName WHERE "OrganizationId" IS NULL`. Applied to `Skill.IconicName`, `Topic.IconicName` and
+  `Technique.Slug`; the roadmap only named the first, but all three are the same defect.
+- **The EF migration contains no `CREATE INDEX` and no backfill.** learning-service runs
+  `Database.Migrate()` during startup, so anything slow in a migration stalls the readiness probe
+  and races the replicas — which is exactly what the roadmap means by "long index rebuilds are a
+  separate operational step, not `DatabaseBootstrapper`". Indexes move to
+  `docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql` (`CREATE INDEX
+  CONCURRENTLY`, `pg_index.indisvalid` checked *before* anything is dropped, old index dropped only
+  after its replacement is valid), and the backfill to
+  `40.10_learning_organization_backfill.sql`, because learning-db has no tenant registry to look the
+  default organization up in. **Consequence accepted and documented:** the EF model snapshot declares
+  indexes that no migration creates, so a fresh database has the columns and the RLS but not the
+  indexes until the operational script runs. That is the one place in this service where the
+  snapshot deliberately runs ahead of the migrations.
+  - *Alternative rejected — `migrationBuilder.Sql(..., suppressTransaction: true)` with
+    `CREATE INDEX CONCURRENTLY IF NOT EXISTS` inside the migration.* It is the shape the roadmap's
+    checklist literally describes, and it would keep the snapshot honest, but it puts the long build
+    back on the startup path, which is the thing the same roadmap line forbids. The two halves of
+    that bullet contradict each other for a service that migrates at startup; the "operational step"
+    half wins because it is the one about production behaviour.
+- **The backfill refuses to run as a role that cannot bypass RLS.** The migration enables `FORCE ROW
+  LEVEL SECURITY` before the backfill runs, so a connection without `BYPASSRLS` cannot see the
+  placeholder rows: the `UPDATE`s would touch zero rows and the assertions would then "pass" because
+  they cannot see the rows either. A silent no-op that reports success is worse than a hard failure,
+  so the script checks `pg_roles.rolsuper OR rolbypassrls` up front and aborts.
+- **Placeholder organization instead of a nullable-then-tightened column.** Adding `NOT NULL` to a
+  populated table needs a default; existing rows get the all-zeros guid and the column default is
+  dropped immediately afterwards, so a later insert that forgets the organization fails loudly rather
+  than landing in a phantom tenant. Between the migration and the backfill those rows are invisible
+  (fail-closed, TENANCY.md §1.5) — correct, but user-visible as "my progress vanished", so the two
+  steps belong in one maintenance window. Written up in Russian in `docs/DONT_FORGET.md`.
+- **One transaction pattern for the whole service: `TenantTransactionScope`.** `SET LOCAL` needs a
+  transaction, EF only opens one for `SaveChanges`, and a bare `SELECT` under RLS silently returns
+  nothing. Rather than sprinkling `BeginTransactionAsync` per call site, learning-service has one
+  re-entrant helper with two entry points — `BeginReadAsync` (rolls back on dispose; it exists to
+  make rows visible, not to persist) and `BeginWriteAsync` + explicit `CommitAsync`.
+  - *Alternative rejected — a global MVC action filter opening a transaction for the whole request.*
+    It would need no call-site changes at all, but `SubmitExerciseAnswerAsync` calls the AI evaluator
+    mid-request and `/exercises/{id}/voice/stream` writes TTS audio to the response body from inside
+    the action. A request-wide transaction would hold a Postgres connection open across both — idle
+    in transaction for the length of an LLM call or an entire audio stream. Placing the scopes by
+    hand costs ~20 one-line edits and keeps the transaction around the database work only.
+  - *Alternative rejected — `Database.UseTransaction` for the life of the connection.* Already
+    rejected in the 40.4 entry below for making `SaveChanges` externally owned; nothing changed.
+  - The helper no-ops when `Database.IsRelational()` is false, so the in-memory unit tests are
+    unaffected.
+- **Content authoring stays superadmin-only, so no content write-stamping is needed yet.** Every
+  content endpoint in learning-service is `RequireSuperAdministrator`, so content is authored only by
+  platform staff and `OrganizationId` stays `NULL` — the seeder produces a global library without any
+  special system mode. Note the gap this leaves for later: the content RLS policy's `WITH CHECK`
+  admits `NULL`, so it would **not** stop an org-scoped writer from creating global content. When
+  40.18 adds organization-authored content, the write side needs an application-level guard
+  (a content equivalent of `TenantSaveChangesInterceptor`); RLS alone will not cover it.
+- **`DisableTenantRls` added to BuildingBlocks.** identity's first RLS table (40.7) was created by the
+  same migration that enabled RLS, so `Down` could just drop the table. A service adding
+  `OrganizationId` to tables that already exist needs to hand them back unprotected, so the rollback
+  helper now exists alongside the two enable helpers.
+- **Admin controllers are the one documented place with no tenant scope.** They read and write
+  content directly, and the content policy admits global rows even with the session variable unset,
+  so they work as-is for the whole of 40.10. Recorded as a known gap rather than papered over,
+  because 40.18 must revisit it.
+
+---
+
 ## 2026-08-15 — Platform superadmin, impersonation, and the live-data migration (40.9)
 
 - **Which service hosts what.** Organization CRUD stays in organization-service and impersonation

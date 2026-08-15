@@ -10,6 +10,7 @@ public sealed class LessonEntityConfiguration : IEntityTypeConfiguration<Lesson>
     {
         builder.ToTable("Lessons");
         builder.HasKey(lesson => lesson.Id);
+        builder.Property(lesson => lesson.OrganizationId);
         builder.Property(lesson => lesson.Title).IsRequired();
 
         builder.HasOne(lesson => lesson.Topic)
@@ -17,6 +18,6 @@ public sealed class LessonEntityConfiguration : IEntityTypeConfiguration<Lesson>
             .HasForeignKey(lesson => lesson.TopicId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(lesson => new { lesson.TopicId, lesson.OrderInTopic });
+        builder.HasIndex(lesson => new { lesson.OrganizationId, lesson.TopicId, lesson.OrderInTopic });
     }
 }
