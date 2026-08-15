@@ -65,7 +65,7 @@ public sealed class EventMessageProcessor
             return MessageProcessingOutcome.Commit;
         }
 
-        if (await _idempotencyStore.HasProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken))
+        if (await _idempotencyStore.HasProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken))
         {
             _logger.LogDebug(
                 "Skipping duplicate event {EventId} ({Type}) in group '{Group}'",
@@ -86,7 +86,7 @@ public sealed class EventMessageProcessor
         var handlerError = await RunHandlerWithRetriesAsync(envelope, handler, cancellationToken);
         if (handlerError is null)
         {
-            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken);
+            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken);
             return MessageProcessingOutcome.Commit;
         }
 
@@ -160,7 +160,7 @@ public sealed class EventMessageProcessor
                 handlerError.Message,
                 cancellationToken);
 
-            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken);
+            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken);
 
             _logger.LogError(
                 handlerError, "Dead-lettered event {EventId} ({Type}) to {DeadLetterTopic} after exhausting retries",

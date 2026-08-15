@@ -4,6 +4,7 @@ using System.Text.Json;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.BuildingBlocks.Tenancy;
 using StackExchange.Redis;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
@@ -22,6 +23,12 @@ public sealed class ScenarioValidationService : IScenarioValidationService
 
     // Bumping the version invalidates every cached verdict at once — do it whenever the criteria
     // below change, otherwise old verdicts outlive the rules that produced them.
+    //
+    // Phase 40.11: the key is namespaced by organization first. Without it, one customer's cached
+    // verdict answers another customer's request — and since the key is a hash of the scenario
+    // text, a shared key also tells organization B that somebody else already submitted exactly
+    // this text. The org: prefix makes both impossible, and incidentally makes every pre-40.11 key
+    // unreachable: no un-prefixed key is ever read again, they simply age out on their own TTL.
     private const string CacheKeyPrefix = "dialog:scenario-validation:v1:";
     private const string ApprovedCacheValue = "ok";
     private const string RejectedCacheValuePrefix = "no:";
@@ -46,15 +53,18 @@ public sealed class ScenarioValidationService : IScenarioValidationService
 
     private readonly IOpenAiChatService _openAiChatService;
     private readonly IConnectionMultiplexer _redis;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<ScenarioValidationService> _logger;
 
     public ScenarioValidationService(
         IOpenAiChatService openAiChatService,
         IConnectionMultiplexer redis,
+        ITenantContext tenantContext,
         ILogger<ScenarioValidationService> logger)
     {
         _openAiChatService = openAiChatService;
         _redis = redis;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -70,9 +80,14 @@ public sealed class ScenarioValidationService : IScenarioValidationService
             return ScenarioValidationResult.Invalid(lengthComplaint);
         }
 
+        // Null when there is no organization on this request. The cache is documented below as an
+        // optimization and never a dependency, so an unset tenant degrades exactly the way an
+        // unreachable Redis does — one extra model call — rather than reading or writing a key
+        // that no organization owns. Session data fails loudly instead; a verdict about the
+        // caller's own text is not data another organization put there.
         var cacheKey = BuildCacheKey(scenario);
 
-        var cached = await ReadFromCacheAsync(cacheKey);
+        var cached = cacheKey is null ? null : await ReadFromCacheAsync(cacheKey);
         if (cached != null)
         {
             _logger.LogDebug("Scenario validation cache hit for {CacheKey}", cacheKey);
@@ -80,7 +95,11 @@ public sealed class ScenarioValidationService : IScenarioValidationService
         }
 
         var verdict = await AskModelAsync(scenario, cancellationToken);
-        await WriteToCacheAsync(cacheKey, verdict);
+        if (cacheKey is not null)
+        {
+            await WriteToCacheAsync(cacheKey, verdict);
+        }
+
         return verdict;
     }
 
@@ -100,13 +119,21 @@ public sealed class ScenarioValidationService : IScenarioValidationService
 
     /// <summary>
     /// Keys on a hash of the normalized text so that trivial edits — extra spaces, a different
-    /// case, a trailing newline — reuse an existing verdict instead of paying for a fresh one.
+    /// case, a trailing newline — reuse an existing verdict instead of paying for a fresh one,
+    /// under the current organization's namespace so the reuse never crosses a customer boundary.
+    /// Returns <see langword="null"/> when there is no organization on the request, meaning
+    /// "do not touch the cache at all".
     /// </summary>
-    private static string BuildCacheKey(string scenario)
+    private string? BuildCacheKey(string scenario)
     {
+        if (_tenantContext.OrganizationId is not { } organizationId)
+        {
+            return null;
+        }
+
         var normalized = Normalize(scenario);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        return CacheKeyPrefix + Convert.ToHexString(hash).ToLowerInvariant();
+        return $"org:{organizationId}:{CacheKeyPrefix}{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
     private static string Normalize(string scenario)

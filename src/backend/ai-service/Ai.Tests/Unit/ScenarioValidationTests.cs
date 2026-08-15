@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
@@ -22,6 +23,8 @@ public class ScenarioValidationTests
     private FakeRedis _cache = null!;
     private ScenarioValidationService _service = null!;
 
+    private TenantContext _tenantContext = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -31,8 +34,11 @@ public class ScenarioValidationTests
         var redis = Substitute.For<IConnectionMultiplexer>();
         redis.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(_cache.Database);
 
+        _tenantContext = new TenantContext();
+        _tenantContext.SetOrganization(AiDbContextFactory.DefaultOrganizationId);
+
         _service = new ScenarioValidationService(
-            _openAiChatService, redis, NullLogger<ScenarioValidationService>.Instance);
+            _openAiChatService, redis, _tenantContext, NullLogger<ScenarioValidationService>.Instance);
     }
 
     private void AnswerWith(string answer) =>
