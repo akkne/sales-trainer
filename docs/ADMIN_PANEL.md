@@ -36,8 +36,8 @@ yet — that starts with 40.7 (invites) and 40.20 (the org admin screen itself).
 
 | Policy | Required claim | Applied to |
 |---|---|---|
-| `RequireSuperAdmin` | `role` = SuperAdmin | All `/admin/*` endpoints today (Phase 40.6 — was `RequireAdmin`, Admin-or-SuperAdmin) |
-| `RequireOrgAdmin` | `org_role` = OrgAdmin | New infrastructure, Phase 40.6. No call site yet — ready for 40.7's invite endpoints and 40.20's org admin screen |
+| `RequireSuperAdmin` | `role` = SuperAdmin | All `/admin/*` endpoints (Phase 40.6 — was `RequireAdmin`, Admin-or-SuperAdmin), plus `/admin/platform/*` and the whole `/organizations` tenant registry since 40.9 |
+| `RequireOrgAdmin` | `org_role` = OrgAdmin | `/invites`, `/memberships` (Phase 40.7). Also the level an impersonation token is granted *inside* the organization it names |
 
 Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireSuperAdmin")]`.
 
@@ -217,6 +217,31 @@ UI: `/admin/users` lists all users (avatar, email + verification, provider, role
 
 **Owned by identity-service** (`AdminUsersController` in `identity-service/Identity/Features/Admin`). The activity stats (streak/XP/skills/score) are owned by gamification/learning, so identity returns them as `0` until cross-service composition lands — the same caveat as `GET /profile`. The monolith's copy stays as reference only.
 
+### Organizations & impersonation (`RequireSuperAdmin`, Phase 40.9)
+
+The `/admin/organizations` screen talks to two services, and the split follows which database the
+operation needs. Full contracts in [API_CONTRACTS.md](API_CONTRACTS.md).
+
+| Method | Path | Owning service | Purpose |
+|---|---|---|---|
+| GET / POST | /organizations | organization-service | list / create a tenant |
+| POST | /organizations/:id/suspend, /organizations/:id/reactivate | organization-service | suspend / resume |
+| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite the organization's first `OrgAdmin` |
+| POST | /admin/platform/impersonation | identity-service | mint a short-lived token for another organization |
+| GET | /admin/platform/impersonation | identity-service | the impersonation audit trail |
+
+UI notes:
+
+- **Impersonation always asks for a reason.** It is written into the audit record, and a crossing
+  nobody can justify afterwards is the one nobody can review.
+- Starting an impersonation swaps the active access token for the short-lived one and parks the
+  platform token in `sessionStorage`. `ImpersonationBanner`, rendered in the main app shell on
+  every screen, is the way back — without it, entering a customer organization would be a one-way
+  door until the token expired.
+- The "Impersonate" action is disabled for a suspended organization; the backend refuses it too.
+- Suspending an organization stops its users signing in and stops their refresh tokens working.
+  Already-issued access tokens keep working for up to 15 minutes.
+
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -271,6 +296,8 @@ app/(admin)/
         page.tsx       ← period members: move tier, adjust progress points, remove, force re-sync
     users/
       page.tsx         ← user list + role management (superadmin only)
+    organizations/
+      page.tsx         ← tenant registry: create, invite the first OrgAdmin, suspend/resume, impersonate (Phase 40.9)
 ```
 
 ---

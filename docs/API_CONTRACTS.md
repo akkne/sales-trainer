@@ -65,6 +65,15 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 > single identical message for both cases (it must not reveal which addresses belong to a
 > customer).
 
+> **Suspended organizations (Phase 40.9).** `/auth/login`, `/auth/google`, `/auth/refresh` and
+> `/auth/invites/{token}/accept` all answer `403` (`"Organization suspended"`) when the caller's
+> active membership belongs to a suspended organization. The check lives at the single point every
+> one of those routes converges on — token issuance — so a route added later cannot miss it, and a
+> refresh token cannot outlive the suspension by its 30-day lifetime. Already-issued access tokens
+> still work until they expire (≤15 min): a JWT is not revocable without a session store. An
+> organization identity-service has not heard of yet reads as **active**, never as suspended — the
+> registry projection is eventually consistent and a lagging consumer must not lock a customer out.
+
 **Three-step login (Phase 40.8).** The login method is a per-organization setting
 (`organization_auth_config`, owned by identity-service), so the client asks first and sends a
 credential second:
@@ -104,6 +113,53 @@ re-issues a code (silent 204 for unknown/already-verified emails to avoid accoun
 `/auth/verify-email` returns `401` on an invalid/expired/exhausted code.
 `/auth/login` returns `403 {message, requiresEmailVerification: true, email}` when the address
 is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
+
+---
+
+## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9)
+
+> Served by **identity-service** under `/admin/platform/*` (gateway route `identity-admin-platform`).
+> Organization CRUD lives in organization-service; what lands here is everything that needs
+> identity-db — minting a token and creating an invite. See [DECISIONS.md](DECISIONS.md) (2026-08-15).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /admin/platform/impersonation | `{organizationId, reason}` | `ImpersonationTokenDto`, `404` unknown org, `403` suspended / already impersonating |
+| GET | /admin/platform/impersonation | — | `ImpersonationAuditEntryDto[]`, newest first, max 100 |
+| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email}` | `BootstrapOrganizationAdminResponseDto`, `404`, `409` already has an admin, `403` suspended |
+
+`ImpersonationTokenDto`: `{accessToken, expiresAt, impersonationId, organization: {id, name}}`
+`ImpersonationAuditEntryDto`: `{id, actorUserId, actorEmail, organization: {id, name}, reason, issuedAt, expiresAt}`
+`BootstrapOrganizationAdminResponseDto`: `{inviteId, organization: {id, name}, email, expiresAt, token}`
+
+These are the **only** routes in the backend where an organization identifier arrives in a request
+body. TENANCY.md §1.3 states the rule and this exception in the same breath: a superadmin crossing
+a tenant boundary does so through an explicit endpoint that mints a new token, never through a
+parameter on an ordinary route. `scripts/tenancy-boundary-lint.py` allow-lists the two request DTOs
+by exact path and nothing else.
+
+**The impersonation token is deliberately weaker than the one that requested it:**
+
+| Property | Value | Why |
+|---|---|---|
+| `role` | `User` — **never** `SuperAdmin` | it cannot reach any `RequireSuperAdmin` route, which is what stops a second impersonation |
+| `sub` | the superadmin's own user id | the impersonator borrows an organization, never an identity |
+| `org_id` / `org_role` | target organization / `OrgAdmin` | what it is for |
+| `imp`, `imp_id`, `imp_actor` | marker claims | it is recognisable as an impersonation token wherever it turns up |
+| lifetime | `Impersonation:TokenLifetimeMinutes`, default **15** | short |
+| refresh token | **none** | the session cannot be silently renewed; extending it means asking again and writing another audit row |
+
+The audit row is written and committed *before* the token is returned, so a token that exists
+always has a record behind it. `reason` is required (3–500 chars).
+
+`bootstrap-admin` reuses the Phase 40.7 invite machinery verbatim — same `IInviteService`, same
+email, same one-time token — in a scope pinned to the target organization. The role is always
+`OrgAdmin` and is not taken from the request. It answers `409` if the organization already has an
+active `OrgAdmin` membership or a pending `OrgAdmin` invite, so it cannot be used as a back door
+into a running customer's organization.
+
+`404` also covers "organization-service created it seconds ago and identity-service has not
+consumed `organization.created` yet"; the message says so and the operation is safe to retry.
 
 ---
 
@@ -1298,11 +1354,15 @@ practice call; the selected persona's `name`/`position`/`personality`/`difficult
 `slug` is normalized (lowercased, non-alphanumerics collapsed to single hyphens) and globally
 unique; omitted → derived from `name`. `status` is `Active | Suspended`. These routes are not
 `[TenantScoped]` — they administer the registry itself, not one organization's own data (see
-docs/TENANCY/TENANCY.md §1.2). Restricting them to platform SuperAdmins is Phase 40.9 scope; today
-any authenticated caller can reach them, tracked in docs/DECISIONS.md.
+docs/TENANCY/TENANCY.md §1.2).
+
+**Phase 40.9:** the whole controller now requires `RequireSuperAdmin`; any other caller gets `403`.
+That gate is what makes addressing an organization by a route id legitimate here and nowhere else
+(docs/TENANCY/TENANCY.md §1.3).
 
 Publishes `organization.created` on create, `organization.updated` on rename/reactivate,
-`organization.suspended` on suspend (Kafka, no consumer yet).
+`organization.suspended` on suspend. **Consumed since 40.9** by identity-service, which keeps an
+`OrganizationReplicas` projection so a suspended organization stops producing tokens.
 
 ### Organization profile (tenant-scoped)
 

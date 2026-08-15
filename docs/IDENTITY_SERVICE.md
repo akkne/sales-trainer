@@ -28,7 +28,8 @@ src/backend/identity-service/
 
 `Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatar`,
 `Memberships` (Phase 40.6 — see below), `Invites` (Phase 40.7 — see below),
-`OrganizationAuthConfigurations` (Phase 40.8 — see below). The service has **its own database**, separate
+`OrganizationAuthConfigurations` (Phase 40.8 — see below), `OrganizationReplicas` and
+`ImpersonationAuditEntries` (Phase 40.9 — see below). The service has **its own database**, separate
 from the monolith's. `DatabaseBootstrapper` creates the `identity` database on startup if
 missing (idempotent), then EF `Migrate()` builds the schema — so it works against a fresh
 or an already-populated shared Postgres instance.
@@ -156,10 +157,57 @@ is **refused** (`401`, even for the right password), never downgraded to a passw
 `POST /auth/login/start` answers `200` for every syntactically valid address, known or not, and
 never names the organization — the same anti-enumeration property 40.7 gave `POST /auth/google`.
 
+## Platform superadmin surface (Phase 40.9)
+
+Two tables and one controller, all gated by `RequireSuperAdmin` and none of them tenant-scoped —
+these routes act *on* organizations rather than *inside* one, so there is no `X-Organization-Id`
+header to scope by. Contracts: [API_CONTRACTS.md](API_CONTRACTS.md) → "Platform superadmin".
+
+### `OrganizationReplicas`
+
+identity-service's read-only projection of organization-service's tenant registry
+(`organizationId` PK, `name`, `slug`, `status`, `updatedAt`), fed over Kafka. It exists because
+identity-service is the only service that mints tokens, and a suspended organization has to stop
+producing them — asking organization-service synchronously would put a second service on the
+authentication hot path.
+
+Suspension is enforced in `AuthenticationService.IssueTokensForUserAsync`, the one point password
+login, Google sign-in, invite acceptance and refresh all converge on. **A missing replica row reads
+as active**, never as suspended: the projection is eventually consistent and a lagging consumer
+must not lock a customer out of their own product.
+
+### `ImpersonationAuditEntries`
+
+Append-only: actor id and email, organization id and name (copied at write time), the mandatory
+reason, issue and expiry times. Written and committed *before* the token is handed back, so a token
+that exists always has a record behind it.
+
+### The impersonation token
+
+`POST /admin/platform/impersonation` mints a brand-new JWT rather than adding a parameter to an
+existing route ([TENANCY.md §1.3](TENANCY/TENANCY.md)). It carries `role: User` — deliberately not
+`SuperAdmin`, which is what stops it reaching any `RequireSuperAdmin` route including this one —
+plus `org_id`, `org_role: OrgAdmin`, and the marker claims `imp` / `imp_id` / `imp_actor`. `sub`
+stays the superadmin's own user id: the impersonator borrows an organization, never an identity.
+It is short-lived (`Impersonation:TokenLifetimeMinutes`, default 15) and has **no refresh token**.
+
+Built by hand in `PlatformAdminService` rather than through `AuthenticationService`'s token path,
+because every one of those differences *is* a security property.
+
+### Bootstrapping the first `OrgAdmin`
+
+`POST /admin/platform/organizations/bootstrap-admin` opens a DI scope, points that scope's
+`TenantContext` at the target organization and calls the ordinary Phase 40.7 `IInviteService` — the
+same code, the same tenant guards, the same email. There is no second invite path. The role is
+always `OrgAdmin` and is not read from the request, and the endpoint answers `409` if the
+organization already has an active `OrgAdmin` or a pending `OrgAdmin` invite, so it cannot become a
+back door into a running customer's organization.
+
 ## Frontend REST (unchanged paths, served via the gateway)
 
-`/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*`, and since 40.7 `/invites/*`
-and `/memberships/*` (both gateway routes point at the `identity` cluster) — identical request /
+`/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*`, since 40.7 `/invites/*`
+and `/memberships/*`, and since 40.9 `/admin/platform/*` (all gateway routes point at the
+`identity` cluster) — identical request /
 response contracts to the monolith (see [API_CONTRACTS.md](API_CONTRACTS.md)). JWT
 issuance, Google OAuth, MailerSend email verification and S3/MinIO avatar storage are all
 preserved verbatim.
@@ -174,9 +222,22 @@ preserved verbatim.
 | `user.deleted` | (contract ready; no trigger yet — no delete-account endpoint) | `{userId}` |
 
 Events go through `IUserEventPublisher` → the shared `KafkaEventPublisher` in
-`building-blocks`, keyed by `userId` for per-user ordering. Identity only **produces**
-events, so it wires the Kafka publisher but no Redis/idempotency store (those are for
-consumers).
+`building-blocks`, keyed by `userId` for per-user ordering.
+
+## Kafka events consumed (`organization.*`, Phase 40.9)
+
+Until 40.9 identity only produced events. `OrganizationReplicaConsumer` now subscribes to
+`organization.created` / `organization.updated` / `organization.suspended` and maintains
+`OrganizationReplicas`. It opts out of the base consumer's "every message must carry an
+organization" rule (`RequiresOrganization => false`): these events *describe* the tenant registry,
+the organization is the payload rather than the context.
+
+The projection logic lives in `OrganizationReplicaProjector` so it can be unit-tested without a
+broker; the consumer is only the transport shell.
+
+**Operational consequence:** identity-service now resolves the Redis-backed idempotency store at
+startup (every `KafkaConsumerBackgroundService` needs one), so Redis has to be reachable when the
+service boots. It did not before.
 
 ## Known transitional limitation — `GET /profile` aggregates
 

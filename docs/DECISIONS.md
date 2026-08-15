@@ -4,6 +4,123 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-15 — Platform superadmin, impersonation, and the live-data migration (40.9)
+
+- **Which service hosts what.** Organization CRUD stays in organization-service and impersonation
+  goes to identity-service, split along the line of *which database the operation needs*.
+  organization-service owns the tenant registry, so create / list / suspend / reactivate belong
+  there and nowhere else. Impersonation mints a JWT, and only identity-service holds the signing
+  key and the membership table the claims are built from. The one genuinely ambiguous case is
+  inviting the first `OrgAdmin`: the invite row lives in identity-db, so the endpoint lives in
+  identity-service (`POST /admin/platform/organizations/bootstrap-admin`) even though the action
+  reads like organization administration. *Alternative rejected:* organization-service calling
+  identity-service over HTTP to create the invite — that would put a synchronous cross-service
+  call on a path that already has a database it can write to, and would need a second trust
+  mechanism between the two services.
+
+- **The superadmin panel does not get its own invite path.** `bootstrap-admin` opens a DI scope,
+  points that scope's `TenantContext` at the target organization and calls the ordinary Phase 40.7
+  `IInviteService` — the same code, the same tenant guards, the same email. This is the
+  "open a scope per unit of work" shape [TENANCY.md §1.6](TENANCY/TENANCY.md) prescribes for
+  background jobs. *Alternative rejected:* writing an `Invite` row directly from the platform
+  service. It is four lines shorter and immediately becomes a second definition of what a valid
+  invite is, which then drifts.
+
+- **The endpoint refuses an organization that already has an admin.** Without that check,
+  `bootstrap-admin` is a permanent platform-side back door into any running customer's
+  organization. With it, it can only do the one thing it exists for. The check covers both an
+  active `OrgAdmin` membership and a pending, unexpired `OrgAdmin` invite.
+
+- **The impersonation token is deliberately weaker than the token that asked for it.** It carries
+  `role: User` — not `SuperAdmin` — plus `org_id` and `org_role: OrgAdmin` for the target
+  organization, the marker claims `imp` / `imp_id` / `imp_actor`, a short lifetime
+  (`Impersonation:TokenLifetimeMinutes`, default 15) and **no refresh token**. Dropping the
+  platform role is what stops an impersonation session reaching `RequireSuperAdmin` routes,
+  including the impersonation route itself; the explicit `IsAlreadyImpersonating` check in the
+  service is belt-and-braces for the day someone edits that policy. `sub` stays the superadmin's
+  own user id: the impersonator borrows an organization, never an identity, so anything the token
+  writes is attributable to a real person. *Alternative rejected:* reusing
+  `AuthenticationService`'s token path with a flag — the differences here *are* the security
+  properties, and hiding them behind a boolean makes them easy to lose.
+
+- **The audit row is written before the token is returned**, in the same database, so a token that
+  exists always has a record behind it. It records actor id and email, organization id and name
+  (copied, so the row still reads correctly after a rename), a mandatory free-text reason, and the
+  issue/expiry times. A crossing nobody can justify afterwards is exactly the one nobody can
+  review. *Alternative rejected:* a log line — Loki retention is not an audit policy.
+
+- **Suspension is enforced at token issuance, not at the gateway.** The check sits in
+  `AuthenticationService.IssueTokensForUserAsync`, the single point password login, Google
+  sign-in, invite acceptance and refresh all converge on. Enforcing it per-controller would leave
+  whichever route is added next unguarded; enforcing it only at login would let an already-issued
+  refresh token keep working for its full 30 days. Consequence to accept: a suspended
+  organization's users keep their current access token until it expires (≤15 minutes), because
+  JWTs are not revocable without a session store.
+
+- **identity-service gets an `OrganizationReplica` table rather than calling organization-service.**
+  DB-per-service means identity cannot join the registry, and asking over HTTP would put a second
+  service on the authentication hot path and make identity unable to sign anyone in whenever
+  organization-service is down. The replica is fed by the `organization.*` topics that already
+  existed, unused, since 40.5 — the same `UserReplica` pattern
+  ([TENANCY.md §1.1](TENANCY/TENANCY.md)). **A missing replica row reads as active, never as
+  suspended:** the projection is eventually consistent, and a consumer that is briefly behind must
+  not lock a paying customer out of their own product. Suspension is a deliberate recorded act; its
+  absence is what "no row" means. *Accepted cost:* an organization created seconds ago may not be
+  in the replica yet, so `bootstrap-admin` and `impersonation` answer `404` with a message saying
+  exactly that, and the operator retries.
+
+- **`OrganizationReplicas` and `ImpersonationAuditEntries` are outside RLS.** The first is read
+  while deciding whether a token may be issued at all — before there is a tenant context to filter
+  by, the same reason `OrganizationAuthConfigurations` skipped RLS in 40.8. The second exists to
+  record crossings *between* tenants and is read by platform staff, not by the organization named
+  in it. A table whose main access path would have to bypass RLS on every call should not pretend
+  to have it.
+
+- **`scripts/tenancy-boundary-lint.py` gained a two-file allow-list instead of being worked
+  around.** [TENANCY.md §1.3](TENANCY/TENANCY.md) states the rule and its single exception in the
+  same breath: the organization is never read from body/query/route, *except* through an explicit
+  superadmin impersonation endpoint. The two request DTOs that name an organization are listed by
+  exact path, with a stale-entry check so an exception cannot outlive the code it was granted for.
+  *Alternative rejected:* naming the files so the regex misses them — that is the same exception,
+  minus the review. Response DTOs use a nested `OrganizationReferenceDto(Id, Name)` — mirroring
+  organization-service's own `OrganizationSummaryDto` — so the outbound case needs no exception at
+  all.
+
+- **The live-data migration is SQL files plus a bash driver, not a dotnet tool.** It follows the
+  shape the repo already has for one-shot data moves (`scripts/migrate-monolith-to-services.sh`):
+  dry-run by default, connection resolved from `.env`, destructive SQL printed before it runs. A
+  DBA can read the four files in `docs/TENANCY/sql/` without a .NET toolchain, which matters
+  because the person running them at 2am is not necessarily the person who wrote them. It is
+  explicitly **not** an EF migration: EF migrations are schema, run automatically on service start,
+  and must never carry a one-shot data backfill that has to be rehearsed on a copy of production
+  first.
+
+- **The rollback is verifiable because the forward run leaves evidence.** `tenancy_backfill_40_9`
+  records which organization was created and when; `tenancy_backfill_40_9_demoted_users` records
+  the platform role of every account whose removed global `Admin` value was cleared. The rollback
+  deletes only memberships created at or before that timestamp and **refuses outright** if anyone
+  has joined since — deleting a real post-migration membership is worse than a failed rollback. It
+  never deletes a user: offboarding is deactivation ([TENANCY.md §4.3](TENANCY/TENANCY.md)) and
+  that does not stop applying because a migration went wrong.
+  `scripts/tenancy-default-organization-verify.sh` proves all of it against two throwaway
+  databases built from the services' own EF migrations, and drops them again.
+
+- **The migration is honest about how little there is to backfill.** `Invites` — the only
+  `ITenantScoped` table anywhere today — has had `OrganizationId NOT NULL` since it was created in
+  40.7, so there is nothing to fill in; the script asserts that rather than assuming it.
+  `OutboxMessages.OrganizationId` is left null where it is null, because a platform-global event
+  legitimately has no tenant and stamping one on retroactively would be inventing history. Every
+  other service database has no organization column yet — that is Stage C (40.10+), and the file
+  ends with the extension template for it instead of pretending to cover it.
+
+- **Role mapping in the backfill.** A user holding the removed global `Admin` value (1) or the
+  platform `SuperAdmin` role (2) becomes `OrgAdmin` of the default organization; everyone else
+  becomes `Manager`. The platform role on `Users` is a separate axis and is not touched by the
+  mapping — a `SuperAdmin` stays a `SuperAdmin` and additionally gains a membership, because
+  without one they cannot use the ordinary product at all.
+
+---
+
 ## 2026-08-15 — The SSO seam (40.8): why a three-step login exists before there is a second provider
 
 - **Why build a seam for something explicitly not being built.** SSO is deferred

@@ -41,7 +41,7 @@ public static class TestOrganizationSeeder
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var replica = await database.OrganizationReplicas.FindAsync(organizationId)
-            ?? throw new InvalidOperationException($"No organization replica for {organizationId}.");
+            ?? throw new InvalidOperationException("No organization replica for " + organizationId + ".");
         replica.Status = status;
         replica.UpdatedAt = DateTime.UtcNow;
         await database.SaveChangesAsync();
