@@ -20,6 +20,8 @@ internal sealed class ExerciseService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
@@ -76,6 +78,8 @@ internal sealed class ExerciseService(
         Guid topicId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
@@ -111,6 +115,8 @@ internal sealed class ExerciseService(
         string skillSlug,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var skill = await databaseContext.Skills
             .FirstOrDefaultAsync(candidate => candidate.IconicName == skillSlug, cancellationToken);
 
@@ -166,6 +172,8 @@ internal sealed class ExerciseService(
         Guid lessonId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var rawExercises = await databaseContext.Exercises
             .Where(exercise => exercise.LessonId == lessonId)
             .OrderBy(exercise => exercise.OrderInLesson)
@@ -273,9 +281,15 @@ internal sealed class ExerciseService(
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var exercise = await databaseContext.Exercises
-            .FirstOrDefaultAsync(exerciseRecord => exerciseRecord.Id == exerciseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        // Phase 40.10. Read scope only around the lookup: the AI evaluation below is a network
+        // call and must never happen with a Postgres transaction held open.
+        Exercise exercise;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            exercise = await databaseContext.Exercises
+                .FirstOrDefaultAsync(exerciseRecord => exerciseRecord.Id == exerciseId, cancellationToken)
+                ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        }
 
         var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
         var exerciseContent = JsonDocument.Parse(exercise.SerializedContent).RootElement;
@@ -296,6 +310,14 @@ internal sealed class ExerciseService(
                 : null,
             AttemptedAt = DateTime.UtcNow
         };
+
+        // Phase 40.10. One explicit transaction over the whole write phase: the progress reads
+        // inside UpdateLessonProgressAsync / PublishSkillCompletionIfFinishedAsync hit
+        // row-level-security-protected tables and see nothing without SET LOCAL, which
+        // TenantConnectionInterceptor only issues when a transaction starts. The intermediate
+        // SaveChangesAsync calls still flush in order, so the sequencing the comments below
+        // describe is unchanged — only the commit moved to the end.
+        await using var writeScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         databaseContext.UserExerciseAttempts.Add(newAttempt);
         // Persist the attempt first so UpdateLessonProgressAsync can count it
@@ -333,6 +355,8 @@ internal sealed class ExerciseService(
 
             await databaseContext.SaveChangesAsync(cancellationToken);
         }
+
+        await writeScope.CommitAsync(cancellationToken);
 
         return new ExerciseSubmissionResultDto(
             evaluationResult.IsCorrect,

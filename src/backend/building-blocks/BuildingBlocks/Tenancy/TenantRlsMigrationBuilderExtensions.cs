@@ -53,6 +53,28 @@ public static class TenantRlsMigrationBuilderExtensions
         return ApplyPolicy(migrationBuilder, tableName, comparison);
     }
 
+    /// <summary>
+    /// Reverses either of the two helpers above, for a migration's <c>Down</c>. Needed from 40.10
+    /// on: identity's first RLS table (<c>Invites</c>, 40.7) was created by the same migration that
+    /// enabled RLS, so dropping the table was enough; a service that adds <c>OrganizationId</c> to
+    /// tables that already existed has to be able to hand them back unprotected. <c>IF EXISTS</c>
+    /// keeps the rollback idempotent.
+    /// </summary>
+    public static OperationBuilder<SqlOperation> DisableTenantRls(
+        this MigrationBuilder migrationBuilder,
+        string tableName)
+    {
+        var quotedTable = QuoteIdentifier(tableName);
+        var quotedPolicy = QuoteIdentifier($"{tableName}_tenant_isolation");
+
+        return migrationBuilder.Sql($"""
+            DROP POLICY IF EXISTS {quotedPolicy} ON {quotedTable};
+
+            ALTER TABLE {quotedTable} NO FORCE ROW LEVEL SECURITY;
+            ALTER TABLE {quotedTable} DISABLE ROW LEVEL SECURITY;
+            """);
+    }
+
     private static string BuildOwnOrganizationComparison(string organizationIdColumnName)
         => $"{QuoteIdentifier(organizationIdColumnName)} = NULLIF(current_setting('{TenantConnectionInterceptor.OrganizationIdSettingName}', true), '')::uuid";
 

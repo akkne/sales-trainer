@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -12,8 +13,12 @@ namespace Sellevate.Learning.Infrastructure.Data;
 
 public sealed class LearningDbContext : DbContext
 {
-    public LearningDbContext(DbContextOptions<LearningDbContext> options) : base(options)
+    private readonly ITenantContext _tenantContext;
+
+    public LearningDbContext(DbContextOptions<LearningDbContext> options, ITenantContext tenantContext)
+        : base(options)
     {
+        _tenantContext = tenantContext;
     }
 
     public DbSet<Skill> Skills => Set<Skill>();
@@ -36,6 +41,39 @@ public sealed class LearningDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(LearningDbContext).Assembly);
+
+        // Phase 40.10. Convenience, not security — the boundary is the RLS policy created by the
+        // AddOrganizationId migration (docs/TENANCY/TENANCY.md 1.4). Every tenant-scoped entity is
+        // listed explicitly: EF query filters are NOT inherited through navigations, so a filter on
+        // Skill says nothing about Topic, Lesson or Exercise even though the read path composes
+        // Skill -> Topic -> Lesson -> Exercise. LearningDbContextQueryFilterTests fails the build if
+        // an entity ever grows an OrganizationId without appearing here.
+
+        // Tenant data: exactly one owning organization per row.
+        modelBuilder.Entity<UserSkillProgress>()
+            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<UserLessonProgress>()
+            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<UserExerciseAttempt>()
+            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<UserTechniqueProgress>()
+            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+
+        // Content: null means the global library shared by every organization, so the comparison is
+        // "mine or global", never plain equality (docs/TENANCY/CONTENT_MODEL.md).
+        modelBuilder.Entity<Skill>()
+            .HasQueryFilter(skill => skill.OrganizationId == null || skill.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<Topic>()
+            .HasQueryFilter(topic => topic.OrganizationId == null || topic.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<Lesson>()
+            .HasQueryFilter(lesson => lesson.OrganizationId == null || lesson.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<Exercise>()
+            .HasQueryFilter(exercise => exercise.OrganizationId == null || exercise.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<Technique>()
+            .HasQueryFilter(technique => technique.OrganizationId == null || technique.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<ReferenceMaterial>()
+            .HasQueryFilter(material => material.OrganizationId == null || material.OrganizationId == _tenantContext.OrganizationId);
     }
 }

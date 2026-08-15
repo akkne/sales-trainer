@@ -12,12 +12,19 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
 
         builder.HasKey(technique => technique.Id);
 
+        builder.Property(technique => technique.OrganizationId);
+
         builder.Property(technique => technique.Slug)
             .IsRequired()
             .HasMaxLength(120);
 
-        builder.HasIndex(technique => technique.Slug)
+        // Phase 40.10, same reasoning as SkillEntityConfiguration.
+        builder.HasIndex(technique => new { technique.OrganizationId, technique.Slug })
             .IsUnique();
+        builder.HasIndex(technique => technique.Slug)
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NULL")
+            .HasDatabaseName("IX_Techniques_Slug_Global");
 
         builder.Property(technique => technique.Name)
             .IsRequired()
@@ -65,7 +72,7 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
             .HasForeignKey<TechniqueCoach>(coach => coach.TechniqueId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(technique => technique.PrimarySkillId);
-        builder.HasIndex(technique => technique.SortOrder);
+        builder.HasIndex(technique => new { technique.OrganizationId, technique.PrimarySkillId });
+        builder.HasIndex(technique => new { technique.OrganizationId, technique.SortOrder });
     }
 }

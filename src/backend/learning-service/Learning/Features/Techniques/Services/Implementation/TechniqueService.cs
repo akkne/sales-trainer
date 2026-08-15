@@ -18,6 +18,8 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         IReadOnlyCollection<string>? tags,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var techniquesQuery = databaseContext.Techniques.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(skillIconicName))
@@ -86,6 +88,8 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var technique = await databaseContext.Techniques.AsNoTracking()
             .Include(loadedTechnique => loadedTechnique.Coach)
             .Include(loadedTechnique => loadedTechnique.AdditionalSkills)
@@ -134,6 +138,8 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking()
             .Where(technique => technique.PrimarySkillId != null)
             .GroupBy(technique => technique.PrimarySkillId!.Value)
@@ -182,6 +188,8 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var technique = await databaseContext.Techniques
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
 
@@ -208,6 +216,7 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         });
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyDictionary<Guid, Skill>> LoadSkillLookupAsync(

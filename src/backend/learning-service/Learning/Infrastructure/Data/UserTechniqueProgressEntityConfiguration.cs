@@ -12,9 +12,13 @@ public sealed class UserTechniqueProgressEntityConfiguration : IEntityTypeConfig
 
         builder.HasKey(progress => progress.Id);
 
-        builder.HasIndex(progress => new { progress.UserId, progress.TechniqueId })
+        builder.Property(progress => progress.OrganizationId)
+            .IsRequired();
+
+        // Phase 40.10: organization first, per docs/TENANCY/TENANCY.md section 3.
+        builder.HasIndex(progress => new { progress.OrganizationId, progress.UserId, progress.TechniqueId })
             .IsUnique();
 
-        builder.HasIndex(progress => progress.UserId);
+        builder.HasIndex(progress => new { progress.OrganizationId, progress.UserId });
     }
 }

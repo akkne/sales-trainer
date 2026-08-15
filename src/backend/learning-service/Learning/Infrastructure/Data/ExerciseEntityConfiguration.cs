@@ -10,6 +10,7 @@ public sealed class ExerciseEntityConfiguration : IEntityTypeConfiguration<Exerc
     {
         builder.ToTable("Exercises");
         builder.HasKey(exercise => exercise.Id);
+        builder.Property(exercise => exercise.OrganizationId);
         builder.Property(exercise => exercise.Type).IsRequired();
         builder.Property(exercise => exercise.SerializedContent).HasColumnType("jsonb");
 
@@ -18,6 +19,6 @@ public sealed class ExerciseEntityConfiguration : IEntityTypeConfiguration<Exerc
             .HasForeignKey(exercise => exercise.LessonId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(exercise => new { exercise.LessonId, exercise.OrderInLesson });
+        builder.HasIndex(exercise => new { exercise.OrganizationId, exercise.LessonId, exercise.OrderInLesson });
     }
 }

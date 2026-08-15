@@ -13,5 +13,11 @@ public sealed class UserExerciseAttemptEntityConfiguration : IEntityTypeConfigur
 
         builder.Property(attempt => attempt.SerializedAiFeedback)
             .HasColumnType("jsonb");
+
+        builder.Property(attempt => attempt.OrganizationId)
+            .IsRequired();
+
+        // Phase 40.10: organization first, per docs/TENANCY/TENANCY.md section 3.
+        builder.HasIndex(attempt => new { attempt.OrganizationId, attempt.UserId, attempt.ExerciseId });
     }
 }

@@ -17,6 +17,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
     public async Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         return await databaseContext.SkillStages
             .OrderBy(stage => stage.Order)
             .Select(stage => new SkillStageDto(stage.Key, stage.Label, stage.Accent, stage.Order))
@@ -26,6 +28,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
     public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await databaseContext.Skills
             .OrderBy(skill => skill.OrderInTree)
             .ThenBy(skill => skill.Id)
@@ -50,6 +54,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await databaseContext.Skills
             .OrderBy(skill => skill.OrderInTree)
             .ThenBy(skill => skill.Id)
@@ -146,6 +152,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         IReadOnlyList<string> skillSlugs,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         // Always keep the core skill enrolled, regardless of what the caller sent.
         var desiredSlugs = skillSlugs
             .Append(AlwaysEnrolledSlug)
@@ -186,12 +194,15 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         await databaseContext.UserSkillProgressRecords.AddRangeAsync(toAdd, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<TopicDto>> GetTopicsForSkillAsync(
         Guid skillId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var topics = await databaseContext.Topics
             .Where(topic => topic.SkillId == skillId)
             .OrderBy(topic => topic.OrderInSkill)
@@ -209,6 +220,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await GetAllSkillsWithProgressAsync(userId, cancellationToken);
 
         return new SkillTreeResponseDto(
