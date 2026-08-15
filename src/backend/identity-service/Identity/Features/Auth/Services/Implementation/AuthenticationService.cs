@@ -10,6 +10,7 @@ using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Features.Membership.Models;
+using Sellevate.Identity.Features.Organizations.Models;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 
@@ -308,6 +309,15 @@ internal sealed class AuthenticationService(
             .OrderBy(candidate => candidate.JoinedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        // Phase 40.9: suspension is enforced here, at the one point every entry route converges on
+        // — password login, Google, invite acceptance and refresh all end up in this method. Doing
+        // it per-controller would leave whichever route is added next unguarded, and doing it only
+        // at login would leave already-issued refresh tokens working indefinitely.
+        if (membership is not null)
+        {
+            await RejectIfOrganizationIsSuspendedAsync(membership.OrganizationId, cancellationToken);
+        }
+
         var accessToken = BuildJwtAccessToken(user, membership);
         var rawRefreshToken = GenerateSecureRandomToken();
 
@@ -333,6 +343,33 @@ internal sealed class AuthenticationService(
             OrgId: membership?.OrganizationId.ToString(),
             OrgRole: membership?.Role.ToString()
         );
+    }
+
+    /// <summary>
+    /// An organization identity-service has never heard of is treated as active: the replica is
+    /// populated asynchronously over Kafka, and a consumer that is briefly behind must not lock a
+    /// paying customer out of their own product. Suspension is a deliberate, recorded platform act
+    /// — its absence is what "no row" means here, not "unknown, therefore refuse".
+    /// </summary>
+    private async Task RejectIfOrganizationIsSuspendedAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var isSuspended = await databaseContext.OrganizationReplicas
+            .AsNoTracking()
+            .AnyAsync(
+                replica => replica.OrganizationId == organizationId
+                    && replica.Status == OrganizationReplicaStatus.Suspended,
+                cancellationToken);
+
+        if (!isSuspended)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "Token issuance refused — OrganizationId={OrganizationIdentifier} is suspended", organizationId);
+        throw new OrganizationSuspendedException(organizationId);
     }
 
     private string BuildJwtAccessToken(User user, Features.Membership.Models.Membership? membership)

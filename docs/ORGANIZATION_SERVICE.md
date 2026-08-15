@@ -70,7 +70,9 @@ Migration: `InitialOrganizationSchema` (2026-08-14) creates both tables, the uni
 
 Produces only (no consumer — like `company-service`'s `company.followup.due`, this service
 registers `KafkaTopicProvisioner` + `KafkaEventPublisher` directly rather than the full
-`AddSellevateEventing` helper, since it never needs the Redis-backed consumer idempotency store):
+`AddSellevateEventing` helper, since it never needs the Redis-backed consumer idempotency store).
+Since Phase 40.9 all three topics have a consumer on the other side: identity-service projects them
+into its `OrganizationReplicas` table so a suspended organization stops producing tokens.
 
 | Topic | Payload | When |
 |---|---|---|
@@ -98,6 +100,21 @@ auto-started by `scripts/dev-up.sh` (which only starts infra + frontend, per the
 profile) — run it alongside `scripts/dev-gateway.sh` and the other per-service scripts, same as
 `scripts/dev-company.sh`. See [LOCAL_DEV.md](LOCAL_DEV.md).
 
+## Authorization (Phase 40.9)
+
+`OrganizationController` — create / list / get / rename / suspend / reactivate — is
+`[Authorize(Policy = AuthorizationPolicies.RequireSuperAdmin)]`. The policy is registered in this
+service's own `Program.cs` and mirrors identity-service's definition verbatim (the platform role
+travels in the JWT `role` claim, which every service validates directly), so the same token means
+the same thing in both.
+
+That gate is load-bearing rather than cosmetic: the registry is the one place in the backend where
+an organization is legitimately addressed by an id supplied in the route
+([TENANCY.md §1.3](TENANCY/TENANCY.md)), and the licence for that rests entirely on the routes being
+platform-staff-only. `OrganizationControllerAuthorizationTests` asserts both halves — the registry
+requires `RequireSuperAdmin`, and `OrganizationProfileController` deliberately does not (it belongs
+to the organization itself and is read by its own members).
+
 ## What 40.6 needs to know
 
 - `Organization.Id` is the value that will become the JWT `org_id` claim and the
@@ -106,13 +123,12 @@ profile) — run it alongside `scripts/dev-gateway.sh` and the other per-service
   `organization_id uuid` with **no** foreign key into this service's database (DB-per-service —
   see docs/TENANCY/TENANCY.md §1.1), the same pattern `identity-service`'s `UserReplica` already
   uses for users elsewhere.
-- `organization.created` is the natural place for identity-service to hook the "mint the first
-  OrgAdmin membership" flow in 40.9 — no consumer exists yet, this scaffold only produces the
-  event.
-- `OrganizationController` today has no role restriction beyond `[Authorize]` (any authenticated
-  user can create/suspend/reactivate an organization). Locking it to platform `SuperAdmin` is
-  explicitly 40.9 scope, once `RequireSuperAdmin` exists in its post-40.6 shape — tracked in
-  [DECISIONS.md](DECISIONS.md).
+- `organization.created` is consumed by identity-service since 40.9, into `OrganizationReplicas`.
+  The first `OrgAdmin` is *not* minted from that event, though — it is created on demand by
+  `POST /admin/platform/organizations/bootstrap-admin`, because an organization exists for a while
+  before anyone decides who runs it. See [DECISIONS.md](DECISIONS.md) (2026-08-15).
+- `OrganizationController`'s missing role restriction was closed in 40.9 — see "Authorization"
+  above.
 - `OrganizationProfileController` is already `[TenantScoped]` and reads the organization solely
   from `X-Organization-Id`. It will start being reachable through a real user's JWT the moment
   identity-service issues the `org_id` claim in 40.6 — no changes needed on this service's side.

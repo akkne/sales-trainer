@@ -166,8 +166,66 @@ on a `BYPASSRLS` role that does not exist on real servers yet. A future write pa
 scope by `ITenantContext` explicitly in the query.
 
 An organization with no row here signs in with a password — the same answer an unknown address
-gets, which is what keeps login step 1 non-enumerable. Rows are created by 40.9's superadmin
-panel; nothing writes one today.
+gets, which is what keeps login step 1 non-enumerable. There is still no write endpoint; the first
+rows arrive with the 40.9 data migration
+(`docs/TENANCY/sql/40.9_default_organization_backfill_identity_db.sql`), which seeds one row with
+`method = password` and deliberately **empty** `AllowedEmailDomains` — claiming a domain would
+route every address at that domain to that organization, which is wrong the moment a second
+customer shares a mail provider.
+
+---
+
+### `OrganizationReplicas` (Phase 40.9)
+
+identity-service's read-only projection of the tenant registry owned by `organization-service`,
+kept current over Kafka (`organization.created` / `.updated` / `.suspended`). The same shape as
+`UserReplica` elsewhere: a bare uuid key, no FK, eventual consistency accepted on purpose
+([TENANCY.md §1.1](TENANCY/TENANCY.md)).
+
+| Column           | Type                       | Nullable | Notes                                                          |
+|------------------|----------------------------|----------|----------------------------------------------------------------|
+| `OrganizationId` | `uuid`                     | NOT NULL | PK. **No FK** — `organization-service` owns the registry        |
+| `Name`           | `character varying(200)`   | NOT NULL |                                                                 |
+| `Slug`           | `character varying(100)`   | NOT NULL |                                                                 |
+| `Status`         | `integer`                  | NOT NULL | `0 = Active`, `1 = Suspended`. Stored as an int here; the registry itself stores the same value as **text** — the two are not interchangeable, each side uses its own representation |
+| `UpdatedAt`      | `timestamp with time zone` | NOT NULL |                                                                 |
+
+It exists because identity-service is the only service that mints tokens, and a suspended
+organization has to stop producing them; a synchronous call to `organization-service` on every
+login would put authentication behind another service's availability.
+
+**No row-level security**, for the same reason as `OrganizationAuthConfigurations`: it is read
+while deciding whether a token may be issued at all, before there is a tenant context to filter by.
+
+**A missing row means active, not suspended.** The projection is eventually consistent, and a
+consumer that is briefly behind must not lock a paying customer out of their own product.
+
+---
+
+### `ImpersonationAuditEntries` (Phase 40.9)
+
+Append-only record of a platform superadmin minting a token for someone else's organization. The
+row is written and committed *before* the token is returned, so a token that exists always has a
+record behind it.
+
+| Column             | Type                       | Nullable | Notes                                                     |
+|--------------------|----------------------------|----------|-----------------------------------------------------------|
+| `Id`               | `uuid`                     | NOT NULL | PK                                                        |
+| `ActorUserId`      | `uuid`                     | NOT NULL | The platform staff member who asked                       |
+| `ActorEmail`       | `character varying(320)`   | NOT NULL | Copied at write time, so the row still reads correctly after a rename |
+| `OrganizationId`   | `uuid`                     | NOT NULL | **No FK** — cross-service reference                        |
+| `OrganizationName` | `character varying(200)`   | NOT NULL | Copied for the same reason as `ActorEmail`                |
+| `Reason`           | `character varying(500)`   | NOT NULL | Required. An impersonation with no stated reason is the one nobody can review afterwards |
+| `IssuedAt`         | `timestamp with time zone` | NOT NULL |                                                           |
+| `ExpiresAt`        | `timestamp with time zone` | NOT NULL | The true end of the session — impersonation tokens have no refresh companion |
+
+Indexes: `IX_ImpersonationAuditEntries_IssuedAt` (DESC) for "who went in recently";
+`IX_ImpersonationAuditEntries_OrganizationId_IssuedAt` (org, issued DESC) for "who has been inside
+this organization".
+
+**No row-level security**: the record exists to describe crossings *between* tenants, and its
+readers are platform staff, not the organization named in it. Nothing in the codebase updates or
+deletes a row.
 
 ---
 

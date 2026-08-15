@@ -11,6 +11,7 @@ using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Invites;
 using Sellevate.Identity.Features.Onboarding;
+using Sellevate.Identity.Features.PlatformAdmin;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
@@ -65,6 +66,11 @@ builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
 builder.Services.AddScoped<IOutboxWriter, IdentityOutboxWriter>();
 builder.Services.AddScoped<IOutboxStore, IdentityOutboxStore>();
 builder.Services.AddHostedService<OutboxRelayBackgroundService>();
+
+// Phase 40.9: identity-service becomes a consumer for the first time. It needs its own projection
+// of the tenant registry because it is the service that mints tokens, and a suspended organization
+// has to stop producing them (docs/TENANCY/TENANCY.md §1.1).
+builder.Services.AddHostedService<OrganizationReplicaConsumer>();
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -126,6 +132,7 @@ builder.Services
     .AddAuthenticationFeatureServices(builder.Configuration)
     .AddInviteFeatureServices(builder.Configuration)
     .AddOnboardingFeatureServices()
+    .AddPlatformAdminFeatureServices(builder.Configuration)
     .AddProfileFeatureServices();
 
 builder.Services.AddProblemDetails();

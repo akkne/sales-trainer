@@ -120,3 +120,92 @@ against a real, connection-pooled Postgres and not a mock.
   transaction (see docs/DECISIONS.md), is Stage C's responsibility, not this block's.
 - The role-provisioning SQL (`docs/TENANCY/sql/create_sellevate_app_role.sql`) is written but not
   run anywhere real — see `docs/DONT_FORGET.md`.
+
+---
+
+## 40.9 — platform superadmin, impersonation, and the live-data migration
+
+### Backend (`Identity.Tests`, `Organization.Tests`)
+
+`dotnet test src/backend/identity-service/Identity.Tests/Sellevate.Identity.Tests.csproj`
+→ **121/121** (was 96/96 before this block).
+`dotnet test src/backend/organization-service/Organization.Tests/Sellevate.Organization.Tests.csproj`
+→ **31/31**.
+
+| Test | Proves |
+|------|--------|
+| `PlatformAdminTests.StartImpersonation_AsOrdinaryUser_IsForbidden` | an `OrgAdmin` with a valid token and a valid organization cannot reach the impersonation endpoint |
+| `…ListImpersonations_AsOrdinaryUser_IsForbidden`, `…BootstrapOrganizationAdmin_AsOrdinaryUser_IsForbidden` | the same for the other two platform routes — the gate is on the controller, not on one action |
+| `…StartImpersonation_MintsAShortLivedNonEscalatingTokenAndAuditsIt` | the issued token carries `org_id`, `imp`, `imp_id`, `imp_actor`, `role: User` and **no** `SuperAdmin` anywhere, expires within the hour, and has a matching `ImpersonationAuditEntries` row with the actor and the stated reason |
+| `…StartImpersonation_AppearsInTheAuditList` | the audit is readable, not just written |
+| `…ImpersonationToken_CannotStartAnotherImpersonation` | chaining is refused — the dropped platform role is doing real work, not decoration |
+| `…StartImpersonation_ForUnknownOrganization_IsNotFound` | fails closed on an organization identity-service has never seen |
+| `…StartImpersonation_IntoSuspendedOrganization_IsForbidden` | suspension blocks platform staff too |
+| `…BootstrapOrganizationAdmin_CreatesAnOrgAdminInviteThatCanBeAccepted` | the invite is a real Phase 40.7 invite: it is emailed, and accepting it produces an **active `OrgAdmin` membership** |
+| `…BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflict`, `…WhenAnOrgAdminAlreadyExists_IsConflict` | the endpoint cannot be used as a back door into a running organization |
+| `…BootstrapOrganizationAdmin_ForSuspendedOrganization_IsForbidden` | a suspended tenant cannot be staffed |
+| `OrganizationSuspensionTests.Login_WhileOrganizationIsSuspended_IsForbidden` | a suspended organization actually blocks its users (`403`, not a silent success) |
+| `…Login_AfterTheOrganizationIsReactivated_Succeeds` | and resuming actually unblocks them |
+| `…RefreshToken_StopsWorkingOnceTheOrganizationIsSuspended` | an already-issued session does not outlive the suspension by the refresh token's 30-day lifetime |
+| `…AcceptInvite_IntoASuspendedOrganization_IsForbidden` | the invite path is covered by the same choke point, not separately guarded |
+| `…Login_WhenTheOrganizationIsNotYetReplicated_StillSucceeds` | **the negative of the negative**: a lagging Kafka consumer must never read as a suspension and lock a customer out |
+| `OrganizationReplicaProjectorTests` (5) | created / updated / suspended projections, a suspension for an organization whose create event was never seen, and an unrelated topic being ignored |
+| `PlatformAdminControllerContractTests` (3) | the platform controller is `RequireSuperAdmin` and **not** `[TenantScoped]`; `InvitesController` is still `RequireOrgAdmin` **and** `[TenantScoped]` — i.e. the bootstrap path did not loosen the ordinary one |
+| `OrganizationControllerAuthorizationTests` (2) | the tenant registry requires `RequireSuperAdmin`; the organization profile deliberately does not |
+
+Integration tests run without Kafka, so `TestOrganizationSeeder` writes the `OrganizationReplicas`
+rows the consumer would have written, and `TestWebApplicationFactory` removes
+`OrganizationReplicaConsumer` from the test host by exact implementation type (it resolves the
+Redis-backed idempotency store at startup, and there is no Redis in the test environment). The
+outbox relay and topic provisioner keep running exactly as before.
+
+### Frontend
+
+`cd src/frontend && npx vitest run` → **346/346** (was 338/338). `npx tsc --noEmit` clean.
+
+`__tests__/adminOrganizations.test.tsx` covers the hooks and the impersonation session:
+creating an organization never sends an organization id; suspend/resume go through the registry's
+own routes; the first `OrgAdmin` is invited through `/admin/platform/...` and never through
+`/invites`; impersonation always carries a reason; the platform token is parked and restorable; an
+elapsed **or unparseable** expiry reads as expired rather than as an endless session.
+
+### Lints
+
+```bash
+python3 scripts/tenancy-boundary-lint.py   # clean
+python3 scripts/tenancy-pool-lint.py       # clean
+```
+
+The boundary lint now carries a two-file allow-list for the superadmin request bodies that name an
+organization (the single carve-out in TENANCY.md §1.3) plus a check that a stale allow-list entry
+is itself reported as a violation. Response DTOs avoid the exception entirely by nesting
+`OrganizationReferenceDto(Id, Name)`.
+
+### The data migration and its rollback
+
+```bash
+./scripts/tenancy-default-organization-verify.sh
+```
+
+Creates two **throwaway** databases (`tenancy_verify_identity`, `tenancy_verify_organization`),
+builds their schema from the services' own EF migrations via
+`dotnet ef migrations script --idempotent` — so the assertions run against the real schema, not a
+hand-written imitation — seeds an awkward fixture (ordinary user, a user still holding the removed
+global `Admin` role, a platform `SuperAdmin`, and someone who already has a membership in another
+organization), then checks, in order:
+
+1. the driver's default mode writes nothing;
+2. the forward run gives every user a membership, maps the legacy admin and the superadmin to
+   `OrgAdmin` and everyone else to `Manager`, leaves the pre-existing membership alone, keeps the
+   platform role intact, and seeds the auth-config and replica rows;
+3. running it a second time changes nothing (idempotent);
+4. the rollback restores the user roles and the membership set **byte-for-byte** (md5 of the
+   sorted rows), removes the registry row and the bookkeeping tables, and deletes no user;
+5. the rollback **refuses** when someone has joined the organization after the backfill, and that
+   person's membership survives the refusal.
+
+24/24 assertions green; both databases are dropped on exit (`trap … EXIT`).
+
+> The migration has been executed **only** against those throwaway databases. Running it on a copy
+> of production and then on production is a human step — see `docs/DONT_FORGET.md` and
+> [MICROSERVICES_PRODUCTION_MIGRATION.md §7](../MICROSERVICES_PRODUCTION_MIGRATION.md).

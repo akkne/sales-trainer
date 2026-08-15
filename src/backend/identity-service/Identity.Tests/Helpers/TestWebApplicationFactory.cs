@@ -66,6 +66,21 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
 
             services.RemoveAll<IUserEventPublisher>();
             services.AddSingleton<IUserEventPublisher>(UserEventPublisher);
+
+            // Phase 40.9: OrganizationReplicaConsumer resolves the Redis-backed idempotency
+            // store the moment the host starts, and there is no Redis in the test environment.
+            // Removed by exact implementation type rather than with RemoveAll<IHostedService>()
+            // so the outbox relay and topic provisioner keep running exactly as before. The tests
+            // seed OrganizationReplicas directly (TestOrganizationSeeder) — exactly what the
+            // consumer would have written — and the projection it performs is covered separately
+            // by OrganizationReplicaProjectorTests.
+            var organizationReplicaConsumerDescriptors = services
+                .Where(descriptor => descriptor.ImplementationType == typeof(OrganizationReplicaConsumer))
+                .ToList();
+            foreach (var descriptor in organizationReplicaConsumerDescriptors)
+            {
+                services.Remove(descriptor);
+            }
         });
     }
 
