@@ -1081,6 +1081,111 @@ counterpart would have been a dangling reference in the other direction.
 
 ---
 
+## Phase 40.12 — company-service, where the scope is double (2026-08-15)
+
+### Company-service is scoped by organization **and** by user, and the two are enforced differently
+
+Every other Stage-C service has one axis: a row belongs to an organization. company-service has
+two — a row belongs to one salesperson *inside* one organization, because this is a personal CRM,
+the list of companies one person is calling. Getting either half wrong is a bug, but in opposite
+directions: the organization half leaks between paying customers, the user half hands a
+salesperson a colleague's private pipeline inside one customer.
+
+The two halves are therefore enforced in two different places, on purpose:
+
+- **Organization** — never written at a call site. It comes from `ITenantContext` through the EF
+  query filter and, authoritatively, from the RLS policy on all five tables. Nothing in
+  `CompanyService` mentions it.
+- **User** — always an explicit `UserId == userId` predicate, on the parent row *and* on every
+  sub-resource query. A query filter cannot express it (the user is a method argument, not ambient
+  state), and hiding it in the model would make "which rows can this caller see" impossible to read
+  off a call site.
+
+Before 40.12, sub-resource queries filtered on `CompanyId` alone and leaned on the ownership check
+performed on the parent two statements earlier. That was sound — a company id is unique to one
+user — but it left half of a two-part rule resting on an argument rather than on a predicate. All
+24 of them now carry the user themselves. The two deliberate exceptions are the navigation-property
+counts in `ListCompaniesAsync`/`GetCompanyAsync`, which count children of a company row already
+matched by both halves.
+
+The isolation tests assert both halves separately, and the user half is asserted **through the
+service layer**, because the database deliberately admits both colleagues' rows — the predicate is
+the only thing between them.
+
+### Strict RLS on all five tables, with no content flavour anywhere
+
+learning-db and ai-db needed `EnableTenantRlsForContent` (`organization_id IS NULL OR = current`)
+because they hold a global library shared by every tenant. company-db holds nothing of the sort:
+`Companies`, `CallLogEntries`, `PracticeCalls`, `CompanyContacts` and `CompanyPersonas` are all one
+salesperson's own working data. Every policy is therefore `EnableTenantRls`, plain equality, and a
+row with no organization is invisible rather than shared. That also makes the "unset tenant" test
+here stronger than in the other two services: an unset tenant sees literally nothing, not "only the
+global library".
+
+### `Company` is not deduplicated across users or organizations, and stays that way
+
+Two salespeople at the same customer who both call Acme already produce two `Companies` rows today
+— there is no unique constraint on `(UserId, Name)`, and none is added. Once the table is
+tenant-scoped that becomes up to three rows for the same real-world company: one per salesperson
+per organization.
+
+That is the correct answer for what this table actually stores. `Description` is a free-form brief
+written for one person's call, `Contacts`/`Personas`/`CallLogEntries` are that person's notes and
+that person's practice history, and `NextActionAt` is that person's calendar. Merging two
+salespeople onto one row would mean one of them editing the other's brief and seeing the other's
+log. A shared *account* record — one row per organization, with per-user pipelines hanging off it —
+is a different product feature (a real CRM's account/opportunity split), not a deduplication tweak,
+and nothing in Phase 40 asks for it.
+
+### Where company-service's per-organization poll gets its organizations
+
+`FollowUpReminderBackgroundService` is the job TENANCY.md §1.6 names as "scans due follow-ups
+across **all** orgs". It now iterates organizations with a scoped context per organization, which
+raises the question of where the list comes from. Three options were on the table:
+
+1. **A replicated tenant registry** (`OrganizationReplicas`, the way 40.9 gave identity one). It
+   would need a Kafka consumer, and company-service is deliberately producer-only — `Program.cs`
+   documents why — so wiring `AddSellevateEventing` would add a Redis dependency this service has
+   never had. Worse for correctness: an organization whose registry row had not replicated yet
+   would be skipped, turning replication lag into a silently dropped reminder.
+2. **Ask organization-service synchronously.** Puts a second service in the path of a background
+   job and fails the whole tick when it is down.
+3. **`SELECT DISTINCT "OrganizationId" FROM "Companies" WHERE <due and unnotified>`** — chosen. The
+   question the job actually asks is "which organizations have a follow-up due right now", and that
+   is a fact of company-db. An organization with no companies is not worth a loop iteration, and no
+   organization with due rows can be missed.
+
+The enumeration is the one place in company-service that enters system mode: one method, one
+column, no row content, and everything downstream runs with a concrete organization set — which is
+the "explicit, auditable opt-in" §1.6 asks for rather than an ambient fallback.
+
+**The cost, stated plainly:** system mode issues no `SET LOCAL`, so this query returns rows only
+for a role that bypasses RLS. That holds today (the service connects as the owning superuser) and
+is exactly the trap `DB_SCHEMA.md` already flags about `OrganizationAuthConfiguration` — a
+`NOBYPASSRLS` `sellevate_app` would make the enumeration return an empty list and the poll would go
+quiet without erroring. Recorded in `docs/DONT_FORGET.md` as a prerequisite of that rollout: either
+grant the background connection `BYPASSRLS` or give company-service a second connection string for
+system mode.
+
+### `IEventPublisher` takes the organization as a parameter, not from ambient context
+
+`company.followup.due` had to start filling 40.3's envelope `organizationId`. The publisher is a
+singleton and `ITenantContext` is request-scoped, so it cannot read the tenant itself — and it
+should not: the producers that matter here are background jobs, where the tenant is a property of
+the unit of work rather than of the caller. `PublishAsync` therefore grew an optional
+`organizationId` parameter, defaulting to `null` for genuinely platform-global events, which also
+keeps every pre-40.12 call site compiling and behaving identically.
+
+### The migration does no index work at all
+
+learning's and ai's 40.10/40.11 migrations omitted `CREATE INDEX` and left it to a concurrent
+script. company-service goes one step further and omits the `DROP INDEX` too. The old child-table
+indexes were `("CompanyId", <time>)` and doubled as the index the cascade-delete foreign key needs;
+their organization-first replacements do not serve that FK. Had the migration dropped them,
+deleting a company between the deploy and the index script would have sequential-scanned four
+tables. The script creates the replacements *and* a plain `("CompanyId")` index per child table,
+verifies `pg_index.indisvalid`, and only then drops.
+
 ## Phase 40.11 — ai-service across three stores (2026-08-15)
 
 ### Mongo sessions get a repository, not a convention

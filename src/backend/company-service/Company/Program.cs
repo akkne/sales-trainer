@@ -3,8 +3,10 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Infrastructure.Data;
@@ -33,8 +35,19 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Company");
 });
 
-builder.Services.AddDbContext<CompanyDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.12. Registers the request-scoped ITenantContext plus the two interceptors: the
+// cross-tenant write guard and the one that issues SET LOCAL app.organization_id for the
+// row-level-security policies. Never switch this to EF Core's pooled-context helper
+// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py) — a pooled context would cache the first
+// tenant's query filter and hand it to every later caller.
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<CompanyDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddCompanyFeatureServices(builder.Configuration);
 
@@ -111,6 +124,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

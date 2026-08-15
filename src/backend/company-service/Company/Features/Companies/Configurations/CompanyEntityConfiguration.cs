@@ -13,6 +13,9 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
 
         builder.HasKey(company => company.Id);
 
+        builder.Property(company => company.OrganizationId)
+            .IsRequired();
+
         builder.Property(company => company.Name)
             .IsRequired()
             .HasMaxLength(200);
@@ -59,11 +62,20 @@ public sealed class CompanyEntityConfiguration : IEntityTypeConfiguration<Compan
         builder.Property(company => company.UpdatedAt)
             .IsRequired();
 
-        builder.HasIndex(company => company.UserId);
+        // Phase 40.12: the double scope is the access path, so it is also the index. Every read in
+        // CompanyService is "this organization's rows, for this user", and the composite is a
+        // strict superset of the old IX_Companies_UserId — which the concurrent-index script drops
+        // once this one is built (docs/TENANCY/sql/40.12_company_organization_indexes_concurrently.sql).
+        builder.HasIndex(company => new { company.OrganizationId, company.UserId })
+            .HasDatabaseName("IX_Companies_OrganizationId_UserId");
 
         // Sparse index (only rows with a scheduled follow-up) so the reminder poll's
         // WHERE NextActionAt <= now AND FollowUpNotifiedAt IS NULL stays cheap as the table grows.
-        builder.HasIndex(company => company.NextActionAt)
+        // Leads with OrganizationId from 40.12 on: the poll now runs once per organization with a
+        // scoped context, so the organization is the first thing every one of its queries filters
+        // by (FollowUpReminderService).
+        builder.HasIndex(company => new { company.OrganizationId, company.NextActionAt })
+            .HasDatabaseName("IX_Companies_OrganizationId_NextActionAt")
             .HasFilter("\"NextActionAt\" IS NOT NULL");
 
         builder.HasMany(company => company.CallLogEntries)

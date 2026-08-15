@@ -10,6 +10,27 @@ using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Features.Companies.Services.Implementation;
 
+/// <summary>
+/// Phase 40.12. Company-service's scope is <b>double</b>: a row is visible to one user inside one
+/// organization, and the two halves are enforced in two different places on purpose.
+///
+/// <list type="bullet">
+/// <item><b>Organization</b> — never written here. It comes from <c>ITenantContext</c> via the EF
+/// query filter in <c>CompanyDbContext</c> and, authoritatively, from the row-level-security policy
+/// on all five tables. That is why every method below opens a <see cref="TenantTransactionScope"/>
+/// as its first statement: <c>SET LOCAL app.organization_id</c> only applies inside a transaction,
+/// and a read outside one returns zero rows under RLS — which looks exactly like an empty CRM.</item>
+/// <item><b>User</b> — always an explicit <c>UserId == userId</c> predicate, on the parent row and
+/// on every sub-resource query, not inferred from having already checked the parent. A manager and
+/// a colleague share an organization, so the organization filter alone would hand one salesperson
+/// another's pipeline. The two exceptions are the navigation-property counts in
+/// <c>ListCompaniesAsync</c>/<c>GetCompanyAsync</c>, which count children of a company row that
+/// was already matched by both halves.</item>
+/// </list>
+///
+/// An id that exists but fails either half is indistinguishable from an id that does not exist —
+/// both are <c>404</c>, never <c>403</c>, which is the pre-existing rule extended to the new half.
+/// </summary>
 internal sealed class CompanyService(
     CompanyDbContext databaseContext,
     IBriefingAiClient briefingAiClient,
@@ -41,6 +62,8 @@ internal sealed class CompanyService(
         string? search,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var query = databaseContext.Companies
             .Where(company => company.UserId == userId);
 
@@ -89,6 +112,8 @@ internal sealed class CompanyService(
         CreateCompanyRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var now = DateTime.UtcNow;
         var company = new CompanyEntity
         {
@@ -103,6 +128,8 @@ internal sealed class CompanyService(
         databaseContext.Companies.Add(company);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToDetailDto(company, 0, 0, 0);
     }
 
@@ -112,6 +139,8 @@ internal sealed class CompanyService(
         UpdateCompanyStatusRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         if (request.Status is not { } status)
             throw new ArgumentException("Status is required.", nameof(request));
 
@@ -128,11 +157,13 @@ internal sealed class CompanyService(
         await databaseContext.SaveChangesAsync(cancellationToken);
 
         var callLogCount = await databaseContext.CallLogEntries
-            .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
+            .CountAsync(entry => entry.CompanyId == companyId && entry.UserId == userId, cancellationToken);
         var practiceCallCount = await databaseContext.PracticeCalls
-            .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+            .CountAsync(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId, cancellationToken);
         var contactCount = await databaseContext.CompanyContacts
-            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
+            .CountAsync(contact => contact.CompanyId == companyId && contact.UserId == userId, cancellationToken);
+
+        await scope.CommitAsync(cancellationToken);
 
         return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
     }
@@ -143,6 +174,8 @@ internal sealed class CompanyService(
         UpdateCompanyFollowUpRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -183,11 +216,13 @@ internal sealed class CompanyService(
         await databaseContext.SaveChangesAsync(cancellationToken);
 
         var callLogCount = await databaseContext.CallLogEntries
-            .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
+            .CountAsync(entry => entry.CompanyId == companyId && entry.UserId == userId, cancellationToken);
         var practiceCallCount = await databaseContext.PracticeCalls
-            .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+            .CountAsync(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId, cancellationToken);
         var contactCount = await databaseContext.CompanyContacts
-            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
+            .CountAsync(contact => contact.CompanyId == companyId && contact.UserId == userId, cancellationToken);
+
+        await scope.CommitAsync(cancellationToken);
 
         return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
     }
@@ -197,6 +232,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .Select(c => new
@@ -240,6 +277,8 @@ internal sealed class CompanyService(
         UpdateCompanyRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -254,11 +293,13 @@ internal sealed class CompanyService(
         await databaseContext.SaveChangesAsync(cancellationToken);
 
         var callLogCount = await databaseContext.CallLogEntries
-            .CountAsync(entry => entry.CompanyId == companyId, cancellationToken);
+            .CountAsync(entry => entry.CompanyId == companyId && entry.UserId == userId, cancellationToken);
         var practiceCallCount = await databaseContext.PracticeCalls
-            .CountAsync(practiceCall => practiceCall.CompanyId == companyId, cancellationToken);
+            .CountAsync(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId, cancellationToken);
         var contactCount = await databaseContext.CompanyContacts
-            .CountAsync(contact => contact.CompanyId == companyId, cancellationToken);
+            .CountAsync(contact => contact.CompanyId == companyId && contact.UserId == userId, cancellationToken);
+
+        await scope.CommitAsync(cancellationToken);
 
         return MapToDetailDto(company, callLogCount, practiceCallCount, contactCount);
     }
@@ -268,6 +309,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -277,6 +320,8 @@ internal sealed class CompanyService(
 
         databaseContext.Companies.Remove(company);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
+
         return true;
     }
 
@@ -285,6 +330,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -292,7 +339,7 @@ internal sealed class CompanyService(
             return null;
 
         return await databaseContext.CallLogEntries
-            .Where(entry => entry.CompanyId == companyId)
+            .Where(entry => entry.CompanyId == companyId && entry.UserId == userId)
             .OrderByDescending(entry => entry.OccurredAt)
             .Select(entry => MapToCallLogDto(entry))
             .ToListAsync(cancellationToken);
@@ -304,6 +351,8 @@ internal sealed class CompanyService(
         CreateCallLogEntryRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
@@ -311,7 +360,7 @@ internal sealed class CompanyService(
             return null;
 
         if (request.ContactId is { } contactId)
-            await EnsureContactBelongsToCompanyAsync(companyId, contactId, cancellationToken);
+            await EnsureContactBelongsToCompanyAsync(userId, companyId, contactId, cancellationToken);
 
         var now = DateTime.UtcNow;
         var entry = new CallLogEntry
@@ -348,6 +397,8 @@ internal sealed class CompanyService(
             throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
         }
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToCallLogDto(entry);
     }
 
@@ -358,6 +409,8 @@ internal sealed class CompanyService(
         UpdateCallLogEntryRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -365,14 +418,14 @@ internal sealed class CompanyService(
             return null;
 
         var entry = await databaseContext.CallLogEntries
-            .Where(e => e.Id == logId && e.CompanyId == companyId)
+            .Where(e => e.Id == logId && e.CompanyId == companyId && e.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (entry is null)
             return null;
 
         if (request.ContactId is { } contactId)
-            await EnsureContactBelongsToCompanyAsync(companyId, contactId, cancellationToken);
+            await EnsureContactBelongsToCompanyAsync(userId, companyId, contactId, cancellationToken);
 
         entry.ContactId = request.ContactId;
         entry.ContactName = request.ContactName;
@@ -394,6 +447,8 @@ internal sealed class CompanyService(
             throw new ContactNotFoundInCompanyException(raceContactId, companyId, dbUpdateException);
         }
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToCallLogDto(entry);
     }
 
@@ -403,6 +458,8 @@ internal sealed class CompanyService(
         Guid logId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -410,7 +467,7 @@ internal sealed class CompanyService(
             return false;
 
         var entry = await databaseContext.CallLogEntries
-            .Where(e => e.Id == logId && e.CompanyId == companyId)
+            .Where(e => e.Id == logId && e.CompanyId == companyId && e.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (entry is null)
@@ -418,6 +475,8 @@ internal sealed class CompanyService(
 
         databaseContext.CallLogEntries.Remove(entry);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
+
         return true;
     }
 
@@ -427,6 +486,8 @@ internal sealed class CompanyService(
         CreatePracticeCallRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
@@ -455,6 +516,8 @@ internal sealed class CompanyService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToPracticeCallDto(practiceCall);
     }
 
@@ -463,6 +526,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -470,7 +535,7 @@ internal sealed class CompanyService(
             return null;
 
         return await databaseContext.PracticeCalls
-            .Where(practiceCall => practiceCall.CompanyId == companyId)
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
             .Select(practiceCall => MapToPracticeCallDto(practiceCall))
             .ToListAsync(cancellationToken);
@@ -481,6 +546,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -488,7 +555,7 @@ internal sealed class CompanyService(
             return null;
 
         return await databaseContext.PracticeCalls
-            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.Goal != string.Empty)
             .GroupBy(practiceCall => practiceCall.Goal)
             .Select(group => new { Goal = group.Key, LastCreatedAt = group.Max(practiceCall => practiceCall.CreatedAt) })
             .OrderByDescending(goalEntry => goalEntry.LastCreatedAt)
@@ -502,6 +569,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -509,7 +578,7 @@ internal sealed class CompanyService(
             return null;
 
         return await databaseContext.CompanyContacts
-            .Where(contact => contact.CompanyId == companyId)
+            .Where(contact => contact.CompanyId == companyId && contact.UserId == userId)
             .OrderByDescending(contact => contact.CreatedAt)
             .Select(contact => MapToContactDto(contact))
             .ToListAsync(cancellationToken);
@@ -521,6 +590,8 @@ internal sealed class CompanyService(
         CreateCompanyContactRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -543,6 +614,8 @@ internal sealed class CompanyService(
         databaseContext.CompanyContacts.Add(contact);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToContactDto(contact);
     }
 
@@ -553,6 +626,8 @@ internal sealed class CompanyService(
         UpdateCompanyContactRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -560,7 +635,7 @@ internal sealed class CompanyService(
             return null;
 
         var contact = await databaseContext.CompanyContacts
-            .Where(c => c.Id == contactId && c.CompanyId == companyId)
+            .Where(c => c.Id == contactId && c.CompanyId == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (contact is null)
@@ -573,6 +648,8 @@ internal sealed class CompanyService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToContactDto(contact);
     }
 
@@ -582,6 +659,8 @@ internal sealed class CompanyService(
         Guid contactId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -589,7 +668,7 @@ internal sealed class CompanyService(
             return false;
 
         var contact = await databaseContext.CompanyContacts
-            .Where(c => c.Id == contactId && c.CompanyId == companyId)
+            .Where(c => c.Id == contactId && c.CompanyId == companyId && c.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (contact is null)
@@ -597,6 +676,8 @@ internal sealed class CompanyService(
 
         databaseContext.CompanyContacts.Remove(contact);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
+
         return true;
     }
 
@@ -605,6 +686,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
@@ -614,13 +697,13 @@ internal sealed class CompanyService(
         // Most recent non-empty practice-call goal, if any — same "latest goal" notion as the
         // recent-goals feature, but only the single newest one (not the last-5-distinct list).
         var latestGoal = await databaseContext.PracticeCalls
-            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.Goal != string.Empty)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
             .Select(practiceCall => practiceCall.Goal)
             .FirstOrDefaultAsync(cancellationToken);
 
         var recentCalls = await databaseContext.CallLogEntries
-            .Where(entry => entry.CompanyId == companyId)
+            .Where(entry => entry.CompanyId == companyId && entry.UserId == userId)
             .OrderByDescending(entry => entry.OccurredAt)
             .Take(RecentCallLogCountForBriefing)
             .Select(entry => new BriefingCallLogItem(entry.ContactName, entry.Subject, entry.Outcome, entry.OccurredAt))
@@ -638,6 +721,8 @@ internal sealed class CompanyService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return new CompanyBriefingDto(company.BriefingContent, company.BriefingGeneratedAt);
     }
 
@@ -646,6 +731,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .Select(c => new { c.BriefingContent, c.BriefingGeneratedAt })
@@ -662,6 +749,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .FirstOrDefaultAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
@@ -686,7 +775,7 @@ internal sealed class CompanyService(
         // Most recent practice-call session ids first (capped to what ai-service accepts), plus
         // the single latest non-empty goal — same "latest goal" notion used by the briefing feature.
         var sessionIds = await databaseContext.PracticeCalls
-            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.DialogSessionId != string.Empty)
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.DialogSessionId != string.Empty)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
             .Take(MaxSessionIdsForReadiness)
             .Select(practiceCall => practiceCall.DialogSessionId)
@@ -696,7 +785,7 @@ internal sealed class CompanyService(
             return new CompanyReadinessDto(null, null, null, null, null);
 
         var latestGoal = await databaseContext.PracticeCalls
-            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.Goal != string.Empty)
+            .Where(practiceCall => practiceCall.CompanyId == companyId && practiceCall.UserId == userId && practiceCall.Goal != string.Empty)
             .OrderByDescending(practiceCall => practiceCall.CreatedAt)
             .Select(practiceCall => practiceCall.Goal)
             .FirstOrDefaultAsync(cancellationToken);
@@ -714,6 +803,8 @@ internal sealed class CompanyService(
 
             await databaseContext.SaveChangesAsync(cancellationToken);
 
+            await scope.CommitAsync(cancellationToken);
+
             return new CompanyReadinessDto(null, null, null, null, null);
         }
 
@@ -727,6 +818,8 @@ internal sealed class CompanyService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return new CompanyReadinessDto(aiResult.Score, aiResult.Strengths, aiResult.Gaps, aiResult.Recommendation, generatedAt);
     }
 
@@ -736,6 +829,8 @@ internal sealed class CompanyService(
         ParseCallLogRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(c => c.Id == companyId && c.UserId == userId, cancellationToken);
 
@@ -753,6 +848,8 @@ internal sealed class CompanyService(
         Guid companyId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -760,7 +857,7 @@ internal sealed class CompanyService(
             return null;
 
         return await databaseContext.CompanyPersonas
-            .Where(persona => persona.CompanyId == companyId)
+            .Where(persona => persona.CompanyId == companyId && persona.UserId == userId)
             .OrderByDescending(persona => persona.CreatedAt)
             .Select(persona => MapToPersonaDto(persona))
             .ToListAsync(cancellationToken);
@@ -772,6 +869,8 @@ internal sealed class CompanyService(
         CreateCompanyPersonaRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -793,6 +892,8 @@ internal sealed class CompanyService(
         databaseContext.CompanyPersonas.Add(persona);
         await databaseContext.SaveChangesAsync(cancellationToken);
 
+        await scope.CommitAsync(cancellationToken);
+
         return MapToPersonaDto(persona);
     }
 
@@ -802,6 +903,8 @@ internal sealed class CompanyService(
         Guid personaId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var companyExists = await databaseContext.Companies
             .AnyAsync(company => company.Id == companyId && company.UserId == userId, cancellationToken);
 
@@ -809,7 +912,7 @@ internal sealed class CompanyService(
             return false;
 
         var persona = await databaseContext.CompanyPersonas
-            .Where(p => p.Id == personaId && p.CompanyId == companyId)
+            .Where(p => p.Id == personaId && p.CompanyId == companyId && p.UserId == userId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (persona is null)
@@ -817,6 +920,8 @@ internal sealed class CompanyService(
 
         databaseContext.CompanyPersonas.Remove(persona);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
+
         return true;
     }
 
@@ -826,6 +931,8 @@ internal sealed class CompanyService(
         GenerateCompanyPersonaRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var company = await databaseContext.Companies
             .Where(c => c.Id == companyId && c.UserId == userId)
             .Select(c => new { c.Description })
@@ -841,10 +948,10 @@ internal sealed class CompanyService(
         return new GeneratedCompanyPersonaDto(aiResult.Name, aiResult.Position, aiResult.Personality);
     }
 
-    private async Task EnsureContactBelongsToCompanyAsync(Guid companyId, Guid contactId, CancellationToken cancellationToken)
+    private async Task EnsureContactBelongsToCompanyAsync(Guid userId, Guid companyId, Guid contactId, CancellationToken cancellationToken)
     {
         var contactBelongsToCompany = await databaseContext.CompanyContacts
-            .AnyAsync(contact => contact.Id == contactId && contact.CompanyId == companyId, cancellationToken);
+            .AnyAsync(contact => contact.Id == contactId && contact.CompanyId == companyId && contact.UserId == userId, cancellationToken);
 
         if (!contactBelongsToCompany)
             throw new ContactNotFoundInCompanyException(contactId, companyId);

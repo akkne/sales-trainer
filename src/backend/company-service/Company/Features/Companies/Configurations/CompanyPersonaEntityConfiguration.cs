@@ -12,6 +12,9 @@ public sealed class CompanyPersonaEntityConfiguration : IEntityTypeConfiguration
 
         builder.HasKey(persona => persona.Id);
 
+        builder.Property(persona => persona.OrganizationId)
+            .IsRequired();
+
         builder.Property(persona => persona.Name)
             .IsRequired()
             .HasMaxLength(200);
@@ -33,8 +36,11 @@ public sealed class CompanyPersonaEntityConfiguration : IEntityTypeConfiguration
         builder.Property(persona => persona.CreatedAt)
             .IsRequired();
 
-        builder.HasIndex(persona => new { persona.CompanyId, persona.CreatedAt })
-            .HasDatabaseName("IX_CompanyPersonas_CompanyId_CreatedAt")
-            .IsDescending(false, true);
+        builder.HasIndex(persona => new { persona.OrganizationId, persona.CompanyId, persona.CreatedAt })
+            .HasDatabaseName("IX_CompanyPersonas_OrganizationId_CompanyId_CreatedAt")
+            .IsDescending(false, false, true);
+
+        builder.HasIndex(persona => new { persona.OrganizationId, persona.UserId })
+            .HasDatabaseName("IX_CompanyPersonas_OrganizationId_UserId");
     }
 }

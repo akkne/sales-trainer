@@ -12,6 +12,9 @@ public sealed class PracticeCallEntityConfiguration : IEntityTypeConfiguration<P
 
         builder.HasKey(practiceCall => practiceCall.Id);
 
+        builder.Property(practiceCall => practiceCall.OrganizationId)
+            .IsRequired();
+
         builder.Property(practiceCall => practiceCall.DialogSessionId)
             .IsRequired()
             .HasMaxLength(100);
@@ -23,8 +26,11 @@ public sealed class PracticeCallEntityConfiguration : IEntityTypeConfiguration<P
         builder.Property(practiceCall => practiceCall.CreatedAt)
             .IsRequired();
 
-        builder.HasIndex(practiceCall => new { practiceCall.CompanyId, practiceCall.CreatedAt })
-            .HasDatabaseName("IX_PracticeCalls_CompanyId_CreatedAt")
-            .IsDescending(false, true);
+        builder.HasIndex(practiceCall => new { practiceCall.OrganizationId, practiceCall.CompanyId, practiceCall.CreatedAt })
+            .HasDatabaseName("IX_PracticeCalls_OrganizationId_CompanyId_CreatedAt")
+            .IsDescending(false, false, true);
+
+        builder.HasIndex(practiceCall => new { practiceCall.OrganizationId, practiceCall.UserId })
+            .HasDatabaseName("IX_PracticeCalls_OrganizationId_UserId");
     }
 }

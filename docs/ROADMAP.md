@@ -1730,14 +1730,27 @@
       операция на живых данных, порядок расписан в `docs/DONT_FORGET.md`. Бэкфилла в Postgres нет
       намеренно: весь существующий контент глобальный, `NULL` для него уже верное значение
 
-### [ ] 40.12 company-service
-- [ ] `organization_id` в `Company`, `CallLogEntry`, `PracticeCall`, `CompanyContact`, `CompanyPersona`
-- [ ] Скоуп становится двойным: организация **и** пользователь (личный CRM внутри компании)
-- [ ] Индексы: `(organization_id, user_id)`, `(organization_id, company_id, occurred_at DESC)`
-- [ ] **`FollowUpReminderBackgroundService`** — сейчас сканирует всех; переделать на
+### [x] 40.12 company-service
+- [x] `organization_id` в `Company`, `CallLogEntry`, `PracticeCall`, `CompanyContact`, `CompanyPersona`
+      — NOT NULL, `ITenantScoped`, строгая RLS на всех пяти таблицах (глобального контента в этой
+      БД нет вообще), фильтр запроса на каждую сущность по отдельности
+- [x] Скоуп становится двойным: организация **и** пользователь (личный CRM внутри компании)
+      — организация из `ITenantContext` (фильтр + RLS), пользователь явным предикатом
+      `UserId == userId` на родителе и на каждом под-ресурсе; обе половины покрыты тестами
+- [x] Индексы: `(organization_id, user_id)`, `(organization_id, company_id, occurred_at DESC)`
+      — миграция намеренно не создаёт и не дропает ни одного индекса, всё в
+      `40.12_company_organization_indexes_concurrently.sql` (иначе между деплоем и скриптом
+      удаление компании сканировало бы четыре дочерние таблицы)
+- [x] **`FollowUpReminderBackgroundService`** — сейчас сканирует всех; переделать на
       обход организаций со scoped-контекстом на каждую
-- [ ] `company.followup.due` несёт `organizationId` в конверте
-- [ ] Обновить `docs/COMPANIES/COMPANIES.md`
+      — не установленный тенант и системный режим теперь бросают исключение, а не значат «все»
+- [x] `company.followup.due` несёт `organizationId` в конверте
+      — `IEventPublisher.PublishAsync` получил необязательный параметр `organizationId`
+- [x] Обновить `docs/COMPANIES/COMPANIES.md`
+- [~] Тесты изоляции (12 штук, реальный Postgres) — **написаны и закоммичены, но не запускались**
+      (Правило №2 в `docs/DONT_FORGET.md`); юнит-тесты 134/134 зелёные
+- [~] Бэкфилл и перестройка индексов — SQL и драйвер написаны, **ни разу не выполнялись ни против
+      какой БД**; порядок для человека в `docs/DONT_FORGET.md`
 
 ### [ ] 40.13 Остальные сервисы
 - [ ] `social-service`: Postgres `social` + Mongo `chat_conversations` + фото в MinIO;

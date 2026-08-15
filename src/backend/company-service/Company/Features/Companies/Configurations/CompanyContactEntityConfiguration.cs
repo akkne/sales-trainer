@@ -12,6 +12,9 @@ public sealed class CompanyContactEntityConfiguration : IEntityTypeConfiguration
 
         builder.HasKey(contact => contact.Id);
 
+        builder.Property(contact => contact.OrganizationId)
+            .IsRequired();
+
         builder.Property(contact => contact.Name)
             .IsRequired()
             .HasMaxLength(200);
@@ -32,9 +35,12 @@ public sealed class CompanyContactEntityConfiguration : IEntityTypeConfiguration
         builder.Property(contact => contact.UpdatedAt)
             .IsRequired();
 
-        builder.HasIndex(contact => new { contact.CompanyId, contact.CreatedAt })
-            .HasDatabaseName("IX_CompanyContacts_CompanyId_CreatedAt")
-            .IsDescending(false, true);
+        builder.HasIndex(contact => new { contact.OrganizationId, contact.CompanyId, contact.CreatedAt })
+            .HasDatabaseName("IX_CompanyContacts_OrganizationId_CompanyId_CreatedAt")
+            .IsDescending(false, false, true);
+
+        builder.HasIndex(contact => new { contact.OrganizationId, contact.UserId })
+            .HasDatabaseName("IX_CompanyContacts_OrganizationId_UserId");
 
         builder.HasMany(contact => contact.CallLogEntries)
             .WithOne(entry => entry.Contact)
