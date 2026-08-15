@@ -1078,3 +1078,98 @@ Added `orgId`/`orgRole` (optional) to `AuthenticatedUser` and threaded them thro
 `useHandleSuccessfulAuth`/`useInitAuth` so the org claims introduced this block are actually
 reachable from the frontend once 40.20 needs them — leaving JWT claims with no client-visible
 counterpart would have been a dangling reference in the other direction.
+
+---
+
+## Phase 40.11 — ai-service across three stores (2026-08-15)
+
+### Mongo sessions get a repository, not a convention
+
+`dialog_sessions` had four readers (`DialogService`, `VoiceDialogService`, `VoiceUsageService`, and
+an unused `GetSessionByIdAsync`), each building its own `Builders<DialogSession>.Filter`. Adding an
+`organizationId` clause to each would have been the smaller diff and the wrong shape: Mongo has no
+row-level security, so unlike every Postgres table in this codebase there is no second layer to
+catch the call site that forgets. **Decision:** one `DialogSessionRepository`, taking
+`ITenantContext` in its constructor, holding the only `GetCollection<DialogSession>` in the
+service, exposing no method that accepts an organization or returns "all organizations".
+`MongoDbContext` stopped exposing the collection entirely, and a unit test asserts against the
+source tree that exactly one file names it — because nothing in C# enforces "sole holder".
+
+**Alternative considered and rejected:** a convention plus a code-review checklist. The block's own
+requirement was "one place to audit"; a convention is auditable only by reading every file that
+might have violated it.
+
+### An unset tenant on a session read raises; on the verdict cache it degrades
+
+Both are "fail closed", but they fail closed differently, and the difference is deliberate.
+
+A session read with no organization **throws** `InvalidOperationException("Organization context is
+not set.")` — the same wording as `TenantSaveChangesInterceptor`, so operators grep once. Returning
+an empty list would also be safe, and that is exactly the problem: a misconfigured gateway would
+present as "my history disappeared" rather than as an error, and would survive to production.
+
+The custom-scenario verdict cache with no organization is **skipped**, read and write. The file
+already documents Redis there as an optimization and never a dependency (a `RedisException` falls
+through to the model), so an unset tenant degrades the same way an unreachable Redis does — one
+extra model call. The data at stake is a verdict about the caller's own text, not something another
+organization put there. What must never happen — reading a key with no owner — does not.
+
+### No system-mode bypass on the session repository
+
+`ITenantContext.IsSystem` exists and `TenantSaveChangesInterceptor` honours it. The repository does
+not. Nothing in ai-service reads sessions outside a request today — both Kafka consumers touch
+Postgres only — so a system hatch would be an escape hatch with no user, in the one class whose
+entire purpose is to not have one. A future background reader must add an explicitly reviewed
+method; roadmap 40.14 (the background-job registry) is where that argument belongs.
+
+### ai-service `UserReplica` stays platform-global in 40.11
+
+`UserReplicas` is a projection of identity's users, maintained by `UserReplicaConsumer` — a Kafka
+consumer with no request and therefore no ambient tenant. Giving it an `OrganizationId` means
+deciding a tenant per message, which is the identity/consumer audit in 40.13, not this block.
+learning-db made the same call in 40.10 and consistency between the two replicas is worth more than
+a partial fix here. Its only cross-organization reader is the SuperAdmin voice-usage screen, whose
+*rows* are now organization-scoped, so no user outside the caller's organization appears in it.
+
+### The SuperAdmin voice-usage report becomes organization-scoped
+
+`GET /admin/voice/usage` used to aggregate every session in the installation. Under the repository
+it aggregates the caller's organization. This is a visible behaviour change to a staff-only screen,
+accepted rather than special-cased: a cross-tenant total is precisely the leak this block exists to
+close, and 40.9 already ships the legitimate way to see another organization's numbers
+(impersonation, which mints a token carrying that organization). The org-scoped admin surface is
+40.20.
+
+### Old Redis keys expire, they are not flushed
+
+Two options for keys written before the `org:` prefix: delete them, or let them age out. **Decision:
+let them age out.** The requirement is that a stale un-prefixed key is never *read* again, and the
+new key shape guarantees that on its own — no code path can produce the old shape. A flush would
+buy nothing for correctness and would cost real behaviour: `FLUSHDB` on a shared Redis takes out
+every other service's keys, and a targeted `SCAN`+`DEL` is an operation on live infrastructure for
+data that is already unreachable.
+
+Two consequences are accepted explicitly. Voice quota counters restart for the current day/month
+window, so a user can reserve up to one extra window's quota once — bounded, self-healing, and
+identical under either option. And `RedisIdempotencyStore` keys change shape *only for events that
+carry an organization*: a redelivery of an already-handled org event can be processed a second time
+within one TTL of the deploy. Every handler in this codebase is idempotent by construction.
+Platform-global events keep the historical `idem:{group}:{eventId}` key precisely so their dedupe
+survives untouched.
+
+### The idempotency organization comes from the envelope, not from `ITenantContext`
+
+`RedisIdempotencyStore` is a singleton and `ITenantContext` is scoped, so injecting the context was
+never available — but the reason to prefer the envelope stands on its own: a consumer's tenant is a
+property of the message it is holding, and reading it from ambient state would be a second source
+of truth that can disagree with the payload. The organization is therefore an optional parameter on
+`IIdempotencyStore`, passed by `EventMessageProcessor` from `EventEnvelope.OrganizationId`.
+
+### `40.11` index rebuilds and the Mongo backfill are operational steps
+
+Same reasoning as 40.10, and the same split: the EF migration adds columns and RLS policies only.
+`CREATE INDEX CONCURRENTLY` cannot run in a transaction and a transactional build would take an
+`ACCESS EXCLUSIVE` lock during `Database.Migrate()` at startup. The Mongo backfill is separate for
+a different reason — it is the user-visible step. Between the deploy and the script, pre-40.11
+sessions match no organization's filter and a user sees an empty history; that window must be
+closed by a human who is watching, not by a startup path that might race replicas.

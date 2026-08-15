@@ -22,6 +22,7 @@ New tab "Диалог" (left of Profile) where users practice sales skills via A
 ```sql
 CREATE TABLE "DialogBundles" (
     "Id" uuid PRIMARY KEY,
+    "OrganizationId" uuid NULL,             -- 40.11: NULL = global library, else org-authored
     "SkillId" uuid NOT NULL REFERENCES "Skills"("Id") ON DELETE CASCADE,
     "Title" varchar(200) NOT NULL,
     "Description" varchar(1000) NOT NULL,
@@ -37,6 +38,7 @@ CREATE TABLE "DialogBundles" (
 ```sql
 CREATE TABLE "DialogModes" (
     "Id" uuid PRIMARY KEY,
+    "OrganizationId" uuid NULL,             -- 40.11: NULL = global library, else org-authored
     "BundleId" uuid NOT NULL REFERENCES "DialogBundles"("Id") ON DELETE CASCADE,
     "Key" varchar(100) NOT NULL,
     "Title" varchar(200) NOT NULL,
@@ -46,10 +48,25 @@ CREATE TABLE "DialogModes" (
     "SortOrder" int NOT NULL,
     "IsActive" bool NOT NULL DEFAULT true,
     "CreatedAt" timestamp NOT NULL,
-    "UpdatedAt" timestamp NOT NULL,
-    UNIQUE ("BundleId", "Key")
+    "UpdatedAt" timestamp NOT NULL
 );
+
+-- 40.11: the mode key is unique per organization, not per installation. Two indexes, because
+-- Postgres treats NULLs in a composite unique index as distinct, so the composite one alone
+-- would not stop two global modes sharing a key.
+CREATE UNIQUE INDEX "IX_DialogModes_OrganizationId_BundleId_Key"
+    ON "DialogModes" ("OrganizationId", "BundleId", "Key") WHERE "OrganizationId" IS NOT NULL;
+CREATE UNIQUE INDEX "IX_DialogModes_BundleId_Key_Global"
+    ON "DialogModes" ("BundleId", "Key") WHERE "OrganizationId" IS NULL;
 ```
+
+Both tables are **content** in the tenancy model (`docs/TENANCY/CONTENT_MODEL.md`): `NULL` means
+the global library every organization sees, a non-null value means one organization authored the
+row. The EF query filter reads `OrganizationId IS NULL OR = current` — never plain equality, which
+would hand a new customer an empty practice page — and Postgres row-level security enforces the
+same comparison underneath (migration `20260815154837_AddOrganizationId`). The two seeded hidden
+bundles, `company-call` and `custom-scenario`, stay global on purpose: the frontend looks them up
+by key and every organization needs them.
 
 ### MongoDB Collection
 
@@ -57,6 +74,7 @@ CREATE TABLE "DialogModes" (
 ```json
 {
   "_id": ObjectId,
+  "organizationId": "guid",   // 40.11: owning organization, never absent
   "userId": "guid",
   "bundleId": "guid",
   "modeId": "guid",
@@ -80,6 +98,32 @@ CREATE TABLE "DialogModes" (
   "completedAt": ISODate
 }
 ```
+
+#### The tenant boundary in Mongo (40.11)
+
+Mongo has no row-level security. For every Postgres table in this codebase the EF query filter is
+convenience and the RLS policy is the boundary; here **there is no second layer** — the application
+is the boundary, and a boundary spread across call sites is one that gets forgotten on the next
+one. So all session access goes through a single class:
+
+| | |
+|---|---|
+| Class | `Features/Dialog/Services/Implementation/DialogSessionRepository.cs` |
+| Interface | `IDialogSessionRepository` — no method takes an organization, none returns "all organizations" |
+| Construction | requires `ITenantContext`; the collection handle is created here and nowhere else |
+| Unset tenant | throws `InvalidOperationException("Organization context is not set.")` — never an empty list, which would hide a misconfigured gateway behind an empty history screen |
+| System bypass | none. Nothing in ai-service reads sessions outside a request; a future background reader must add an explicitly reviewed method (roadmap 40.14) |
+
+`MongoDbContext` no longer exposes the collection at all, and a unit test
+(`AiTenancyModelTests.Only_the_repository_reaches_the_dialog_sessions_collection`) fails the build
+if a second file ever names `GetCollection<DialogSession>`.
+
+Indexes all lead with `organizationId`, which is also the designated prefix of any future shard
+key — a shard key that did not start with the tenant would scatter one customer's sessions across
+every shard and make the cross-tenant scan the cheap operation. They are created by
+`docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js`, which also backfills existing
+documents. Until that script runs, pre-40.11 sessions match no organization's filter and are
+invisible — fail-closed, the same shape RLS gives Postgres.
 
 ## API Endpoints
 

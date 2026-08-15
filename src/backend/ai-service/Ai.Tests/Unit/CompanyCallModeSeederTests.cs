@@ -62,10 +62,7 @@ public sealed class CompanyCallModeSeederTests
         "- Достижение цели звонка: до 25 XP\n" +
         "Калибровка: 0-20 провал, 21-45 слабо, 46-70 нормально, 71-85 хорошо, 86-100 исключительно (редко).";
 
-    private static AiDbContext CreateInMemory() =>
-        new(new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options);
+    private static AiDbContext CreateInMemory() => AiDbContextFactory.CreateInMemory();
 
     private static async Task<DialogMode> GetSeededModeAsync(AiDbContext db) =>
         await db.DialogModes.FirstAsync(mode => mode.Key == DialogModeKeys.CompanyCall);

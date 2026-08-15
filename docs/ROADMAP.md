@@ -1703,17 +1703,32 @@
 - [x] Обновить `docs/LEARNING_SERVICE.md`, `docs/DB_SCHEMA.md` (+ `docs/TESTING/TENANCY.md`,
       `docs/DECISIONS.md`)
 
-### [ ] 40.11 ai-service (Postgres + Mongo)
-- [ ] `organization_id` в Postgres-таблицах сервиса (квоты, веса, настройки)
-- [ ] **Mongo `DialogSession`**: поле `organizationId`, добавить в составные индексы,
-      префикс будущего ключа шардирования
-- [ ] RLS для Mongo не существует — фильтр прикладной; **все чтения сессий свести в один
-      репозиторий**, чтобы место для аудита было одно
-- [ ] Ревизия сидируемых скрытых режимов (`company-call`, `custom-scenario`) — остаются
-      глобальными; org-авторские режимы получают организацию в ключе
-- [ ] Redis: ключ verdict-кеша custom-scenario и `RedisIdempotencyStore` — **префикс
-      `org:{orgId}:`** (иначе кешированный вердикт одной организации отвечает другой)
-- [ ] Обновить `docs/AI_SERVICE.md`, `docs/AI_DIALOG.md`, `docs/CUSTOM_SCENARIO.md`
+### [x] 40.11 ai-service (Postgres + Mongo)
+- [x] `organization_id` в Postgres-таблицах сервиса: их оказалось две содержательных —
+      `DialogBundles` и `DialogModes` (нуллабельный, `NULL` = глобальная библиотека), плюс
+      контентная RLS и фильтры запросов. Отдельных таблиц квот/весов/настроек в ai-db нет: веса
+      скоринга живут в памяти и приходят из Kafka, лимиты голоса — в конфиге и Redis.
+      `UserReplicas` осознанно оставлена платформенной (как в 40.10) — см. `docs/DECISIONS.md`
+- [x] **Mongo `DialogSession`**: поле `organizationId`, три составных индекса, все начинаются с
+      него, он же зафиксирован как обязательный префикс будущего ключа шардирования
+- [x] RLS для Mongo не существует — фильтр прикладной; все чтения сессий сведены в
+      `DialogSessionRepository`: он требует `ITenantContext` в конструкторе, держит единственный
+      `GetCollection<DialogSession>` в сервисе, не имеет ни одного нескоупленного метода и падает
+      при незаданном тенанте. Юнит-тест проверяет по исходникам, что второго места не появилось
+- [x] Сидируемые скрытые режимы (`company-call`, `custom-scenario`) остаются глобальными
+      (тест это фиксирует); org-авторские режимы получают организацию в ключе — уникальность стала
+      `(OrganizationId, BundleId, Key)` + частичный уникальный индекс по глобальным строкам
+- [x] Redis: verdict-кеш, счётчики голосовой квоты и `RedisIdempotencyStore` — префикс
+      `org:{orgId}:`. Проверены и остальные ключи ai-service; `TtsAudioCache` оставлен как есть —
+      он in-process и его ключ это чистая функция от (текст, голос)
+- [x] Обновить `docs/AI_SERVICE.md`, `docs/AI_DIALOG.md`, `docs/CUSTOM_SCENARIO.md`
+      (+ `docs/TENANCY/TENANCY.md`, `docs/TESTING/TENANCY.md`, `docs/DECISIONS.md`)
+- [~] Интеграционные тесты изоляции по трём хранилищам написаны, но **не прогнаны** (Правило №2
+      в `docs/DONT_FORGET.md`): `AiTenantIsolationIntegrationTests`, 11 тестов, запускать
+      `--filter "TestCategory=Integration"`. Юнит-тесты 164/164 зелёные без них
+- [~] Бэкфилл Mongo и перестройка индексов **не выполнены ни против какой БД, Mongo или Redis** —
+      операция на живых данных, порядок расписан в `docs/DONT_FORGET.md`. Бэкфилла в Postgres нет
+      намеренно: весь существующий контент глобальный, `NULL` для него уже верное значение
 
 ### [ ] 40.12 company-service
 - [ ] `organization_id` в `Company`, `CallLogEntry`, `PracticeCall`, `CompanyContact`, `CompanyPersona`

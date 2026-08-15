@@ -12,6 +12,9 @@ public static class DialogServiceCollectionExtensions
     {
         services.Configure<OpenAiConfiguration>(configuration.GetSection(OpenAiConfiguration.SectionName));
         services.AddScoped<IOpenAiChatService, OpenAiChatService>();
+        // Phase 40.11: scoped, because it closes over the per-request ITenantContext. It is the
+        // only door to the dialog_sessions collection — see IDialogSessionRepository.
+        services.AddScoped<IDialogSessionRepository, DialogSessionRepository>();
         services.AddScoped<IDialogService, DialogService>();
         services.AddScoped<IScenarioValidationService, ScenarioValidationService>();
         return services;

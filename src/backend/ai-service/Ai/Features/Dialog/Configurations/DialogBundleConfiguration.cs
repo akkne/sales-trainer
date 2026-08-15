@@ -26,5 +26,10 @@ public sealed class DialogBundleConfiguration : IEntityTypeConfiguration<DialogB
 
         builder.HasIndex(bundle => bundle.SkillId);
         builder.HasIndex(bundle => bundle.SortOrder);
+
+        // Phase 40.11. Every bundle read is "mine or global", so the organization leads the index.
+        // Built by docs/TENANCY/sql/40.11_ai_organization_indexes_concurrently.sql, not by the
+        // migration — see the note on 20260815_AddOrganizationId.
+        builder.HasIndex(bundle => new { bundle.OrganizationId, bundle.SortOrder });
     }
 }

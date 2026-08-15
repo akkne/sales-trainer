@@ -840,7 +840,7 @@ without it the client received a 200 with zero frames and the persona simply sta
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`) |
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). Response shape unchanged. |
 
 ```jsonc
 // AdminVoiceUsageDto

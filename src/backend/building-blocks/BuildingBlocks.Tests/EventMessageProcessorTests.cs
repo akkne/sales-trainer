@@ -187,12 +187,20 @@ public sealed class EventMessageProcessorTests
 
         public List<Guid> Marked { get; } = [];
 
-        public Task<bool> HasProcessedAsync(string consumerGroup, Guid eventId, CancellationToken cancellationToken = default)
-            => Task.FromResult(_seen.Contains($"{consumerGroup}:{eventId}"));
+        public Task<bool> HasProcessedAsync(
+            string consumerGroup,
+            Guid eventId,
+            Guid? organizationId = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(_seen.Contains($"{organizationId}:{consumerGroup}:{eventId}"));
 
-        public Task MarkProcessedAsync(string consumerGroup, Guid eventId, CancellationToken cancellationToken = default)
+        public Task MarkProcessedAsync(
+            string consumerGroup,
+            Guid eventId,
+            Guid? organizationId = null,
+            CancellationToken cancellationToken = default)
         {
-            _seen.Add($"{consumerGroup}:{eventId}");
+            _seen.Add($"{organizationId}:{consumerGroup}:{eventId}");
             Marked.Add(eventId);
             return Task.CompletedTask;
         }

@@ -13,7 +13,6 @@ using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -22,20 +21,11 @@ public class CompanyContextDialogTests
 {
     private static AiDbContext BuildInMemoryContext()
     {
-        var databaseOptions = new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase("company-context-test-" + Guid.NewGuid())
-            .Options;
-        return new AiDbContext(databaseOptions);
+        return AiDbContextFactory.CreateInMemory("company-context-test-" + Guid.NewGuid());
     }
 
-    private static MongoDbContext BuildFakeMongoContext()
-    {
-        var mongoClient = Substitute.For<IMongoClient>();
-        var mongoDatabase = Substitute.For<IMongoDatabase>();
-        mongoClient.GetDatabase(Arg.Any<string>(), Arg.Any<MongoDatabaseSettings>()).Returns(mongoDatabase);
-        var configuration = new ConfigurationBuilder().Build();
-        return new MongoDbContext(mongoClient, configuration);
-    }
+    private static IDialogSessionRepository BuildFakeSessionRepository()
+        => Substitute.For<IDialogSessionRepository>();
 
     [Test]
     public async Task Seeder_CreatesCompanyCallBundle_AndMode_OnFirstRun()
@@ -79,7 +69,7 @@ public class CompanyContextDialogTests
     public async Task GetActiveBundles_ExcludesHiddenBundles()
     {
         await using var databaseContext = BuildInMemoryContext();
-        var mongoContext = BuildFakeMongoContext();
+        var sessionRepository = BuildFakeSessionRepository();
 
         databaseContext.DialogBundles.Add(new DialogBundle
         {
@@ -114,7 +104,7 @@ public class CompanyContextDialogTests
 
         var dialogService = new DialogService(
             databaseContext,
-            mongoContext,
+            sessionRepository,
             openAiChatService,
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
@@ -379,7 +369,7 @@ public class CompanyContextDialogTests
     public async Task StartSession_WithCompanyContext_OnNonCompanyCallMode_Throws()
     {
         await using var databaseContext = BuildInMemoryContext();
-        var mongoContext = BuildFakeMongoContext();
+        var sessionRepository = BuildFakeSessionRepository();
 
         var regularModeId = Guid.NewGuid();
         var bundleId = Guid.NewGuid();
@@ -413,7 +403,7 @@ public class CompanyContextDialogTests
 
         var dialogService = new DialogService(
             databaseContext,
-            mongoContext,
+            sessionRepository,
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
@@ -436,11 +426,11 @@ public class CompanyContextDialogTests
     public async Task GetCompanyCallMode_ReturnsNull_WhenModeNotSeeded()
     {
         await using var databaseContext = BuildInMemoryContext();
-        var mongoContext = BuildFakeMongoContext();
+        var sessionRepository = BuildFakeSessionRepository();
 
         var dialogService = new DialogService(
             databaseContext,
-            mongoContext,
+            sessionRepository,
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
@@ -456,13 +446,13 @@ public class CompanyContextDialogTests
     public async Task GetCompanyCallMode_ReturnsSeededMode_AfterSeeding()
     {
         await using var databaseContext = BuildInMemoryContext();
-        var mongoContext = BuildFakeMongoContext();
+        var sessionRepository = BuildFakeSessionRepository();
 
         await CompanyCallModeSeeder.SeedAsync(databaseContext);
 
         var dialogService = new DialogService(
             databaseContext,
-            mongoContext,
+            sessionRepository,
             Substitute.For<IOpenAiChatService>(),
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),

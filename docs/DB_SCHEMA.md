@@ -754,6 +754,15 @@ Skills
 | `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly team-progress ranking          |
 | `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
 | `presence:online`                  | Sorted | —        | Online-presence (member=userId, score=last-seen unix sec); pruned to a 5-min window by the metrics updater — see [MONITORING.md](MONITORING.md) |
+| `org:{orgId}:idem:{group}:{eventId}` | String | `Kafka:IdempotencyTtlDays` | Kafka consumer dedupe (Phase 40.11 added the `org:` prefix; an event whose envelope carries no organization keeps the historical `idem:{group}:{eventId}`) |
+| `org:{orgId}:dialog:scenario-validation:v1:{sha256}` | String | 30d approved / 7d rejected | ai-service custom-scenario relevance verdict, keyed by a hash of the normalized text — see [CUSTOM_SCENARIO.md](CUSTOM_SCENARIO.md) |
+| `org:{orgId}:voice:{userId}:day:{y}:{m}:{d}` / `:month:{y}:{m}` | String | end of window | ai-service voice-quota counters |
+
+> **Phase 40.11 rule:** every ai-service Redis key is namespaced `org:{orgId}:`. Without it one
+> organization's cached verdict answers another organization's request. Keys written before the
+> prefix are unreachable by the current code and expire on their own TTL — nothing was flushed
+> ([DECISIONS.md](DECISIONS.md)). Roadmap 40.13 applies the same rule to notification inboxes and
+> analytics presence.
 
 ---
 

@@ -6,11 +6,12 @@ using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using NSubstitute;
 using NUnit.Framework;
+using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
+using Sellevate.BuildingBlocks.Tenancy;
 using StackExchange.Redis;
 
 namespace Sellevate.Ai.Tests.Unit;
@@ -34,9 +35,10 @@ public class VoiceReservationGateTests
     /// <summary>
     /// Builds a VoiceUsageService backed by a fake Redis that returns the specified
     /// Lua-script results for day (1st call) and month (2nd call).
-    /// MongoDbContext and AiDbContext are constructed with real but non-connected stubs
-    /// because they are sealed and cannot be mocked with NSubstitute.
-    /// ReserveSecondsAsync never touches Mongo so the stubs are safe.
+    /// AiDbContext is constructed with a real but non-connected in-memory provider because it is
+    /// sealed and cannot be mocked with NSubstitute; the dialog-session store is reached through
+    /// IDialogSessionRepository, which substitutes cleanly. ReserveSecondsAsync never touches
+    /// Mongo anyway.
     /// </summary>
     private static (VoiceUsageService svc, IDatabase redis) Build(
         IOptions<VoiceFeatureConfiguration> limits,
@@ -65,22 +67,16 @@ public class VoiceReservationGateTests
         redis.StringGetAsync(Arg.Any<RedisKey>(), Arg.Any<CommandFlags>())
             .Returns(Task.FromResult<RedisValue>(RedisValue.Null));
 
-        // MongoDbContext is sealed — construct with a substituted IMongoClient + IConfiguration.
-        var mongoClient = Substitute.For<IMongoClient>();
-        var mongoDb = Substitute.For<IMongoDatabase>();
-        mongoClient.GetDatabase(Arg.Any<string>(), Arg.Any<MongoDatabaseSettings>()).Returns(mongoDb);
-        var config = new ConfigurationBuilder().Build();
-        var mongoContext = new MongoDbContext(mongoClient, config);
-
         // AiDbContext is sealed — construct with in-memory EF provider so no DB needed.
-        var dbOptions = new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase("voice-test-" + Guid.NewGuid())
-            .Options;
-        var dbContext = new AiDbContext(dbOptions);
+        var dbContext = AiDbContextFactory.CreateInMemory("voice-test-" + Guid.NewGuid());
+
+        var tenantContext = new TenantContext();
+        tenantContext.SetOrganization(AiDbContextFactory.DefaultOrganizationId);
 
         var svc = new VoiceUsageService(
-            mongoContext,
+            Substitute.For<IDialogSessionRepository>(),
             dbContext,
+            tenantContext,
             mux,
             limits,
             NullLogger<VoiceUsageService>.Instance);
@@ -89,6 +85,29 @@ public class VoiceReservationGateTests
     }
 
     // ── AI1: reservation gate ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Phase 40.11. A voice quota is already per-user, so this key could not have leaked one
+    /// customer's usage into another's — but "no ai-service Redis key is shared across
+    /// organizations" is only checkable by reading key names if every key carries the prefix.
+    /// </summary>
+    [Test]
+    public async Task ReserveSeconds_KeysAreNamespacedByOrganization()
+    {
+        var (svc, redis) = Build(LimitsOf(30, 300), dayScriptResult: 60, monthScriptResult: 60);
+
+        await svc.ReserveSecondsAsync(Guid.NewGuid(), 60);
+
+        var usedKeys = redis.ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(IDatabase.ScriptEvaluateAsync))
+            .SelectMany(call => (RedisKey[])call.GetArguments()[1]!)
+            .Select(key => key.ToString())
+            .ToList();
+
+        usedKeys.Should().HaveCount(2);
+        usedKeys.Should().OnlyContain(key =>
+            key.StartsWith($"org:{AiDbContextFactory.DefaultOrganizationId}:voice:", StringComparison.Ordinal));
+    }
 
     [Test]
     public async Task ReserveSeconds_WhenBelowDailyLimit_ReturnsReservedAmount()

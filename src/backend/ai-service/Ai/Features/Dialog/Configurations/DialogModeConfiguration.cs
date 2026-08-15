@@ -36,6 +36,17 @@ public sealed class DialogModeConfiguration : IEntityTypeConfiguration<DialogMod
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(mode => mode.BundleId);
-        builder.HasIndex(mode => new { mode.BundleId, mode.Key }).IsUnique();
+
+        // Phase 40.11. The mode key is unique per organization, not per installation. Postgres
+        // treats NULLs in a composite unique index as distinct, so the composite index alone would
+        // let the global library grow two rows with the same (BundleId, Key) — hence the second,
+        // partial index over exactly the global rows. Same shape as 40.10's Skill.IconicName.
+        builder.HasIndex(mode => new { mode.OrganizationId, mode.BundleId, mode.Key })
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NOT NULL");
+        builder.HasIndex(mode => new { mode.BundleId, mode.Key })
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NULL")
+            .HasDatabaseName("IX_DialogModes_BundleId_Key_Global");
     }
 }

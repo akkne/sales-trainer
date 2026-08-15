@@ -289,3 +289,98 @@ tenant's filter onto another's request.
 `..._indexes_concurrently.sql`, driven by `scripts/tenancy-learning-organization-rollout.sh`
 (default mode writes nothing). Neither file has been executed against any database, real or
 throwaway. See `docs/DONT_FORGET.md` for the order a human must run them in.
+
+---
+
+## 40.11 — ai-service (Postgres + Mongo + Redis)
+
+The first block whose boundary spans three stores, and each of them fails differently: Postgres has
+row-level security, Mongo has nothing but `DialogSessionRepository`, and Redis has nothing but the
+key name. The tests are split accordingly.
+
+### Unit tests — run on every build (`Ai.Tests`)
+
+```
+dotnet test src/backend/ai-service/Ai.Tests/Sellevate.Ai.Tests.csproj \
+  --filter "TestCategory!=Integration"
+```
+
+164/164 green (was 154/154). Six are the tenancy tripwires in `Unit/AiTenancyModelTests`:
+
+| Test | What it would catch |
+|---|---|
+| `Every_entity_with_an_organization_id_has_its_own_query_filter` | The §1.4 trap: EF does not inherit filters through `DialogBundle → DialogMode`. It walks the model rather than restating the entity list. |
+| `Dialog_sessions_are_tenant_data_and_the_dialog_library_is_content` | Someone making `DialogBundle`/`DialogMode` `ITenantScoped`, which would force a non-null owner and destroy the global library — or dropping `ITenantScoped` from `DialogSession`, which has no global case at all. |
+| `Seeded_hidden_modes_stay_global_and_are_visible_to_every_organization` | The roadmap's explicit 40.11 requirement. Plain equality would give every new customer a practice page with no `company-call` and no `custom-scenario` entry point — the two modes the frontend looks up by key. |
+| `One_organizations_authored_bundle_is_invisible_to_another` | A missing or wrong filter on the library. |
+| `Every_session_repository_method_refuses_an_unset_tenant` | 40.14's rule, for the store that has no policy to fall back on. It walks `IDialogSessionRepository` by reflection, so a method added later without the guard fails the build. |
+| `Only_the_repository_reaches_the_dialog_sessions_collection` | The regression that would quietly undo the whole block: a second class calling `GetCollection<DialogSession>` and filtering by hand. Asserted against the source tree, because nothing in C# enforces it. |
+
+Three more live with the code they guard:
+
+| Test | File | What it would catch |
+|---|---|---|
+| `Cached_verdict_is_namespaced_by_organization`, `Two_organizations_do_not_share_a_verdict_for_the_same_text`, `An_unset_tenant_does_not_touch_the_cache` | `Unit/ScenarioValidationTests` | One customer's cached verdict answering another's request — and the existence leak that comes with a text-hash key. |
+| `ReserveSeconds_KeysAreNamespacedByOrganization` | `Unit/VoiceReservationGateTests` | A quota key without the prefix. |
+| `RedisIdempotencyStoreKeyTests` (3) | `BuildingBlocks.Tests/Idempotency` | Two tenants sharing a dedupe namespace; and the deliberate exception — a platform-global event keeps the historical un-prefixed key, which is what preserves pre-40.11 dedupe. |
+
+`BuildingBlocks.Tests` is 94/94 (was 91/91).
+
+### Three-store isolation test — **written, not run in the 40.11 session**
+
+```
+dotnet test src/backend/ai-service/Ai.Tests/Sellevate.Ai.Tests.csproj \
+  --filter "TestCategory=Integration"
+```
+
+`Integration/AiTenantIsolationIntegrationTests`, 11 tests. Per Правило №2 in
+`docs/DONT_FORGET.md` they were written and committed but **not executed** by the agent. They
+compile, and the unit suite is green without them.
+
+Safety properties, same as 40.10's and extended per store:
+
+- each store is probed independently with a bounded timeout, so a machine with Postgres but no
+  Mongo still runs what it can, and a machine with nothing skips the whole file in seconds;
+- its own throwaway Postgres database `ai_tenancy_integration_test` and login role
+  `sellevate_ai_app_test`, its own throwaway Mongo database `ai_tenancy_integration_test` — the
+  real `ai` and `sallevate` databases are never touched;
+- Redis keys are written under the `ai-tenancy-test:` prefix and deleted **by name** in teardown.
+  There is no `FLUSHDB` anywhere: that Redis is shared with the developer's running stack;
+- the application role is `NOBYPASSRLS`, and the schema comes from ai-service's own EF migrations;
+- sessions are seeded **through the repository**, not written into the collection by hand — had
+  the repository stopped stamping the organization on write, hand-written documents would have let
+  every assertion pass anyway.
+
+| Test | Door it checks |
+|---|---|
+| `Global_dialog_library_stays_visible_to_both_organizations` | The content policy: `NULL` visible to A and B, each org's own only to itself. |
+| `Row_level_security_hides_the_other_organization_even_with_query_filters_ignored` | Which layer is actually doing the work — `IgnoreQueryFilters()` strips the convenience one on purpose. |
+| `Raw_sql_cannot_reach_the_other_organizations_modes` | Raw SQL, the door the EF filter does not guard at all. |
+| `Writing_a_mode_into_another_organization_is_refused_by_the_policy` | `WITH CHECK` on the content policy. |
+| `One_organizations_sessions_are_invisible_to_another` | The Mongo read path. |
+| `Knowing_another_organizations_session_id_is_not_enough_to_read_it` | The realistic attack: session id **and** user id both travel in URLs. |
+| `Writes_and_deletes_cannot_reach_another_organizations_session` | Update and delete, plus A's document still intact afterwards. |
+| `Voice_usage_aggregation_never_totals_across_organizations` | The aggregation pipeline — the one place a `$match` stage could be reordered into uselessness. |
+| `An_unset_tenant_reading_sessions_raises_instead_of_returning_everything` | The single most important behaviour in the block. |
+| `Two_organizations_never_read_each_others_cached_verdict` | The Redis verdict namespace. |
+| `Idempotency_keys_do_not_collide_across_organizations` | One organization marking an event processed must not suppress the other's copy. |
+
+### Lints
+
+```
+python3 scripts/tenancy-boundary-lint.py
+python3 scripts/tenancy-pool-lint.py
+```
+
+Both clean. The route-template check in the boundary lint was narrowed in this block: it now
+inspects only routing attributes and minimal-API map calls, because `org:{organizationId}:` in a
+Redis key is the tenancy fix and not a breach. A real
+`[HttpGet("organizations/{organizationId}/things")]` still fails it.
+
+### The operational scripts — not run against anything
+
+`docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js` and
+`docs/TENANCY/sql/40.11_ai_organization_indexes_concurrently.sql`, driven by
+`scripts/tenancy-ai-organization-rollout.sh` (default mode writes nothing). Neither has been
+executed against any database, Mongo, or Redis. See `docs/DONT_FORGET.md` for the order a human
+must run them in — the Mongo step is the user-visible one.

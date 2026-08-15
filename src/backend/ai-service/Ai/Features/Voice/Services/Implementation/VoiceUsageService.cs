@@ -1,21 +1,20 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Driver;
-using Sellevate.Ai.Features.Dialog.Models;
+using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
+using Sellevate.BuildingBlocks.Tenancy;
 using StackExchange.Redis;
 
 namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 
 internal sealed class VoiceUsageService : IVoiceUsageService
 {
-    private readonly MongoDbContext _mongoContext;
+    private readonly IDialogSessionRepository _sessionRepository;
     private readonly AiDbContext _dbContext;
+    private readonly ITenantContext _tenantContext;
     private readonly IDatabase _redis;
     private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
     private readonly ILogger<VoiceUsageService> _logger;
@@ -39,14 +38,16 @@ end
 return newval";
 
     public VoiceUsageService(
-        MongoDbContext mongoContext,
+        IDialogSessionRepository sessionRepository,
         AiDbContext dbContext,
+        ITenantContext tenantContext,
         IConnectionMultiplexer connectionMultiplexer,
         IOptions<VoiceFeatureConfiguration> voiceFeatureOptions,
         ILogger<VoiceUsageService> logger)
     {
-        _mongoContext = mongoContext;
+        _sessionRepository = sessionRepository;
         _dbContext = dbContext;
+        _tenantContext = tenantContext;
         _redis = connectionMultiplexer.GetDatabase();
         _voiceFeatureOptions = voiceFeatureOptions;
         _logger = logger;
@@ -58,8 +59,8 @@ return newval";
         var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var dailyUsedSeconds = await SumSecondsAsync(userId, dayStart, cancellationToken);
-        var monthlyUsedSeconds = await SumSecondsAsync(userId, monthStart, cancellationToken);
+        var dailyUsedSeconds = await _sessionRepository.SumVoiceSecondsForUserAsync(userId, dayStart, cancellationToken);
+        var monthlyUsedSeconds = await _sessionRepository.SumVoiceSecondsForUserAsync(userId, monthStart, cancellationToken);
 
         var limits = _voiceFeatureOptions.Value;
 
@@ -163,14 +164,9 @@ return newval";
     {
         if (seconds <= 0) return;
 
-        var sessionFilter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(session => session.UserId, userId)
-        );
-        var incrementUpdate = Builders<DialogSession>.Update.Inc(session => session.VoiceSeconds, seconds);
-        var result = await _mongoContext.DialogSessions.UpdateOneAsync(sessionFilter, incrementUpdate, cancellationToken: cancellationToken);
+        var recorded = await _sessionRepository.IncrementVoiceSecondsAsync(sessionId, userId, seconds, cancellationToken);
 
-        if (result.MatchedCount == 0)
+        if (!recorded)
         {
             _logger.LogWarning("Voice usage record skipped — session {SessionId} not found for user {UserId}", sessionId, userId);
         }
@@ -182,51 +178,24 @@ return newval";
         var dayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var aggregationPipeline = new[]
-        {
-            new BsonDocument("$match", new BsonDocument
-            {
-                { "voiceSeconds", new BsonDocument("$gt", 0) },
-            }),
-            new BsonDocument("$group", new BsonDocument
-            {
-                { "_id", "$userId" },
-                { "total", new BsonDocument("$sum", "$voiceSeconds") },
-                { "sessionCount", new BsonDocument("$sum", 1) },
-                { "lastCallAt", new BsonDocument("$max", "$createdAt") },
-                { "daily", new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray
-                    {
-                        new BsonDocument("$gte", new BsonArray { "$createdAt", dayStart }),
-                        "$voiceSeconds",
-                        0,
-                    })) },
-                { "monthly", new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray
-                    {
-                        new BsonDocument("$gte", new BsonArray { "$createdAt", monthStart }),
-                        "$voiceSeconds",
-                        0,
-                    })) },
-            }),
-            new BsonDocument("$sort", new BsonDocument("monthly", -1)),
-        };
+        // Phase 40.11: scoped to the caller's organization by the repository. This screen is
+        // SuperAdmin-only and used to aggregate the whole installation; it now aggregates one
+        // organization, because a cross-tenant total is exactly the leak this block closes. A
+        // platform superadmin reaches another organization's numbers by impersonating into it
+        // (40.9), and the org-scoped admin surface is 40.20.
+        var usage = await _sessionRepository.AggregateVoiceUsageAsync(dayStart, monthStart, cancellationToken);
 
-        using var cursor = await _mongoContext.DialogSessions.AggregateAsync<BsonDocument>(aggregationPipeline, cancellationToken: cancellationToken);
-        var documents = await cursor.ToListAsync(cancellationToken);
-
-        var usageEntries = new List<AdminVoiceUsageEntryDto>();
-        foreach (var document in documents)
-        {
-            if (!Guid.TryParse(document["_id"].AsString, out var documentUserId)) continue;
-            usageEntries.Add(new AdminVoiceUsageEntryDto
+        var usageEntries = usage
+            .Select(entry => new AdminVoiceUsageEntryDto
             {
-                UserId = documentUserId,
-                TotalSeconds = document["total"].ToInt32(),
-                SessionCount = document["sessionCount"].ToInt32(),
-                LastCallAt = document["lastCallAt"].ToUniversalTime(),
-                DailyUsedSeconds = document["daily"].ToInt32(),
-                MonthlyUsedSeconds = document["monthly"].ToInt32(),
-            });
-        }
+                UserId = entry.UserId,
+                TotalSeconds = entry.TotalSeconds,
+                SessionCount = entry.SessionCount,
+                LastCallAt = entry.LastCallAt,
+                DailyUsedSeconds = entry.DailyUsedSeconds,
+                MonthlyUsedSeconds = entry.MonthlyUsedSeconds,
+            })
+            .ToList();
 
         var userIdentifiers = usageEntries.Select(entry => entry.UserId).ToList();
         var userProfiles = await _dbContext.UserReplicas
@@ -253,29 +222,19 @@ return newval";
         };
     }
 
-    private async Task<int> SumSecondsAsync(Guid userId, DateTime since, CancellationToken cancellationToken)
+    /// <summary>
+    /// Phase 40.11. Every ai-service Redis key is namespaced by organization. A voice quota is
+    /// already per-user and a user id is globally unique, so this particular key could not have
+    /// leaked one customer's usage into another's — but the prefix is what makes "no ai-service key
+    /// is shared across organizations" checkable by reading key names instead of reasoning about
+    /// each one, and voice limits become an organization setting later in Phase 40. Unset tenant
+    /// throws rather than silently sharing one counter between customers.
+    /// </summary>
+    private string RedisKey(Guid userId, string window, params int[] parts)
     {
-        var sumPipeline = new[]
-        {
-            new BsonDocument("$match", new BsonDocument
-            {
-                { "userId", userId.ToString() },
-                { "createdAt", new BsonDocument("$gte", since) },
-                { "voiceSeconds", new BsonDocument("$gt", 0) },
-            }),
-            new BsonDocument("$group", new BsonDocument
-            {
-                { "_id", BsonNull.Value },
-                { "total", new BsonDocument("$sum", "$voiceSeconds") },
-            }),
-        };
+        var organizationId = _tenantContext.OrganizationId
+            ?? throw new InvalidOperationException("Organization context is not set.");
 
-        using var cursor = await _mongoContext.DialogSessions.AggregateAsync<BsonDocument>(sumPipeline, cancellationToken: cancellationToken);
-        var document = await cursor.FirstOrDefaultAsync(cancellationToken);
-        if (document == null) return 0;
-        return document["total"].ToInt32();
+        return $"org:{organizationId}:voice:{userId}:{window}:{string.Join(":", parts)}";
     }
-
-    private static string RedisKey(Guid userId, string window, params int[] parts)
-        => $"voice:{userId}:{window}:{string.Join(":", parts)}";
 }
