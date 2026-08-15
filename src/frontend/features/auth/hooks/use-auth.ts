@@ -135,6 +135,31 @@ export function useResendVerificationCode() {
     });
 }
 
+/**
+ * Phase 40.8, step 1 of the three-step login flow: the server answers which credential to ask
+ * for, because the login method is per-organization configuration (docs/TENANCY/TENANCY.md §4.5).
+ *
+ * The response deliberately carries nothing but the method — no organization, no "this address
+ * exists" flag — so the screen cannot be used to probe which addresses belong to a customer.
+ */
+export type LoginMethod = "password" | "oidc" | "saml";
+
+interface LoginStartResponse {
+    method: LoginMethod;
+}
+
+export function useLoginStart() {
+    return useMutation({
+        mutationFn: (email: string) =>
+            apiClient.post<LoginStartResponse>("/auth/login/start", { email }),
+        onError: (error) => {
+            clientLogger.warn("Login method lookup failed", {
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
 export function useLogin() {
     const router = useRouter();
     const handleSuccessfulAuth = useHandleSuccessfulAuth();
