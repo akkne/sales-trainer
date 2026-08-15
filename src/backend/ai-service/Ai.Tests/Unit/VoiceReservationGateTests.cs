@@ -73,10 +73,7 @@ public class VoiceReservationGateTests
         var mongoContext = new MongoDbContext(mongoClient, config);
 
         // AiDbContext is sealed — construct with in-memory EF provider so no DB needed.
-        var dbOptions = new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase("voice-test-" + Guid.NewGuid())
-            .Options;
-        var dbContext = new AiDbContext(dbOptions);
+        var dbContext = AiDbContextFactory.CreateInMemory("voice-test-" + Guid.NewGuid());
 
         var svc = new VoiceUsageService(
             mongoContext,

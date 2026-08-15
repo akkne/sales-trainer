@@ -15,10 +15,7 @@ public sealed class AdminDialogExportTests
 {
     private static AiDbContext CreateInMemory()
     {
-        var options = new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        return new AiDbContext(options);
+        return AiDbContextFactory.CreateInMemory();
     }
 
     private static AdminDialogController CreateController(AiDbContext db) =>

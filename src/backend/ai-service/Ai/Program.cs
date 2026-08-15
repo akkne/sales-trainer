@@ -21,6 +21,7 @@ using Sellevate.Ai.Infrastructure.Mongo;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Tenancy;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
@@ -49,8 +50,18 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 
 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
-builder.Services.AddDbContext<AiDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.11: ai-db holds the dialog library, which becomes org-authorable, so the context carries
+// both tenancy interceptors — the write guard and the one that issues SET LOCAL app.organization_id
+// for the row-level-security policies. Never switch this to EF Core's pooled-context helper
+// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py).
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<AiDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddSingleton<IMongoClient>(_ =>
     new MongoClient(builder.Configuration.GetConnectionString("Mongo")));
@@ -185,6 +196,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

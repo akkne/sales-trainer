@@ -22,10 +22,7 @@ public class CompanyContextDialogTests
 {
     private static AiDbContext BuildInMemoryContext()
     {
-        var databaseOptions = new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase("company-context-test-" + Guid.NewGuid())
-            .Options;
-        return new AiDbContext(databaseOptions);
+        return AiDbContextFactory.CreateInMemory("company-context-test-" + Guid.NewGuid());
     }
 
     private static MongoDbContext BuildFakeMongoContext()
