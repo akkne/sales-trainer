@@ -11,7 +11,9 @@ Three checks:
      body.
   2. A [FromQuery] / [FromRoute] binding named organizationId — the query
      string / route path cases.
-  3. A route template containing the literal segment {organizationId}.
+  3. A routing attribute or minimal-API map call whose template contains the
+     literal segment {organizationId}. Only route declarations are inspected:
+     "org:{organizationId}:" in a Redis key is the tenancy fix, not a breach.
 
 Scope is passed as command-line paths (defaults to the whole backend). Files
 under obj/, bin/, and Migrations/ are skipped.
@@ -31,6 +33,15 @@ ORGANIZATION_ID_IDENTIFIER_PATTERN = re.compile(r"\bOrganizationId\b")
 FROM_QUERY_OR_ROUTE_PATTERN = re.compile(r"\[From(?:Query|Route)\b[^\]]*\]")
 ORGANIZATION_ID_BINDING_NAME_PATTERN = re.compile(r"\borganizationId\b", re.IGNORECASE)
 ROUTE_TEMPLATE_ORGANIZATION_PATTERN = re.compile(r"\{organizationId\}", re.IGNORECASE)
+# The check above is about ROUTE templates, so it only looks at lines that declare one. Before
+# Phase 40.11 it scanned every line, which was fine while "{organizationId}" could only be a route
+# segment; once services started building Redis keys as $"org:{organizationId}:..." — the whole
+# point of 40.11 — a whole-file grep flagged the fix as the violation. Narrowing it to routing
+# attributes and minimal-API map calls keeps the rule and drops the false positive.
+ROUTE_DECLARATION_PATTERN = re.compile(
+    r"\[\s*(?:Route|Http(?:Get|Post|Put|Patch|Delete|Head|Options))\b"
+    r"|\bMap(?:Get|Post|Put|Patch|Delete|Group|Methods)\s*\("
+)
 
 REQUEST_DTO_FILENAME_PATTERN = re.compile(r"(Request|Dto)\.cs$")
 
@@ -95,7 +106,7 @@ def lint_file(path: pathlib.Path):
                 "(TENANCY.md section 1.3)",
             ))
 
-        if ROUTE_TEMPLATE_ORGANIZATION_PATTERN.search(line):
+        if ROUTE_DECLARATION_PATTERN.search(line) and ROUTE_TEMPLATE_ORGANIZATION_PATTERN.search(line):
             violations.append((
                 line_number,
                 "route template must not carry an organization id segment "
