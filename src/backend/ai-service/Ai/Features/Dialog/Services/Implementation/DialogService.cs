@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Helpers;
@@ -7,14 +6,13 @@ using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
 internal sealed class DialogService : IDialogService
 {
     private readonly AiDbContext _databaseContext;
-    private readonly MongoDbContext _mongoContext;
+    private readonly IDialogSessionRepository _sessionRepository;
     private readonly IOpenAiChatService _openAiChatService;
     private readonly IDialogScoringWeightsProvider _scoringWeightsProvider;
     private readonly IDialogEventPublisher _dialogEventPublisher;
@@ -23,7 +21,7 @@ internal sealed class DialogService : IDialogService
 
     public DialogService(
         AiDbContext databaseContext,
-        MongoDbContext mongoContext,
+        IDialogSessionRepository sessionRepository,
         IOpenAiChatService openAiChatService,
         IDialogScoringWeightsProvider scoringWeightsProvider,
         IDialogEventPublisher dialogEventPublisher,
@@ -31,7 +29,7 @@ internal sealed class DialogService : IDialogService
         ILogger<DialogService> logger)
     {
         _databaseContext = databaseContext;
-        _mongoContext = mongoContext;
+        _sessionRepository = sessionRepository;
         _openAiChatService = openAiChatService;
         _scoringWeightsProvider = scoringWeightsProvider;
         _dialogEventPublisher = dialogEventPublisher;
@@ -160,40 +158,22 @@ internal sealed class DialogService : IDialogService
             CustomScenarioContext = customScenarioContext
         };
 
-        await _mongoContext.DialogSessions.InsertOneAsync(session, cancellationToken: cancellationToken);
+        await _sessionRepository.InsertAsync(session, cancellationToken);
         _logger.LogInformation("Started dialog session {SessionId} for user {UserId}", session.Id, userId);
 
         return session;
-    }
-
-    public async Task<DialogSession?> GetSessionByIdAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default)
-    {
-        var filter = Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId);
-        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<DialogSession?> GetSessionForUserAsync(
         string sessionId,
         Guid userId,
         CancellationToken cancellationToken = default)
-    {
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(session => session.UserId, userId)
-        );
-        return await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
-    }
+        => await _sessionRepository.FindForUserAsync(sessionId, userId, cancellationToken);
 
     public async Task<List<DialogSession>> GetUserSessionsAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
-    {
-        var filter = Builders<DialogSession>.Filter.Eq(session => session.UserId, userId);
-        var sort = Builders<DialogSession>.Sort.Descending(session => session.CreatedAt);
-        return await _mongoContext.DialogSessions.Find(filter).Sort(sort).ToListAsync(cancellationToken);
-    }
+        => await _sessionRepository.ListForUserAsync(userId, cancellationToken);
 
     public async Task<DialogMessage> SendMessageAsync(
         string sessionId,
@@ -242,14 +222,8 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(aiMessage);
 
-        var updateDefinition = Builders<DialogSession>.Update.PushEach(
-            sessionRecord => sessionRecord.Messages,
-            new[] { userMessage, aiMessage });
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
-            updateDefinition,
-            cancellationToken: cancellationToken
-        );
+        await _sessionRepository.AppendMessagesAsync(
+            sessionId, userId, [userMessage, aiMessage], cancellationToken);
 
         _logger.LogInformation("Added message to session {SessionId}, total messages: {Count}", sessionId, session.Messages.Count);
 
@@ -274,13 +248,7 @@ internal sealed class DialogService : IDialogService
 
         if (!session.Messages.Any(message => message.Role == "user" && !string.IsNullOrWhiteSpace(message.Content)))
         {
-            await _mongoContext.DialogSessions.UpdateOneAsync(
-                Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
-                Builders<DialogSession>.Update
-                    .Set(sessionRecord => sessionRecord.Status, DialogSessionStatus.Abandoned)
-                    .Set(sessionRecord => sessionRecord.XpEarned, 0)
-                    .Set(sessionRecord => sessionRecord.CompletedAt, DateTime.UtcNow),
-                cancellationToken: cancellationToken);
+            await _sessionRepository.AbandonAsync(sessionId, userId, cancellationToken);
 
             _logger.LogInformation("Abandoned empty session {SessionId} for user {UserId} — no user messages to evaluate", sessionId, userId);
             return null;
@@ -313,17 +281,7 @@ internal sealed class DialogService : IDialogService
             GeneratedAt = DateTime.UtcNow
         };
 
-        var updateDefinition = Builders<DialogSession>.Update
-            .Set(sessionRecord => sessionRecord.Status, DialogSessionStatus.Completed)
-            .Set(sessionRecord => sessionRecord.Feedback, feedback)
-            .Set(sessionRecord => sessionRecord.XpEarned, earnedXp)
-            .Set(sessionRecord => sessionRecord.CompletedAt, DateTime.UtcNow);
-
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
-            updateDefinition,
-            cancellationToken: cancellationToken
-        );
+        await _sessionRepository.CompleteAsync(sessionId, userId, feedback, earnedXp, cancellationToken);
 
         await _dialogEventPublisher.PublishEvaluatedAsync(
             new DialogEvaluatedEvent(
@@ -349,20 +307,12 @@ internal sealed class DialogService : IDialogService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var session = await GetSessionForUserAsync(sessionId, userId, cancellationToken);
-        if (session == null)
+        var deleted = await _sessionRepository.DeleteForUserAsync(sessionId, userId, cancellationToken);
+        if (deleted)
         {
-            return false;
+            _logger.LogInformation("Deleted session {SessionId} for user {UserId}", sessionId, userId);
         }
 
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(sessionRecord => sessionRecord.UserId, userId)
-        );
-
-        var result = await _mongoContext.DialogSessions.DeleteOneAsync(filter, cancellationToken);
-        _logger.LogInformation("Deleted session {SessionId} for user {UserId}", sessionId, userId);
-
-        return result.DeletedCount > 0;
+        return deleted;
     }
 }

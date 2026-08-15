@@ -35,10 +35,6 @@ public interface IDialogService
         CustomScenarioContext? customScenarioContext,
         CancellationToken cancellationToken = default);
 
-    Task<DialogSession?> GetSessionByIdAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
     Task<DialogSession?> GetSessionForUserAsync(
         string sessionId,
         Guid userId,
