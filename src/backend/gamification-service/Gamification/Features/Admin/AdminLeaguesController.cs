@@ -35,6 +35,12 @@ public sealed class AdminLeaguesController(
         [FromQuery] string? tier,
         CancellationToken cancellationToken = default)
     {
+        // Phase 40.13. Every admin action that touches Leagues, LeagueMemberships, LeagueSettings
+        // or the XP ledger opens exactly one scope as its first statement — those tables carry RLS
+        // policies now, and a bare SELECT outside a transaction reads zero rows rather than
+        // erroring (see TenantTransactionScope).
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var tierKeys = await LoadTierKeysAsync(cancellationToken);
         if (tier is not null && !tierKeys.Contains(tier))
         {
@@ -90,6 +96,8 @@ public sealed class AdminLeaguesController(
     [HttpGet("weeks")]
     public async Task<ActionResult<IReadOnlyList<DateOnly>>> GetWeeks(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var weeks = await databaseContext.Leagues
             .Select(league => league.WeekStartDate)
             .Distinct()
@@ -102,6 +110,8 @@ public sealed class AdminLeaguesController(
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AdminLeagueDetailDto>> GetById(Guid id, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var detail = await BuildDetailAsync(id, cancellationToken);
         if (detail is null)
         {
@@ -122,6 +132,8 @@ public sealed class AdminLeaguesController(
     [HttpPost("{id:guid}/resync")]
     public async Task<ActionResult<AdminLeagueDetailDto>> Resync(Guid id, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var leagueExists = await databaseContext.Leagues.AnyAsync(league => league.Id == id, cancellationToken);
         if (!leagueExists)
         {
@@ -130,7 +142,9 @@ public sealed class AdminLeaguesController(
 
         await leagueService.SyncLeagueWeeklyExperiencePointsAsync(id, cancellationToken);
         logger.LogInformation("League XP resynced LeagueId={LeagueId}", id);
-        return Ok(await BuildDetailAsync(id, cancellationToken));
+        var resyncedDetail = await BuildDetailAsync(id, cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
+        return Ok(resyncedDetail);
     }
 
     [HttpPut("memberships/{membershipId:guid}/tier")]
@@ -139,6 +153,8 @@ public sealed class AdminLeaguesController(
         [FromBody] MoveMembershipTierRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var tierKeys = await LoadTierKeysAsync(cancellationToken);
         if (!tierKeys.Contains(request.Tier))
         {
@@ -161,7 +177,9 @@ public sealed class AdminLeaguesController(
 
         if (currentLeague.Tier == request.Tier)
         {
-            return Ok(await BuildDetailAsync(currentLeague.Id, cancellationToken));
+            var unchangedDetail = await BuildDetailAsync(currentLeague.Id, cancellationToken);
+            await tenantScope.CommitAsync(cancellationToken);
+            return Ok(unchangedDetail);
         }
 
         var targetLeague = await databaseContext.Leagues
@@ -190,7 +208,9 @@ public sealed class AdminLeaguesController(
             "League membership moved MembershipId={MembershipId} UserId={UserId} {OldTier} -> {NewTier}",
             membership.Id, membership.UserId, currentLeague.Tier, request.Tier);
 
-        return Ok(await BuildDetailAsync(targetLeague.Id, cancellationToken));
+        var movedDetail = await BuildDetailAsync(targetLeague.Id, cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
+        return Ok(movedDetail);
     }
 
     [HttpPut("memberships/{membershipId:guid}/xp")]
@@ -199,6 +219,8 @@ public sealed class AdminLeaguesController(
         [FromBody] AdjustMembershipXpRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         if (request.Delta == 0)
         {
             return BadRequest(new { message = "Delta must be non-zero" });
@@ -234,12 +256,16 @@ public sealed class AdminLeaguesController(
             "League XP adjusted MembershipId={MembershipId} UserId={UserId} Delta={Delta}",
             membership.Id, membership.UserId, request.Delta);
 
-        return Ok(await BuildDetailAsync(league.Id, cancellationToken));
+        var adjustedDetail = await BuildDetailAsync(league.Id, cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
+        return Ok(adjustedDetail);
     }
 
     [HttpDelete("memberships/{membershipId:guid}")]
     public async Task<IActionResult> RemoveMembership(Guid membershipId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var membership = await databaseContext.LeagueMemberships
             .FirstOrDefaultAsync(record => record.Id == membershipId, cancellationToken);
         if (membership is null)
@@ -254,6 +280,7 @@ public sealed class AdminLeaguesController(
             "League membership removed MembershipId={MembershipId} UserId={UserId} LeagueId={LeagueId}",
             membership.Id, membership.UserId, membership.LeagueId);
 
+        await tenantScope.CommitAsync(cancellationToken);
         return NoContent();
     }
 
@@ -269,6 +296,8 @@ public sealed class AdminLeaguesController(
         [FromBody] UpdateLeagueSettingsRequestDto request,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         if (request.MaximumLeagueParticipantCount <= 0 ||
             request.PromotionZoneSize <= 0 ||
             request.DemotionZoneSize <= 0)
@@ -327,6 +356,7 @@ public sealed class AdminLeaguesController(
             settings.MaximumLeagueParticipantCount, settings.PromotionZoneSize, settings.DemotionZoneSize,
             settings.CurrentPeriodEndsAt, settings.PeriodLengthDays);
 
+        await tenantScope.CommitAsync(cancellationToken);
         return Ok(ToSettingsDto(settings));
     }
 
@@ -411,6 +441,8 @@ public sealed class AdminLeaguesController(
     [HttpDelete("tiers/{id:guid}")]
     public async Task<IActionResult> DeleteTier(Guid id, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var leagueTier = await databaseContext.LeagueTiers.FirstOrDefaultAsync(tier => tier.Id == id, cancellationToken);
         if (leagueTier is null)
         {
@@ -432,6 +464,7 @@ public sealed class AdminLeaguesController(
 
         logger.LogWarning("League tier deleted Key={Key}", leagueTier.Key);
 
+        await tenantScope.CommitAsync(cancellationToken);
         return NoContent();
     }
 
