@@ -9,6 +9,7 @@ using NUnit.Framework;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Features.Auth.Services.Implementation;
+using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Tests.Helpers;
@@ -28,16 +29,14 @@ public class AuthenticationServiceSecurityTests
         DemoTokenLifetimeHours = 1
     });
 
-    private static readonly IOptions<GoogleAuthConfiguration> GoogleOptions =
-        Options.Create(new GoogleAuthConfiguration { ClientId = "test" });
-
-    private static AuthenticationService BuildService(IdentityDbContext db) =>
+    private static AuthenticationService BuildService(
+        IdentityDbContext db,
+        IGoogleTokenValidator? googleTokenValidator = null) =>
         new(
             db,
             Substitute.For<IEmailVerificationService>(),
-            new RecordingUserEventPublisher(),
+            googleTokenValidator ?? Substitute.For<IGoogleTokenValidator>(),
             JwtOptions,
-            GoogleOptions,
             NullLogger<AuthenticationService>.Instance);
 
     private static string ComputeTokenHash(string rawToken)
@@ -146,13 +145,105 @@ public class AuthenticationServiceSecurityTests
     public async Task LoginWithGoogle_UnverifiedEmail_ThrowsUnauthorized()
     {
         await using var db = InMemoryDbContextFactory.Create();
-        var service = BuildService(db);
+        var service = BuildService(db, StubGoogleValidator("unverified@test.com", isEmailVerified: false));
 
-        // GoogleJsonWebSignature.ValidateAsync is an external call; we test the
-        // EmailVerified guard by seeding a revoked scenario via reflection on a
-        // known unverified payload. Since we cannot mock the static validator in
-        // a unit test, this test documents the path; integration tests cover the
-        // full flow.  Skipping here — covered by integration tests.
-        Assert.Pass("Google EmailVerified guard is covered by integration tests (requires real token validation).");
+        var act = async () => await service.LoginWithGoogleAsync("google-id-token");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    // ── 40.7: Google login is invite-only — no implicit account creation ──────
+
+    [Test]
+    public async Task LoginWithGoogle_UnknownEmail_ThrowsAndCreatesNoUser()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        var service = BuildService(db, StubGoogleValidator("stranger@test.com"));
+
+        var act = async () => await service.LoginWithGoogleAsync("google-id-token");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await db.Users.CountAsync()).Should().Be(0, "Google sign-in must never provision an account");
+    }
+
+    [Test]
+    public async Task LoginWithGoogle_ExistingUserWithoutMembership_ThrowsUnauthorized()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        await SeedGoogleUserAsync(db, "no-membership@test.com");
+        var service = BuildService(db, StubGoogleValidator("no-membership@test.com"));
+
+        var act = async () => await service.LoginWithGoogleAsync("google-id-token");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Test]
+    public async Task LoginWithGoogle_ExistingUserWithDeactivatedMembership_ThrowsUnauthorized()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        var user = await SeedGoogleUserAsync(db, "deactivated@test.com");
+        db.Memberships.Add(new Membership
+        {
+            UserId = user.Id,
+            OrganizationId = Guid.NewGuid(),
+            Role = OrgRole.Manager,
+            Status = MembershipStatus.Deactivated,
+            JoinedAt = DateTime.UtcNow.AddDays(-10),
+            DeactivatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = BuildService(db, StubGoogleValidator("deactivated@test.com"));
+
+        var act = async () => await service.LoginWithGoogleAsync("google-id-token");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Test]
+    public async Task LoginWithGoogle_ExistingUserWithActiveMembership_IssuesTokensWithOrgClaims()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        var user = await SeedGoogleUserAsync(db, "member@test.com");
+        var organizationId = Guid.NewGuid();
+        db.Memberships.Add(new Membership
+        {
+            UserId = user.Id,
+            OrganizationId = organizationId,
+            Role = OrgRole.OrgAdmin,
+            Status = MembershipStatus.Active,
+            JoinedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var service = BuildService(db, StubGoogleValidator("member@test.com"));
+
+        var issuedTokenPair = await service.LoginWithGoogleAsync("google-id-token");
+
+        issuedTokenPair.OrgId.Should().Be(organizationId.ToString());
+        issuedTokenPair.OrgRole.Should().Be("OrgAdmin");
+    }
+
+    private static IGoogleTokenValidator StubGoogleValidator(string email, bool isEmailVerified = true)
+    {
+        var validator = Substitute.For<IGoogleTokenValidator>();
+        validator.ValidateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GoogleUserPayload($"google-subject-{email}", email, "Google User", isEmailVerified));
+        return validator;
+    }
+
+    private static async Task<User> SeedGoogleUserAsync(IdentityDbContext db, string email)
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            DisplayName = "Google User",
+            GoogleId = $"google-subject-{email}",
+            CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = true
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
     }
 }

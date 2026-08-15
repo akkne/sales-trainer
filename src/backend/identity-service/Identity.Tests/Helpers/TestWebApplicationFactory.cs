@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.BuildingBlocks.Email.Abstract;
+using Sellevate.BuildingBlocks.Identity;
 
 namespace Sellevate.Identity.Tests.Helpers;
 
@@ -75,6 +76,17 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
         var token = JwtTestHelper.BuildToken(userId, email, displayName, role, organizationId, orgRole);
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    // Stands in for the gateway, which is the only thing allowed to set X-Organization-Id and
+    // always derives it from the validated token (docs/TENANCY/TENANCY.md §1.1). Calling the
+    // service directly in a test means setting it by hand.
+    public HttpClient CreateOrganizationAdminClient(Guid userId, Guid organizationId, string email = "orgadmin@test.com")
+    {
+        var client = CreateAuthenticatedClient(
+            userId, email, "Org Admin", UserRole.User, organizationId, "OrgAdmin");
+        client.DefaultRequestHeaders.Add(IdentityHeaders.OrganizationId, organizationId.ToString());
         return client;
     }
 }
