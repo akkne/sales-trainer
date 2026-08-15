@@ -194,11 +194,24 @@ and consumers, so it happens once, before any tenant-scoped consumer exists.
   `organizationId` to the document, to the compound indexes, and make it the shard key prefix if
   sharding ever happens. There is no RLS equivalent, so the filter is application-enforced; keep
   all session reads behind one repository so there is exactly one place to audit.
+  **Done in 40.11** — `DialogSessionRepository` in ai-service. What made it a boundary rather than
+  a convention: it takes `ITenantContext` in its constructor, it holds the only
+  `GetCollection<DialogSession>` in the service (`MongoDbContext` no longer exposes the
+  collection), no method accepts an organization or returns "all organizations", an unset tenant
+  raises instead of widening, there is no system-mode bypass, and a unit test asserts against the
+  source tree that no second file reaches the collection. Copy that shape for
+  `chat_conversations` in social-service (40.13).
 - **Redis** — analytics, presence, notification inboxes, the idempotency store and the LLM verdict
   cache are all Redis-only. **Namespace every key with the org id** (`org:{orgId}:...`). The
   current `RedisIdempotencyStore` and the custom-scenario verdict cache key off user-supplied
   content; without a prefix, one org's cached verdict answers another org's request, and presence
   counts leak headcount between customers.
+  **Done for ai-service in 40.11**: the verdict cache, the voice quota counters and
+  `RedisIdempotencyStore` all carry `org:{orgId}:`. The idempotency organization comes from the
+  event envelope, not from ambient context, and an event with no organization deliberately keeps
+  the un-prefixed key — there is no tenant to confuse, and the unchanged key is what preserves
+  dedupe across the deploy. Pre-prefix keys are never read again and expire on their own TTL;
+  nothing is flushed (`docs/DECISIONS.md`).
 
 ### 1.9 Indexes and unique constraints
 
@@ -211,7 +224,7 @@ The higher-severity item is uniqueness. Every existing global unique constraint 
 |------------------|---------------|
 | `UNIQUE(email)` on users | **stays global** — see §4.1, users are cross-org identities |
 | `UNIQUE(iconic_name)` on skills | `UNIQUE(organization_id, iconic_name)` — two orgs may both have `objections` |
-| dialog mode `key` (e.g. `company-call`, `custom-scenario`) | seeded modes stay global; org-authored modes need the org in the key |
+| dialog mode `key` (e.g. `company-call`, `custom-scenario`) | seeded modes stay global; org-authored modes need the org in the key — **done in 40.11**: `UNIQUE(OrganizationId, BundleId, Key) WHERE OrganizationId IS NOT NULL` plus a partial `UNIQUE(BundleId, Key) WHERE OrganizationId IS NULL`, because Postgres treats NULLs in a composite unique index as distinct |
 
 A missed one does not leak data — it makes onboarding the second customer fail with a constraint
 violation, which is a better failure than the alternative but still blocks the sale.

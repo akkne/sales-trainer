@@ -98,7 +98,7 @@ re-check is cheap because it hashes to the cache entry the pre-flight call just 
 
 | | |
 |---|---|
-| Key | `dialog:scenario-validation:v1:{sha256(normalized)}` |
+| Key | `org:{organizationId}:dialog:scenario-validation:v1:{sha256(normalized)}` |
 | Normalization | trim, collapse whitespace runs, lowercase — so cosmetic edits reuse a verdict |
 | Value | `ok`, or `no:{reason}` |
 | TTL | approvals 30 days, rejections 7 days |
@@ -108,8 +108,17 @@ model call every attempt. Their TTL is shorter because a rejection is the side w
 re-examining after a prompt change. Bump `v1` in the key prefix to invalidate every verdict at
 once when the criteria change.
 
+The `org:` prefix (Phase 40.11) is not cosmetic. Without it one organization's cached verdict
+answers another organization's request, and because the key is a hash of the scenario text, a hit
+also tells organization B that somebody else already submitted exactly this text. With no
+organization on the request the cache is skipped entirely — read *and* write — so no key without
+an owner is ever touched. Pre-40.11 keys are unreachable under the new shape and expire on their
+own TTL; nothing is flushed.
+
 Redis is an **optimization, not a dependency** — every cache path swallows `RedisException` and
-falls through to the model.
+falls through to the model. That is exactly why an unset tenant degrades to "no cache" here rather
+than raising, while a session read with an unset tenant raises: a verdict about the caller's own
+text is not data another organization put there.
 
 ### Failing closed
 
@@ -129,6 +138,7 @@ a model conversation anyway, so it could not work in that state regardless.
 | `Seeders/CustomScenarioModeSeeder.cs` | hidden bundle + mode, generic role-play prompts |
 | `Constants/ScenarioLimits.cs` | 20–1500 characters, shared by controller and validator |
 | `Models/CustomScenarioContext.cs` | what lands on the Mongo session document |
+| `Services/Implementation/DialogSessionRepository.cs` | the only door to `dialog_sessions`; the scenario travels on a session that belongs to one organization |
 
 **Frontend** (`src/frontend/`)
 

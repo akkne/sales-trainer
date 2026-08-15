@@ -42,13 +42,31 @@ src/backend/ai-service/
 
 | Store | Owns | Notes |
 |---|---|---|
-| Postgres `ai` | `DialogBundles`, `DialogModes` | Roleplay catalog config. `SkillId` is a loose `Guid` (Skills are owned by Learning — no cross-DB FK). |
-| Postgres `ai` | `UserReplicas` | Local read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` Kafka events. Used by the admin voice-usage report instead of joining Identity. |
-| Mongo `sallevate` | `dialog_sessions` | Roleplay transcripts + per-session voice seconds. |
-| Redis | TTS audio cache (in-process) + Kafka idempotency store | |
+| Postgres `ai` | `DialogBundles`, `DialogModes` | Roleplay catalog config. `SkillId` is a loose `Guid` (Skills are owned by Learning — no cross-DB FK). Tenancy: `OrganizationId` nullable — `NULL` is the global library, non-null is org-authored — with an EF query filter and RLS on both tables (40.11). |
+| Postgres `ai` | `UserReplicas` | Local read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` Kafka events. Used by the admin voice-usage report instead of joining Identity. **No `OrganizationId`**: it is a consumer-fed projection with no request and therefore no tenant, the same call learning-db made in 40.10. |
+| Mongo `sallevate` | `dialog_sessions` | Roleplay transcripts + per-session voice seconds. Tenancy: `organizationId` on every document, enforced by `DialogSessionRepository` alone — Mongo has no RLS (40.11). |
+| Redis | scenario-verdict cache + voice quota counters + Kafka idempotency store; TTS audio cache is in-process | Every ai-service key is namespaced `org:{organizationId}:` (40.11). |
 
 `DatabaseBootstrapper` creates the `ai` database on startup, then EF migrations run
-(`InitialAiSchema`).
+(`InitialAiSchema` … `AddOrganizationId`). Index rebuilds and the Mongo backfill are **not** part
+of startup — they are operational steps, driven by
+`scripts/tenancy-ai-organization-rollout.sh`.
+
+### Multi-tenancy (Phase 40.11)
+
+ai-service is the first service whose tenant boundary spans three stores, and each of them fails
+differently:
+
+| Store | What enforces the boundary | What happens with no tenant on the request |
+|---|---|---|
+| Postgres | RLS policy (`EnableTenantRlsForContent`) + EF query filter as convenience | The policy admits global rows only |
+| Mongo | `DialogSessionRepository`, and nothing else — there is no database-side net | Raises `InvalidOperationException`; never "all sessions" |
+| Redis | The key name (`org:{organizationId}:…`) | Verdict cache is skipped; quota keys raise |
+
+The one behavioural change worth knowing: the SuperAdmin voice-usage report aggregates the
+caller's organization instead of the whole installation. A cross-tenant total is exactly the leak
+40.11 closes; a platform superadmin reaches another organization's numbers by impersonating into
+it (40.9), and the org-scoped admin surface arrives in 40.20.
 
 ## Coupling broken during extraction
 
@@ -66,7 +84,9 @@ src/backend/ai-service/
   `rawScore`, `xpEarned`), partition key = `userId`.
 - **Consumes:** `gamification.dialog-weights.updated` (refresh scoring weights cache),
   and `user.registered` / `user.updated` / `user.deleted` (maintain the `UserReplica`).
-  Both consumers are idempotent (dedupe on `eventId` via the shared Redis store).
+  Both consumers are idempotent (dedupe on `eventId` via the shared Redis store, keyed
+  `org:{organizationId}:idem:{group}:{eventId}` since 40.11 — the organization comes from the
+  envelope, and an event without one keeps the historical un-prefixed key).
 
 ## Routes (through the gateway, paths preserved)
 
