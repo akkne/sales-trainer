@@ -6,6 +6,8 @@ using Sellevate.Identity.Features.Avatars.Models;
 using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Features.Onboarding.Models;
+using Sellevate.Identity.Features.Organizations.Models;
+using Sellevate.Identity.Features.PlatformAdmin.Models;
 
 namespace Sellevate.Identity.Infrastructure.Data;
 
@@ -28,6 +30,20 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITen
     /// </summary>
     public DbSet<OrganizationAuthConfiguration> OrganizationAuthConfigurations
         => Set<OrganizationAuthConfiguration>();
+
+    /// <summary>
+    /// Phase 40.9. Read-only projection of organization-service's tenant registry, kept current
+    /// over Kafka. No query filter and no row-level security, for the same reason as
+    /// <see cref="OrganizationAuthConfigurations"/>: it is consulted while deciding whether a
+    /// token may be issued at all, before there is a tenant context to filter by.
+    /// </summary>
+    public DbSet<OrganizationReplica> OrganizationReplicas => Set<OrganizationReplica>();
+
+    /// <summary>
+    /// Phase 40.9. Append-only record of platform superadmins minting tokens for other people's
+    /// organizations. Cross-tenant by definition, so no query filter and no RLS.
+    /// </summary>
+    public DbSet<ImpersonationAuditEntry> ImpersonationAuditEntries => Set<ImpersonationAuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

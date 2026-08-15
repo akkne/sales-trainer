@@ -15,6 +15,7 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
         {
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
             EmailNotVerifiedException   => (StatusCodes.Status403Forbidden,    "Email not verified"),
+            OrganizationSuspendedException => (StatusCodes.Status403Forbidden, "Organization suspended"),
             EmailVerificationCooldownException => (StatusCodes.Status429TooManyRequests, "Too many requests"),
             InvalidOperationException   => (StatusCodes.Status400BadRequest,   "Bad request"),
             KeyNotFoundException        => (StatusCodes.Status404NotFound,     "Not found"),
