@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.Features.Admin.Models;
 using Sellevate.Gamification.Features.Gamification.Models;
@@ -10,9 +11,16 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Admin;
 
+/// <summary>
+/// Phase 40.13: <see cref="TenantScopedAttribute"/>. Every route here reads or writes rows that
+/// belong to one organization, so a request without the gateway-validated organization header is
+/// refused by the tenant middleware with a 403 instead of reaching a query filter that would match
+/// nothing and answer with a plausible-looking empty result.
+/// </summary>
 [ApiController]
 [Route(RouteConstants.AdminLeagues)]
 [Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[TenantScoped]
 public sealed class AdminLeaguesController(
     GamificationDbContext databaseContext,
     ILeagueService leagueService,
@@ -279,6 +287,16 @@ public sealed class AdminLeaguesController(
         }
 
         var settings = await leagueService.GetSettingsAsync(cancellationToken);
+
+        // Phase 40.13. LeagueSettings became per-organization, so an organization that has never
+        // saved its settings has no row and GetSettingsAsync hands back an unsaved default. Without
+        // this the edit would be accepted, logged, echoed back to the admin — and silently dropped
+        // by SaveChanges, because EF is not tracking the object. The interceptor stamps the
+        // organization on insert; nothing here assigns it.
+        if (databaseContext.Entry(settings).State == EntityState.Detached)
+        {
+            databaseContext.LeagueSettings.Add(settings);
+        }
 
         settings.MaximumLeagueParticipantCount = request.MaximumLeagueParticipantCount;
         settings.PromotionZoneSize = request.PromotionZoneSize;

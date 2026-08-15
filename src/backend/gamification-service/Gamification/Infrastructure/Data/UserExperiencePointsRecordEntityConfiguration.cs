@@ -12,7 +12,12 @@ public sealed class UserExperiencePointsRecordEntityConfiguration : IEntityTypeC
         builder.HasKey(record => record.Id);
         builder.Property(record => record.Source).IsRequired();
         builder.Property(record => record.SourceEventId).IsRequired(false);
-        builder.HasIndex(record => record.UserId);
+        builder.HasIndex(record => new { record.OrganizationId, record.UserId });
+
+        // Deliberately left global. SourceEventId is a Kafka event id, unique across the whole
+        // platform by construction, so this index enforces "one grant per event" — a statement
+        // about the event stream, not about an organization. Adding the organization would let the
+        // same event be granted once per tenant, which is the opposite of what it is for.
         builder.HasIndex(record => record.SourceEventId)
             .IsUnique()
             .HasFilter("\"SourceEventId\" IS NOT NULL");

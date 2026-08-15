@@ -10,6 +10,8 @@ public sealed class UserAchievementEntityConfiguration : IEntityTypeConfiguratio
     {
         builder.ToTable("UserAchievements");
         builder.HasKey(userAchievement => userAchievement.Id);
-        builder.HasIndex(userAchievement => new { userAchievement.UserId, userAchievement.AchievementId }).IsUnique();
+        builder.HasIndex(userAchievement =>
+            new { userAchievement.OrganizationId, userAchievement.UserId, userAchievement.AchievementId })
+            .IsUnique();
     }
 }

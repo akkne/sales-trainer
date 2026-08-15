@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.DependencyInjection;
 using Sellevate.Gamification.Features.Achievements;
@@ -39,7 +40,16 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Gamification");
 });
 
-builder.Services.AddDbContext<GamificationDbContext>(databaseOptions =>
+// Phase 40.13. Registers the request-scoped ITenantContext plus the two interceptors: the
+// cross-tenant write guard and the one that issues SET LOCAL app.organization_id for the
+// row-level-security policies. AddSellevateEventing below also calls AddSellevateTenancy, but
+// this file registers it explicitly so the DbContext registration below cannot depend on
+// the ordering of an unrelated call. Never switch to EF Core's pooled-context helper
+// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py) — a pooled context would cache the first
+// tenant's query filter and hand it to every later caller.
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<GamificationDbContext>((serviceProvider, databaseOptions) =>
 {
     // Pin the Npgsql session timezone to UTC so that DateOnly.FromDateTime(timestamptz)
     // comparisons in XP-sync queries always bucket dates consistently, regardless of
@@ -49,7 +59,11 @@ builder.Services.AddDbContext<GamificationDbContext>(databaseOptions =>
     {
         Timezone = "UTC",
     };
-    databaseOptions.UseNpgsql(npgsqlBuilder.ConnectionString);
+    databaseOptions
+        .UseNpgsql(npgsqlBuilder.ConnectionString)
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>());
 });
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -133,12 +147,26 @@ if (application.Environment.IsDevelopment())
 application.UseAuthentication();
 application.UseAuthorization();
 
+// Phase 40.13. Populates the scoped ITenantContext from the gateway-validated X-Organization-Id
+// header. After UseAuthorization so the endpoint — and therefore its [TenantScoped] metadata —
+// is already resolved.
+application.UseSellevateTenantContext();
+
 application.MapSellevateHealthChecks();
 
 application.MapControllers();
 
 using (var serviceScope = application.Services.CreateScope())
 {
+    // Phase 40.13. Startup has no request and therefore no organization. Everything seeded below is
+    // platform-global by design — the achievement catalogue, the league tiers and the installation
+    // -wide GamificationSettings row — so this scope declares system mode explicitly rather than
+    // running on a blank context that would be indistinguishable from a forgotten one
+    // (docs/TENANCY/TENANCY.md §1.6). LeagueSettings is deliberately no longer seeded here: it
+    // became tenant-scoped, and a row seeded with no organization is hidden from everybody by the
+    // RLS policy.
+    serviceScope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
+
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     await DatabaseBootstrapper.EnsureDatabaseExistsAsync(

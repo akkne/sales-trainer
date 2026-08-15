@@ -12,13 +12,11 @@ namespace Sellevate.Gamification.Tests.Unit;
 public sealed class StreakResetJobTests
 {
     private GamificationDbContext _databaseContext = null!;
-    private StreakResetJob _streakResetJob = null!;
 
     [SetUp]
     public void SetUp()
     {
         _databaseContext = GamificationDbContextFactory.CreateInMemory();
-        _streakResetJob = new StreakResetJob(_databaseContext, new FixedStreakClock(), NullLogger<StreakResetJob>.Instance);
     }
 
     [TearDown]
@@ -38,7 +36,11 @@ public sealed class StreakResetJobTests
             new UserStreak { Id = Guid.NewGuid(), UserId = yesterdayUserId, CurrentStreakDayCount = 3, LongestStreakDayCount = 3, LastActivityDate = today.AddDays(-1) });
         await _databaseContext.SaveChangesAsync();
 
-        await _streakResetJob.ExecuteAsync();
+        // Phase 40.13: StreakResetJob.ExecuteAsync is now the per-organization loop and needs a
+        // service provider; the reset rule itself moved to this method, which takes the scoped
+        // context the loop would have handed it.
+        await StreakResetJob.ResetStaleStreaksAsync(
+            _databaseContext, new FixedStreakClock(), CancellationToken.None);
 
         var staleStreak = await _databaseContext.UserStreaks.FirstAsync(record => record.UserId == staleUserId);
         var activeStreak = await _databaseContext.UserStreaks.FirstAsync(record => record.UserId == activeUserId);
