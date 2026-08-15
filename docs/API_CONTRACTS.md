@@ -49,6 +49,7 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 | POST | /auth/invites/{token}/accept `[public]` | `{displayName?, password?}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/verify-email | `{email, code}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/resend-code | `{email}` | 204 |
+| POST | /auth/login/start | `{email}` | `{method}` |
 | POST | /auth/login | `{email, password}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/google | `{idToken}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/refresh `[public]` | — (reads cookie) | `AuthTokenResponseDto` + new cookie |
@@ -63,6 +64,31 @@ workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 > unknown Google identity, and one whose account has no **active** membership, with `401` and a
 > single identical message for both cases (it must not reveal which addresses belong to a
 > customer).
+
+**Three-step login (Phase 40.8).** The login method is a per-organization setting
+(`organization_auth_config`, owned by identity-service), so the client asks first and sends a
+credential second:
+
+1. `POST /auth/login/start` `{email}` → `200 {"method": "password" | "oidc" | "saml"}`
+2. the client renders the form for that method
+3. `POST /auth/login` `{email, password}` — the server re-resolves the organization and
+   dispatches to the `IAuthProvider` registered for its method
+
+`/auth/login/start` is **pre-authentication and not tenant-scoped**: the caller has no token and
+no `X-Organization-Id` yet — resolving that is what the step is for.
+
+It answers `200` for **every syntactically valid address, known or not** (`400` only for a
+malformed one), and never returns the organization id or name. This is the same anti-enumeration
+choice `POST /auth/google` makes with its single identical `401`: the first step of a login screen
+is the most reachable endpoint in the product, so its answer must not vary with whether the
+address belongs to a customer. The organization is resolved from an **active membership** first
+(the invite path) and from `allowed_email_domains` second; anything unmatched resolves to
+`password`, exactly like a known address in a password organization.
+
+`"oidc"`/`"saml"` are declared but **not implemented**. An organization configured for one has
+password login refused — `POST /auth/login` returns `401` even for the correct password — rather
+than silently downgraded. Only a customer who configures SSO makes their own domain's answer
+differ; see [DECISIONS.md](DECISIONS.md) (2026-08-15, 40.8).
 
 `orgId`/`orgRole` (Phase 40.6) are `null` unless the user has an active `membership` row —
 absent membership is never implicit organization access. `GET /auth/me` mirrors the same

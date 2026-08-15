@@ -1602,18 +1602,24 @@
 - [x] Тесты: истёкший токен, повторное использование, отозванный, чужая организация
 - [x] Обновить `docs/EMAIL_VERIFICATION.md`, `docs/API_CONTRACTS.md`
 
-### [ ] 40.8 Способ логина как настройка организации (шов под SSO)
-- [ ] `organization_auth_config (organization_id PK, method, settings jsonb,
+### [x] 40.8 Способ логина как настройка организации (шов под SSO)
+- [x] `organization_auth_config (organization_id PK, method, settings jsonb,
       allowed_email_domains text[], jit_provisioning bool, session_ttl, require_mfa)`;
-      `method` всегда `password` на этом этапе
-- [ ] `IAuthProvider { string Method; Task<AuthResult> AuthenticateAsync(...); }`
+      `method` всегда `password` на этом этапе — реализовано как
+      `OrganizationAuthConfigurations` в **identity-db** (не в organization-db: строка читается
+      до аутентификации, см. `docs/DECISIONS.md`). Намеренно **без** RLS и без `ITenantScoped` —
+      основной запрос кросс-тенантный по своей природе
+- [x] `IAuthProvider { string Method; Task<AuthResult> AuthenticateAsync(...); }`
       с **единственной** реализацией `PasswordAuthProvider`
-- [ ] Трёхшаговый флоу входа уже сейчас: email → резолв организации по домену/инвайту →
-      диспатч в провайдера по `method`
-- [ ] Фронт: экран входа в две стадии (email, затем метод по ответу сервера)
-- [ ] SSO (OIDC/SAML) и `jit_provisioning` **не реализуются** — только заложенная развилка;
-      реализация по первому платящему запросу
-- [ ] Обновить `docs/DECISIONS.md` (почему шов строится заранее)
+- [x] Трёхшаговый флоу входа уже сейчас: email → резолв организации по домену/инвайту →
+      диспатч в провайдера по `method` — `POST /auth/login/start` отвечает одинаково для
+      известного и неизвестного адреса (не оракул для перебора, как и `/auth/google` в 40.7);
+      организация с методом без провайдера получает `401`, а не откат на пароль
+- [x] Фронт: экран входа в две стадии (email, затем метод по ответу сервера)
+- [x] SSO (OIDC/SAML) и `jit_provisioning` **не реализуются** — только заложенная развилка;
+      реализация по первому платящему запросу. `jit_provisioning`, `session_ttl`, `require_mfa`
+      хранятся, но не читаются; эндпоинта записи конфигурации нет — строки появятся в 40.9
+- [x] Обновить `docs/DECISIONS.md` (почему шов строится заранее)
 
 ### [ ] 40.9 Суперадминка платформы и миграция существующих данных
 - [ ] Экран платформенного суперадмина: создать организацию, пригласить её первого

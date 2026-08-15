@@ -4,6 +4,82 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-15 — The SSO seam (40.8): why a three-step login exists before there is a second provider
+
+- **Why build a seam for something explicitly not being built.** SSO is deferred
+  ([TENANCY.md §4.5](TENANCY/TENANCY.md)), but the *shape* of login is not deferrable. The
+  request, when it comes, is not "add SSO" — it is a 200-seat customer requiring Azure AD, with
+  their deadline and the deal as leverage. Retrofitting that into a single hardcoded
+  email+password branch means rewriting login, session issuance, the invite mechanic and user
+  provisioning simultaneously, under exactly the conditions where you least want to touch
+  authentication. Building the seam first is roughly a day: one table, one interface with one
+  implementation, and a login screen with one extra step. Doing it later is weeks of that rewrite.
+  The cheap half of the work is done now precisely because it is cheap now.
+- **What was deliberately *not* built:** no OIDC provider, no SAML provider, no
+  `jit_provisioning` behaviour (the column is stored and never read), no per-organization session
+  TTL applied to token issuance, no admin UI to edit the configuration (that is 40.20's split of
+  the admin panel), and no endpoint that writes an `OrganizationAuthConfigurations` row —
+  organizations get one when 40.9's superadmin panel creates them. An organization with no row
+  logs in with a password, the same as the platform default.
+- **Which service owns `organization_auth_config` — identity-service, not organization-service.**
+  The deciding constraint is *when* the row is read: on `POST /auth/login/start`, before
+  authentication, with no JWT, no `X-Organization-Id` and no tenant context. Putting the table in
+  organization-service would mean identity-service making an unauthenticated cross-service HTTP
+  call on the single most availability-sensitive path in the product — nobody can log in if
+  organization-service is down — and would force organization-service to expose an anonymous
+  "which organization owns this email domain" endpoint, which is a far better enumeration oracle
+  than the thing this design is trying to avoid. There is also precedent: `Membership` (40.6) and
+  `Invite` (40.7) both live in identity-service despite being about organizations. The boundary
+  that holds is **identity-service owns access, organization-service owns the registry and the
+  business/content profile** — how you get in is access.
+- **The table is deliberately not `ITenantScoped` and has no RLS policy** — unlike `Invites`,
+  which 40.7 put behind `EnableTenantRls`. Its primary read is a cross-tenant question by nature
+  ("which organization claims this domain") asked at a moment when no tenant context can exist. A
+  table whose main access path has to bypass RLS on every single login is not protected by RLS,
+  it is decorated with it — and worse, `TenantConnectionInterceptor`'s system mode relies on a
+  `BYPASSRLS` role that does not exist yet on real servers, so the "correct" version would work
+  locally and silently stop resolving organizations the day `sellevate_app` is rolled out. This
+  is the same reasoning that kept the `Organizations` registry in 40.5 out of RLS. Consequence to
+  respect when a write path is added: the organization must be taken from `ITenantContext`
+  explicitly in the query, because neither the query filter nor the database will do it.
+- **`POST /auth/login/start` answers `200 {"method":"password"}` for every syntactically valid
+  address, known or not.** It never returns the organization id or name, and there is no "this
+  address is known" flag. This continues 40.7's choice for Google sign-in (one identical `401`
+  for "no such account" and "account without a membership"): the first step of a login screen is
+  the most reachable endpoint in the product, and any variation in its answer turns it into a
+  free customer-list oracle.
+  - **The one leak we accept and name:** an organization that configures OIDC/SAML *will* get a
+    different answer for its domain, because the browser has to be sent somewhere. That is
+    inherent to SSO, not to this design, and it is opt-in by the customer who configured it. It
+    also reveals only "this domain uses SSO with us", never which individual addresses exist.
+  - **Rejected:** returning `404` for an unknown address (a perfect enumeration oracle), and
+    returning the organization name so the screen could greet the user by company (the same
+    oracle with better branding).
+- **A method with no provider is refused, not downgraded to a password.** If an organization is
+  configured for `oidc`, `POST /auth/login` returns `401` even for the correct password. The
+  alternative — falling back to the password provider when no provider matches — would mean that
+  switching a customer to their directory silently leaves password login working alongside it,
+  which is the opposite of what the customer bought. This is the only behaviour the seam actually
+  changes today, and it is the one worth testing.
+- **`method` is stored as `text` with a `CHECK` constraint, not as an int enum.** The rest of the
+  codebase converts enums with `HasConversion<int>()`, but this value is also the wire value in
+  `LoginStartResponseDto` and the key `IAuthProvider.Method` is matched on, and keeping one
+  spelling across the database, the interface and the JSON removes a mapping layer that exists
+  only to be gotten wrong. The `CHECK ("Method" IN ('password','oidc','saml'))` is a stricter
+  guarantee than an int enum, which happily stores `47`.
+- **Noted, not fixed: `scripts/codestyle-lint.py` and the identity-service codebase disagree about
+  comments.** CODESTYLE §9 forbids comments outright; the linter implements that literally,
+  flagging `///` XML documentation too. identity-service was already at **527** violations before
+  40.8 (40.7's own merged `Features/Invites/` accounts for 101 of them), because the house style
+  in this service is to record *why* a security decision was made next to the code that makes it —
+  which is exactly what a reviewer of an authentication seam needs. 40.8 follows that style and
+  leaves the count at 585. This is a real contradiction between the written rule and the practice
+  every recent block has followed, and resolving it (relax the rule to allow `///`, or strip the
+  documentation) is a repo-wide call, not a thing to settle inside one sub-phase. The
+  `codestyle` CI workflow is consequently red for identity-service and was already red on arrival.
+
+---
+
 ## 2026-08-15 — organization-service scaffold (40.5): registry vs profile tenancy scope, deferred authorization
 
 - **Which table is tenant-scoped, and why the answer isn't "both":** `Organizations` (the tenant

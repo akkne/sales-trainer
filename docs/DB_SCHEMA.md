@@ -139,6 +139,38 @@ to leave that migration room.
 
 ---
 
+### `OrganizationAuthConfigurations` (Phase 40.8)
+
+How one organization's people sign in — the roadmap's `organization_auth_config`. In **identity-db**
+rather than `organization`-db because it is read on `POST /auth/login/start`, before
+authentication: a cross-service call there would put login behind another service's availability.
+See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.5 and `docs/DECISIONS.md` (2026-08-15, 40.8).
+
+| Column                                | Type                        | Nullable | Notes                              |
+|---------------------------------------|------------------------------|----------|------------------------------------|
+| `OrganizationId`                      | `uuid`                       | NOT NULL | PK. **No FK** — bare uuid; `organization-service` owns the registry (DB-per-service) |
+| `Method`                              | `character varying(32)`      | NOT NULL | `password` \| `oidc` \| `saml`, enforced by `CK_OrganizationAuthConfigurations_Method`. Stored as text so the database, `IAuthProvider.Method` and the JSON all read the same |
+| `ProviderSettings`                    | `jsonb`                      | NULL     | Provider-specific (issuer, client id, metadata URL, certificate). Null while the method is `password` |
+| `AllowedEmailDomains`                 | `text[]`                     | NOT NULL | Domains that map to this organization at login step 1. Empty = reachable only through an existing membership |
+| `IsJustInTimeProvisioningEnabled`     | `boolean`                    | NOT NULL | Reserved for SSO. **Stored, never read** — provisioning stays invite-only |
+| `SessionLifetime`                     | `interval`                   | NULL     | Per-organization override; null = `Jwt:RefreshTokenLifetimeDays`. **Stored, not yet applied** |
+| `IsMultiFactorAuthenticationRequired` | `boolean`                    | NOT NULL | Reserved for SSO/MFA. **Stored, never read** |
+| `CreatedAt`                           | `timestamp with time zone`   | NOT NULL |                                    |
+
+Indexes: `IX_OrganizationAuthConfigurations_AllowedEmailDomains` (**GIN**) — the domain lookup on
+the first login step asks "which organization claims this domain", which no b-tree helps with.
+
+**No row-level security**, deliberately, unlike `Invites`. The table is not `ITenantScoped`; its
+main read is a cross-tenant question asked with no tenant context, and system mode would depend
+on a `BYPASSRLS` role that does not exist on real servers yet. A future write path must therefore
+scope by `ITenantContext` explicitly in the query.
+
+An organization with no row here signs in with a password — the same answer an unknown address
+gets, which is what keeps login step 1 non-enumerable. Rows are created by 40.9's superadmin
+panel; nothing writes one today.
+
+---
+
 ### `UserProfiles`
 
 | Column                  | Type      | Nullable | Notes                                                            |
