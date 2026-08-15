@@ -15,6 +15,11 @@ public static class AuthenticationServiceCollectionExtensions
         services.Configure<GoogleAuthConfiguration>(configuration.GetSection(GoogleAuthConfiguration.SectionName));
         services.Configure<EmailVerificationConfiguration>(configuration.GetSection(EmailVerificationConfiguration.SectionName));
         services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
+        // Phase 40.8 seam: providers are resolved as a collection and selected by
+        // OrganizationAuthConfiguration.Method. Adding OIDC/SAML later is one more registration
+        // here plus its implementation — nothing in the login flow changes.
+        services.AddScoped<IAuthProvider, PasswordAuthProvider>();
+        services.AddScoped<IOrganizationAuthConfigurationResolver, OrganizationAuthConfigurationResolver>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IEmailVerificationService, EmailVerificationService>();
         services.AddScoped<SuperAdminSeeder>();

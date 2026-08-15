@@ -19,9 +19,17 @@ internal sealed class AuthenticationService(
     IdentityDbContext databaseContext,
     IEmailVerificationService emailVerificationService,
     IGoogleTokenValidator googleTokenValidator,
+    IOrganizationAuthConfigurationResolver organizationAuthConfigurationResolver,
+    IEnumerable<IAuthProvider> authProviders,
     IOptions<JwtConfiguration> jwtOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
 {
+    /// <summary>
+    /// One message for "no such address", "wrong password" and "this organization does not sign in
+    /// with a password at all" — see <see cref="AuthResult"/>.
+    /// </summary>
+    private const string LoginRejectedMessage = "Invalid email or password.";
+
     /// <summary>
     /// Deliberately identical for "no such account" and "account without an active membership":
     /// a distinguishable answer would turn the Google endpoint into an oracle telling an outsider
@@ -84,6 +92,18 @@ internal sealed class AuthenticationService(
         await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, user.DisplayName, cancellationToken);
     }
 
+    public Task<ResolvedLoginMethod> ResolveLoginMethodAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+        => organizationAuthConfigurationResolver.ResolveForEmailAsync(email, cancellationToken);
+
+    /// <summary>
+    /// Step 3 of the three-step login flow (docs/TENANCY/TENANCY.md §4.5): the organization the
+    /// address resolves to decides which <see cref="IAuthProvider"/> gets the credential. Today
+    /// that is always <c>PasswordAuthProvider</c>; an organization configured for a method with no
+    /// provider is refused rather than quietly falling back to a password, which is what makes the
+    /// seam worth having before SSO exists.
+    /// </summary>
     public async Task<IssuedTokenPair> LoginWithEmailAsync(
         string email,
         string password,
@@ -92,14 +112,27 @@ internal sealed class AuthenticationService(
         var normalizedEmail = email.ToLowerInvariant();
         logger.LogInformation("Login attempt {Email}", normalizedEmail);
 
-        var user = await databaseContext.Users
-            .FirstOrDefaultAsync(userRecord => userRecord.Email == normalizedEmail, cancellationToken);
+        var resolvedLoginMethod = await organizationAuthConfigurationResolver
+            .ResolveForEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || user.PasswordHash is null ||
-            !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        var authProvider = authProviders
+            .FirstOrDefault(candidate => candidate.Method == resolvedLoginMethod.Method);
+
+        if (authProvider is null)
+        {
+            logger.LogWarning(
+                "Login failed — no provider implements method {Method} configured for OrganizationId={OrganizationIdentifier}",
+                resolvedLoginMethod.Method, resolvedLoginMethod.OrganizationId);
+            throw new UnauthorizedAccessException(LoginRejectedMessage);
+        }
+
+        var authResult = await authProvider.AuthenticateAsync(
+            new AuthRequest(normalizedEmail, password), cancellationToken);
+
+        if (authResult.AuthenticatedUser is not { } user)
         {
             logger.LogWarning("Login failed — invalid credentials {Email}", normalizedEmail);
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new UnauthorizedAccessException(LoginRejectedMessage);
         }
 
         // TEMP: email confirmation disabled — do not block unverified accounts on login.
