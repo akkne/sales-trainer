@@ -6,6 +6,7 @@ using Sellevate.Analytics;
 using Sellevate.Analytics.Common.Constants;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
@@ -96,6 +97,12 @@ application.UseHttpMetrics();
 
 application.UseAuthentication();
 application.UseAuthorization();
+
+// Phase 40.13. Populates the scoped ITenantContext from the gateway-validated
+// X-Organization-Id header. After authorization so the endpoint (and therefore its
+// [TenantScoped] metadata) is resolved, which is what lets the middleware reject a presence
+// ping that carries no organization instead of pooling it into a shared Redis key.
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 application.MapMetrics();
