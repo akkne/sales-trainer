@@ -1,6 +1,7 @@
 import { NavRail } from "@/features/layout/components/nav-rail";
 import { BottomNav } from "@/features/layout/components/bottom-nav";
 import { MobileTopbar } from "@/features/layout/components/mobile-topbar";
+import { ImpersonationBanner } from "@/features/admin/components/impersonation-banner";
 
 export default function MainLayout({
     children,
@@ -17,6 +18,7 @@ export default function MainLayout({
 
             {/* Scrollable content area */}
             <main className="shell-content has-bottom-nav">
+                <ImpersonationBanner />
                 {children}
             </main>
 

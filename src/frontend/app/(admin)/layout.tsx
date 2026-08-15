@@ -23,6 +23,7 @@ const NAV_ICONS: Record<string, IconName> = {
     "/admin/leagues": "trophy",
     "/admin/gamification": "star",
     "/admin/users": "users",
+    "/admin/organizations": "briefcase",
 };
 
 export default function AdminLayout({
@@ -91,6 +92,7 @@ export default function AdminLayout({
     // so reaching this point already implies SuperAdmin and the "Users" link no longer
     // needs a separate gate.
     const navItems = [
+        { href: "/admin/organizations", label: "Organizations" },
         { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
         { href: "/admin/skill-stages", label: "Skill Stages" },
