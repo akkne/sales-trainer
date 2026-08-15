@@ -86,6 +86,29 @@ public class VoiceReservationGateTests
 
     // ── AI1: reservation gate ─────────────────────────────────────────────
 
+    /// <summary>
+    /// Phase 40.11. A voice quota is already per-user, so this key could not have leaked one
+    /// customer's usage into another's — but "no ai-service Redis key is shared across
+    /// organizations" is only checkable by reading key names if every key carries the prefix.
+    /// </summary>
+    [Test]
+    public async Task ReserveSeconds_KeysAreNamespacedByOrganization()
+    {
+        var (svc, redis) = Build(LimitsOf(30, 300), dayScriptResult: 60, monthScriptResult: 60);
+
+        await svc.ReserveSecondsAsync(Guid.NewGuid(), 60);
+
+        var usedKeys = redis.ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(IDatabase.ScriptEvaluateAsync))
+            .SelectMany(call => (RedisKey[])call.GetArguments()[1]!)
+            .Select(key => key.ToString())
+            .ToList();
+
+        usedKeys.Should().HaveCount(2);
+        usedKeys.Should().OnlyContain(key =>
+            key.StartsWith($"org:{AiDbContextFactory.DefaultOrganizationId}:voice:", StringComparison.Ordinal));
+    }
+
     [Test]
     public async Task ReserveSeconds_WhenBelowDailyLimit_ReturnsReservedAmount()
     {
