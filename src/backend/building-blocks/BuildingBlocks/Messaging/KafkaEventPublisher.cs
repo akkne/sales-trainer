@@ -56,9 +56,10 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDeadLetterPublisher,
         string eventType,
         TData data,
         int version = 1,
+        Guid? organizationId = null,
         CancellationToken cancellationToken = default)
     {
-        var envelope = EventEnvelope.Create(eventType, data, version);
+        var envelope = EventEnvelope.Create(eventType, data, version, organizationId);
         var json = JsonSerializer.Serialize(envelope, EventEnvelope.JsonOptions);
 
         try

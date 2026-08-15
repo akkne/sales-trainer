@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Eventing;
 using Sellevate.Company.Infrastructure.Data;
 
@@ -17,6 +18,7 @@ namespace Sellevate.Company.Features.Companies.FollowUpReminders;
 /// </summary>
 internal sealed class FollowUpReminderService(
     CompanyDbContext databaseContext,
+    ITenantContext tenantContext,
     IEventPublisher eventPublisher,
     IOptions<FollowUpReminderOptions> options,
     ILogger<FollowUpReminderService> logger) : IFollowUpReminderService
@@ -30,7 +32,24 @@ internal sealed class FollowUpReminderService(
 
     public async Task<int> ProcessDueFollowUpsAsync(CancellationToken cancellationToken = default)
     {
+        // Phase 40.12, and the whole point of the rework: this service runs for exactly one
+        // organization per call. An unset tenant is an exception, never a licence to scan every
+        // customer's pipeline (docs/TENANCY/TENANCY.md §1.6) — and system mode is rejected just as
+        // firmly, because the enumeration that legitimately uses it lives in the background service
+        // and hands a concrete organization down to here.
+        if (tenantContext.IsSystem)
+        {
+            throw new InvalidOperationException(
+                "FollowUpReminderService must run per organization; system mode would publish reminders across every tenant.");
+        }
+
+        var organizationId = tenantContext.OrganizationId
+            ?? throw new InvalidOperationException(
+                "FollowUpReminderService requires an organization; an unset tenant must never mean every organization.");
+
         var now = DateTime.UtcNow;
+
+        await using var transactionScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         var dueCompanies = await databaseContext.Companies
             .Where(company => company.NextActionAt != null
@@ -61,6 +80,7 @@ internal sealed class FollowUpReminderService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await transactionScope.CommitAsync(cancellationToken);
 
         var publishedCount = 0;
         foreach (var company in dueCompanies)
@@ -74,7 +94,7 @@ internal sealed class FollowUpReminderService(
                     company.NextActionAt!.Value,
                     company.NextActionNote);
 
-                await PublishWithRetryAsync(payload, company.UserId, company.Id, cancellationToken);
+                await PublishWithRetryAsync(payload, company.UserId, company.Id, organizationId, cancellationToken);
 
                 publishedCount++;
             }
@@ -101,17 +121,22 @@ internal sealed class FollowUpReminderService(
         CompanyFollowUpDueEvent payload,
         Guid userId,
         Guid companyId,
+        Guid organizationId,
         CancellationToken cancellationToken)
     {
         for (var attempt = 1; attempt <= PublishMaxAttempts; attempt++)
         {
             try
             {
+                // The organization travels in the envelope (40.3's field, populated at last), not
+                // in the payload: a consumer's tenant is a property of the message in its hand, and
+                // notification-service's own tenancy block will read it from there.
                 await eventPublisher.PublishAsync(
                     Topics.CompanyFollowUpDue,
                     userId.ToString(),
                     Topics.CompanyFollowUpDue,
                     payload,
+                    organizationId: organizationId,
                     cancellationToken: cancellationToken);
 
                 return;
