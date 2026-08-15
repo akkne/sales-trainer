@@ -248,13 +248,19 @@ deletes a row.
 | Column        | Type      | Nullable | Notes                          |
 |---------------|-----------|----------|--------------------------------|
 | `Id`          | `uuid`    | NOT NULL | PK                             |
-| `IconicName`  | `text`    | NOT NULL | UNIQUE — English identifier    |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Skills_tenant_isolation` (content variant: `IS NULL OR = current`). |
+| `IconicName`  | `text`    | NOT NULL | English identifier. UNIQUE **per organization** since 40.10 — see the index note below |
 | `OrderInTree` | `integer` | NOT NULL | Display order in tree          |
 | `Title`       | `text`    | NOT NULL | Localized display name         |
 | `Description` | `text`    | NULL     |                                |
 | `Stage`       | `text`    | NOT NULL | Funnel stage bucket (DEFAULT `general`). References `SkillStages.Key`; built-in keys: `preparation`, `discovery`, `engagement`, `closing`, `retention`. Free string (no FK) — `general` and unknown keys fall back to a generic bucket. |
 
-Indexes: `IX_Skills_IconicName` (unique), `IX_Skills_Stage`.
+Indexes (Phase 40.10): `IX_Skills_OrganizationId_IconicName` (unique), `IX_Skills_IconicName_Global`
+(unique, partial `WHERE "OrganizationId" IS NULL`), `IX_Skills_OrganizationId_Stage`. The slug is
+unique **per organization**, not globally — otherwise a second customer could not have its own
+`objections` skill. The partial index is not redundant: Postgres treats NULLs in a composite unique
+index as distinct, so without it two global `objections` skills would be allowed. Built by
+`docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql`, not by the EF migration.
 
 ### `SkillStages`
 
@@ -277,8 +283,9 @@ Index: `IX_SkillStages_Key` (unique). `general` is the implicit fallback for una
 | Column        | Type      | Nullable | Notes                          |
 |---------------|-----------|----------|--------------------------------|
 | `Id`          | `uuid`    | NOT NULL | PK                             |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Topics_tenant_isolation` (content variant: `IS NULL OR = current`). |
 | `SkillId`     | `uuid`    | NOT NULL | FK → `Skills.Id`               |
-| `IconicName`  | `text`    | NOT NULL | UNIQUE — English identifier    |
+| `IconicName`  | `text`    | NOT NULL | English identifier. UNIQUE **per organization** since 40.10 — see the index note below |
 | `OrderInSkill`| `integer` | NOT NULL |                                |
 | `Title`       | `text`    | NOT NULL | Localized display name         |
 
@@ -291,6 +298,7 @@ Indexes: `IX_Topics_IconicName`, `IX_Topics_SkillId_OrderInSkill`
 | Column        | Type      | Nullable | Notes                |
 |---------------|-----------|----------|----------------------|
 | `Id`          | `uuid`    | NOT NULL | PK                   |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Lessons_tenant_isolation` (content variant: `IS NULL OR = current`). |
 | `TopicId`     | `uuid`    | NOT NULL | FK → `Topics.Id`     |
 | `OrderInTopic`| `integer` | NOT NULL |                      |
 | `Title`       | `text`    | NOT NULL |                      |
@@ -304,6 +312,7 @@ Indexes: `IX_Lessons_TopicId_OrderInTopic`
 | Column              | Type                       | Nullable | Notes                                                                         |
 |---------------------|----------------------------|----------|-------------------------------------------------------------------------------|
 | `Id`                | `uuid`                     | NOT NULL | PK                                                                            |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Exercises_tenant_isolation` (content variant: `IS NULL OR = current`). |
 | `LessonId`          | `uuid`                     | NOT NULL | FK → `Lessons.Id`                                                             |
 | `Type`              | `text`                     | NOT NULL | `choose_option`, `fill_blank`, `free_text`, `reorder`, `match_pairs`, `categorize`, `spot_mistake`, `rewrite` |
 | `OrderInLesson`     | `integer`                  | NOT NULL |                                                                               |
@@ -386,6 +395,7 @@ Legacy markdown glossary, kept to serve old skill-detail pages. Superseded for t
 | Column            | Type      | Nullable | Notes              |
 |-------------------|-----------|----------|--------------------|
 | `Id`              | `uuid`    | NOT NULL | PK                 |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `ReferenceMaterials_tenant_isolation` (content variant: `IS NULL OR = current`). |
 | `SkillId`         | `uuid`    | NOT NULL | FK → `Skills.Id`   |
 | `Title`           | `text`    | NOT NULL |                    |
 | `MarkdownContent` | `text`    | NOT NULL |                    |
@@ -402,6 +412,7 @@ Techniques replace `ReferenceMaterials` as the handbook's primary entity. Dialog
 | Column           | Type                       | Nullable | Notes                                                                            |
 |------------------|----------------------------|----------|----------------------------------------------------------------------------------|
 | `Id`             | `uuid`                     | NOT NULL | PK                                                                               |
+| `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Techniques_tenant_isolation` (content variant: `IS NULL OR = current`). |
 | `Slug`           | `text`                     | NOT NULL | UNIQUE                                                                           |
 | `Name`           | `text`                     | NOT NULL |                                                                                  |
 | `Summary`        | `text`                     | NOT NULL | Short excerpt shown on card                                                      |
@@ -455,6 +466,7 @@ Per-user mastery tracking for techniques (drives the `MasteryRing` + `isNew` chi
 | Column           | Type                       | Nullable | Notes                                              |
 |------------------|----------------------------|----------|----------------------------------------------------|
 | `Id`             | `uuid`                     | NOT NULL | PK                                                 |
+| `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserTechniqueProgressRecords_tenant_isolation`. |
 | `UserId`         | `uuid`                     | NOT NULL | FK → `Users.Id` ON DELETE CASCADE                  |
 | `TechniqueId`    | `uuid`                     | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE             |
 | `Level`          | `integer`                  | NOT NULL | 0=Unseen, 1=Novice, 2=Practitioner, 3=Expert, 4=Master |
@@ -471,6 +483,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column                | Type      | Nullable | Notes                                               |
 |-----------------------|-----------|----------|-----------------------------------------------------|
 | `Id`                  | `uuid`    | NOT NULL | PK                                                  |
+| `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserSkillProgressRecords_tenant_isolation`. |
 | `UserId`              | `uuid`    | NOT NULL | FK → `Users.Id`                                     |
 | `SkillId`             | `uuid`    | NOT NULL | FK → `Skills.Id`                                    |
 | `Status`              | `text`    | NOT NULL | `locked` / `available` / `in_progress` / `completed`|
@@ -484,6 +497,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column        | Type                       | Nullable | Notes                                      |
 |---------------|----------------------------|----------|--------------------------------------------|
 | `Id`          | `uuid`                     | NOT NULL | PK                                         |
+| `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserLessonProgressRecords_tenant_isolation`. |
 | `UserId`      | `uuid`                     | NOT NULL | FK → `Users.Id`                            |
 | `LessonId`    | `uuid`                     | NOT NULL | FK → `Lessons.Id`                          |
 | `Status`      | `text`                     | NOT NULL | `not_started` / `in_progress` / `completed`|
@@ -497,6 +511,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column                | Type                       | Nullable | Notes                              |
 |-----------------------|----------------------------|----------|------------------------------------|
 | `Id`                  | `uuid`                     | NOT NULL | PK                                 |
+| `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserExerciseAttempts_tenant_isolation`. |
 | `UserId`              | `uuid`                     | NOT NULL | FK → `Users.Id`                    |
 | `ExerciseId`          | `uuid`                     | NOT NULL | FK → `Exercises.Id`                |
 | `SerializedAnswer`    | `jsonb`                    | NOT NULL | User's answer payload              |
@@ -777,6 +792,7 @@ Skills
 | `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
 | `AddCompanyReadiness` (company-service)  | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
 | `AddCompanyReadinessNoFeedbackCache` (company-service) | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+| `AddOrganizationId` (learning-service) | 2026-08-15 | Phase 40.10, first Stage-C service. `OrganizationId uuid NOT NULL` on `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` (added with an all-zeros placeholder default, which is then dropped) and `OrganizationId uuid NULL` on `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` (`NULL` = global library). RLS on all ten: `EnableTenantRls` for the progress tables, `EnableTenantRlsForContent` for the content ones. Contains **no `CREATE INDEX` and no backfill** on purpose — both are operational steps (`docs/TENANCY/sql/40.10_learning_organization_backfill.sql`, `..._indexes_concurrently.sql`), because the migration runs from `Database.Migrate()` at startup where a long index build would stall readiness. |
 | `InitialOrganizationSchema` (organization-service) | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
 
 ---

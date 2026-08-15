@@ -1665,25 +1665,43 @@
 > RLS → аудит фоновых джоб → тесты изоляции. Порядок сервисов — по риску: сначала
 > те, где лежат разговоры и прогресс.
 
-### [ ] 40.10 learning-service
-- [ ] `organization_id` в: `user_skill_progress`, `user_lesson_progress`,
-      `user_exercise_attempts`, `user_technique_progress`
-- [ ] Контентные таблицы (`skills`, `topics`, `lessons`, `exercises`, `techniques`,
-      `reference_materials`) — колонка **nullable**: `NULL` = глобальная библиотека
-- [ ] Query filter для контента: `x.OrganizationId == null || x.OrganizationId == current`
+### [~] 40.10 learning-service
+- [x] `organization_id` в: `UserSkillProgressRecords`, `UserLessonProgressRecords`,
+      `UserExerciseAttempts`, `UserTechniqueProgress` — `NOT NULL`, `ITenantScoped`
+- [x] Контентные таблицы (`Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`,
+      `ReferenceMaterials`) — колонка **nullable**: `NULL` = глобальная библиотека
+- [x] Query filter для контента: `x.OrganizationId == null || x.OrganizationId == current`
       (НЕ простое равенство)
-- [ ] Фильтр нужен **каждой** сущности отдельно — навигации `Skill→Topic→Lesson→Exercise`
-      фильтр не наследуют
-- [ ] `Skill.IconicName`: `UNIQUE(organization_id, iconic_name)` — иначе второй клиент со
-      своим `objections` не заведётся
-- [ ] Индексы: `(organization_id, user_id, ...)`, перестройка через
-      `CREATE INDEX CONCURRENTLY` + `suppressTransaction: true`, дроп старого **после**
-- [ ] Проверка `pg_index.indisvalid` после конкурентной сборки (упавшая сборка оставляет
-      невалидный индекс, который жрёт оверхед на записи)
-- [ ] Долгие перестройки индексов — **отдельный операционный шаг**, не в
-      `DatabaseBootstrapper` (иначе тормозит readiness и гоняется с репликами)
-- [ ] RLS на всех таблицах; `ExerciseTypePrompt` остаётся платформенно-глобальным
-- [ ] Обновить `docs/LEARNING_SERVICE.md`, `docs/DB_SCHEMA.md`
+- [x] Фильтр нужен **каждой** сущности отдельно — навигации `Skill→Topic→Lesson→Exercise`
+      фильтр не наследуют. Тест `Every_entity_with_an_organization_id_has_its_own_query_filter`
+      обходит модель и валит сборку, если у сущности есть `OrganizationId` и нет фильтра
+- [x] `Skill.IconicName`: `UNIQUE(organization_id, iconic_name)` — **плюс частичный уникальный
+      индекс по глобальным строкам**: Postgres считает NULL'ы в составном уникальном индексе
+      различными, поэтому одного составного мало. То же для `Topic.IconicName` и `Technique.Slug`
+- [x] Индексы: `(organization_id, user_id, ...)`, перестройка через `CREATE INDEX CONCURRENTLY`,
+      дроп старого **после** — `docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql`
+- [x] Проверка `pg_index.indisvalid` — дважды: **до** дропа старых индексов (иначе можно остаться
+      вообще без индекса) и после
+- [x] Долгие перестройки индексов — **отдельный операционный шаг**: EF-миграция не создаёт ни
+      одного индекса, потому что `Database.Migrate()` идёт на старте сервиса. Следствие
+      (снимок модели знает про индексы, которых нет до прогона скрипта) записано в
+      `docs/DECISIONS.md` и `docs/DONT_FORGET.md`
+- [x] RLS на всех десяти таблицах: `EnableTenantRls` для прогресса,
+      `EnableTenantRlsForContent` для контента. `ExerciseTypePrompts`, `SkillStages`,
+      `DailyQuotes`, `UserReplicas` остаются платформенно-глобальными
+- [x] Аудит фоновых джоб: `OutboxRelayBackgroundService` — системный (читает только
+      `OutboxMessages`, без RLS), `UserReplicaConsumer` — `RequiresOrganization => false`
+      (проекция кросс-организационных пользователей). Незаданный тенант — исключение, а не «все данные»
+- [x] Один документированный паттерн транзакций на весь сервис (`TenantTransactionScope`):
+      `SET LOCAL` не работает вне транзакции, поэтому голый `SELECT` под RLS вернул бы пусто
+- [x] Тесты изоляции **написаны** (8 штук, `LearningTenantIsolationIntegrationTests`):
+      навигация, сырой SQL, `ExecuteUpdate`/`ExecuteDelete`, глобальный контент виден обеим
+- [~] Тесты изоляции **не прогнаны** — Правило №2 в `docs/DONT_FORGET.md`; человек запускает
+      `--filter "TestCategory=Integration"`. Юнит-тесты 61/61 зелёные без них
+- [~] Бэкфилл и перестройка индексов **не выполнены ни против какой БД** — операция на живых
+      данных, порядок расписан в `docs/DONT_FORGET.md`
+- [x] Обновить `docs/LEARNING_SERVICE.md`, `docs/DB_SCHEMA.md` (+ `docs/TESTING/TENANCY.md`,
+      `docs/DECISIONS.md`)
 
 ### [ ] 40.11 ai-service (Postgres + Mongo)
 - [ ] `organization_id` в Postgres-таблицах сервиса (квоты, веса, настройки)

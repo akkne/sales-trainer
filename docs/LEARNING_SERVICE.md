@@ -58,6 +58,90 @@ read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` event
 
 Reuses the shared Redis (Kafka idempotency store) and Kafka broker.
 
+## Multi-tenancy (Phase 40.10)
+
+learning-db is the first database where **tenant data and the global content library live side by
+side**, so the two halves are modelled differently on purpose.
+
+| | Tables | `OrganizationId` | Query filter | RLS policy |
+|---|---|---|---|---|
+| **Tenant data** | `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` | `NOT NULL`, `ITenantScoped` | `== current` | `EnableTenantRls` |
+| **Content** | `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` | nullable — `NULL` = global library | `== null \|\| == current` | `EnableTenantRlsForContent` |
+| **Platform-global** | `ExerciseTypePrompts`, `SkillStages`, `DailyQuotes`, `UserReplicas`, `TechniqueSkills`, `TechniqueCoaches`, `OutboxMessages` | none | none | none |
+
+Points that are easy to get wrong and are therefore pinned by tests
+(`Learning.Tests/Unit/LearningTenancyModelTests`, `Learning.Tests/Integration/LearningTenantIsolationIntegrationTests`):
+
+- **Every entity declares its own filter.** EF does not inherit query filters through navigations,
+  and every read path here composes `Skill → Topic → Lesson → Exercise`. A filter on `Skill` says
+  nothing about `Exercise`. A model-walking unit test fails the build if an entity grows an
+  `OrganizationId` without a filter.
+- **Content uses `null || ==`, never plain equality.** Plain equality would hand every new customer
+  an empty skill tree on day one.
+- **`Skill.IconicName` is unique per organization**, not globally (`UNIQUE (OrganizationId,
+  IconicName)`), plus a partial unique index over the global rows — Postgres treats NULLs in a
+  composite unique index as distinct, so the composite index alone would let two global `objections`
+  skills exist. Same treatment for `Topic.IconicName` and `Technique.Slug`.
+- **Progress indexes lead with `OrganizationId`** (docs/TENANCY/TENANCY.md §3).
+
+### The read-transaction rule
+
+`TenantConnectionInterceptor` issues `SET LOCAL app.organization_id` when a transaction starts, and
+`SET LOCAL` does nothing outside one. EF opens an implicit transaction for every `SaveChangesAsync`,
+so writes are covered for free — **a bare `SELECT` is not, and under RLS it silently returns zero
+tenant rows.** learning-service therefore has exactly one pattern, in
+`Infrastructure/Data/TenantTransactionScope.cs`:
+
+- read-only service method → `TenantTransactionScope.BeginReadAsync(...)` as its first statement
+  (rolls back on dispose — it exists to make rows visible, not to persist anything);
+- method that also writes → `BeginWriteAsync(...)` plus an explicit `CommitAsync(...)`.
+
+Both are re-entrant, so a nested call is a no-op and the outermost scope owns the transaction. Two
+deliberate placements rather than a blanket request-wide transaction:
+
+- `ExerciseService.SubmitExerciseAnswerAsync` scopes the exercise lookup and the write phase
+  separately, because the AI evaluation between them is a network call and must never run with a
+  Postgres transaction held open;
+- `ExerciseDialogService` closes its scope before a single byte of audio is generated, which is why
+  the `/voice/stream` endpoint needs no request-wide transaction.
+
+**Known gap, deliberate:** the superadmin-only controllers under `Features/Admin` talk to the
+content tables with no scope. Content is global (`OrganizationId IS NULL`) for the whole of 40.10
+and the content policy admits global rows even with the session variable unset, so they keep
+working. Phase 40.18 (organization-authored content) has to revisit them.
+
+### Content authoring and the seeder
+
+All content write endpoints are `RequireSuperAdministrator`, so in 40.10 content is authored only by
+platform staff and `OrganizationId` stays `NULL` — the seeder needs no special mode to produce a
+global library, it simply never sets an organization. The column and the filters are already
+forward-compatible with the copy-on-write overrides of 40.18.
+
+### Background jobs
+
+| Job | Mode | Why it is safe |
+|---|---|---|
+| `OutboxRelayBackgroundService` | system | Reads `OutboxMessages` only, which has no `OrganizationId` filter and no RLS policy — the tenant travels in the envelope payload (TENANCY.md §1.7). The single legitimate cross-tenant reader. |
+| `UserReplicaConsumer` | platform-global (`RequiresOrganization => false`) | Projects identity's cross-org user table; `UserReplicas` has no organization column. |
+
+There is no per-organization iteration job in learning-service. An **unset tenant is an exception,
+never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
+organization gets an envelope without one, the query filters resolve to "no rows" rather than "all
+rows", and `TenantSaveChangesInterceptor` throws on any tenant-scoped write with no context.
+
+### Operational steps that are NOT in the migration
+
+Migration `20260815152225_AddOrganizationId` adds the columns and turns RLS on. It deliberately
+contains no `CREATE INDEX` and no backfill:
+
+- `docs/TENANCY/sql/40.10_learning_organization_backfill.sql` — replaces the all-zeros placeholder
+  organization on the progress tables. Until it runs, RLS hides every pre-existing progress row.
+- `docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql` — `CREATE INDEX
+  CONCURRENTLY`, `pg_index.indisvalid` check, then drops the superseded indexes.
+- `scripts/tenancy-learning-organization-rollout.sh` drives both; default mode writes nothing.
+
+Neither has been run against any real database — see `docs/DONT_FORGET.md`.
+
 ## Coupling broken during extraction
 
 | Monolith coupling | Resolution in learning-service |

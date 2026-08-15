@@ -113,11 +113,11 @@ against a real, connection-pooled Postgres and not a mock.
 
 ### Not covered here — deferred to Stage C (40.10+)
 
-- No service table has `OrganizationId` yet, so there is nothing to point `EnableTenantRls` at in
-  a real migration. Add a new row to this document per service the first time it does.
-- `TenantConnectionInterceptor` is registered by `AddSellevateTenancy()` but not yet added to any
-  service's `DbContext` — that wiring, plus wrapping tenant-scoped reads in an explicit
-  transaction (see docs/DECISIONS.md), is Stage C's responsibility, not this block's.
+- ~~No service table has `OrganizationId` yet~~ — learning-service is the first, see the 40.10
+  section below. The remaining services (ai, company, gamification, social, notification) are still
+  outstanding; add a section here per service.
+- ~~`TenantConnectionInterceptor` is registered but not added to any service's `DbContext`~~ —
+  learning-service and identity-service both add it now.
 - The role-provisioning SQL (`docs/TENANCY/sql/create_sellevate_app_role.sql`) is written but not
   run anywhere real — see `docs/DONT_FORGET.md`.
 
@@ -209,3 +209,83 @@ organization), then checks, in order:
 > The migration has been executed **only** against those throwaway databases. Running it on a copy
 > of production and then on production is a human step — see `docs/DONT_FORGET.md` and
 > [MICROSERVICES_PRODUCTION_MIGRATION.md §7](../MICROSERVICES_PRODUCTION_MIGRATION.md).
+
+---
+
+## 40.10 — learning-service (first Stage-C service)
+
+### Unit tests — run on every build (`Learning.Tests`)
+
+```
+dotnet test src/backend/learning-service/Learning.Tests/Sellevate.Learning.Tests.csproj \
+  --filter "TestCategory!=Integration"
+```
+
+61/61 green. Six of them are the tenancy tripwires in `Unit/LearningTenancyModelTests`:
+
+| Test | What it would catch |
+|---|---|
+| `Every_entity_with_an_organization_id_has_its_own_query_filter` | The trap TENANCY.md §1.4 names: EF does not inherit filters through `Skill → Topic → Lesson → Exercise`. It walks the model rather than restating the entity list, since restating the list would repeat whichever omission it is meant to catch. `OutboxMessage` is the one asserted exception. |
+| `Progress_tables_are_tenant_scoped_and_content_tables_are_not` | Someone making a content entity `ITenantScoped`, which would force a non-null owner and destroy the global library. |
+| `Global_content_is_visible_to_every_organization` | Plain equality on a content filter — a new customer would get an empty skill tree on day one. |
+| `One_organizations_progress_is_invisible_to_another` | A missing filter on a progress table. |
+| `An_unset_tenant_sees_no_progress_and_cannot_write_any` | 40.14's rule: an unset tenant is an exception, never "all data". |
+| `Writing_another_organizations_progress_row_is_refused` | The write guard silently accepting a foreign `OrganizationId`. |
+
+The rest of the suite is the pre-existing learning tests, which now run inside a tenant context
+(`Unit/LearningDbContextFactory` sets an organization and installs `TenantSaveChangesInterceptor`).
+
+### Real-Postgres isolation test — **written, not run in the 40.10 session**
+
+```
+dotnet test src/backend/learning-service/Learning.Tests/Sellevate.Learning.Tests.csproj \
+  --filter "TestCategory=Integration"
+```
+
+`Integration/LearningTenantIsolationIntegrationTests`, 8 tests. Per Правило №2 in
+`docs/DONT_FORGET.md` these were written and committed but **not executed** by the agent — they are
+slow, and the human runs them with the command above. They compile, and the unit suite is green
+without them.
+
+Same safety properties as `TenantRowLevelSecurityIntegrationTests`:
+
+- no local Postgres → every test `Assert.Ignore`s within seconds (bounded 3-second probe), never
+  hangs, never fails the build;
+- its own throwaway database `learning_tenancy_integration_test` and its own throwaway login role
+  `sellevate_learning_app_test`, dropped and recreated at the start and dropped at the end — the
+  real `learning` database is never touched;
+- the application role is `NOBYPASSRLS`, because testing isolation as the superuser proves nothing;
+- the schema comes from the service's **own EF migrations**, so what is under test is the RLS the
+  migration really emits, not a hand-copied restatement of it.
+
+What the 8 tests cover:
+
+| Test | Door it checks |
+|---|---|
+| `Content_read_through_the_navigation_chain_never_crosses_the_organization_boundary` | Navigation property: `Exercise → Lesson → Topic → Skill` eagerly loaded, asserted at **every** hop, not just the root. |
+| `Global_content_stays_visible_to_both_organizations` | `NULL` content readable by A and B; each org's own content readable only by itself. |
+| `Raw_sql_only_returns_the_current_organizations_progress` | Raw SQL — the door the EF filter does not guard at all. |
+| `Raw_sql_with_no_organization_setting_sees_no_progress_at_all` | Fail-closed: unset tenant → zero rows across all four progress tables. |
+| `Raw_sql_with_no_organization_setting_still_sees_the_global_library` | The difference between `EnableTenantRls` and `EnableTenantRlsForContent`. |
+| `ExecuteUpdate_cannot_touch_another_organizations_progress` | `ExecuteUpdate` with `IgnoreQueryFilters()` — 0 rows, and B's score is still exactly what was seeded. |
+| `ExecuteDelete_cannot_remove_another_organizations_progress` | `ExecuteDelete` with `IgnoreQueryFilters()` — 0 rows, and B's row survives. |
+| `Inserting_progress_for_another_organization_is_refused_by_postgres` | `WITH CHECK` — a raw INSERT with a foreign `OrganizationId` raises `row-level security`. |
+| `A_read_without_a_transaction_sees_no_progress_even_with_a_tenant_context` | Documents *why* every learning-service read path opens a `TenantTransactionScope`: `SET LOCAL` has no effect outside a transaction. |
+
+### Lints
+
+```
+python3 scripts/tenancy-boundary-lint.py
+python3 scripts/tenancy-pool-lint.py
+```
+
+Both clean. The pool lint matters more from 40.10 on: `LearningDbContext` closes over
+`ITenantContext` in its query filters, so registering it with `AddDbContextPool` would leak one
+tenant's filter onto another's request.
+
+### The operational SQL — not run against anything
+
+`docs/TENANCY/sql/40.10_learning_organization_backfill.sql` and
+`..._indexes_concurrently.sql`, driven by `scripts/tenancy-learning-organization-rollout.sh`
+(default mode writes nothing). Neither file has been executed against any database, real or
+throwaway. See `docs/DONT_FORGET.md` for the order a human must run them in.
