@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
+using Sellevate.Identity.Features.Auth.Constants;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Features.Auth.Services.Implementation;
@@ -29,6 +30,9 @@ public class AuthenticationServiceSecurityTests
         DemoTokenLifetimeHours = 1
     });
 
+    // Phase 40.8: the resolver and the provider collection are wired with their real
+    // implementations rather than substitutes — the whole point of the seam is which provider the
+    // resolved method dispatches to, and a stub would assert nothing about that.
     private static AuthenticationService BuildService(
         IdentityDbContext db,
         IGoogleTokenValidator? googleTokenValidator = null) =>
@@ -36,6 +40,9 @@ public class AuthenticationServiceSecurityTests
             db,
             Substitute.For<IEmailVerificationService>(),
             googleTokenValidator ?? Substitute.For<IGoogleTokenValidator>(),
+            new OrganizationAuthConfigurationResolver(
+                db, NullLogger<OrganizationAuthConfigurationResolver>.Instance),
+            [new PasswordAuthProvider(db, NullLogger<PasswordAuthProvider>.Instance)],
             JwtOptions,
             NullLogger<AuthenticationService>.Instance);
 
@@ -221,6 +228,64 @@ public class AuthenticationServiceSecurityTests
 
         issuedTokenPair.OrgId.Should().Be(organizationId.ToString());
         issuedTokenPair.OrgRole.Should().Be("OrgAdmin");
+    }
+
+    // ── 40.8: the login method is per-organization configuration ──────────────
+
+    /// <summary>
+    /// The behaviour that makes the seam more than a shape: an organization configured for a
+    /// method nobody implements is refused, not quietly downgraded to a password. Without this,
+    /// switching a customer to SSO would leave their password login silently working alongside it.
+    /// </summary>
+    [Test]
+    public async Task LoginWithEmail_ForOrganizationConfiguredForSso_IsRejectedDespiteCorrectPassword()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        var organizationId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "employee@bigcustomer.test",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Password1!"),
+            DisplayName = "Employee",
+            CreatedAt = DateTime.UtcNow,
+            IsEmailVerified = true
+        };
+        db.Users.Add(user);
+        db.Memberships.Add(new Membership
+        {
+            UserId = user.Id,
+            OrganizationId = organizationId,
+            Role = OrgRole.Manager,
+            Status = MembershipStatus.Active,
+            JoinedAt = DateTime.UtcNow
+        });
+        db.OrganizationAuthConfigurations.Add(new OrganizationAuthConfiguration
+        {
+            OrganizationId = organizationId,
+            Method = AuthMethodNames.Oidc,
+            AllowedEmailDomains = ["bigcustomer.test"],
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = BuildService(db);
+
+        var act = async () => await service.LoginWithEmailAsync("employee@bigcustomer.test", "Password1!");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await db.RefreshTokens.CountAsync()).Should().Be(0, "no session may be issued for a refused method");
+    }
+
+    [Test]
+    public async Task ResolveLoginMethodAsync_ForAnUnknownAddress_StillAnswersPassword()
+    {
+        await using var db = InMemoryDbContextFactory.Create();
+        var service = BuildService(db);
+
+        var resolved = await service.ResolveLoginMethodAsync("stranger@nowhere.test");
+
+        resolved.Method.Should().Be(AuthMethodNames.Password);
     }
 
     private static IGoogleTokenValidator StubGoogleValidator(string email, bool isEmailVerified = true)

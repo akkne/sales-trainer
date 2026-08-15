@@ -13,6 +13,14 @@ public interface IAuthenticationService
         string email,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Steps 1–2 of the three-step login flow (Phase 40.8): the address is turned into the login
+    /// method its organization configured, without revealing whether the address is known.
+    /// </summary>
+    Task<ResolvedLoginMethod> ResolveLoginMethodAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
     Task<IssuedTokenPair> LoginWithEmailAsync(
         string email,
         string password,

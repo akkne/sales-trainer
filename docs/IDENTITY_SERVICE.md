@@ -27,7 +27,8 @@ src/backend/identity-service/
 ## Owns (Postgres database `identity-db`)
 
 `Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatar`,
-`Memberships` (Phase 40.6 — see below), `Invites` (Phase 40.7 — see below). The service has **its own database**, separate
+`Memberships` (Phase 40.6 — see below), `Invites` (Phase 40.7 — see below),
+`OrganizationAuthConfigurations` (Phase 40.8 — see below). The service has **its own database**, separate
 from the monolith's. `DatabaseBootstrapper` creates the `identity` database on startup if
 missing (idempotent), then EF `Migrate()` builds the schema — so it works against a fresh
 or an already-populated shared Postgres instance.
@@ -114,6 +115,46 @@ stamped in the same transaction, so a replay is `409`.
 code path in this service that deletes a membership row — the manager's attempt history, calls
 and scores belong to the organization (TENANCY.md §4.3). Deactivated members lose `org_id` /
 `org_role` at the next token issuance and cannot sign in with Google.
+
+## Login method as organization configuration (Phase 40.8)
+
+The login flow is **three steps**, while there is still exactly one provider:
+
+1. `POST /auth/login/start` `{email}` → `{method}`
+2. the email is resolved to an organization — active `Membership` first (the invite path), then
+   `AllowedEmailDomains` — and that organization's configured method is returned
+3. `POST /auth/login` dispatches to the `IAuthProvider` whose `Method` matches
+
+`OrganizationAuthConfiguration (OrganizationId PK, Method, ProviderSettings jsonb,
+AllowedEmailDomains text[], IsJustInTimeProvisioningEnabled, SessionLifetime,
+IsMultiFactorAuthenticationRequired, CreatedAt)` lives in **identity-db**, not in
+organization-service: it is read before authentication, when there is no JWT and no
+`X-Organization-Id`, and a cross-service call there would put login behind another service's
+availability and would force an anonymous "which organization owns this domain" endpoint —
+a better enumeration oracle than the one this design avoids. identity-service owns *access*;
+organization-service owns the registry and the business profile.
+
+Unlike `Invites`, the table is **not** `ITenantScoped` and has **no RLS policy**. Its main read
+is a cross-tenant question asked without a tenant context; a table that must bypass RLS on every
+login is not protected by it. See [DECISIONS.md](DECISIONS.md) (2026-08-15, 40.8) — including the
+consequence that a future write path must scope by `ITenantContext` explicitly.
+
+`IAuthProvider { string Method; Task<AuthResult> AuthenticateAsync(AuthRequest, ...) }` has one
+implementation, `PasswordAuthProvider`, which holds the bcrypt check that used to sit inline in
+`AuthenticationService.LoginWithEmailAsync`. Providers are injected as `IEnumerable<IAuthProvider>`
+and selected by `Method`; adding OIDC/SAML is one registration in
+`AuthenticationServiceCollectionExtensions` plus the implementation, and nothing in the flow
+changes. A provider never issues tokens — that stays in `IssueTokensForUserAsync`, so every login
+method produces identical claims and the same refresh-token family.
+
+**Not implemented, on purpose:** OIDC, SAML, `IsJustInTimeProvisioningEnabled` (stored, never
+read), `SessionLifetime` (stored, not yet applied to token issuance), and any endpoint that
+writes a configuration row — organizations get one when 40.9's superadmin panel creates them, and
+one with no row logs in with a password. An organization configured for a method with no provider
+is **refused** (`401`, even for the right password), never downgraded to a password.
+
+`POST /auth/login/start` answers `200` for every syntactically valid address, known or not, and
+never names the organization — the same anti-enumeration property 40.7 gave `POST /auth/google`.
 
 ## Frontend REST (unchanged paths, served via the gateway)
 

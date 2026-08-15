@@ -132,6 +132,32 @@ public sealed class AuthController(
         }
     }
 
+    /// <summary>
+    /// Step 1 of the three-step login flow (Phase 40.8, docs/TENANCY/TENANCY.md §4.5): the client
+    /// sends only the address and is told which credential to ask for next.
+    ///
+    /// <para>
+    /// Pre-authentication and therefore **not** <c>[TenantScoped]</c>: the caller has no token and
+    /// no <c>X-Organization-Id</c> header yet, which is exactly what this step exists to resolve.
+    /// </para>
+    ///
+    /// <para>
+    /// It answers <c>200</c> for every syntactically valid address, known or not, and never names
+    /// the organization — otherwise the endpoint would be a free account-enumeration oracle. Same
+    /// choice 40.7 made for <c>POST /auth/google</c>'s single identical <c>401</c>.
+    /// </para>
+    /// </summary>
+    [HttpPost("login/start")]
+    public async Task<ActionResult<LoginStartResponseDto>> StartLogin(
+        [FromBody] LoginStartRequestDto loginStartRequest,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedLoginMethod = await authenticationService.ResolveLoginMethodAsync(
+            loginStartRequest.Email, cancellationToken);
+
+        return Ok(new LoginStartResponseDto(resolvedLoginMethod.Method));
+    }
+
     [HttpPost("login")]
     public async Task<ActionResult<AuthTokenResponseDto>> LoginWithEmail(
         [FromBody] LoginRequestDto loginRequest,

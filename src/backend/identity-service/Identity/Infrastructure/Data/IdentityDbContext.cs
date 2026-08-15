@@ -21,6 +21,14 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITen
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Invite> Invites => Set<Invite>();
 
+    /// <summary>
+    /// Phase 40.8. No query filter and no row-level security on purpose — it is read before
+    /// authentication, when no tenant context exists. See
+    /// <see cref="OrganizationAuthConfiguration"/>.
+    /// </summary>
+    public DbSet<OrganizationAuthConfiguration> OrganizationAuthConfigurations
+        => Set<OrganizationAuthConfiguration>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
