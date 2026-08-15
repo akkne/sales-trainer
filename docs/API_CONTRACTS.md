@@ -1162,7 +1162,10 @@ background service (`FollowUpReminderBackgroundService`) that polls every
 `FollowUpReminder:PollIntervalMinutes` (default 5) for companies where `NextActionAt <= now AND
 FollowUpNotifiedAt IS NULL`, claims them (sets `FollowUpNotifiedAt`, commits), and publishes one
 `company.followup.due` Kafka event per claimed company — see `docs/MICROSERVICES.md §4.1` for the
-topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Consumed by
+topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Since Phase 40.12
+the poll runs **once per organization** with a scoped tenant context (an unset tenant raises rather
+than meaning "every organization"), and the event carries `organizationId` in the **envelope** —
+not in the payload, whose fields are unchanged. Consumed by
 notification-service → `NotificationType.CompanyFollowUpDue`, an in-app-only notification (no
 email) titled *«Пора связаться с {companyName}»*, `actionUrl` `/companies/{id}`.
 

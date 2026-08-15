@@ -213,7 +213,8 @@ call history, and practice-call sessions tied to a company.
 - **Frontend REST:** `/companies/*` (companies CRUD, status, follow-up scheduling, call log,
   practice-call records, contacts).
 - **Kafka producer only** (since Phase 39.11): a polling background service
-  (`FollowUpReminderBackgroundService`, default every 5 min) publishes `company.followup.due`
+  (`FollowUpReminderBackgroundService`, default every 5 min, one scoped pass per organization
+  since 40.12) publishes `company.followup.due`
   for companies whose `NextActionAt` is due and not yet notified — see §4.1. Registers only
   the Kafka publisher + topic provisioner directly (not the full `AddSellevateEventing`
   helper), since it never consumes and so has no need for the Redis-backed consumer
@@ -268,7 +269,7 @@ a composition of those per-service admin APIs.
 | `chat.message.sent` | Social | Notifications | recipientId, senderName, preview |
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
-| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
+| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note (+ `organizationId` in the envelope since 40.12) |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
 per user), envelope = `{ eventId, occurredAt, type, version, organizationId, data }`,
