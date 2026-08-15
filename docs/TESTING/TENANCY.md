@@ -384,3 +384,107 @@ Redis key is the tenancy fix and not a breach. A real
 `scripts/tenancy-ai-organization-rollout.sh` (default mode writes nothing). Neither has been
 executed against any database, Mongo, or Redis. See `docs/DONT_FORGET.md` for the order a human
 must run them in — the Mongo step is the user-visible one.
+
+---
+
+## 40.12 — company-service (the first double scope)
+
+Every earlier Stage-C block had one axis to test. This one has two, and they fail in opposite
+directions: the organization half leaks between paying customers, the user half hands a salesperson
+a colleague's private pipeline inside one customer. Every group below is deliberately split so a
+regression in one half cannot be masked by the other still passing.
+
+### Unit tests — run on every build (`Company.Tests`)
+
+```
+dotnet test src/backend/company-service/Company.Tests/Sellevate.Company.Tests.csproj \
+  --filter "TestCategory!=Integration"
+```
+
+134/134 green (was 123/123). Eleven are the tenancy tripwires in `Unit/CompanyTenancyModelTests`:
+
+| Test | What it would catch |
+|---|---|
+| `Every_entity_with_an_organization_id_has_its_own_query_filter` | The §1.4 trap: EF does not inherit filters through `Company → CallLogEntries / PracticeCalls / Contacts / Personas`. It walks the model rather than restating the entity list. Unlike learning and ai there is no exception list — nothing in company-db is global. |
+| `Every_company_entity_is_tenant_scoped` | A future table added to this database without an organization, which would be the one unprotected row shape in a service that has no legitimate global data. |
+| `A_company_written_by_one_organization_is_invisible_to_another` | A missing or wrong filter. It also asserts the row exists behind `IgnoreQueryFilters()`, so the test cannot pass by being an empty database. |
+| `A_user_does_not_see_a_colleagues_companies_inside_the_same_organization` | **The half a single-tenant mindset misses.** Both rows are in the same organization, so the tenant filter admits both — only the explicit user predicate separates them. |
+| `A_user_cannot_read_a_colleagues_call_log_through_their_company_id` | The sub-resource version: knowing a colleague's company id must not open its timeline. Before 40.12 sub-resource queries filtered on `CompanyId` alone. |
+| `An_unset_tenant_reads_no_companies` | 40.14's rule: an unset tenant is an exception, never a licence. |
+| `Writing_a_foreign_organization_id_raises` | `TenantSaveChangesInterceptor`'s write guard, exercised for real — the unit-test factory attaches the shipping interceptor rather than stamping organizations by hand. |
+| `The_follow_up_reminder_service_raises_on_an_unset_tenant` | The roadmap's explicit requirement for background jobs. |
+| `The_follow_up_reminder_service_refuses_to_run_in_system_mode` | The subtler version: system mode is not "no tenant", and it is refused just as firmly, because the legitimate system-mode read lives in the background service and hands a concrete organization down. |
+| `The_follow_up_reminder_service_never_processes_across_organizations` | The pre-40.12 behaviour returning: two organizations due at the same moment, and a tick scoped to one must claim exactly one. |
+| `The_due_follow_up_event_carries_the_organization_in_the_envelope` | 40.3's envelope field going unpopulated, which would leave the consumer with no tenant to process for. |
+
+`BuildingBlocks.Tests` stays 94/94 after `IEventPublisher.PublishAsync` grew its optional
+`organizationId` parameter.
+
+### Real-Postgres isolation test — **written, not run in the 40.12 session**
+
+```
+dotnet test src/backend/company-service/Company.Tests/Sellevate.Company.Tests.csproj \
+  --filter "TestCategory=Integration"
+```
+
+`Integration/CompanyTenantIsolationIntegrationTests`, 12 tests. Per Правило №2 in
+`docs/DONT_FORGET.md` they were written and committed but **not executed** by the agent. They
+compile, and the unit suite is green without them.
+
+Safety properties, same as 40.10's and 40.11's:
+
+- a bounded reachability probe, so a machine with no local Postgres skips the whole file in seconds
+  rather than hanging;
+- its own throwaway database `company_tenancy_integration_test` and login role
+  `sellevate_company_app_test` — the real `company` database is never touched;
+- the application role is `NOBYPASSRLS`, because testing isolation as the superuser proves nothing;
+- the schema comes from company-service's own EF migrations, so what is under test is the RLS the
+  migration really emits;
+- the fixture is seeded through the admin connection, which bypasses RLS — seeding through the
+  application role would be circular, since it could only create rows the policy already allows.
+
+Organization half:
+
+| Test | Door it checks |
+|---|---|
+| `A_read_through_the_navigation_chain_never_crosses_the_organization_boundary` | The §1.4 trap at every hop of `Company → CallLogEntries / PracticeCalls / Contacts / Personas`, not just at the root. |
+| `Raw_sql_only_returns_the_current_organizations_rows` | Raw SQL, the door the EF filter does not guard at all. |
+| `Raw_sql_with_no_organization_setting_sees_nothing_at_all` | Stronger than the same test in 40.10/40.11: company-db has no global library, so an unset tenant sees literally zero rows across all five tables. |
+| `ExecuteUpdate_cannot_touch_another_organizations_company` | `ExecuteUpdate` with `IgnoreQueryFilters()` stripping the convenience layer on purpose, plus B's row intact afterwards. |
+| `ExecuteDelete_cannot_remove_another_organizations_call_log` | Same for `ExecuteDelete`. |
+| `Inserting_a_company_for_another_organization_is_refused_by_postgres` | `WITH CHECK`, i.e. the policy and not the application refusing the write. |
+| `A_read_without_a_transaction_sees_nothing_even_with_a_tenant_context` | Why every read path opens a `TenantTransactionScope`. The symptom is especially quiet here: "no companies" looks exactly like a new user. |
+
+User half, inside **one** organization:
+
+| Test | Door it checks |
+|---|---|
+| `A_user_does_not_see_a_colleagues_companies_inside_the_same_organization` | Asserted through `CompanyService`, not through the `DbContext`, because the database deliberately admits both rows. |
+| `A_colleagues_company_id_opens_none_of_its_sub_resources` | Company, call log, contacts, personas and practice calls — and the colleague still sees their own, so the nulls above are not an empty database in disguise. |
+| `A_company_id_from_another_organization_behaves_exactly_like_an_unknown_id` | 404-shaped, never 403-shaped: the pre-existing rule extended to the new half. |
+
+Background job:
+
+| Test | Door it checks |
+|---|---|
+| `The_follow_up_poll_never_claims_another_organizations_due_company` | Both organizations due at the same moment; a tick scoped to A publishes one event, with A's id in the envelope, and leaves B's row unnotified. |
+| `The_follow_up_poll_raises_on_an_unset_tenant_instead_of_scanning_everything` | The same guard as the unit tripwire, against a real database. |
+
+### Lints
+
+```
+python3 scripts/tenancy-boundary-lint.py
+python3 scripts/tenancy-pool-lint.py
+```
+
+Both clean. `CompanyDbContext` is registered with `AddDbContext`, never the pooled helper — a
+pooled context would cache the first tenant's query filter and hand it to every later caller.
+
+### The operational SQL — not run against anything
+
+`docs/TENANCY/sql/40.12_company_organization_backfill.sql` and
+`docs/TENANCY/sql/40.12_company_organization_indexes_concurrently.sql`, driven by
+`scripts/tenancy-company-organization-rollout.sh` (default mode writes nothing). Neither has been
+executed against any database. See `docs/DONT_FORGET.md` for the order a human must run them in —
+the backfill is the user-visible step, and the index script is the one that keeps the cascade-delete
+foreign keys indexed.

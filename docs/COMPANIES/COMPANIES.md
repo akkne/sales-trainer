@@ -34,9 +34,9 @@ routes in `src/backend/gateway/Gateway/appsettings.json`), `docker-compose.yml` 
 `scripts/dev-company.sh` (`LOCAL_COMPANY_PORT=5009`) wired into `scripts/dev-up.sh`.
 
 Every controller action resolves `UserId` from the JWT (`ClaimTypes.NameIdentifier`) and every
-query/mutation is scoped `WHERE UserId = ...` (or via an ownership existence check for
-sub-resources). An id that exists but belongs to another user is indistinguishable from an id
-that doesn't exist — both return `404`, never `403`.
+query/mutation is scoped `WHERE UserId = ...`. An id that exists but belongs to another user is
+indistinguishable from an id that doesn't exist — both return `404`, never `403`. Since Phase 40.12
+that scope is **double** — see "Multi-tenancy: the double scope" below.
 
 ### ai-service — company-context sessions
 
@@ -73,7 +73,8 @@ feedback, progress points, and minute quotas as any other dialog mode) with two 
 
 ## Data model (company-service, Postgres `company`)
 
-Three entities, all owned by `UserId`, cascade-deleted with their parent `Company`:
+Three entities, all owned by `OrganizationId` **and** `UserId` (Phase 40.12), cascade-deleted with
+their parent `Company`:
 
 - **`Company`** — `Id, UserId, Name (≤200), Description (≤8000, default ""),
   Status (Lead/Contacted/MeetingScheduled/DealWon/DealLost, default Lead, stored as string),
@@ -273,9 +274,19 @@ for due dates and notifies via the shared notification inbox — no client-side 
   `FollowUpReminder:PollIntervalMinutes` (default 5) for `NextActionAt <= now AND
   FollowUpNotifiedAt IS NULL`, claims matching companies (sets `FollowUpNotifiedAt`, commits),
   then publishes one `company.followup.due` Kafka event per claim (payload: `companyId, userId,
-  companyName, nextActionAt, note`). See `docs/ARCHITECTURE.md` for why the claim commits
-  *before* the publish (an at-most-once trade-off appropriate for a single-instance, non-outbox
-  producer) and `docs/API_CONTRACTS.md` for the full contract.
+  companyName, nextActionAt, note`; the organization travels in the **envelope**, not the payload —
+  see below). See `docs/ARCHITECTURE.md` for why the claim commits *before* the publish (an
+  at-most-once trade-off appropriate for a single-instance, non-outbox producer) and
+  `docs/API_CONTRACTS.md` for the full contract.
+- **Since Phase 40.12 the poll is per organization, not global.** Each tick first enumerates the
+  organizations that currently have something due, then opens one scope per organization with that
+  organization set on the tenant context, so every query the reminder service runs is filtered by
+  the query filter and the RLS policy exactly like a request would be. `FollowUpReminderService`
+  **throws** if the tenant is unset or in system mode — the cross-organization scan it used to
+  perform is precisely what the tenancy work removes, so it must fail loudly rather than fall back.
+  A failure inside one organization is logged and the loop continues to the next. The enumeration
+  itself is the one system-mode read in the service; where it gets its organizations, and what that
+  costs, is in `docs/DECISIONS.md`.
 - **notification-service:** consumes `company.followup.due` → `NotificationType.CompanyFollowUpDue`,
   an **in-app-only** notification (no email) titled *«Пора связаться с {companyName}»*, body is
   the follow-up note (or a generic fallback when there's none), `actionUrl` `/companies/{id}`.
@@ -302,6 +313,73 @@ for due dates and notifies via the shared notification inbox — no client-side 
     render would add a network round trip or extra API field for a cosmetic-only gap.
     Revisit if server time becomes cheaply available on these payloads for another
     reason.
+
+## Multi-tenancy: the double scope (Phase 40.12)
+
+Every other service in Stage C has one axis — a row belongs to an organization. company-service has
+two, because this is a **personal** CRM inside a shared customer: a row belongs to one salesperson
+*inside* one organization. Getting either half wrong is a bug, in opposite directions:
+
+- lose the organization half → one customer's prospect list leaks into another's;
+- lose the user half → a manager or a colleague sees a salesperson's private pipeline.
+
+All five tables carry `OrganizationId` (NOT NULL, `ITenantScoped`): `Companies`, `CallLogEntries`,
+`PracticeCalls`, `CompanyContacts`, `CompanyPersonas`.
+
+### How each half is enforced
+
+| Half | Where it lives | Why there |
+|---|---|---|
+| Organization | `ITenantContext` → EF query filter in `CompanyDbContext`, and **authoritatively** the Postgres RLS policy on each table | It is ambient — it comes from the gateway-validated `X-Organization-Id`, never from a route, body or query string. No call site mentions it. |
+| User | An explicit `UserId == userId` predicate on the parent row **and** on every sub-resource query in `CompanyService` | It is a method argument, not ambient state. A query filter cannot express it, and hiding it in the model would make "which rows can this caller see" impossible to read off a call site. |
+
+Before 40.12, sub-resource queries filtered on `CompanyId` alone and relied on the ownership check
+performed on the parent a couple of statements earlier. That was sound, but it left half of a
+two-part rule resting on an argument rather than a predicate; all of them now carry the user
+themselves. The two deliberate exceptions are the navigation-property counts in `ListCompaniesAsync`
+and `GetCompanyAsync`, which count children of a company row already matched by both halves.
+
+### RLS flavour: strict, everywhere
+
+Unlike learning-db and ai-db there is **no global content library** in this database — nothing here
+is shared between organizations — so every policy is the strict `EnableTenantRls` form (plain
+equality), never the `IS NULL OR = current` content form. A row with no organization is invisible,
+not shared. One practical consequence: with no tenant set, a query against company-db returns
+literally zero rows, not "only the global part".
+
+### Transactions are not optional
+
+`SET LOCAL app.organization_id` only applies inside a transaction, so a bare `SELECT` under these
+policies returns nothing. Every method in `CompanyService` therefore opens exactly one
+`TenantTransactionScope` as its first statement (read scopes roll back on dispose, write scopes
+commit explicitly just before returning). The symptom of forgetting one is unusually quiet in this
+service: an empty company list looks exactly like a salesperson who has not added anyone yet.
+
+### One `Company` per salesperson, not per real-world company
+
+There is deliberately no deduplication. Two salespeople at the same customer who both call Acme get
+two `Companies` rows, and a third appears if another organization calls Acme too. That is correct
+for what the table stores: `Description` is a brief written for one person's call, the contacts,
+personas and call log are that person's notes and practice history, and `NextActionAt` is that
+person's calendar. Merging them would mean one salesperson editing another's brief and reading
+another's log. A shared *account* record with per-user pipelines hanging off it is a different
+product feature, not a deduplication tweak — see `docs/DECISIONS.md`.
+
+### Indexes
+
+`(OrganizationId, UserId)` on all five tables — the double scope is the access path, so it is also
+the index. `(OrganizationId, CompanyId, OccurredAt DESC)` for the call-log timeline (and the
+`CreatedAt DESC` equivalents for practice calls, contacts and personas). The sparse follow-up index
+becomes `(OrganizationId, NextActionAt) WHERE "NextActionAt" IS NOT NULL`, because the poll now
+filters by organization first.
+
+**The EF migration creates and drops no indexes at all** — unusually, even for this codebase. The
+old child-table indexes were `("CompanyId", <time>)` and doubled as the index the cascade-delete
+foreign key needs; their organization-first replacements do not serve that FK. All index work
+therefore lives in `docs/TENANCY/sql/40.12_company_organization_indexes_concurrently.sql`, which
+builds the replacements *and* a plain `("CompanyId")` per child table, verifies validity, and only
+then drops. Rollout order and the backfill are in `docs/DONT_FORGET.md`; tests in
+`docs/TESTING/TENANCY.md`.
 
 ## AI pre-call briefing / "Шпаргалка" (Phase 39.12)
 
