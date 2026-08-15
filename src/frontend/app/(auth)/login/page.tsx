@@ -66,8 +66,7 @@ export default function LoginPage() {
                 <GoogleLoginButton />
 
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    Нет аккаунта?{" "}
-                    <Link href="/register">Зарегистрироваться</Link>
+                    Доступ в Sellevate — только по приглашению от твоей компании.
                 </p>
             </div>
         </div>

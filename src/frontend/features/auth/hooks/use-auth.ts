@@ -77,26 +77,24 @@ export function useInitAuth() {
     }, [accessToken]);
 }
 
-export function useRegister() {
-    // TEMP: email confirmation disabled — registration returns tokens and logs in immediately.
+// Phase 40.7: there is no public registration. An account is created only by accepting an
+// invite, and the invite token itself already proves control of the email address, so this
+// replaces both the old useRegister hook and the email-verification step for invited users.
+export function useAcceptInvite(token: string) {
     const handleSuccessfulAuth = useHandleSuccessfulAuth();
 
     return useMutation({
-        mutationFn: (credentials: {
-            email: string;
-            password: string;
-            displayName: string;
-        }) => apiClient.post<AuthTokenResponse>("/auth/register", credentials),
-        onSuccess: (data, variables) => {
-            clientLogger.info("Registration successful", {
-                userId: data.userId,
-                email: variables.email,
-            });
+        mutationFn: (credentials: { displayName?: string; password?: string }) =>
+            apiClient.post<AuthTokenResponse>(
+                `/auth/invites/${encodeURIComponent(token)}/accept`,
+                credentials,
+            ),
+        onSuccess: (data) => {
+            clientLogger.info("Invite accepted", { userId: data.userId });
             handleSuccessfulAuth(data);
         },
-        onError: (error, variables) => {
-            clientLogger.warn("Registration failed", {
-                email: variables.email,
+        onError: (error) => {
+            clientLogger.warn("Invite acceptance failed", {
                 error: (error as Error).message,
             });
         },

@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useState } from "react";
-import { useRegister } from "@/features/auth/hooks/use-auth";
-import { GoogleLoginButton } from "@/shared/components/google-login-button";
+import { useAcceptInvite } from "@/features/auth/hooks/use-auth";
 import { Wordmark } from "@/shared/components/wordmark";
 
-export default function RegisterPage() {
+export default function AcceptInvitePage() {
+    const params = useParams();
+    const token = Array.isArray(params.token) ? params.token[0] : (params.token ?? "");
+
     const [displayName, setDisplayName] = useState("");
-    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const registerMutation = useRegister();
+    const acceptInviteMutation = useAcceptInvite(token);
 
     function handleSubmit(event: React.FormEvent) {
         event.preventDefault();
-        registerMutation.mutate({ email, password, displayName });
+        acceptInviteMutation.mutate({ displayName, password });
     }
 
     return (
@@ -23,8 +25,11 @@ export default function RegisterPage() {
                 <div className="auth-wordmark">
                     <Wordmark size={28} />
                 </div>
-                <h1 className="auth-heading">Создать аккаунт</h1>
-                <p className="auth-sub">Всего пара секунд — и тебя ждёт первый урок</p>
+                <h1 className="auth-heading">Приглашение в Sellevate</h1>
+                <p className="auth-sub">
+                    Придумай пароль — и можно начинать. Email подтверждать не нужно,
+                    приглашение уже это сделало.
+                </p>
 
                 <form onSubmit={handleSubmit} className="col gap-3">
                     <input
@@ -32,14 +37,6 @@ export default function RegisterPage() {
                         placeholder="Твоё имя"
                         value={displayName}
                         onChange={(event) => setDisplayName(event.target.value)}
-                        required
-                        className="field"
-                    />
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
                         required
                         className="field"
                     />
@@ -53,31 +50,25 @@ export default function RegisterPage() {
                         className="field"
                     />
 
-                    {registerMutation.isError && (
+                    {acceptInviteMutation.isError && (
                         <p className="auth-error">
-                            {registerMutation.error?.message ?? "Не удалось зарегистрироваться"}
+                            {acceptInviteMutation.error?.message ??
+                                "Приглашение недействительно или уже использовано"}
                         </p>
                     )}
 
                     <button
                         type="submit"
-                        disabled={registerMutation.isPending}
+                        disabled={acceptInviteMutation.isPending}
                         className="btn btn-dark btn-block btn-lg"
                         style={{ marginTop: 4 }}
                     >
-                        {registerMutation.isPending ? "Создаём..." : "Зарегистрироваться"}
+                        {acceptInviteMutation.isPending ? "Принимаем..." : "Принять приглашение"}
                     </button>
                 </form>
 
-                <div className="auth-or">
-                    <span>или</span>
-                </div>
-
-                <GoogleLoginButton />
-
                 <p className="auth-footer" style={{ marginTop: 22 }}>
-                    Уже есть аккаунт?{" "}
-                    <Link href="/login">Войти</Link>
+                    Уже есть аккаунт? <Link href="/login">Войти</Link>
                 </p>
             </div>
         </div>
