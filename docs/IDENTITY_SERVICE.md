@@ -16,7 +16,7 @@ this service produces.
 src/backend/identity-service/
   Identity/                     ← ASP.NET Core 9 service (RootNamespace Sellevate.Identity)
     Program.cs                  ← host: Serilog→Loki, EF/Postgres, JWT, CORS, Kafka producer
-    Features/{Auth,Profile,Onboarding,Avatars}/
+    Features/{Auth,Invites,Membership,Profile,Onboarding,Avatars}/
     Eventing/                   ← user.* integration-event contracts + Kafka publisher
     Infrastructure/{Configuration,Data,Email,Storage}/
     Infrastructure/Data/Migrations/  ← own EF migrations (InitialIdentitySchema)
@@ -27,7 +27,7 @@ src/backend/identity-service/
 ## Owns (Postgres database `identity-db`)
 
 `Users`, `RefreshTokens`, `EmailVerificationCodes`, `UserProfiles`, `DefaultAvatar`,
-`Memberships` (Phase 40.6 — see below). The service has **its own database**, separate
+`Memberships` (Phase 40.6 — see below), `Invites` (Phase 40.7 — see below). The service has **its own database**, separate
 from the monolith's. `DatabaseBootstrapper` creates the `identity` database on startup if
 missing (idempotent), then EF `Migrate()` builds the schema — so it works against a fresh
 or an already-populated shared Postgres instance.
@@ -63,9 +63,62 @@ Migrating existing users into a default organization's `Membership` row is **40.
 not this block's — the schema is intentionally nullable/backfillable (`InvitedBy`) to leave
 that migration room without a follow-up schema change.
 
+## Closed registration and invites (Phase 40.7)
+
+`POST /auth/register` **is deleted** — not hidden, not flagged, not role-gated. There is no
+route in this service that creates an account on request. `POST /auth/google` is a login
+method only: an unknown Google identity, and a known one whose account has no *active*
+membership, both get `401` with one identical message (a distinguishable answer would let an
+outsider probe which addresses belong to a customer). See
+[TENANCY/TENANCY.md](TENANCY/TENANCY.md) §4.1.
+
+`Invite (Id, OrganizationId, Email, Role, TokenHash, ExpiresAt, AcceptedAt, RevokedAt,
+InvitedBy, CreatedAt)` is the service's **first tenant-scoped table**: it implements
+`ITenantScoped`, has an EF global query filter, and the `AddInvite` migration calls
+`EnableTenantRls("Invites")`. Consequently `Program.cs` now registers
+`TenantSaveChangesInterceptor` + `TenantConnectionInterceptor` on `IdentityDbContext` and adds
+`UseSellevateTenantContext()`. `Users`, `RefreshTokens` and `Memberships` stay outside RLS —
+the first two are platform-global identities and the third is what resolves an organization in
+the first place.
+
+Because RLS is on, any code path that **reads** invites must open an explicit transaction so
+`TenantConnectionInterceptor` has somewhere to put its `SET LOCAL app.organization_id`; a bare
+`SELECT` returns nothing. `InviteService` does this in all three operations, and so does the
+test helper that inspects invite rows.
+
+### The token
+
+`{organizationId:N}.{nonce}.{signature}` — base64url parts, the signature an HMAC-SHA256 over
+the first two, keyed by `Invites:SigningKey` (falling back to `Jwt:Key`). Only
+`SHA256(rawToken)` is persisted; the raw token exists in the creation response and the invite
+email and nowhere else.
+
+The token carries its own organization on purpose. `POST /auth/invites/{token}/accept` is
+anonymous — the caller has no organization and therefore no `X-Organization-Id` header — so the
+organization is recovered from verified signed material rather than from a request field, which
+keeps the "never read the organization from body/query/route" rule intact. The nonce carries the
+entropy (32 bytes from a CSPRNG), so knowing an organization id buys an attacker nothing.
+
+### Acceptance
+
+Accepting an invite for an address that already has an account **adds a membership to that
+account** and never creates a second user; a deactivated membership for the same organization is
+reactivated rather than duplicated. A brand-new address needs a `password` in the body and gets
+`IsEmailVerified = true` with no verification code — the token already proved the mailbox
+(see [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md)). The invite is single-use: `AcceptedAt` is
+stamped in the same transaction, so a replay is `409`.
+
+### Offboarding
+
+`DELETE /memberships/{userId}` sets `Status = Deactivated` + `DeactivatedAt`. There is **no**
+code path in this service that deletes a membership row — the manager's attempt history, calls
+and scores belong to the organization (TENANCY.md §4.3). Deactivated members lose `org_id` /
+`org_role` at the next token issuance and cannot sign in with Google.
+
 ## Frontend REST (unchanged paths, served via the gateway)
 
-`/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*` — identical request /
+`/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*`, `/avatars/*`, and since 40.7 `/invites/*`
+and `/memberships/*` (both gateway routes point at the `identity` cluster) — identical request /
 response contracts to the monolith (see [API_CONTRACTS.md](API_CONTRACTS.md)). JWT
 issuance, Google OAuth, MailerSend email verification and S3/MinIO avatar storage are all
 preserved verbatim.
@@ -74,7 +127,7 @@ preserved verbatim.
 
 | Topic | When | Payload |
 |---|---|---|
-| `user.registered` | new email user, new Google user, super-admin seed | `{userId, email, displayName, avatarKey}` |
+| `user.registered` | invite accepted by a new address, super-admin seed | `{userId, email, displayName, avatarKey}` |
 | `user.avatar.changed` | avatar upload / reset | `{userId, avatarKey}` (null on reset) |
 | `user.updated` | (contract ready; no trigger yet — no rename endpoint exists) | `{userId, displayName, avatarKey}` |
 | `user.deleted` | (contract ready; no trigger yet — no delete-account endpoint) | `{userId}` |
@@ -99,7 +152,7 @@ out in `ProfileService` and in [API_CONTRACTS.md](API_CONTRACTS.md).
 - The monolith's Hangfire daily `ExpiredEmailVerificationCleanupJob` became a lightweight
   `ExpiredEmailVerificationCleanupService` (`BackgroundService`, runs on startup + every
   24h) — the Identity service carries no Hangfire dependency.
-- `AppDbContext` → a focused `IdentityDbContext` with only the five owned entities.
+- `AppDbContext` → a focused `IdentityDbContext` with only the entities this service owns.
 - Prometheus login/registration counters from the monolith `AuthController` were dropped
   (Analytics owns product metrics; Identity stays lean).
 

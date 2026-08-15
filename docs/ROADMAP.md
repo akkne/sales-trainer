@@ -1586,21 +1586,21 @@
 - [x] Обновить `docs/IDENTITY_SERVICE.md`, `docs/ADMIN_PANEL.md`, `docs/API_CONTRACTS.md`,
       `docs/DB_SCHEMA.md`
 
-### [ ] 40.7 Закрытие регистрации и инвайты
-- [ ] **Удалить** `POST /auth/register` — не спрятать, не закрыть флагом, а удалить маршрут
-- [ ] Ревизия Google-входа: разрешён только для email, у которого уже есть membership
-- [ ] `invite (id, organization_id, email, role, token_hash, expires_at, accepted_at,
+### [x] 40.7 Закрытие регистрации и инвайты
+- [x] **Удалить** `POST /auth/register` — не спрятать, не закрыть флагом, а удалить маршрут
+- [x] Ревизия Google-входа: разрешён только для email, у которого уже есть membership
+- [x] `invite (id, organization_id, email, role, token_hash, expires_at, accepted_at,
       revoked_at, invited_by)`; одноразовый подписанный токен с TTL
-- [ ] `POST /organizations/{id}/invites` (одиночный и **массовый список email**),
+- [x] `POST /organizations/{id}/invites` (одиночный и **массовый список email**),
       `DELETE .../invites/{id}` (отзыв), `POST /auth/invites/{token}/accept`
-- [ ] Приём инвайта на существующий email **добавляет membership**, а не создаёт второго
+- [x] Приём инвайта на существующий email **добавляет membership**, а не создаёт второго
       пользователя — этот случай невозможно добавить потом
-- [ ] Инвайт заменяет email-верификацию (владение адресом уже доказано)
-- [ ] Увольнение = `membership.status = deactivated`, **никогда не удаление**: история
+- [x] Инвайт заменяет email-верификацию (владение адресом уже доказано)
+- [x] Увольнение = `membership.status = deactivated`, **никогда не удаление**: история
       попыток и звонков менеджера принадлежит организации
-- [ ] Письма-инвайты через существующий MailerSend-транспорт в BuildingBlocks
-- [ ] Тесты: истёкший токен, повторное использование, отозванный, чужая организация
-- [ ] Обновить `docs/EMAIL_VERIFICATION.md`, `docs/API_CONTRACTS.md`
+- [x] Письма-инвайты через существующий MailerSend-транспорт в BuildingBlocks
+- [x] Тесты: истёкший токен, повторное использование, отозванный, чужая организация
+- [x] Обновить `docs/EMAIL_VERIFICATION.md`, `docs/API_CONTRACTS.md`
 
 ### [ ] 40.8 Способ логина как настройка организации (шов под SSO)
 - [ ] `organization_auth_config (organization_id PK, method, settings jsonb,
