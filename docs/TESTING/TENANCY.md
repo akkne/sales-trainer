@@ -123,6 +123,36 @@ against a real, connection-pooled Postgres and not a mock.
 
 ---
 
+## 2026-08-16 — the platform/tenancy role split
+
+Every service that gates a route declares the same four policies. Each of those services' test
+projects carries an `AuthorizationPolicyContractTests` that builds the real
+`IAuthorizationService` from `AuthorizationPolicies.Register` and asserts the same things, so a
+service whose `Program.cs` stops registering them — or whose constants drift — fails locally rather
+than in production.
+
+```bash
+dotnet test src/backend/ai-service/Ai.Tests            --filter "TestCategory!=Integration"
+dotnet test src/backend/social-service/Social.Tests    --filter "TestCategory!=Integration"
+dotnet test src/backend/learning-service/Learning.Tests --filter "TestCategory!=Integration"
+dotnet test src/backend/gamification-service/Gamification.Tests --filter "TestCategory!=Integration"
+dotnet test src/backend/organization-service/Organization.Tests --filter "TestCategory!=Integration"
+```
+
+| Test | Proves |
+|------|--------|
+| `The_policy_and_role_names_match_the_platform_contract` | the wire-level strings (`RequirePlatformAdmin`, `RequireSuperAdmin`, `RequireOrgAdmin`, `RequireOrgSuperAdmin`, `Admin`, `SuperAdmin`, `TenancyAdmin`, `TenancySuperAdmin`, `org_role`) are identical in every service — a rename in one would otherwise make the same token mean two different things |
+| `All_four_policies_are_registered_and_resolvable` | the service's `Program.cs` actually calls `AuthorizationPolicies.Register`; without it every gated route fails closed |
+| `A_platform_admin_passes_the_org_scoped_gate_without_an_org_role_claim` | the core of "не должны ограничиваться tenancy" — Sellevate staff hold no membership and must still work |
+| `A_tenancy_admin_is_refused_the_add_and_remove_users_gate` | the single asymmetry between the two tenancy roles |
+| `An_ordinary_user_passes_nothing` | the gates are gates |
+
+Identity-service additionally carries `AuthorizationPolicyTests`, `RoleEnumContractTests`,
+`TokenRoleClaimTests` and `InviteRoleValidationTests` — see
+[TESTING/IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
+---
+
 ## 40.9 — platform superadmin, impersonation, and the live-data migration
 
 ### Backend (`Identity.Tests`, `Organization.Tests`)
@@ -134,15 +164,15 @@ against a real, connection-pooled Postgres and not a mock.
 
 | Test | Proves |
 |------|--------|
-| `PlatformAdminTests.StartImpersonation_AsOrdinaryUser_IsForbidden` | an `OrgAdmin` with a valid token and a valid organization cannot reach the impersonation endpoint |
+| `PlatformAdminTests.StartImpersonation_AsOrdinaryUser_IsForbidden` | a `TenancyAdmin` with a valid token and a valid organization cannot reach the impersonation endpoint |
 | `…ListImpersonations_AsOrdinaryUser_IsForbidden`, `…BootstrapOrganizationAdmin_AsOrdinaryUser_IsForbidden` | the same for the other two platform routes — the gate is on the controller, not on one action |
 | `…StartImpersonation_MintsAShortLivedNonEscalatingTokenAndAuditsIt` | the issued token carries `org_id`, `imp`, `imp_id`, `imp_actor`, `role: User` and **no** `SuperAdmin` anywhere, expires within the hour, and has a matching `ImpersonationAuditEntries` row with the actor and the stated reason |
 | `…StartImpersonation_AppearsInTheAuditList` | the audit is readable, not just written |
 | `…ImpersonationToken_CannotStartAnotherImpersonation` | chaining is refused — the dropped platform role is doing real work, not decoration |
 | `…StartImpersonation_ForUnknownOrganization_IsNotFound` | fails closed on an organization identity-service has never seen |
 | `…StartImpersonation_IntoSuspendedOrganization_IsForbidden` | suspension blocks platform staff too |
-| `…BootstrapOrganizationAdmin_CreatesAnOrgAdminInviteThatCanBeAccepted` | the invite is a real Phase 40.7 invite: it is emailed, and accepting it produces an **active `OrgAdmin` membership** |
-| `…BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflict`, `…WhenAnOrgAdminAlreadyExists_IsConflict` | the endpoint cannot be used as a back door into a running organization |
+| `…BootstrapOrganizationAdmin_CreatesATenancySuperAdminInviteThatCanBeAccepted` | the invite is a real Phase 40.7 invite: it is emailed, and accepting it produces an **active `TenancySuperAdmin` membership** — one rank below would leave the new organization unable to add anybody |
+| `…BootstrapOrganizationAdmin_WhenAnInviteIsAlreadyPending_IsConflict`, `…WhenATenancySuperAdminAlreadyExists_IsConflict` | the endpoint cannot be used as a back door into a running organization |
 | `…BootstrapOrganizationAdmin_ForSuspendedOrganization_IsForbidden` | a suspended tenant cannot be staffed |
 | `OrganizationSuspensionTests.Login_WhileOrganizationIsSuspended_IsForbidden` | a suspended organization actually blocks its users (`403`, not a silent success) |
 | `…Login_AfterTheOrganizationIsReactivated_Succeeds` | and resuming actually unblocks them |

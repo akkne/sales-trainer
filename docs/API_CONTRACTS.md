@@ -29,8 +29,9 @@ spoof them. See `src/backend/gateway/Gateway/IdentityForwarding.cs` and
 
 `org_role` (Phase 40.6) is **not** forwarded as a gateway header — unlike `X-User-Id`/
 `X-User-Role`/`X-Organization-Id`, every service already validates the JWT itself
-(`AddJwtBearer`, shared signing key), so `RequireOrgAdmin`/`RequireSuperAdmin` read the
-`org_role`/`role` claims straight off the validated token; no header round-trip needed.
+(`AddJwtBearer`, shared signing key), so all four policies (`RequirePlatformAdmin`,
+`RequireSuperAdmin`, `RequireOrgAdmin`, `RequireOrgSuperAdmin`) read the `org_role`/`role` claims
+straight off the validated token; no header round-trip needed.
 
 `X-Organization-Id` populates `Sellevate.BuildingBlocks.Tenancy.ITenantContext` via
 `TenantContextMiddleware`. A route marked `[TenantScoped]` (or built with
@@ -116,7 +117,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 
 ---
 
-## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9)
+## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9 — unchanged by the 2026-08-16 role split: impersonation and bootstrapping an organization's first admin are both superadmin-exclusive)
 
 > Served by **identity-service** under `/admin/platform/*` (gateway route `identity-admin-platform`).
 > Organization CRUD lives in organization-service; what lands here is everything that needs
@@ -144,7 +145,7 @@ by exact path and nothing else.
 |---|---|---|
 | `role` | `User` — **never** `SuperAdmin` | it cannot reach any `RequireSuperAdmin` route, which is what stops a second impersonation |
 | `sub` | the superadmin's own user id | the impersonator borrows an organization, never an identity |
-| `org_id` / `org_role` | target organization / `OrgAdmin` | what it is for |
+| `org_id` / `org_role` | target organization / `TenancyAdmin` | what it is for — deliberately one rank below `TenancySuperAdmin`, so an impersonator cannot add or remove the borrowed organization's users |
 | `imp`, `imp_id`, `imp_actor` | marker claims | it is recognisable as an impersonation token wherever it turns up |
 | lifetime | `Impersonation:TokenLifetimeMinutes`, default **15** | short |
 | refresh token | **none** | the session cannot be silently renewed; extending it means asking again and writing another audit row |
@@ -154,16 +155,17 @@ always has a record behind it. `reason` is required (3–500 chars).
 
 `bootstrap-admin` reuses the Phase 40.7 invite machinery verbatim — same `IInviteService`, same
 email, same one-time token — in a scope pinned to the target organization. The role is always
-`OrgAdmin` and is not taken from the request. It answers `409` if the organization already has an
-active `OrgAdmin` membership or a pending `OrgAdmin` invite, so it cannot be used as a back door
-into a running customer's organization.
+`TenancySuperAdmin` and is not taken from the request: only a superadmin can invite, so a first
+admin one rank lower would leave the organization unable to add anybody. It answers `409` if the
+organization already has an active `TenancySuperAdmin` membership or a pending `TenancySuperAdmin`
+invite, so it cannot be used as a back door into a running customer's organization.
 
 `404` also covers "organization-service created it seconds ago and identity-service has not
 consumed `organization.created` yet"; the message says so and the operation is safe to retry.
 
 ---
 
-## Invites & memberships `[OrgAdmin]` `[tenant-scoped]`
+## Invites & memberships `[OrgSuperAdmin]` `[tenant-scoped]`
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -171,9 +173,11 @@ consumed `organization.created` yet"; the message says so and the operation is s
 | DELETE | /invites/{inviteId} | — | 204 / 404 |
 | DELETE | /memberships/{userId} | — | 204 / 404 |
 
-All three require the `RequireOrgAdmin` policy (`org_role = OrgAdmin`) **and** the
-gateway-injected `X-Organization-Id` header; they are `[TenantScoped]`, so a request without
-that header gets `403` before the action runs.
+All three add or remove a user, which after the 2026-08-16 role split is the one privilege reserved
+for a superadmin — so all three require `RequireOrgSuperAdmin` (`org_role = TenancySuperAdmin`, or a
+platform `role = SuperAdmin`) **and** the gateway-injected `X-Organization-Id` header. They are
+`[TenantScoped]`, so a request without that header gets `403` before the action runs. A
+`TenancyAdmin` gets `403` here and nowhere else.
 
 `CreateInvitesResponseDto`: `{created: [{id, email, role, expiresAt, token}], rejected: [{email, reason}]}`
 
@@ -182,7 +186,10 @@ that header gets `403` before the action runs.
   successful**: bad addresses land in `rejected` with a reason
   (`invalid-email`, `duplicate-in-request`, `already-a-member`, `invite-already-pending`)
   while the rest are created.
-- `role` is an `OrgRole` (`Manager` / `OrgAdmin`); an unknown value is `400`.
+- `role` is an `OrgRole` (`Manager` / `TenancyAdmin` / `TenancySuperAdmin`); an unknown value is
+  `400`. The retired name `OrgAdmin` is **rejected**, not mapped — the `400` message names both
+  replacements so a stale client can fix itself (`docs/DECISIONS.md`, 2026-08-16). Bare numbers
+  outside the enum are rejected too.
 - `token` is the raw single-use token and is returned **only here, once** — the database keeps
   only its SHA-256 hash. It is also mailed to the invitee (MailerSend).
 - The route deliberately carries **no organization segment**. The roadmap sketched
@@ -433,23 +440,24 @@ Tiers: configurable via the `LeagueTiers` table (admin CRUD below). Default ladd
 
 ## Auth — updated response
 
-`AuthTokenResponseDto` now includes `role: "User" | "SuperAdmin"` (the global `Admin` role
+`AuthTokenResponseDto` now includes `role: "User" | "Admin" | "SuperAdmin"` (the global `Admin` role
 was removed in Phase 40.6 — see below) plus the nullable `orgId`/`orgRole` pair.
 
 ---
 
-## Admin (requires `RequireSuperAdmin` policy — Phase 40.6)
+## Admin (requires `RequirePlatformAdmin` policy — revised 2026-08-16)
 
 All routes prefixed `/admin`. Unauthorized → 403.
 
-> **Phase 40.6 — the global `Admin` role is gone.** Every `/admin/*` endpoint below now
-> requires `RequireSuperAdmin` (Sellevate platform staff), not the old `RequireAdmin`
-> (Admin-or-SuperAdmin) policy — there is no org-scoped admin screen yet (roadmap block
-> 40.20 builds one; the organization role `OrgAdmin` lives on `membership`, not on `user`,
-> and has no admin endpoints of its own in this phase). `RequireOrgAdmin` exists as
-> authorization infrastructure (checks the JWT `org_role` claim) but has zero call sites
-> today. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) and `docs/DECISIONS.md` (2026-08-15)
-> for the full audit.
+> **2026-08-16 — platform content administration is `RequirePlatformAdmin`.** Every `/admin/*`
+> content endpoint below is open to Sellevate staff at either rank (`role` ∈ {`Admin`,
+> `SuperAdmin`}). The only routes that stay `RequireSuperAdmin` are the ones that add or remove a
+> user — the `/admin/users` mutations and all of `/admin/platform/*`. The organization roles
+> (`TenancyAdmin`, `TenancySuperAdmin`) live on `membership`, not on `user`, and their own admin
+> screen is roadmap block 40.20, waiting on the owner's design; `RequireOrgAdmin` is declared in
+> every service for it but has zero call sites today. See
+> [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md), [ADMIN_PANEL.md](ADMIN_PANEL.md) and
+> `docs/DECISIONS.md` (2026-08-16) for the full route audit.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -613,16 +621,17 @@ On update and on re-import the child rows (`TechniqueSkills`, `TechniqueCoaches`
 
 Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the team progress period's week start — a direct `WeeklyXpAmount` write would be erased by the next progress-point sync, while a correction record survives every re-sync and stays auditable.
 
-### Users (`RequireSuperAdmin` — whole controller, Phase 40.6)
+### Users (read: `RequirePlatformAdmin`; every mutation: `RequireSuperAdmin`)
 
 > Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
 > Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
 > shapes are unchanged. The `AdminUserDetailDto` activity stats (activity-consistency/progress-points/skills/score)
 > are owned by gamification/learning, so identity returns them as `0` for now — same
 > caveat as `GET /profile`. Lists/manages users platform-wide (not scoped to one
-> organization), so as of Phase 40.6 the whole controller — not just role changes — is
-> `RequireSuperAdmin`-only; role changes only ever move between the two remaining platform
-> roles (`User`/`SuperAdmin`).
+> organization), so the controller is Sellevate-staff-only throughout: reading is
+> `RequirePlatformAdmin`, every mutation is `RequireSuperAdmin`. Role changes move between the
+> three platform roles (`User`/`Admin`/`SuperAdmin`) — organization roles are a different axis and
+> are never assignable here.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -635,7 +644,7 @@ Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "a
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider ("Google"|"Password"), hasCustomAvatar, avatarUrl}`
 `AdminUserDetailDto`: `AdminUserDto` + `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`
 
-Rename and avatar moderation are available to any admin (inappropriate nicknames/photos); role changes stay SuperAdmin-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
+Reading the roster and a user's detail is open to both platform staff roles. Renaming, avatar moderation and role changes all mutate a user and are `RequireSuperAdmin`-only, so a platform `Admin` sees the modal read-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
 
 ### Seeder
 | Method | Path | Body | Response |
@@ -782,7 +791,7 @@ involvement.
 - If `OpenAI:ApiKey` is not configured, `GET /dialog/bundles` returns `[]`
 - Session endpoints return `503 Service Unavailable` if OpenAI not configured
 
-### Admin endpoints (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`)
+### Admin endpoints (`RequirePlatformAdmin` — revised 2026-08-16)
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -840,7 +849,7 @@ without it the client received a 200 with zero frames and the persona simply sta
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). Response shape unchanged. |
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequirePlatformAdmin` — revised 2026-08-16). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). Response shape unchanged. |
 
 ```jsonc
 // AdminVoiceUsageDto
@@ -1056,7 +1065,7 @@ All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are
 Tags are hybrid: a thread's `tags` array mixes existing curated/free slugs and brand-new labels;
 unknown labels are created on the fly as non-curated tags (slug = lowercased, whitespace→`-`).
 
-### Admin endpoints (`RequireSuperAdmin`, Phase 40.6 — was `RequireAdmin`)
+### Admin endpoints (`RequirePlatformAdmin` — revised 2026-08-16)
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -1359,7 +1368,7 @@ unique; omitted → derived from `name`. `status` is `Active | Suspended`. These
 `[TenantScoped]` — they administer the registry itself, not one organization's own data (see
 docs/TENANCY/TENANCY.md §1.2).
 
-**Phase 40.9:** the whole controller now requires `RequireSuperAdmin`; any other caller gets `403`.
+**Phase 40.9, revised 2026-08-16:** the whole controller requires `RequirePlatformAdmin` — running the tenant registry is ordinary platform administration, and only adding/removing users is superadmin-exclusive. Any other caller gets `403`.
 That gate is what makes addressing an organization by a route id legitimate here and nowhere else
 (docs/TENANCY/TENANCY.md §1.3).
 

@@ -42,6 +42,7 @@ All tests live in `src/frontend/__tests__/`.
 | `usePracticeCalls.test.tsx` | `useCompanyPracticeCalls`/`useRecentGoals` — endpoints, disabled-when-no-id (Phase 39.6) |
 | `CompanyPage.test.tsx` | `/companies/[id]` page: loading/404/error states, description, pre-call CTA handoff, delete-company confirm (Phase 39.6) |
 | `LoginPage.test.tsx` | Two-stage `/login` (Phase 40.8): stage 1 shows no password field and posts `/auth/login/start`; the password form appears only after the server answers `password`; an `oidc` answer shows the "SSO not connected" notice and **no** password field; "Изменить" returns to stage 1 |
+| `roleGating.test.ts` | The 2026-08-16 role split's display gates (`isPlatformStaff`, `canManagePlatformUsers`): both Sellevate staff roles reach the platform admin panel, only `SuperAdmin` may add/remove users, no organization role ever reaches the platform panel, and the retired `OrgAdmin` name is gone from both role vocabularies |
 
 ## What NOT to test (yet)
 

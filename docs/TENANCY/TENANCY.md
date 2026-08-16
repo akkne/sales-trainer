@@ -455,13 +455,23 @@ it later means rewriting the JWT, every authorization check and the invite flow 
 first person who needs two organizations (a consultant, or Sellevate's own support staff) shows up
 earlier than expected.
 
-`UserRole` today is a global enum `{User, Admin, SuperAdmin}` on the user row. It splits in two:
+`UserRole` was a single global enum on the user row. It is now two independent axes (revised
+2026-08-16 at the owner's request — `docs/DECISIONS.md`):
 
-- **Platform role** (on `user`): `SuperAdmin` — Sellevate staff only, creates organizations.
-- **Organization role** (on `membership`): `Manager` (the salesperson) / `OrgAdmin` (the РОП).
+- **Platform role** (on `user`): `User` / `Admin` / `SuperAdmin` — Sellevate staff, deliberately
+  **not bounded by tenancy**; they are meant to see across every organization.
+- **Organization role** (on `membership`): `Manager` (the salesperson) / `TenancyAdmin` (the РОП) /
+  `TenancySuperAdmin`.
 
-`Admin` as a global role disappears; a РОП is an admin **of one organization**, never of the
-platform. Both go into the JWT: `role` (platform) and `org_role` (within `org_id`).
+At either level the only difference between the admin and the superadmin is that only the superadmin
+may **add or remove users**. A РОП is an admin **of one organization**, never of the platform. Both
+axes go into the JWT: `role` (platform) and `org_role` (within `org_id`), and a user with no active
+membership carries neither `org_id` nor `org_role` — which is the normal state for Sellevate staff.
+
+The authorization policies (`RequirePlatformAdmin`, `RequireSuperAdmin`, `RequireOrgAdmin`,
+`RequireOrgSuperAdmin`) let the platform role satisfy the organization-scoped gates on its own.
+Making the *data* those callers then see span every organization is the tenant-context/query-filter/
+RLS concern described elsewhere in this document, not an authorization one.
 
 ### 4.3 Invites
 
