@@ -9,17 +9,21 @@ import {
 } from "@/features/admin/hooks/use-admin";
 import { UserAvatar } from "@/shared/components/user-avatar";
 
-// Phase 40.6: "Admin" (global platform admin) no longer exists as a backend UserRole value.
-const ROLES = ["User", "SuperAdmin"];
+// The three platform roles (docs/DECISIONS.md, 2026-08-16). `Admin` was reinstated at its
+// original numeric value; organization roles are a different axis and are never assignable here.
+const ROLES = ["User", "Admin", "SuperAdmin"];
 
 interface UserDetailModalProps {
     userId: string;
-    canChangeRole: boolean;
+    /// Everything this modal can change — the photo, the display name and the role — is an
+    /// add/remove/re-role-a-user operation, which the backend gates behind RequireSuperAdmin.
+    /// A platform `Admin` opens the modal read-only rather than being shown buttons that 403.
+    canManageUser: boolean;
     isSelf: boolean;
     onClose: () => void;
 }
 
-export function UserDetailModal({ userId, canChangeRole, isSelf, onClose }: UserDetailModalProps) {
+export function UserDetailModal({ userId, canManageUser, isSelf, onClose }: UserDetailModalProps) {
     const { data: user, isLoading } = useAdminUser(userId);
     const updateUser = useUpdateUser();
     const changeRole = useChangeUserRole();
@@ -98,7 +102,13 @@ export function UserDetailModal({ userId, canChangeRole, isSelf, onClose }: User
                         {/* Photo moderation */}
                         <section className="mb-5">
                             <h3 className="mb-1.5 text-xs font-medium text-ink-3">Photo</h3>
-                            {user.hasCustomAvatar ? (
+                            {!canManageUser ? (
+                                <p className="text-xs text-ink-4">
+                                    {user.hasCustomAvatar
+                                        ? "Using a custom photo."
+                                        : "Using a default avatar."}
+                                </p>
+                            ) : user.hasCustomAvatar ? (
                                 <button
                                     onClick={() =>
                                         deleteAvatar.mutate(user.id, {
@@ -120,6 +130,10 @@ export function UserDetailModal({ userId, canChangeRole, isSelf, onClose }: User
                         {/* Display name */}
                         <section className="mb-5">
                             <h3 className="mb-1.5 text-xs font-medium text-ink-3">Display name</h3>
+                            {!canManageUser ? (
+                                <p className="text-sm text-ink">{user.displayName}</p>
+                            ) : (
+                            <>
                             <div className="flex gap-2">
                                 <input
                                     value={displayName}
@@ -142,34 +156,36 @@ export function UserDetailModal({ userId, canChangeRole, isSelf, onClose }: User
                                     Must be 2–50 characters.
                                 </p>
                             )}
+                            </>
+                            )}
                         </section>
 
                         {/* Role */}
-                        {canChangeRole && (
-                            <section className="mb-5">
-                                <h3 className="mb-1.5 text-xs font-medium text-ink-3">Role</h3>
-                                {isSelf ? (
-                                    <p className="text-xs text-ink-4">
-                                        You cannot change your own role.
-                                    </p>
-                                ) : (
-                                    <select
-                                        value={user.role}
-                                        disabled={changeRole.isPending}
-                                        onChange={(e) =>
-                                            changeRole.mutate({ id: user.id, role: e.target.value })
-                                        }
-                                        className="rounded border border-line px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 disabled:opacity-50"
-                                    >
-                                        {ROLES.map((r) => (
-                                            <option key={r} value={r}>
-                                                {r}
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
-                            </section>
-                        )}
+                        <section className="mb-5">
+                            <h3 className="mb-1.5 text-xs font-medium text-ink-3">Role</h3>
+                            {!canManageUser ? (
+                                <p className="text-sm text-ink">{user.role}</p>
+                            ) : isSelf ? (
+                                <p className="text-xs text-ink-4">
+                                    You cannot change your own role.
+                                </p>
+                            ) : (
+                                <select
+                                    value={user.role}
+                                    disabled={changeRole.isPending}
+                                    onChange={(e) =>
+                                        changeRole.mutate({ id: user.id, role: e.target.value })
+                                    }
+                                    className="rounded border border-line px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo/30 disabled:opacity-50"
+                                >
+                                    {ROLES.map((r) => (
+                                        <option key={r} value={r}>
+                                            {r}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </section>
 
                         {/* Stats */}
                         <section className="mb-2">

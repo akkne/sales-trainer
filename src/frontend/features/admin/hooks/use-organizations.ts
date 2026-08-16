@@ -9,7 +9,7 @@ import { clientLogger } from "@/shared/utils/client-logger";
  *
  * Two backends sit behind it and that split is deliberate: organization-service owns the tenant
  * registry (`/organizations`), identity-service owns anything that needs identity-db — minting a
- * token and creating an invite (`/admin/platform/*`). Both are gated by `RequireSuperAdmin`.
+ * token and creating an invite (`/admin/platform/*`). Both are gated by `RequireSuperAdmin` — inviting the first admin adds a user, and impersonation is superadmin-exclusive (docs/DECISIONS.md, 2026-08-16).
  */
 
 export type OrganizationStatus = "Active" | "Suspended";
@@ -112,13 +112,13 @@ export function useBootstrapOrganizationAdmin() {
                 { organizationId, email }
             ),
         onSuccess: (result) => {
-            clientLogger.info("First OrgAdmin invited", {
+            clientLogger.info("First tenancy superadmin invited", {
                 organizationId: result.organization.id,
                 inviteId: result.inviteId,
             });
         },
         onError: (error, variables) => {
-            clientLogger.error("Failed to invite the first OrgAdmin", {
+            clientLogger.error("Failed to invite the first tenancy superadmin", {
                 organizationId: variables.organizationId,
                 error: (error as Error).message,
             });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
@@ -52,7 +52,7 @@ export default function AdminLayout({
             router.replace("/login");
             return;
         }
-        if (authenticatedUser && authenticatedUser.role !== "SuperAdmin") {
+        if (authenticatedUser && !isPlatformStaff(authenticatedUser.role)) {
             clientLogger.warn("Admin panel access denied — insufficient role", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -63,7 +63,7 @@ export default function AdminLayout({
     }, [accessToken, authenticatedUser, router, pathname]);
 
     useEffect(() => {
-        if (accessToken && authenticatedUser && authenticatedUser.role === "SuperAdmin") {
+        if (accessToken && authenticatedUser && isPlatformStaff(authenticatedUser.role)) {
             clientLogger.info("Admin panel opened", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -83,14 +83,17 @@ export default function AdminLayout({
         );
     }
 
-    if (!accessToken || !authenticatedUser || authenticatedUser.role !== "SuperAdmin") {
+    if (!accessToken || !authenticatedUser || !isPlatformStaff(authenticatedUser.role)) {
         return null;
     }
 
-    // Phase 40.6: every admin screen below is Sellevate-staff-only (RequireSuperAdmin on
-    // the backend) — there is no org-scoped admin panel yet (that is roadmap block 40.20),
-    // so reaching this point already implies SuperAdmin and the "Users" link no longer
-    // needs a separate gate.
+    // Every screen below is the *platform* admin panel: Sellevate-staff-only, and open to
+    // both `Admin` and `SuperAdmin` (RequirePlatformAdmin on the backend). Reaching this point
+    // already implies platform staff, so no nav item needs a gate of its own — the
+    // superadmin-only affordances are gated inside the screens that own them.
+    //
+    // The separate organization-scoped admin panel (for TenancyAdmin/TenancySuperAdmin) is
+    // roadmap block 40.20 and is waiting on the owner's design.
     const navItems = [
         { href: "/admin/organizations", label: "Organizations" },
         { href: "/admin/import", label: "Bundle Import" },

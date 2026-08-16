@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { canManagePlatformUsers, useAuthStore } from "@/shared/stores/auth-store";
 import { beginImpersonationSession } from "@/features/admin/lib/impersonation-session";
 import {
     useBootstrapOrganizationAdmin,
@@ -21,7 +21,13 @@ const statusBadgeClass: Record<string, string> = {
 
 export default function AdminOrganizationsPage() {
     const router = useRouter();
-    const { accessToken, setAccessToken } = useAuthStore();
+    const { accessToken, setAccessToken, authenticatedUser } = useAuthStore();
+
+    // Creating, suspending and resuming an organization is ordinary platform administration, so
+    // an `Admin` does all of it. Inviting the organization's first admin adds a user, and
+    // impersonation is superadmin-exclusive for its own reasons — both stay behind
+    // RequireSuperAdmin on the backend (docs/DECISIONS.md, 2026-08-16).
+    const canManageUsers = canManagePlatformUsers(authenticatedUser?.role);
 
     const { data: organizations = [], isLoading } = usePlatformOrganizations();
     const { data: impersonations = [] } = useImpersonationAudit();
@@ -65,7 +71,7 @@ export default function AdminOrganizationsPage() {
                 email,
             });
             setAdminEmailByOrganizationId((current) => ({ ...current, [organization.id]: "" }));
-            setFeedback(`Invited ${email} as the first OrgAdmin of "${organization.name}".`);
+            setFeedback(`Invited ${email} as the first TenancySuperAdmin of "${organization.name}".`);
         } catch (error) {
             setErrorMessage((error as Error).message);
         }
@@ -167,7 +173,7 @@ export default function AdminOrganizationsPage() {
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Name</th>
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Slug</th>
                                 <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">Status</th>
-                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">First OrgAdmin</th>
+                                <th className="text-left py-2 px-3 text-xs text-ink-3 font-medium">First admin</th>
                                 <th className="py-2 px-3" />
                             </tr>
                         </thead>
@@ -186,10 +192,15 @@ export default function AdminOrganizationsPage() {
                                         </span>
                                     </td>
                                     <td className="py-2.5 px-3">
+                                        {!canManageUsers ? (
+                                            <span className="text-xs text-ink-4">
+                                                Superadmins only
+                                            </span>
+                                        ) : (
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="email"
-                                                aria-label={`First OrgAdmin email for ${organization.name}`}
+                                                aria-label={`First admin email for ${organization.name}`}
                                                 value={adminEmailByOrganizationId[organization.id] ?? ""}
                                                 onChange={(event) =>
                                                     setAdminEmailByOrganizationId((current) => ({
@@ -209,6 +220,7 @@ export default function AdminOrganizationsPage() {
                                                 Invite
                                             </button>
                                         </div>
+                                        )}
                                     </td>
                                     <td className="py-2.5 px-3 text-right whitespace-nowrap">
                                         <button
@@ -219,16 +231,19 @@ export default function AdminOrganizationsPage() {
                                         >
                                             {organization.status === "Suspended" ? "Resume" : "Suspend"}
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => impersonate(organization)}
-                                            disabled={
-                                                startImpersonation.isPending || organization.status === "Suspended"
-                                            }
-                                            className="ml-3 text-xs text-indigo-ink hover:underline disabled:opacity-50"
-                                        >
-                                            Impersonate
-                                        </button>
+                                        {canManageUsers && (
+                                            <button
+                                                type="button"
+                                                onClick={() => impersonate(organization)}
+                                                disabled={
+                                                    startImpersonation.isPending
+                                                    || organization.status === "Suspended"
+                                                }
+                                                className="ml-3 text-xs text-indigo-ink hover:underline disabled:opacity-50"
+                                            >
+                                                Impersonate
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
