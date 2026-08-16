@@ -15,6 +15,10 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.4" />
+    <!-- Phase 40.13: the real Npgsql provider, so Integration/SocialTenantIsolationIntegrationTests
+         can run social-service's own migrations against a throwaway database and exercise the RLS
+         policies they install. Not used by any unit test. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
   </ItemGroup>
 
   <ItemGroup>
