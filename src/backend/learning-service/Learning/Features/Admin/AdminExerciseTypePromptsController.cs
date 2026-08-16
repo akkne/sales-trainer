@@ -9,7 +9,7 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminExerciseTypePromptsController(LearningDbContext database, ILogger<AdminExerciseTypePromptsController> logger) : ControllerBase
 {
     [HttpGet("admin/exercise-type-prompts")]

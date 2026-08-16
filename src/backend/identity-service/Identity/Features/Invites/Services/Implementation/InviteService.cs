@@ -30,6 +30,8 @@ internal sealed class InviteService(
     IOptions<InviteConfiguration> inviteOptions,
     ILogger<InviteService> logger) : IInviteService
 {
+    private const string LegacyOrganizationAdminRoleName = "OrgAdmin";
+
     private static readonly EmailAddressAttribute EmailAddressValidator = new();
 
     public async Task<CreateInvitesResponseDto> CreateAsync(
@@ -300,10 +302,34 @@ internal sealed class InviteService(
         => tenantContext.OrganizationId
            ?? throw new InvalidOperationException("Organization context is not set.");
 
+    /// <summary>
+    /// Accepts only the names declared on <see cref="OrgRole"/>. The 2026-08-16 role split renamed
+    /// <c>OrgAdmin</c> to <see cref="OrgRole.TenancyAdmin"/>; the old name is rejected rather than
+    /// silently mapped, so a stale caller finds out instead of quietly inviting someone at a role
+    /// it did not mean (docs/DECISIONS.md). The rejection message names the replacement, so the
+    /// fix is obvious from the response alone.
+    ///
+    /// <para>
+    /// <c>Enum.TryParse</c> also accepts bare numbers and happily produces values that are not
+    /// declared at all (<c>"99"</c> would become <c>(OrgRole)99</c>), so the parse is followed by
+    /// an <c>IsDefined</c> check rather than trusted on its own.
+    /// </para>
+    /// </summary>
     private static OrgRole ParseRole(string role)
-        => Enum.TryParse<OrgRole>(role, ignoreCase: true, out var parsedRole)
+    {
+        if (string.Equals(role, LegacyOrganizationAdminRoleName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"The organization role '{LegacyOrganizationAdminRoleName}' no longer exists — "
+                + $"use '{nameof(OrgRole.TenancyAdmin)}' or '{nameof(OrgRole.TenancySuperAdmin)}'.",
+                nameof(role));
+        }
+
+        return Enum.TryParse<OrgRole>(role, ignoreCase: true, out var parsedRole)
+               && Enum.IsDefined(parsedRole)
             ? parsedRole
             : throw new ArgumentException($"Unknown organization role: {role}", nameof(role));
+    }
 
     private static EmailMessage BuildInviteEmail(CreatedInviteDto invite, string acceptUrl)
     {

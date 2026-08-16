@@ -43,7 +43,7 @@ public sealed class Invite : ITenantScoped
     public DateTime? RevokedAt { get; set; }
 
     /// <summary>The user who issued the invite. Nullable so a platform-side bootstrap invite
-    /// (the first <c>OrgAdmin</c> of a brand new organization, 40.9) has somewhere to land.</summary>
+    /// (the first <c>TenancySuperAdmin</c> of a brand new organization, 40.9) has somewhere to land.</summary>
     public Guid? InvitedBy { get; set; }
 
     public DateTime CreatedAt { get; set; }

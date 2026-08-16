@@ -85,13 +85,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Phase 40.9: the tenant registry stops being world-writable. `RequireSuperAdmin` mirrors
-// identity-service's policy verbatim (the platform role travels in the JWT `role` claim) so the
-// same token means the same thing in both services.
-builder.Services.AddAuthorization(authorizationOptions =>
-    authorizationOptions.AddPolicy(
-        AuthorizationPolicies.RequireSuperAdmin,
-        policy => policy.RequireRole(AuthorizationPolicies.SuperAdminRoleName)));
+// Phase 40.9 stopped the tenant registry being world-writable; the 2026-08-16 role split moved it
+// from `RequireSuperAdmin` to `RequirePlatformAdmin`, since running the registry is ordinary
+// platform administration and only adding/removing users is superadmin-exclusive. The policy set
+// is declared identically in every service so the same token means the same thing everywhere.
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

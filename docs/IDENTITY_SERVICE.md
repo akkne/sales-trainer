@@ -34,14 +34,25 @@ from the monolith's. `DatabaseBootstrapper` creates the `identity` database on s
 missing (idempotent), then EF `Migrate()` builds the schema — so it works against a fresh
 or an already-populated shared Postgres instance.
 
-## Memberships and role split (Phase 40.6)
+## Memberships and role split (Phase 40.6, revised 2026-08-16)
 
-The global `UserRole.Admin` is **removed**. Roles now split into two:
+Roles live on two independent axes:
 
-- **Platform role** (`User.Role`, unchanged column): `User` or `SuperAdmin` — Sellevate
-  staff only.
-- **Organization role** (`Membership.Role`, new table): `Manager` or `OrgAdmin` — a РОП is
-  the admin of one organization, never of the platform.
+- **Platform role** (`User.Role`, unchanged column): `User = 0`, `Admin = 1`, `SuperAdmin = 2` —
+  Sellevate staff, deliberately **not** bounded by tenancy.
+- **Organization role** (`Membership.Role`): `Manager = 0`, `TenancyAdmin = 1`,
+  `TenancySuperAdmin = 2` — a РОП is the admin of one organization, never of the platform.
+
+At **either** level the only difference between the admin and the superadmin is that only the
+superadmin may **add or remove users**. Everything else is identical.
+
+Phase 40.6 had removed `Admin` and left value 1 unassigned; the owner reinstated it on 2026-08-16
+at that same value, where it already meant "global platform admin", so no stored row changes
+meaning. `OrgAdmin` was renamed to `TenancyAdmin` in place — both role columns are `integer`
+(`HasConversion<int>()`), so the rename needed **no data migration and no EF migration**. The
+retired `OrgAdmin` string is rejected by `InviteService.ParseRole` with a message naming its
+replacements rather than silently mapped. Full rationale and the route audit:
+[DECISIONS.md](DECISIONS.md) → 2026-08-16.
 
 `Membership (UserId, OrganizationId, Role, Status, InvitedBy, JoinedAt, DeactivatedAt)`,
 PK `(UserId, OrganizationId)` — from day one, even though the current UI only ever creates
@@ -56,10 +67,16 @@ before multi-org support lands) and adds `org_id`/`org_role` claims to the JWT w
 exists; both claims are simply absent otherwise. `AuthTokenResponseDto` and `GET /auth/me`
 mirror `orgId`/`orgRole` for the frontend.
 
-Authorization policies: `RequireSuperAdmin` (unchanged shape, `role` claim) and the new
-`RequireOrgAdmin` (checks the `org_role` claim for `OrgAdmin`) — see
-[ADMIN_PANEL.md](ADMIN_PANEL.md) for the full policy table and the audit of every former
-`RequireAdmin` call site across services.
+A user with **no** active membership gets neither `org_id` nor `org_role` — absent membership is
+never implied. Platform staff normally have no membership anywhere, which is exactly why
+`RequireOrgAdmin` and `RequireOrgSuperAdmin` are satisfied by the platform `role` claim on its own.
+For the same reason Google login exempts `Admin`/`SuperAdmin` from the "must have an active
+membership" check; the password path never had it.
+
+Authorization policies (`RequirePlatformAdmin`, `RequireSuperAdmin`, `RequireOrgAdmin`,
+`RequireOrgSuperAdmin`) are declared identically in every service by
+`Common/Constants/AuthorizationPolicies.Register` — see [ADMIN_PANEL.md](ADMIN_PANEL.md) for the
+full policy table and the route audit across services.
 
 Migrating existing users into a default organization's `Membership` row is **40.9's job**,
 not this block's — the schema is intentionally nullable/backfillable (`InvitedBy`) to leave
@@ -159,7 +176,9 @@ never names the organization — the same anti-enumeration property 40.7 gave `P
 
 ## Platform superadmin surface (Phase 40.9)
 
-Two tables and one controller, all gated by `RequireSuperAdmin` and none of them tenant-scoped —
+Two tables and one controller, all gated by `RequireSuperAdmin` (unchanged by the 2026-08-16 role
+split: impersonation and bootstrapping an organization's first admin are both superadmin-exclusive)
+and none of them tenant-scoped —
 these routes act *on* organizations rather than *inside* one, so there is no `X-Organization-Id`
 header to scope by. Contracts: [API_CONTRACTS.md](API_CONTRACTS.md) → "Platform superadmin".
 
@@ -187,21 +206,24 @@ that exists always has a record behind it.
 `POST /admin/platform/impersonation` mints a brand-new JWT rather than adding a parameter to an
 existing route ([TENANCY.md §1.3](TENANCY/TENANCY.md)). It carries `role: User` — deliberately not
 `SuperAdmin`, which is what stops it reaching any `RequireSuperAdmin` route including this one —
-plus `org_id`, `org_role: OrgAdmin`, and the marker claims `imp` / `imp_id` / `imp_actor`. `sub`
+plus `org_id`, `org_role: TenancyAdmin` — deliberately one rank below
+`TenancySuperAdmin`, so an impersonator cannot add or remove the borrowed organization's users —
+and the marker claims `imp` / `imp_id` / `imp_actor`. `sub`
 stays the superadmin's own user id: the impersonator borrows an organization, never an identity.
 It is short-lived (`Impersonation:TokenLifetimeMinutes`, default 15) and has **no refresh token**.
 
 Built by hand in `PlatformAdminService` rather than through `AuthenticationService`'s token path,
 because every one of those differences *is* a security property.
 
-### Bootstrapping the first `OrgAdmin`
+### Bootstrapping the first `TenancySuperAdmin`
 
 `POST /admin/platform/organizations/bootstrap-admin` opens a DI scope, points that scope's
 `TenantContext` at the target organization and calls the ordinary Phase 40.7 `IInviteService` — the
 same code, the same tenant guards, the same email. There is no second invite path. The role is
-always `OrgAdmin` and is not read from the request, and the endpoint answers `409` if the
-organization already has an active `OrgAdmin` or a pending `OrgAdmin` invite, so it cannot become a
-back door into a running customer's organization.
+always `TenancySuperAdmin` and is not read from the request — only a superadmin can invite, so a
+first admin one rank lower would leave the organization unable to add anybody. The endpoint answers
+`409` if the organization already has an active `TenancySuperAdmin` or a pending
+`TenancySuperAdmin` invite, so it cannot become a back door into a running customer's organization.
 
 ## Frontend REST (unchanged paths, served via the gateway)
 

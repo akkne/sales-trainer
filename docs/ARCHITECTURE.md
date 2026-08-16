@@ -185,13 +185,16 @@ src/backend/
   `Sellevate.BuildingBlocks.Tenancy`) holds the foundation multi-tenancy is built on — see
   [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) for the full design. `ITenantScoped`
   marks an entity as carrying an `OrganizationId`. `ITenantContext` (`OrganizationId`,
-  `IsSystem`) is the read-only view consumed by application code; its scoped
+  `IsPlatformWide`, `IsSystem`) is the read-only view consumed by application code; its scoped
   implementation `TenantContext` exposes explicit `SetOrganization(organizationId)` /
-  `EnterSystemMode()` mutators so only the code that actually establishes the tenant for
+  `EnterPlatformMode()` / `EnterSystemMode()` mutators so only the code that actually establishes the tenant for
   a unit of work (gateway-driven middleware for requests, an explicit per-organization or
   system-mode setup for background jobs — see TENANCY.md §1.6) can populate it; each
   method may only run once per scope (calling either after the context is already
-  populated throws `InvalidOperationException`). `TenantSaveChangesInterceptor :
+  populated throws `InvalidOperationException`). The three modes and what each one widens are
+  TENANCY.md §1.6a: platform-wide (validated Sellevate staff, reads only) is deliberately separate
+  from system (a background job with no principal, connecting under a `BYPASSRLS` role), and the
+  two are mutually exclusive. `TenantSaveChangesInterceptor :
   SaveChangesInterceptor` is the write-side guard: on `Added` entries it stamps
   `OrganizationId` from the current tenant (or rejects a foreign one already set), and on
   `Modified`/`Deleted` it compares against `OriginalValues` so an entity loaded via

@@ -270,6 +270,40 @@ public class SocialTenantIsolationIntegrationTests
     }
 
     /// <summary>
+    /// The 2026-08-16 role split in the store that has no row-level security to express it: what
+    /// Postgres does with an <c>OR</c> in a policy, this repository does with an empty filter.
+    /// </summary>
+    [Test]
+    public async Task Platform_staff_see_conversations_from_every_organization()
+    {
+        SkipIfMongoIsNotReachable();
+
+        var visibleToPlatformStaff = await CreatePlatformStaffConversationRepository()
+            .ListForParticipantAsync(FirstUserId);
+
+        visibleToPlatformStaff.Select(conversation => conversation.Id)
+            .Should().Contain([_organizationAConversationId, _organizationBConversationId]);
+    }
+
+    /// <summary>
+    /// Platform mode widens; it does not disable the fail-closed rule. A request with neither an
+    /// organization nor platform mode is a misconfigured gateway, and must still throw rather than
+    /// quietly return every customer's chat history.
+    /// </summary>
+    [Test]
+    public async Task A_repository_with_no_tenant_at_all_still_refuses_to_read()
+    {
+        SkipIfMongoIsNotReachable();
+
+        var repositoryWithNoTenant = new ChatConversationRepository(
+            CreateMongoContext(), new TenantContext());
+
+        var listing = async () => await repositoryWithNoTenant.ListForParticipantAsync(FirstUserId);
+
+        await listing.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    /// <summary>
     /// The important one. Knowing the conversation id and a participant's user id — both of which
     /// travel in URLs — must not be enough to read a conversation, because in Mongo the repository
     /// is the only thing standing between the two organizations.
@@ -558,6 +592,18 @@ public class SocialTenantIsolationIntegrationTests
     {
         var tenantContext = new TenantContext();
         tenantContext.SetOrganization(organizationId);
+
+        return new ChatConversationRepository(CreateMongoContext(), tenantContext);
+    }
+
+    /// <summary>
+    /// The repository in the third tenant mode: validated platform staff, no organization. Mongo has
+    /// no policies, so this class is the entire boundary — and therefore the entire widening too.
+    /// </summary>
+    private static IChatConversationRepository CreatePlatformStaffConversationRepository()
+    {
+        var tenantContext = new TenantContext();
+        tenantContext.EnterPlatformMode();
 
         return new ChatConversationRepository(CreateMongoContext(), tenantContext);
     }

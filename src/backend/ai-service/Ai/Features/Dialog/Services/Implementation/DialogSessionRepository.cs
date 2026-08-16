@@ -141,17 +141,17 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         DateTime since,
         CancellationToken cancellationToken = default)
     {
-        var organizationId = RequireOrganizationId();
+        var matchStage = new BsonDocument
+        {
+            { "userId", userId.ToString() },
+            { "createdAt", new BsonDocument("$gte", since) },
+            { "voiceSeconds", new BsonDocument("$gt", 0) },
+        };
+        AddTenantMatch(matchStage);
 
         var pipeline = new[]
         {
-            new BsonDocument("$match", new BsonDocument
-            {
-                { "organizationId", organizationId.ToString() },
-                { "userId", userId.ToString() },
-                { "createdAt", new BsonDocument("$gte", since) },
-                { "voiceSeconds", new BsonDocument("$gt", 0) },
-            }),
+            new BsonDocument("$match", matchStage),
             new BsonDocument("$group", new BsonDocument
             {
                 { "_id", BsonNull.Value },
@@ -170,19 +170,20 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         DateTime monthStart,
         CancellationToken cancellationToken = default)
     {
-        var organizationId = RequireOrganizationId();
+        // The organization is the first key of the first stage on purpose: with the compound index
+        // built by docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js this narrows to
+        // one tenant's slice before anything else runs, and no ordering of the later stages can
+        // widen it again. Platform staff are the one caller for whom the key is absent, and this
+        // endpoint (admin voice usage) is exactly the screen they need it absent for.
+        var matchStage = new BsonDocument
+        {
+            { "voiceSeconds", new BsonDocument("$gt", 0) },
+        };
+        AddTenantMatch(matchStage);
 
-        // The organization is the first stage on purpose: with the compound index built by
-        // docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js this narrows to one
-        // tenant's slice before anything else runs, and no ordering of the later stages can widen
-        // it again.
         var pipeline = new[]
         {
-            new BsonDocument("$match", new BsonDocument
-            {
-                { "organizationId", organizationId.ToString() },
-                { "voiceSeconds", new BsonDocument("$gt", 0) },
-            }),
+            new BsonDocument("$match", matchStage),
             new BsonDocument("$group", new BsonDocument
             {
                 { "_id", "$userId" },
@@ -237,9 +238,35 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
     /// <summary>
     /// The one filter every read and write in this class starts from. Sessions are tenant data, not
     /// content: there is no "global session", so this is plain equality with no null branch.
+    ///
+    /// <para>
+    /// Platform-wide mode (validated Sellevate staff, 2026-08-16) drops the organization instead —
+    /// Mongo has no row-level security, so what Postgres expresses as an <c>OR</c> in a policy's
+    /// <c>USING</c> clause has to be expressed here. It is still not a bypass of the unset-tenant
+    /// rule: a request with neither an organization nor platform mode reaches
+    /// <see cref="RequireOrganizationId"/> and throws exactly as before.
+    /// </para>
     /// </summary>
     private FilterDefinition<DialogSession> TenantFilter()
-        => Builders<DialogSession>.Filter.Eq(session => session.OrganizationId, RequireOrganizationId());
+        => _tenantContext.IsPlatformWide
+            ? Builders<DialogSession>.Filter.Empty
+            : Builders<DialogSession>.Filter.Eq(session => session.OrganizationId, RequireOrganizationId());
+
+    /// <summary>
+    /// The aggregation-pipeline counterpart of <see cref="TenantFilter"/>. The organization stays
+    /// the first key of the <c>$match</c> stage so the compound index built by
+    /// docs/TENANCY/mongo/40.11_dialog_sessions_organization_backfill.js still leads; in
+    /// platform-wide mode the key is absent and the pipeline reads every organization.
+    /// </summary>
+    private void AddTenantMatch(BsonDocument matchStage)
+    {
+        if (_tenantContext.IsPlatformWide)
+        {
+            return;
+        }
+
+        matchStage.InsertAt(0, new BsonElement("organizationId", RequireOrganizationId().ToString()));
+    }
 
     /// <summary>
     /// Fails closed and loudly. Returning every session for an unset tenant would be the exact

@@ -22,7 +22,7 @@ public interface IPlatformAdminService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Invites the first <c>OrgAdmin</c> of an organization that has none, reusing the Phase 40.7
+    /// Invites the first <c>TenancySuperAdmin</c> of an organization that has none, reusing the Phase 40.7
     /// invite machinery verbatim.
     /// </summary>
     Task<BootstrapOrganizationAdminResponseDto> BootstrapOrganizationAdminAsync(

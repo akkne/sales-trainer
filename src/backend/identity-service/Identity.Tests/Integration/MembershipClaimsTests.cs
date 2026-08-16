@@ -26,7 +26,7 @@ public class MembershipClaimsTests
         var email = UniqueEmail();
         var organizationId = Guid.NewGuid();
         await TestUserSeeder.SeedUserAsync(
-            Factory, email, "Member User", organizationId: organizationId, organizationRole: OrgRole.OrgAdmin);
+            Factory, email, "Member User", organizationId: organizationId, organizationRole: OrgRole.TenancyAdmin);
 
         var login = await client.PostAsJsonAsync("/auth/login",
             new { email, password = TestUserSeeder.DefaultPassword });
@@ -34,11 +34,11 @@ public class MembershipClaimsTests
         var body = await login.Content.ReadFromJsonAsync<AuthTokenResult>();
 
         body!.OrgId.Should().Be(organizationId.ToString());
-        body.OrgRole.Should().Be("OrgAdmin");
+        body.OrgRole.Should().Be("TenancyAdmin");
 
         var claims = new JwtSecurityTokenHandler().ReadJwtToken(body.AccessToken).Claims.ToList();
         claims.Should().ContainSingle(claim => claim.Type == "org_id" && claim.Value == organizationId.ToString());
-        claims.Should().ContainSingle(claim => claim.Type == "org_role" && claim.Value == "OrgAdmin");
+        claims.Should().ContainSingle(claim => claim.Type == "org_role" && claim.Value == "TenancyAdmin");
     }
 
     [Test]

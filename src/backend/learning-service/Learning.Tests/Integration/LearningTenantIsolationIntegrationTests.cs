@@ -375,6 +375,119 @@ public class LearningTenantIsolationIntegrationTests
             + "this is why every learning-service read path opens a TenantTransactionScope");
     }
 
+    /// <summary>
+    /// The read half of the 2026-08-16 role split, checked at the layer that actually enforces it.
+    /// A query filter alone would prove nothing here: the point of the RLS change is that platform
+    /// staff see other organizations' rows even through the paths that bypass EF entirely.
+    /// </summary>
+    [Test]
+    public async Task Platform_staff_read_every_organizations_progress()
+    {
+        SkipIfPostgresIsNotReachable();
+
+        await using var context = CreatePlatformStaffContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
+        var visibleAttemptIds = await context.UserExerciseAttempts
+            .Select(attempt => attempt.Id)
+            .ToListAsync();
+
+        await transaction.CommitAsync();
+        visibleAttemptIds.Should().Contain([OrganizationAAttemptId, OrganizationBAttemptId]);
+    }
+
+    [Test]
+    public async Task Platform_staff_read_every_organizations_content()
+    {
+        SkipIfPostgresIsNotReachable();
+
+        await using var context = CreatePlatformStaffContext();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
+        var visibleSkillIds = await context.Skills.Select(skill => skill.Id).ToListAsync();
+
+        await transaction.CommitAsync();
+        visibleSkillIds.Should().Contain([GlobalSkillId, OrganizationASkillId, OrganizationBSkillId]);
+    }
+
+    /// <summary>
+    /// Raw SQL under the application role, which is where a query-filter-only implementation would
+    /// be caught out: with the platform GUC on, the policy itself admits the rows.
+    /// </summary>
+    [Test]
+    public async Task Raw_sql_in_platform_mode_sees_both_organizations_progress()
+    {
+        SkipIfPostgresIsNotReachable();
+
+        await using var connection = new NpgsqlConnection(
+            LocalLearningPostgresTestSettings.ApplicationRoleConnectionString());
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await SetPlatformModeAsync(connection, transaction);
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT count(*) FROM \"UserExerciseAttempts\"";
+        var visibleAttempts = (long)(await command.ExecuteScalarAsync())!;
+
+        await transaction.CommitAsync();
+        visibleAttempts.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    /// <summary>
+    /// The half that must NOT widen. Platform staff read across organizations and write into none
+    /// of them implicitly: WITH CHECK never got the platform branch, so an insert that names no
+    /// organization is refused by Postgres itself, not merely by the application.
+    /// </summary>
+    [Test]
+    public async Task Platform_mode_does_not_permit_a_write_without_an_organization()
+    {
+        SkipIfPostgresIsNotReachable();
+
+        await using var connection = new NpgsqlConnection(
+            LocalLearningPostgresTestSettings.ApplicationRoleConnectionString());
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await SetPlatformModeAsync(connection, transaction);
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO "UserExerciseAttempts" ("Id", "OrganizationId", "UserId", "ExerciseId", "IsCorrect", "AttemptedAt")
+            VALUES (gen_random_uuid(), @organizationId, @userId, @exerciseId, true, now())
+            """;
+        command.Parameters.AddWithValue("organizationId", OrganizationBId);
+        command.Parameters.AddWithValue("userId", OrganizationBUserId);
+        command.Parameters.AddWithValue("exerciseId", OrganizationBExerciseId);
+
+        var insertingIntoAnotherOrganization = async () => await command.ExecuteNonQueryAsync();
+
+        await insertingIntoAnotherOrganization.Should().ThrowAsync<PostgresException>(
+            "the platform branch is in USING only — reading every organization is not authorship of any");
+        await transaction.RollbackAsync();
+    }
+
+    /// <summary>
+    /// A tenancy admin is not platform staff. Without this the previous tests would pass just as
+    /// well against a policy that had lost its organization comparison altogether.
+    /// </summary>
+    [Test]
+    public async Task An_organization_scoped_reader_still_sees_only_its_own_progress()
+    {
+        SkipIfPostgresIsNotReachable();
+
+        await using var context = CreateApplicationContext(OrganizationAId);
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
+        var visibleAttemptIds = await context.UserExerciseAttempts
+            .Select(attempt => attempt.Id)
+            .ToListAsync();
+
+        await transaction.CommitAsync();
+        visibleAttemptIds.Should().Contain(OrganizationAAttemptId);
+        visibleAttemptIds.Should().NotContain(OrganizationBAttemptId);
+    }
+
     private void SkipIfPostgresIsNotReachable()
     {
         if (!_isPostgresReachable)
@@ -410,6 +523,37 @@ public class LearningTenantIsolationIntegrationTests
             .Options;
 
         return new LearningDbContext(options, tenantContext);
+    }
+
+    /// <summary>
+    /// A context in the third tenant mode: validated platform staff, no organization of their own.
+    /// Same application role as every other request — the widening is the policy's doing, not a
+    /// privileged connection's, which is exactly what makes it reviewable.
+    /// </summary>
+    private static LearningDbContext CreatePlatformStaffContext()
+    {
+        var tenantContext = new TenantContext();
+        tenantContext.EnterPlatformMode();
+
+        var options = new DbContextOptionsBuilder<LearningDbContext>()
+            .UseNpgsql(LocalLearningPostgresTestSettings.ApplicationRoleConnectionString())
+            .AddInterceptors(
+                new TenantSaveChangesInterceptor(tenantContext),
+                new TenantConnectionInterceptor(tenantContext))
+            .Options;
+
+        return new LearningDbContext(options, tenantContext);
+    }
+
+    private static async Task SetPlatformModeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        // The statement TenantConnectionInterceptor issues in platform mode. As with the
+        // organization GUC above, the name comes from the interceptor's public constant so a rename
+        // cannot silently desynchronise the two.
+        command.CommandText = $"SET LOCAL {TenantConnectionInterceptor.PlatformModeSettingName} = 'on'";
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<IReadOnlyList<Guid>> ReadVisibleSkillIdsAsync(Guid organizationId)

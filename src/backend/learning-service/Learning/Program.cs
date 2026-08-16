@@ -85,15 +85,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireOrgAdmin, policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.HasClaim(claim =>
-                claim.Type == "org_role" && claim.Value == AuthorizationPolicies.OrgAdminOrgRole)));
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireSuperAdministrator, policy =>
-        policy.RequireRole(AuthorizationPolicies.SuperAdministratorRole));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

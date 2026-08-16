@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Admin.Models;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Avatars;
@@ -11,13 +12,14 @@ using Sellevate.Identity.Infrastructure.Data;
 
 namespace Sellevate.Identity.Features.Admin;
 
-// Phase 40.6 audit: this controller lists and manages ALL users platform-wide (not scoped
-// to one organization) and role changes only ever move between the two remaining platform
-// roles (User/SuperAdmin) — there is no org-scoped admin screen yet (that is 40.20). So the
-// whole controller, not just role changes, is Sellevate-staff-only now: RequireSuperAdmin.
+// 2026-08-16 role-split audit: this controller lists and manages ALL users platform-wide (not
+// scoped to one organization), so it stays Sellevate-staff-only. Reading the roster is ordinary
+// platform administration and is open to `Admin` as well as `SuperAdmin`; every mutation below
+// adds, removes or re-roles a user, and that is the single privilege reserved for `SuperAdmin`
+// (docs/DECISIONS.md).
 [ApiController]
 [Route("admin/users")]
-[Authorize(Policy = "RequireSuperAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminUsersController(
     IdentityDbContext database,
     IAvatarService avatarService,
@@ -82,6 +84,7 @@ public sealed class AdminUsersController(
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
     public async Task<ActionResult<AdminUserDto>> UpdateUser(
         Guid id,
         [FromBody] UpdateUserRequestDto request,
@@ -122,6 +125,7 @@ public sealed class AdminUsersController(
     }
 
     [HttpDelete("{id:guid}/avatar")]
+    [Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
     public async Task<IActionResult> DeleteAvatar(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -140,6 +144,7 @@ public sealed class AdminUsersController(
     }
 
     [HttpPut("{id:guid}/role")]
+    [Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
     public async Task<ActionResult<AdminUserDto>> ChangeRole(
         Guid id,
         [FromBody] ChangeUserRoleRequestDto request,
@@ -151,7 +156,10 @@ public sealed class AdminUsersController(
             return NotFound();
         }
 
-        if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var newRole))
+        // `Enum.TryParse` also accepts bare numbers and returns undefined values for them
+        // ("99" would become (UserRole)99), so the parse is paired with an `IsDefined` check.
+        if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var newRole)
+            || !Enum.IsDefined(newRole))
         {
             return BadRequest(new { message = $"Unknown role: {request.Role}" });
         }

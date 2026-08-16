@@ -60,6 +60,28 @@ public class CompanyTenancyModelTests
     }
 
     /// <summary>
+    /// The 2026-08-16 role split widened every filter so validated platform staff read across
+    /// organizations. A filter that forgot the branch fails silently in production — Sellevate
+    /// staff open the screen, see nothing, and everybody concludes the data is missing rather than
+    /// filtered — so a missing branch fails the build here instead.
+    /// </summary>
+    [Test]
+    public void Every_query_filter_admits_platform_staff()
+    {
+        using var databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
+
+        var filtersMissingThePlatformBranch = databaseContext.Model.GetEntityTypes()
+            .Where(entityType => entityType.GetQueryFilter() is not null)
+            .Where(entityType => !entityType.GetQueryFilter()!.ToString()
+                .Contains(nameof(ITenantContext.IsPlatformWide), StringComparison.Ordinal))
+            .Select(entityType => entityType.ClrType.Name)
+            .OrderBy(name => name)
+            .ToList();
+
+        filtersMissingThePlatformBranch.Should().BeEmpty();
+    }
+
+    /// <summary>
     /// company-db has no global content library — there is no table here whose rows are shared
     /// between organizations — so every entity is tenant-scoped, strictly.
     /// </summary>

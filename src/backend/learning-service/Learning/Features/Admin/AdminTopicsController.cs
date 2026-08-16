@@ -9,7 +9,7 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminTopicsController(LearningDbContext database, ILogger<AdminTopicsController> logger) : ControllerBase
 {
     [HttpGet("admin/topics")]

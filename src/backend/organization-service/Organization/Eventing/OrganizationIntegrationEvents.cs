@@ -3,7 +3,7 @@ namespace Sellevate.Organization.Eventing;
 /// <summary>
 /// Published when a new organization is created in the tenant registry. Consumed by
 /// identity-service in Phase 40.6+ once memberships exist (the first membership — the invited
-/// OrgAdmin — is created in response to this in Phase 40.9).
+/// TenancySuperAdmin — is created in response to this in Phase 40.9).
 /// </summary>
 public sealed record OrganizationCreatedEvent(Guid OrganizationId, string Name, string Slug);
 

@@ -2,44 +2,60 @@
 
 ## Roles
 
-> **Phase 40.6 update:** the global `Admin` role is **removed**. A РОП (sales manager
-> lead) is the admin of one organization, never of the platform — that role now lives on
-> `membership.role` (`Manager` / `OrgAdmin`), not on `User.Role`. See
-> [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md) and `docs/DECISIONS.md` (2026-08-15) for the
-> full `RequireAdmin` audit that drove this.
+> **2026-08-16 update (owner's request):** roles live on two independent axes. `Admin` and
+> `SuperAdmin` are **Sellevate's own platform roles** and are deliberately not bounded by tenancy.
+> Every organization additionally has its own `TenancyAdmin` and `TenancySuperAdmin`. At either
+> level the **only** difference between the admin and the superadmin is that only the superadmin may
+> **add or remove users**. See `docs/DECISIONS.md` (2026-08-16) for the rationale and the full
+> route audit.
 
 ### Platform role (`User.Role`)
 
 | Role | Value | Capabilities |
 |---|---|---|
 | `User` | 0 | Regular learner — existing experience unchanged |
-| `SuperAdmin` | 2 | Sellevate staff. All current `/admin/*` endpoints below (every one is still global/platform content today — no org-scoped admin screen exists yet, that is roadmap block 40.20) + manage admin roles (promote/demote users) |
+| `Admin` | 1 | Sellevate staff. Every `/admin/*` content endpoint below and the `/organizations` tenant registry. **May not** add, invite, deactivate or re-role a user |
+| `SuperAdmin` | 2 | Everything `Admin` can do, **plus** adding/removing users and impersonation |
 
-(Value 1, formerly `Admin`, is deliberately left unassigned rather than reused.)
+Value 1 was `Admin` before Phase 40.6 removed it and is `Admin` again — the same meaning, so no
+stored row changes interpretation.
 
 Role is stored as an integer column on the `User` table and emitted as a `role` claim in the JWT access token.
 
-### Organization role (`membership.role`, Phase 40.6 — not yet exposed in any admin screen)
+### Organization role (`membership.role`)
 
 | Role | Value | Meaning |
 |---|---|---|
 | `Manager` | 0 | The salesperson practicing in one organization |
-| `OrgAdmin` | 1 | The РОП — admin of that one organization |
+| `TenancyAdmin` | 1 | The РОП — admin of that one organization (formerly `OrgAdmin`, same value) |
+| `TenancySuperAdmin` | 2 | Everything `TenancyAdmin` can do, **plus** inviting and offboarding that organization's users |
 
 Emitted as the `org_role` JWT claim (alongside `org_id`) when the user has an active
-`membership` row; absent for a user with none. No admin panel screen manages `membership`
-yet — that starts with 40.7 (invites) and 40.20 (the org admin screen itself).
+`membership` row; **absent** for a user with none — which is the normal state for Sellevate staff,
+and why the platform role satisfies the org-scoped policies on its own. The organization-scoped
+admin screen itself is roadmap block 40.20, waiting on the owner's design.
 
 ---
 
 ## Authorization policies (backend)
 
-| Policy | Required claim | Applied to |
+| Policy | Satisfied by | Applied to |
 |---|---|---|
-| `RequireSuperAdmin` | `role` = SuperAdmin | All `/admin/*` endpoints (Phase 40.6 — was `RequireAdmin`, Admin-or-SuperAdmin), plus `/admin/platform/*` and the whole `/organizations` tenant registry since 40.9 |
-| `RequireOrgAdmin` | `org_role` = OrgAdmin | `/invites`, `/memberships` (Phase 40.7). Also the level an impersonation token is granted *inside* the organization it names |
+| `RequirePlatformAdmin` | `role` ∈ {`Admin`, `SuperAdmin`} | All `/admin/*` **content** endpoints (learning, ai, gamification, social), the `/organizations` tenant registry, and the read side of `/admin/users` |
+| `RequireSuperAdmin` | `role` = `SuperAdmin` | Everything that adds or removes a user platform-wide: `PUT/DELETE /admin/users/*`, plus all of `/admin/platform/*` (impersonation, bootstrap-admin) |
+| `RequireOrgAdmin` | `org_role` ∈ {`TenancyAdmin`, `TenancySuperAdmin`} **or** `role` ∈ {`Admin`, `SuperAdmin`} | No call site today — reserved for the organization admin screen (40.20) |
+| `RequireOrgSuperAdmin` | `org_role` = `TenancySuperAdmin` **or** `role` = `SuperAdmin` | `/invites`, `/memberships` — adding and removing an organization's users |
 
-Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireSuperAdmin")]`.
+Platform staff satisfy the two org-scoped policies **without holding any `org_role` claim**: they
+normally have no membership anywhere, and the whole point of the platform roles is that they are not
+bounded by tenancy. (Making the *data* they then see span every organization is a separate concern
+in the tenancy layer, not in these policies.)
+
+All four are declared once per service in `Common/Constants/AuthorizationPolicies.cs` and registered
+with `builder.Services.AddAuthorization(AuthorizationPolicies.Register)`. Controllers use
+`[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]` and friends — never a
+string literal. Each service's test project carries an `AuthorizationPolicyContractTests` that pins
+the wire-level names and the two asymmetries.
 
 ---
 
@@ -50,8 +66,8 @@ central admin app. The frontend is unaffected: it calls the same paths through t
 API gateway, which routes each `/admin/*` prefix to its owning service. `org_role`/`role`
 are read straight off the JWT the service already validates (no header round-trip); the
 gateway still injects `X-User-Id`/`X-User-Role`/`X-Organization-Id` for the cases that do
-use headers. Each service registers its own `RequireSuperAdmin`/`RequireOrgAdmin` policies
-and enforces them locally.
+use headers. Each service registers the same four policies from its own
+`AuthorizationPolicies.Register` and enforces them locally.
 
 | Admin prefix | Owning service |
 |---|---|
@@ -79,7 +95,7 @@ Change these in production via environment variables.
 
 ## API endpoints (admin namespace)
 
-All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
+All routes prefixed `/admin`. Require `RequirePlatformAdmin` unless noted.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -202,7 +218,7 @@ See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the poi
 
 `AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. The admin UI is a month calendar (`/admin/quotes`) — click a day to create/edit/delete its quote.
 
-### Users (`RequireAdmin`; role change is SuperAdmin only)
+### Users (read: `RequirePlatformAdmin`; every mutation: `RequireSuperAdmin`)
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/users | — | `AdminUserDto[]` |
@@ -213,11 +229,14 @@ See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the poi
 
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider, hasCustomAvatar, avatarUrl}`.
 `AdminUserDetailDto` adds activity stats: `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`.
-UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row opens a detail modal for moderation (rename, remove photo) and stats. Any admin can moderate; only SuperAdmins see the role selector.
+UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row
+opens a detail modal. A platform `Admin` sees the roster and the modal **read-only** — renaming,
+removing a photo and changing a role are all add/remove/re-role-a-user operations and are shown only
+to a `SuperAdmin`, so an `Admin` is never offered a button that would answer 403.
 
 **Owned by identity-service** (`AdminUsersController` in `identity-service/Identity/Features/Admin`). The activity stats (streak/XP/skills/score) are owned by gamification/learning, so identity returns them as `0` until cross-service composition lands — the same caveat as `GET /profile`. The monolith's copy stays as reference only.
 
-### Organizations & impersonation (`RequireSuperAdmin`, Phase 40.9)
+### Organizations & impersonation (registry: `RequirePlatformAdmin`; `/admin/platform/*`: `RequireSuperAdmin`)
 
 The `/admin/organizations` screen talks to two services, and the split follows which database the
 operation needs. Full contracts in [API_CONTRACTS.md](API_CONTRACTS.md).
@@ -226,7 +245,7 @@ operation needs. Full contracts in [API_CONTRACTS.md](API_CONTRACTS.md).
 |---|---|---|---|
 | GET / POST | /organizations | organization-service | list / create a tenant |
 | POST | /organizations/:id/suspend, /organizations/:id/reactivate | organization-service | suspend / resume |
-| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite the organization's first `OrgAdmin` |
+| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite the organization's first `TenancySuperAdmin` |
 | POST | /admin/platform/impersonation | identity-service | mint a short-lived token for another organization |
 | GET | /admin/platform/impersonation | identity-service | the impersonation audit trail |
 
@@ -297,7 +316,7 @@ app/(admin)/
     users/
       page.tsx         ← user list + role management (superadmin only)
     organizations/
-      page.tsx         ← tenant registry: create, invite the first OrgAdmin, suspend/resume, impersonate (Phase 40.9)
+      page.tsx         ← tenant registry: create, invite the first admin, suspend/resume, impersonate (Phase 40.9)
 ```
 
 ---

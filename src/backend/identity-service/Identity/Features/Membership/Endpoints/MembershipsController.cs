@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Data;
 
@@ -17,10 +18,14 @@ namespace Sellevate.Identity.Features.Membership.Endpoints;
 /// organization and are exactly what the РОП pays to keep (docs/TENANCY/TENANCY.md §4.3). Erasure
 /// is a separate, explicit GDPR operation that does not exist yet.
 /// </para>
+/// <para>
+/// Removing a user from an organization is the one privilege the 2026-08-16 role split reserves
+/// for a superadmin, so this route is <c>RequireOrgSuperAdmin</c> (docs/DECISIONS.md).
+/// </para>
 /// </summary>
 [ApiController]
 [Route("memberships")]
-[Authorize(Policy = "RequireOrgAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationSuperAdministrator)]
 [TenantScoped]
 public sealed class MembershipsController(
     IdentityDbContext databaseContext,

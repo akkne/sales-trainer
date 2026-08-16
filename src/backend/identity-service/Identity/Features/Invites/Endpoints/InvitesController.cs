@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
 using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Invites.Services.Abstract;
 
@@ -19,10 +20,15 @@ namespace Sellevate.Identity.Features.Invites.Endpoints;
 /// <see cref="TenantScopedAttribute"/> makes <c>TenantContextMiddleware</c> answer 403 before the
 /// action runs if that header is missing.
 /// </para>
+/// <para>
+/// Inviting someone into an organization and revoking that invite are both "add/remove a user",
+/// the one privilege the 2026-08-16 role split reserves for a superadmin — so this controller is
+/// <c>RequireOrgSuperAdmin</c>, not <c>RequireOrgAdmin</c> (docs/DECISIONS.md).
+/// </para>
 /// </summary>
 [ApiController]
 [Route("invites")]
-[Authorize(Policy = "RequireOrgAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationSuperAdministrator)]
 [TenantScoped]
 public sealed class InvitesController(IInviteService inviteService) : ControllerBase
 {

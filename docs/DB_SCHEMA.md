@@ -54,7 +54,7 @@ All tables managed by EF Core migrations (`Infrastructure/Data/Migrations/`).
 | `PasswordHash` | `text`                      | NULL     | NULL for Google-only accounts      |
 | `DisplayName`  | `text`                      | NOT NULL |                                    |
 | `GoogleId`     | `text`                      | NULL     | NULL for email/password accounts   |
-| `Role`                | `integer`                   | NOT NULL | Platform role. 0=User, 2=SuperAdmin (1 was `Admin`, removed Phase 40.6 — see below; deliberately left unassigned) |
+| `Role`                | `integer`                   | NOT NULL | Platform role. 0=User, 1=Admin, 2=SuperAdmin. Removed in 40.6 and reinstated at the same value on 2026-08-16, so no stored row changes meaning (`docs/DECISIONS.md`) |
 | `AvatarType`          | `integer`                   | NOT NULL | 0=Default, 1=Uploaded (default 0)  |
 | `AvatarKey`           | `text`                      | NULL     | S3 object key for uploaded avatar; NULL when using a default |
 | `DefaultAvatarIndex`  | `integer`                   | NOT NULL | Index into `DefaultAvatars` catalog (default 0) |
@@ -123,7 +123,7 @@ JWT, every authorization check and the invite flow at once. See
 |------------------|------------------------------|----------|------------------------------------|
 | `UserId`         | `uuid`                       | NOT NULL | PK (part 1). FK → `Users.Id` ON DELETE CASCADE (same database) |
 | `OrganizationId` | `uuid`                       | NOT NULL | PK (part 2). **No FK** — bare uuid; `organization-service` owns the registry in its own database (DB-per-service) |
-| `Role`           | `integer`                    | NOT NULL | Org-scoped role. 0=Manager, 1=OrgAdmin |
+| `Role`           | `integer`                    | NOT NULL | Org-scoped role. 0=Manager, 1=TenancyAdmin, 2=TenancySuperAdmin. `OrgAdmin` → `TenancyAdmin` was a source-level rename at the same value on 2026-08-16 — **no data migration** |
 | `Status`         | `integer`                    | NOT NULL | 0=Active (default), 1=Deactivated. Offboarding sets `Deactivated`, never deletes — attempt history/scores belong to the organization |
 | `InvitedBy`      | `uuid`                       | NULL     | The inviting user's id (40.7 invite flow; not populated yet) |
 | `JoinedAt`        | `timestamp with time zone`  | NOT NULL |                                    |

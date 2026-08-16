@@ -91,6 +91,93 @@ public class TenantRlsMigrationBuilderExtensionsTests
         sql.Should().Contain("CREATE POLICY \"UserExerciseAttempts_tenant_isolation\" ON \"UserExerciseAttempts\"");
     }
 
+    /// <summary>
+    /// The asymmetry is the whole design of the 2026-08-16 role split: platform staff read every
+    /// organization's rows and still write into none of them implicitly. A test that only checked
+    /// "the platform branch is present somewhere" would pass on a policy that had leaked it into
+    /// <c>WITH CHECK</c> too, so this one splits the statement and asserts on each half.
+    /// </summary>
+    [Test]
+    public void EnableTenantRls_admits_platform_staff_to_reads_but_not_to_writes()
+    {
+        var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
+
+        migrationBuilder.EnableTenantRls("UserExerciseAttempts");
+
+        var sql = SingleSqlOperationText(migrationBuilder);
+        UsingClauseOf(sql).Should().Contain("current_setting('app.platform_mode', true)");
+        WithCheckClauseOf(sql).Should().NotContain("platform_mode");
+    }
+
+    [Test]
+    public void EnableTenantRlsForContent_admits_platform_staff_to_reads_but_not_to_writes()
+    {
+        var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
+
+        migrationBuilder.EnableTenantRlsForContent("Skills");
+
+        var sql = SingleSqlOperationText(migrationBuilder);
+        UsingClauseOf(sql).Should().Contain("current_setting('app.platform_mode', true)");
+        WithCheckClauseOf(sql).Should().NotContain("platform_mode");
+    }
+
+    [Test]
+    public void EnableTenantRls_treats_an_empty_platform_setting_as_off()
+    {
+        // Same pooled-connection trap as the organization GUC: once SET LOCAL has run on a
+        // connection, the setting comes back as '' rather than NULL for the next transaction.
+        var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
+
+        migrationBuilder.EnableTenantRls("UserExerciseAttempts");
+
+        var sql = SingleSqlOperationText(migrationBuilder);
+        sql.Should().Contain("COALESCE(NULLIF(current_setting('app.platform_mode', true), ''), 'off') = 'on'");
+    }
+
+    /// <summary>
+    /// What a rollback migration calls. It must regenerate the pre-2026-08-16 policy exactly, with
+    /// no trace of the platform branch in either clause.
+    /// </summary>
+    [Test]
+    public void EnableTenantRls_without_platform_staff_emits_the_pre_role_split_policy()
+    {
+        var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
+
+        migrationBuilder.EnableTenantRls("UserExerciseAttempts", admitPlatformStaff: false);
+
+        var sql = SingleSqlOperationText(migrationBuilder);
+        sql.Should().NotContain("platform_mode");
+        sql.Should().Contain("\"OrganizationId\" = NULLIF(current_setting('app.organization_id', true), '')::uuid");
+    }
+
+    /// <summary>
+    /// Re-applying the helper to a table that already carries the policy has to replace it, not
+    /// fail — that is what lets a later migration re-issue the current definition instead of
+    /// hand-writing a second copy of the policy SQL that would drift from the helper.
+    /// </summary>
+    [Test]
+    public void EnableTenantRls_replaces_an_existing_policy_instead_of_failing_on_it()
+    {
+        var migrationBuilder = new MigrationBuilder(activeProvider: "Npgsql");
+
+        migrationBuilder.EnableTenantRls("UserExerciseAttempts");
+
+        var sql = SingleSqlOperationText(migrationBuilder);
+        sql.Should().Contain("DROP POLICY IF EXISTS \"UserExerciseAttempts_tenant_isolation\" ON \"UserExerciseAttempts\";");
+        sql.IndexOf("DROP POLICY", StringComparison.Ordinal)
+            .Should().BeLessThan(sql.IndexOf("CREATE POLICY", StringComparison.Ordinal));
+    }
+
+    private static string UsingClauseOf(string sql)
+    {
+        var start = sql.IndexOf("USING (", StringComparison.Ordinal);
+        var end = sql.IndexOf("WITH CHECK (", StringComparison.Ordinal);
+        return sql[start..end];
+    }
+
+    private static string WithCheckClauseOf(string sql)
+        => sql[sql.IndexOf("WITH CHECK (", StringComparison.Ordinal)..];
+
     private static string SingleSqlOperationText(MigrationBuilder migrationBuilder)
     {
         var operation = migrationBuilder.Operations.Should().ContainSingle().Which;

@@ -53,27 +53,27 @@ public sealed class LearningDbContext : DbContext
 
         // Tenant data: exactly one owning organization per row.
         modelBuilder.Entity<UserSkillProgress>()
-            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserLessonProgress>()
-            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserExerciseAttempt>()
-            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserTechniqueProgress>()
-            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
 
         // Content: null means the global library shared by every organization, so the comparison is
         // "mine or global", never plain equality (docs/TENANCY/CONTENT_MODEL.md).
         modelBuilder.Entity<Skill>()
-            .HasQueryFilter(skill => skill.OrganizationId == null || skill.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(skill => _tenantContext.IsPlatformWide || skill.OrganizationId == null || skill.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Topic>()
-            .HasQueryFilter(topic => topic.OrganizationId == null || topic.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(topic => _tenantContext.IsPlatformWide || topic.OrganizationId == null || topic.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Lesson>()
-            .HasQueryFilter(lesson => lesson.OrganizationId == null || lesson.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(lesson => _tenantContext.IsPlatformWide || lesson.OrganizationId == null || lesson.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Exercise>()
-            .HasQueryFilter(exercise => exercise.OrganizationId == null || exercise.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(exercise => _tenantContext.IsPlatformWide || exercise.OrganizationId == null || exercise.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Technique>()
-            .HasQueryFilter(technique => technique.OrganizationId == null || technique.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(technique => _tenantContext.IsPlatformWide || technique.OrganizationId == null || technique.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<ReferenceMaterial>()
-            .HasQueryFilter(material => material.OrganizationId == null || material.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(material => _tenantContext.IsPlatformWide || material.OrganizationId == null || material.OrganizationId == _tenantContext.OrganizationId);
     }
 }

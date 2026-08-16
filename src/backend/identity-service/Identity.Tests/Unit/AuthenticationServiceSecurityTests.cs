@@ -217,7 +217,7 @@ public class AuthenticationServiceSecurityTests
         {
             UserId = user.Id,
             OrganizationId = organizationId,
-            Role = OrgRole.OrgAdmin,
+            Role = OrgRole.TenancyAdmin,
             Status = MembershipStatus.Active,
             JoinedAt = DateTime.UtcNow
         });
@@ -227,7 +227,7 @@ public class AuthenticationServiceSecurityTests
         var issuedTokenPair = await service.LoginWithGoogleAsync("google-id-token");
 
         issuedTokenPair.OrgId.Should().Be(organizationId.ToString());
-        issuedTokenPair.OrgRole.Should().Be("OrgAdmin");
+        issuedTokenPair.OrgRole.Should().Be("TenancyAdmin");
     }
 
     // ── 40.8: the login method is per-organization configuration ──────────────

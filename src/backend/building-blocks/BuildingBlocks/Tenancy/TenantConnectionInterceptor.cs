@@ -54,20 +54,53 @@ public sealed class TenantConnectionInterceptor(ITenantContext tenantContext) : 
     }
 
     /// <summary>
-    /// Returns the <c>SET LOCAL</c> statement for the current tenant, or <see langword="null"/>
-    /// when there is nothing to set: system-mode connections rely on a <c>BYPASSRLS</c> role
-    /// instead of the GUC, and a connection with no organization at all leaves the setting unset
-    /// so the fail-closed RLS policy (<c>current_setting(..., true)</c>, missing_ok) filters every
-    /// tenant-scoped row rather than erroring.
+    /// The Postgres session variable that tells a tenant policy's <c>USING</c> clause the caller is
+    /// validated platform staff and may read every organization's rows. Set only from
+    /// <see cref="ITenantContext.IsPlatformWide"/>, which in a request comes only from the `role`
+    /// claim of a validated token (see <see cref="TenantContextMiddleware"/>) — never from a
+    /// header, body, query or route value a client could write.
+    ///
+    /// <para>
+    /// It widens reads alone. The <c>WITH CHECK</c> half of every policy ignores it, so a platform
+    /// administrator still cannot write a row into an organization they did not name explicitly.
+    /// </para>
+    /// </summary>
+    public const string PlatformModeSettingName = "app.platform_mode";
+
+    /// <summary>
+    /// Returns the <c>SET LOCAL</c> statements for the current tenant context, or
+    /// <see langword="null"/> when there is nothing to set: system-mode connections rely on a
+    /// <c>BYPASSRLS</c> role instead of the GUCs, and a connection with neither an organization nor
+    /// platform-wide mode leaves both settings unset so the fail-closed RLS policy
+    /// (<c>current_setting(..., true)</c>, missing_ok) filters every tenant-scoped row rather than
+    /// erroring.
+    ///
+    /// <para>
+    /// Platform-wide mode and an organization can both be present — a Sellevate administrator who
+    /// also belongs to an organization reads across all of them and writes into theirs — so the two
+    /// statements are emitted independently rather than as an either/or.
+    /// </para>
     /// </summary>
     internal string? BuildSetLocalCommandText()
     {
-        if (tenantContext.IsSystem || tenantContext.OrganizationId is not { } organizationId)
+        if (tenantContext.IsSystem)
         {
             return null;
         }
 
-        return BuildSetLocalCommandText(organizationId);
+        var statements = new List<string>(capacity: 2);
+
+        if (tenantContext.OrganizationId is { } organizationId)
+        {
+            statements.Add(BuildSetLocalCommandText(organizationId));
+        }
+
+        if (tenantContext.IsPlatformWide)
+        {
+            statements.Add(BuildPlatformModeSetLocalCommandText());
+        }
+
+        return statements.Count == 0 ? null : string.Join("; ", statements);
     }
 
     /// <summary>
@@ -79,6 +112,13 @@ public sealed class TenantConnectionInterceptor(ITenantContext tenantContext) : 
     /// </summary>
     internal static string BuildSetLocalCommandText(Guid organizationId)
         => $"SET LOCAL {OrganizationIdSettingName} = '{organizationId:D}'";
+
+    /// <summary>
+    /// The platform-mode counterpart. A constant string with no interpolation at all — the mode is
+    /// on or the statement is not emitted.
+    /// </summary>
+    internal static string BuildPlatformModeSetLocalCommandText()
+        => $"SET LOCAL {PlatformModeSettingName} = 'on'";
 
     private static DbCommand CreateSetLocalCommand(DbTransaction transaction, string commandText)
     {

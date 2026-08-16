@@ -186,14 +186,22 @@ internal sealed class AuthenticationService(
             throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
         }
 
-        // Having an account is not enough: without an active membership the user belongs to no
-        // organization and there is nothing to sign in to.
+        // Having an account is not enough: without an active membership an ordinary user belongs
+        // to no organization and there is nothing to sign in to.
+        //
+        // Platform staff are the exception, and deliberately so. `Admin` and `SuperAdmin` are
+        // Sellevate's own roles and are not bounded by tenancy (docs/DECISIONS.md, 2026-08-16);
+        // they normally hold no membership anywhere, and their whole job lives on the platform
+        // admin routes. Without this carve-out the password path would admit them and the Google
+        // path would lock them out of their own product. They still receive no `org_id`/`org_role`
+        // claim — absent membership stays absent, it is never implied.
+        var isPlatformStaff = existingUser.Role is UserRole.Admin or UserRole.SuperAdmin;
         var hasActiveMembership = await databaseContext.Memberships
             .AnyAsync(
                 candidate => candidate.UserId == existingUser.Id && candidate.Status == MembershipStatus.Active,
                 cancellationToken);
 
-        if (!hasActiveMembership)
+        if (!hasActiveMembership && !isPlatformStaff)
         {
             logger.LogWarning(
                 "Google login rejected — no active membership for {Email} UserId={UserId}",

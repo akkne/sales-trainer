@@ -4,6 +4,200 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-16 — `Admin`/`SuperAdmin` become platform roles, every tenancy gets its own pair
+
+Requested directly by the project owner tonight, ahead of the remaining Phase 40 blocks, and
+revising the split Phase 40.6 made. Verbatim:
+
+> «admin и superadmin это чисто роли наши, которые не должны ограничиваться tenancy, они должны
+> показывать все. а вот у каждой tenancy должны быть роли tenancy-admin и tenancy-superadmin. пока
+> что различием сделай только то что только суперадмины могут добавлять/удалять пользователей.
+> остальное у них одно и то же. админка у админов и админов tenancy будет разная в разном месте.
+> это пока можно не продумывать, я сам потом пришлю дизайн.»
+
+### The model
+
+Two independent axes, both already in the JWT, now both fully populated.
+
+**Platform roles** — `User.Role`, `role` claim. Sellevate's own staff, deliberately not bounded by
+tenancy.
+
+| Value | Role | May |
+|---|---|---|
+| 0 | `User` | nothing administrative |
+| 1 | `Admin` | all platform content administration |
+| 2 | `SuperAdmin` | everything `Admin` may, **plus adding and removing users** |
+
+**Organization roles** — `Membership.Role` / `Invite.Role`, `org_role` claim.
+
+| Value | Role | May |
+|---|---|---|
+| 0 | `Manager` | nothing administrative |
+| 1 | `TenancyAdmin` | administer their own organization |
+| 2 | `TenancySuperAdmin` | everything `TenancyAdmin` may, **plus adding and removing the organization's users** |
+
+- **`Admin` is reinstated at value 1, and reusing the value is the safe move rather than the risky
+  one.** Phase 40.6 removed `Admin` and deliberately left 1 unassigned so a legacy `Role = 1` row
+  would fail loudly. But 1 meant exactly "global platform admin" before 40.6, which is precisely
+  what it means again — any surviving row lands back on the meaning it already had. There is
+  nothing to migrate and nothing to reinterpret. Allocating 3 instead would have left a permanent
+  hole in the enum and a class of rows that still fail to deserialize for no benefit.
+- **`OrgAdmin` is renamed to `TenancyAdmin` in place, at the same value 1.** Both columns are
+  `integer` (`HasConversion<int>()` in `MembershipEntityConfiguration` and
+  `InviteEntityConfiguration`), so the rename is source-level only: **no data migration and no EF
+  migration**. `RoleEnumContractTests` pins every number and name so the next rename cannot silently
+  re-label rows already in the database.
+- **The retired `OrgAdmin` string is rejected, not mapped.** `InviteService.ParseRole` answers 400
+  with a message naming both replacements. Silently mapping it to `TenancyAdmin` would let a stale
+  client keep inviting people at a role it no longer means to, and the rename is exactly the moment
+  that mistake is cheap to catch. Both role parsers also gained an `Enum.IsDefined` check —
+  `Enum.TryParse` accepts bare numbers and would happily have persisted `(OrgRole)99`.
+
+### The four policies
+
+Declared identically in all six services by `AuthorizationPolicies.Register`, so a token means the
+same thing wherever it lands.
+
+| Policy | Satisfied by |
+|---|---|
+| `RequirePlatformAdmin` | `role` ∈ {`Admin`, `SuperAdmin`} |
+| `RequireSuperAdmin` | `role` = `SuperAdmin` |
+| `RequireOrgAdmin` | `org_role` ∈ {`TenancyAdmin`, `TenancySuperAdmin`} **or** `role` ∈ {`Admin`, `SuperAdmin`} |
+| `RequireOrgSuperAdmin` | `org_role` = `TenancySuperAdmin` **or** `role` = `SuperAdmin` |
+
+- **Platform staff satisfy the organization-scoped policies while holding no `org_role` claim at
+  all.** That is the point of "не должны ограничиваться tenancy": a Sellevate administrator normally
+  has no membership anywhere. Token issuance is unchanged — absent membership still yields no
+  `org_id`/`org_role`, never an implied one — so the platform role alone has to carry them.
+- **Making the *data* they then see span every organization is a separate concern** living in the
+  tenancy layer (`ITenantContext`, query filters, RLS), not in these policies. This block
+  deliberately stops at the seam.
+- **Each service keeps its own `AuthorizationPolicies.cs` rather than sharing one from
+  BuildingBlocks.** The file is a handful of constants and one registration method; a shared
+  version would couple every service's authorization to a building-block release, and the
+  duplication is pinned by an `AuthorizationPolicyContractTests` in each service's test project that
+  asserts the wire-level names and the two asymmetries. *Alternative rejected — a
+  `SellevateAuthorizationPolicies` extension in BuildingBlocks.* Less text, but it makes the six
+  `Program.cs` files silently inherit policy changes from a dependency bump, which is the opposite
+  of what an authorization decision wants.
+
+### Route audit — every gated route, before and after
+
+The rule applied: platform **content** administration is ordinary admin work and moves to
+`RequirePlatformAdmin`; anything that creates, invites, deactivates or re-roles a **user or
+membership** is superadmin-exclusive; impersonation stays superadmin-exclusive on its own merits.
+
+| Service | Route(s) | Before | After |
+|---|---|---|---|
+| identity | `GET /admin/users`, `GET /admin/users/{id}` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| identity | `PUT /admin/users/{id}` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| identity | `DELETE /admin/users/{id}/avatar` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| identity | `PUT /admin/users/{id}/role` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| identity | `POST /invites`, `DELETE /invites/{id}` | `RequireOrgAdmin` | **`RequireOrgSuperAdmin`** |
+| identity | `DELETE /memberships/{userId}` | `RequireOrgAdmin` | **`RequireOrgSuperAdmin`** |
+| identity | `POST /admin/platform/impersonation` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| identity | `GET /admin/platform/impersonation` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| identity | `POST /admin/platform/organizations/bootstrap-admin` | `RequireSuperAdmin` | `RequireSuperAdmin` |
+| organization | `/organizations` (create, list, read, update, suspend, reactivate) | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| organization | `/organizations/profile` | `[Authorize]` | `[Authorize]` |
+| learning | `admin/skills`, `admin/skill-stages` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| learning | `admin/topics`, `admin/lessons` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| learning | `admin/exercises`, `admin/exercise-type-prompts` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| learning | `admin/techniques`, `admin/reference` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| learning | `admin/daily-quotes`, `admin/seeder` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| ai | `admin/dialog` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| ai | `admin/voice` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| gamification | `admin/gamification` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| gamification | `admin/leagues` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+| social | `admin/discuss` | `RequireSuperAdmin` | **`RequirePlatformAdmin`** |
+
+`RequireOrgAdmin` now has no call site at all: both of its former routes turned out to be
+add/remove-a-user. It stays declared because it is the correct gate for the organization admin
+panel that block 40.20 will build, and because leaving it out would invite the next screen to reach
+for `RequireOrgSuperAdmin` by default.
+
+### Three consequences worth stating
+
+- **Bootstrapping an organization now creates a `TenancySuperAdmin`, not a `TenancyAdmin`.** Only a
+  superadmin can invite, so a first admin without that rank would leave the organization unable to
+  add anybody — a dead end on day one. The "already bootstrapped" guard follows the same value, which
+  also gives an organization that somehow ends up with no superadmin a legitimate way back.
+- **An impersonation token is granted `org_role: TenancyAdmin`, deliberately one rank below.** The
+  impersonator borrows an organization to see what its people see; adding or removing that
+  organization's users is not part of looking around, and the token already downgrades the platform
+  role to `User` for the same reason.
+- **Google login no longer refuses platform staff who hold no membership.** The membership check
+  exists because an ordinary account with no organization has nothing to sign in to; a platform
+  `Admin`/`SuperAdmin` has the whole platform admin panel. Without the carve-out the password path
+  would admit them and the Google path would lock them out. They still receive no `org_id`/`org_role`.
+
+### Not in scope
+
+The visual split between the platform admin panel and the organization admin panel is **roadmap
+block 40.20** and is waiting on the owner's design («админка у админов и админов tenancy будет
+разная в разном месте... я сам потом пришлю дизайн»). Nothing here builds a new screen; the existing
+`app/(admin)` panel simply admits `Admin` alongside `SuperAdmin` and hides the add/remove-user
+affordances from `Admin`.
+
+### The data half: «они должны показывать все»
+
+The policies above only decide who may call a route. Passing them changed nothing about what came
+back: every read was still filtered to an organization platform staff usually do not belong to, so
+the platform admin screens would have rendered an empty page. The second half of the change widens
+the reads.
+
+**A third tenant mode rather than reuse of the one that existed.** `ITenantContext` gains
+`IsPlatformWide` alongside `IsSystem`. The tempting shortcut — "platform staff are just system mode
+with a face" — is wrong in a way that would not show up until it mattered: system mode exists
+because there is *nobody* to attribute the work to and relies on a `BYPASSRLS` role, while
+platform-wide mode exists because there *is* somebody and they are entitled. Collapsing them would
+let any background job inherit a human's privileges, or let a request inherit a job's connection
+role. The two are mutually exclusive and entering the second from the first throws.
+
+**The claim is the only door.** `TenantContextMiddleware` enters platform mode from the `role` claim
+of the principal the service itself authenticated — never a header, body, query or route value. This
+is the same rule tenancy has had since 40.2 ("the organization is never read from the request"),
+applied to the privilege as well as to the tenant. Tests pin that a forged `X-User-Role`, an
+invented `X-Platform-Mode` header, and an unauthenticated principal carrying the role claim all
+fail to open it. Impersonation tokens carry `role: User` by design (40.9), so borrowing an
+organization confers nothing.
+
+**Reads widen in three places, writes in none.** Query filters gain the branch, RLS policies gain
+`app.platform_mode` in `USING`, and the two Mongo repositories drop the organization from their
+filter because Mongo has no policy to carry it. `WITH CHECK` deliberately does **not** get the
+branch and `TenantSaveChangesInterceptor` still demands an explicit organization on insert. A
+platform administrator sees every customer and can still only write into one they named. If that
+makes some future platform write path fail, the correct fix is to name the organization, not to
+loosen the policy.
+
+**Platform mode coexists with an organization** instead of replacing it — an administrator who also
+belongs to a tenant reads across all of them and writes into theirs — which is why the connection
+interceptor emits both `SET LOCAL` statements rather than choosing between them.
+
+**Why a GUC and not a second `BYPASSRLS` role.** A role-based bypass would need a second connection
+string per service, a second pool, and a decision at connection time about which one a request gets
+— privilege escalation would then be a connection-selection bug, invisible in the policy. With
+`app.platform_mode` the policy itself states who may read what, in one place, reviewable in
+`\d+ tablename` on any environment. It also keeps the "one application role, no `BYPASSRLS`"
+property that 40.4 established. The GUC is set only by `TenantConnectionInterceptor`, only from
+`IsPlatformWide`, only via `SET LOCAL`, so it cannot survive its transaction on a pooled connection.
+
+**Redis is deliberately excluded.** Notification inboxes and analytics presence are namespaced by
+key prefix, so a cross-organization read means scanning every prefix. No platform screen asks for
+one today, and building the scan now would add an unbounded `KEYS`-shaped operation to serve a
+feature nobody requested. Platform staff therefore see per-organization Redis state only when acting
+inside one organization. Written here so that nobody later reads "platform staff see everything" and
+assumes live presence across customers is included — it is not.
+
+**One code path for the policy SQL.** `EnableTenantRls` now emits `DROP POLICY IF EXISTS` before
+`CREATE POLICY`, which makes it re-appliable; the seven `RefreshTenantPoliciesForPlatformStaff`
+migrations therefore call the helper again instead of carrying a copy of the policy text that would
+drift the next time the helper changes. Their `Down` passes `admitPlatformStaff: false` through that
+same helper, so the rollback regenerates the exact pre-change policy rather than an approximation
+written from memory.
+
+---
+
 ## 2026-08-16 — the remaining services get `organization_id` (40.13, Stage C closes)
 
 - **`DiscussTags` is social-db's one content-flavour table, and the stamping is explicit rather than
