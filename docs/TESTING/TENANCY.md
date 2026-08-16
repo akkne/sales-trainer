@@ -759,3 +759,208 @@ dotnet test src/backend/gamification-service/Gamification.Tests  # 53
 поднятой `scripts/dev-infra.sh`, и **после** применения семи миграций
 `RefreshTenantPoliciesForPlatformStaff` — до них платформенные тесты обязаны падать, это и есть
 проверка того, что расширение даёт именно RLS, а не EF-фильтр.
+
+---
+
+## 40.14 — приёмка изоляции: чеклист для человека
+
+Этот раздел — **инструкция, а не описание тестов**. Всё выше отвечает на вопрос «что покрыто»;
+здесь — что запустить руками и что посмотреть глазами, чтобы сказать «изоляция принята».
+Порядок имеет значение: шаги 1–3 быстрые и не требуют ничего, кроме репозитория, шаг 4 требует
+поднятой локальной инфраструктуры, шаг 5 — применённых миграций.
+
+Реестр фоновых задач, который этот блок произвёл: **[docs/TENANCY/BACKGROUND_JOBS.md](../TENANCY/BACKGROUND_JOBS.md)**.
+
+### Шаг 0 — ловушка, из-за которой можно принять изоляцию по 6% тестов
+
+```bash
+dotnet test src/backend/Sellevate.sln      # ← НЕ ДЕЛАЙТЕ ТАК
+```
+
+Эта команда печатает `A total of 1 test files matched the specified pattern.` и прогоняет
+**один** тест-проект из одиннадцати — 53 теста из 894. Заканчивается зелёным `Passed!`, поэтому
+выглядит как полный прогон и им не является. Правильная команда — цикл по проектам:
+
+```bash
+for p in $(find src/backend -name "*.Tests.csproj" -not -path "*/obj/*" | sort); do
+  echo "== $p"
+  dotnet test "$p" --no-build --filter "TestCategory!=Integration" --nologo | grep -E "Passed!|Failed!"
+done
+```
+
+Ожидаемо (состояние на 40.14): **894 зелёных, 0 упавших, 0 пропущенных**.
+
+| Проект | Юнит |
+|--------|------|
+| Ai | 170 |
+| Analytics | 29 |
+| BuildingBlocks | 118 |
+| Company | 135 |
+| Gamification | 53 |
+| Gateway | 71 |
+| Identity | 97 |
+| Learning | 67 |
+| Notification | 56 |
+| Organization | 36 |
+| Social | 62 |
+
+### Шаг 1 — сборка и линты (секунды, ничего не поднимая)
+
+```bash
+dotnet build src/backend/Sellevate.sln
+python3 scripts/tenancy-boundary-lint.py    # организация не приходит из тела/query/маршрута
+python3 scripts/tenancy-pool-lint.py        # нет AddDbContextPool на tenant-scoped контекстах
+```
+
+Оба линта должны сказать `clean.` Первый — это гейт против самой дешёвой ошибки во всей теме:
+`?organizationId=...` в запросе. Второй — против ловушки из TENANCY.md §1.4: пул контекстов
+закэшировал бы фильтр первого тенанта и раздавал бы его всем следующим.
+
+### Шаг 2 — три грепа, которые держат реестр фоновых задач честным
+
+Полное объяснение — в [BACKGROUND_JOBS.md](../TENANCY/BACKGROUND_JOBS.md) §5. Коротко:
+
+```bash
+# 2.1 Каждая зарегистрированная фоновая задача должна быть в реестре
+grep -rn --include=*.cs "AddHostedService" src/backend | grep -v /obj/ | grep -v /bin/
+
+# 2.2 IgnoreQueryFilters в продакшн-коде — ТОЛЬКО перечисление организаций.
+#     Ожидается ровно три попадания: FollowUpReminderBackgroundService,
+#     StreakResetJob, WeeklyLeagueClosureJob. Четвёртое — находка, пока не доказано обратное.
+grep -rn --include=*.cs "IgnoreQueryFilters" src/backend | grep -v /obj/ | grep -v Tests
+
+# 2.3 Сырого SQL в бэкенде быть не должно вообще (на 40.14 — ноль попаданий)
+grep -rnE "FromSqlRaw|FromSqlInterpolated|ExecuteSqlRaw|ExecuteSqlInterpolated" \
+  --include=*.cs src/backend | grep -v /obj/
+```
+
+Автоматического гейта на 2.2 и 2.3 **нет** — это глазами. Превратить их в линт по образцу
+`tenancy-boundary-lint.py` — очевидный следующий шаг, сознательно не входящий в 40.14.
+
+### Шаг 3 — что смотреть глазами в собранной системе
+
+Ни один из этих пунктов не покрыт автотестом, и каждый ловит ошибку, которая выглядит не как
+ошибка, а как «данных нет»:
+
+1. **Заголовок `X-Organization-Id` не проходит снаружи.** С фронта всё работает, потому что его
+   ставит гейтвей. Проверка — послать его руками мимо гейтвея и убедиться, что гейтвей его срезает,
+   а не пробрасывает:
+   ```bash
+   curl -s -H "Authorization: Bearer <ваш токен>" \
+        -H "X-Organization-Id: 00000000-0000-4000-8000-000000000009" \
+        http://localhost:5001/companies | head
+   ```
+   Ответ должен быть про **вашу** организацию, а не про подставленную. Гейтвей срезает все три
+   identity-заголовка безусловно и переставляет их из валидированного токена
+   (`gateway/Gateway/IdentityForwarding.cs`).
+
+2. **Маршруты `[TenantScoped]` отвечают 403 без заголовка, а не 200 с пустотой.** Помеченные
+   контроллеры: `/notifications/*`, `POST /tracking/presence/ping`, профиль организации.
+   ai-service, company-service и learning-service атрибутом **не** помечены — там запрос без
+   организации даёт пустой результат или 500, потому что фильтры и гуарды и так fail-closed. Это
+   косметика, но при разборе инцидента она стоит часа: 403 говорит «нет тенанта», пустой список
+   говорит «нет данных».
+
+3. **Пустые экраны после деплоя — это RLS, а не потеря данных.** Между применением миграции
+   `AddOrganizationId` и прогоном бэкфилла строки лежат в организации-заглушке из нулей и спрятаны
+   политикой. Правильное поведение, выглядит как «всё стёрли». Порядок и окна — в
+   `docs/DONT_FORGET.md`, по одному пункту на сервис.
+
+4. **Фоновые джобы не молчат.** Признак беды не в логах ошибок, а в их отсутствии: перечисление
+   организаций идёт в системном режиме и под `NOBYPASSRLS`-ролью вернёт пустой список, после чего
+   напоминания, сброс серий и закрытие лиг просто перестанут происходить, **не выдав ни одной
+   ошибки**. Смотреть на счётчики в `LogInformation` этих джоб («no organization has a live
+   streak»), а не на error rate.
+
+### Шаг 4 — интеграционные тесты изоляции: написаны, но НИ РАЗУ не прогонялись
+
+По Правилу №2 в `docs/DONT_FORGET.md` агент их писал и коммитил, но не запускал. Это **131 тест**,
+и они — основная непроверенная часть приёмки. Все фикстуры создают свою одноразовую БД и
+одноразовую `NOBYPASSRLS`-роль, дропают их в начале и в конце и настоящих БД сервисов не трогают.
+Нет локального Postgres → уходят в `Skipped` за секунды, сборка не виснет.
+
+```bash
+scripts/dev-infra.sh    # postgres/mongo/redis в Docker — нужны только для этого шага
+
+dotnet test src/backend/ai-service/Ai.Tests/Sellevate.Ai.Tests.csproj                       --filter "TestCategory=Integration"   #  11
+dotnet test src/backend/analytics-service/Analytics.Tests/Sellevate.Analytics.Tests.csproj  --filter "TestCategory=Integration"   #   8
+dotnet test src/backend/company-service/Company.Tests/Sellevate.Company.Tests.csproj        --filter "TestCategory=Integration"   #  12
+dotnet test src/backend/identity-service/Identity.Tests/Sellevate.Identity.Tests.csproj     --filter "TestCategory=Integration"   #  72
+dotnet test src/backend/learning-service/Learning.Tests/Sellevate.Learning.Tests.csproj     --filter "TestCategory=Integration"   #  14
+dotnet test src/backend/social-service/Social.Tests/Sellevate.Social.Tests.csproj           --filter "TestCategory=Integration"   #  14
+```
+
+| Файл | Тестов | Что доказывает | Блок |
+|------|--------|----------------|------|
+| `Ai.Tests/Integration/AiTenantIsolationIntegrationTests.cs` | 11 | Три хранилища сразу: Postgres (контентная RLS на `DialogBundles`/`DialogModes`), Mongo (`dialog_sessions` — прикладной фильтр, RLS нет), Redis (префиксы ключей) | 40.11 |
+| `Analytics.Tests/Integration/TrackingControllerTests.cs` | 8 | Presence и воронки по префиксу организации; Redis и Kafka застабаны, Docker не нужен | 40.13 |
+| `Company.Tests/Integration/CompanyTenantIsolationIntegrationTests.cs` | 12 | Двойной скоуп — организация И пользователь; `IgnoreQueryFilters` + `ExecuteUpdate`/`ExecuteDelete` под ролью приложения упираются в RLS, а не в EF-фильтр | 40.12 |
+| `Identity.Tests/Integration/*.cs` (8 файлов) | 72 | Инвайты, membership-клеймы, платформенная админка, разделение ролей 2026-08-16, вход и приостановка организации | 40.7–40.9 + роли |
+| `Learning.Tests/Integration/LearningTenantIsolationIntegrationTests.cs` | 14 | Прогресс и контент двух организаций; сырой SQL и `ExecuteDelete`; +5 сценариев платформенного режима | 40.10 + роли |
+| `Social.Tests/Integration/SocialTenantIsolationIntegrationTests.cs` | 14 | Postgres (шесть таблиц строгой RLS + контентные теги) **и** Mongo (`chat_conversations`); +2 сценария платформенного режима | 40.13 + роли |
+
+**Важно про порядок.** Тесты платформенного режима обязаны **падать** до применения семи миграций
+`RefreshTenantPoliciesForPlatformStaff` — это и есть проверка того, что расширение чтения даёт
+именно RLS, а не EF-фильтр. Прогонять их имеет смысл дважды: до миграций (ожидаемо красные) и
+после (ожидаемо зелёные).
+
+**Чего в этом списке нет.** `gamification-service` — единственный сервис Stage C **без** теста
+изоляции на реальном Postgres (пробел зафиксирован ещё в 40.13). И сквозного теста «две
+организации, полный набор операций, ни один endpoint не отдаёт чужие данные», который требовал
+роадмап 40.14, **не существует** — он не написан по Правилу №3, см. `docs/DONT_FORGET.md`.
+
+### Шаг 5 — RLS ещё ни в одном окружении не включена
+
+Самая важная строчка всей приёмки, и она не про тесты. Все compose-файлы подключают сервисы под
+`${POSTGRES_USER}` — владельцем схемы. `FORCE ROW LEVEL SECURITY` **не применяется к
+суперпользователю**, поэтому ни одна из политик, созданных семью миграциями `AddOrganizationId` и
+семью `RefreshTenantPoliciesForPlatformStaff`, сейчас ничего не фильтрует.
+
+Сегодня граница держится на слоях 1 и 2 — middleware и EF-фильтры, — и ревью 40.14 нашло их
+целыми. Но свойство «переживает забытый фильтр», ради которого RLS и вводилась, **пока не
+существует**. Пока не выполнен переход на роль `sellevate_app`
+(`docs/TENANCY/sql/create_sellevate_app_role.sql`), четвёртый слой приёмки честно считать
+непройденным.
+
+Проверить, что политики хотя бы созданы (только чтение, под ролью-владельцем):
+
+```sql
+SELECT tablename, policyname, qual, with_check FROM pg_policies
+WHERE policyname LIKE '%_tenant_isolation' ORDER BY tablename;
+-- в qual должен быть app.platform_mode, в with_check — НЕ должен
+```
+
+Проверить, под кем реально ходит сервис:
+
+```sql
+SELECT current_user, usesuper, userepl FROM pg_user WHERE usename = current_user;
+-- usesuper = true → RLS не фильтрует ничего
+```
+
+### Что ревью безопасности 40.14 признало чистым
+
+Прогон `security-reviewer` (opus) по границе тенанта: **0 критичных**, ни одного пути, отдающего
+данные одной организации пользователю другой. Восемь из двенадцати областей закрыты полностью:
+
+- **25 из 25** сущностей `ITenantScoped` имеют И EF query filter, И RLS-политику — соответствие
+  один-к-одному, без сирот в обе стороны; каждое исключение названо и обосновано в doc-комментарии
+  своей миграции;
+- `IgnoreQueryFilters()` в продакшн-коде — ровно три места, все внутри явного системного режима,
+  все проецируют **только** колонку `OrganizationId` и не читают содержимое строк;
+- сырого SQL в бэкенде нет вообще (ноль `FromSqlRaw`/`ExecuteSqlRaw`); `AddDbContextPool` нет нигде;
+- гейтвей срезает identity-заголовки безусловно и переставляет их из валидированного токена;
+  порядок middleware (`UseAuthentication` → `UseAuthorization` → `UseSellevateTenantContext`)
+  одинаков и корректен во всех девяти сервисах;
+- четыре политики авторизации байт-в-байт одинаковы в шести сервисах, где объявлены — дрейфа нет;
+- платформенный режим открывается **только** клеймом валидированного принципала; ветка
+  `app.platform_mode` попадает в `USING` и не попадает в `WITH CHECK`;
+- обе Mongo-коллекции — настоящие чокпойнты: хендл коллекции создаётся ровно в одном классе, что
+  проверяется тестом по исходникам;
+- секретов в репозитории нет: каждый `Jwt:Key` — литерал `INJECTED_FROM_ENV`, `.env` в gitignore.
+
+Найденное и **исправленное** в этом же блоке — пять правок, коммит `af7ff0e`. Найденное и
+**отложенное владельцу** (включая `POST /demo/token`, который в текущей конфигурации доступен из
+интернета) — в `docs/DONT_FORGET.md`.
+
+**Не прогонялся:** `dotnet list package --vulnerable --include-transitive` — требует restore и сети.
+К границе тенанта отношения не имеет, но в приёмке это честный пробел.

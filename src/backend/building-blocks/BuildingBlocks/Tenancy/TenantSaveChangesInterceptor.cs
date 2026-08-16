@@ -32,8 +32,14 @@ public sealed class TenantSaveChangesInterceptor(ITenantContext tenantContext) :
     /// </summary>
     private void Enforce(DbContext? context)
     {
-        if (context is null || tenantContext.IsSystem)
+        if (context is null)
         {
+            return;
+        }
+
+        if (tenantContext.IsSystem)
+        {
+            EnforceSystemMode(context);
             return;
         }
 
@@ -68,6 +74,41 @@ public sealed class TenantSaveChangesInterceptor(ITenantContext tenantContext) :
                     }
 
                     break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// System mode has no ambient organization to stamp, so it cannot run the checks above — that is
+    /// the whole reason it exists. What it must still refuse is the one thing an unset tenant can
+    /// silently produce: a brand-new tenant-scoped row carrying the default <c>Guid.Empty</c>, which
+    /// belongs to no organization, is visible to none of them, and is unattributable forever after.
+    ///
+    /// <para>
+    /// Added by the 40.14 audit as a backstop, not because any current path hits it: every
+    /// system-mode writer today touches platform-global tables only (the outbox relay writes
+    /// <c>OutboxMessage</c>, the replica consumers write user/organization projections, the two
+    /// identity cleanups delete non-tenant rows). The backstop exists because the cheapest way to
+    /// silence a consumer that throws "carries no organization" is to flip its
+    /// <c>RequiresOrganization</c> to <c>false</c> — which fixes the exception by moving the handler
+    /// into system mode and turning a loud failure into zero-organization data. This makes that
+    /// shortcut fail loudly too.
+    /// </para>
+    ///
+    /// <para>
+    /// A system-mode writer with a genuine organization in hand is unaffected: it sets
+    /// <c>OrganizationId</c> on the entity explicitly, which is exactly the auditable act being
+    /// asked for.
+    /// </para>
+    /// </summary>
+    private static void EnforceSystemMode(DbContext context)
+    {
+        foreach (var entry in context.ChangeTracker.Entries<ITenantScoped>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.OrganizationId == Guid.Empty)
+            {
+                throw new InvalidOperationException(
+                    $"System mode may not create {entry.Metadata.Name} without an explicit organization.");
             }
         }
     }

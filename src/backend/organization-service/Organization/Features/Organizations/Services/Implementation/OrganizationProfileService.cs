@@ -37,6 +37,14 @@ internal sealed class OrganizationProfileService(OrganizationDbContext databaseC
         var currentOrganizationId = RequireOrganizationId();
         var now = DateTime.UtcNow;
 
+        // Same reason as GetProfileAsync above, and the consequence here is worse than a blank read.
+        // EF opens an implicit transaction for SaveChangesAsync, but this lookup runs *before* it —
+        // so under a NOBYPASSRLS role it would run with app.organization_id unset, return nothing,
+        // and send the method down the "create new" branch every time. The INSERT then collides with
+        // the row that was there all along, and an organization can never edit its profile twice.
+        // Wrapping the read and the write in one transaction also makes the upsert actually atomic.
+        await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
+
         var profile = await databaseContext.OrganizationProfiles
             .FirstOrDefaultAsync(candidate => candidate.OrganizationId == currentOrganizationId, cancellationToken);
 
@@ -60,6 +68,7 @@ internal sealed class OrganizationProfileService(OrganizationDbContext databaseC
         profile.UpdatedAt = now;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return ToDto(profile);
     }

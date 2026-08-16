@@ -16,7 +16,8 @@ namespace Sellevate.Social.Features.Chat.Services.Implementation;
 /// is created here and nowhere else — <c>MongoDbContext</c> no longer exposes it, so reaching around
 /// this class means writing <c>GetCollection&lt;ChatConversation&gt;</c> by hand, which
 /// <c>SocialTenancyModelTests</c> turns into a failing build. Second, every filter starts from
-/// <see cref="TenantFilter"/>, and <see cref="RequireOrganizationId"/> throws when the tenant is
+/// <see cref="TenantReadFilter"/> or <see cref="TenantWriteFilter"/> (reads widen for platform
+/// staff, writes widen nowhere), and <see cref="RequireOrganizationId"/> throws when the tenant is
 /// unset, so there is no path through this class that returns another organization's conversations
 /// and none that returns all of them.
 /// </para>
@@ -59,7 +60,7 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         CancellationToken cancellationToken = default)
     {
         var filter = Builders<ChatConversation>.Filter.And(
-            TenantFilter(),
+            TenantReadFilter(),
             Builders<ChatConversation>.Filter.Eq(
                 conversation => conversation.ParticipantIds, sortedParticipantIds.ToList()));
 
@@ -71,7 +72,7 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         Guid participantUserId,
         CancellationToken cancellationToken = default)
         => await _conversations
-            .Find(ConversationOfParticipantFilter(conversationId, participantUserId))
+            .Find(ConversationOfParticipantForReadFilter(conversationId, participantUserId))
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<List<ChatConversation>> ListForParticipantAsync(
@@ -79,7 +80,7 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         CancellationToken cancellationToken = default)
     {
         var filter = Builders<ChatConversation>.Filter.And(
-            TenantFilter(),
+            TenantReadFilter(),
             Builders<ChatConversation>.Filter.AnyEq(
                 conversation => conversation.ParticipantIds, participantUserId));
         var sort = Builders<ChatConversation>.Sort.Descending(conversation => conversation.LastMessageAt);
@@ -106,7 +107,7 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         ChatMessage message,
         CancellationToken cancellationToken = default)
         => await _conversations.UpdateOneAsync(
-            ConversationOfParticipantFilter(conversationId, senderId),
+            ConversationOfParticipantForWriteFilter(conversationId, senderId),
             Builders<ChatConversation>.Update
                 .Push(conversation => conversation.Messages, message)
                 .Set(conversation => conversation.LastMessageAt, message.SentAt),
@@ -118,28 +119,42 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
         DateTime readAt,
         CancellationToken cancellationToken = default)
         => await _conversations.UpdateOneAsync(
-            ConversationOfParticipantFilter(conversationId, participantUserId),
+            ConversationOfParticipantForWriteFilter(conversationId, participantUserId),
             // Dotted field path: sets only this participant's entry, leaving the other's watermark
             // untouched.
             Builders<ChatConversation>.Update.Set($"lastReadAt.{participantUserId}", readAt),
             cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Organization AND membership in one filter. Keeping the membership check here rather than in
-    /// the caller is the point: a "load the conversation, then check the participant" shape works
-    /// until somebody adds a sixth call site and forgets the second half.
+    /// Organization AND membership in one filter, for a read. Platform staff may reach across
+    /// organizations here. Keeping the membership check in the filter rather than in the caller is
+    /// the point: a "load the conversation, then check the participant" shape works until somebody
+    /// adds a sixth call site and forgets the second half.
     /// </summary>
-    private FilterDefinition<ChatConversation> ConversationOfParticipantFilter(
+    private FilterDefinition<ChatConversation> ConversationOfParticipantForReadFilter(
         string conversationId, Guid participantUserId)
+        => ConversationOfParticipant(TenantReadFilter(), conversationId, participantUserId);
+
+    /// <summary>
+    /// The same, for an update. Never reaches across organizations — see
+    /// <see cref="TenantWriteFilter"/>.
+    /// </summary>
+    private FilterDefinition<ChatConversation> ConversationOfParticipantForWriteFilter(
+        string conversationId, Guid participantUserId)
+        => ConversationOfParticipant(TenantWriteFilter(), conversationId, participantUserId);
+
+    private static FilterDefinition<ChatConversation> ConversationOfParticipant(
+        FilterDefinition<ChatConversation> tenantFilter, string conversationId, Guid participantUserId)
         => Builders<ChatConversation>.Filter.And(
-            TenantFilter(),
+            tenantFilter,
             Builders<ChatConversation>.Filter.Eq(conversation => conversation.Id, conversationId),
             Builders<ChatConversation>.Filter.AnyEq(
                 conversation => conversation.ParticipantIds, participantUserId));
 
     /// <summary>
-    /// The one filter every read and write in this class starts from. A conversation is tenant data,
-    /// not content: there is no "global conversation", so this is plain equality with no null branch.
+    /// The filter every <b>read</b> in this class starts from — the Mongo counterpart of a policy's
+    /// <c>USING</c> clause. A conversation is tenant data, not content: there is no "global
+    /// conversation", so this is plain equality with no null branch.
     ///
     /// <para>
     /// Platform-wide mode (validated Sellevate staff, 2026-08-16) drops the organization instead —
@@ -149,11 +164,31 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
     /// <see cref="RequireOrganizationId"/> and throws.
     /// </para>
     /// </summary>
-    private FilterDefinition<ChatConversation> TenantFilter()
+    private FilterDefinition<ChatConversation> TenantReadFilter()
         => _tenantContext.IsPlatformWide
             ? Builders<ChatConversation>.Filter.Empty
             : Builders<ChatConversation>.Filter.Eq(
                 conversation => conversation.OrganizationId, RequireOrganizationId());
+
+    /// <summary>
+    /// The filter every <b>write</b> in this class starts from — the counterpart of a policy's
+    /// <c>WITH CHECK</c> clause, and deliberately not the same method as
+    /// <see cref="TenantReadFilter"/>.
+    ///
+    /// <para>
+    /// <b>Reads widen for platform staff; writes never widen anywhere</b> (docs/TENANCY/TENANCY.md
+    /// §1.6a, docs/DECISIONS.md 2026-08-16). Postgres gets that asymmetry for free, because
+    /// <c>TenantRlsMigrationBuilderExtensions</c> puts the <c>app.platform_mode</c> branch in
+    /// <c>USING</c> and pointedly not in <c>WITH CHECK</c>. Mongo has no policies, so until the
+    /// 40.14 audit both halves shared one method and a validated administrator could append a
+    /// message to, or move the read watermark of, a conversation in an organization they never
+    /// named. Splitting the two puts the asymmetry into code instead of into a comment, and stops
+    /// the next method added to this class from inheriting the wrong half silently.
+    /// </para>
+    /// </summary>
+    private FilterDefinition<ChatConversation> TenantWriteFilter()
+        => Builders<ChatConversation>.Filter.Eq(
+            conversation => conversation.OrganizationId, RequireOrganizationId());
 
     /// <summary>
     /// Fails closed and loudly. Returning every conversation for an unset tenant is the exact

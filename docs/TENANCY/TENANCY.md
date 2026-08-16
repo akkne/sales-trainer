@@ -172,6 +172,17 @@ Two legitimate modes, and they must be distinguishable in code:
   the default when the context happens to be empty. **An unset tenant is an exception, never a
   license.**
 
+**Done in 40.14 — the audit and its registry: [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md).** Every
+hosted service, Hangfire job and Kafka consumer in `src/backend` is listed there with its mode and
+the line that declares it, including the ones that touch no tenant data at all (listed so the
+registry is provably complete rather than merely long). The audit closed the last two workers whose
+mode was implicit: `OutboxRelayBackgroundService`, which had cross-tenant reach as a side effect of
+an empty context and now says `EnterSystemMode()` out loud, and ai-service's
+`GamificationDialogWeightsConsumer`, which demanded a tenant for a platform-global setting and so
+dead-lettered every change saved by Sellevate staff.
+
+Table above kept as written for the design record; the registry is the current state.
+
 ### 1.6a Три режима тенант-контекста (правка владельца, 2026-08-16)
 
 `ITenantContext` различает **три** режима, и они намеренно не сведены в один флаг:

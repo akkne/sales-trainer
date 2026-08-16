@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.BuildingBlocks.Outbox;
 
@@ -10,6 +11,18 @@ namespace Sellevate.BuildingBlocks.Outbox;
 /// <see cref="IOutboxStore"/> (over its EF <c>DbContext</c>) plus the shared
 /// <see cref="IOutboxEventForwarder"/>, and dispatches pending outbox messages to Kafka.
 /// Register one of these per producing service.
+///
+/// <para>
+/// <b>Tenancy: system mode, declared.</b> This is the one component the tenancy design names as a
+/// legitimate reader of every organization's rows (docs/TENANCY/TENANCY.md §1.6/§1.7) — which is
+/// precisely why the tenant travels inside <see cref="OutboxMessage.Payload"/> rather than being
+/// re-derived here at publish time. The relay therefore calls
+/// <see cref="TenantContext.EnterSystemMode"/> on every tick's scope. It reads the same rows it
+/// read before that call existed; what changes is that the mode is now stated instead of inferred
+/// from a <see cref="TenantContext"/> that merely happened to be blank. An unset tenant is an
+/// exception, never a licence — so the one place the licence is real has to say so out loud, and a
+/// service that ever gives this relay a tenant-scoped scope by mistake now fails loudly.
+/// </para>
 /// </summary>
 public sealed class OutboxRelayBackgroundService : BackgroundService
 {
@@ -36,6 +49,12 @@ public sealed class OutboxRelayBackgroundService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
+
+                // Before the DbContext is resolved, not after: the connection interceptor decides
+                // whether to emit SET LOCAL app.organization_id the first time a transaction opens
+                // on that context, so the mode has to be settled while the scope is still empty.
+                scope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
+
                 var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
                 var forwarder = scope.ServiceProvider.GetRequiredService<IOutboxEventForwarder>();
                 var processor = new OutboxRelayProcessor(store, forwarder, _logger);
