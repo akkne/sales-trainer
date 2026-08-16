@@ -1588,3 +1588,108 @@ Same reasoning as 40.10, and the same split: the EF migration adds columns and R
 a different reason — it is the user-visible step. Between the deploy and the script, pre-40.11
 sessions match no organization's filter and a user sees an empty history; that window must be
 closed by a human who is watching, not by a startup path that might race replicas.
+
+---
+
+## Phase 40.14 — the background-job audit and the isolation acceptance (2026-08-16)
+
+### The audit's own rule: a mode that is inferred is a mode that is absent
+
+40.14 walked every `BackgroundService`, `IHostedService`, Hangfire job and Kafka consumer in
+`src/backend` and asked one question of each: *where does this say which side of the tenant boundary
+it is on?* Two could not answer, and both were "working" — which is the point. A background worker
+has no HTTP request, so nothing populates `ITenantContext` for it; left alone it starts every scope
+with an empty context, and an empty context is not "no data", it is "everything the database role
+can see". Under the owning superuser that is every customer's rows.
+
+`OutboxRelayBackgroundService` had exactly that shape, and it is the one component the design
+genuinely licenses to read across tenants. It opened a scope, left the context blank, and got its
+cross-tenant reach as a side effect of emptiness — indistinguishable, reading the code, from a job
+that had simply forgotten. The fix changes no behaviour at all: `EnterSystemMode()` on each tick's
+scope. **The value is entirely in the declaration.** A licence that is inferred cannot be reviewed,
+cannot be grepped, and cannot be distinguished from a bug; and a scope handed to the relay with a
+tenant already on it now throws instead of quietly narrowing the relay to one customer.
+
+The corollary is the registry itself ([docs/TENANCY/BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md)),
+including its third table — the workers that touch no tenant data at all. Listing only the
+interesting jobs produces a document whose completeness cannot be checked: a reader has no way to
+distinguish an audited "needs no tenant" from a worker somebody missed. The connection warmer, the
+topic provisioner and the Prometheus presence gauge are in the registry with their reasons for
+exactly that reason.
+
+### `GamificationSettings` is platform-global, and that is a product bug the agent did not invent a fix for
+
+Classifying `GamificationDialogWeightsConsumer` turned up a real defect. It inherited
+`RequiresOrganization = true` although its payload mirrors `GamificationSettings` — a single row
+with no `OrganizationId` — into a **process-wide singleton** in ai-service. That was wrong in both
+directions simultaneously: weights saved by Sellevate staff carry no `org_id` claim, so the envelope
+had no organization and every message was rejected, retried and dead-lettered (the setting silently
+never propagated); weights saved by one customer's administrator were accepted and then applied to
+every customer's dialog scoring anyway.
+
+**Decision: declare the mode, do not redesign the feature.** `RequiresOrganization => false` is the
+honest description of what the code does — platform-global configuration, no database access — and
+it fixes the first symptom outright. Making the settings per-organization is a schema migration plus
+a product call about who owns scoring weights, and inventing that at 3 a.m. in an audit block would
+be the agent choosing a product direction. It is written down for the owner instead
+(`docs/DONT_FORGET.md`).
+
+### Reads widen for platform staff; writes widen nowhere — now expressed in code, not in prose
+
+The 2026-08-16 platform-mode work stated the asymmetry plainly: `USING` gets the `app.platform_mode`
+branch, `WITH CHECK` does not. Postgres therefore enforces it for free. **Mongo has no policies**, and
+both chokepoint repositories had a single `TenantFilter()` that returned `Filter.Empty` under
+platform mode and then fed `Find`, `UpdateOne` and `DeleteOne` alike — so a validated administrator
+could mutate a document in an organization they never named.
+
+Splitting it into `TenantReadFilter()` and `TenantWriteFilter()` was chosen over adding a boolean
+parameter or a comment. The boundary is a security property, so it should be visible at the call
+site: `SessionOfUserForWriteFilter` reads as a different thing from `SessionOfUserForReadFilter`,
+and the next method added to either class has to pick one. A comment saying "remember not to widen
+writes" is a rule the compiler cannot hold.
+
+### The system-mode write guard: refuse `Guid.Empty`, allow an explicit organization
+
+`TenantSaveChangesInterceptor` returned immediately in system mode, so a tenant-scoped entity could
+be created carrying the default `Guid.Empty` — a row owned by no organization, visible to none, and
+unattributable forever. No path reaches it today.
+
+It was added anyway because of the shape of the `dialog.evaluated` bug found in the same review: a
+consumer throwing "carries no organization" has one very cheap wrong fix, `RequiresOrganization =>
+false`, which resolves the exception by moving the handler into system mode. That turns a loud,
+correct failure into silent zero-organization data. The guard makes the shortcut fail too. It
+deliberately does **not** require an ambient organization in system mode — that would defeat the
+mode's reason for existing — only that a *created* tenant-scoped row name its organization
+explicitly, which is precisely the auditable act being asked for.
+
+### What the security review found and what was deliberately left alone
+
+The `security-reviewer` pass returned zero critical findings; five were fixed in commit `af7ff0e`.
+Three were left, and the reasoning is the point:
+
+- **Cross-checking `X-Organization-Id` against the JWT `org_id` claim** (defence in depth). The
+  gateway already strips and re-adds the header from the validated token, so a client cannot forge
+  it through the front door; the finding is about reaching a service port directly. The fix is a few
+  lines, but it changes behaviour at the authentication boundary for callers the agent cannot
+  exercise — platform staff hold no `org_id` claim, and Rule №3 forbids writing the tests that would
+  prove the change safe. Recorded rather than merged.
+- **ai-service has RLS-protected tables and no `TenantTransactionScope`.** Four services ship that
+  helper so bare reads get a transaction for `SET LOCAL` to scope to; ai-service ships neither, so
+  the day it connects as `sellevate_app` an organization's own dialog modes go invisible. Real, and
+  fail-closed. It is a multi-site change to 40.11's service with no test coverage available, and it
+  cannot bite before the role rollout — which is a human step that is already gated. Recorded as a
+  prerequisite of that rollout.
+- **`POST /demo/token` mints a valid signed JWT and every compose file sets
+  `ASPNETCORE_ENVIRONMENT=Development`.** Serious, and outside the tenant boundary: the demo token
+  carries no `role`, no `org_id` and no `org_role`, so `TenantContext` stays unset and every filter
+  yields zero rows — fail-closed exactly as designed. The fix is a deployment-configuration decision
+  whose blast radius (error pages, logging, CORS) the agent cannot validate without running the
+  stack. Recorded as the top item for the owner.
+
+### The end-to-end two-organization acceptance test was not written
+
+The roadmap's own wording for 40.14 asked for it. Rule №3 (`docs/DONT_FORGET.md`, introduced by the
+owner on 2026-08-16) forbids writing new tests of any kind. The rule wins: the block's item is marked
+`[~]` rather than quietly satisfied by something weaker, and the gap is listed under "Тесты,
+которых нет". Documentation is not tests, so the acceptance *checklist* in
+`docs/TESTING/TENANCY.md` was written and is the deliverable that shipped in its place.
