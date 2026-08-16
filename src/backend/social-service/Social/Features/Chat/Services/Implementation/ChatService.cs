@@ -1,17 +1,20 @@
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
-using MongoDB.Driver;
 using Sellevate.Social.Eventing;
 using Sellevate.Social.Features.Chat.Models;
 using Sellevate.Social.Features.Chat.Services.Abstract;
 using Sellevate.Social.Features.Friends.Models;
 using Sellevate.Social.Infrastructure.Data;
-using Sellevate.Social.Infrastructure.Mongo;
 
 namespace Sellevate.Social.Features.Chat.Services.Implementation;
 
+/// <summary>
+/// Phase 40.13 moved every Mongo call in this class behind
+/// <see cref="IChatConversationRepository"/>. The organization is no longer something this service
+/// reasons about: it cannot construct an unscoped query, because it no longer holds a collection.
+/// </summary>
 internal sealed class ChatService(
-    MongoDbContext mongoContext,
+    IChatConversationRepository conversations,
     SocialDbContext databaseContext,
     ISocialEventPublisher eventPublisher) : IChatService
 {
@@ -24,17 +27,20 @@ internal sealed class ChatService(
         Guid friendUserId,
         CancellationToken cancellationToken = default)
     {
+        // The only method here that reads a table with a row-level-security policy (Friendships).
+        // Without the transaction the SET LOCAL never applies, the friendship check returns zero
+        // rows and every attempt to open a chat fails with "you can only chat with accepted
+        // friends" — the fail-closed direction, but still a broken feature. The other methods read
+        // UserReplicas only, which carries no policy (docs/TENANCY/TENANCY.md §4.2), and their
+        // tenant boundary is the Mongo repository rather than Postgres.
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         await ValidateFriendshipExistsAsync(userId, friendUserId, cancellationToken);
 
         var sortedParticipantIds = BuildSortedParticipantIds(userId, friendUserId);
 
-        var participantsFilter = Builders<ChatConversation>.Filter.Eq(
-            conversation => conversation.ParticipantIds,
-            sortedParticipantIds);
-
-        var existingConversation = await mongoContext.ChatConversations
-            .Find(participantsFilter)
-            .FirstOrDefaultAsync(cancellationToken);
+        var existingConversation = await conversations.FindByParticipantsAsync(
+            sortedParticipantIds, cancellationToken);
 
         if (existingConversation is not null)
         {
@@ -48,7 +54,7 @@ internal sealed class ChatService(
             CreatedAt = DateTime.UtcNow
         };
 
-        await mongoContext.ChatConversations.InsertOneAsync(newConversation, cancellationToken: cancellationToken);
+        await conversations.InsertAsync(newConversation, cancellationToken);
 
         var newFriendDisplayName = await GetUserDisplayNameAsync(friendUserId, cancellationToken);
         return MapToConversationSummary(newConversation, friendUserId, newFriendDisplayName);
@@ -60,13 +66,12 @@ internal sealed class ChatService(
         string content,
         CancellationToken cancellationToken = default)
     {
-        var conversation = await mongoContext.ChatConversations
-            .Find(conversation => conversation.Id == conversationId)
-            .FirstOrDefaultAsync(cancellationToken)
+        // The repository's filter already carries both the organization and "senderId is a
+        // participant", so a conversation in another organization and a conversation the sender is
+        // not in are the same not-found here — deliberately, since telling them apart would confirm
+        // that a given conversation id exists somewhere else.
+        var conversation = await conversations.FindForParticipantAsync(conversationId, senderId, cancellationToken)
             ?? throw new KeyNotFoundException("Conversation not found.");
-
-        if (!conversation.ParticipantIds.Contains(senderId))
-            throw new InvalidOperationException("You are not a participant in this conversation.");
 
         var chatMessage = new ChatMessage
         {
@@ -76,14 +81,7 @@ internal sealed class ChatService(
             SentAt = DateTime.UtcNow
         };
 
-        var updateDefinition = Builders<ChatConversation>.Update
-            .Push(conversation => conversation.Messages, chatMessage)
-            .Set(conversation => conversation.LastMessageAt, chatMessage.SentAt);
-
-        await mongoContext.ChatConversations.UpdateOneAsync(
-            conversation => conversation.Id == conversationId,
-            updateDefinition,
-            cancellationToken: cancellationToken);
+        await conversations.AppendMessageAsync(conversationId, senderId, chatMessage, cancellationToken);
 
         await PublishChatMessageSentAsync(conversation, senderId, content, cancellationToken);
 
@@ -105,13 +103,8 @@ internal sealed class ChatService(
         // TODO SO3: restructure ChatConversation to a separate messages collection to avoid loading the full document here.
         limit = Math.Clamp(limit, 1, 100);
 
-        var conversation = await mongoContext.ChatConversations
-            .Find(conversation => conversation.Id == conversationId)
-            .FirstOrDefaultAsync(cancellationToken)
+        var conversation = await conversations.FindForParticipantAsync(conversationId, userId, cancellationToken)
             ?? throw new KeyNotFoundException("Conversation not found.");
-
-        if (!conversation.ParticipantIds.Contains(userId))
-            throw new InvalidOperationException("You are not a participant in this conversation.");
 
         var messages = conversation.Messages;
 
@@ -138,10 +131,7 @@ internal sealed class ChatService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var userConversations = await mongoContext.ChatConversations
-            .Find(conversation => conversation.ParticipantIds.Contains(userId))
-            .SortByDescending(conversation => conversation.LastMessageAt)
-            .ToListAsync(cancellationToken);
+        var userConversations = await conversations.ListForParticipantAsync(userId, cancellationToken);
 
         if (userConversations.Count == 0)
             return [];
@@ -171,25 +161,12 @@ internal sealed class ChatService(
         string conversationId,
         CancellationToken cancellationToken = default)
     {
-        var conversation = await mongoContext.ChatConversations
-            .Find(conversation => conversation.Id == conversationId)
-            .FirstOrDefaultAsync(cancellationToken)
+        var conversation = await conversations.FindForParticipantAsync(conversationId, userId, cancellationToken)
             ?? throw new KeyNotFoundException("Conversation not found.");
-
-        if (!conversation.ParticipantIds.Contains(userId))
-            throw new InvalidOperationException("You are not a participant in this conversation.");
 
         var readAt = DateTime.UtcNow;
 
-        // Set only this participant's entry in the lastReadAt map (dotted field path), leaving
-        // the other participant's watermark untouched.
-        var updateDefinition = Builders<ChatConversation>.Update
-            .Set($"lastReadAt.{userId}", readAt);
-
-        await mongoContext.ChatConversations.UpdateOneAsync(
-            conversation => conversation.Id == conversationId,
-            updateDefinition,
-            cancellationToken: cancellationToken);
+        await conversations.SetReadWatermarkAsync(conversationId, userId, readAt, cancellationToken);
 
         await eventPublisher.PublishChatMessageReadAsync(
             new ChatMessageReadEvent(userId, ParseConversationId(conversation.Id), readAt),

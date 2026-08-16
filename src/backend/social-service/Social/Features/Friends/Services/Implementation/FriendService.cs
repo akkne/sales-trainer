@@ -9,6 +9,27 @@ using Sellevate.Social.Infrastructure.Data;
 
 namespace Sellevate.Social.Features.Friends.Services.Implementation;
 
+/// <summary>
+/// Phase 40.13. Friendships are tenant data: the row carries the organization, the query filter in
+/// <see cref="SocialDbContext"/> hides other organizations' rows, and the row-level-security policy
+/// enforces it even when the filter is bypassed. Two people in different organizations therefore
+/// cannot become friends — the row one of them creates is invisible to the other, so it can never be
+/// accepted — and because <c>ChatService</c> refuses to open a conversation without an accepted
+/// friendship, a chat cannot cross the boundary either.
+///
+/// <para>
+/// Every method opens a <see cref="TenantTransactionScope"/> as its first statement. Without one,
+/// <c>SET LOCAL app.organization_id</c> has nothing to apply to and RLS returns zero rows — which on
+/// this screen is indistinguishable from having no friends yet.
+/// </para>
+///
+/// <para>
+/// <c>UserReplicas</c> is deliberately not tenant-scoped (docs/TENANCY/TENANCY.md §4.2, and the same
+/// call every other service made), so <see cref="SearchUsersAsync"/> still searches the platform
+/// directory. See docs/DECISIONS.md, "social-service's user directory stays platform-global in
+/// 40.13", for what that does and does not expose, and for the membership projection that closes it.
+/// </para>
+/// </summary>
 internal sealed class FriendService(
     SocialDbContext databaseContext,
     ISocialEventPublisher eventPublisher) : IFriendService
@@ -26,6 +47,8 @@ internal sealed class FriendService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var acceptedFriendships = await databaseContext.Friendships
             .Where(friendship =>
                 friendship.Status == FriendshipStatus.Accepted &&
@@ -61,6 +84,8 @@ internal sealed class FriendService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var pendingFriendships = await databaseContext.Friendships
             .Where(friendship =>
                 friendship.Status == FriendshipStatus.Pending &&
@@ -99,6 +124,8 @@ internal sealed class FriendService(
         Guid addresseeId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         if (requesterId == addresseeId)
             throw new InvalidOperationException("Cannot send a friend request to yourself.");
 
@@ -130,6 +157,7 @@ internal sealed class FriendService(
                 existingFriendship.CreatedAt = DateTime.UtcNow;
                 existingFriendship.AcceptedAt = null;
                 await databaseContext.SaveChangesAsync(cancellationToken);
+                await scope.CommitAsync(cancellationToken);
 
                 await PublishFriendRequestReceivedAsync(existingFriendship, cancellationToken);
 
@@ -159,6 +187,8 @@ internal sealed class FriendService(
                 "A friend request already exists between you and this user.", ex);
         }
 
+        await scope.CommitAsync(cancellationToken);
+
         await PublishFriendRequestReceivedAsync(friendship, cancellationToken);
 
         return friendship;
@@ -169,6 +199,8 @@ internal sealed class FriendService(
         Guid friendshipId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
             ?? throw new KeyNotFoundException("Friend request not found.");
@@ -182,6 +214,7 @@ internal sealed class FriendService(
         friendship.Status = FriendshipStatus.Accepted;
         friendship.AcceptedAt = DateTime.UtcNow;
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         await PublishFriendRequestAcceptedAsync(friendship, cancellationToken);
     }
@@ -191,6 +224,8 @@ internal sealed class FriendService(
         Guid friendshipId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
             ?? throw new KeyNotFoundException("Friend request not found.");
@@ -203,6 +238,7 @@ internal sealed class FriendService(
 
         friendship.Status = FriendshipStatus.Declined;
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
     }
 
     public async Task CancelFriendRequestAsync(
@@ -210,6 +246,8 @@ internal sealed class FriendService(
         Guid friendshipId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship => friendship.Id == friendshipId, cancellationToken)
             ?? throw new KeyNotFoundException("Friend request not found.");
@@ -225,6 +263,7 @@ internal sealed class FriendService(
         // record so the requester can later revive it). Either party may start fresh afterwards.
         databaseContext.Friendships.Remove(friendship);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
     }
 
     public async Task RemoveFriendAsync(
@@ -232,6 +271,8 @@ internal sealed class FriendService(
         Guid friendUserId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var friendship = await databaseContext.Friendships
             .FirstOrDefaultAsync(friendship =>
                 friendship.Status == FriendshipStatus.Accepted &&
@@ -242,6 +283,7 @@ internal sealed class FriendService(
 
         databaseContext.Friendships.Remove(friendship);
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
     }
 
     public async Task<List<UserSearchResultDto>> SearchUsersAsync(
@@ -249,6 +291,8 @@ internal sealed class FriendService(
         string query,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
             return [];
 
@@ -299,6 +343,8 @@ internal sealed class FriendService(
         Guid targetUserId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var targetReplica = await databaseContext.UserReplicas
             .FirstOrDefaultAsync(replica => replica.UserId == targetUserId, cancellationToken)
             ?? throw new KeyNotFoundException("User not found.");
@@ -330,6 +376,8 @@ internal sealed class FriendService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var friendUserIds = await GetAcceptedFriendUserIdsAsync(userId, cancellationToken);
         var allParticipantIds = friendUserIds.Append(userId).Distinct().ToList();
 

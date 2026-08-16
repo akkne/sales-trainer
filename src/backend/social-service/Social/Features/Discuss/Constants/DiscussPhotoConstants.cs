@@ -7,6 +7,13 @@ internal static class DiscussPhotoConstants
 
     public const long MaximumUploadRequestSizeBytes = MaximumFileSizeBytes * MaximumPhotosPerOwner + 1024 * 1024;
 
+    /// <summary>
+    /// Phase 40.13. Leading segment of every object key written from now on, followed by the
+    /// organization id — see <c>DiscussService.ResolveObjectKeyPrefix</c> for why the bucket carries
+    /// the tenant even though the tenant boundary is the database row.
+    /// </summary>
+    public const string OrganizationObjectKeyPrefix = "org";
+
     public const string ThreadObjectKeyPrefix = "discuss/threads";
     public const string ReplyObjectKeyPrefix = "discuss/replies";
 

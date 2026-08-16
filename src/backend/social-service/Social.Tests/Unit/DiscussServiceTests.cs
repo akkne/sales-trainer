@@ -6,6 +6,7 @@ using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Implementation;
 using Sellevate.Social.Infrastructure.Data;
 using Sellevate.Social.Infrastructure.Storage.Abstract;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Tests.Helpers;
 
 namespace Sellevate.Social.Tests.Unit;
@@ -16,6 +17,7 @@ public sealed class DiscussServiceTests
     private SocialDbContext _databaseContext = null!;
     private IObjectStorage _objectStorage = null!;
     private RecordingSocialEventPublisher _eventPublisher = null!;
+    private TenantContext _tenantContext = null!;
     private DiscussService _discussService = null!;
 
     private static readonly Guid AuthorId = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -27,8 +29,10 @@ public sealed class DiscussServiceTests
         _databaseContext = TestSocialDatabaseFactory.CreateInMemory();
         _objectStorage = Substitute.For<IObjectStorage>();
         _eventPublisher = new RecordingSocialEventPublisher();
+        _tenantContext = new TenantContext();
+        _tenantContext.SetOrganization(TestSocialDatabaseFactory.DefaultOrganizationId);
         _discussService = new DiscussService(
-            _databaseContext, _objectStorage, _eventPublisher, NullLogger<DiscussService>.Instance);
+            _databaseContext, _objectStorage, _eventPublisher, _tenantContext, NullLogger<DiscussService>.Instance);
 
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, AuthorId, "Author");
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, ViewerId, "Viewer");

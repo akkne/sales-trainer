@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
 
@@ -10,6 +11,11 @@ namespace Sellevate.Social.Features.Discuss;
 // social-service) — Sellevate-staff-only. RequireSuperAdmin.
 [ApiController]
 [Route("admin/discuss")]
+// Phase 40.13. Staff-only, and now also organization-scoped: moderation acts on the organization
+// whose token the staff member is holding, which after 40.9 means impersonation is the documented
+// way to moderate another customer's forum. A cross-tenant moderation view is exactly the leak this
+// block closes, and the org-scoped admin surface is 40.20.
+[TenantScoped]
 [Authorize(Policy = "RequireSuperAdmin")]
 public sealed class AdminDiscussController : ControllerBase
 {

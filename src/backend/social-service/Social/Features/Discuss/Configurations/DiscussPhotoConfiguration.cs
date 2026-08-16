@@ -14,6 +14,7 @@ public sealed class DiscussPhotoConfiguration : IEntityTypeConfiguration<Discuss
         builder.Property(photo => photo.ObjectKey).IsRequired().HasMaxLength(512);
         builder.Property(photo => photo.ContentType).IsRequired().HasMaxLength(100);
 
-        builder.HasIndex(photo => new { photo.OwnerType, photo.OwnerId, photo.OrderIndex });
+        builder.HasIndex(photo =>
+            new { photo.OrganizationId, photo.OwnerType, photo.OwnerId, photo.OrderIndex });
     }
 }

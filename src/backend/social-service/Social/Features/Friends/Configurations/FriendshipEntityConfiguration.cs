@@ -18,12 +18,18 @@ public sealed class FriendshipEntityConfiguration : IEntityTypeConfiguration<Fri
         builder.Property(friendship => friendship.CreatedAt)
             .IsRequired();
 
-        builder.HasIndex(friendship => new { friendship.RequesterId, friendship.AddresseeId })
+        builder.HasIndex(friendship =>
+            new { friendship.OrganizationId, friendship.RequesterId, friendship.AddresseeId })
             .IsUnique();
 
         // Canonical-pair index: ensures (A,B) and (B,A) cannot coexist even under concurrent inserts.
         // Stored as computed expression LEAST(id,id), GREATEST(id,id) at the DB level.
-        builder.HasIndex(friendship => new { friendship.CanonicalLowId, friendship.CanonicalHighId })
+        //
+        // Phase 40.13 put the organization first. Not cosmetic: memberships (40.6) let one person
+        // belong to two customers, and the old platform-wide pair meant the second organization's
+        // friendship between the same two people was rejected as a duplicate of the first.
+        builder.HasIndex(friendship =>
+            new { friendship.OrganizationId, friendship.CanonicalLowId, friendship.CanonicalHighId })
             .IsUnique()
             .HasDatabaseName("IX_Friendships_CanonicalPair");
 
@@ -37,8 +43,8 @@ public sealed class FriendshipEntityConfiguration : IEntityTypeConfiguration<Fri
                 "GREATEST(\"RequesterId\", \"AddresseeId\")",
                 stored: true);
 
-        builder.HasIndex(friendship => friendship.RequesterId);
-        builder.HasIndex(friendship => friendship.AddresseeId);
+        builder.HasIndex(friendship => new { friendship.OrganizationId, friendship.RequesterId });
+        builder.HasIndex(friendship => new { friendship.OrganizationId, friendship.AddresseeId });
 
         builder.ToTable(tableBuilder =>
             tableBuilder.HasCheckConstraint(
