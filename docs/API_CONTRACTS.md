@@ -41,6 +41,14 @@ caller is a validated identity that lacks organization context, not an unauthent
 string, or route — enforced by `scripts/tenancy-boundary-lint.py` (CI: `tenancy-boundary`
 workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
 
+**Exception since 2026-08-16 (the owner's role split):** a caller whose validated `role` claim is
+`Admin` or `SuperAdmin` — Sellevate's own staff — passes a `[TenantScoped]` route **without** the
+header, and their reads span every organization. They normally hold no membership, so requiring the
+header would lock the platform admin panel out of its own screens. The privilege comes from the
+claim on the token this service authenticated, never from a header a client could send; the
+organization header, when present, still only names an organization and still grants nothing. Their
+writes are unchanged and still require an explicit organization. See TENANCY.md §1.6a.
+
 ---
 
 ## Auth `[public]`

@@ -694,3 +694,68 @@ Neither driver has been run against any database, real or throwaway. See `docs/D
 the rollout order for both services, and for the Redis-only steps (deleting the retired
 `presence:online` key; nothing to run for notification-service's old keys, which expire on their
 own TTL).
+
+---
+
+## Разделение ролей 2026-08-16 — платформенный режим чтения
+
+Третий режим тенант-контекста (`IsPlatformWide`) — сознательный обход изоляции, поэтому проверять
+его нужно с обеих сторон: что он открывается там, где должен, и **не** открывается больше нигде.
+
+### BuildingBlocks — 118/118 зелёных
+
+```
+dotnet test src/backend/building-blocks/BuildingBlocks.Tests --filter "TestCategory!=Integration"
+```
+
+Что закрыто:
+
+- `TenantContextTests` — режим включается, совместим с заданной организацией в любом порядке,
+  взаимоисключающ с системным в обе стороны, идемпотентен.
+- `TenantContextMiddlewareTests` — режим открывается **только** клеймом `role` = `Admin`/`SuperAdmin`
+  валидированного принципала. Отдельными тестами закрыты: подделанный `X-User-Role`, выдуманный
+  `X-Platform-Mode`, неаутентифицированный принципал с нужным клеймом, роли `User` /
+  `TenancyAdmin` / `TenancySuperAdmin` (в том числе токен импersonation, который выпускается с
+  `role: User`). Плюс: платформенный персонал проходит `[TenantScoped]` без заголовка, а
+  организация, если она есть, сохраняется.
+- `TenantConnectionInterceptorTests` — точный текст `SET LOCAL` для всех трёх режимов, включая
+  случай «организация + платформенный режим» (выдаются оба оператора) и «системный режим не
+  выдаёт ничего».
+- `TenantRlsMigrationBuilderExtensionsTests` — ветка платформы попадает в `USING` и **не** попадает
+  в `WITH CHECK` (проверяется по отдельности для строгой и контентной политики), пустой GUC
+  трактуется как `off`, `admitPlatformStaff: false` восстанавливает дореформенную политику,
+  политика пересоздаётся (`DROP POLICY IF EXISTS` перед `CREATE POLICY`).
+
+### Пер-сервисные tripwire-тесты — зелёные
+
+```
+dotnet test src/backend/learning-service/Learning.Tests     # 67
+dotnet test src/backend/ai-service/Ai.Tests                 # 170
+dotnet test src/backend/company-service/Company.Tests       # 135
+dotnet test src/backend/social-service/Social.Tests         # 62
+dotnet test src/backend/gamification-service/Gamification.Tests  # 53
+```
+
+`Every_query_filter_admits_platform_staff` обходит построенную модель и валит сборку, если у
+какой-то сущности фильтр забыл ветку `IsPlatformWide`. Это не косметика: такой фильтр не бросает
+исключений — платформенный сотрудник просто видит пустой экран и все решают, что данных нет.
+
+Здесь же закрыт пробел 40.13: у gamification-service появился свой `GamificationTenancyModelTests`
+(на который `GamificationDbContext` уже ссылался в комментарии) — обе tripwire-проверки, разметка
+`ITenantScoped` по таблицам и каталогам, изоляция чужой организации и видимость обеих для
+платформенного персонала.
+
+### Интеграционные — **написаны, не запускались** (правило №2)
+
+- `Learning.Tests/Integration/LearningTenantIsolationIntegrationTests.cs`: платформенный персонал
+  читает прогресс и контент обеих организаций; сырой SQL с включённым `app.platform_mode` под
+  ролью приложения видит обе; **запись без организации отклоняется самим Postgres** (ветки в
+  `WITH CHECK` нет); обычный тенант по-прежнему видит только своё — контрольный тест, без которого
+  предыдущие прошли бы и на политике, потерявшей сравнение организаций вообще.
+- `Social.Tests/Integration/SocialTenantIsolationIntegrationTests.cs`: чат обеих организаций виден
+  платформенному персоналу; репозиторий вообще без тенанта по-прежнему бросает, а не отдаёт всё.
+
+Запускать человеку вместе с остальными интеграционными: `--filter "TestCategory=Integration"` при
+поднятой `scripts/dev-infra.sh`, и **после** применения семи миграций
+`RefreshTenantPoliciesForPlatformStaff` — до них платформенные тесты обязаны падать, это и есть
+проверка того, что расширение даёт именно RLS, а не EF-фильтр.

@@ -87,6 +87,13 @@ The old, un-prefixed `presence:online` key is never read after this rollout, but
 notification-service keys, which carry a TTL — it is a sorted set with no expiry, so it will not
 disappear on its own; see `docs/DONT_FORGET.md`.
 
+Platform staff (`Admin`/`SuperAdmin`, the 2026-08-16 role split) are **not** widened here, unlike
+every Postgres and Mongo store. Reading presence across organizations means scanning every prefix,
+and there is no platform screen that asks for it. The irony would be worth noting even if there
+were: a platform-wide presence count is exactly the cross-customer headcount number this key was
+prefixed to stop leaking, so if such a screen is ever wanted it deserves its own decision rather
+than arriving as a side effect of a role change. See `docs/DECISIONS.md` (2026-08-16).
+
 ## Metrics owned
 
 Defined in `Infrastructure/Metrics/AppMetrics.cs` (process-global statics, self-registered

@@ -65,6 +65,13 @@ empty organization rather than building `org:00000000-...:notifications:inbox:{u
 would be one shared bucket collecting every caller whose context was missing, worse than the
 un-prefixed key it replaced because it would *look* correctly namespaced.
 
+Platform staff (`Admin`/`SuperAdmin`, the 2026-08-16 role split) are **not** widened here, unlike
+every Postgres and Mongo store. A cross-organization read of a prefixed key space means scanning
+every prefix, and no platform screen asks for one; building that scan now would add an unbounded
+`KEYS`-shaped operation to serve a feature nobody requested. They see an organization's inbox only
+while acting inside that organization. Recorded in `docs/DECISIONS.md` so "platform staff see
+everything" is not later assumed to include live notification state.
+
 `NotificationController` is `[TenantScoped]` and the tenant middleware is wired into the pipeline —
 a request with no `X-Organization-Id` (gateway-set) gets `403`, not a pooled inbox.
 `NotificationEventConsumer` keeps `RequiresOrganization` at its inherited `true`, now as a

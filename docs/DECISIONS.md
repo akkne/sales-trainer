@@ -139,6 +139,63 @@ block 40.20** and is waiting on the owner's design («админка у адми
 `app/(admin)` panel simply admits `Admin` alongside `SuperAdmin` and hides the add/remove-user
 affordances from `Admin`.
 
+### The data half: «они должны показывать все»
+
+The policies above only decide who may call a route. Passing them changed nothing about what came
+back: every read was still filtered to an organization platform staff usually do not belong to, so
+the platform admin screens would have rendered an empty page. The second half of the change widens
+the reads.
+
+**A third tenant mode rather than reuse of the one that existed.** `ITenantContext` gains
+`IsPlatformWide` alongside `IsSystem`. The tempting shortcut — "platform staff are just system mode
+with a face" — is wrong in a way that would not show up until it mattered: system mode exists
+because there is *nobody* to attribute the work to and relies on a `BYPASSRLS` role, while
+platform-wide mode exists because there *is* somebody and they are entitled. Collapsing them would
+let any background job inherit a human's privileges, or let a request inherit a job's connection
+role. The two are mutually exclusive and entering the second from the first throws.
+
+**The claim is the only door.** `TenantContextMiddleware` enters platform mode from the `role` claim
+of the principal the service itself authenticated — never a header, body, query or route value. This
+is the same rule tenancy has had since 40.2 ("the organization is never read from the request"),
+applied to the privilege as well as to the tenant. Tests pin that a forged `X-User-Role`, an
+invented `X-Platform-Mode` header, and an unauthenticated principal carrying the role claim all
+fail to open it. Impersonation tokens carry `role: User` by design (40.9), so borrowing an
+organization confers nothing.
+
+**Reads widen in three places, writes in none.** Query filters gain the branch, RLS policies gain
+`app.platform_mode` in `USING`, and the two Mongo repositories drop the organization from their
+filter because Mongo has no policy to carry it. `WITH CHECK` deliberately does **not** get the
+branch and `TenantSaveChangesInterceptor` still demands an explicit organization on insert. A
+platform administrator sees every customer and can still only write into one they named. If that
+makes some future platform write path fail, the correct fix is to name the organization, not to
+loosen the policy.
+
+**Platform mode coexists with an organization** instead of replacing it — an administrator who also
+belongs to a tenant reads across all of them and writes into theirs — which is why the connection
+interceptor emits both `SET LOCAL` statements rather than choosing between them.
+
+**Why a GUC and not a second `BYPASSRLS` role.** A role-based bypass would need a second connection
+string per service, a second pool, and a decision at connection time about which one a request gets
+— privilege escalation would then be a connection-selection bug, invisible in the policy. With
+`app.platform_mode` the policy itself states who may read what, in one place, reviewable in
+`\d+ tablename` on any environment. It also keeps the "one application role, no `BYPASSRLS`"
+property that 40.4 established. The GUC is set only by `TenantConnectionInterceptor`, only from
+`IsPlatformWide`, only via `SET LOCAL`, so it cannot survive its transaction on a pooled connection.
+
+**Redis is deliberately excluded.** Notification inboxes and analytics presence are namespaced by
+key prefix, so a cross-organization read means scanning every prefix. No platform screen asks for
+one today, and building the scan now would add an unbounded `KEYS`-shaped operation to serve a
+feature nobody requested. Platform staff therefore see per-organization Redis state only when acting
+inside one organization. Written here so that nobody later reads "platform staff see everything" and
+assumes live presence across customers is included — it is not.
+
+**One code path for the policy SQL.** `EnableTenantRls` now emits `DROP POLICY IF EXISTS` before
+`CREATE POLICY`, which makes it re-appliable; the seven `RefreshTenantPoliciesForPlatformStaff`
+migrations therefore call the helper again instead of carrying a copy of the policy text that would
+drift the next time the helper changes. Their `Down` passes `admitPlatformStaff: false` through that
+same helper, so the rollback regenerates the exact pre-change policy rather than an approximation
+written from memory.
+
 ---
 
 ## 2026-08-16 — the remaining services get `organization_id` (40.13, Stage C closes)
