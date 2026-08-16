@@ -6,6 +6,7 @@ using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Infrastructure.Ai;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Infrastructure.Data;
 using StackExchange.Redis;
 
@@ -18,6 +19,7 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
     private readonly ITtsRouter _ttsRouter;
     private readonly ILogger<ExerciseDialogService> _logger;
     private readonly IDatabase _redis;
+    private readonly ITenantContext _tenantContext;
 
     // TTL for dialog state: 24 hours is enough for any single practice session.
     private static readonly TimeSpan ChatStateTtl = TimeSpan.FromHours(24);
@@ -27,13 +29,15 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         IOpenAiChatService openAiChatService,
         ITtsRouter ttsRouter,
         ILogger<ExerciseDialogService> logger,
-        IConnectionMultiplexer redisConnection)
+        IConnectionMultiplexer redisConnection,
+        ITenantContext tenantContext)
     {
         _databaseContext = databaseContext;
         _openAiChatService = openAiChatService;
         _ttsRouter = ttsRouter;
         _logger = logger;
         _redis = redisConnection.GetDatabase();
+        _tenantContext = tenantContext;
     }
 
     public async Task ValidateExerciseForVoiceAsync(Guid exerciseId, CancellationToken cancellationToken = default)
@@ -219,8 +223,36 @@ internal sealed class ExerciseDialogService : IExerciseDialogService
         return new ExerciseChatContext(systemPrompt, maxTurns);
     }
 
-    private static string BuildChatCacheKey(Guid userId, Guid exerciseId) =>
-        $"exercise_chat:{userId}:{exerciseId}";
+    /// <summary>
+    /// Phase 40.14. This key holds the full transcript of a practice dialogue — real tenant data —
+    /// and was the last one in the backend without an <c>org:{orgId}:</c> prefix, after 40.11
+    /// prefixed ai-service's verdict cache, voice counters and idempotency store and 40.13 did the
+    /// same for notification inboxes and analytics presence.
+    ///
+    /// <para>
+    /// Nothing was leaking through it: both components are globally unique GUIDs, so no two
+    /// organizations could ever collide on a key. What the prefix buys is the two properties that
+    /// come from the naming scheme rather than from the values — "no learning-service key is shared
+    /// across organizations" stays checkable by reading key names, and offboarding a customer stays
+    /// a single <c>SCAN org:{orgId}:*</c> instead of a sweep that silently leaves every practice
+    /// transcript behind. It also stops a person moved between organizations from carrying a warm
+    /// cache across the boundary with them.
+    /// </para>
+    ///
+    /// <para>
+    /// Old keys are never read again and expire on their own <see cref="ChatStateTtl"/> (24 hours),
+    /// so nothing has to be migrated or flushed — the Redis instance is shared with every other
+    /// service. The only user-visible effect is that a practice dialogue in flight across the deploy
+    /// restarts from its first turn.
+    /// </para>
+    /// </summary>
+    private string BuildChatCacheKey(Guid userId, Guid exerciseId)
+    {
+        var organizationId = _tenantContext.OrganizationId
+            ?? throw new InvalidOperationException("Organization context is not set.");
+
+        return $"org:{organizationId}:exercise_chat:{userId}:{exerciseId}";
+    }
 
     private static List<DialogMessage> ToDialogHistory(IEnumerable<ChatMessage> messages) =>
         messages.Select(m => new DialogMessage

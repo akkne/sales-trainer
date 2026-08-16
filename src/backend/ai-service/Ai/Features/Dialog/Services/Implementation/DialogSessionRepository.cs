@@ -15,10 +15,15 @@ namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 /// handle is created here and nowhere else — <c>MongoDbContext</c> no longer exposes it, so
 /// reaching around this class means writing <c>GetCollection&lt;DialogSession&gt;</c> by hand,
 /// which <c>DialogSessionRepositoryIsTheOnlyMongoSessionReaderTests</c> turns into a failing build.
-/// Second, every filter starts from <see cref="TenantFilter"/>, and
-/// <see cref="RequireOrganizationId"/> throws when the tenant is unset, so there is no code path
+/// Second, every filter starts from <see cref="TenantReadFilter"/> or <see cref="TenantWriteFilter"/>,
+/// and <see cref="RequireOrganizationId"/> throws when the tenant is unset, so there is no code path
 /// through this class that returns another organization's sessions and none that returns all of
 /// them.
+/// </para>
+///
+/// <para>
+/// The read/write split is not stylistic (40.14): reads widen for validated platform staff, writes
+/// widen nowhere. See <see cref="TenantWriteFilter"/>.
 /// </para>
 ///
 /// <para>
@@ -62,14 +67,14 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         string sessionId,
         Guid userId,
         CancellationToken cancellationToken = default)
-        => await _sessions.Find(SessionOfUserFilter(sessionId, userId)).FirstOrDefaultAsync(cancellationToken);
+        => await _sessions.Find(SessionOfUserForReadFilter(sessionId, userId)).FirstOrDefaultAsync(cancellationToken);
 
     public async Task<List<DialogSession>> ListForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
         var filter = Builders<DialogSession>.Filter.And(
-            TenantFilter(),
+            TenantReadFilter(),
             Builders<DialogSession>.Filter.Eq(session => session.UserId, userId));
         var sort = Builders<DialogSession>.Sort.Descending(session => session.CreatedAt);
 
@@ -82,7 +87,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         IReadOnlyCollection<DialogMessage> messages,
         CancellationToken cancellationToken = default)
         => await _sessions.UpdateOneAsync(
-            SessionOfUserFilter(sessionId, userId),
+            SessionOfUserForWriteFilter(sessionId, userId),
             Builders<DialogSession>.Update.PushEach(session => session.Messages, messages),
             cancellationToken: cancellationToken);
 
@@ -91,7 +96,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         Guid userId,
         CancellationToken cancellationToken = default)
         => await _sessions.UpdateOneAsync(
-            SessionOfUserFilter(sessionId, userId),
+            SessionOfUserForWriteFilter(sessionId, userId),
             Builders<DialogSession>.Update
                 .Set(session => session.Status, DialogSessionStatus.Abandoned)
                 .Set(session => session.XpEarned, 0)
@@ -105,7 +110,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         int experiencePointsEarned,
         CancellationToken cancellationToken = default)
         => await _sessions.UpdateOneAsync(
-            SessionOfUserFilter(sessionId, userId),
+            SessionOfUserForWriteFilter(sessionId, userId),
             Builders<DialogSession>.Update
                 .Set(session => session.Status, DialogSessionStatus.Completed)
                 .Set(session => session.Feedback, feedback)
@@ -118,7 +123,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var result = await _sessions.DeleteOneAsync(SessionOfUserFilter(sessionId, userId), cancellationToken);
+        var result = await _sessions.DeleteOneAsync(SessionOfUserForWriteFilter(sessionId, userId), cancellationToken);
         return result.DeletedCount > 0;
     }
 
@@ -129,7 +134,7 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         CancellationToken cancellationToken = default)
     {
         var result = await _sessions.UpdateOneAsync(
-            SessionOfUserFilter(sessionId, userId),
+            SessionOfUserForWriteFilter(sessionId, userId),
             Builders<DialogSession>.Update.Inc(session => session.VoiceSeconds, seconds),
             cancellationToken: cancellationToken);
 
@@ -229,15 +234,30 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         return usageEntries;
     }
 
-    private FilterDefinition<DialogSession> SessionOfUserFilter(string sessionId, Guid userId)
+    /// <summary>
+    /// One session, for a read. Platform staff may reach across organizations here.
+    /// </summary>
+    private FilterDefinition<DialogSession> SessionOfUserForReadFilter(string sessionId, Guid userId)
+        => SessionOfUser(TenantReadFilter(), sessionId, userId);
+
+    /// <summary>
+    /// One session, for an update or a delete. Never reaches across organizations — see
+    /// <see cref="TenantWriteFilter"/>.
+    /// </summary>
+    private FilterDefinition<DialogSession> SessionOfUserForWriteFilter(string sessionId, Guid userId)
+        => SessionOfUser(TenantWriteFilter(), sessionId, userId);
+
+    private static FilterDefinition<DialogSession> SessionOfUser(
+        FilterDefinition<DialogSession> tenantFilter, string sessionId, Guid userId)
         => Builders<DialogSession>.Filter.And(
-            TenantFilter(),
+            tenantFilter,
             Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId),
             Builders<DialogSession>.Filter.Eq(session => session.UserId, userId));
 
     /// <summary>
-    /// The one filter every read and write in this class starts from. Sessions are tenant data, not
-    /// content: there is no "global session", so this is plain equality with no null branch.
+    /// The filter every <b>read</b> in this class starts from — the Mongo counterpart of a policy's
+    /// <c>USING</c> clause. Sessions are tenant data, not content: there is no "global session", so
+    /// this is plain equality with no null branch.
     ///
     /// <para>
     /// Platform-wide mode (validated Sellevate staff, 2026-08-16) drops the organization instead —
@@ -247,10 +267,29 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
     /// <see cref="RequireOrganizationId"/> and throws exactly as before.
     /// </para>
     /// </summary>
-    private FilterDefinition<DialogSession> TenantFilter()
+    private FilterDefinition<DialogSession> TenantReadFilter()
         => _tenantContext.IsPlatformWide
             ? Builders<DialogSession>.Filter.Empty
             : Builders<DialogSession>.Filter.Eq(session => session.OrganizationId, RequireOrganizationId());
+
+    /// <summary>
+    /// The filter every <b>write</b> in this class starts from — the counterpart of a policy's
+    /// <c>WITH CHECK</c> clause, and deliberately not the same method as
+    /// <see cref="TenantReadFilter"/>.
+    ///
+    /// <para>
+    /// <b>Reads widen for platform staff; writes never widen anywhere</b> (docs/TENANCY/TENANCY.md
+    /// §1.6a, docs/DECISIONS.md 2026-08-16). Postgres gets that asymmetry for free, because
+    /// <c>TenantRlsMigrationBuilderExtensions</c> puts the <c>app.platform_mode</c> branch in
+    /// <c>USING</c> and pointedly not in <c>WITH CHECK</c>. Mongo has no policies, so until the
+    /// 40.14 audit both halves shared one method and a validated administrator could mutate or
+    /// delete a document in an organization they never named. Splitting the two is what puts the
+    /// asymmetry into code instead of into a comment — and it is what stops the next method added to
+    /// this class from inheriting the wrong half silently.
+    /// </para>
+    /// </summary>
+    private FilterDefinition<DialogSession> TenantWriteFilter()
+        => Builders<DialogSession>.Filter.Eq(session => session.OrganizationId, RequireOrganizationId());
 
     /// <summary>
     /// The aggregation-pipeline counterpart of <see cref="TenantFilter"/>. The organization stays
