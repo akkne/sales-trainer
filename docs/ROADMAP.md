@@ -1851,7 +1851,7 @@
 
 ### Этап D — контент: версионирование и кастомизация
 
-### [ ] 40.15 Иммутабельное версионирование уроков
+### [>] 40.15 Иммутабельное версионирование уроков
 - [ ] `lesson (id, organization_id NULL=глобальный, parent_lesson_id, slug, archived)`,
       `UNIQUE (organization_id, slug)`
 - [ ] `lesson_version (id, lesson_id, version_no, content jsonb, content_hash, status,
