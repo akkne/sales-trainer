@@ -6,6 +6,16 @@ namespace Sellevate.Notification.Features.Users;
 /// Redis-backed <see cref="IUserDirectory"/>. Each user is a small hash at
 /// <c>notifications:user:{userId}</c> holding their email and display name. The data is a
 /// projection of Identity's user events, so it carries no TTL — it lives until the user is deleted.
+///
+/// <para>
+/// Phase 40.13 reviewed this key and deliberately left it un-prefixed. It is the same call
+/// learning-service and ai-service made about their <c>UserReplicas</c> tables: an identity in this
+/// product is cross-organization (docs/TENANCY/TENANCY.md §4.2), so an organization is not a
+/// property of the row and putting one in the key would mean either duplicating the projection per
+/// organization or picking one arbitrarily. What lives here — an email address and a display name
+/// — is what identity-service broadcasts platform-wide, and it is read only to address an email
+/// that some other, org-scoped decision already decided to send.
+/// </para>
 /// </summary>
 public sealed class RedisUserDirectory : IUserDirectory
 {

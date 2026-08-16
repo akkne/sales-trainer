@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Features.Chat.Models;
 using Sellevate.Social.Features.Chat.Services.Abstract;
 
@@ -8,6 +9,10 @@ namespace Sellevate.Social.Features.Chat;
 
 [ApiController]
 [Route("chat")]
+// Phase 40.13. [TenantScoped] makes the middleware answer 403 when the gateway did not supply
+// X-Organization-Id, instead of letting the request run with no tenant — where the Mongo repository
+// would throw a 500 and the Postgres reads would silently see nothing.
+[TenantScoped]
 [Authorize]
 public sealed class ChatController(IChatService chatService) : ControllerBase
 {

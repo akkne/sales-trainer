@@ -14,12 +14,14 @@ internal sealed class GamificationSettingsService(GamificationDbContext database
 
     public async Task<GamificationSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
         var settings = await databaseContext.GamificationSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is null)
         {
             settings = new GamificationSettings();
             databaseContext.GamificationSettings.Add(settings);
             await databaseContext.SaveChangesAsync(cancellationToken);
+            await tenantScope.CommitAsync(cancellationToken);
         }
 
         return settings;
@@ -27,6 +29,7 @@ internal sealed class GamificationSettingsService(GamificationDbContext database
 
     public async Task<int> GetExerciseBaseExperiencePointsAsync(string exerciseType, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         var reward = await databaseContext.ExerciseTypeRewards
             .AsNoTracking()
             .FirstOrDefaultAsync(record => record.ExerciseType == exerciseType, cancellationToken);
@@ -36,6 +39,7 @@ internal sealed class GamificationSettingsService(GamificationDbContext database
 
     public async Task<int> GetStreakBonusExperiencePointsAsync(int streakDayCount, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         var milestones = await databaseContext.StreakMilestones
             .AsNoTracking()
             .ToListAsync(cancellationToken);

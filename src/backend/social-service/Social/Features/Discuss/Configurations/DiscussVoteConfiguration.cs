@@ -11,7 +11,8 @@ public sealed class DiscussVoteConfiguration : IEntityTypeConfiguration<DiscussV
         builder.ToTable("DiscussVotes");
         builder.HasKey(vote => vote.Id);
 
-        builder.HasIndex(vote => new { vote.UserId, vote.TargetType, vote.TargetId }).IsUnique();
-        builder.HasIndex(vote => new { vote.TargetType, vote.TargetId });
+        builder.HasIndex(vote =>
+            new { vote.OrganizationId, vote.UserId, vote.TargetType, vote.TargetId }).IsUnique();
+        builder.HasIndex(vote => new { vote.OrganizationId, vote.TargetType, vote.TargetId });
     }
 }

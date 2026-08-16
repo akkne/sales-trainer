@@ -19,7 +19,17 @@ public sealed class DiscussTagConfiguration : IEntityTypeConfiguration<DiscussTa
             .HasForeignKey(threadTag => threadTag.TagId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(tag => tag.Slug).IsUnique();
-        builder.HasIndex(tag => tag.IsCurated);
+        // Phase 40.13. Two indexes, not one, and the second is not redundant: Postgres treats
+        // NULLs in a composite unique index as distinct, so UNIQUE(OrganizationId, Slug) alone would
+        // happily accept the curated tag "objections" twice at the global level. The partial index
+        // is what actually keeps the shared vocabulary unique. Same pair learning-service needed for
+        // Skill.IconicName in 40.10.
+        builder.HasIndex(tag => new { tag.OrganizationId, tag.Slug }).IsUnique();
+        builder.HasIndex(tag => tag.Slug)
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NULL")
+            .HasDatabaseName("IX_DiscussTags_Slug_Global");
+
+        builder.HasIndex(tag => new { tag.OrganizationId, tag.IsCurated });
     }
 }

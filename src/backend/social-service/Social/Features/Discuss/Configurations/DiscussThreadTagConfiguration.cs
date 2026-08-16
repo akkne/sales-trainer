@@ -16,7 +16,8 @@ public sealed class DiscussThreadTagConfiguration : IEntityTypeConfiguration<Dis
             .HasForeignKey(threadTag => threadTag.ThreadId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(threadTag => new { threadTag.ThreadId, threadTag.TagId }).IsUnique();
+        builder.HasIndex(threadTag =>
+            new { threadTag.OrganizationId, threadTag.ThreadId, threadTag.TagId }).IsUnique();
         builder.HasIndex(threadTag => threadTag.TagId);
     }
 }

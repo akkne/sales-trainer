@@ -18,8 +18,17 @@ internal sealed class StreakService(
     {
         var today = streakClock.Today();
 
-        var streak = await databaseContext.UserStreaks
-            .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);
+        // Phase 40.13: each read gets its own short transaction rather than the whole method
+        // sharing one. The insert below recovers from a unique violation and re-reads the winner;
+        // inside a single long transaction that violation would poison the transaction and the
+        // re-read could not run. Writes need no scope — EF opens an implicit transaction per
+        // SaveChangesAsync, which is what triggers SET LOCAL.
+        UserStreak? streak;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            streak = await databaseContext.UserStreaks
+                .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);
+        }
 
         if (streak is null)
         {
@@ -48,8 +57,11 @@ internal sealed class StreakService(
                     entry.State = EntityState.Detached;
                 }
 
-                streak = await databaseContext.UserStreaks
-                    .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);
+                await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+                {
+                    streak = await databaseContext.UserStreaks
+                        .FirstOrDefaultAsync(record => record.UserId == userId, cancellationToken);
+                }
 
                 if (streak is null)
                 {
@@ -83,6 +95,7 @@ internal sealed class StreakService(
 
     public async Task<int> GetCurrentStreakDayCountAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         return await databaseContext.UserStreaks
             .Where(record => record.UserId == userId)
             .Select(record => (int?)record.CurrentStreakDayCount)

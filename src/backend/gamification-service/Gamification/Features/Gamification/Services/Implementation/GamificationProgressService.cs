@@ -11,6 +11,7 @@ internal sealed class GamificationProgressService(
 {
     public async Task<GamificationProgressDto> GetProgressForUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         var settings = await settingsService.GetSettingsAsync(cancellationToken);
 
         var streak = await databaseContext.UserStreaks

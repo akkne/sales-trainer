@@ -16,6 +16,9 @@ namespace Sellevate.Analytics.Tests.Integration;
 [Category("Integration")]
 public sealed class TrackingControllerTests
 {
+    /// <summary>The gateway-validated organization every ping in this fixture claims to come from.</summary>
+    private static readonly Guid OrganizationId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
     private AnalyticsWebApplicationFactory _factory = null!;
 
     [SetUp]
@@ -100,12 +103,13 @@ public sealed class TrackingControllerTests
         // Simulate the API gateway injecting X-User-Id (presence tracker is stubbed).
         var client = _factory.CreateAuthenticatedClient();
         client.DefaultRequestHeaders.Add("X-User-Id", Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add("X-Organization-Id", OrganizationId.ToString());
 
         var response = await client.PostAsync("/tracking/presence/ping", content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         await _factory.PresenceTracker.Received(1).MarkSeenAsync(
-            Arg.Any<string>(), Arg.Any<CancellationToken>());
+            OrganizationId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -114,11 +118,29 @@ public sealed class TrackingControllerTests
         // No X-User-Id header — identity must be resolved from the validated JWT subject.
         var userId = Guid.NewGuid();
         var client = _factory.CreateAuthenticatedClient(userId);
+        client.DefaultRequestHeaders.Add("X-Organization-Id", OrganizationId.ToString());
 
         var response = await client.PostAsync("/tracking/presence/ping", content: null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         await _factory.PresenceTracker.Received(1).MarkSeenAsync(
-            userId.ToString(), Arg.Any<CancellationToken>());
+            OrganizationId, userId.ToString(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Phase 40.13. Presence is stored per organization, so a ping with no organization header has
+    /// no correct destination. The route is [TenantScoped], so the tenant middleware rejects it
+    /// before the action runs — it must never fall back to a shared key.
+    /// </summary>
+    [Test]
+    public async Task Ping_WithoutAnOrganizationHeader_IsRejectedAndRecordsNothing()
+    {
+        var client = _factory.CreateAuthenticatedClient(Guid.NewGuid());
+
+        var response = await client.PostAsync("/tracking/presence/ping", content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        await _factory.PresenceTracker.DidNotReceive().MarkSeenAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

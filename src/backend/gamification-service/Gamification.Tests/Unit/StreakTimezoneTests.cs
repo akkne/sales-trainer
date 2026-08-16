@@ -122,10 +122,10 @@ public sealed class StreakTimezoneTests
             new UserStreak { Id = Guid.NewGuid(), UserId = todayUserId, CurrentStreakDayCount = 1, LongestStreakDayCount = 1, LastActivityDate = today });
         await _databaseContext.SaveChangesAsync();
 
-        var job = new StreakResetJob(_databaseContext, new FixedStreakClock(today), NullLogger<StreakResetJob>.Instance);
-
-        // Act
-        await job.ExecuteAsync();
+        // Phase 40.13: the Hangfire entry point iterates organizations and needs a scope factory;
+        // the rule under test is the reset itself, which now takes an already-scoped context.
+        await StreakResetJob.ResetStaleStreaksAsync(
+            _databaseContext, new FixedStreakClock(today), CancellationToken.None);
 
         // Assert
         var staleStreak = await _databaseContext.UserStreaks.FirstAsync(s => s.UserId == staleUserId);

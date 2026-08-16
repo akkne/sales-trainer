@@ -10,7 +10,12 @@ public sealed class LeagueMembershipEntityConfiguration : IEntityTypeConfigurati
     {
         builder.ToTable("LeagueMemberships");
         builder.HasKey(membership => membership.Id);
-        builder.HasIndex(membership => membership.LeagueId);
-        builder.HasIndex(membership => new { membership.UserId, membership.LeagueId }).IsUnique();
+        builder.HasIndex(membership => new { membership.OrganizationId, membership.LeagueId });
+
+        // The organization leads here too, but note that the old UNIQUE(UserId, LeagueId) was
+        // already safe: a league id belongs to exactly one organization, so the pair could never
+        // span two. This is alignment, not a fix.
+        builder.HasIndex(membership =>
+            new { membership.OrganizationId, membership.UserId, membership.LeagueId }).IsUnique();
     }
 }

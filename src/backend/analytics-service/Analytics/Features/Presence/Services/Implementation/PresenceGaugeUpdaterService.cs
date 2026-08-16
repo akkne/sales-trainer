@@ -9,7 +9,7 @@ internal sealed class PresenceGaugeUpdaterService : BackgroundService
     private static readonly TimeSpan UpdateInterval = TimeSpan.FromSeconds(20);
 
     // Prune stale Redis members on a slower cadence to avoid redundant writes on every tick.
-    // CountOnlineAsync already filters by the window, so pruning is purely for compaction.
+    // Counting already filters by the window, so pruning is purely for compaction.
     private static readonly TimeSpan PruneInterval = TimeSpan.FromMinutes(5);
 
     // Per-process startup jitter: spread replicas across the 20 s window so they don't all
@@ -57,11 +57,19 @@ internal sealed class PresenceGaugeUpdaterService : BackgroundService
     {
         try
         {
-            // NOTE: app_users_online is a per-instance gauge backed by a shared Redis sorted
-            // set. Under horizontal scaling, aggregate with max() — not sum() — across
+            // NOTE: app_users_online is a per-instance gauge backed by shared Redis sorted
+            // sets. Under horizontal scaling, aggregate with max() — not sum() — across
             // instances, because every replica reads the same Redis data and produces the
             // same value. Example PromQL: max(app_users_online)
-            var onlineUserCount = await _presenceTracker.CountOnlineAsync(cancellationToken);
+            //
+            // Phase 40.13: this is the one system-mode read in analytics-service, and it is
+            // deliberately the SUM across organizations rather than a per-organization gauge.
+            // The metric is operational — scraped by Prometheus, never served to a customer —
+            // and an organization id as a Prometheus label would put customer identities and
+            // unbounded cardinality into the metrics store to answer a question nobody asks
+            // there. Per-organization counts are available only through
+            // CountOnlineAsync(organizationId), which needs a tenant to call.
+            var onlineUserCount = await _presenceTracker.CountOnlineAcrossAllOrganizationsAsync(cancellationToken);
             AppMetrics.UsersOnline.Set(onlineUserCount);
 
             // Prune on a slower cadence (compaction only — counting already filters by window).

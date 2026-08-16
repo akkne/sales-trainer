@@ -107,6 +107,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                     b.Property<Guid>("AchievementId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UnlockedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -115,7 +118,7 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "AchievementId")
+                    b.HasIndex("OrganizationId", "UserId", "AchievementId")
                         .IsUnique();
 
                     b.ToTable("UserAchievements", (string)null);
@@ -123,8 +126,10 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Sellevate.Gamification.Features.Achievements.Models.UserLearningProgress", b =>
                 {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<int>("CompletedLessonCount")
@@ -136,7 +141,7 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("UserId");
+                    b.HasKey("OrganizationId", "UserId");
 
                     b.ToTable("UserLearningProgress", (string)null);
                 });
@@ -227,6 +232,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                     b.Property<DateTime>("EarnedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("text");
@@ -243,7 +251,7 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"SourceEventId\" IS NOT NULL");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("OrganizationId", "UserId");
 
                     b.ToTable("UserXpRecords", (string)null);
                 });
@@ -263,12 +271,15 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                     b.Property<int>("LongestStreakDayCount")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId")
+                    b.HasIndex("OrganizationId", "UserId")
                         .IsUnique();
 
                     b.ToTable("UserStreaks", (string)null);
@@ -278,6 +289,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Tier")
@@ -292,7 +306,7 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WeekStartDate", "Tier")
+                    b.HasIndex("OrganizationId", "WeekStartDate", "Tier")
                         .IsUnique();
 
                     b.ToTable("Leagues", (string)null);
@@ -305,6 +319,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("LeagueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("PromotionOutcome")
@@ -321,9 +338,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LeagueId");
+                    b.HasIndex("OrganizationId", "LeagueId");
 
-                    b.HasIndex("UserId", "LeagueId")
+                    b.HasIndex("OrganizationId", "UserId", "LeagueId")
                         .IsUnique();
 
                     b.ToTable("LeagueMemberships", (string)null);
@@ -347,6 +364,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                     b.Property<int>("MaximumLeagueParticipantCount")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("PeriodLengthDays")
                         .HasColumnType("integer");
 
@@ -354,6 +374,9 @@ namespace Sellevate.Gamification.Infrastructure.Data.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
 
                     b.ToTable("LeagueSettings", (string)null);
                 });

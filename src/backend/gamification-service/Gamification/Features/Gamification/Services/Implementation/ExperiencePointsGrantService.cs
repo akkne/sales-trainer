@@ -29,8 +29,19 @@ internal sealed class ExperiencePointsGrantService(
         // Application-level idempotency guard: skip if this event was already processed.
         if (sourceEventId.HasValue)
         {
-            var alreadyGranted = await databaseContext.UserExperiencePointsRecords
-                .AnyAsync(record => record.SourceEventId == sourceEventId, cancellationToken);
+            // Phase 40.13: the read needs a transaction to see anything under RLS, but this method
+            // deliberately does NOT wrap the whole body in one. The insert below recovers from a
+            // unique violation and carries on; inside a single long transaction that violation
+            // would poison the transaction and the recovery path could not run. Writes need no
+            // scope of their own — EF opens an implicit transaction per SaveChangesAsync, which is
+            // what triggers SET LOCAL — so scoping the read alone is both sufficient and the only
+            // shape that keeps the concurrency guard working.
+            bool alreadyGranted;
+            await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+            {
+                alreadyGranted = await databaseContext.UserExperiencePointsRecords
+                    .AnyAsync(record => record.SourceEventId == sourceEventId, cancellationToken);
+            }
 
             if (alreadyGranted)
             {

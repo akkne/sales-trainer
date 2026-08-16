@@ -13,7 +13,7 @@ public sealed class DiscussReplyConfiguration : IEntityTypeConfiguration<Discuss
 
         builder.Property(reply => reply.Body).IsRequired().HasMaxLength(20000);
 
-        builder.HasIndex(reply => reply.AuthorId);
-        builder.HasIndex(reply => new { reply.ThreadId, reply.CreatedAt });
+        builder.HasIndex(reply => new { reply.OrganizationId, reply.AuthorId });
+        builder.HasIndex(reply => new { reply.OrganizationId, reply.ThreadId, reply.CreatedAt });
     }
 }

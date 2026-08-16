@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications;
 using Serilog;
@@ -106,6 +107,11 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+
+// Phase 40.13. Populates the scoped ITenantContext from the gateway-validated X-Organization-Id
+// header, so every notification key is built for one organization. After UseAuthorization so the
+// endpoint — and therefore its [TenantScoped] metadata — is already resolved.
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

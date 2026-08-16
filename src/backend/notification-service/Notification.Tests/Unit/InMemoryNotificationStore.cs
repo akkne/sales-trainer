@@ -3,16 +3,22 @@ using Sellevate.Notification.Features.Notifications.Services.Abstract;
 
 namespace Sellevate.Notification.Tests.Unit;
 
+/// <summary>
+/// Phase 40.13 keyed this fake by (organization, recipient) rather than by recipient alone, so it
+/// models the real Redis key instead of a flattened version of it. A fake that ignores the
+/// organization would make a cross-tenant isolation test pass for the wrong reason.
+/// </summary>
 internal sealed class InMemoryNotificationStore : INotificationStore
 {
-    private readonly Dictionary<Guid, List<NotificationRecord>> _inboxesByRecipient = new();
+    private readonly Dictionary<(Guid OrganizationId, Guid RecipientUserId), List<NotificationRecord>> _inboxes = new();
 
     public TimeSpan? LastRetention { get; private set; }
 
-    public int CapacityFor(Guid recipientUserId) =>
-        _inboxesByRecipient.TryGetValue(recipientUserId, out var inbox) ? inbox.Count : 0;
+    public int CapacityFor(Guid organizationId, Guid recipientUserId) =>
+        _inboxes.TryGetValue((organizationId, recipientUserId), out var inbox) ? inbox.Count : 0;
 
     public Task PrependAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationRecord notification,
         int inboxCapacity,
@@ -21,10 +27,10 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     {
         LastRetention = retention;
 
-        if (!_inboxesByRecipient.TryGetValue(recipientUserId, out var inbox))
+        if (!_inboxes.TryGetValue((organizationId, recipientUserId), out var inbox))
         {
             inbox = [];
-            _inboxesByRecipient[recipientUserId] = inbox;
+            _inboxes[(organizationId, recipientUserId)] = inbox;
         }
 
         inbox.Insert(0, notification);
@@ -39,22 +45,24 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     }
 
     public Task<IReadOnlyList<NotificationRecord>> GetAllAsync(
+        Guid organizationId,
         Guid recipientUserId,
         CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<NotificationRecord> result = _inboxesByRecipient.TryGetValue(recipientUserId, out var inbox)
+        IReadOnlyList<NotificationRecord> result = _inboxes.TryGetValue((organizationId, recipientUserId), out var inbox)
             ? inbox.ToList()
             : [];
         return Task.FromResult(result);
     }
 
     public Task<bool> ExistsAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationType notificationType,
         string? relatedEntityId,
         CancellationToken cancellationToken = default)
     {
-        if (!_inboxesByRecipient.TryGetValue(recipientUserId, out var inbox))
+        if (!_inboxes.TryGetValue((organizationId, recipientUserId), out var inbox))
             return Task.FromResult(false);
 
         return Task.FromResult(inbox.Any(n =>
@@ -63,6 +71,7 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     }
 
     public Task<bool> ReplaceAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationRecord updatedNotification,
         TimeSpan retention,
@@ -70,7 +79,7 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     {
         LastRetention = retention;
 
-        if (!_inboxesByRecipient.TryGetValue(recipientUserId, out var inbox))
+        if (!_inboxes.TryGetValue((organizationId, recipientUserId), out var inbox))
         {
             return Task.FromResult(false);
         }
@@ -86,6 +95,7 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     }
 
     public Task ReplaceAllAsync(
+        Guid organizationId,
         Guid recipientUserId,
         IReadOnlyList<NotificationRecord> notifications,
         TimeSpan retention,
@@ -93,7 +103,7 @@ internal sealed class InMemoryNotificationStore : INotificationStore
     {
         LastRetention = retention;
 
-        if (!_inboxesByRecipient.TryGetValue(recipientUserId, out var inbox))
+        if (!_inboxes.TryGetValue((organizationId, recipientUserId), out var inbox))
         {
             return Task.CompletedTask;
         }

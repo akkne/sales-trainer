@@ -10,6 +10,9 @@ public sealed class UserStreakEntityConfiguration : IEntityTypeConfiguration<Use
     {
         builder.ToTable("UserStreaks");
         builder.HasKey(streak => streak.Id);
-        builder.HasIndex(streak => streak.UserId).IsUnique();
+        // Phase 40.13: the organization leads, and the uniqueness is per organization. The old
+        // global UNIQUE(UserId) would have refused a second streak for a person who belongs to two
+        // customers — which memberships (40.6) make possible.
+        builder.HasIndex(streak => new { streak.OrganizationId, streak.UserId }).IsUnique();
     }
 }

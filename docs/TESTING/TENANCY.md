@@ -488,3 +488,179 @@ pooled context would cache the first tenant's query filter and hand it to every 
 executed against any database. See `docs/DONT_FORGET.md` for the order a human must run them in —
 the backfill is the user-visible step, and the index script is the one that keeps the cascade-delete
 foreign keys indexed.
+
+---
+
+## 40.13 — the remaining services (identity, analytics, notification, gamification, social)
+
+Five services, five different tenant boundaries: one Postgres table with a policy (learning/ai/
+company's pattern, reused here for gamification and social), a background job with no table at all
+(identity), and two stores with **no database and no RLS** (notification, analytics), where the
+Redis key name is the entire boundary.
+
+### identity-service — `IdentityBackgroundJobTenancyTests`
+
+```
+dotnet test src/backend/identity-service/Identity.Tests/Sellevate.Identity.Tests.csproj
+```
+
+62/62 green (was 58/58). Four tests, all source-tree tripwires rather than behavioural assertions —
+`ExpiredRefreshTokenCleanupService`/`ExpiredEmailVerificationCleanupService` both call
+`ExecuteDeleteAsync`, which the in-memory EF provider does not implement, so there is no behaviour
+to exercise without a real Postgres:
+
+| Test | What it would catch |
+|---|---|
+| `Cleanup_jobs_declare_an_explicit_tenant_mode` (×2 jobs) | A cleanup job resolving `IdentityDbContext` from a scope with no declared mode — indistinguishable at runtime from a deliberate `EnterSystemMode()`, and TENANCY.md §1.6 requires the intent written down. |
+| `The_tenant_mode_is_declared_before_the_database_context_is_resolved` (×2 jobs) | `EnterSystemMode()` called *after* `GetRequiredService<IdentityDbContext>()` — would still contain the string and pass a naive check while the context had already captured a blank scope, since `TenantContext` refuses to change mode once set. |
+
+No RLS, no `OrganizationId` column, and no isolation test: `RefreshTokens` and
+`EmailVerificationCodes` are genuinely platform-wide (identities are cross-organization,
+TENANCY.md §4.2) with nothing per-tenant to iterate. This block is entirely about the *honesty* of
+the scope, not about new SQL.
+
+### analytics-service — `PresenceTrackerTests` + `TrackingControllerTests`
+
+```
+dotnet test src/backend/analytics-service/Analytics.Tests/Sellevate.Analytics.Tests.csproj
+```
+
+37/37 green (was 31/31) — **no database, no `TestCategory=Integration` split**: this service's
+`[Category("Integration")]` tests (`TrackingControllerTests`) run against
+`AnalyticsWebApplicationFactory` with Redis and Kafka stubbed, no Docker required, so they run in
+every session and are counted in the 37.
+
+| Test | What it would catch |
+|---|---|
+| `MarkSeenAsync_AddsUserToTheOrganizationsOwnOnlineSet`, `MarkSeenAsync_UsesADifferentKeyForEachOrganization` | A presence key not actually keyed by organization. |
+| `MarkSeenAsync_RegistersTheOrganizationSoTheGaugeCanFindIt` | The `presence:organizations` registry going unwritten, which would make the platform-wide gauge blind to a whole organization. |
+| `MarkSeenAsync_WithNoOrganization_Raises`, `CountOnlineAsync_WithNoOrganization_Raises` | An empty organization silently building `org:00000000-...:presence:online` — one shared bucket for every caller whose context was missing. |
+| `CountOnlineAsync_DoesNotSeeAnotherOrganizationsUsers` | The count itself crossing the boundary. |
+| `CountOnlineAcrossAllOrganizationsAsync_SumsEveryRegisteredOrganization` | The one legitimate system-mode read — the `app_users_online` gauge — silently missing an organization. |
+| `PruneAsync_RemovesStaleMembersFromEachRegisteredOrganization`, `PruneAsync_ForgetsAnOrganizationOnceItsSetIsEmpty` | The registry growing forever, or compaction touching the wrong organization's set. |
+
+`TrackingControllerTests` adds the endpoint-level check: `POST /tracking/presence/ping` without
+`X-Organization-Id` is `403` (the route is `[TenantScoped]`), not a pooled ping.
+
+### notification-service — `NotificationTenancyTests`
+
+```
+dotnet test src/backend/notification-service/Notification.Tests/Sellevate.Notification.Tests.csproj
+```
+
+56/56 green (was 46/46) — Redis-only, no `TestCategory=Integration` split: the store under test in
+`NotificationTenancyTests` is `InMemoryNotificationStore`, now keyed by `(organization, recipient)`
+rather than `recipient` alone, so a fake that ignored the organization would fail the isolation
+tests for the wrong reason (i.e. it actually models the real key shape).
+
+| Test | What it would catch |
+|---|---|
+| `Inbox_keys_carry_the_organization_prefix`, `Unread_count_keys_carry_the_organization_prefix`, `Chat_email_watermark_keys_carry_the_organization_prefix` | Any of the three key builders losing the `org:{orgId}:` prefix. |
+| `Two_organizations_never_share_an_inbox_key` | Two different organizations resolving to the same Redis key by construction. |
+| `An_unset_organization_raises_rather_than_building_a_zero_key` | The `org:00000000-...` trap — a shared bucket that looks correctly namespaced. |
+| `Creating_a_notification_without_a_tenant_raises`, `Reading_notifications_without_a_tenant_raises` | `NotificationService` — the one class holding a real `ITenantContext` — forgetting to require it. There is no system-mode path for an inbox. |
+| `A_notification_written_in_one_organization_is_invisible_in_another` | The store itself leaking across the (organization, recipient) key. |
+| `The_unread_count_does_not_include_another_organizations_notifications` | The counter drifting out of sync with the namespaced list. |
+
+`NotificationController` being `[TenantScoped]` and `NotificationEventConsumer` keeping
+`RequiresOrganization = true` are asserted by the existing controller/consumer contract tests, not
+duplicated here.
+
+### gamification-service
+
+```
+dotnet test src/backend/gamification-service/Gamification.Tests/Sellevate.Gamification.Tests.csproj
+```
+
+42/42 green. **Unlike every other Stage-C service, this block shipped with no dedicated tenancy
+tripwire file and no `Integration` isolation-test project** — there is no
+`GamificationTenancyModelTests` walking the model for a missing query filter (the pattern learning/
+ai/company/social all used), and no `GamificationTenantIsolationIntegrationTests` against a real
+Postgres role. `StreakResetJobTests` and `StreakTimezoneTests` were updated to pass an
+`OrganizationId` through the existing fixtures, and `GamificationDbContextFactory` (the shared test
+factory) now attaches an organization, but neither is a tenancy-isolation test in the sense the
+other 40.10–40.13 blocks mean it. This is a real gap relative to the roadmap's stated pattern, not a
+documentation omission — see the report accompanying this documentation pass.
+
+### social-service — `SocialTenancyModelTests`
+
+```
+dotnet test src/backend/social-service/Social.Tests/Sellevate.Social.Tests.csproj \
+  --filter "TestCategory!=Integration"
+```
+
+56/56 green (was 46/46 before the tripwire commit). Ten tests in
+`Unit/SocialTenancyModelTests`:
+
+| Test | What it would catch |
+|---|---|
+| `Every_entity_with_an_organization_id_has_its_own_query_filter` | The §1.4 trap: EF does not inherit filters through `DiscussThread → DiscussReplies`. Walked from the model, not a restated list. |
+| `Social_rows_are_tenant_data_and_tags_are_content` | Someone making `DiscussTags` `ITenantScoped` (destroying the shared vocabulary) or removing the content flavour from it. |
+| `A_friendship_created_in_one_organization_is_invisible_in_another` | A missing or wrong filter on `Friendships`. |
+| `Chat_cannot_be_opened_across_the_organization_boundary` | `ChatService` no longer refusing to open a conversation between non-friends, which is the structural half of the chat boundary. |
+| `Curated_tags_are_shared_and_an_organizations_own_tag_is_not` | Plain equality on the `DiscussTags` filter — a new customer would open Discuss and find no tags at all. |
+| `A_tag_typed_by_a_user_belongs_to_their_organization` | `ResolveOrCreateTagsAsync` failing to stamp a user-typed tag, leaking it into the curated vocabulary. |
+| `Photo_object_keys_are_namespaced_by_organization` | A new upload's `ObjectKey` losing the `org/{organizationId}/...` prefix. |
+| `Every_conversation_repository_method_refuses_an_unset_tenant` | Walked from `IChatConversationRepository` by reflection — a method added later without the guard fails the build. |
+| `Only_the_repository_reaches_the_chat_conversations_collection` | The regression that would quietly undo the whole Mongo boundary: a second class calling `GetCollection<ChatConversation>` and filtering by hand. Asserted against the source tree, because nothing in C# enforces it. |
+| `Published_events_carry_the_organization_and_refuse_an_unset_tenant` | `KafkaSocialEventPublisher` publishing an unstamped envelope — which notification-service's `RequiresOrganization = true` would then dead-letter silently. |
+
+### Real-Postgres-and-Mongo isolation test — **written, not run in the 40.13 session**
+
+```
+dotnet test src/backend/social-service/Social.Tests/Sellevate.Social.Tests.csproj \
+  --filter "TestCategory=Integration"
+```
+
+`Integration/SocialTenantIsolationIntegrationTests`, 12 tests across both stores. Per Правило №2 in
+`docs/DONT_FORGET.md` they were written and committed but **not executed**. They build their schema
+from social-service's own EF migrations (so what is under test is the RLS the migrations actually
+emit, not a restatement of it) and read as a throwaway `NOBYPASSRLS` role.
+
+Postgres half:
+
+| Test | Door it checks |
+|---|---|
+| `One_organizations_threads_are_invisible_to_another` | A missing or wrong filter on `DiscussThreads`. |
+| `Row_level_security_hides_the_other_organization_even_with_query_filters_ignored` | `IgnoreQueryFilters()` stripping the convenience layer — the policy, not the filter, is what's actually tested. |
+| `Raw_sql_cannot_reach_the_other_organizations_replies` | Raw SQL, the door the EF filter does not guard at all. |
+| `A_read_outside_a_transaction_sees_nothing_rather_than_everything` | The `SET LOCAL` rule — a bare `SELECT` under RLS fails closed, not open. |
+| `Writing_a_thread_into_another_organization_is_refused_by_the_policy` | `WITH CHECK`, i.e. Postgres refusing the write, not the application. |
+| `Curated_tags_are_shared_and_an_organizations_own_tag_is_not` | The content-flavour policy against a real database, not just the EF filter. |
+| `The_same_two_people_can_be_friends_in_two_organizations` | The organization-first unique index on `Friendships` — the case the plain pre-40.13 constraint would have refused. |
+
+Mongo half:
+
+| Test | Door it checks |
+|---|---|
+| `One_organizations_conversations_are_invisible_to_another` | The repository's read filter. |
+| `Knowing_another_organizations_conversation_id_is_not_enough_to_read_it` | The realistic attack: a conversation id travels in the URL. |
+| `Writes_cannot_reach_another_organizations_conversation` | Append-message / read-watermark writes scoped the same way as reads. |
+| `Finding_by_participants_resolves_within_the_callers_organization` | Two organizations with the same pair of participant ids (memberships, 40.6) resolving to different conversations. |
+| `An_unset_tenant_reading_conversations_raises_instead_of_returning_everything` | The single most important behaviour in the Mongo half — no RLS to fall back on, so the repository itself must fail closed. |
+
+### Lints
+
+```
+python3 scripts/tenancy-boundary-lint.py
+python3 scripts/tenancy-pool-lint.py
+```
+
+Clean for social-service (`SocialDbContext` uses `AddDbContext`, never the pooled helper) and
+gamification-service. Not re-run against identity/analytics/notification, which have no
+tenant-scoped `DbContext` to lint in the first place.
+
+### The operational scripts — not run against anything
+
+- `docs/TENANCY/sql/40.13_gamification_organization_backfill.sql`,
+  `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`, driven by
+  `scripts/tenancy-gamification-organization-rollout.sh`.
+- `docs/TENANCY/sql/40.13_social_organization_backfill.sql`,
+  `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`, and
+  `docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`, driven by
+  `scripts/tenancy-social-organization-rollout.sh`.
+
+Neither driver has been run against any database, real or throwaway. See `docs/DONT_FORGET.md` for
+the rollout order for both services, and for the Redis-only steps (deleting the retired
+`presence:online` key; nothing to run for notification-service's old keys, which expire on their
+own TTL).
