@@ -53,6 +53,6 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options, ITen
         // Convenience, not security — the security boundary is the RLS policy created by the
         // AddInvite migration (docs/TENANCY/TENANCY.md §1.4).
         modelBuilder.Entity<Invite>()
-            .HasQueryFilter(invite => invite.OrganizationId == tenantContext.OrganizationId);
+            .HasQueryFilter(invite => tenantContext.IsPlatformWide || invite.OrganizationId == tenantContext.OrganizationId);
     }
 }

@@ -37,8 +37,8 @@ public sealed class AiDbContext : DbContext
         // organization — the two seeded hidden bundles live there — so the comparison is
         // "mine or global", never plain equality (docs/TENANCY/CONTENT_MODEL.md).
         modelBuilder.Entity<DialogBundle>()
-            .HasQueryFilter(bundle => bundle.OrganizationId == null || bundle.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(bundle => _tenantContext.IsPlatformWide || bundle.OrganizationId == null || bundle.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DialogMode>()
-            .HasQueryFilter(mode => mode.OrganizationId == null || mode.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(mode => _tenantContext.IsPlatformWide || mode.OrganizationId == null || mode.OrganizationId == _tenantContext.OrganizationId);
     }
 }

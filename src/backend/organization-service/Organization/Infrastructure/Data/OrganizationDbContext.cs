@@ -26,6 +26,6 @@ public sealed class OrganizationDbContext : DbContext
         modelBuilder.ApplyConfiguration(new OrganizationProfileEntityConfiguration());
 
         modelBuilder.Entity<OrganizationProfile>()
-            .HasQueryFilter(profile => profile.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(profile => _tenantContext.IsPlatformWide || profile.OrganizationId == _tenantContext.OrganizationId);
     }
 }

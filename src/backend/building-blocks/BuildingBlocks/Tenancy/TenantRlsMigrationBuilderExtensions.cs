@@ -20,7 +20,8 @@ public static class TenantRlsMigrationBuilderExtensions
     /// notifications, etc. (TENANCY.md §1.2, "Tenant data").
     ///
     /// Emits <c>ENABLE</c> + <c>FORCE</c> ROW LEVEL SECURITY and a policy with both
-    /// <c>USING</c> and <c>WITH CHECK</c>, reading
+    /// <c>USING</c> and <c>WITH CHECK</c> (the read half additionally admitting validated platform
+    /// staff — see <see cref="ApplyPolicy"/>), reading
     /// <c>NULLIF(current_setting('app.organization_id', true), '')</c> so an unset session
     /// variable yields zero rows rather than an error — fail closed. The <c>NULLIF</c> is not
     /// redundant with <c>missing_ok</c>: once a pooled physical connection has run
@@ -32,8 +33,13 @@ public static class TenantRlsMigrationBuilderExtensions
     public static OperationBuilder<SqlOperation> EnableTenantRls(
         this MigrationBuilder migrationBuilder,
         string tableName,
-        string organizationIdColumnName = DefaultOrganizationIdColumnName)
-        => ApplyPolicy(migrationBuilder, tableName, BuildOwnOrganizationComparison(organizationIdColumnName));
+        string organizationIdColumnName = DefaultOrganizationIdColumnName,
+        bool admitPlatformStaff = true)
+        => ApplyPolicy(
+            migrationBuilder,
+            tableName,
+            BuildOwnOrganizationComparison(organizationIdColumnName),
+            admitPlatformStaff);
 
     /// <summary>
     /// Enables RLS for a content table where a <see langword="null"/> <c>OrganizationId</c> means
@@ -46,11 +52,12 @@ public static class TenantRlsMigrationBuilderExtensions
     public static OperationBuilder<SqlOperation> EnableTenantRlsForContent(
         this MigrationBuilder migrationBuilder,
         string tableName,
-        string organizationIdColumnName = DefaultOrganizationIdColumnName)
+        string organizationIdColumnName = DefaultOrganizationIdColumnName,
+        bool admitPlatformStaff = true)
     {
         var quotedColumn = QuoteIdentifier(organizationIdColumnName);
         var comparison = $"{quotedColumn} IS NULL OR {BuildOwnOrganizationComparison(organizationIdColumnName)}";
-        return ApplyPolicy(migrationBuilder, tableName, comparison);
+        return ApplyPolicy(migrationBuilder, tableName, comparison, admitPlatformStaff);
     }
 
     /// <summary>
@@ -78,17 +85,57 @@ public static class TenantRlsMigrationBuilderExtensions
     private static string BuildOwnOrganizationComparison(string organizationIdColumnName)
         => $"{QuoteIdentifier(organizationIdColumnName)} = NULLIF(current_setting('{TenantConnectionInterceptor.OrganizationIdSettingName}', true), '')::uuid";
 
-    private static OperationBuilder<SqlOperation> ApplyPolicy(MigrationBuilder migrationBuilder, string tableName, string comparison)
+    /// <summary>
+    /// The platform-staff branch of the <c>USING</c> clause (2026-08-16, the owner's role split —
+    /// docs/DECISIONS.md). Validated Sellevate staff read across every organization, so the policy
+    /// admits every row while <c>app.platform_mode</c> is on.
+    ///
+    /// <para>
+    /// <c>COALESCE(NULLIF(..., ''), 'off')</c> rather than a bare comparison, for the same reason
+    /// the organization branch uses <c>NULLIF</c>: once a pooled physical connection has run
+    /// <c>SET LOCAL</c> on a GUC even once, Postgres reverts it to <c>''</c> — not NULL — when the
+    /// transaction ends. Comparing <c>''</c> to <c>'on'</c> is merely false, so this is defensive
+    /// rather than load-bearing, but the two branches reading the same way is what keeps the next
+    /// person from "simplifying" the organization branch into the bug it already had once.
+    /// </para>
+    /// </summary>
+    private static string BuildPlatformModeComparison()
+        => $"COALESCE(NULLIF(current_setting('{TenantConnectionInterceptor.PlatformModeSettingName}', true), ''), 'off') = 'on'";
+
+    /// <summary>
+    /// Emits the policy with an asymmetric pair of clauses: <c>USING</c> (what may be read) carries
+    /// the platform-staff branch, <c>WITH CHECK</c> (what may be written) does not. Platform staff
+    /// see every organization and can still only write into one they named — the widening is a
+    /// visibility privilege, never an authorship one.
+    ///
+    /// <para>
+    /// <c>DROP POLICY IF EXISTS</c> first, so calling the helper again on a table that already has
+    /// the policy replaces it instead of failing. That is what lets a later migration re-apply the
+    /// current definition rather than hand-writing policy SQL that would drift from this file — and
+    /// what lets that migration's <c>Down</c> pass <c>admitPlatformStaff: false</c> to regenerate
+    /// the exact pre-2026-08-16 policy through the same code path instead of a copy of it.
+    /// </para>
+    /// </summary>
+    private static OperationBuilder<SqlOperation> ApplyPolicy(
+        MigrationBuilder migrationBuilder,
+        string tableName,
+        string comparison,
+        bool admitPlatformStaff)
     {
         var quotedTable = QuoteIdentifier(tableName);
         var quotedPolicy = QuoteIdentifier($"{tableName}_tenant_isolation");
+        var readComparison = admitPlatformStaff
+            ? $"{BuildPlatformModeComparison()} OR {comparison}"
+            : comparison;
 
         return migrationBuilder.Sql($"""
             ALTER TABLE {quotedTable} ENABLE ROW LEVEL SECURITY;
             ALTER TABLE {quotedTable} FORCE ROW LEVEL SECURITY;
 
+            DROP POLICY IF EXISTS {quotedPolicy} ON {quotedTable};
+
             CREATE POLICY {quotedPolicy} ON {quotedTable}
-                USING ({comparison})
+                USING ({readComparison})
                 WITH CHECK ({comparison});
             """);
     }

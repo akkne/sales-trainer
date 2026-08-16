@@ -64,18 +64,18 @@ public sealed class GamificationDbContext : DbContext
         // OutboxMessages (read only by the system-mode relay) — carry no OrganizationId at all,
         // which is what keeps "a row with no organization is invisible, not shared" true here.
         modelBuilder.Entity<UserExperiencePointsRecord>()
-            .HasQueryFilter(record => record.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserStreak>()
-            .HasQueryFilter(streak => streak.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(streak => _tenantContext.IsPlatformWide || streak.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserAchievement>()
-            .HasQueryFilter(userAchievement => userAchievement.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(userAchievement => _tenantContext.IsPlatformWide || userAchievement.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserLearningProgress>()
-            .HasQueryFilter(progress => progress.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(progress => _tenantContext.IsPlatformWide || progress.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<League>()
-            .HasQueryFilter(league => league.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(league => _tenantContext.IsPlatformWide || league.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<LeagueMembership>()
-            .HasQueryFilter(membership => membership.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(membership => _tenantContext.IsPlatformWide || membership.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<LeagueSettings>()
-            .HasQueryFilter(settings => settings.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(settings => _tenantContext.IsPlatformWide || settings.OrganizationId == _tenantContext.OrganizationId);
     }
 }

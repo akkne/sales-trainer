@@ -140,10 +140,20 @@ internal sealed class ChatConversationRepository : IChatConversationRepository
     /// <summary>
     /// The one filter every read and write in this class starts from. A conversation is tenant data,
     /// not content: there is no "global conversation", so this is plain equality with no null branch.
+    ///
+    /// <para>
+    /// Platform-wide mode (validated Sellevate staff, 2026-08-16) drops the organization instead —
+    /// Mongo has no row-level security, so what Postgres expresses as an <c>OR</c> in a policy's
+    /// <c>USING</c> clause has to be expressed here. It is not a bypass of the unset-tenant rule: a
+    /// request with neither an organization nor platform mode still reaches
+    /// <see cref="RequireOrganizationId"/> and throws.
+    /// </para>
     /// </summary>
     private FilterDefinition<ChatConversation> TenantFilter()
-        => Builders<ChatConversation>.Filter.Eq(
-            conversation => conversation.OrganizationId, RequireOrganizationId());
+        => _tenantContext.IsPlatformWide
+            ? Builders<ChatConversation>.Filter.Empty
+            : Builders<ChatConversation>.Filter.Eq(
+                conversation => conversation.OrganizationId, RequireOrganizationId());
 
     /// <summary>
     /// Fails closed and loudly. Returning every conversation for an unset tenant is the exact

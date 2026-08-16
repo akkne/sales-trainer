@@ -72,4 +72,88 @@ public class TenantContextTests
 
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Test]
+    public void EnterPlatformMode_sets_IsPlatformWide_and_is_not_system_mode()
+    {
+        var tenantContext = new TenantContext();
+
+        tenantContext.EnterPlatformMode();
+
+        tenantContext.IsPlatformWide.Should().BeTrue();
+        tenantContext.IsSystem.Should().BeFalse();
+        tenantContext.OrganizationId.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The two coexist on purpose: a Sellevate administrator who also belongs to an organization
+    /// reads across all of them and writes into theirs. Order must not matter — the middleware sets
+    /// the organization first, but nothing should depend on that.
+    /// </summary>
+    [Test]
+    public void EnterPlatformMode_and_SetOrganization_coexist_in_either_order()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var organizationFirst = new TenantContext();
+        organizationFirst.SetOrganization(organizationId);
+        organizationFirst.EnterPlatformMode();
+
+        var platformFirst = new TenantContext();
+        platformFirst.EnterPlatformMode();
+        platformFirst.SetOrganization(organizationId);
+
+        organizationFirst.IsPlatformWide.Should().BeTrue();
+        organizationFirst.OrganizationId.Should().Be(organizationId);
+        platformFirst.IsPlatformWide.Should().BeTrue();
+        platformFirst.OrganizationId.Should().Be(organizationId);
+    }
+
+    /// <summary>
+    /// System mode and platform-wide mode are not two names for "sees everything". One is a
+    /// background job with nobody behind it, the other is a person entitled to look. A scope that
+    /// claimed both would be a job inheriting a human's privileges, or the reverse.
+    /// </summary>
+    [Test]
+    public void EnterPlatformMode_rejects_a_context_already_in_system_mode()
+    {
+        var tenantContext = new TenantContext();
+        tenantContext.EnterSystemMode();
+
+        var act = tenantContext.EnterPlatformMode;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Test]
+    public void EnterSystemMode_rejects_a_context_already_in_platform_mode()
+    {
+        var tenantContext = new TenantContext();
+        tenantContext.EnterPlatformMode();
+
+        var act = tenantContext.EnterSystemMode;
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Test]
+    public void EnterPlatformMode_is_idempotent()
+    {
+        var tenantContext = new TenantContext();
+
+        tenantContext.EnterPlatformMode();
+        tenantContext.EnterPlatformMode();
+
+        tenantContext.IsPlatformWide.Should().BeTrue();
+    }
+
+    [Test]
+    public void A_fresh_context_is_neither_platform_wide_nor_system()
+    {
+        var tenantContext = new TenantContext();
+
+        tenantContext.IsPlatformWide.Should().BeFalse();
+        tenantContext.IsSystem.Should().BeFalse();
+        tenantContext.OrganizationId.Should().BeNull();
+    }
 }

@@ -47,14 +47,14 @@ public sealed class CompanyDbContext : DbContext
         // model and fails the build if an entity ever grows an OrganizationId without appearing
         // here.
         modelBuilder.Entity<CompanyEntity>()
-            .HasQueryFilter(company => company.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(company => _tenantContext.IsPlatformWide || company.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<CallLogEntry>()
-            .HasQueryFilter(entry => entry.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(entry => _tenantContext.IsPlatformWide || entry.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<PracticeCall>()
-            .HasQueryFilter(practiceCall => practiceCall.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(practiceCall => _tenantContext.IsPlatformWide || practiceCall.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<CompanyContact>()
-            .HasQueryFilter(contact => contact.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(contact => _tenantContext.IsPlatformWide || contact.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<CompanyPersona>()
-            .HasQueryFilter(persona => persona.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(persona => _tenantContext.IsPlatformWide || persona.OrganizationId == _tenantContext.OrganizationId);
     }
 }

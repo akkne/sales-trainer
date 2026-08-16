@@ -52,25 +52,27 @@ public sealed class SocialDbContext : DbContext
         // between two people who are not accepted friends, so a friendship that cannot cross the
         // boundary is also a conversation that cannot.
         modelBuilder.Entity<Friendship>()
-            .HasQueryFilter(friendship => friendship.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(friendship => _tenantContext.IsPlatformWide || friendship.OrganizationId == _tenantContext.OrganizationId);
 
         modelBuilder.Entity<DiscussThread>()
-            .HasQueryFilter(thread => thread.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(thread => _tenantContext.IsPlatformWide || thread.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DiscussReply>()
-            .HasQueryFilter(reply => reply.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(reply => _tenantContext.IsPlatformWide || reply.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DiscussVote>()
-            .HasQueryFilter(vote => vote.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(vote => _tenantContext.IsPlatformWide || vote.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DiscussThreadTag>()
-            .HasQueryFilter(threadTag => threadTag.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(threadTag => _tenantContext.IsPlatformWide || threadTag.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DiscussPhoto>()
-            .HasQueryFilter(photo => photo.OrganizationId == _tenantContext.OrganizationId);
+            .HasQueryFilter(photo => _tenantContext.IsPlatformWide || photo.OrganizationId == _tenantContext.OrganizationId);
 
         // The one content-flavour filter in this database: NULL means the curated vocabulary every
         // organization shares. NOT plain equality — a new customer would otherwise open Discuss and
         // find no tags at all.
         modelBuilder.Entity<DiscussTag>()
             .HasQueryFilter(tag =>
-                tag.OrganizationId == null || tag.OrganizationId == _tenantContext.OrganizationId);
+                _tenantContext.IsPlatformWide
+                || tag.OrganizationId == null
+                || tag.OrganizationId == _tenantContext.OrganizationId);
 
         // UserReplicas carries no organization: identities are cross-organization by design
         // (TENANCY.md §4.2), the same call learning, ai and gamification made. What keeps user
