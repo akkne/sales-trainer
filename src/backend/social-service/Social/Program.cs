@@ -21,6 +21,7 @@ using Sellevate.Social.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
+using Sellevate.Social.Common.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -112,18 +113,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    // Phase 40.6: the global `Admin` role is gone. `RequireSuperAdmin` gates the existing
-    // discuss-moderation admin endpoints — Sellevate-staff-only, since there is no
-    // org-scoped admin screen yet (that is 40.20). `RequireOrgAdmin` is new infrastructure
-    // for the organization-scoped role (`org_role` claim); no call site here yet.
-    authorizationOptions.AddPolicy("RequireOrgAdmin", policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.HasClaim(claim => claim.Type == "org_role" && claim.Value == "OrgAdmin")));
-    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
-        policy.RequireRole("SuperAdmin"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

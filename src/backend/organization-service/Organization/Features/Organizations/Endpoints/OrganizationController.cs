@@ -17,7 +17,7 @@ namespace Sellevate.Organization.Features.Organizations.Endpoints;
 /// </summary>
 [ApiController]
 [Route(RouteConstants.OrganizationsBase)]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdmin)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class OrganizationController(IOrganizationService organizationService) : ControllerBase
 {
     [HttpPost]

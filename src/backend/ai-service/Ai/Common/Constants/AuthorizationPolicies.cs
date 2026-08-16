@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 
-namespace Sellevate.Learning.Common.Constants;
+namespace Sellevate.Ai.Common.Constants;
 
 /// <summary>
 /// The four authorization policies of the platform, declared identically in every service so a

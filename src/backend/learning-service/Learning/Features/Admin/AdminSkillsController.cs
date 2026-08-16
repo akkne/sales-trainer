@@ -10,7 +10,7 @@ namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
 [Route("admin/skills")]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminSkillsController(LearningDbContext database, ILogger<AdminSkillsController> logger) : ControllerBase
 {
     [HttpGet]

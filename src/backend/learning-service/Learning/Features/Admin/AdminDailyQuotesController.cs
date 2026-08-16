@@ -22,7 +22,7 @@ public sealed record AdminDailyQuoteWriteRequestDto(
     string? Author);
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminDailyQuotesController(
     LearningDbContext databaseContext,
     ILogger<AdminDailyQuotesController> logger) : ControllerBase

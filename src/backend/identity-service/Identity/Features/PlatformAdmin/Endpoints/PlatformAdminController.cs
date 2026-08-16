@@ -5,6 +5,7 @@ using Sellevate.Identity.Features.PlatformAdmin.Constants;
 using Sellevate.Identity.Features.PlatformAdmin.Exceptions;
 using Sellevate.Identity.Features.PlatformAdmin.Models;
 using Sellevate.Identity.Features.PlatformAdmin.Services.Abstract;
+using Sellevate.Identity.Common.Constants;
 
 namespace Sellevate.Identity.Features.PlatformAdmin.Endpoints;
 
@@ -24,7 +25,7 @@ namespace Sellevate.Identity.Features.PlatformAdmin.Endpoints;
 /// </summary>
 [ApiController]
 [Route("admin/platform")]
-[Authorize(Policy = "RequireSuperAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
 public sealed class PlatformAdminController(IPlatformAdminService platformAdminService) : ControllerBase
 {
     /// <summary>
@@ -58,7 +59,7 @@ public sealed class PlatformAdminController(IPlatformAdminService platformAdminS
         => Ok(await platformAdminService.ListImpersonationsAsync(cancellationToken));
 
     /// <summary>
-    /// Invites the first <c>OrgAdmin</c> of a new organization, reusing the Phase 40.7 invite
+    /// Invites the first <c>TenancySuperAdmin</c> of a new organization, reusing the Phase 40.7 invite
     /// machinery rather than adding a second way to create a membership.
     /// </summary>
     [HttpPost("organizations/bootstrap-admin")]

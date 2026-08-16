@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Invites.Models;
 using Sellevate.Identity.Features.Membership.Models;
 using Sellevate.Identity.Infrastructure.Data;
@@ -78,8 +79,10 @@ public class InviteFlowTests
     [Test]
     public async Task CreateInvites_WithoutOrganizationHeader_IsForbidden()
     {
+        // The caller is a fully entitled TenancySuperAdmin — the 403 must come from the missing
+        // X-Organization-Id header alone, not from the role gate.
         var client = Factory.CreateAuthenticatedClient(
-            Guid.NewGuid(), "orgadmin@test.com", "Org Admin", orgRole: "OrgAdmin");
+            Guid.NewGuid(), "orgadmin@test.com", "Org Admin", orgRole: "TenancySuperAdmin");
 
         var response = await client.PostAsJsonAsync("/invites", new { email = UniqueEmail(), role = "Manager" });
 
@@ -97,6 +100,49 @@ public class InviteFlowTests
         var response = await client.PostAsJsonAsync("/invites", new { email = UniqueEmail(), role = "Manager" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // The 2026-08-16 role split: adding and removing users is the single privilege that separates
+    // a tenancy admin from a tenancy superadmin. A TenancyAdmin runs everything else in the
+    // organization and still cannot invite.
+    [Test]
+    public async Task CreateInvites_AsTenancyAdmin_IsForbidden()
+    {
+        var organizationId = Guid.NewGuid();
+        var client = Factory.CreateOrganizationAdminClient(
+            Guid.NewGuid(), organizationId, organizationRole: "TenancyAdmin");
+
+        var response = await client.PostAsJsonAsync("/invites", new { email = UniqueEmail(), role = "Manager" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // A platform SuperAdmin holds no membership anywhere, so it carries no `org_role` claim at
+    // all — the policy has to let it through on the platform role alone.
+    [Test]
+    public async Task CreateInvites_AsPlatformSuperAdminWithoutAnyMembership_IsAllowed()
+    {
+        var organizationId = Guid.NewGuid();
+        var client = Factory.CreateAuthenticatedClient(
+            Guid.NewGuid(), "platform@test.com", "Platform Staff", UserRole.SuperAdmin);
+        client.DefaultRequestHeaders.Add("X-Organization-Id", organizationId.ToString());
+
+        var response = await client.PostAsJsonAsync("/invites", new { email = UniqueEmail(), role = "Manager" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    // The role name `OrgAdmin` was retired on 2026-08-16. A stale client must be told, not
+    // silently mapped onto whatever the closest surviving value happens to be.
+    [Test]
+    public async Task CreateInvites_WithTheRetiredOrgAdminRoleName_IsRejected()
+    {
+        var organizationId = Guid.NewGuid();
+        var client = Factory.CreateOrganizationAdminClient(Guid.NewGuid(), organizationId);
+
+        var response = await client.PostAsJsonAsync("/invites", new { email = UniqueEmail(), role = "OrgAdmin" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Test]
@@ -140,7 +186,7 @@ public class InviteFlowTests
             Factory, email, "Existing Person", organizationId: firstOrganizationId);
 
         var client = Factory.CreateOrganizationAdminClient(Guid.NewGuid(), secondOrganizationId);
-        var createdInvite = await CreateInviteAsync(client, email, "OrgAdmin");
+        var createdInvite = await CreateInviteAsync(client, email, "TenancyAdmin");
 
         var anonymousClient = Factory.CreateClient();
         var acceptResponse = await anonymousClient.PostAsJsonAsync(
@@ -162,7 +208,7 @@ public class InviteFlowTests
         memberships.Should().HaveCount(2);
         memberships.Should().Contain(membership =>
             membership.OrganizationId == secondOrganizationId
-            && membership.Role == OrgRole.OrgAdmin
+            && membership.Role == OrgRole.TenancyAdmin
             && membership.Status == MembershipStatus.Active);
     }
 

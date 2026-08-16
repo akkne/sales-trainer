@@ -107,7 +107,7 @@ internal sealed class PlatformAdminService(
             .AsNoTracking()
             .AnyAsync(
                 membership => membership.OrganizationId == organization.OrganizationId
-                    && membership.Role == OrgRole.OrgAdmin
+                    && membership.Role == OrgRole.TenancySuperAdmin
                     && membership.Status == MembershipStatus.Active,
                 cancellationToken);
 
@@ -133,7 +133,7 @@ internal sealed class PlatformAdminService(
 
         var inviteService = organizationScope.ServiceProvider.GetRequiredService<IInviteService>();
         var createInvitesResponse = await inviteService.CreateAsync(
-            new CreateInvitesRequestDto(request.Email, Emails: null, Role: nameof(OrgRole.OrgAdmin)),
+            new CreateInvitesRequestDto(request.Email, Emails: null, Role: nameof(OrgRole.TenancySuperAdmin)),
             actor.UserId,
             cancellationToken);
 
@@ -148,7 +148,7 @@ internal sealed class PlatformAdminService(
         var createdInvite = createInvitesResponse.Created[0];
 
         logger.LogWarning(
-            "Bootstrap OrgAdmin invited InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
+            "Bootstrap TenancySuperAdmin invited InviteId={InviteId} OrganizationId={OrganizationIdentifier} "
             + "ActorUserId={ActorUserId}",
             createdInvite.Id, organization.OrganizationId, actor.UserId);
 
@@ -186,7 +186,7 @@ internal sealed class PlatformAdminService(
     }
 
     /// <summary>
-    /// Refuses to bootstrap an organization that already has an unused <c>OrgAdmin</c> invite
+    /// Refuses to bootstrap an organization that already has an unused <c>TenancySuperAdmin</c> invite
     /// waiting. Runs in the target organization's own scope and inside an explicit transaction so
     /// the row-level-security <c>SET LOCAL</c> has something to attach to — a bare <c>SELECT</c>
     /// on a tenant-scoped table sees nothing otherwise (docs/TENANCY/TENANCY.md §1.5).
@@ -204,7 +204,7 @@ internal sealed class PlatformAdminService(
         var hasPendingOrganizationAdminInvite = await scopedDatabaseContext.Invites
             .AsNoTracking()
             .AnyAsync(
-                invite => invite.Role == OrgRole.OrgAdmin
+                invite => invite.Role == OrgRole.TenancySuperAdmin
                     && invite.AcceptedAt == null
                     && invite.RevokedAt == null
                     && invite.ExpiresAt > now,
@@ -254,7 +254,7 @@ internal sealed class PlatformAdminService(
             new("displayName", actor.DisplayName),
             new(ClaimTypes.Role, UserRole.User.ToString()),
             new("org_id", organizationId.ToString()),
-            new("org_role", nameof(OrgRole.OrgAdmin)),
+            new("org_role", nameof(OrgRole.TenancyAdmin)),
             new(ImpersonationClaimNames.IsImpersonation, "true"),
             new(ImpersonationClaimNames.ImpersonationId, impersonationId.ToString()),
             new(ImpersonationClaimNames.ActorUserId, actor.UserId.ToString()),

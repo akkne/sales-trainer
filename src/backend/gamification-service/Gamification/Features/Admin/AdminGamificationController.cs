@@ -19,7 +19,7 @@ namespace Sellevate.Gamification.Features.Admin;
 /// </summary>
 [ApiController]
 [Route(RouteConstants.AdminGamification)]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 [TenantScoped]
 public sealed class AdminGamificationController(
     GamificationDbContext databaseContext,

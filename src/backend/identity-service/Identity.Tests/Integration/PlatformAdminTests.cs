@@ -16,7 +16,7 @@ namespace Sellevate.Identity.Tests.Integration;
 
 /// <summary>
 /// Phase 40.9 — the platform superadmin surface: impersonation and bootstrapping the first
-/// <c>OrgAdmin</c> of a new organization.
+/// <c>TenancySuperAdmin</c> of a new organization.
 /// </summary>
 [TestFixture]
 [Category("Integration")]
@@ -39,7 +39,7 @@ public class PlatformAdminTests
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
         var client = Factory.CreateAuthenticatedClient(
-            Guid.NewGuid(), UniqueEmail(), "Ordinary", UserRole.User, organizationId, "OrgAdmin");
+            Guid.NewGuid(), UniqueEmail(), "Ordinary", UserRole.User, organizationId, "TenancyAdmin");
 
         var response = await client.PostAsJsonAsync(
             "/admin/platform/impersonation",
@@ -64,7 +64,7 @@ public class PlatformAdminTests
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
         var client = Factory.CreateAuthenticatedClient(
-            Guid.NewGuid(), UniqueEmail(), "Ordinary", UserRole.User, organizationId, "OrgAdmin");
+            Guid.NewGuid(), UniqueEmail(), "Ordinary", UserRole.User, organizationId, "TenancyAdmin");
 
         var response = await client.PostAsJsonAsync(
             "/admin/platform/organizations/bootstrap-admin",
@@ -196,7 +196,7 @@ public class PlatformAdminTests
     }
 
     [Test]
-    public async Task BootstrapOrganizationAdmin_CreatesAnOrgAdminInviteThatCanBeAccepted()
+    public async Task BootstrapOrganizationAdmin_CreatesATenancySuperAdminInviteThatCanBeAccepted()
     {
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId, "Fresh Customer");
@@ -225,7 +225,9 @@ public class PlatformAdminTests
         var database = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var membership = await database.Memberships
             .SingleAsync(candidate => candidate.OrganizationId == organizationId);
-        membership.Role.Should().Be(OrgRole.OrgAdmin);
+        membership.Role.Should().Be(OrgRole.TenancySuperAdmin,
+            "the first person in a new organization has to be able to add everyone else, and after "
+            + "the 2026-08-16 role split only a TenancySuperAdmin can");
         membership.Status.Should().Be(MembershipStatus.Active);
     }
 
@@ -249,13 +251,13 @@ public class PlatformAdminTests
     }
 
     [Test]
-    public async Task BootstrapOrganizationAdmin_WhenAnOrgAdminAlreadyExists_IsConflict()
+    public async Task BootstrapOrganizationAdmin_WhenATenancySuperAdminAlreadyExists_IsConflict()
     {
         var organizationId = Guid.NewGuid();
         await TestOrganizationSeeder.SeedOrganizationAsync(Factory, organizationId);
         await TestUserSeeder.SeedUserAsync(
             Factory, UniqueEmail(), "Sitting Admin",
-            organizationId: organizationId, organizationRole: OrgRole.OrgAdmin);
+            organizationId: organizationId, organizationRole: OrgRole.TenancySuperAdmin);
         var client = CreateSuperAdminClient();
 
         var response = await client.PostAsJsonAsync(

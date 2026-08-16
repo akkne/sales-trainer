@@ -9,8 +9,8 @@ public enum PlatformAdminRejectionReason
     /// <summary>The organization is suspended — it may neither be entered nor staffed.</summary>
     OrganizationSuspended = 1,
 
-    /// <summary>The organization already has an active <c>OrgAdmin</c> or a pending
-    /// <c>OrgAdmin</c> invite, so it is past the point of being bootstrapped.</summary>
+    /// <summary>The organization already has an active <c>TenancySuperAdmin</c> or a pending
+    /// <c>TenancySuperAdmin</c> invite, so it is past the point of being bootstrapped.</summary>
     OrganizationAlreadyBootstrapped = 2,
 
     /// <summary>The caller is already inside an impersonation session. Impersonating from an

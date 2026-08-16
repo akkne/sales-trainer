@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.Dialog;
 
@@ -12,7 +13,7 @@ namespace Sellevate.Ai.Features.Dialog;
 // in ai-service) — Sellevate-staff-only. RequireSuperAdmin.
 [ApiController]
 [Route("admin/dialog")]
-[Authorize(Policy = "RequireSuperAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminDialogController : ControllerBase
 {
     private readonly AiDbContext _dbContext;

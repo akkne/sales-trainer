@@ -13,7 +13,7 @@ using Sellevate.Learning.Infrastructure.Data;
 namespace Sellevate.Learning.Features.Admin;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminSeederController(LearningDbContext database, ILogger<AdminSeederController> logger) : ControllerBase
 {
     [HttpPost("admin/seeder/skills")]

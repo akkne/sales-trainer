@@ -97,10 +97,18 @@ public sealed class TestWebApplicationFactory(string connectionString) : WebAppl
     // Stands in for the gateway, which is the only thing allowed to set X-Organization-Id and
     // always derives it from the validated token (docs/TENANCY/TENANCY.md §1.1). Calling the
     // service directly in a test means setting it by hand.
-    public HttpClient CreateOrganizationAdminClient(Guid userId, Guid organizationId, string email = "orgadmin@test.com")
+    // The default is TenancySuperAdmin rather than TenancyAdmin because most callers use this
+    // client to invite or offboard someone, and after the 2026-08-16 role split that is the one
+    // thing only a superadmin may do (docs/DECISIONS.md). Pass `organizationRole` explicitly to
+    // assert the negative case.
+    public HttpClient CreateOrganizationAdminClient(
+        Guid userId,
+        Guid organizationId,
+        string email = "orgadmin@test.com",
+        string organizationRole = "TenancySuperAdmin")
     {
         var client = CreateAuthenticatedClient(
-            userId, email, "Org Admin", UserRole.User, organizationId, "OrgAdmin");
+            userId, email, "Org Admin", UserRole.User, organizationId, organizationRole);
         client.DefaultRequestHeaders.Add(IdentityHeaders.OrganizationId, organizationId.ToString());
         return client;
     }

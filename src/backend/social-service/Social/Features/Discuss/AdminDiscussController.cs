@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
+using Sellevate.Social.Common.Constants;
 
 namespace Sellevate.Social.Features.Discuss;
 
@@ -16,7 +17,7 @@ namespace Sellevate.Social.Features.Discuss;
 // way to moderate another customer's forum. A cross-tenant moderation view is exactly the leak this
 // block closes, and the org-scoped admin surface is 40.20.
 [TenantScoped]
-[Authorize(Policy = "RequireSuperAdmin")]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminDiscussController : ControllerBase
 {
     private readonly IDiscussService _discussService;
