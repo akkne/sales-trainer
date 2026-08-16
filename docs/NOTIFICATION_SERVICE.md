@@ -44,11 +44,41 @@ src/backend/notification-service/
 
 | Store | Owns | Notes |
 |---|---|---|
-| Redis list `notifications:inbox:{userId}` | Per-user notification inbox | `LPUSH` newest-first, `LTRIM` to `InboxCapacity` (default 100), `EXPIRE` = `RetentionDays` (default 30). |
-| Redis string `notifications:unread:{userId}` | Fast unread counter | Refreshed from the list on every write; same TTL. |
+| Redis list `org:{orgId}:notifications:inbox:{userId}` | Per-user notification inbox | `LPUSH` newest-first, `LTRIM` to `InboxCapacity` (default 100), `EXPIRE` = `RetentionDays` (default 30). Namespaced per organization since 40.13 (was `notifications:inbox:{userId}`). |
+| Redis string `org:{orgId}:notifications:unread:{userId}` | Fast unread counter | Refreshed from the list on every write; same TTL. Namespaced per organization since 40.13. |
+| Redis string `org:{orgId}:notifications:chat-email:read:{userId}:{conversationId}` | Chat read watermark | Suppresses a pending unread-chat email once the recipient has actually read the conversation; namespaced per organization since 40.13 — a conversation belongs to one organization, matching social-service's chat isolation in this same block. |
+| Redis sorted set `notifications:chat-email:pending` | Delayed unread-chat email queue | **Stays un-prefixed on purpose.** One due-time-ordered work list shaped like an outbox; the organization travels inside each queued item instead (`PendingChatEmail`), the same way it rides in a Kafka envelope. Items queued before 40.13 carry no organization and are dropped with a warning rather than dispatched under a guessed tenant. |
+| Redis hash `notifications:user:{userId}` | Cross-org user directory replica | **Deliberately not namespaced** — projects Identity's cross-organization user directory (TENANCY.md §4.2), the same call learning/ai/gamification/social made for their `UserReplicas` tables. |
 | Redis (shared) | Kafka idempotency store | `idem:notification-service:{eventId}` via the shared `RedisIdempotencyStore`. |
 
 No Postgres, no Mongo, no EF migrations, no `DatabaseBootstrapper`.
+
+## Multi-tenancy (Phase 40.13)
+
+notification-service has no database and therefore no row-level security to fall back on — the
+Redis key **is** the boundary. `INotificationStore` takes the organization explicitly on every
+member (it is a singleton, so it has no current organization to read from); `NotificationService` —
+scoped, and therefore holding a real `ITenantContext` — is the single place that turns the ambient
+tenant into an explicit argument, with no system-mode path at all: an inbox has no platform-global
+reading, so an unset tenant raises. The key builders in `Common/Constants/RedisKeys.cs` raise on an
+empty organization rather than building `org:00000000-...:notifications:inbox:{user}` — that key
+would be one shared bucket collecting every caller whose context was missing, worse than the
+un-prefixed key it replaced because it would *look* correctly namespaced.
+
+`NotificationController` is `[TenantScoped]` and the tenant middleware is wired into the pipeline —
+a request with no `X-Organization-Id` (gateway-set) gets `403`, not a pooled inbox.
+`NotificationEventConsumer` keeps `RequiresOrganization` at its inherited `true`, now as a
+written-down decision: every topic it handles (`achievement.unlocked`, `streak.milestone`,
+`friend.request.received`, `friend.request.accepted`, `chat.message.sent`, `chat.message.read`,
+`discuss.reply.created`) produces a notification in exactly one organization's inbox, so an
+envelope with no organization is a bug that should dead-letter rather than land somewhere. This is
+also why social-service and gamification-service both stamp the organization on every event they
+publish (see their own 40.13 notes) — an unstamped envelope reaching this consumer now fails
+loudly instead of silently.
+
+Old, un-prefixed Redis keys are never read after the rollout and are left to expire on their own
+TTL — see `docs/DONT_FORGET.md` for what that means for a user's notification history across the
+deploy.
 
 ## Cleanup-job replacement
 

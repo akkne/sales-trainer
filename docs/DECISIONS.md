@@ -4,6 +4,122 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-16 — the remaining services get `organization_id` (40.13, Stage C closes)
+
+- **`DiscussTags` is social-db's one content-flavour table, and the stamping is explicit rather than
+  automatic.** A tag is a word, not somebody's content: `OrganizationId` is nullable, `NULL` is the
+  curated vocabulary every organization shares, and the filter is `== null || == current` — plain
+  equality would open Discuss to a new customer with no tags at all, the same trap learning's
+  `Skill.IconicName` and ai's seeded dialog modes named in 40.10/40.11. The stamping cannot be
+  automatic the way `ITenantScoped` writes are: the write guard (`TenantSaveChangesInterceptor`)
+  only recognizes `ITenantScoped`, whose `OrganizationId` is a non-nullable `Guid`, so `DiscussTag`
+  cannot implement it without losing the nullable column that makes the content flavour work at all.
+  `ResolveOrCreateTagsAsync` stamps a user-typed tag by hand; the SuperAdmin curated-tag endpoint
+  leaves the column unset on purpose. `UNIQUE(Slug)` becomes `UNIQUE(OrganizationId, Slug)` plus a
+  partial unique index over the global rows (Postgres treats `NULL`s in a composite unique index as
+  distinct, so the composite alone would allow the curated tag "objections" to exist twice at the
+  global level) — the same pair learning-service needed for `Skill.IconicName`.
+  - *Alternative rejected — a separate `CuratedTags` table, kept entirely apart from per-organization
+    tags.* Would avoid the nullable column and the explicit-stamping asymmetry, but every read path
+    that resolves a thread's tags (list, search, autocomplete) would need to union two tables instead
+    of filtering one, and the frontend tag picker gains no benefit from the split — it already treats
+    curated and custom tags identically. Not worth doubling the read surface to avoid one nullable
+    column.
+
+- **`UserReplicas` stays platform-global in both gamification-service and social-service, the same
+  call learning (40.10) and ai (40.11) made.** It projects identity-service's cross-organization user
+  directory (TENANCY.md §4.2): a user's `DisplayName`/`Email`/`AvatarKey` are not organization-scoped
+  facts, they are the same three fields regardless of which organization is asking, and giving the
+  table an `OrganizationId` would just duplicate one row per organization a person belongs to for no
+  isolation gain — Identity is the source of truth for who somebody is, not for who employs them.
+  **What this leaves open, stated plainly:** social-service's `FriendService.SearchUsersAsync` still
+  searches `UserReplicas` platform-wide, so it can surface a person from another organization by name
+  or email in a friend-search result. That is not a new leak 40.13 introduced — the same platform-wide
+  search existed before this block — and the boundary that actually matters is enforced one step
+  later: a friend request toward that person is refused by the `Friendships` RLS policy the moment
+  either party tries to accept it, so the two people can never actually become friends or open a chat
+  across the organization boundary. Narrowing the search itself to organization-mates only was
+  considered and deliberately left to a later block, because it needs a join through Identity's
+  membership table that no 40.13 service currently has a read path for; see `docs/DONT_FORGET.md`.
+
+- **Redis-only services get key prefixing, not separate Redis databases, for notification-service and
+  analytics-service.** Both services have no relational database and therefore no RLS to fall back
+  on — the Redis key name *is* the tenant boundary, the same shape 40.11 used for ai-service's
+  verdict cache and voice-quota counters. Every organization's data gets `org:{orgId}:` prepended to
+  its existing key (`notifications:inbox:{userId}` → `org:{orgId}:notifications:inbox:{userId}`,
+  `presence:online` → `org:{orgId}:presence:online`); the key builders raise on an empty organization
+  rather than building `org:00000000-...:...`, which would be one shared bucket collecting every
+  caller whose context was missing — worse than the un-prefixed key it replaced, because it would
+  *look* correctly namespaced.
+  - *Alternative rejected — a separate logical Redis database (`SELECT n`) per organization.* Redis
+    databases are a fixed, small, per-connection-pool resource (16 by default), not a per-tenant
+    primitive, and StackExchange.Redis multiplexers are shared singletons in both services — routing
+    per request would mean either one connection per organization (defeating the point of a shared
+    multiplexer) or a runtime `SELECT` race between requests sharing a connection.
+  - *Alternative rejected — a separate Redis instance per organization.* The operationally correct
+    shape at very large scale, and explicitly out of scope for this block: it would need per-tenant
+    infrastructure provisioning, which Phase 40 has not built for any store yet (Postgres and Mongo
+    both stay single-instance, RLS/application-filter-scoped).
+  - Old un-prefixed keys are not migrated or flushed. notification-service's inbox/counter keys carry
+    a TTL and expire on their own; analytics-service's `presence:online` is a TTL-less sorted set and
+    needs one manual `DEL` — recorded in `docs/DONT_FORGET.md` because it is the one key in this block
+    that will not disappear by itself.
+
+- **Four unique-index swaps live inside the `AddOrganizationId` migration for gamification-service,
+  and two do for social-service — not the concurrent-rebuild script 40.10–40.12 used for every
+  index.** The pattern through 40.12 was "no `CREATE INDEX` in the migration at all," because
+  `Database.Migrate()` runs on the startup path and a long index build there stalls readiness. That
+  reasoning does not apply to a small, fixed set of constraints on tables that hold at most a row per
+  user (or a handful of rows per week): `Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`,
+  `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key,
+  `DiscussTags.(Slug)`, and `Friendships.(RequesterId,AddresseeId)` (+ its canonical-pair index) were
+  all **correctness-load-bearing in the deploy-to-script window**, not performance work: memberships
+  (40.6) let one person belong to two customers, and every one of these old, platform-wide constraints
+  would have refused that person's second organization a row — a league, a streak, an achievement, a
+  friendship, or (for `DiscussTags`) an entire second organization's ability to create the tag
+  somebody is typing. Leaving them for the concurrent-rebuild script would have meant the service was
+  broken for the second organization from the moment of deploy until a human ran a separate script.
+  The read indexes on the two tables that actually grow without bound in each service —
+  `UserXpRecords`/`LeagueMemberships` in gamification-db, everything else in social-db — stay in the
+  concurrent-rebuild scripts, unchanged from the 40.10–40.12 pattern.
+
+- **Chat isolation is application-side in social-service, because Mongo has no row-level security.**
+  `chat_conversations` gets an `organizationId` field, but there is no database-side policy that can
+  enforce it the way Postgres's RLS does for the other six tables — the entire boundary is
+  `ChatConversationRepository`, the only class permitted to call `GetCollection<ChatConversation>`.
+  `MongoDbContext` was cut down to expose the database handle alone (it used to expose
+  `ChatConversations` as a property), and a unit test walks the source tree and fails the build if a
+  second file names `GetCollection<ChatConversation>` — the same structural move ai-service made for
+  `dialog_sessions` in 40.11. Every repository method takes the tenant from `ITenantContext` and
+  raises on an unset one; there is no system-mode bypass, because there is no legitimate
+  platform-wide read of somebody's private messages.
+  - *Alternative rejected — a `organizationId` filter added ad hoc at each of `ChatService`'s five
+    call sites, with no repository.* Cheaper to write, but it is exactly the shape that lets a future
+    call site forget the filter with nothing else in the codebase able to catch it — Mongo will not
+    reject an unfiltered query the way Postgres rejects a write with no `SET LOCAL` under `FORCE ROW
+    LEVEL SECURITY`. Centralizing behind one interface turns "did every caller remember" into "does
+    the interface exist and is it the only path," which is checkable by a test that does not need to
+    enumerate call sites.
+  - The structural half of the boundary — friendship and chat cannot cross the organization — comes
+    from `ChatService.GetOrCreateConversationAsync` refusing to open a conversation between people who
+    are not `Accepted` friends, combined with `Friendships` being RLS-protected tenant data: a
+    friendship that cannot cross the boundary is also a conversation that cannot.
+
+- **`LeagueSettings` becomes tenant data with `UNIQUE(OrganizationId)`, not configuration, and the
+  startup seeder stops creating it.** Every other singleton settings row in gamification-db
+  (`GamificationSettings`) is genuinely installation-wide and stayed platform-global. `LeagueSettings`
+  looked like the same shape — one row, admin-edited — but `CurrentPeriodStartDate`/
+  `CurrentPeriodEndsAt` are the state of a *running competition*, not a knob: shared, the first
+  organization to roll over advanced the period for everybody, and every other organization's weekly
+  rollover then found the period already advanced, bailed out, and left its leagues open forever; one
+  customer's admin pressing "close the league now" did that to every other customer too. Startup has
+  no tenant, so the seeder cannot create a correctly-scoped row for every future organization up
+  front — it stopped creating this row at all, and `LeagueService.GetSettingsAsync` returns a correct
+  unsaved default until an organization's own admin first saves league settings, which is when the row
+  is actually created.
+
+---
+
 ## 2026-08-15 — learning-service gets `organization_id` (40.10, first Stage-C service)
 
 - **Content is nullable-owner, tenant data is not, and they use different RLS helpers.** Progress

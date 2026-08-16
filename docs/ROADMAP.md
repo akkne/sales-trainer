@@ -1752,18 +1752,43 @@
 - [~] Бэкфилл и перестройка индексов — SQL и драйвер написаны, **ни разу не выполнялись ни против
       какой БД**; порядок для человека в `docs/DONT_FORGET.md`
 
-### [ ] 40.13 Остальные сервисы
-- [ ] `social-service`: Postgres `social` + Mongo `chat_conversations` + фото в MinIO;
-      дружба и чат **не должны** пересекать границу организации
-- [ ] `gamification-service`: таблицы + Hangfire-джобы (сброс серий, недельное закрытие) —
-      обход по организациям либо явный `IsSystem`
-- [ ] `notification-service`: Redis-инбоксы — префикс `org:{orgId}:`
-- [ ] `analytics-service`: Redis-only, presence и воронки — префикс ключей, иначе утекает
-      численность команды между заказчиками
-- [ ] `identity-service`: `ExpiredRefreshTokenCleanupService` /
-      `ExpiredEmailVerificationCleanupService` — явный системный режим
-- [ ] Обновить `docs/SOCIAL_SERVICE.md`, `docs/GAMIFICATION_SERVICE.md`,
-      `docs/NOTIFICATION_SERVICE.md`, `docs/ANALYTICS_SERVICE.md`
+### [x] 40.13 Остальные сервисы
+- [x] `social-service`: Postgres `social` + Mongo `chat_conversations` + фото в MinIO;
+      дружба и чат **не должны** пересекать границу организации — шесть таблиц (`Friendships`,
+      `DiscussThreads/Replies/Votes/ThreadTags/Photos`) строгая RLS, `DiscussTags` — нуллабельная
+      контентная (курируемые теги общие), `ChatConversationRepository` — единственный держатель
+      Mongo-коллекции (RLS у Mongo нет), фото — `org/{organizationId}/…`, старые ключи не трогаются
+  - [~] Интеграционные тесты изоляции (12 штук, Postgres+Mongo) **написаны, не прогнаны** —
+        Правило №2 в `docs/DONT_FORGET.md`; юнит-тесты 56/56 зелёные
+  - [~] Раскатка (`--backfill` → `--mongo` → `--indexes`) **не выполнена ни против какой БД**;
+        порядок в `docs/DONT_FORGET.md`
+  - [~] Поиск пользователей (`SearchUsersAsync`) остался платформенным, не сужен по организации —
+        решение оставлено владельцу продукта, см. `docs/DONT_FORGET.md` и `docs/DECISIONS.md`
+- [x] `gamification-service`: таблицы + Hangfire-джобы (сброс серий, недельное закрытие) —
+      обход по организациям либо явный `IsSystem` — семь таблиц строгой RLS, оба джоба стали
+      «обход по организациям» через `TenantJobScope`, `LeagueSettings` стала per-organization
+  - [~] В отличие от social/learning/ai/company в этом блоке **не написано** ни модельного
+        тест-файла (`*TenancyModelTests`), ни интеграционных тестов изоляции по реальному
+        Postgres — только точечные правки существующих тестов (`StreakResetJobTests`,
+        `StreakTimezoneTests`, `GamificationDbContextFactory`). Юнит-тесты 42/42 зелёные, но
+        покрытие слабее, чем в остальных сервисах блока — см. отчёт исполнителя
+  - [~] Раскатка (`--backfill` → `--indexes`) **не выполнена ни против какой БД**; порядок в
+        `docs/DONT_FORGET.md`
+- [x] `notification-service`: Redis-инбоксы — префикс `org:{orgId}:` — инбокс, счётчик и
+      вотермарка чат-писем; очередь `notifications:chat-email:pending` осталась без префикса
+      намеренно (организация едет внутри элемента очереди); `RequiresOrganization` остался `true`
+- [x] `analytics-service`: Redis-only, presence и воронки — префикс ключей, иначе утекает
+      численность команды между заказчиками — `presence:online` → `org:{orgId}:presence:online`,
+      реестр организаций `presence:organizations`, `FunnelEventsConsumer` — `RequiresOrganization
+      => false` (кросс-организационное событие `user.registered`)
+  - [~] Старый ключ `presence:online` без TTL — единственный ключ блока, который не уйдёт сам,
+        удалить руками (`docs/DONT_FORGET.md`)
+- [x] `identity-service`: `ExpiredRefreshTokenCleanupService` /
+      `ExpiredEmailVerificationCleanupService` — явный системный режим (`EnterSystemMode()` до
+      резолва `IdentityDbContext`), четыре тест-тривера по исходникам; identity 62/62
+- [x] Обновить `docs/SOCIAL_SERVICE.md`, `docs/GAMIFICATION_SERVICE.md`,
+      `docs/NOTIFICATION_SERVICE.md`, `docs/ANALYTICS_SERVICE.md` (+ `docs/DB_SCHEMA.md`,
+      `docs/TESTING/TENANCY.md`, `docs/DECISIONS.md`, `docs/DONT_FORGET.md`)
 
 ### [ ] 40.14 Аудит фоновых задач и приёмка изоляции
 - [ ] Реестр всех `BackgroundService` / Hangfire-джоб: для каждой явно записать режим —

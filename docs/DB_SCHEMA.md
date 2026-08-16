@@ -350,6 +350,7 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 | Column        | Type                       | Nullable | Notes                              |
 |---------------|----------------------------|----------|------------------------------------|
 | `Id`          | `uuid`                     | NOT NULL | PK                                 |
+| `OrganizationId` | `uuid`                  | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS (plain equality — there is no global content flavour in social-db). A friendship cannot cross the organization boundary. |
 | `RequesterId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who sent (loose `Guid` in `social`) |
 | `AddresseeId` | `uuid`                     | NOT NULL | FK → `Users.Id` — who received (loose `Guid` in `social`) |
 | `Status`      | `integer`                  | NOT NULL | 0=Pending, 1=Accepted, 2=Declined |
@@ -357,11 +358,27 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 | `AcceptedAt`  | `timestamp with time zone` | NULL     |                                    |
 
 **Indexes:**
-- UNIQUE `(RequesterId, AddresseeId)` — no duplicate requests
-- Individual on `RequesterId` and `AddresseeId`
+- UNIQUE `(OrganizationId, RequesterId, AddresseeId)` — no duplicate requests within one
+  organization. Was plain `(RequesterId, AddresseeId)`; Phase 40.13 put the organization first
+  because memberships (40.6) let one person belong to two customers, and the old platform-wide pair
+  rejected the second organization's friendship between the same two people as a duplicate. Swapped
+  **inside** the `AddOrganizationId` migration, not the concurrent-rebuild script.
+- UNIQUE `(OrganizationId, CanonicalLowId, CanonicalHighId)` (`IX_Friendships_CanonicalPair`) —
+  canonical-pair guard against concurrent inserts, same reasoning.
+- Individual on `(OrganizationId, RequesterId)` and `(OrganizationId, AddresseeId)`
 
 **Constraints:**
 - CHECK `RequesterId != AddresseeId` — cannot friend yourself
+
+> **Phase 40.13** also added `OrganizationId` (`NOT NULL`, strict RLS) to `DiscussThreads`,
+> `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags` and `DiscussPhotos` (below), and a
+> **nullable** `OrganizationId` to `DiscussTags` — `NULL` is the curated vocabulary every
+> organization shares, non-null is one customer's own tag, `UNIQUE(OrganizationId, Slug)` plus a
+> partial unique index over the global rows (Postgres treats `NULL`s in a composite unique index as
+> distinct, so the composite alone would allow a duplicate curated tag). These tables are not yet
+> individually documented in this file; see
+> [SOCIAL_SERVICE.md](SOCIAL_SERVICE.md#multi-tenancy-phase-4013) for the full column/RLS/index
+> breakdown and [DECISIONS.md](DECISIONS.md) for the `DiscussTags` content-flavour call.
 
 ---
 
@@ -524,13 +541,22 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 
 ### `UserStreaks`
 
+> **Microservices (Phase 7):** owned by the **gamification-service** Postgres database
+> (`gamification`). See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md).
+
 | Column                  | Type      | Nullable | Notes                  |
 |-------------------------|-----------|----------|------------------------|
 | `Id`                    | `uuid`    | NOT NULL | PK                     |
+| `OrganizationId`        | `uuid`    | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `UserId`                | `uuid`    | NOT NULL | FK → `Users.Id`        |
 | `CurrentStreakDayCount` | `integer` | NOT NULL |                        |
 | `LongestStreakDayCount` | `integer` | NOT NULL |                        |
 | `LastActivityDate`      | `date`    | NULL     |                        |
+
+**Indexes:** UNIQUE `(OrganizationId, UserId)` — was plain `UNIQUE(UserId)`; Phase 40.13 added the
+organization because memberships (40.6) let one person belong to two customers, and the old
+constraint would have refused a second streak row. Swapped **inside** the `AddOrganizationId`
+migration (at most one row per user, so a short lock), not the concurrent-rebuild script.
 
 ---
 
@@ -539,10 +565,17 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column     | Type                       | Nullable | Notes                                            |
 |------------|----------------------------|----------|--------------------------------------------------|
 | `Id`       | `uuid`                     | NOT NULL | PK                                               |
+| `OrganizationId` | `uuid`                | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `UserId`   | `uuid`                     | NOT NULL | FK → `Users.Id`                                  |
 | `Amount`   | `integer`                  | NOT NULL |                                                  |
 | `Source`   | `text`                     | NOT NULL | `exercise` / `streak_bonus` / `league_bonus` / `admin_correction` |
 | `EarnedAt` | `timestamp with time zone` | NOT NULL |                                                  |
+
+**Indexes:** `(OrganizationId, UserId)`, rebuilt with `CREATE INDEX CONCURRENTLY` by
+`docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql` — this table grows
+without bound, unlike the other six 40.13 tables, so its index work stayed out of the EF migration.
+UNIQUE `(SourceEventId)` stays **global** on purpose: it is a statement about the Kafka event
+stream, and scoping it per organization would let one event grant XP once per tenant.
 
 ---
 
@@ -551,9 +584,16 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | Column          | Type      | Nullable | Notes                                           |
 |-----------------|-----------|----------|-------------------------------------------------|
 | `Id`            | `uuid`    | NOT NULL | PK                                              |
+| `OrganizationId` | `uuid`   | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `Tier`          | `text`    | NOT NULL | tier key → `LeagueTiers.Key` (e.g. `bronze`)    |
 | `WeekStartDate` | `date`    | NOT NULL | start of the period (named "week" for history)  |
 | `WeekEndDate`   | `date`    | NOT NULL | end of the period (period length is configurable) |
+
+**Indexes:** UNIQUE `(OrganizationId, WeekStartDate, Tier)` — was `UNIQUE(WeekStartDate, Tier)`,
+i.e. "one bronze league per week for the whole platform"; the second organization to roll over
+would have hit a unique violation and gotten no league at all. Swapped **inside** the
+`AddOrganizationId` migration (a handful of rows per week, so a short lock), not the
+concurrent-rebuild script.
 
 ---
 
@@ -576,21 +616,38 @@ The configurable tier ladder (replaces the previously hardcoded list). Seeded by
 | Column            | Type      | Nullable | Notes                                        |
 |-------------------|-----------|----------|----------------------------------------------|
 | `Id`              | `uuid`    | NOT NULL | PK                                           |
+| `OrganizationId`  | `uuid`    | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `UserId`          | `uuid`    | NOT NULL | FK → `Users.Id`                              |
 | `LeagueId`        | `uuid`    | NOT NULL | FK → `Leagues.Id`                            |
 | `WeeklyXpAmount`  | `integer` | NOT NULL |                                              |
 | `Rank`            | `integer` | NOT NULL |                                              |
 | `PromotionOutcome`| `text`    | NULL     | `promoted` / `demoted` / `stayed` / NULL (active) |
 
+**Indexes:** UNIQUE `(OrganizationId, UserId, LeagueId)` — was `UNIQUE(UserId, LeagueId)`; scoped
+per organization for the same memberships-can-belong-to-two-customers reason as `Leagues`/
+`UserStreaks`. Plus a plain `(OrganizationId, LeagueId)` index. Both are rebuilt with `CREATE INDEX
+CONCURRENTLY` by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql` — this
+table grows without bound, so (unlike `Leagues`/`UserStreaks`/`UserAchievements`) its index work
+stayed out of the EF migration. A plain `(LeagueId)` index is created **before** the old one is
+dropped, so the FK to `Leagues` is never left unindexed mid-rollout.
+
 ---
 
 ### `LeagueSettings`
 
-Single-row table (same pattern as `OpenQuestionGlobalContexts`). Seeded by migration `20260607000000_AddLeagueSettings`; period columns added by `20260616120000_AddLeagueTiersAndSchedule`. Read by `LeagueService` at runtime; edited via `/admin/leagues/settings`. The period columns are initialized on first access (to the current Monday-based week) if null.
+Was a single-row table (same pattern as `OpenQuestionGlobalContexts`) through 40.12. **Phase 40.13
+made it per-organization**: `CurrentPeriodStartDate`/`CurrentPeriodEndsAt` are the state of a
+running competition, not configuration — shared, the first organization to roll over advanced the
+period for everybody. Seeded by migration `20260607000000_AddLeagueSettings`; period columns added
+by `20260616120000_AddLeagueTiersAndSchedule`. Read by `LeagueService` at runtime; edited via
+`/admin/leagues/settings`. The period columns are initialized on first access (to the current
+Monday-based week) if null. Since 40.13 the startup seeder no longer creates this row at all — an
+organization gets one lazily, on its admin's first settings save.
 
 | Column                          | Type                       | Nullable | Notes                                            |
 |---------------------------------|----------------------------|----------|--------------------------------------------------|
 | `Id`                            | `uuid`                     | NOT NULL | PK                                               |
+| `OrganizationId`                | `uuid`                     | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. UNIQUE — one settings row per organization, created lazily. |
 | `MaximumLeagueParticipantCount` | `integer`                  | NOT NULL | default 30                                       |
 | `PromotionZoneSize`             | `integer`                  | NOT NULL | default 10                                       |
 | `DemotionZoneSize`              | `integer`                  | NOT NULL | default 5                                        |
@@ -672,9 +729,22 @@ Quote of the day shown in the stats widget ("Совет дня"). One quote per 
 | Column          | Type                       | Nullable | Notes                     |
 |-----------------|----------------------------|----------|---------------------------|
 | `Id`            | `uuid`                     | NOT NULL | PK                        |
+| `OrganizationId`| `uuid`                     | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `UserId`        | `uuid`                     | NOT NULL | FK → `Users.Id` CASCADE   |
 | `AchievementId` | `uuid`                     | NOT NULL | FK → `Achievements.Id` CASCADE |
 | `UnlockedAt`    | `timestamp with time zone` | NOT NULL |                           |
+
+**Indexes:** UNIQUE `(OrganizationId, UserId, AchievementId)` — was `UNIQUE(UserId, AchievementId)`;
+scoped per organization for the same memberships-can-belong-to-two-customers reason as `Leagues`/
+`UserStreaks`. Swapped **inside** the `AddOrganizationId` migration, not the concurrent-rebuild
+script.
+
+> **Phase 40.13** also added `OrganizationId` (`NOT NULL`, `ITenantScoped`, strict RLS) to
+> `UserLearningProgress` (not otherwise documented in this file — the local completed-lesson-count
+> / has-completed-any-skill projection fed by `lesson.completed`/`skill.completed`), whose primary
+> key moved from `UserId` alone to `(OrganizationId, UserId)` for the same reason. See
+> [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md#multi-tenancy-phase-4013) for the full
+> seven-table breakdown, including the `LeagueSettings` per-organization change below.
 
 ---
 
@@ -685,9 +755,10 @@ Photo attachments for Discuss threads and replies. Polymorphic owner (no FK), mi
 | Column        | Type            | Nullable | Notes                                                  |
 |---------------|-----------------|----------|--------------------------------------------------------|
 | `Id`          | `uuid`          | NOT NULL | PK                                                     |
+| `OrganizationId` | `uuid`       | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
 | `OwnerType`   | `integer`       | NOT NULL | 0=Thread, 1=Reply                                      |
 | `OwnerId`     | `uuid`          | NOT NULL | thread id or reply id (polymorphic, no FK — mirrors `DiscussVotes`) |
-| `ObjectKey`   | `varchar(512)`  | NOT NULL | S3 object key                                          |
+| `ObjectKey`   | `varchar(512)`  | NOT NULL | S3 object key. New uploads since 40.13 are keyed `org/{organizationId}/discuss/threads/...` (or `.../replies/...`); pre-40.13 keys are unaffected and keep serving — the key is read from this row, never recomputed. |
 | `ContentType` | `varchar(100)`  | NOT NULL | e.g. `image/png`                                       |
 | `OrderIndex`  | `integer`       | NOT NULL | 0-based display order                                  |
 | `SizeBytes`   | `bigint`        | NOT NULL | uploaded byte size                                     |
@@ -728,6 +799,7 @@ Skills
 | Field            | Type       | Notes                                  |
 |------------------|------------|----------------------------------------|
 | `_id`            | ObjectId   |                                        |
+| `organizationId` | Guid       | Phase 40.13 — owning tenant. Mongo has no RLS, so this field is enforced entirely by `ChatConversationRepository`, the only class permitted to query this collection (asserted against the source tree by a unit test). |
 | `participantIds` | Guid[]     | Always 2 elements, sorted              |
 | `messages`       | ChatMessage[] | Embedded array                      |
 | `lastMessageAt`  | date?      | Updated on each new message            |
@@ -742,7 +814,9 @@ Skills
 | `content`  | string   |                                |
 | `sentAt`   | date     |                                |
 
-**Index:** `participantIds` for efficient conversation lookup by user.
+**Index:** `participantIds` for efficient conversation lookup by user; `organizationId` added by the
+40.13 rollout script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not
+run against any database yet — see `docs/DONT_FORGET.md`.
 
 ---
 
@@ -753,7 +827,12 @@ Skills
 | `session:{userId}`                 | Hash   | 24h      | Session data                         |
 | `league:weekly:{leagueId}`         | Sorted | Until EOW| Weekly team-progress ranking          |
 | `user:xp_total:{userId}`           | String | —        | Cached total XP (invalidated on earn)|
-| `presence:online`                  | Sorted | —        | Online-presence (member=userId, score=last-seen unix sec); pruned to a 5-min window by the metrics updater — see [MONITORING.md](MONITORING.md) |
+| `org:{orgId}:presence:online`      | Sorted | —        | analytics-service online-presence (member=userId, score=last-seen unix sec); pruned to a 5-min window by the gauge updater — see [MONITORING.md](MONITORING.md). Phase 40.13 namespaced this per organization (was the platform-wide `presence:online`); the old key is never read after the rollout but has no TTL, so it is not removed automatically — see `docs/DONT_FORGET.md`. |
+| `presence:organizations`           | Set    | —        | analytics-service registry of organization ids that have recorded presence (40.13) — how the platform-wide `app_users_online` gauge finds every organization with no database to query. |
+| `org:{orgId}:notifications:inbox:{userId}` | List | `RetentionDays` (default 30) | notification-service per-user inbox. Phase 40.13 namespaced this per organization (was `notifications:inbox:{userId}`); old keys are never read after the rollout and expire on their own TTL. |
+| `org:{orgId}:notifications:unread:{userId}` | String | `RetentionDays` (default 30) | notification-service unread counter, namespaced per organization since 40.13 (was `notifications:unread:{userId}`). |
+| `org:{orgId}:notifications:chat-email:read:{userId}:{conversationId}` | String | `BookkeepingRetentionHours` | notification-service chat-email read watermark, namespaced per organization since 40.13 — a conversation belongs to one organization. |
+| `notifications:chat-email:pending` | Sorted | —        | notification-service delayed unread-chat email queue. **Deliberately not namespaced** (40.13) — one due-time-ordered work list, organization travels inside each queued item instead, the same way it rides in a Kafka envelope. |
 | `org:{orgId}:idem:{group}:{eventId}` | String | `Kafka:IdempotencyTtlDays` | Kafka consumer dedupe (Phase 40.11 added the `org:` prefix; an event whose envelope carries no organization keeps the historical `idem:{group}:{eventId}`) |
 | `org:{orgId}:dialog:scenario-validation:v1:{sha256}` | String | 30d approved / 7d rejected | ai-service custom-scenario relevance verdict, keyed by a hash of the normalized text — see [CUSTOM_SCENARIO.md](CUSTOM_SCENARIO.md) |
 | `org:{orgId}:voice:{userId}:day:{y}:{m}:{d}` / `:month:{y}:{m}` | String | end of window | ai-service voice-quota counters |
@@ -761,8 +840,11 @@ Skills
 > **Phase 40.11 rule:** every ai-service Redis key is namespaced `org:{orgId}:`. Without it one
 > organization's cached verdict answers another organization's request. Keys written before the
 > prefix are unreachable by the current code and expire on their own TTL — nothing was flushed
-> ([DECISIONS.md](DECISIONS.md)). Roadmap 40.13 applies the same rule to notification inboxes and
-> analytics presence.
+> ([DECISIONS.md](DECISIONS.md)). **Phase 40.13 applied the same rule to notification-service's
+> inboxes/counters/watermarks and analytics-service's presence sets** — both services have no
+> database, so the Redis key *is* the tenant boundary. The one deliberate exception in either
+> service is the notification-service delayed-email queue above, which stays a single un-prefixed
+> list because it is a work queue, not a store of tenant data.
 
 ---
 
@@ -803,6 +885,8 @@ Skills
 | `AddCompanyReadinessNoFeedbackCache` (company-service) | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
 | `AddOrganizationId` (learning-service) | 2026-08-15 | Phase 40.10, first Stage-C service. `OrganizationId uuid NOT NULL` on `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` (added with an all-zeros placeholder default, which is then dropped) and `OrganizationId uuid NULL` on `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` (`NULL` = global library). RLS on all ten: `EnableTenantRls` for the progress tables, `EnableTenantRlsForContent` for the content ones. Contains **no `CREATE INDEX` and no backfill** on purpose — both are operational steps (`docs/TENANCY/sql/40.10_learning_organization_backfill.sql`, `..._indexes_concurrently.sql`), because the migration runs from `Database.Migrate()` at startup where a long index build would stall readiness. |
 | `InitialOrganizationSchema` (organization-service) | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
+| `AddOrganizationId` (gamification-service) | 2026-08-15 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserLearningProgress`, `Leagues`, `LeagueMemberships`, `LeagueSettings` — strict `EnableTenantRls` on all seven (no global content flavour in this database). `Achievements`, `LeagueTiers`, `GamificationSettings`, `StreakMilestones`, `ExerciseTypeRewards`, `UserReplicas`, `OutboxMessages` get nothing. Unlike 40.10–40.12, **this migration does swap four unique constraints in place** (`Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`, `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key) because each was load-bearing for correctness in the deploy-to-script window and every affected table holds at most a row per user/week. Read indexes on `UserXpRecords`/`LeagueMemberships` stay out, rebuilt by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`. |
+| `AddOrganizationId` (social-service) | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
 
 ---
 
