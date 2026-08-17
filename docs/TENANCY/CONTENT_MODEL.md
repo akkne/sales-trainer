@@ -9,7 +9,9 @@
 [LEARNING_SERVICE.md](../LEARNING_SERVICE.md) and [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md)
 (how metrics are counted per version); §1 and §2.6 (copy-on-write overrides, read resolution and the
 staleness queue) are **implemented** (Phase 40.18, 2026-08-18) for lessons, techniques, reference
-materials and dialog-mode prompts. Still design only: §3 (the organization profile) is 40.19.
+materials and dialog-mode prompts; §3 (the organization profile and placeholder substitution) is
+**implemented** (Phase 40.19, 2026-08-18) — see [CONTENT_PARAMETERIZATION.md](../CONTENT_PARAMETERIZATION.md)
+for the syntax and [SEEDER.md](../SEEDER.md) §0 for what changed in the seeder.
 
 Three places where the implementation is narrower than the text below, deliberately.
 
@@ -309,6 +311,44 @@ render time. One base lesson serves every customer; the customer fills in a form
 customer will ask what stops the AI persona from coaching a rep into an illegal promise. Having an
 answer is a sales asset.
 
+**As implemented (40.19):** six things worth stating, because each is a fork the roadmap left open
+(full reasoning in `docs/DECISIONS.md`, 2026-08-18; syntax and authoring guidance in
+[CONTENT_PARAMETERIZATION.md](../CONTENT_PARAMETERIZATION.md)).
+
+- **The syntax is `{{organization.<field>}}`, and substitution happens on read, never on write.** The
+  row and the §2.1 snapshot both keep the template; only the HTTP response and the outgoing AI prompt
+  carry substituted text. Rendering before the write would freeze a different snapshot — and a
+  different `content_hash` — per organization for the same base lesson, which is §1's fork reached by
+  accident and stripped of §2.6's guard rails. The same argument protects `DialogMode`'s 40.18
+  fingerprint: a rendered prompt would make every override permanently stale.
+- **An unfilled field renders as neutral prose, not as a blank and not as the raw placeholder.**
+  «ваш продукт», «ваш клиент», «типичные возражения ваших клиентов» — the phrases the base library was
+  already written in, so a trial account on day one reads exactly as it did before this phase. A
+  visible `{{organization.icp}}` is a defect a salesperson sees; a blank produces «Расскажите, чем
+  помогает », which reads as a broken product rather than an empty form. An unknown key (a typo) is
+  removed and logged rather than displayed. What this buys is paid for in Russian grammar: there is no
+  declension engine and there is not going to be one, so base sentences have to be phrased to survive
+  the fallback.
+- **The grader renders too.** Not symmetry for its own sake: a question rendered for the learner and
+  unrendered for the grader marks correct answers wrong, because the deterministic strategies compare
+  option text and the AI strategy would be judging an answer to a question it was not shown.
+- **`banned_claims` binds both the persona and the scoring.** ai-service's chat prompt, ai-service's
+  feedback prompt, and learning-service's exercise grading prompt, all from one builder in
+  BuildingBlocks. Enforcing only the persona side is worse than nothing: a persona that stays silent
+  while the grader keeps rewarding the forbidden claim teaches the rep to say it anyway. The block is
+  appended **last**, after every block carrying human-written text, because a rule something later can
+  qualify is not a rule.
+- **The profile reaches the two rendering services as a replica, not a call.** `organization.profile.updated`
+  on Kafka → `OrganizationProfileReplicas` in learning-db and ai-db, the same shape as `UserReplicas`
+  (40.2) and `OrganizationReplicas` (40.9). Substitution sits on the read path of the entire product,
+  and a synchronous hop there would mean lessons go down when organization-service does, to deliver
+  something whose absence is merely cosmetic. The cost is eventual consistency; the payload is the
+  whole profile every time, so a lost message is repaired by the next save. Unlike every earlier
+  replica consumer, these two run in **tenant** mode — the profile is inside a tenant, not about one.
+- **Platform-wide callers get the empty profile.** In platform mode the query filter admits every
+  organization at once, so "the profile" is undefined and picking a row would render Sellevate staff a
+  lesson with some customer's product name in it. The same rule §2.6's read resolution follows.
+
 **This is the metric that decides whether the architecture worked** (repeated from
 [TENANCY.md §5](TENANCY.md#5-the-commercial-trap-this-architecture-has-to-defuse)): on the first
 pilot, measure the share of adaptation closed by profile substitution versus hand-editing lesson
@@ -321,7 +361,7 @@ expensive at ten customers.
 
 | Existing thing | What tenancy does to it |
 |----------------|--------------------------|
-| `seed.py` + `/admin/seeder/bundle` | Seeds the **global** library (`organization_id IS NULL`). Needs an explicit target, and must not be pointed at a customer. |
+| `seed.py` + `/admin/seeder/bundle` | **Done (40.19).** Seeds the **global** library (`organization_id IS NULL`), with a required `target=global` field and every read narrowed to `organization_id IS NULL` — see [SEEDER.md](../SEEDER.md) §0. The narrowing was a real fix, not paperwork: reads went through the "mine or global" query filter, and lessons upsert on `(topicId, title)`, so re-running a bundle import could silently overwrite a customer's override with the base text. |
 | `Skill.IconicName` uniqueness | Becomes unique per organization — see [TENANCY.md §1.9](TENANCY.md#19-indexes-and-unique-constraints) |
 | `DialogMode` / `DialogBundle` prompts | **Done (40.18)** for `DialogMode`, which is where the prompts live: `ParentModeId` + `BaseContentHash`, the override keeping its parent's `BundleId` and `Key`. `DialogBundle` is not copy-on-write — see §2.6. The seeded hidden modes (`company-call`, `custom-scenario`) stay global and the service **refuses** to override them: their prompts are completed at run time from placeholders the code supplies. |
 | `ExerciseTypePrompt` | Stays platform-global — it defines how a *type* is graded, not what a customer teaches |
