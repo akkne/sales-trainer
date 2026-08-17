@@ -8,6 +8,7 @@ public static class AssignmentServiceCollectionExtensions
     public static IServiceCollection AddAssignmentFeatureServices(this IServiceCollection services)
     {
         services.AddScoped<IAssignmentService, AssignmentService>();
+        services.AddScoped<IAssignmentThresholdEvaluator, AssignmentThresholdEvaluator>();
 
         return services;
     }

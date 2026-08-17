@@ -83,6 +83,63 @@ public static class LessonSnapshotSerializer
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
+    /// <summary>
+    /// Phase 40.22. The exercise ids frozen inside a snapshot, in the order they were written.
+    ///
+    /// <para>
+    /// This is what makes "точность по упражнениям ≥80%" answerable: an assignment pins a
+    /// <c>LessonVersion</c>, and the set of exercises the threshold is measured over is the set the
+    /// snapshot names — not whatever the mutable <c>Exercises</c> table holds today. Reading it here
+    /// rather than re-querying by <c>LessonId</c> is the difference between grading somebody against
+    /// what they were asked to do and grading them against what the lesson has since become, which
+    /// is the defect 40.16 spent a block removing from progress.
+    /// </para>
+    ///
+    /// <para>
+    /// Tolerant by design, like every other read of a stored document in this service: a snapshot
+    /// this reader cannot parse yields an empty set, which the evaluator treats as "cannot be
+    /// judged" and never as "passed".
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<Guid> ReadExerciseIds(string? canonicalContent)
+    {
+        if (string.IsNullOrWhiteSpace(canonicalContent))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(canonicalContent);
+
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("exercises", out var exercises)
+                || exercises.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var exerciseIds = new List<Guid>(exercises.GetArrayLength());
+
+            foreach (var exercise in exercises.EnumerateArray())
+            {
+                if (exercise.ValueKind == JsonValueKind.Object
+                    && exercise.TryGetProperty("exerciseId", out var exerciseId)
+                    && exerciseId.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(exerciseId.GetString(), out var parsedExerciseId))
+                {
+                    exerciseIds.Add(parsedExerciseId);
+                }
+            }
+
+            return exerciseIds;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>Lowercase hex SHA-256 of the UTF-8 bytes of <paramref name="canonicalContent"/>.</summary>
     public static string ComputeContentHash(string canonicalContent)
     {
