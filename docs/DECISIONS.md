@@ -4,6 +4,152 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.15 — immutable lesson versioning (2026-08-17)
+
+Six forks the roadmap left to the agent, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+### `Lessons` is extended into the lifeline; `lesson_version` is the only new table
+
+The roadmap names two tables, `lesson` and `lesson_version`, and the existing schema already has a
+`Lessons` table. Two readings were possible.
+
+**Rejected: create a new `lesson` table beside `Lessons` and migrate.** It produces two rows that
+both claim to be "the lesson", and every downstream block then has to say which one it means —
+40.16's attempts, 40.17's `program_item`, 40.18's overrides, plus every existing read path, the
+seeder and the admin panel. The migration would be a rename dressed up as a new concept.
+
+**Chosen: `Lessons` *is* the `lesson` table** and gains the three columns that make it a lifeline
+rather than a leaf — `ParentLessonId`, `Slug`, `IsArchived`. `LessonVersions` is genuinely new,
+because nothing like it existed. This is also what CONTENT_MODEL.md §2.1 describes when it calls
+`lesson` "the identity/lifeline of a lesson": an identity the existing table already was.
+
+**Room left for 40.16 without doing its work.** 40.16 has to attach historical attempts to a
+"version 1". Nothing here creates a version for an existing lesson — the first version appears when
+an admin opens a draft or publishes — so 40.16 is free to decide whether version 1 is minted by a
+backfill script or lazily on first read. What it gets for free: a lesson's version numbering starts
+at 1 by construction, and the snapshot carries `exerciseId`, which is the join key an attempt needs.
+Deciding that for it would have been guessing at a migration whose shape depends on how many
+historical attempts exist.
+
+### The snapshot is denormalized JSON of the whole lesson, and `exerciseId` is inside the hash
+
+`{ "exercises": [{ "content", "customAiPrompt", "exerciseId", "orderInLesson", "type" }],
+"schemaVersion", "title" }`. The alternative — version each `Exercise` row and reconstruct a lesson
+from N version rows — makes every historical question ("what did this learner actually answer?") an
+archaeology exercise. A lesson is kilobytes; copy the whole thing.
+
+`exerciseId` is in the document and therefore in the hash, which is a real trade and was taken
+knowingly: deleting an exercise row and recreating it with identical content yields a new hash and
+so a new version. Keeping identity *out* of the hash while storing it *in* the content would be
+worse than either option — two versions could then have the same hash and different content, which
+destroys the hash's meaning entirely. And the identity really did change; a version that pretends
+otherwise lies to 40.16.
+
+### The hash is over a canonical form, and canonicalization is not optional
+
+Object keys sorted ordinal, array order preserved (it is meaningful in exercise content), the whole
+document then SHA-256'd as UTF-8 and stored as lowercase hex.
+
+Without sorting, an admin panel that re-serialized an exercise's content with its keys in a
+different order would look like a content change on every save, and "publish with no changes" would
+mint a version every time — which is exactly and only what `content_hash` exists to prevent. The
+stored `Content` **is** the canonical form, so the hash is a function of what is stored rather than
+of a parallel representation that could drift from it.
+
+Two limits, accepted and written down rather than hidden. Numbers are passed through unchanged, so
+`1` and `1.0` hash differently; normalizing them means choosing a numeric model (double? decimal?)
+and silently rewriting customer content to fit it. And the column is `jsonb`, so Postgres
+re-normalizes on write and a `SELECT` does not return the hashed bytes — anyone recomputing the hash
+from a query result will get a mismatch and must go through `LessonSnapshotSerializer` instead.
+
+### The draft is re-derived from the live rows, not edited in place
+
+CONTENT_MODEL.md says two things that look like they conflict: the draft row is mutable and is what
+editing happens on (§2.1), and `Exercise` rows are the working representation the admin panel edits
+(§2.2). They reconcile if the draft is a mirror: `LessonVersionService` re-serializes it from the
+live `Lesson` + `Exercise` rows on every call.
+
+**Rejected: make the draft's JSON the thing admins edit.** It would mean a second editor for the
+same content, a sync problem between the two, and a rewrite of the existing admin panel — for a
+block whose job is to add history, not to move the authoring surface.
+
+The consequence is that the draft row is close to a cache, and the honest question is whether it
+earns its place. It does, for what live rows cannot carry: who started editing, when, which base
+version was forked, and the plain fact that this lesson has unpublished changes — the last being
+what 40.18's stale-override queue reads. And it is the row the one-draft-per-lesson index
+constrains, which is a guarantee that has nowhere else to live.
+
+### Freezing is a database trigger, not a service convention
+
+"Publishing freezes the row forever" is the property the whole table exists for, so it is enforced
+where it cannot be bypassed. `LessonVersions_reject_frozen_change` refuses any change to `Content`,
+`ContentHash`, `VersionNumber`, `LessonId`, `OrganizationId`, `IsBreaking` or `PublishedAt` once the
+row has left `draft`, and refuses `published → draft` and any exit from `archived`.
+
+A code-only guarantee would be the weaker claim in a repository whose entire tenancy argument is
+that application-layer filters are not enough (TENANCY.md §1.5). The failure it prevents is silent:
+a snapshot edited after the fact re-scores every historical attempt against it, which is precisely
+the corruption 40.16 is being written to fix — arrived at from inside the fix.
+
+`BaseVersionId` and `Status` are deliberately left writable on a frozen row. 40.18's review screen
+offers "keep the override, re-point its base" as one of its three actions, and archiving a version
+is a lifecycle move rather than a rewrite. The transition check is what stops that second door being
+used to walk a version back to draft and edit it.
+
+### Slugs are machine-generated; nothing transliterates Russian titles
+
+`UNIQUE (OrganizationId, Slug)` needs a value for every existing lesson, and lesson titles are
+Russian prose.
+
+**Rejected: transliterate the title.** A transliteration table is a long-lived guess about how
+«Работа с возражениями» should read in latin that nobody asked for, and it collides (two lessons,
+one slug) exactly where the constraint is supposed to help.
+
+**Chosen:** `lesson-<32 hex of the row's own id>`, unique by construction and needing no retry loop,
+with an optional explicit `slug` on create and update that is *validated* rather than rewritten — an
+admin who typed a slug meant that slug. This is cheap because nothing routes by the slug yet: making
+them readable later is a rename, and a rename is safe for exactly that reason. The generated form is
+duplicated in the migration's SQL and in `LessonSlugGenerator`; they must move together.
+
+Two indexes, not one, because Postgres treats NULLs in a composite unique index as distinct — the
+same trap paid for in 40.10 for `Skill.IconicName`, `Topic.IconicName` and `Technique.Slug`.
+
+### Publishing global content requires platform rights; the policy alone would be a hole
+
+The roadmap asks who may publish. `RequireOrgAdmin` on the controller admits an organization's own
+administrator as well as any platform administrator — correct for an organization's own lessons, and
+a hole for the global library, since a lesson with `OrganizationId IS NULL` is read by every
+customer. So each write additionally resolves the lesson's owner and demands platform rights when it
+is global.
+
+Only one direction needs checking. The reverse — an organization administrator reaching another
+organization's lesson — was already impossible before the request arrived, through the query filter
+and the RLS policy. Re-checking it here would be a second implementation of the boundary, and a
+second implementation is a second thing to get wrong.
+
+### There is no `40.15_*_indexes_concurrently.sql`, and that is the decision
+
+40.10–40.13 each shipped one, because each rebuilt indexes on tables that were already large and
+already live: a transactional build takes `ACCESS EXCLUSIVE`, and those migrations run from
+`Database.Migrate()` at startup where a long build stalls readiness and races the replicas.
+
+Nothing in 40.15 has that shape. `LessonVersions` is created empty by the migration, so its indexes
+are built over zero rows; `Lessons` is a content table of a few hundred rows. And the new index on
+it enforces slug uniqueness, which is correctness — the same reasoning 40.13 used to put four unique
+constraints in the migration rather than the script. Deferring a correctness constraint to a script
+somebody has to remember to run is the worse trade.
+
+The same applies to the slug backfill: it is in the migration because its value comes from each
+row's own primary key, so unlike 40.9–40.13 there is no ordering requirement between two steps and
+no window in which data is invisible. What was written instead is
+`docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` — read-only, safe with the service up, and
+also never executed. If some future installation grows a `Lessons` table large enough to make this
+the wrong call, the fix is to move three `CREATE INDEX` calls into a concurrent script, not to relax
+the constraint.
+
+---
+
 ## 2026-08-16 — `Admin`/`SuperAdmin` become platform roles, every tenancy gets its own pair
 
 Requested directly by the project owner tonight, ahead of the remaining Phase 40 blocks, and
