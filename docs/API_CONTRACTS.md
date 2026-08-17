@@ -676,7 +676,7 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
-### Assignments (Phase 40.21)
+### Assignments (Phase 40.21, thresholds 40.22)
 
 The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
 what counts as done, and who is where on it. Design:
@@ -701,14 +701,34 @@ what counts as done, and who is where on it. Design:
 `AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
 `AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
 
-**`completionRule` is required and has no default, which is the point of the block.** It must be a
-JSON object naming its `kind` — for example `{"kind":"dialog_score","minimumScore":70,"requiredCount":3}`
-or `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}`. Anything else is a 400. If completion
-could mean "opened everything", managers would click through in four minutes, the dashboard would read
-100%, and the number would be a lie the РОП eventually catches — so the API has no way to express it.
-**Nothing evaluates the rule yet** (that is 40.22); 40.21 stores it and asserts only that a kind was
-named, because the vocabulary of kinds belongs to the block that implements it. The same holds for
-`repeatSchedule` (optional; 40.24).
+**`completionRule` is required, has no default, and since 40.22 is checked against a closed
+vocabulary.** If completion could mean "opened everything", managers would click through in four
+minutes, the dashboard would read 100%, and the number would be a lie the РОП eventually catches — so
+the API has no way to express it. Two kinds, both from the roadmap:
+
+| `kind` | Shape | One attempt is | Met when | `bestScore` on the progress row |
+|---|---|---|---|---|
+| `dialog_score` | `{"kind":"dialog_score","minimumScore":70,"requiredCount":3}` | one graded practice conversation on one of the assignment's `dialog_scenario` items | `requiredCount` conversations have each scored at least `minimumScore` | the best single conversation score so far |
+| `exercise_accuracy` | `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}` | one exercise submission against the assignment's pinned `lesson_version` | every exercise in the pinned set has been attempted **and** correct submissions ÷ all submissions ≥ `minimumAccuracyPercent` | `null` until the whole set has been attempted, then the accuracy percent |
+
+Anything else is a **400**: an unknown `kind`, a missing number, a bar outside 1–100, a
+`requiredCount` outside 1–20. A bar of **zero is refused explicitly** — "score at least 0" is a
+threshold every click clears, which is the failure mode wearing a discriminator. Counting
+conversations rather than averaging them is deliberate (an average lets one strong call carry two
+weak ones), and so is counting exercise *submissions* rather than exercises-eventually-correct
+(brute-forcing a set lowers accuracy instead of raising it).
+
+`POST /activate` additionally **409s when the rule measures content the assignment does not carry** —
+`dialog_score` with no `dialog_scenario` item, `exercise_accuracy` with no `lesson_version` item.
+Issuing freezes both the rule and the content, so this is the last moment they can be reconciled, and
+an assignment nobody can ever finish is indistinguishable on the dashboard from a team that has not
+started.
+
+`repeatSchedule` (optional) is still checked only for being an object naming a `kind`; its vocabulary
+is 40.24's.
+
+Work done **before** the assignment was issued never counts towards it: the measurement window opens
+at the later of `activatedAt` and `opensAt`.
 
 `content` is a list of **references**, never exercise bodies. Three kinds:
 
@@ -725,8 +745,10 @@ items arrive in, and a `lesson_version` or `reference_material` reference that i
 `{"kind":"users","userIds":[…]}` or `{"kind":"group","groupId":…}`, defaulting to `whole_team`. The
 employee list lives in identity-service, so learning-service deliberately does not check the ids
 against membership — it cannot, and a stale copy would be worse than none. Resolving the rule into
-people, writing their progress rows and notifying them is 40.23; until then
+people and notifying them is 40.23; until then **nothing creates a progress row**, so
 `GET /admin/assignments/:id/progress` returns `[]` and every funnel count on the summary reads zero.
+40.22 wrote the *updater* — what moves a row between the four statuses — not the creator: a row's
+existence means "this person was asked", which is a fact about issue time.
 The `group` kind is accepted structurally so 40.23 needs no migration, but nothing in the platform
 defines a group yet.
 
@@ -754,6 +776,22 @@ gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
 **No learner-facing routes yet.** The manager's own screen (`GET /assignments`, "the active assignment
 sits at the top until done") is 40.23, together with the audience resolution it depends on.
+
+**Progress moves on events, not on requests (40.22).** `AssignmentProgressDto.status` is written by
+`AssignmentThresholdConsumer`, which listens to `dialog.evaluated` and `exercise.completed` and
+re-judges that person's open assignments. Nothing about it is synchronous with a learner's submit, so
+a progress row updates a moment after the work rather than in the same response —
+`POST /exercises/:id/submit` returns exactly what it always did. The four statuses:
+
+| `status` | Means |
+|---|---|
+| `not_started` | issued to this person, no work recorded since it was issued |
+| `in_progress` | started, and the work the rule measures is not finished yet |
+| `failed_threshold` | the work **is** finished and the result is under the bar — "started, tried 4 times, did not reach it" |
+| `completed` | the bar was met. Terminal: a later weaker attempt is practice, not a demotion, so `bestScore` and `completedAt` stand |
+
+`attemptCount` and `bestScore` are **recomputed** from the recorded attempts on every evaluation, never
+incremented, so reprocessing an event cannot inflate them.
 
 ### Content overrides and the staleness queue (Phase 40.18)
 

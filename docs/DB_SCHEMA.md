@@ -498,7 +498,7 @@ before — see [DECISIONS.md](DECISIONS.md), 2026-08-17.
 
 ### `Assignments`, `AssignmentProgressRecords`
 
-Phase 40.21, the first tables of Stage E. What the РОП asks their team to practise after an internal
+Phase 40.21 (thresholds and their evaluation: 40.22), the first tables of Stage E. What the РОП asks their team to practise after an internal
 training, and where each person stands on it (docs/TENANCY/ASSIGNMENTS.md §1).
 
 Both are **strict tenant data**, like the programme tables above and unlike the content tables: there
@@ -527,7 +527,7 @@ equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner 
 | `Audience` | `jsonb` | NOT NULL | `{"kind":"whole_team"}` \| `{"kind":"users","userIds":[…]}` \| `{"kind":"group","groupId":…}`; `CK_Assignments_Audience` (object carrying `kind`) |
 | `OpensAt` | `timestamptz` | NULL | Null means "as soon as it is active" |
 | `Deadline` | `timestamptz` | NULL | `CK_Assignments_Schedule`: strictly after `OpensAt` when both are present |
-| `CompletionRule` | `jsonb` | NOT NULL | **No default.** `CK_Assignments_CompletionRule`: an object carrying a `kind` |
+| `CompletionRule` | `jsonb` | NOT NULL | **No default.** `CK_Assignments_CompletionRule`: an object carrying a `kind`. Since 40.22 the service also refuses anything outside the vocabulary below |
 | `RepeatSchedule` | `jsonb` | NULL | Null = one-shot; otherwise an object carrying a `kind` (`CK_Assignments_RepeatSchedule`) |
 | `Status` | `varchar(16)` | NOT NULL | `draft` \| `active` \| `closed`; default `draft`; `CK_Assignments_Status` |
 | `CreatedAt` | `timestamptz` | NOT NULL | |
@@ -542,8 +542,18 @@ Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_Organi
 > compliance-theatre failure [ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1.1 is written to prevent:
 > managers click through in four minutes, the dashboard reads 100%, and the number is a lie the РОП
 > eventually catches. With no default and no way for the API to omit the field, that failure mode has
-> no resting place in the schema. The *vocabulary* of rule kinds stays 40.22's to define — the
-> constraint asserts only that there is one.
+> no resting place in the schema. The database constraint asserts only that a `kind` is named; the
+> *vocabulary* is 40.22's and lives in the service, because it is a product decision that will grow
+> (40.24, 40.25) and a `CHECK` listing kinds would have to be migrated on every addition.
+
+> **The 40.22 vocabulary, as stored.** Two kinds, both from the roadmap. `{"kind":"dialog_score",
+> "minimumScore":70,"requiredCount":3}` — met once that many graded conversations have each cleared
+> that bar. `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}` — met once every exercise in
+> the pinned `lesson_version` has been attempted and correct submissions ÷ all submissions clears the
+> bar. Both numbers are 1–100 and a **zero bar is refused**: "score at least 0" is a threshold every
+> click clears. `docs/TENANCY/sql/40.22_completion_threshold_verify.sql` fails a row whose `kind` is
+> outside the vocabulary, because an unevaluable rule is indistinguishable on the dashboard from a
+> team that has not started.
 
 > **`Content` holds references and never an exercise body.** An assignment's exercises are ordinary
 > exercises inside a pinned `LessonVersion` (`kind = "lesson_version"`, `reference` = a
@@ -622,10 +632,62 @@ extending a deadline are ordinary acts of running a team, and a trigger that for
 
 **No backfill, and no maintenance window.** Both tables are created empty by the migration, nothing
 else filters on them, and no existing row anywhere gains a meaning it did not have.
-`AssignmentProgressRecords` additionally has **no writer at all** until 40.23 resolves an audience into
+`AssignmentProgressRecords` additionally has **no row creator** until 40.23 resolves an audience into
 people — deliberate scope, recorded in [DECISIONS.md](DECISIONS.md), 2026-08-18 and
-[DONT_FORGET.md](DONT_FORGET.md). Verification script:
-`docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed).
+[DONT_FORGET.md](DONT_FORGET.md). 40.22 wrote its *updater* (below), which changes rows that exist and
+never creates one: a row's existence means "this person was asked", which is a fact about issue time.
+Verification scripts: `docs/TENANCY/sql/40.21_assignments_verify.sql` and
+`docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (both read-only, never executed).
+
+**Who writes the four progress columns (40.22).** `AssignmentThresholdConsumer` in learning-service,
+reacting to `dialog.evaluated` and `exercise.completed`. `Status`, `BestScore`, `AttemptCount`,
+`FirstOpenedAt` and `CompletedAt` are **recomputed** from the attempt rows that already exist — the
+person's `UserExerciseAttempts` and their `UserDialogScores` — rather than incremented, so a
+redelivered Kafka message leaves the same values behind. `BestScore` only ever rises; `completed` is
+terminal. Work recorded before the assignment was issued is excluded: the window opens at the later of
+`ActivatedAt` and `OpensAt`.
+
+---
+
+### `UserDialogScores`
+
+Phase 40.22. One graded practice conversation, as learning-service heard about it on
+`dialog.evaluated`. Strict tenant data: a conversation happens inside exactly one organization, so
+`OrganizationId` is `NOT NULL` and the policy `UserDialogScores_tenant_isolation` is plain equality.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | RLS, strict equality |
+| `UserId` | `uuid` | NOT NULL | |
+| `SessionId` | `varchar(64)` | NOT NULL | ai-service's session id, a string because that is what the event carries. `CK_UserDialogScores_SessionId` (non-blank) |
+| `DialogModeKey` | `varchar(100)` | NOT NULL | How an assignment's `dialog_scenario` item names a scenario. `CK_UserDialogScores_DialogModeKey` (non-blank) |
+| `DialogModeId` | `uuid` | NOT NULL | Kept for tracing back to ai-service; never matched on |
+| `Score` | `integer` | NOT NULL | The grade the learner was shown, 0–100. `CK_UserDialogScores_Score` |
+| `EvaluatedAt` | `timestamptz` | NOT NULL | The envelope's `occurredAt` |
+
+Indexes: `IX_UserDialogScores_OrganizationId_UserId_SessionId` (**UNIQUE**),
+`IX_UserDialogScores_OrganizationId_UserId_DialogModeKey_Evalua~`.
+
+> **Why a table and not two more columns on the progress row.** "3 диалога с оценкой ≥70" is a
+> question about a *set* of conversations, and no counter can answer it. Keeping the set also means
+> `AttemptCount` and `BestScore` are derived rather than incremented, which is what makes an
+> at-least-once Kafka redelivery harmless: the unique index above turns a reprocessed event into a
+> no-op. A counter would drift upward on its own once the Redis dedupe window expires, and "tried 4
+> times and did not reach the bar" is the line a РОП acts on — a number that inflates while nobody
+> practises is worse than no number.
+
+> **Matched by key, not by id, and not tied to an assignment.** The row records what happened to a
+> person, not what it counted towards: one conversation may satisfy two assignments referencing the
+> same scenario, so a foreign key would mean duplicating it. `DialogModeKey` rather than
+> `DialogModeId` because 40.18's copy-on-write override of a global dialog mode keeps its parent's key
+> and gets a new id — an assignment written against the shared library keeps working after an
+> organization customizes the prompt.
+
+> **Nothing before 40.22 can be backfilled here, ever.** `dialog.evaluated` carried no grade until
+> this block added one (`rawScore` is the pre-multiplier XP reward, not a score), so conversations
+> graded before the deploy are invisible to every assignment. Recorded in
+> [DONT_FORGET.md](DONT_FORGET.md).
 
 ---
 
