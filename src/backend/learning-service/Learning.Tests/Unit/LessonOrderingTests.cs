@@ -5,6 +5,7 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
@@ -25,7 +26,8 @@ public sealed class LessonOrderingTests
             databaseContext,
             factory,
             Substitute.For<ILearningEventPublisher>(),
-            Substitute.For<IExerciseDialogService>());
+            Substitute.For<IExerciseDialogService>(),
+            new LessonVersionService(databaseContext));
     }
 
     [Test]

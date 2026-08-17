@@ -7,6 +7,7 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
@@ -90,7 +91,8 @@ public sealed class ExerciseServiceEventEmissionTests
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext),
             Substitute.For<ILearningEventPublisher>(),
-            Substitute.For<IExerciseDialogService>());
+            Substitute.For<IExerciseDialogService>(),
+            new LessonVersionService(databaseContext));
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -114,7 +116,8 @@ public sealed class ExerciseServiceEventEmissionTests
         var dialogService = Substitute.For<IExerciseDialogService>();
 
         var service = new ExerciseService(
-            databaseContext, CreateFactory(databaseContext), eventPublisher, dialogService);
+            databaseContext, CreateFactory(databaseContext), eventPublisher, dialogService,
+            new LessonVersionService(databaseContext));
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -154,7 +157,8 @@ public sealed class ExerciseServiceEventEmissionTests
         var eventPublisher = Substitute.For<ILearningEventPublisher>();
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext), eventPublisher,
-            Substitute.For<IExerciseDialogService>());
+            Substitute.For<IExerciseDialogService>(),
+            new LessonVersionService(databaseContext));
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":1}""").RootElement;
