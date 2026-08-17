@@ -47,6 +47,19 @@ public static class OrganizationPlaceholderRenderer
     private const string Prefix = "organization.";
     private const string GlossaryPrefix = "glossary.";
 
+    /// <summary>
+    /// The whole content library is Russian prose, and <see cref="System.Text.Json"/>'s default
+    /// encoder escapes every non-ASCII character as <c>\uXXXX</c> — six bytes for one letter, so a
+    /// re-serialized exercise grows several times over for no gain. <c>UnicodeRanges.All</c> emits
+    /// Cyrillic literally while still escaping <c>&lt;</c>, <c>&gt;</c>, <c>&amp;</c> and <c>'</c>,
+    /// unlike <c>UnsafeRelaxedJsonEscaping</c>, which is the usual and wrong way to fix this.
+    /// </summary>
+    private static readonly System.Text.Json.JsonWriterOptions JsonWriterOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(
+            System.Text.Unicode.UnicodeRanges.All),
+    };
+
     private static readonly Regex PlaceholderPattern = new(
         @"\{\{\s*(?<key>[A-Za-z0-9_.\-]+)\s*\}\}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
@@ -204,7 +217,7 @@ public static class OrganizationPlaceholderRenderer
 
         using var document = System.Text.Json.JsonDocument.Parse(json);
         var buffer = new MemoryStream();
-        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer, JsonWriterOptions))
         {
             WriteRendered(document.RootElement, writer, profile, unresolvedKeys, propertyName: null);
         }
