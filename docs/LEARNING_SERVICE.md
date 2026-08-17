@@ -32,7 +32,8 @@ src/backend/learning-service/
     Identity/                          local UserReplica
     Features/
       SkillTree/                       /skills, /skill-tree, /skills/{id}/topics
-      Lessons/                         Lesson/Exercise/progress/attempt models
+      Lessons/                         Lesson/Exercise/progress/attempt models + LessonVersion
+                                       (40.15: snapshot serializer, canonical JSON, slugs)
       Exercises/                       /lessons, /exercises/*, deterministic + AI grading, chat/voice
       Reference/                       /reference
       Techniques/                      /techniques
@@ -50,7 +51,7 @@ src/backend/learning-service/
 Owns Postgres database **`learning`** (created on startup by `DatabaseBootstrapper`,
 then EF migration `InitialLearningSchema` runs):
 
-`Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `Exercises`,
+`Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `LessonVersions`, `Exercises`,
 `UserLessonProgressRecords`, `UserExerciseAttempts`, `ExerciseTypePrompts`,
 `ReferenceMaterials`, `DailyQuotes`, `Techniques`, `TechniqueSkills`,
 `TechniqueCoaches`, `UserTechniqueProgressRecords`, plus a local `UserReplicas`
@@ -66,7 +67,7 @@ side**, so the two halves are modelled differently on purpose.
 | | Tables | `OrganizationId` | Query filter | RLS policy |
 |---|---|---|---|---|
 | **Tenant data** | `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` | `NOT NULL`, `ITenantScoped` | `== current` | `EnableTenantRls` |
-| **Content** | `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` | nullable — `NULL` = global library | `== null \|\| == current` | `EnableTenantRlsForContent` |
+| **Content** | `Skills`, `Topics`, `Lessons`, `LessonVersions` (40.15), `Exercises`, `Techniques`, `ReferenceMaterials` | nullable — `NULL` = global library | `== null \|\| == current` | `EnableTenantRlsForContent` |
 | **Platform-global** | `ExerciseTypePrompts`, `SkillStages`, `DailyQuotes`, `UserReplicas`, `TechniqueSkills`, `TechniqueCoaches`, `OutboxMessages` | none | none | none |
 
 Points that are easy to get wrong and are therefore pinned by tests
@@ -81,7 +82,8 @@ Points that are easy to get wrong and are therefore pinned by tests
 - **`Skill.IconicName` is unique per organization**, not globally (`UNIQUE (OrganizationId,
   IconicName)`), plus a partial unique index over the global rows — Postgres treats NULLs in a
   composite unique index as distinct, so the composite index alone would let two global `objections`
-  skills exist. Same treatment for `Topic.IconicName` and `Technique.Slug`.
+  skills exist. Same treatment for `Topic.IconicName` and `Technique.Slug` — and, from 40.15, for
+  `Lesson.Slug`.
 - **Progress indexes lead with `OrganizationId`** (docs/TENANCY/TENANCY.md §3).
 
 ### The read-transaction rule
@@ -117,6 +119,43 @@ platform staff and `OrganizationId` stays `NULL` — the seeder needs no special
 global library, it simply never sets an organization. The column and the filters are already
 forward-compatible with the copy-on-write overrides of 40.18.
 
+Phase 40.15 adds the one exception, and it is deliberate. `AdminLessonVersionsController` carries
+`RequireOrgAdmin` rather than `RequireSuperAdmin`, because lesson versions are the first content an
+organization will author for itself. The policy alone would be a hole — an organization
+administrator publishing into a lesson with `OrganizationId IS NULL` would be editing the curriculum
+of every other customer — so both write routes check the lesson's owner and require platform rights
+for global content. The other direction needs no check: another organization's lessons are already
+invisible through the query filter and the RLS policy.
+
+### Immutable lesson versioning (Phase 40.15)
+
+`Lessons` becomes a lifeline rather than a leaf (`ParentLessonId`, `Slug`, `IsArchived`) and
+`LessonVersions` holds the snapshots. Full schema in [DB_SCHEMA.md](DB_SCHEMA.md), authoring
+walkthrough in [SKILLS_AND_EXERCISES.md](SKILLS_AND_EXERCISES.md), design in
+[TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2. What matters at the service level:
+
+- **The versioned unit is the whole lesson plus its ordered exercises**, snapshotted as one canonical
+  JSON document. A `Lessons` row has no body — only a title — so versioning the row alone versions
+  nothing, and versioning each `Exercise` separately turns every historical question into a
+  reconstruction from N rows.
+- **`Exercise` rows stay the working representation.** `LessonVersionService` re-derives the draft's
+  snapshot from the live rows on every call, so a draft cannot drift from what the admin is looking
+  at. The draft row exists for what the working rows cannot carry: who started editing, when, which
+  base version was forked, and the fact that unpublished changes exist — the last of which is what
+  40.18's stale-override queue reads.
+- **Three guarantees live in Postgres, not in C#:** the freeze trigger
+  (`LessonVersions_reject_frozen_change`), the one-draft-per-lesson partial unique index, and the two
+  check constraints. Application-level versions of the first two would be a promise and a lost race
+  respectively.
+- **Every service method opens a `TenantTransactionScope` first**, per the read-transaction rule
+  below — `LessonVersions` is an RLS table and a bare `SELECT` outside a transaction sees only global
+  rows.
+- **Not in this block:** attaching historical attempts to a version (40.16), programme versioning and
+  enrollments (40.17), creating overrides and the staleness queue (40.18). `ParentLessonId` and
+  `BaseVersionId` exist and are filled correctly when set, so those blocks add behaviour rather than
+  schema. Nothing creates a version by itself — the first one appears when an admin opens a draft or
+  publishes.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -141,6 +180,16 @@ contains no `CREATE INDEX` and no backfill:
 - `scripts/tenancy-learning-organization-rollout.sh` drives both; default mode writes nothing.
 
 Neither has been run against any real database — see `docs/DONT_FORGET.md`.
+
+Phase 40.15's migration (`20260817193243_AddLessonVersioning`) is the opposite case and deliberately
+so: it creates its own indexes and does its own slug backfill, and there is **no** companion
+`_indexes_concurrently.sql` or backfill script. `LessonVersions` is created empty by the migration,
+`Lessons` is a content table of a few hundred rows, and the slug value is derived from each row's own
+primary key — so there is no long lock, no separate maintenance window, and no interval in which data
+is invisible. Slug uniqueness is correctness, and deferring a correctness constraint to a script
+somebody has to remember is the worse trade (the same call 40.13 made for the four small gamification
+tables). What does exist is `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` — read-only, safe
+with the service up, and not run against anything either.
 
 ## Coupling broken during extraction
 

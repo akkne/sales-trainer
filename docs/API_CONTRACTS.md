@@ -504,12 +504,51 @@ All routes prefixed `/admin`. Unauthorized → 403.
 |---|---|---|---|
 | GET | /admin/lessons | — | `AdminLessonWithTopicDto[]` |
 | GET | /admin/topics/:topicIconicName/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
-| PUT | /admin/lessons/:id | `{title, orderInTopic}` | `AdminLessonDto` |
+| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic, slug?}` | `AdminLessonDto` (400 if `slug` is malformed) |
+| PUT | /admin/lessons/:id | `{title, orderInTopic, slug?}` | `AdminLessonDto` (400 if `slug` is malformed) |
 | DELETE | /admin/lessons/:id | — | 204 |
 
-`AdminLessonDto`: `{id, topicId, title, orderInTopic}`
+`AdminLessonDto`: `{id, topicId, title, orderInTopic, slug, isArchived}`
 `AdminLessonWithTopicDto`: `{id, topicId, topicIconicName, topicTitle, title, orderInTopic}`
+
+`slug` (Phase 40.15) is optional in both directions. Omitted on create, the lesson gets a
+collision-free machine slug derived from its own id; omitted on update, the existing slug is left
+alone rather than regenerated — regenerating would change the lesson's stable identifier on every
+title edit, which is the one thing a slug must not do. Supplied, it is validated (lowercase latin
+letters, digits, single hyphens) and rejected with 400 rather than silently rewritten.
+
+### Lesson versions (Phase 40.15)
+
+Immutable snapshots of a lesson together with its full ordered exercise set. Design:
+[TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/lessons/:lessonId/versions | — | `LessonVersionSummaryDto[]`, newest first (404 if no such lesson) |
+| GET | /admin/lessons/:lessonId/versions/:versionId | — | `LessonVersionDto` |
+| POST | /admin/lessons/:lessonId/versions/draft | — | `LessonVersionDto` (the lesson's single draft, created if absent) |
+| POST | /admin/lessons/:lessonId/versions/publish | `{isBreaking?}` (default `false`) | `PublishLessonVersionResultDto` |
+
+`LessonVersionSummaryDto`: `{id, lessonId, versionNumber, status, contentHash, baseVersionId, isBreaking, createdBy, createdAt, publishedAt}`
+`LessonVersionDto`: the same plus `content` — the snapshot, as a JSON object rather than a string
+`PublishLessonVersionResultDto`: `{version, createdNewVersion}`
+
+`createdNewVersion: false` means the content hash matched the last published version: nothing
+changed, so nothing was frozen and the existing version comes back unchanged. The caller should say
+"no changes to publish" rather than show a version number that did not move.
+
+`isBreaking` is the one thing publishing cannot infer. A typo fix and a changed correct answer look
+identical to a diff, and 40.16 joins the accuracy series across the first and splits it across the
+second — so the publisher declares which it was.
+
+**Authorization is two-part.** The controller carries `RequireOrgAdmin`, which admits an
+organization's own administrator as well as any platform administrator. That alone is not enough:
+a lesson with `OrganizationId IS NULL` is the global library every customer reads, so both write
+routes additionally require platform administrator rights when the lesson is global, answering 403
+otherwise. The reverse direction needs no check — another organization's lessons were already
+invisible before the request arrived, through the query filter and the RLS policy. As everywhere,
+the organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`,
+never from the body, the query string or the route.
 
 ### Exercises
 | Method | Path | Body | Response |
