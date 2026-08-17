@@ -31,7 +31,7 @@ public static class LearningServiceCollectionExtensions
         services.AddSkillTreeFeatureServices();
         services.AddLessonFeatureServices();
         services.AddProgramFeatureServices();
-        services.AddAssignmentFeatureServices();
+        services.AddAssignmentFeatureServices(configuration);
         services.AddExerciseFeatureServices();
         services.AddExerciseDialogServices(configuration);
         services.AddReferenceFeatureServices();

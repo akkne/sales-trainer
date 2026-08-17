@@ -242,6 +242,15 @@ internal sealed class AssignmentService(
         assignment.SourceRef = sourceRef;
         assignment.Content = content;
         assignment.Audience = audience;
+        // Phase 40.23. Moving the deadline re-arms its notice. A РОП who extends a due date is
+        // asking for the team to be told about the new one, and the notification's dedupe key
+        // carries the deadline for the same reason — otherwise the extension would be announced to
+        // nobody and the original warning would stand for a date that no longer exists.
+        if (assignment.Deadline != requestDto.Deadline)
+        {
+            assignment.DeadlineNoticeSentAt = null;
+        }
+
         assignment.OpensAt = requestDto.OpensAt;
         assignment.Deadline = requestDto.Deadline;
         assignment.CompletionRule = completionRule;

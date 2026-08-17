@@ -129,5 +129,25 @@ public sealed class Assignment : ITenantScoped
 
     public DateTime? ClosedAt { get; set; }
 
+    /// <summary>
+    /// Phase 40.23. When the "your deadline is close" notice went out for the deadline this
+    /// assignment currently has, or null if it has not.
+    ///
+    /// <para>
+    /// <b>A column rather than a Redis marker or a recomputation.</b> The sweep has to answer "have
+    /// I already told these people about this date", and the two cheaper answers both fail:
+    /// recomputing from the notification inbox means learning-service reading notification-service's
+    /// Redis, and a Redis flag means the fact that somebody was warned outlives or predeceases the
+    /// row it is about depending on a TTL. It sits here because it is a property of the assignment.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Extending the deadline clears it</b>, which is what makes the notice describe a date
+    /// rather than an event: a РОП who moves a due date is asking for the team to be told about the
+    /// new one. That is also why the notification's dedupe key carries the deadline.
+    /// </para>
+    /// </summary>
+    public DateTime? DeadlineNoticeSentAt { get; set; }
+
     public ICollection<AssignmentProgress> ProgressRecords { get; set; } = [];
 }
