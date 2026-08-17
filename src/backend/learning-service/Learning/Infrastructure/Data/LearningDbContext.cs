@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Content.Models;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.Exercises.Models;
@@ -43,6 +44,8 @@ public sealed class LearningDbContext : DbContext
     public DbSet<ProgramVersion> ProgramVersions => Set<ProgramVersion>();
     public DbSet<ProgramItem> ProgramItems => Set<ProgramItem>();
     public DbSet<ProgramEnrollment> ProgramEnrollments => Set<ProgramEnrollment>();
+    public DbSet<Assignment> Assignments => Set<Assignment>();
+    public DbSet<AssignmentProgress> AssignmentProgressRecords => Set<AssignmentProgress>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -84,6 +87,13 @@ public sealed class LearningDbContext : DbContext
             .HasQueryFilter(item => _tenantContext.IsPlatformWide || item.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<ProgramEnrollment>()
             .HasQueryFilter(enrollment => _tenantContext.IsPlatformWide || enrollment.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.21. An assignment is a decision one organization made about its own people, the
+        // same shape as a programme version: there is no global assignment, so the comparison is plain
+        // equality and never the "or global" content branch below.
+        modelBuilder.Entity<Assignment>()
+            .HasQueryFilter(assignment => _tenantContext.IsPlatformWide || assignment.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<AssignmentProgress>()
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
         // is no global profile, and a null owner would read as "every organization's product name".
         modelBuilder.Entity<OrganizationProfileReplica>()
