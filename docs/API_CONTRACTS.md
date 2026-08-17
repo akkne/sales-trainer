@@ -676,6 +676,85 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
+### Assignments (Phase 40.21)
+
+The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
+what counts as done, and who is where on it. Design:
+[TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/assignments?status=draft\|active\|closed | — | `AssignmentSummaryDto[]`, newest first (400 on an unknown status) |
+| GET | /admin/assignments/:assignmentId | — | `AssignmentDto` |
+| GET | /admin/assignments/:assignmentId/progress | — | `AssignmentProgressDto[]` |
+| POST | /admin/assignments | `CreateAssignmentRequestDto` | `AssignmentDto` (a draft) |
+| PUT | /admin/assignments/:assignmentId | `UpdateAssignmentRequestDto` | `AssignmentDto` (409 when the status forbids the edit) |
+| POST | /admin/assignments/:assignmentId/activate | — | `AssignmentDto` (409 if it is not a draft, or has no content) |
+| POST | /admin/assignments/:assignmentId/close | — | `AssignmentDto` (409 if it is not active) |
+| DELETE | /admin/assignments/:assignmentId | — | 204 (409 for anything that has been issued) |
+
+`CreateAssignmentRequestDto` / `UpdateAssignmentRequestDto`:
+`{title, goal?, sourceType, sourceRef?, content?: AssignmentContentItemDto[], audience?, opensAt?, deadline?, completionRule, repeatSchedule?}`
+`AssignmentContentItemDto`: `{kind, reference, orderIndex}`
+`AssignmentAudienceDto`: `{kind, userIds?, groupId?}`
+`AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
+`AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
+`AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
+
+**`completionRule` is required and has no default, which is the point of the block.** It must be a
+JSON object naming its `kind` — for example `{"kind":"dialog_score","minimumScore":70,"requiredCount":3}`
+or `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}`. Anything else is a 400. If completion
+could mean "opened everything", managers would click through in four minutes, the dashboard would read
+100%, and the number would be a lie the РОП eventually catches — so the API has no way to express it.
+**Nothing evaluates the rule yet** (that is 40.22); 40.21 stores it and asserts only that a kind was
+named, because the vocabulary of kinds belongs to the block that implements it. The same holds for
+`repeatSchedule` (optional; 40.24).
+
+`content` is a list of **references**, never exercise bodies. Three kinds:
+
+| `kind` | `reference` | Why |
+|---|---|---|
+| `lesson_version` | a `LessonVersions.Id` | The assignment's exercise set. A frozen snapshot, so a recorded score always describes content somebody can still read; pointing at a mutable `Exercise` id would repeat the defect 40.16 removed from progress. The eleven existing exercise types render it with **no new code** |
+| `dialog_scenario` | an ai-service dialog mode **key** | The practice conversation. A key, not a uuid — that is how ai-service addresses modes. 40.23 turns it into an ordinary `DialogSession` with an injected persona |
+| `reference_material` | a `ReferenceMaterials.Id` | Ungraded theory, resolved through the same override and substitution path as any other read |
+
+Duplicate `(kind, reference)` pairs are a 400, `orderIndex` is re-derived densely from the order the
+items arrive in, and a `lesson_version` or `reference_material` reference that is not a uuid is a 400.
+
+`audience` is the **rule**, not the resolved people: `{"kind":"whole_team"}`,
+`{"kind":"users","userIds":[…]}` or `{"kind":"group","groupId":…}`, defaulting to `whole_team`. The
+employee list lives in identity-service, so learning-service deliberately does not check the ids
+against membership — it cannot, and a stale copy would be worse than none. Resolving the rule into
+people, writing their progress rows and notifying them is 40.23; until then
+`GET /admin/assignments/:id/progress` returns `[]` and every funnel count on the summary reads zero.
+The `group` kind is accepted structurally so 40.23 needs no migration, but nothing in the platform
+defines a group yet.
+
+`sourceType` is `training`, `manual` or `gap_detected`, and `sourceRef` is read according to it: a
+`manual` assignment with a source reference is a 400. When the reference names library content it must
+name a **frozen version** (`lesson-version:<uuid>`), never a lesson.
+
+**Status transitions are one-way: `draft → active → closed`.** A draft is fully editable and
+deletable. An issued assignment refuses edits to `sourceType`, `sourceRef`, `content` and
+`completionRule` with a 409 naming the fields — refused rather than silently ignored, because an
+administrator who believes they moved a threshold and did not is worse off than one who is told they
+cannot. Title, goal, audience, opening time, deadline and repeat schedule stay editable, because adding
+three people to a running assignment and extending a deadline are ordinary acts. A closed assignment is
+frozen whole and cannot be reopened; the answer to "we want that practice again" is a new assignment,
+which is also what 40.24's repeats will create. The database enforces all of this with a trigger, not
+only the service.
+
+**Authorization is one-part, like the programme routes above.** `RequireOrgAdmin` and nothing else:
+there is no global assignment — `Assignments.OrganizationId` is `NOT NULL` and the RLS policy is plain
+equality — so the "is this the global library?" question that forces a second gate onto lesson
+publishing has no analogue. The write routes refuse a caller with no organization in context at all
+(403): platform staff satisfy `RequireOrgAdmin` without holding a membership, and an assignment with no
+owner is not a thing that can be written. As everywhere, the organization comes from the
+gateway-validated `X-Organization-Id` header via `ITenantContext`.
+
+**No learner-facing routes yet.** The manager's own screen (`GET /assignments`, "the active assignment
+sits at the top until done") is 40.23, together with the audience resolution it depends on.
+
 ### Content overrides and the staleness queue (Phase 40.18)
 
 Copy-on-write: an organization customizes the shared library one row at a time instead of forking it.

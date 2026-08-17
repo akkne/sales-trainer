@@ -496,6 +496,139 @@ before — see [DECISIONS.md](DECISIONS.md), 2026-08-17.
 
 ---
 
+### `Assignments`, `AssignmentProgressRecords`
+
+Phase 40.21, the first tables of Stage E. What the РОП asks their team to practise after an internal
+training, and where each person stands on it (docs/TENANCY/ASSIGNMENTS.md §1).
+
+Both are **strict tenant data**, like the programme tables above and unlike the content tables: there
+is no such thing as a global assignment, so `OrganizationId` is `NOT NULL` and both policies are plain
+equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner here would mean
+"everybody's homework".
+
+> **Why this is not a `ProgramVersion` with a deadline column.** The programme is a long, sequential,
+> self-paced curriculum somebody walks over months and is pinned to; an assignment is days long, aimed
+> at named people, issued after one training session, and worthless once its deadline passes. Sharing
+> a table would give the curriculum a deadline it has no meaning for and give the assignment a
+> version-and-pin lifecycle nobody wants for a five-day task.
+
+#### `Assignments`
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | RLS policy `Assignments_tenant_isolation` (strict equality) |
+| `CreatedBy` | `uuid` | NULL | The РОП. Null for rows a background path creates — 40.24's repeats have no human pressing anything |
+| `Title` | `varchar(200)` | NOT NULL | |
+| `Goal` | `varchar(2000)` | NULL | Shown to the team, never parsed |
+| `SourceType` | `varchar(16)` | NOT NULL | `training` \| `manual` \| `gap_detected`; `CK_Assignments_SourceType` |
+| `SourceRef` | `varchar(200)` | NULL | Read according to `SourceType`. `CK_Assignments_ManualHasNoSourceRef`: null whenever the type is `manual` |
+| `Content` | `jsonb` | NOT NULL | `{"items":[{"kind","reference","orderIndex"}]}` — **references only**; `CK_Assignments_Content` (must be an object) |
+| `Audience` | `jsonb` | NOT NULL | `{"kind":"whole_team"}` \| `{"kind":"users","userIds":[…]}` \| `{"kind":"group","groupId":…}`; `CK_Assignments_Audience` (object carrying `kind`) |
+| `OpensAt` | `timestamptz` | NULL | Null means "as soon as it is active" |
+| `Deadline` | `timestamptz` | NULL | `CK_Assignments_Schedule`: strictly after `OpensAt` when both are present |
+| `CompletionRule` | `jsonb` | NOT NULL | **No default.** `CK_Assignments_CompletionRule`: an object carrying a `kind` |
+| `RepeatSchedule` | `jsonb` | NULL | Null = one-shot; otherwise an object carrying a `kind` (`CK_Assignments_RepeatSchedule`) |
+| `Status` | `varchar(16)` | NOT NULL | `draft` \| `active` \| `closed`; default `draft`; `CK_Assignments_Status` |
+| `CreatedAt` | `timestamptz` | NOT NULL | |
+| `UpdatedAt` | `timestamptz` | NOT NULL | |
+| `ActivatedAt` | `timestamptz` | NULL | `CK_Assignments_ActivatedAt`: NOT NULL whenever the status is not `draft` |
+| `ClosedAt` | `timestamptz` | NULL | `CK_Assignments_ClosedAt`: NOT NULL whenever the status is `closed` |
+
+Indexes: `IX_Assignments_OrganizationId_Status_Deadline`, `IX_Assignments_OrganizationId_CreatedAt`.
+
+> **`CompletionRule` has no default, and that is the load-bearing decision of the whole block.** A
+> default would have to mean "no threshold", and an assignment that completes on a click is the
+> compliance-theatre failure [ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1.1 is written to prevent:
+> managers click through in four minutes, the dashboard reads 100%, and the number is a lie the РОП
+> eventually catches. With no default and no way for the API to omit the field, that failure mode has
+> no resting place in the schema. The *vocabulary* of rule kinds stays 40.22's to define — the
+> constraint asserts only that there is one.
+
+> **`Content` holds references and never an exercise body.** An assignment's exercises are ordinary
+> exercises inside a pinned `LessonVersion` (`kind = "lesson_version"`, `reference` = a
+> `LessonVersions.Id`), so their bodies stay in `Exercises.SerializedContent`, the eleven existing
+> renderers play them with no new code, and there is no second grading path, no second override story
+> and nothing for 40.19's substitution to forget. Pointing at mutable `Exercises.Id` values instead
+> would repeat exactly the defect 40.16 removed from progress. The other two kinds are
+> `dialog_scenario` (an ai-service dialog mode **key**, not a uuid — that is how ai-service addresses
+> modes) and `reference_material` (a `ReferenceMaterials.Id`, ungraded theory).
+
+> **No foreign key on any of those references, on purpose.** Same call as 40.16 and 40.17:
+> `LessonVersions` and `ReferenceMaterials` are content tables under an `IS NULL OR = current` policy
+> while `Assignments` is strict tenant data under plain equality, and a constraint spanning the two is
+> validated with the writer's privileges — it would either leak the existence of rows the writer may
+> not read or refuse writes it should allow. `docs/TENANCY/sql/40.21_assignments_verify.sql` checks by
+> query what the constraint would have checked.
+
+> **`SourceRef` names a frozen version, never a lesson.** When the source is library content the
+> reference is written `lesson-version:<uuid>`; a `LessonId` would silently re-point at whatever the
+> lesson has become, which is the defect 40.16 spent a block removing. The verify script fails a row
+> whose `SourceRef` starts with `lesson:`.
+
+> **`Audience` stores the rule, not the people.** The list of an organization's employees lives in
+> identity-service (`Memberships`); learning-db holds only `UserReplicas`, which is platform-global and
+> says nothing about who belongs where. A resolved list in this column would be a stale copy of
+> somebody else's data the moment anybody is hired or leaves. 40.23 resolves the rule at issue time,
+> and its output — the `AssignmentProgressRecords` rows — is the authoritative record of who actually
+> got it.
+
+#### `AssignmentProgressRecords`
+
+The roadmap calls this table `assignment_progress`; the name follows the `UserLessonProgressRecords`
+convention already in this database.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | Denormalized from the assignment, for the same reason `ProgramItems` denormalizes it: an RLS policy can only compare columns of the row it filters |
+| `AssignmentId` | `uuid` | NOT NULL | FK → `Assignments.Id` **`ON DELETE RESTRICT`** |
+| `UserId` | `uuid` | NOT NULL | |
+| `Status` | `varchar(20)` | NOT NULL | `not_started` \| `in_progress` \| `completed` \| `failed_threshold`; default `not_started`; `CK_AssignmentProgressRecords_Status` |
+| `BestScore` | `integer` | NULL | 0–100, `CK_AssignmentProgressRecords_BestScore`. Best rather than latest: a threshold cleared once stays cleared |
+| `AttemptCount` | `integer` | NOT NULL | `CK_AssignmentProgressRecords_AttemptCount` (`>= 0`) |
+| `FirstOpenedAt` | `timestamptz` | NULL | `CK_AssignmentProgressRecords_FirstOpenedAt`: NOT NULL for any status but `not_started` |
+| `CompletedAt` | `timestamptz` | NULL | `CK_AssignmentProgressRecords_CompletedAt`: NOT NULL whenever the status is `completed` |
+
+Indexes: `IX_AssignmentProgressRecords_OrganizationId_AssignmentId_UserId` (UNIQUE — one row per person
+per assignment), `IX_AssignmentProgressRecords_OrganizationId_UserId_Status` (the manager's own list,
+40.23), `IX_AssignmentProgressRecords_AssignmentId_Status`.
+
+> **The last index deliberately does not lead with `OrganizationId`,** unlike every other index in this
+> section. It serves two things that both need `AssignmentId` first: the funnel of one assignment
+> (40.25) and the `ON DELETE RESTRICT` check on the foreign key. Without it Postgres scans this whole
+> table on every attempt to delete an assignment — the trap 40.12 documented when company-service's
+> child indexes stopped covering their foreign key.
+
+> **`RESTRICT`, not `CASCADE`.** A progress row is the record that somebody was asked to do something;
+> deleting an assignment must not erase it. Drafts have no progress rows, so deleting a draft (the only
+> deletion the service permits) still works, and the constraint is a second, database-level guarantee
+> behind that rule.
+
+> **`failed_threshold` is why this status vocabulary is not a copy of `UserLessonProgressRecords`'s.**
+> A lesson is finished or not; an assignment is finished only when a quality threshold is met, so
+> "started, tried four times, still under the bar" has to be a state the РОП can see rather than an
+> invisible retry loop. The roadmap calls it the most valuable row on the screen, and `AttemptCount`
+> carries its whole weight: without it, "did not finish" and "tried four times and did not reach the
+> bar" are the same status and call for opposite reactions.
+
+**Frozen after issue, in the database.** `Assignments_reject_frozen_change` (`BEFORE UPDATE`) refuses
+any change to `SourceType`, `SourceRef`, `Content`, `CompletionRule`, `OrganizationId` or `ActivatedAt`
+once the row has left `draft` — those are what every recorded score was measured against — refuses
+`active → draft`, and freezes a `closed` row whole. `Title`, `Goal`, `Audience`, `OpensAt`, `Deadline`
+and `RepeatSchedule` stay writable on purpose: adding three people to a running assignment and
+extending a deadline are ordinary acts of running a team, and a trigger that forbade them would be one
+40.23 and 40.24 have to break.
+
+**No backfill, and no maintenance window.** Both tables are created empty by the migration, nothing
+else filters on them, and no existing row anywhere gains a meaning it did not have.
+`AssignmentProgressRecords` additionally has **no writer at all** until 40.23 resolves an audience into
+people — deliberate scope, recorded in [DECISIONS.md](DECISIONS.md), 2026-08-18 and
+[DONT_FORGET.md](DONT_FORGET.md). Verification script:
+`docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed).
+
+---
+
 ### `Exercises`
 
 | Column              | Type                       | Nullable | Notes                                                                         |
@@ -1119,6 +1252,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddContentOverrides` (learning-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentTechniqueId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and `IsArchived boolean NOT NULL DEFAULT false` on `Techniques`; the same three (as `ParentMaterialId`) on `ReferenceMaterials`; two indexes on the parent pointers; and three CHECK constraints — `CK_Techniques_OverrideHasOwner`, `CK_ReferenceMaterials_OverrideHasOwner` and `CK_Lessons_OverrideHasOwner` — saying that a row with a parent always has an owning organization. `Lessons` needed nothing else: 40.15 built its override columns already. **No companion `_indexes_concurrently.sql` and no backfill, both deliberate.** Nullable columns and a NOT NULL boolean with a constant default are catalog changes on Postgres 11+; the two indexes are built over tables holding tens to hundreds of rows; the CHECKs scan the same tens. Nothing fills a column on an existing row, so — as in 40.15 and 40.17 — **there is no maintenance window and no interval in which data is invisible**: every existing row keeps a null parent, which is the correct value for "this is the library, not somebody's copy". Verification script: `docs/TENANCY/sql/40.18_content_overrides_verify.sql` (read-only, never executed). |
 | `AddOrganizationProfileReplica` (learning-service) | 2026-08-17 | Phase 40.19, Stage D. One new table, `OrganizationProfileReplicas` — a read-only copy of organization-service's `OrganizationProfiles`, fed by the `organization.profile.updated` consumer. **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`**, and that is the interesting bit: every other table this folder added since 40.15 is content, where a NULL owner means "the shared library". Here a NULL owner would mean every organization's product name and banned claims at once, so the tenant column is the primary key and a row without an owner is unrepresentable. **No backfill, no maintenance window, no companion `_indexes_concurrently.sql`** — the table is created empty, is fed by events, holds at most one row per customer, and its only query is a lookup by that primary key, so there is no second access path to index. What *is* owed to a human is a one-time republish of profiles saved before this phase (`docs/DONT_FORGET.md`). Verification: `docs/TENANCY/sql/40.19_organization_profile_verify.sql` (read-only, never executed). |
 | `AddOrganizationProfileReplica` (ai-service) | 2026-08-17 | Phase 40.19, Stage D. The same table, in `ai`, for the same reason — persona and feedback prompts resolve `{{organization.*}}` and enforce `banned_claims` locally. **This is the first non-content table in ai-db**, which is exactly why the RLS flavour is worth stating: both neighbours (`DialogBundles`, `DialogModes`) legitimately use `IS NULL OR = current`, so copying the neighbouring policy is the natural mistake and would hand one customer's compliance list to everybody. Otherwise identical to the learning-service migration: catalog-only, empty table, no backfill, no window, no index script. |
+| `AddAssignments` (learning-service) | 2026-08-17 | Phase 40.21, **Stage E opens**. Two new **strict tenant** tables — `Assignments`, `AssignmentProgressRecords` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global assignment), fifteen check constraints, one `ON DELETE RESTRICT` foreign key and the `Assignments_reject_frozen_change` trigger. **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15/40.17/40.18 made: both tables are created empty by this very migration, so every index is built over zero rows, and one of them (one progress row per person per assignment) is a correctness constraint that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: nothing filters on the new tables and no existing row gains a meaning. The one constraint worth naming is `CK_Assignments_CompletionRule` — the column has no default and the API cannot omit it, so "completion means opening everything" has no resting place in the schema (docs/TENANCY/ASSIGNMENTS.md §1.1); its vocabulary stays 40.22's. `AssignmentProgressRecords` has **no writer at all** until 40.23 resolves an audience. Verification script: `docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed). |
 | `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
 
 ---
