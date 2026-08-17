@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Infrastructure.Data;
 
 namespace Sellevate.Ai.Features.Dialog.Overrides;
@@ -72,6 +73,21 @@ public sealed class AdminDialogOverridesController(
             }),
             _ => NotFound(),
         };
+    }
+
+    /// <summary>
+    /// Review action three: edit the organization's own prompt. Same partial-update shape as
+    /// <c>PUT /admin/dialog/modes/:modeId</c>, but reachable by an organization administrator and
+    /// only ever aimed at a row they own. `key` and `bundleId` are not editable — they are the
+    /// override's link to the row it shadows.
+    /// </summary>
+    [HttpPut("modes/{overrideId:guid}")]
+    public async Task<ActionResult<AdminDialogModeDto>> UpdateOverride(
+        Guid overrideId, [FromBody] UpdateModeRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var updated = await overrideService.UpdateOverrideAsync(overrideId, request, cancellationToken);
+
+        return updated is null ? NotFound() : Ok(AdminDialogModeDto.FromEntity(updated));
     }
 
     /// <summary>Review action one: take the new base prompt, retiring the override.</summary>

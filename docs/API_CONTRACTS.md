@@ -1070,6 +1070,7 @@ Per-organization prompt customization, the ai-service half of copy-on-write. Des
 | GET | /admin/dialog/overrides/modes?staleOnly=false | — | `DialogModeOverrideDto[]` |
 | GET | /admin/dialog/overrides/modes/:overrideId | — | `DialogModeOverrideReviewDto` |
 | POST | /admin/dialog/overrides/modes/:baseModeId | — | `DialogModeOverrideDto` (409 if already a copy, or if the mode is in a seeded hidden bundle) |
+| PUT | /admin/dialog/overrides/modes/:overrideId | `UpdateModeRequestDto` | `AdminDialogModeDto` (404 if not this organization's override) |
 | POST | /admin/dialog/overrides/modes/:overrideId/accept-base | — | 204 |
 | POST | /admin/dialog/overrides/modes/:overrideId/keep-override | — | 204 |
 
@@ -1093,10 +1094,16 @@ silent no-op.** Their prompts are half code: the service completes them at run t
 it supplies, and a per-organization copy would drift away from the code that feeds it until it
 quietly stopped matching.
 
-`PUT /admin/dialog/modes/:modeId` is the "edit" action and is the one route of `AdminDialogController`
-that 40.18 opened to organization administrators, with a per-row check: a mode with a null
-`OrganizationId` is the shared library and still needs platform rights. Everything else on that
-controller authors the library and stays platform-only.
+`PUT /admin/dialog/overrides/modes/:overrideId` is the "edit" action, and it lives on this controller
+rather than as a widened route on `AdminDialogController` for a concrete reason: stacking a second
+`[Authorize]` on one action of a platform-only controller **ANDs** the two policies rather than ORing
+them, so the code would read as though organization administrators were admitted and they would still
+be refused. A separate controller makes the weaker gate impossible to misread.
+`AdminDialogController` stays platform-only in full.
+
+`key` and `bundleId` are not editable on an override: they are its link to the row it shadows, and
+changing the key would make the copy stop resolving over its base and start appearing beside it —
+the one outcome copy-on-write exists to prevent.
 
 **Dialog export JSON:** `GET /admin/dialog/export` returns `{ bundles: [{ skillId, title, description, iconEmoji, sortOrder, isActive, modes: [{ key, title, description, chatSystemPrompt, feedbackSystemPrompt, sortOrder, isActive, voiceEnabled, voiceId }] }] }` — exactly the shape `POST /admin/dialog/import` accepts, so an export file re-imports verbatim. UI: "Export JSON" button on `/admin/dialog`.
 

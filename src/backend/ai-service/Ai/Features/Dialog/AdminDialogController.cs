@@ -11,16 +11,16 @@ namespace Sellevate.Ai.Features.Dialog;
 
 // Phase 40.6 audit: manages the dialog-content library — Sellevate-staff-only.
 //
-// Phase 40.18 widens exactly one route, PUT modes/{modeId}, to an organization's own administrator,
-// because that is where a prompt override is edited and it is the third of the review screen's three
-// actions. Everything else here still authors the shared library and stays platform-only. The
-// per-row check is in C# rather than in RLS on purpose: the content policy is
-// "OrganizationId IS NULL OR = current" in WITH CHECK as well as USING, so at the database level any
-// organization may write a row with a null owner — that is, edit every other customer's prompts.
+// Phase 40.18 leaves this controller platform-only: it authors the shared prompt library. Editing an
+// organization's own override happens on AdminDialogOverridesController instead
+// (PUT /admin/dialog/overrides/modes/{overrideId}), and that split is deliberate rather than
+// cosmetic — stacking a second [Authorize] on one action here would AND the two policies, not OR
+// them, so an organization administrator would still be refused while the code read as if they were
+// allowed. A separate controller makes the weaker gate impossible to misread.
 //
 // [TenantTransaction] closes ai-service's long-standing gap (docs/DONT_FORGET.md): SET LOCAL only
-// takes effect inside a transaction, so without it an organization's own override is invisible to
-// the screen that manages it.
+// takes effect inside a transaction, so without it an organization's own override is invisible even
+// to a platform administrator working inside one organization.
 [ApiController]
 [Route("admin/dialog")]
 [TenantTransaction]
@@ -400,7 +400,6 @@ public sealed class AdminDialogController : ControllerBase
     }
 
     [HttpPut("modes/{modeId:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
     public async Task<IActionResult> UpdateMode(Guid modeId, [FromBody] UpdateModeRequestDto request)
     {
         var mode = await _dbContext.DialogModes.FindAsync(modeId);
@@ -408,15 +407,6 @@ public sealed class AdminDialogController : ControllerBase
         if (mode == null)
         {
             return NotFound(new { message = "Mode not found" });
-        }
-
-        // A mode with an owner belongs to that organization, and RLS already proved the caller is
-        // inside it. A mode with no owner is the shared library and needs platform rights.
-        var isPlatformStaff = User.IsInRole(AuthorizationPolicies.AdministratorRole)
-                              || User.IsInRole(AuthorizationPolicies.SuperAdministratorRole);
-        if (mode.OrganizationId is null && !isPlatformStaff)
-        {
-            return Forbid();
         }
 
         if (request.Key != null) mode.Key = request.Key;

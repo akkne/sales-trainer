@@ -85,8 +85,15 @@ the `CK_DialogModes_OverrideHasOwner` constraint, and `AdminDialogOverridesContr
 - **The seeded hidden modes stay global, and the service refuses to override them** (409, not a
   silent no-op). `company-call` and `custom-scenario` prompts are half code: the service completes
   them at run time from placeholders it supplies, and a per-organization copy would drift away from
-  the code that feeds it until it quietly stopped matching. `AiTenancyModelTests.Seeded_hidden_modes_stay_global_and_are_visible_to_every_organization` pins the
-  invariant from the other side.
+  the code that feeds it until it quietly stopped matching.
+  `AiTenancyModelTests.Seeded_hidden_modes_stay_global_and_are_visible_to_every_organization` pins
+  the invariant from the other side.
+- **Editing an override is `PUT /admin/dialog/overrides/modes/:overrideId`, not a widened route on
+  `AdminDialogController`.** Stacking a second `[Authorize]` on one action of a platform-only
+  controller ANDs the two policies instead of ORing them — the code would read as though
+  organization administrators were admitted and they would still be refused. `AdminDialogController`
+  therefore stays platform-only in full. `key` and `bundleId` are not editable on an override: they
+  are its link to the row it shadows.
 - **Resolution is applied to `GetActiveModesForBundleAsync` only.** That is the learner-facing mode
   list; without it an organization with an override would see the mode twice in the same bundle.
   Lookups by mode id resolve to themselves and need nothing.
@@ -105,8 +112,8 @@ the `CK_DialogModes_OverrideHasOwner` constraint, and `AdminDialogOverridesContr
   one. While every bundle and mode was global that cost nothing — the content policy returns global
   rows even with the variable unset, and the global rows were all of them. The moment an
   organization owns a prompt, a read outside a transaction stops seeing it, and the administrator
-  overrides a mode and then cannot find it. The override controller and `AdminDialogController` carry
-  `[TenantTransaction]`; `GetActiveModesForBundleAsync` opens its own read scope.
+  overrides a mode and then cannot find it. Both dialog admin controllers carry `[TenantTransaction]`, and
+  `GetActiveModesForBundleAsync` opens its own read scope.
 - **Not in this block:** the review screen (no frontend was touched — 40.20), and prompt
   parameterization from an organization profile (40.19).
 

@@ -16,6 +16,17 @@ public interface IDialogModeOverrideService
     Task<bool> AcceptBaseAsync(Guid overrideId, CancellationToken cancellationToken = default);
 
     Task<bool> KeepOverrideAsync(Guid overrideId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Review action three — <b>edit</b>. Applies the same partial update
+    /// <c>AdminDialogController</c> applies to a library mode, but only ever to a row this
+    /// organization owns. It lives here rather than on that controller because stacking a second
+    /// <c>[Authorize]</c> on one of its actions would AND the two policies instead of ORing them:
+    /// the code would read as if organization administrators were admitted and they would still be
+    /// refused. Returns <see langword="null"/> when the row is not this organization's override.
+    /// </summary>
+    Task<DialogMode?> UpdateOverrideAsync(
+        Guid overrideId, UpdateModeRequestDto request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -240,6 +251,49 @@ internal sealed class DialogModeOverrideService(
             overrideId, organizationId);
 
         return true;
+    }
+
+    public async Task<DialogMode?> UpdateOverrideAsync(
+        Guid overrideId,
+        UpdateModeRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (databaseContext.TenantContext.OrganizationId is not { } organizationId)
+        {
+            return null;
+        }
+
+        await using var tenantScope = await AiTenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
+        var overrideMode = await FindOwnOverrideAsync(overrideId, organizationId, cancellationToken);
+        if (overrideMode is null)
+        {
+            return null;
+        }
+
+        // Key and BundleId are deliberately not editable here. They are the override's link to the
+        // row it shadows: change the key and the copy stops resolving over its base and starts
+        // appearing beside it, which is the one outcome copy-on-write exists to prevent.
+        if (request.Title != null) overrideMode.Title = request.Title;
+        if (request.Description != null) overrideMode.Description = request.Description;
+        if (request.ChatSystemPrompt != null) overrideMode.ChatSystemPrompt = request.ChatSystemPrompt;
+        if (request.FeedbackSystemPrompt != null) overrideMode.FeedbackSystemPrompt = request.FeedbackSystemPrompt;
+        if (request.SortOrder.HasValue) overrideMode.SortOrder = request.SortOrder.Value;
+        if (request.VoiceEnabled.HasValue) overrideMode.VoiceEnabled = request.VoiceEnabled.Value;
+        if (request.VoiceId != null) overrideMode.VoiceId = request.VoiceId;
+
+        overrideMode.UpdatedAt = DateTime.UtcNow;
+
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Dialog mode override edited OverrideId={OverrideId} OrganizationId={OrganizationId}",
+            overrideId, organizationId);
+
+        return overrideMode;
     }
 
     private async Task<DialogModeOverrideDto> DescribeAsync(DialogMode overrideMode, CancellationToken cancellationToken)
