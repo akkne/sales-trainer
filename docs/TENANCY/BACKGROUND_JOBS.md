@@ -139,6 +139,34 @@ it is recorded for the owner in [docs/DONT_FORGET.md](../DONT_FORGET.md) and
 
 ---
 
+## 4a. Phase 40.18 added no background job, and that was a decision
+
+Recorded here rather than left as an absence, because "the staleness queue must be a sweep" is the
+obvious design and the next person will wonder why there is no entry for it.
+
+40.18's roadmap text says overrides "are marked stale and fall into a review queue". A worker that
+walks every override and sets a flag would have belonged in §2.1 above, in explicit system mode, with
+the same `BYPASSRLS` footnote the five existing per-organization jobs carry. It was rejected twice
+over:
+
+- **It can only restate a comparison two columns already answer.** An override's fork marker and its
+  base's current state are both readable at query time; the queue is `GET
+  /admin/content/overrides?staleOnly=true` and computes the answer per request. A stored flag adds a
+  second source of truth and no information.
+- **While it lags, it is wrong in the dangerous direction.** Between the base publishing and the
+  sweep running, a stored flag says an override is current when it is not — which is precisely the
+  claim a review queue exists to prevent an organization from believing.
+
+The alternative that *cannot* work at all is worth stating too, because it looks cheapest: marking
+synchronously inside the publish transaction. That means writing rows into organizations the
+publisher is not in, and the RLS `WITH CHECK` clause — the one clause the 2026-08-16 role split
+deliberately did not widen for platform staff — refuses it. Making it possible would mean a bypass on
+the publish path, a far larger hole than the problem.
+
+Full reasoning and the rejected alternatives: `docs/DECISIONS.md` (2026-08-18).
+
+---
+
 ## 5. How to keep this registry true
 
 The registry rots the moment someone adds a hosted service. Three cheap checks:
