@@ -4,6 +4,212 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.21 — the Assignment entity (2026-08-18)
+
+Eight forks the roadmap left to the agent, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+The frame for all eight: Stage E is the first block whose product claim is about *behaviour of a
+team*, not about data isolation. The claim is that a РОП can turn one internal training into targeted
+practice in minutes and then see who actually did it. Every decision below is answerable by "does this
+keep that claim true a year later, when the content has moved on and the people have changed?"
+
+### The entity is separate, and the shape of the argument matters more than the conclusion
+
+The roadmap already says "отдельная сущность, а не переиспользованный learning path", so the
+conclusion was given. What was not given is *why the obvious reuse fails*, and that reason constrains
+everything else.
+
+**Rejected: `ProgramVersion` with a deadline and an audience column.** The two objects differ on every
+axis that has a column. A programme is walked over months and its central mechanic is the pin — a
+learner stays on the snapshot they started, and 40.17 built a whole freeze-and-diff apparatus so that
+nobody's curriculum moves under them. An assignment is finished or abandoned within days, and nobody
+is pinned to it; its central mechanic is a deadline and a threshold, neither of which a programme has
+any meaning for. Sharing the table means every programme row carries two null columns it will never
+use, every assignment row carries a version number nobody increments, and the freeze trigger has to
+learn two different notions of "frozen".
+
+**Chosen: two new tables in learning-db**, `Assignments` and `AssignmentProgressRecords`, alongside
+the programme tables rather than inside them. learning-service already owns progress and grading
+(roadmap 40.21), so threshold evaluation in 40.22 reuses existing scoring without a cross-service
+call, and "does this pinned lesson version still exist" stays a question one database can answer.
+
+**Rejected: a new assignment-service.** Two tables, no independent scaling story, no separate
+lifecycle, and an immediate synchronous dependency on learning-service for every read — the
+distributed monolith the microservices doc warns about, and the same rejection 40.17 recorded for a
+programme-service.
+
+### `content` holds references to a frozen lesson version, not exercise bodies and not exercise ids
+
+This is the decision that makes the roadmap's "новых рендереров нет" (40.23) literally true, so it
+was made in 40.21 rather than left to the block that would discover the problem.
+
+**Rejected: inline exercise content in the jsonb column.** It is the shortest path from "AI generated
+five exercises" to "the assignment has five exercises", and it forks the platform in half. There would
+be two homes for an exercise body — `Exercises.SerializedContent` and this column — and therefore two
+grading paths, two override stories (40.18 resolves overrides for the first home only), and two places
+for 40.19's `{{organization.*}}` substitution to be applied or forgotten. The second home would get
+the second-class treatment on every one of those, and the divergence would be discovered by a customer.
+
+**Rejected: a list of `Exercises.Id` values.** Better, but it points at the *mutable* working copy the
+admin panel edits. An assignment issued in March and scored in April against an exercise edited in
+between produces a `BestScore` describing a question nobody can reconstruct — which is precisely the
+defect 40.16 spent a block removing from `UserExerciseAttempts`. Repeating it one level up, in the
+table whose numbers a РОП uses to decide who needs coaching, would be worse than the original.
+
+**Chosen: `{"items":[{"kind","reference","orderIndex"}]}` over three kinds** — `lesson_version`
+(a `LessonVersions.Id`: the frozen, ordered exercise set), `dialog_scenario` (an ai-service dialog mode
+key, deliberately a string because that is how ai-service addresses modes, not a uuid), and
+`reference_material` (ungraded theory). Every kind names something that either cannot change or is
+resolved through the existing read path. The assignment's exercises are ordinary exercises inside an
+ordinary lesson version, so the eleven existing renderers, the existing grading and 40.18/40.19's
+resolution all apply with no new code — which is what "no new renderer" has to mean if it is a claim
+rather than a hope.
+
+The generation pipeline of Stage F therefore has a defined output: it writes ordinary lesson and
+exercise rows, publishes a lesson version, and the assignment references it. That is one more step
+than "put the JSON in the assignment", and it is the step that keeps everything downstream working.
+
+### `source_ref` is a namespaced string, and when it names content it names a version
+
+**Rejected: a bare `uuid` column.** Two of the three source types do not have one. A `gap_detected`
+assignment references a metric — a skill plus a funnel stage, or a named counter — which is not a row
+id; a `training` assignment created before Stage F's upload entity exists has nothing to point at yet.
+A uuid column would have been null in the cases that matter and would have forced a second column the
+day the first non-uuid source arrived.
+
+**Rejected: `lesson_id` when the source is a lesson.** Same argument as the content column, and the
+verify script asserts against it explicitly (`SourceRef LIKE 'lesson:%'` must find zero rows). A
+reference to a mutable lesson answers "what was this practice about" with whatever the lesson has since
+become.
+
+**Chosen: `varchar(200)`, read according to `source_type`, written as `<kind>:<identifier>`** —
+`lesson-version:<uuid>` for library content, and whatever Stage F and 40.25 settle on for uploads and
+metrics. Plus a check constraint tying the two columns together: `source_ref` is null exactly when
+`source_type = 'manual'`. A manual assignment carrying a dangling reference is a row nobody can
+interpret a year later, and that is a cheap constraint to add now and an expensive one to add later.
+
+### `audience` stores the rule; the resolved people are the progress rows
+
+The forcing constraint is not a preference: **the list of an organization's employees lives in
+identity-service** (`Memberships`), and learning-db holds only `UserReplicas`, which is
+platform-global and says nothing about who belongs where. learning-service therefore *cannot* resolve
+"the whole team" into names on its own.
+
+**Rejected: an `AssignmentAudienceMembers` join table filled at create time.** It would be a copy of
+somebody else's data, stale the moment anybody is hired or leaves, and it would answer the wrong
+question: the РОП needs to know who was *asked*, which is a fact about issue time, and that fact is
+already the existence of a progress row.
+
+**Rejected: three columns — `audience_kind`, `audience_user_ids uuid[]`, `audience_group_id`.** Two of
+the three are null in every row, and the array column commits the schema to "a list of ids" as the only
+extensible case. Rules like "everybody who scored under 60 last month" — which §3.4's gap-detected flow
+points straight at — do not fit it.
+
+**Chosen: `audience jsonb`** holding `{"kind":"whole_team"}`, `{"kind":"users","userIds":[…]}` or
+`{"kind":"group","groupId":…}`, with a check constraint requiring an object naming its kind. The
+`group` kind is in the vocabulary although nothing in the platform defines a group yet, so 40.23 needs
+no migration to use it; the shape is validated, the meaning is not. And learning-service deliberately
+does **not** validate the user ids against membership — it cannot, and a check against the
+platform-global `UserReplicas` would look like a membership check while proving nothing, which is worse
+than no check at all.
+
+### `completion_rule` is required, has no default, and 40.21 asserts only that it names a kind
+
+This is the block's load-bearing decision, and it is a decision about what the schema makes
+*impossible* rather than about what it stores.
+
+**Rejected: nullable, or defaulting to `{}`.** Either one gives "completion means opening everything" a
+resting place. `ASSIGNMENTS.md` §1.1 is explicit about the consequence: managers click through in four
+minutes, the dashboard reads 100%, and the number is a lie the РОП eventually catches — the difference
+between a training tool and a compliance-theatre tool. A default that expresses the failure mode
+guarantees somebody ships it, because the path of least resistance is to omit the field.
+
+**Rejected: a typed C# record with a closed set of rule kinds, validated in 40.21.** That is 40.22's
+vocabulary. Inventing it a block early means 40.22 either inherits guesses or breaks them, and the
+instruction for this run was explicitly not to build something the next block must break.
+
+**Chosen: `NOT NULL`, no default, no way for the API to omit it, and one constraint —
+`jsonb_typeof = 'object' AND jsonb_exists(…, 'kind')`.** A discriminator is the one field every
+discriminated rule shape will have whatever 40.22 decides, so requiring it constrains nothing and
+catches a scalar or an array. The documented examples (`{"kind":"dialog_score","minimumScore":70,
+"requiredCount":3}`, `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}`) are documentation, not
+schema. `repeat_schedule` gets the same treatment, nullable because one-shot is a legitimate answer.
+
+### `status`: three values, one-way, and the freeze is narrower than 40.17's on purpose
+
+**Rejected: a fourth value `scheduled`** for an assignment whose `opens_at` is in the future. Whether
+an assignment is visible yet is a question about `opens_at`; a second place to store the same fact is a
+second place for it to be wrong, and the two would disagree the first time somebody edits the opening
+time.
+
+**Rejected: freezing an issued assignment whole**, the way 40.17 freezes a published programme version.
+It is the consistent-looking choice and it is wrong here. A programme version is frozen because
+somebody is *pinned* to it; an assignment has no pin. Meanwhile adding three people to a running
+assignment and extending a deadline by two days are ordinary acts of running a team — the roadmap's own
+40.23 and 40.26 both assume them. A whole-row freeze would be a trigger those blocks have to break.
+
+**Rejected: no database enforcement, just service checks.** Same answer 40.15 and 40.17 gave: "the
+service currently refuses" is not the guarantee "it cannot be written".
+
+**Chosen: `draft → active → closed`, one-way, with a trigger that freezes exactly the four fields every
+recorded score was measured against** — `source_type`, `source_ref`, `content`, `completion_rule` (plus
+`organization_id` and `activated_at`) — and leaves title, goal, audience, `opens_at`, `deadline` and
+`repeat_schedule` writable. A closed assignment is frozen whole, because at that point it is history and
+the answer to "we want that practice again" is a new assignment — which is also exactly what 40.24's
+repeats will create. The service refuses the frozen fields first, with a message naming them, rather
+than silently dropping them: an administrator who believes they moved a threshold and did not is worse
+off than one who is told they cannot.
+
+### `assignment_progress` ships with no writer, and the alternative was worse
+
+40.21 creates the table and nothing fills it: fan-out is 40.23, threshold evaluation is 40.22. The
+temptation was to add one small write path so the table is not dead — "mark it in progress when the
+learner first opens it".
+
+**Rejected: creating a progress row lazily on first open.** It requires resolving the audience to know
+whose assignment it is, which is 40.23's headline; and it inverts the table's meaning. If a row exists
+only once somebody has started, then "who has not started" — the single most actionable question in
+`ASSIGNMENTS.md` §5, and the entire subject of roadmap 40.26 — becomes an inference from absent rows
+rather than a query over present ones. The row's existence has to mean "this person was asked", and
+that fact is written at issue time or not at all.
+
+**Chosen: the table exists, the funnel counts read zero, and both facts are stated in the API docs and
+in `DONT_FORGET.md`.** An honest zero is better than a number produced by a shortcut that 40.23 would
+then have to unwind.
+
+### One index deliberately does not lead with the organization
+
+Every tenant-scoped index since 40.10 leads with `OrganizationId`, because the query filter and the RLS
+policy put it in front of every predicate. `IX_AssignmentProgressRecords_AssignmentId_Status` does not.
+
+It serves two things that both need `AssignmentId` first: 40.25's per-assignment funnel, and the
+`ON DELETE RESTRICT` check on the foreign key. The unique index
+`(OrganizationId, AssignmentId, UserId)` cannot cover the latter — `AssignmentId` is not its leading
+column — so without this index Postgres scans the whole progress table on every attempt to delete an
+assignment. That is the exact trap 40.12 documented when company-service's child indexes stopped
+covering their foreign key, arrived at from the other direction.
+
+`RESTRICT` rather than `CASCADE` on that key is the same argument as the status decision: a progress row
+is the record that somebody was asked to do something, and deleting an assignment must not erase it.
+Drafts have no progress rows, so the one deletion the service permits still works, and the constraint
+is a second guarantee behind that rule.
+
+### No `_indexes_concurrently.sql`, and no backfill — stated as a decision because the neighbours have both
+
+40.10–40.13 each shipped a concurrent-index script and a backfill, and each documented a maintenance
+window in which user data was invisible. Nothing of that shape exists here: both tables are created
+empty by the migration, so every index is built over zero rows and the ACCESS EXCLUSIVE lock costs
+nothing; nothing filters on the new tables, so no existing row anywhere changes meaning. The unique
+index is a correctness constraint, and deferring a correctness constraint to a script somebody has to
+remember to run is the worse trade — the same call 40.15, 40.17 and 40.18 made.
+
+What ships instead is `docs/TENANCY/sql/40.21_assignments_verify.sql`: read-only, never executed,
+checking the schema, asserting that neither RLS policy carries an `IS NULL` branch, and querying what
+the deliberately-absent foreign keys would have checked.
+
+---
+
 ## Phase 40.19 — the organization profile and content parameterization (2026-08-18)
 
 Seven forks the roadmap left open, decided during an unattended run under the rules in

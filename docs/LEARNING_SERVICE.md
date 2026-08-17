@@ -367,6 +367,52 @@ from a row that cannot change mid-request. Platform-wide callers get the empty p
 mode the query filter admits every organization at once, so picking a row would show Sellevate staff
 a lesson with some customer's product name in it.
 
+### Assignments (Phase 40.21)
+
+`Assignments` / `AssignmentProgressRecords` ([ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1). Stage E
+opens here: the РОП turns an internal training session into short, dated, targeted practice for named
+people and can see who actually did it.
+
+Strict tenant data, plain-equality RLS, same shape as the programme tables and for the same reason —
+there is no such thing as a global assignment.
+
+- **A separate entity, not a repurposed programme, and the difference is not cosmetic.** The skill
+  tree is long, sequential and self-paced; an assignment is days long, aimed at named people and
+  worthless once its deadline passes. Sharing a table would give the curriculum a deadline it has no
+  meaning for and the assignment a version-and-pin lifecycle nobody wants for a five-day task.
+- **An assignment is references, and nothing else** — the same property `ProgramVersionService` has.
+  Not one write in `AssignmentService` touches `Lessons`, `LessonVersions`, `Exercises` or
+  `ReferenceMaterials`. Its exercise set is a pinned `LessonVersion`, so the bodies stay in
+  `Exercises.SerializedContent`, the eleven existing renderers play it with no new code, and there is
+  no second grading path. Pointing at mutable `Exercise` ids instead would repeat exactly the defect
+  40.16 removed from progress.
+- **`completionRule` is required, has no default, and nothing evaluates it yet.** A default would have
+  to mean "no threshold", and an assignment that completes on a click is the compliance-theatre
+  failure ASSIGNMENTS.md §1.1 exists to prevent — so the column has no default, the API cannot omit
+  it, and a check constraint refuses anything that is not an object naming its `kind`. The vocabulary
+  of kinds and the evaluation are 40.22's; asserting that a kind was named is the most 40.21 can say
+  without building something 40.22 must break. Same treatment for `repeatSchedule` (40.24).
+- **The audience column holds the rule, not the people.** The employee list lives in identity-service;
+  this database has only the platform-global `UserReplicas`, so learning-service cannot resolve
+  "the whole team" into names and a resolved list here would be a stale copy of somebody else's data.
+  40.23 resolves it at issue time, and the `AssignmentProgressRecords` rows it writes are the
+  authoritative record of who was actually asked.
+- **Issue freezes what was asked, in the database.** `Assignments_reject_frozen_change` refuses
+  changes to `SourceType`, `SourceRef`, `Content`, `CompletionRule` and `ActivatedAt` once the row
+  leaves `draft`, and freezes a closed row whole. Title, goal, audience, deadline and repeat schedule
+  stay writable deliberately — adding three people to a running assignment and extending a deadline
+  are ordinary acts, and a trigger that forbade them is one 40.23 and 40.24 would have to break. The
+  service refuses the same edits first, with a message naming the fields, because an administrator who
+  believes they moved a threshold and did not is worse off than one who is told they cannot.
+- **`AssignmentProgressRecords` has no writer in this block, and that is the honest state.** Nothing
+  fans out an audience (40.23) and nothing evaluates a threshold (40.22), so every funnel count on the
+  РОП's list reads zero and `GET /admin/assignments/:id/progress` returns `[]`. The alternative —
+  creating a row lazily when somebody first opens an assignment — would make "who has not started",
+  the single most actionable question in ASSIGNMENTS.md §5, an inference from absent rows instead of a
+  query over present ones.
+- **No learner-facing routes.** `GET /assignments` and the manager's home screen are 40.23, together
+  with the audience resolution they depend on.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |

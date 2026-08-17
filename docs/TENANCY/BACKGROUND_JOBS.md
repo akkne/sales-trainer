@@ -196,6 +196,31 @@ published, so it must be re-saved once by hand.
 
 ---
 
+## 4c. Phase 40.21 added no background job, and 40.24 will add exactly one
+
+Recorded here rather than left as an absence, because 40.21 ships two columns — `repeat_schedule` and
+`deadline` — that both read like an invitation to write a sweep, and the next person will look for the
+entry.
+
+- **`repeat_schedule` is stored and not interpreted.** The job that re-issues an assignment at +7 and
+  +21 days is 40.24, and when it arrives it belongs in §2.1: a worker touching a tenant-scoped table,
+  in explicit system mode, iterating organizations one at a time, carrying the same `BYPASSRLS`
+  footnote as the five jobs already listed there. Writing it in 40.21 would have meant inventing the
+  schedule vocabulary before the block that owns it.
+- **`deadline` likewise.** "Notify the РОП the day before the deadline with the list of who has not
+  started" is 40.26, and it cannot be written before 40.23 exists, because until an audience is
+  resolved into `AssignmentProgressRecords` rows there is no list to send.
+- **Nothing in 40.21 needs a sweep to be correct.** Every question the block answers — which
+  assignments exist, what they ask for, who is where — is answered by a query at request time. The
+  status column moves only on an explicit act by a person (`activate`, `close`), so there is no state
+  that decays while nothing runs.
+
+The consequence to be honest about: an assignment whose deadline has passed stays `active` until
+somebody closes it. That is the correct behaviour for 40.21 — closing on a timer means a background
+job, and the job that would do it also has to notify people, which is 40.26's whole subject.
+
+---
+
 ## 5. How to keep this registry true
 
 The registry rots the moment someone adds a hosted service. Three cheap checks:
