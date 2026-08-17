@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Ai.Features.Dialog;
+using Sellevate.Ai.Features.Organizations;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Identity;
 using Sellevate.BuildingBlocks.Tenancy;
@@ -26,12 +27,14 @@ public sealed class AiDbContext : DbContext
     public DbSet<DialogBundle> DialogBundles => Set<DialogBundle>();
     public DbSet<DialogMode> DialogModes => Set<DialogMode>();
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();
+    public DbSet<OrganizationProfileReplica> OrganizationProfileReplicas => Set<OrganizationProfileReplica>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new DialogBundleConfiguration());
         modelBuilder.ApplyConfiguration(new DialogModeConfiguration());
         modelBuilder.ApplyConfiguration(new UserReplicaEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new OrganizationProfileReplicaEntityConfiguration());
 
         // Phase 40.11. Convenience, not security — the boundary is the RLS policy created by the
         // AddOrganizationId migration (docs/TENANCY/TENANCY.md 1.4). Both entities are listed
@@ -47,5 +50,11 @@ public sealed class AiDbContext : DbContext
             .HasQueryFilter(bundle => _tenantContext.IsPlatformWide || bundle.OrganizationId == null || bundle.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<DialogMode>()
             .HasQueryFilter(mode => _tenantContext.IsPlatformWide || mode.OrganizationId == null || mode.OrganizationId == _tenantContext.OrganizationId);
+
+        // Phase 40.19. The substitution profile is the one table here that is NOT content: there is
+        // no global profile, and a null owner would mean every organization's banned claims applied
+        // to everybody. Plain equality.
+        modelBuilder.Entity<OrganizationProfileReplica>()
+            .HasQueryFilter(replica => _tenantContext.IsPlatformWide || replica.OrganizationId == _tenantContext.OrganizationId);
     }
 }

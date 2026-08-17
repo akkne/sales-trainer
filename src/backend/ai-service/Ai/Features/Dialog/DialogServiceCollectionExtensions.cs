@@ -2,6 +2,7 @@ using Sellevate.Ai.Features.Dialog.Overrides;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
+using Sellevate.Ai.Features.Organizations;
 
 namespace Sellevate.Ai.Features.Dialog;
 
@@ -19,6 +20,10 @@ public static class DialogServiceCollectionExtensions
         services.AddScoped<IDialogService, DialogService>();
         services.AddScoped<IScenarioValidationService, ScenarioValidationService>();
         services.AddScoped<IDialogModeOverrideService, DialogModeOverrideService>();
+
+        // Phase 40.19. Scoped, not singleton: the memo inside it is per request and the profile it
+        // reads is whichever tenant's the request belongs to.
+        services.AddScoped<IOrganizationProfileProvider, OrganizationProfileProvider>();
         return services;
     }
 }

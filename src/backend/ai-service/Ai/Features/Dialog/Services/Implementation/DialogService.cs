@@ -6,6 +6,8 @@ using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Overrides;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Features.Organizations;
+using Sellevate.BuildingBlocks.ContentTemplating;
 using Sellevate.Ai.Infrastructure.Data;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
@@ -18,6 +20,7 @@ internal sealed class DialogService : IDialogService
     private readonly IDialogScoringWeightsProvider _scoringWeightsProvider;
     private readonly IDialogEventPublisher _dialogEventPublisher;
     private readonly IScenarioValidationService _scenarioValidationService;
+    private readonly IOrganizationProfileProvider _organizationProfileProvider;
     private readonly ILogger<DialogService> _logger;
 
     public DialogService(
@@ -27,6 +30,7 @@ internal sealed class DialogService : IDialogService
         IDialogScoringWeightsProvider scoringWeightsProvider,
         IDialogEventPublisher dialogEventPublisher,
         IScenarioValidationService scenarioValidationService,
+        IOrganizationProfileProvider organizationProfileProvider,
         ILogger<DialogService> logger)
     {
         _databaseContext = databaseContext;
@@ -35,6 +39,7 @@ internal sealed class DialogService : IDialogService
         _scoringWeightsProvider = scoringWeightsProvider;
         _dialogEventPublisher = dialogEventPublisher;
         _scenarioValidationService = scenarioValidationService;
+        _organizationProfileProvider = organizationProfileProvider;
         _logger = logger;
     }
 
@@ -216,8 +221,20 @@ internal sealed class DialogService : IDialogService
 
         session.Messages.Add(userMessage);
 
-        var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        // Phase 40.19. Three steps, and the order is the point.
+        //   1. {{organization.*}} in the mode's own prompt is resolved, so a base persona written
+        //      once («ты закупщик, которому продают {{organization.product}}») serves every customer
+        //      instead of being forked per customer.
+        //   2. The company/scenario blocks are appended as before.
+        //   3. The banned-claims rule goes LAST, after every block that carries text a human wrote,
+        //      because a compliance rule that something later can qualify is not a rule.
+        var organizationProfile = await _organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var modeChatPrompt = RenderModePrompt(mode.ChatSystemPrompt, organizationProfile);
+
+        var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(modeChatPrompt, session.CompanyCallContext);
         chatSystemPrompt = CustomScenarioPromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.CustomScenarioContext);
+        chatSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
+        chatSystemPrompt += OrganizationProfilePromptBuilder.BuildPersonaBannedClaimsBlock(organizationProfile);
         var chatResult = await _openAiChatService.SendChatMessageAsync(chatSystemPrompt, session.Messages, cancellationToken);
 
         var aiMessage = new DialogMessage
@@ -275,8 +292,16 @@ internal sealed class DialogService : IDialogService
             scoringWeights.Objection,
             scoringWeights.Goal);
 
-        var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(mode.FeedbackSystemPrompt, session.CompanyCallContext);
+        // Phase 40.19. Same three steps as the chat prompt, with the evaluation wording of the
+        // banned-claims rule: a persona that stays silent while the grader keeps rewarding the rep
+        // for saying the forbidden thing teaches it anyway.
+        var organizationProfile = await _organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var modeFeedbackPrompt = RenderModePrompt(mode.FeedbackSystemPrompt, organizationProfile);
+
+        var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(modeFeedbackPrompt, session.CompanyCallContext);
         feedbackSystemPrompt = CustomScenarioPromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.CustomScenarioContext);
+        feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
+        feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildEvaluationBannedClaimsBlock(organizationProfile);
         var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(feedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
 
         var earnedXp = (int)Math.Round(feedbackResult.XpReward * scoringWeights.Multiplier);
@@ -322,5 +347,40 @@ internal sealed class DialogService : IDialogService
         }
 
         return deleted;
+    }
+
+    /// <summary>
+    /// Phase 40.19. Resolves <c>{{organization.*}}</c> in a stored mode prompt.
+    ///
+    /// <para>
+    /// Rendered here on the way to the model, never written back: <c>DialogMode.ChatSystemPrompt</c>
+    /// stays the template, which is what keeps its 40.18 <c>BaseContentHash</c> the same for every
+    /// organization and the stale queue honest about whether upstream actually moved.
+    /// </para>
+    ///
+    /// <para>
+    /// Placeholders outside the <c>organization.</c> namespace pass through untouched — the seeded
+    /// hidden modes complete their prompts from placeholders the code supplies at run time
+    /// (docs/TENANCY/CONTENT_MODEL.md §4), and eating those would break company-call practice.
+    /// </para>
+    /// </summary>
+    private string RenderModePrompt(string? prompt, OrganizationProfileSnapshot profile)
+    {
+        if (!OrganizationPlaceholderRenderer.HasOrganizationPlaceholders(prompt))
+        {
+            return prompt ?? string.Empty;
+        }
+
+        var unresolved = new List<string>();
+        var rendered = OrganizationPlaceholderRenderer.Render(prompt, profile, unresolved);
+
+        if (unresolved.Count > 0)
+        {
+            _logger.LogWarning(
+                "Unresolved organization placeholders in a dialog mode prompt: {Placeholders}",
+                string.Join(", ", unresolved.Distinct()));
+        }
+
+        return rendered;
     }
 }
