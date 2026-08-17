@@ -2192,7 +2192,7 @@
 
 ### Этап E — задания: цикл «РОП → менеджеры»
 
-### [ ] 40.21 Сущность Assignment
+### [>] 40.21 Сущность Assignment
 - [ ] `assignment (id, organization_id, created_by, title, goal, source_type:
       training|manual|gap_detected, source_ref, content jsonb, audience, opens_at,
       deadline, completion_rule jsonb, repeat_schedule jsonb, status)`
