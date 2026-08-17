@@ -148,7 +148,7 @@ see `docs/DONT_FORGET.md` for the rollout order.
 - **Consumes** (all idempotent, dedupe on `eventId`):
   - `user.registered` / `user.updated` / `user.deleted` / `user.avatar.changed` → maintain `UserReplica`.
   - `exercise.completed` (`userId`, `exerciseType`, `score`, `isCorrect`) → grant base XP (if correct), register streak activity, evaluate achievements.
-  - `dialog.evaluated` (`userId`, `sessionId`, `bundleId`, `modeId`, `rawScore`, `xpEarned`) → grant `xpEarned` as dialog XP, register streak, evaluate achievements.
+  - `dialog.evaluated` (`userId`, `sessionId`, `bundleId`, `modeId`, `rawScore`, `xpEarned`, and since 40.22 `modeKey`, `qualityScore`) → grant `xpEarned` as dialog XP, register streak, evaluate achievements. The two 40.22 fields are for learning-service's assignment thresholds and are ignored here.
   - `lesson.completed` (`userId`, `lessonId`, `bestScore`) → increment lesson count, register streak, evaluate achievements.
   - `skill.completed` (`userId`, `skillId`) → mark skill completed, evaluate achievements.
 - **Produces** (partition key = `userId`, except dialog-weights which is a singleton config snapshot):

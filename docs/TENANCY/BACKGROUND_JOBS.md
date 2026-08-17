@@ -79,6 +79,7 @@ and then dead-lettered. A message is never handled without a decided tenant.
 | ai | `GamificationDialogWeightsConsumer` | `gamification.dialog-weights.updated` | **`false`** (made explicit in 40.14) | Mirrors `GamificationSettings`, a single platform-global row, into an in-memory singleton — see §4 |
 | learning | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited, [declared by omission](../../src/backend/learning-service/Learning/Eventing/OrganizationProfileConsumer.cs)) | Writes `OrganizationProfileReplicas`, strict tenant data. Unlike identity's `OrganizationReplicaConsumer` two rows up, this event is **inside** a tenant, not about one: the profile belongs to the organization the way its lessons do. An envelope with no organization is dead-lettered rather than guessed at |
 | ai | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited) | Same table, same reason, second copy — and here the stakes are higher: a guessed tenant would apply one customer's `banned_claims` to another customer's practice calls |
+| learning | `AssignmentThresholdConsumer` (40.22) | `dialog.evaluated`, `exercise.completed` | **`true`** (inherited, [declared by omission](../../src/backend/learning-service/Learning/Eventing/AssignmentThresholdConsumer.cs)) | Writes `UserDialogScores` and updates `AssignmentProgressRecords`, both strict tenant data under plain-equality policies. See §4d — this is also the first consumer in the system that subscribes to a topic its **own** service produces |
 
 ### 2.3 Workers that touch no tenant data at all
 
@@ -218,6 +219,39 @@ entry.
 The consequence to be honest about: an assignment whose deadline has passed stays `active` until
 somebody closes it. That is the correct behaviour for 40.21 — closing on a timer means a background
 job, and the job that would do it also has to notify people, which is 40.26's whole subject.
+
+---
+
+## 4d. Phase 40.22 added one consumer, no worker, and the shape has two things worth naming
+
+`AssignmentThresholdConsumer` is the writer `AssignmentProgressRecords` was missing. It listens to
+`dialog.evaluated` and `exercise.completed`, mirrors a graded conversation into `UserDialogScores`,
+and re-judges every open assignment row belonging to that person against its completion rule.
+
+**It subscribes to a topic its own service publishes**, which nothing in the system did before. That
+looks like a loop and is not one: `exercise.completed` goes out through learning-service's outbox
+under the topic's own consumer group, and the handler publishes nothing. The alternative — calling
+the evaluator inline at the end of `ExerciseService.SubmitExerciseAnswerAsync` — was rejected because
+half the evidence arrives from **another service**: a conversation is graded in ai-service and
+learning-service only ever learns the result on `dialog.evaluated`. An inline exercise path plus an
+event-driven dialogue path would mean two writers of the same two columns, with two failure modes and
+two idempotency stories. One consumer over both topics keeps a single writer, and it keeps the
+learner's submit request free of work they are not waiting for.
+
+**Idempotency does not rest on the dedupe store.** The Redis `IIdempotencyStore` every consumer
+inherits has a TTL, so a topic replayed after it expires would be handled twice. That is harmless
+here by construction rather than by luck: nothing in the handler increments anything.
+`dialog.evaluated` writes at most one row, guarded by a unique index on
+`(OrganizationId, UserId, SessionId)`; `exercise.completed` writes nothing at all and is used purely
+as a "this person did something" trigger. `AttemptCount` and `BestScore` are then recomputed from the
+attempt rows that already exist. A counter bumped per event would have inflated silently — and
+"tried 4 times and did not reach the bar" is exactly the number a РОП acts on.
+
+**No worker was added, and 40.26 still owes one.** Nothing decays while nothing runs: a threshold is
+re-evaluated when the evidence arrives, and an assignment nobody touches keeps the status it had. The
+one case that needs a clock is the deadline — "at the deadline, everybody still `in_progress` is a
+person who did not finish" — and that belongs with the notification 40.26 has to send anyway. Until
+then a passed deadline changes no status, the same honest gap §4c recorded for closing.
 
 ---
 

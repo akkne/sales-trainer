@@ -167,7 +167,23 @@ the `CK_DialogModes_OverrideHasOwner` constraint, and `AdminDialogOverridesContr
 ## Kafka
 
 - **Produces:** `dialog.evaluated` (`userId`, `sessionId`, `bundleId`, `modeId`,
-  `rawScore`, `xpEarned`), partition key = `userId`.
+  `rawScore`, `xpEarned`, `modeKey`, `qualityScore`), partition key = `userId`.
+  Consumed by gamification (XP) and, since 40.22, by learning-service (assignment thresholds).
+
+  > **`rawScore` is not a grade, despite the name** — it carries `FeedbackResult.XpReward`, the
+  > pre-multiplier XP, bounded by the sum of the four configurable criterion weights rather than by
+  > 100. The grade the learner is actually shown is `FeedbackResult.Score`, on a 0–10 scale, and
+  > until 40.22 it never left this service. `qualityScore` was added in that block and carries it,
+  > **normalized to 0–100 here** so no consumer has to know this service's internal scale; an
+  > assignment's completion rule ("3 диалога с оценкой ≥70") compares against it directly.
+  > `rawScore` was left alone rather than renamed: gamification reads it, and renaming a field on a
+  > live topic buys nothing. `modeKey` was added alongside, because an assignment's
+  > `dialog_scenario` content item addresses a mode by key the way this service's own API does, and
+  > `modeId` alone would force every consumer into an out-of-band lookup.
+  >
+  > One sharp edge to know about: `ExtractScore` defaults to **0** when the model omits its
+  > `[SCORE:n]` tag, so a malformed grading response reads as a failed conversation rather than as
+  > an ungraded one. Recorded in `docs/DONT_FORGET.md`.
 - **Consumes:** `gamification.dialog-weights.updated` (refresh scoring weights cache),
   `user.registered` / `user.updated` / `user.deleted` (maintain the `UserReplica`), and
   `organization.profile.updated` (maintain `OrganizationProfileReplicas`, 40.19).
