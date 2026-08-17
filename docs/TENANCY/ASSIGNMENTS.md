@@ -1,8 +1,13 @@
 # Assignments: the РОП → manager loop, and AI inside the admin panel
 
-**Status:** DESIGN ONLY. Not implemented.
+**Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD).
+Everything else on this page is still design: §1.1 threshold evaluation is 40.22, §2.1 repeats are
+40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the dashboard is 40.25, §5's non-completion push
+is 40.26.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [CONTENT_MODEL.md](CONTENT_MODEL.md).
+Schema as built: [DB_SCHEMA.md](../DB_SCHEMA.md#assignments-assignmentprogressrecords).
+Routes as built: [API_CONTRACTS.md](../API_CONTRACTS.md#assignments-phase-4021).
 
 The driving scenario: **a sales team has just had a training session** (their own, internal, not
 Sellevate's). The knowledge decays in two weeks unless it is practised. The РОП must be able to
@@ -47,6 +52,36 @@ choice is the difference between a training tool and a compliance-theatre tool.
 Corollary: a failed threshold is a **normal, visible state** (`failed_threshold`), not a hidden
 retry. The РОП needs to see "started, tried 4 times, still under threshold" — that person needs
 coaching, and it is the most valuable row on the screen.
+
+### 1.2 What 40.21 built, and the five forks it had to settle
+
+The sketch above named eleven columns; turning it into a schema forced five choices the sketch left
+open. All five are recorded with their rejected alternatives in [DECISIONS.md](../DECISIONS.md)
+(2026-08-18); the short version, because it changes how the rest of this page should be read:
+
+- **`content` holds references, never exercise bodies** — specifically a pinned `LessonVersion` for
+  the exercise set, an ai-service dialog mode key for the conversation, and a `ReferenceMaterials.Id`
+  for theory. That is what makes §6's "no new renderer needed" literally true rather than aspirational:
+  an assignment's exercises *are* ordinary exercises, played by the existing screens and graded by the
+  existing scoring. It is also why a recorded score always describes content somebody can still read.
+- **`audience` stores the rule, not the resolved people** (`whole_team` / `users` / `group`). The
+  employee list lives in identity-service; a resolved list in learning-db would be a stale copy of it.
+  The resolution is 40.23's, and its output — the progress rows — is the authoritative record of who
+  was actually asked.
+- **`source_ref` names a frozen version, never a lesson.** `lesson-version:<uuid>`, because a
+  `lesson_id` silently re-points at whatever the lesson has become — the defect 40.16 spent a block
+  removing from progress.
+- **`completion_rule` is required and has no default.** §1.1 above is the reason: a default would have
+  to mean "no threshold", and that is the compliance-theatre failure with a resting place in the
+  schema. What 40.21 asserts is only that a rule names its `kind`; the vocabulary is 40.22's.
+- **`status` is `draft → active → closed`, one-way, enforced by a database trigger**, and issuing
+  freezes what the assignment asks for while leaving who, when and what-it-is-called editable. Adding
+  three people to a running assignment and extending a deadline are ordinary acts; rewriting the
+  threshold under people who already have scores is not.
+
+The one thing to know when reading §2–§5 below: **`assignment_progress` has no writer yet.** 40.21
+built the table and nothing fills it, so every funnel count in §4 currently reads zero. That is
+deliberate scope, not an oversight — see [DONT_FORGET.md](../DONT_FORGET.md).
 
 ---
 
