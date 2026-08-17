@@ -16,6 +16,13 @@ public sealed class AiDbContext : DbContext
         _tenantContext = tenantContext;
     }
 
+    /// <summary>
+    /// Phase 40.18. The tenant the query filters below are built from, exposed so that
+    /// <c>DialogModeOverrideResolution</c> can decide whether to resolve overrides without every
+    /// read service growing a constructor parameter for a value this context already holds.
+    /// </summary>
+    internal ITenantContext TenantContext => _tenantContext;
+
     public DbSet<DialogBundle> DialogBundles => Set<DialogBundle>();
     public DbSet<DialogMode> DialogModes => Set<DialogMode>();
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();

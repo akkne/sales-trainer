@@ -3,6 +3,7 @@ using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
+using Sellevate.Ai.Features.Dialog.Overrides;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
@@ -59,7 +60,14 @@ internal sealed class DialogService : IDialogService
         Guid bundleId,
         CancellationToken cancellationToken = default)
     {
+        // Phase 40.18. Resolved and inside a transaction, both for the same reason: this is the
+        // only learner-facing list of prompts. Without resolution an organization that overrode one
+        // mode would see it twice in the same bundle; without the transaction SET LOCAL never runs
+        // and its own override would not be visible at all.
+        await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         return await _databaseContext.DialogModes
+            .ResolveOverrides(_databaseContext)
             .Where(mode => mode.BundleId == bundleId && mode.IsActive)
             .OrderBy(mode => mode.SortOrder)
             .ToListAsync(cancellationToken);

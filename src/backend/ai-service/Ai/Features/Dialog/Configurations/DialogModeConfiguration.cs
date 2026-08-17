@@ -35,6 +35,19 @@ public sealed class DialogModeConfiguration : IEntityTypeConfiguration<DialogMod
             .HasForeignKey(mode => mode.BundleId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Phase 40.18. Restrict, not cascade: a global mode three customers have overridden must
+        // not be deletable in one click, and SetNull would silently promote the overrides to
+        // standalone modes, losing the fact that they were ever derived.
+        builder.HasOne<DialogMode>()
+            .WithMany()
+            .HasForeignKey(mode => mode.ParentModeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(mode => mode.BaseContentHash)
+            .HasMaxLength(64);
+
+        builder.HasIndex(mode => mode.ParentModeId);
+
         builder.HasIndex(mode => mode.BundleId);
 
         // Phase 40.11. The mode key is unique per organization, not per installation. Postgres
