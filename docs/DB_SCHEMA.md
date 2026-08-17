@@ -24,7 +24,7 @@ Last updated: 2026-06-12
 >
 > **`learning` (Phase 8)** — the last extraction. The `learning` database owns the
 > content tree and progress: `Skills`, `SkillStages`, `Topics`,
-> `UserSkillProgressRecords`, `Lessons`, `LessonVersions` (40.15), `Exercises`, `UserLessonProgressRecords`,
+> `UserSkillProgressRecords`, `Lessons`, `LessonVersions` (40.15), `ProgramVersions`/`ProgramItems`/`ProgramEnrollments` (40.17), `Exercises`, `UserLessonProgressRecords`,
 > `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`,
 > `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress` (schemas
 > ported verbatim from the monolith `AppDbContext`), plus a local `UserReplicas`
@@ -396,6 +396,103 @@ as one of its three actions, and archiving a version is a lifecycle move rather 
 code: two admins pressing "edit" at the same moment is precisely the race a check-then-insert loses,
 and two drafts are two branches of a lesson with no merge story (CONTENT_MODEL.md §2.6 — merging
 prose and grading criteria automatically produces plausible nonsense that then grades a salesperson).
+
+---
+
+### `ProgramVersions`, `ProgramItems`, `ProgramEnrollments`
+
+Phase 40.17. One organization's curriculum, frozen at a point in time, and who is standing on which
+frozen copy (docs/TENANCY/CONTENT_MODEL.md §2.5).
+
+All three are **strict tenant data**, unlike everything else in this file that came out of Stage D.
+There is no such thing as a global programme: a curriculum is a decision one organization made about
+its own people, so `OrganizationId` is `NOT NULL` and every policy is plain equality rather than the
+content flavour `IS NULL OR = current`. A `NULL` owner here would mean "everybody's programme".
+
+#### `ProgramVersions`
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | RLS policy `ProgramVersions_tenant_isolation` (strict equality) |
+| `VersionNumber` | `integer` | NOT NULL | Monotonic per organization, from 1 |
+| `Status` | `varchar(16)` | NOT NULL | `draft` \| `published` \| `archived`; default `draft`; `CK_ProgramVersions_Status` |
+| `CreatedBy` | `uuid` | NULL | The administrator who opened the draft |
+| `CreatedAt` | `timestamptz` | NOT NULL | |
+| `PublishedAt` | `timestamptz` | NULL | `CK_ProgramVersions_PublishedAt`: NOT NULL whenever `Status = 'published'` |
+
+Indexes: `IX_ProgramVersions_OrganizationId_VersionNumber` (UNIQUE),
+`IX_ProgramVersions_OrganizationId_Draft` (UNIQUE, `WHERE "Status" = 'draft'`).
+
+#### `ProgramItems`
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | Denormalized from the owning version, for the same reason `LessonVersions` denormalizes it: an RLS policy can only compare columns of the row it filters |
+| `ProgramVersionId` | `uuid` | NOT NULL | FK → `ProgramVersions.Id` `ON DELETE CASCADE` |
+| `SkillId` | `uuid` | NOT NULL | Reference only, **no FK** |
+| `LessonId` | `uuid` | NOT NULL | Denormalized from the pinned snapshot. Reference only, **no FK** |
+| `LessonVersionId` | `uuid` | NOT NULL | **The pin.** Reference only, **no FK** |
+| `OrderIndex` | `integer` | NOT NULL | Position in the running order, zero-based, dense within a version; `CK_ProgramItems_OrderIndex` (`>= 0`) |
+
+Indexes: `IX_ProgramItems_ProgramVersionId_LessonId` (UNIQUE),
+`IX_ProgramItems_OrganizationId_ProgramVersionId_OrderIndex`,
+`IX_ProgramItems_LessonVersionId`.
+
+> **No foreign key on the three content references, on purpose.** `Skills`, `Lessons` and
+> `LessonVersions` are content tables under an `IS NULL OR = current` policy, while this is strict
+> tenant data under plain equality — the same call 40.16 made for
+> `UserExerciseAttempts.LessonVersionId`: a constraint spanning the two is validated with the
+> writer's privileges and would either leak the existence of rows the writer may not read or refuse
+> writes it may. `docs/TENANCY/sql/40.17_program_versioning_verify.sql` checks by query what the
+> constraint would have checked.
+
+> **`LessonId` is denormalized deliberately, and it earns its column.** Without it, "the same lesson
+> is now pinned to a different version" is inexpressible: the unique index above would only stop the
+> same *version* appearing twice, not the same lesson appearing at versions 3 and 5 inside one
+> curriculum — the same material with two answer keys. It cannot drift, because
+> `LessonVersion.LessonId` is frozen by 40.15's trigger.
+
+> **The pin survives 40.18.** That block re-points `LessonVersions.BaseVersionId` on frozen rows.
+> `BaseVersionId` is provenance, not identity; a published lesson version is immutable and its `Id`
+> never moves, so nothing 40.18 does can change what a programme item points at.
+
+#### `ProgramEnrollments`
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | RLS policy `ProgramEnrollments_tenant_isolation` (strict equality) |
+| `UserId` | `uuid` | NOT NULL | |
+| `ProgramVersionId` | `uuid` | NOT NULL | FK → `ProgramVersions.Id` `ON DELETE RESTRICT` — a version somebody is standing on is not something to delete, and refusing is a better answer than unpinning a learner mid-course |
+| `PreviousProgramVersionId` | `uuid` | NULL | Where the learner was before their last explicit switch |
+| `EnrolledAt` | `timestamptz` | NOT NULL | |
+| `SwitchedAt` | `timestamptz` | NULL | |
+
+Indexes: `IX_ProgramEnrollments_OrganizationId_UserId` (UNIQUE — one pin per learner per
+organization; the same person may belong to two organizations and then holds one pin in each),
+`IX_ProgramEnrollments_ProgramVersionId`.
+
+**Frozen after publication, in the database — structure included.** Two triggers.
+`ProgramVersions_reject_frozen_change` (`BEFORE UPDATE`) refuses any change to `VersionNumber`,
+`OrganizationId` or `PublishedAt` once the row has left `draft`, refuses `published → draft` and any
+exit from `archived`. `ProgramItems_reject_frozen_change` (`BEFORE INSERT OR UPDATE OR DELETE`) is
+the one that matters: the structure lives in those rows, so that is where a retroactive reorder would
+actually be written, and removing a lesson from a frozen programme is the same edit seen from the
+other side. A cascade from deleting the programme version itself is allowed through by the "parent
+row is already gone" branch — Postgres runs `ON DELETE CASCADE` after the parent row is deleted, so
+a lookup that finds nothing means exactly that.
+
+The reason to put it in the database is sharper than it was for lessons: a lesson version edited
+after the fact corrupts a metric, while a programme version edited after the fact rearranges the
+curriculum under somebody who is on lesson 8 of 21 — the failure the block is named for.
+
+**No backfill, and no "programme version 1".** The migration creates no programme and enrolls
+nobody. 40.16 did mint a lesson's version 1, because the lesson body existed and only the snapshot
+was missing; a programme version is not a snapshot of something that exists but a curriculum
+decision nobody has made yet. Absent enrollment, learners read the live tree exactly as they did
+before — see [DECISIONS.md](DECISIONS.md), 2026-08-17.
 
 ---
 
@@ -1010,6 +1107,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddOrganizationId` (social-service) | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
 | `AddLessonVersioning` (learning-service) | 2026-08-17 | Phase 40.15, Stage D. `ParentLessonId uuid NULL` (self-FK, `RESTRICT`), `Slug varchar(160) NOT NULL` and `IsArchived boolean NOT NULL` on `Lessons`; new table `LessonVersions` with `EnableTenantRlsForContent`, two check constraints and the `LessonVersions_reject_frozen_change` trigger. **Unlike 40.10–40.13 this migration creates its indexes itself**, and there is no companion `_indexes_concurrently.sql`: `LessonVersions` is created empty so its indexes are built over zero rows, and `Lessons` is a content table of a few hundred rows where the build is milliseconds — the same judgement 40.13 made for the four small gamification tables. Slug uniqueness is correctness, and leaving it unenforced until someone remembers a script is the worse trade. The slug backfill is also in-migration (derived from each row's own primary key), so unlike 40.9–40.13 there is **no maintenance window and no interval in which data is invisible**. Verification script: `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` (read-only). |
 | `AddProgressLessonVersionBinding` (learning-service) | 2026-08-17 | Phase 40.16, Stage D. `LessonVersionId uuid NULL` on `UserExerciseAttempts` and `UserLessonProgressRecords`, and nothing else. Both columns are nullable, so Postgres 11+ adds them as a catalogue-only change — no rewrite, no long lock — which is why this one is allowed to run inside `Database.Migrate()` on two tables that grow with usage. **Indexes are not created here** (they are declared in the entity configurations so the model snapshot carries them, and built by `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql`), and **the historical backfill is not here either**: it needs a "version 1" to point at, and that snapshot's `ContentHash` is defined over the exact bytes `LessonSnapshotSerializer` emits — SQL cannot reproduce them, because Postgres orders `jsonb` keys by length and then bytes. `LessonVersionBackfill` mints those versions at startup; `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing rows. No foreign key to `LessonVersions` on purpose (see the `UserExerciseAttempts` notes above). **No window in which any data is invisible**, unlike 40.10–40.13: nothing filters on these columns. |
+| `AddProgramVersioning` (learning-service) | 2026-08-17 | Phase 40.17, Stage D. Three new **strict tenant** tables — `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global programme), three check constraints and two freeze triggers (`ProgramVersions_reject_frozen_change`, `ProgramItems_reject_frozen_change`). **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15 made, for the same reason: all three tables are created empty by this very migration, so every index is built over zero rows, and two of them (one draft per organization, one pin per learner) are correctness constraints that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: the migration mints no programme version and enrolls nobody, nothing filters on the new tables, and an organization without a published programme behaves exactly as it did before — learners read the live tree, unpinned. Verification script: `docs/TENANCY/sql/40.17_program_versioning_verify.sql` (read-only, never executed). |
 
 ---
 

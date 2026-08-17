@@ -4,6 +4,7 @@ using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Programs.Models;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Features.Techniques.Models;
@@ -30,6 +31,9 @@ public sealed class LearningDbContext : DbContext
     public DbSet<Exercise> Exercises => Set<Exercise>();
     public DbSet<UserLessonProgress> UserLessonProgressRecords => Set<UserLessonProgress>();
     public DbSet<UserExerciseAttempt> UserExerciseAttempts => Set<UserExerciseAttempt>();
+    public DbSet<ProgramVersion> ProgramVersions => Set<ProgramVersion>();
+    public DbSet<ProgramItem> ProgramItems => Set<ProgramItem>();
+    public DbSet<ProgramEnrollment> ProgramEnrollments => Set<ProgramEnrollment>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -61,6 +65,15 @@ public sealed class LearningDbContext : DbContext
             .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserTechniqueProgress>()
             .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.17. A curriculum is a decision one organization made about its own people, so
+        // there is no such thing as a global programme and the comparison is plain equality — the
+        // "or global" branch below would hand every customer somebody else's training plan.
+        modelBuilder.Entity<ProgramVersion>()
+            .HasQueryFilter(version => _tenantContext.IsPlatformWide || version.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<ProgramItem>()
+            .HasQueryFilter(item => _tenantContext.IsPlatformWide || item.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<ProgramEnrollment>()
+            .HasQueryFilter(enrollment => _tenantContext.IsPlatformWide || enrollment.OrganizationId == _tenantContext.OrganizationId);
 
         // Content: null means the global library shared by every organization, so the comparison is
         // "mine or global", never plain equality (docs/TENANCY/CONTENT_MODEL.md).

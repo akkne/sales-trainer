@@ -34,6 +34,8 @@ src/backend/learning-service/
       SkillTree/                       /skills, /skill-tree, /skills/{id}/topics
       Lessons/                         Lesson/Exercise/progress/attempt models + LessonVersion
                                        (40.15: snapshot serializer, canonical JSON, slugs)
+      Programs/                        /program, /program/switch + programme versions, items,
+                                       enrollments and diffs (40.17)
       Exercises/                       /lessons, /exercises/*, deterministic + AI grading, chat/voice
       Reference/                       /reference
       Techniques/                      /techniques
@@ -66,7 +68,7 @@ side**, so the two halves are modelled differently on purpose.
 
 | | Tables | `OrganizationId` | Query filter | RLS policy |
 |---|---|---|---|---|
-| **Tenant data** | `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` | `NOT NULL`, `ITenantScoped` | `== current` | `EnableTenantRls` |
+| **Tenant data** | `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress`, `ProgramVersions`/`ProgramItems`/`ProgramEnrollments` (40.17) | `NOT NULL`, `ITenantScoped` | `== current` | `EnableTenantRls` |
 | **Content** | `Skills`, `Topics`, `Lessons`, `LessonVersions` (40.15), `Exercises`, `Techniques`, `ReferenceMaterials` | nullable — `NULL` = global library | `== null \|\| == current` | `EnableTenantRlsForContent` |
 | **Platform-global** | `ExerciseTypePrompts`, `SkillStages`, `DailyQuotes`, `UserReplicas`, `TechniqueSkills`, `TechniqueCoaches`, `OutboxMessages` | none | none | none |
 
@@ -196,6 +198,61 @@ fixing a wrong correct-answer no longer moves numbers that were computed months 
   analytics-service is Redis-only, stores no attempts, and its `exercise.completed` counter is a
   platform-wide funnel number with no lesson, no version and no organization in it.
 
+### Programme versioning and enrollment (Phase 40.17)
+
+`ProgramVersions` / `ProgramItems` / `ProgramEnrollments`
+([CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.5). 40.15 gave a lesson a history and 40.16 bound
+progress to it; this does the same one level up, for the curriculum.
+
+They are the first tables in this service that are **strict tenant data and content-adjacent at the
+same time**, and the distinction is worth stating because the rest of Stage D went the other way: a
+curriculum is a decision one organization made about its own people, so there is no global programme,
+`OrganizationId` is `NOT NULL`, and the policy is plain equality rather than `IS NULL OR = current`.
+
+- **A programme is references, and nothing else.** A `ProgramItem` is a skill id, an order index and
+  a pinned `LessonVersionId`. Not one write in `ProgramVersionService` touches `Lessons`, `Exercises`
+  or `LessonVersions` — reordering a curriculum produces a new programme version and no content edit
+  at all, which is the property that keeps customization from becoming the per-customer fork
+  CONTENT_MODEL.md §1 forbids.
+- **The draft is re-derived from the live tree**, exactly as 40.15's lesson draft is re-derived from
+  the live rows. `POST /admin/program/versions/draft` walks skills → topics → lessons in tree order,
+  skips archived lessons, and pins each to
+  `ILessonVersionService.EnsurePublishedVersionIdAsync` — the same resolver an exercise submission
+  goes through, so a programme and the progress recorded against it can never disagree about which
+  snapshot a lesson currently is. It runs **before** the write scope opens, for the same reason
+  `ExerciseService` does: losing the mint race raises a unique violation, and a unique violation
+  aborts the whole transaction it happens in.
+- **Publishing freezes the structure, in the database.** Two triggers, and the one on `ProgramItems`
+  is the important half — that is where a retroactive reorder would actually be written, and it
+  covers `DELETE` as well, because removing a lesson from a frozen programme is the same edit from
+  the other side. A cascade from deleting the version itself is let through by the "parent row is
+  already gone" branch.
+- **Publishing an unchanged programme mints nothing.** The draft's item tuples are compared with the
+  last published version's, in order; identical means the draft is discarded and the existing version
+  comes back with `createdNewVersion: false`. This is the programme's stand-in for 40.15's content
+  hash, and it matters more here: a version that changed nothing would still tell every enrolled
+  learner a new programme is waiting and then show them an empty diff, which is how a switch notice
+  stops being read.
+- **The diff is computed honestly.** Four buckets — added, removed, re-pinned, moved — because they
+  mean four different things to whoever decides. `movedLessons` (same lesson, same snapshot,
+  different place) is the entire content of a "reorder the skills" edit. And `isBreaking` on a
+  re-pinned lesson is not the target version's own flag: a programme can skip several lesson versions
+  at once, so it asks whether **any** published version between the two pins declared itself
+  breaking. Reading only the target would hide a changed correct answer behind a later typo fix,
+  which is the 40.16 failure restated one level up.
+- **Only the learner moves their own pin.** `POST /admin/program/enrollments` puts a learner with no
+  pin on the newest published version and is idempotent — somebody who already has a pin comes back
+  unchanged, never moved. `POST /program/switch` acts on the caller and names the target version, so
+  a version published between showing the diff and accepting it cannot be the one they land on. There
+  is deliberately no route by which an administrator moves somebody else, because "a manager on
+  lesson 8 of 21 must not find the programme rearranged" is a claim about which code paths exist.
+- **Enrollment does not gate access to lessons, and there is no "programme version 1".** An
+  organization that has published nothing has no pins, and its people read the live tree exactly as
+  they did before the phase. Minting a programme from whatever the seeder happened to load and
+  pinning everybody to it would freeze them onto a curriculum nobody authored — see
+  `docs/DECISIONS.md` (2026-08-17). The consequence, stated plainly: until the frontend reads
+  `GET /program`, the pin changes nothing about what a learner sees on the existing screens.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -248,6 +305,13 @@ Unlike 40.10–40.13 there is **no window in which data is invisible**: nothing 
 `LessonVersionId`, so the deployment and the backfill do not have to share a maintenance window.
 Neither file has been run against any database.
 
+Phase 40.17's migration (`20260817203021_AddProgramVersioning`) is the cleanest of the four and has
+**no operational step at all**. All three tables are created empty by the migration, so its indexes
+are built over zero rows and there is no `_indexes_concurrently.sql`; nothing is backfilled, because
+there is nothing to backfill — no programme exists until an administrator builds one. What does exist
+is `docs/TENANCY/sql/40.17_program_versioning_verify.sql`, read-only, safe with the service up, and
+not run against anything either.
+
 ## Coupling broken during extraction
 
 | Monolith coupling | Resolution in learning-service |
@@ -298,13 +362,13 @@ the `AiService:BaseUrl` option (`http://ai:8080` in compose).
 
 ## Routes flipped at the gateway
 
-`/skills/*`, `/skills`, `/skill-tree`, `/lessons/*`, `/lessons`, `/topics/*`,
-`/exercises/*`, `/reference/*`, `/reference`, `/techniques/*`, `/techniques`,
-`/daily-quote`, and the learning `/admin/*` content routes (`/admin/skills`,
+`/skills/*`, `/skills`, `/skill-tree`, `/program`, `/program/*` (40.17), `/lessons/*`,
+`/lessons`, `/topics/*`, `/exercises/*`, `/reference/*`, `/reference`, `/techniques/*`,
+`/techniques`, `/daily-quote`, and the learning `/admin/*` content routes (`/admin/skills`,
 `/admin/skill-stages`, `/admin/topics`, `/admin/lessons`, `/admin/exercises`,
 `/admin/exercise-type-prompts`, `/admin/reference`, `/admin/techniques`,
-`/admin/daily-quotes`, `/admin/seeder`). `/profile/*` is intentionally NOT captured
-(owned by identity/gamification).
+`/admin/daily-quotes`, `/admin/seeder`, `/admin/program` and `/admin/program/*` — 40.17).
+`/profile/*` is intentionally NOT captured (owned by identity/gamification).
 
 After this flip the only public route still served by the monolith catch-all is
 `/admin/users/*` (admin user management: list/detail, moderation rename, avatar
@@ -323,6 +387,12 @@ user aggregate but never took these admin routes. Phase 9 must move `/admin/user
   the monolith's `MarkTechniqueSeen` only records first-seen and never changes mastery
   (matching prior behaviour). The producer is wired for when a mastery-progression
   flow lands.
+- **A programme pin does not yet change what a learner sees on the existing screens (40.17).**
+  `GET /skill-tree`, `/lessons` and `/exercises/*` still read the live content tree; the pinned
+  programme is served by `GET /program` and nothing in the frontend reads it yet. The backend
+  guarantee the phase makes is real and complete — no code path moves somebody's pin except their
+  own explicit switch — but wiring the learner's existing screens onto the pinned programme belongs
+  with the screens that render a programme, which is 40.20. Recorded in `docs/DONT_FORGET.md`.
 
 ## Local dev
 

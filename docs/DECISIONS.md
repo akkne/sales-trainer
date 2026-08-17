@@ -4,6 +4,243 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.17 — programme versioning and enrollment (2026-08-17)
+
+Twelve forks the roadmap left to the agent, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+### The tables live in learning-db, beside the lessons they reference
+
+`program_item` pins a `lesson_version_id` and names a `skill_id`. Both live in learning-db, and a
+programme is meaningless without them.
+
+**Rejected: organization-service.** It is the tenant registry — organizations, their auth config,
+their profile — and it has never held a row that references content. Putting the curriculum there
+makes every programme read a cross-service call and makes "does this pinned version still exist" a
+question no database can answer.
+
+**Rejected: a new programme-service.** Three tables, no independent scaling story, no separate
+lifecycle, and an immediate synchronous dependency on learning-service for every read. That is the
+distributed monolith the microservices doc already warns about.
+
+**Chosen: learning-db.** The verify script can then check by query what a foreign key would have
+checked (that every pinned version exists, that the denormalized `LessonId` agrees with its
+snapshot), which is precisely what the cross-service options give up.
+
+### All three tables are strict tenant data, and this is the first place the content flavour is wrong
+
+Everything Stage D added to learning-db so far — `Lessons`, `LessonVersions`, `Skills`, `Topics` —
+is a *content* table: `OrganizationId` is nullable, `NULL` means the global library, and the RLS
+policy is `IS NULL OR = current`. The obvious move is to keep going.
+
+**Rejected: nullable `organization_id` with a global default programme.** A `NULL` owner here would
+mean "everybody's programme", and the moment one exists, publishing a new version of it rearranges
+every customer's curriculum at once — the fork-avoidance argument of §1 inverted into the worst
+possible blast radius. A curriculum is not content anybody shares; it is a decision one organization
+made about its own people.
+
+**Chosen:** `NOT NULL`, `ITenantScoped`, `EnableTenantRls` with plain equality on all three tables.
+The verify script asserts explicitly that neither `qual` nor `with_check` contains `IS NULL`, because
+"copy what the neighbouring table does" is exactly how that mistake would arrive later.
+
+### `program_item` carries `lesson_id` as well as `lesson_version_id`
+
+The roadmap names four columns: `program_version_id, skill_id, order_index, lesson_version_id`. A
+fifth looks like padding.
+
+It is the one that makes the block's central question expressible. With only the version id, the
+unique constraint can say "this snapshot appears once" but not "this lesson appears once" — so a
+curriculum could list the same lesson at versions 3 and 5 simultaneously, which is the same material
+with two different answer keys inside one programme. And the diff's largest bucket, "same lesson, now
+pinned to a newer snapshot", needs lesson identity to exist at all.
+
+It cannot drift: a published `LessonVersion`'s `LessonId` is frozen by 40.15's trigger.
+
+**Rejected: derive it by joining `LessonVersions` on every read.** The join works and is cheap; what
+it cannot do is be a unique index.
+
+**Also rejected: a separate `skill_order_index` beside `order_index`.** Reordering skills is
+expressible as a permutation of one dense running order, and two ordering columns are two chances for
+them to disagree about what comes first.
+
+### No foreign key on the three content references; a real one on the enrollment
+
+`program_item.skill_id`, `.lesson_id` and `.lesson_version_id` get no foreign key, for exactly the
+reason 40.16 gave for `UserExerciseAttempt.LessonVersionId`: those are content tables under an
+`IS NULL OR = current` policy while `ProgramItems` is strict tenant data under plain equality, and a
+constraint spanning the two is validated with the writer's privileges. It would either leak the
+existence of rows the writer may not read or refuse writes it should allow.
+
+`ProgramEnrollments.ProgramVersionId` **does** get one, `ON DELETE RESTRICT`, because both sides are
+strict tenant data under the same policy and always in the same organization — the objection above
+simply does not apply. `RESTRICT` rather than `CASCADE`: a programme version somebody is standing on
+is not something to delete, and refusing the delete is a far better answer than silently unpinning a
+learner mid-course.
+
+### No "programme version 1", and nobody is enrolled by the migration
+
+This is the decision most likely to be re-litigated, because 40.16 made the opposite call one block
+earlier: it *did* mint a "version 1" for every lesson that had never been published.
+
+The two cases are not alike. A lesson's version 1 is a faithful snapshot of something that already
+exists — the body is right there in the `Exercises` rows, and the only thing missing was the act of
+freezing it. A programme version is not a snapshot of anything; it is a curriculum decision, and
+nobody has made it yet. The live skill tree is not a curriculum, it is whatever the seeder happened
+to load.
+
+**Rejected: mint a programme version 1 from the live tree and enroll every existing user.** It reads
+as the tidy, symmetric move and is the worse one. Everybody currently learning would be pinned,
+silently, to a snapshot nobody authored — and pinning means they stop receiving content improvements
+until they notice a switch prompt for a programme they never opted into. Today's behaviour (always
+the newest content) would become tomorrow's frozen copy, invisibly, on deploy day.
+
+**Chosen:** the migration creates three empty tables and nothing else. The first programme version
+exists when an administrator calls `POST /admin/program/versions/draft` and then `/publish`.
+
+### Enrollment does not gate access to lessons — fail-open, deliberately, and against the house style
+
+Every tenancy decision in Phase 40 has been fail-closed: an unset organization yields zero rows, a
+write with no tenant throws. The consistent-looking move is to require an enrollment before a learner
+may open a lesson.
+
+**Rejected: fail-closed.** There is no screen anywhere that builds a programme (that is 40.20), so on
+the day this deploys, every organization has zero published programme versions and zero enrollments.
+Fail-closed would mean nobody in the product can open a lesson until a РОП uses an API by hand. That
+is not a security posture, it is an outage.
+
+The deeper reason is that fail-closed is the right default for *data* and the wrong one for a
+*curriculum*. Fail-closed exists so one customer never sees another's rows; an unenrolled learner
+reading the global library sees nothing that is not already theirs to see — the content RLS policy is
+unchanged and still decides that. The question here is "which subset, in what order", and the honest
+answer when no programme exists is "all of it, in tree order", which is exactly what the product did
+yesterday.
+
+**Chosen:** absent an enrollment, `GET /program` answers `isEnrolled: false` and the existing read
+paths behave exactly as before. Enrollment narrows and freezes; it does not authorize.
+
+### Enrollment is asymmetric: an administrator may create a pin and may never move one
+
+The roadmap sentence is "new enrollments go to the new version; existing learners get an explicit
+switch with a diff". Two operations, and the temptation is to write one that does both.
+
+**Rejected: one `PUT /admin/program/enrollments/{userId}` that sets the version.** It makes "the
+manager on lesson 8 of 21 is not rearranged" a matter of which button the UI draws. The first support
+request of the form "can you just move everyone onto v4" gets satisfied by an endpoint that exists.
+
+**Chosen:** `POST /admin/program/enrollments` is idempotent and returns an existing pin *unchanged*,
+so re-running "enroll everybody" after a publish enrolls the newcomers and moves nobody.
+`POST /program/switch` acts on the caller's own pin, takes no user id, and there is no third route.
+The property is then structural rather than procedural.
+
+**The switch names its target rather than meaning "whatever is newest".** The learner was shown a
+diff against a specific version; if another is published in between, the id they send no longer
+matches and the call is refused with 409 instead of landing them on a programme nobody showed them.
+The race is small and the refusal is cheap, and the entire block exists because of what a silent
+programme change does to somebody mid-course.
+
+### Freezing is a database trigger — and the one on `program_item` is the important half
+
+Same shape as 40.15, sharper reason. A frozen lesson snapshot that can be edited corrupts a metric; a
+frozen *programme* that can be edited rearranges the curriculum under a person who is on lesson 8 of
+21, which is the failure the block is named for.
+
+The structure lives in the item rows, so `ProgramItems_reject_frozen_change` fires
+`BEFORE INSERT OR UPDATE OR DELETE` — `DELETE` included, because removing a lesson from a frozen
+programme is the same edit seen from the other side.
+
+The subtle part is how a legitimate cascade gets through. The trigger looks up its owning programme
+version's status; when the lookup finds nothing it allows the row, because Postgres runs
+`ON DELETE CASCADE` *after* the parent row is deleted, so "no parent" means the version itself is
+being dropped. That branch is not a hole for a mis-tenanted write: an `INSERT`/`UPDATE` whose
+organization does not match the session GUC is refused by the table's own RLS `WITH CHECK` before the
+lookup could be fooled by RLS hiding the parent, and a session with no GUC cannot write these tables
+at all.
+
+**Rejected: enforce the freeze in `ProgramVersionService` only.** In a repository whose entire
+tenancy argument is that application-layer filters are not enough (TENANCY.md §1.5), a code-only
+guarantee about immutability is the weaker claim.
+
+### There is no content hash; the no-op publish check compares reference tuples
+
+40.15 stops a no-op publish with a SHA-256 over the snapshot. A programme has no body to hash — it is
+references — so the equivalent is comparing the draft's `(lesson_id, lesson_version_id, skill_id,
+order_index)` tuples, in order, with the last published version's.
+
+**Rejected: hash the tuple list and store it.** A stored hash is a third representation of the same
+facts that can drift from them, and it buys nothing: the comparison reads two small item lists that
+are already being loaded.
+
+It matters more here than it does for lessons. A programme version that changed nothing would still
+tell every enrolled learner that a new programme is waiting and then show them an empty diff — which
+is precisely how a switch notice stops being read, and the notice is the whole mechanism by which a
+breaking change reaches a human.
+
+### `is_breaking` in the diff reads the interval between the pins, not the target version's flag
+
+The shortcut is to report the target `LessonVersion.IsBreaking`. It is wrong whenever a programme
+skips more than one lesson version, which it usually will: a changed correct answer in version 4
+would be hidden behind a cosmetic version 5, and the learner would be told the switch is safe.
+
+**Chosen:** ask whether *any* published version of that lesson strictly after the lower of the two
+version numbers and up to and including the higher declared itself breaking. Expressed with min/max
+so a deliberate move back to an older programme is reported just as loudly — the learner crosses the
+same edit either way. A pin whose snapshot is missing or invisible counts as breaking: "the content
+changed and nobody can say how" is a breaking change.
+
+### The draft is re-derived from the live tree, and titles come out of the snapshot
+
+Two smaller calls that mirror 40.15 rather than inventing something.
+
+`POST /admin/program/versions/draft` re-walks skills → topics → lessons on every call and rebuilds
+the draft's items, exactly as 40.15's lesson draft is re-serialized from the live rows. The
+alternative — a draft the admin edits directly — means a second authoring surface, a sync problem
+with the tree, and a screen that does not exist yet.
+
+Each item is pinned through `ILessonVersionService.EnsurePublishedVersionIdAsync`, the same resolver
+an exercise submission goes through, so a programme and the progress recorded against it can never
+disagree about which snapshot a lesson currently is. It is called *before* the write scope opens, for
+the reason its own remarks give: minting can lose a unique-index race, and a unique violation aborts
+the whole transaction it happens in. One resolver call per lesson is more round trips than a single
+query, and that is the accepted price of not writing a second resolver.
+
+`lessonTitle` in every DTO is parsed out of the pinned snapshot rather than read off the live
+`Lessons` row. Showing the current title beside an old pin is the retroactive substitution this whole
+phase exists to stop; `null` (snapshot gone or invisible) is a truer answer than the new title. The
+cost is loading `Content` — the largest column in `LessonVersions` — for every pinned version, which
+is acceptable at programme size and worth a generated column if a curriculum ever gets big enough to
+feel it.
+
+### `/skill-tree` is not rewired onto the programme; `GET /program` is a new route
+
+The pin has to be readable somewhere. The maximal move is to make `SkillTreeService` serve the pinned
+programme whenever an enrollment exists.
+
+**Rejected, for now.** `/skill-tree` is the read path the entire product depends on, it has existing
+unit tests, and Rule №3 forbids writing tests for the change. More to the point, it would change
+nothing for anybody: on deploy day there are no enrollments, so the branch would be dead code with
+the blast radius of the main read path.
+
+**Chosen:** the pinned programme is `GET /program`, complete with items, upgrade availability and the
+pending diff, so wiring the learner's screens onto it is a frontend change rather than a backend one.
+The honest cost — until that wiring happens, the pin does not change what a learner sees on the
+existing screens — is recorded in `docs/DONT_FORGET.md` and in the roadmap, not glossed.
+
+### A separate `ProgramVersionStatuses`, and no `_indexes_concurrently.sql`
+
+`ProgramVersionStatuses` duplicates `LessonVersionStatuses` value for value today. Sharing one
+constant would couple two check constraints that are frozen by different triggers for different
+reasons — and 40.18's likely `stale` state for lessons would silently widen the programme's
+vocabulary too.
+
+And, as in 40.15, there is no companion concurrent-index script: all three tables are created empty
+by the migration, so every index is built over zero rows, and two of them (one draft per
+organization, one pin per learner) are correctness constraints that must not wait for a script
+somebody has to remember to run. What exists instead is
+`docs/TENANCY/sql/40.17_program_versioning_verify.sql` — read-only, safe with the service up, and
+never executed against anything.
+
+---
+
 ## Phase 40.16 — progress bound to a lesson version (2026-08-17)
 
 Seven forks the roadmap left to the agent, decided during an unattended run under the rules in
