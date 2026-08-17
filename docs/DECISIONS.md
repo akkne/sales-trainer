@@ -4,6 +4,161 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.16 — progress bound to a lesson version (2026-08-17)
+
+Seven forks the roadmap left to the agent, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+### The attempt keeps `ExerciseId` and gains `LessonVersionId`; there is no third column
+
+The roadmap asks for "`lesson_version_id` + the exercise's identity **inside** the version, not the
+mutable `ExerciseId`", which reads at first like two new columns and a retired one.
+
+It is one new column, because 40.15 already put `exerciseId` **inside** the snapshot and therefore
+inside its hash. The identity of an exercise within a version is that key; the pair
+`(LessonVersionId, ExerciseId)` locates the exact question, options and answer key the learner saw.
+`ExerciseId` is not retired — it changes meaning rather than shape, from "a pointer at an editable
+row" to "a key into a frozen document", and the code and schema comments say so where somebody will
+read them.
+
+**Rejected: a separate `ExerciseIndexInVersion` (ordinal position).** Positions move when an admin
+reorders exercises, so the ordinal is exactly the mutable thing being escaped from. **Rejected:
+dropping `ExerciseId`.** Every existing read path uses it, and the "did the learner attempt every
+exercise in this lesson" gate is a question about the *current* lesson, where the live row is the
+right answer.
+
+### Both new columns are nullable, and neither is a foreign key
+
+**Nullable**, because attempts recorded before this phase have nothing to point at until the
+backfill runs, and because a lesson can legitimately have no published version at the moment its
+column is added. `NULL` means "unversioned" and is reported as its own bucket by the accuracy
+endpoint. The alternative — `NOT NULL` with a placeholder version id — is the all-zeros-organization
+trick of 40.10 applied to a case that does not need it: nothing filters on this column, so a `NULL`
+hides no row and creates no fail-closed window.
+
+**No foreign key**, because `LessonVersions` is a content table under an `IS NULL OR = current` RLS
+policy while `UserExerciseAttempts` is strict tenant data under plain equality. A foreign key is
+validated with the referencing statement's privileges, so on the day the service runs as the
+`NOBYPASSRLS` role `sellevate_app`, a perfectly valid reference could be rejected because the
+checking statement cannot see the row. `ExerciseId` has never carried one either, for the same
+family of reasons.
+
+### "Version 1" for existing lessons is minted in C# at startup, not by the migration and not by SQL
+
+This was the fork the task named explicitly, and the deciding argument is not about migrations at
+all — it is about the hash.
+
+`LessonVersion.ContentHash` is a SHA-256 over the exact bytes `LessonSnapshotSerializer` emits, with
+object keys in **ordinal** order. Postgres stores `jsonb` with its own key ordering (length, then
+bytes) and its own whitespace. A version minted by `jsonb_build_object` in a migration or in a
+`psql` script would therefore carry a hash the service never reproduces — and the very next publish
+would see a mismatch and mint a second, byte-identical version. That defeats the single thing
+`content_hash` exists for, and it would put a spurious break in the metric series this phase is
+being written to protect. Whatever mints these snapshots has to be the same code that hashes them.
+
+**Chosen: `LessonVersionBackfill`, resolved in learning-service's startup scope after
+`Database.Migrate()`, in system mode** — the shape gamification-service already uses for its
+seeders. Idempotent, a no-op on every start after the first (one indexed query returning zero rows),
+and one transaction per lesson so a single lesson with unparseable exercise content cannot stop the
+service from starting.
+
+**Rejected: raw SQL inside the EF migration** — the hash problem above, and it would also have to
+run before the versions it needs exist. **Rejected: a human-run `.sql` file for the whole job** —
+same hash problem. **Rejected: lazily, on the first attempt after deployment** — that binds *new*
+attempts fine (and is in fact what `EnsurePublishedVersionIdAsync` does) but leaves every
+*historical* attempt unbound forever, which is the half of the block the roadmap actually asked for.
+
+The second half — pointing the existing attempt and progress rows at that version — **is** plain SQL
+and is in `docs/TENANCY/sql/40.16_progress_version_backfill.sql`, batched, run by a human. It is a
+full-table update on tables that grow with usage, which is not something to do inside a startup path
+that a readiness probe is waiting on.
+
+### An attempt on a never-published lesson mints version 1; an attempt on a *drifted* lesson does not
+
+`EnsurePublishedVersionIdAsync` resolves the newest published version and mints one only when the
+lesson has none at all. It deliberately does **not** compare the live rows' hash against the last
+published snapshot and mint on a mismatch.
+
+**Why the minting branch exists at all.** Publishing is an administrator's act, and at the moment
+40.16 ships nobody has ever performed it — 40.15 created the table and left every lesson with zero
+versions, and there is still no admin screen for it (40.20). An attempt on such a lesson would have
+nothing to point at, which is the bug this phase closes.
+
+**Why it stops there.** Minting on drift would stamp every unpublished administrator edit as an
+unattributed content change. Since nothing can tell such a change from a typo, it would have to be
+recorded as breaking, and the accuracy series would then split every time someone fixed a comma —
+the precise failure `is_breaking` exists to prevent, arrived at from the other side. It also races
+the explicit publish endpoint: a learner submitting between the edit and the publish would mint a
+breaking version and the administrator's `isBreaking: false` would be swallowed by the
+identical-hash branch.
+
+**The accepted gap, stated plainly:** an administrator who edits an exercise and does not publish
+has learners answering new content bound to the previous snapshot. Publishing is what makes an edit
+historically visible, and 40.20's admin screen has to make publishing the natural end of editing.
+Recorded in `docs/DONT_FORGET.md` rather than half-fixed here.
+
+### The version is resolved *before* the submission's write transaction, not inside it
+
+Minting can lose a unique-index race on `(LessonId, VersionNumber)` to another learner answering the
+first exercise of the same never-published lesson. In Postgres a unique violation aborts the entire
+transaction it happens in, so a recovery read placed inside that transaction fails with "current
+transaction is aborted" — and inside `SubmitExerciseAnswerAsync`'s write scope it would take the
+learner's answer down with it. The resolve therefore runs first, in its own transactions, and the
+loser of the race adopts the row the winner created. The snapshot is immutable once published, so
+reading it a moment earlier costs nothing.
+
+### `UserLessonProgress.LessonVersionId` is refreshed only when the row advances
+
+Set when the row is created; updated afterwards only on a new best score or the transition to
+completed.
+
+**Rejected: refresh on every submission.** The row records two facts — the best score and whether
+the lesson is finished — and both belong to the version they were earned on. Restamping on every
+answer would relabel "completed version 1" as "completed version 3" the first time a learner opened
+the lesson again after a breaking edit they never saw, which is the retroactive rewrite this phase
+exists to stop, reached from the progress side instead of the attempt side.
+
+### The accuracy series lives in learning-service; analytics-service gets documentation only
+
+The roadmap says "the dashboard joins cosmetic versions and splits semantic ones", and there is no
+dashboard. Where the joining logic should live was a real fork.
+
+**analytics-service cannot host it.** It is Redis-only by design, stores no attempts, no scores and
+no lesson ids, and its `exercise.completed` consumer increments one platform-wide Prometheus counter
+with no lesson, no version and no organization in it — deliberately, because a customer id as a
+Prometheus label puts identities and unbounded cardinality into the monitoring store. Making it
+compute accuracy means giving it a database and a copy of the attempts, i.e. building a second
+system of record for the number whose trustworthiness is the entire point.
+
+**Chosen: `GET /admin/lessons/{lessonId}/accuracy` in learning-service**, which owns the data, and a
+new section in `docs/ANALYTICS_SERVICE.md` stating the rule for anyone who later draws the chart:
+aggregate per version, join across cosmetic publishes, split at breaking ones, and never fold the
+unversioned bucket into version 1. That last one is not a formatting preference — merging attempts
+whose content nobody can identify into a version's series is the same unprovable claim the phase
+removes, told by the fix instead of by the bug.
+
+The endpoint carries `RequireOrgAdmin` with no second platform-level gate, unlike the publish routes
+of 40.15. It writes nothing and counts only the caller's own organization's attempts, so an
+organization administrator asking about a global lesson gets their own team's numbers — exactly the
+question a РОП is entitled to ask about content they did not write.
+
+### There *is* a `40.16_*_indexes_concurrently.sql`, and that reverses 40.15's call
+
+40.15 put its indexes in the migration and said the absence of a concurrent-index script was a
+decision. 40.16 puts them in a script, and the difference is which tables are involved.
+`LessonVersions` was created empty and `Lessons` is a few hundred content rows; `UserExerciseAttempts`
+and `UserLessonProgressRecords` grow with every answered exercise, and 40.10 already moved every
+index on those two tables out of the migration for exactly this reason. Adding the columns stays in
+the migration — both are nullable, so Postgres 11+ treats it as a catalogue-only change with no
+rewrite and no long lock.
+
+The index names in the script are the exact ones EF Core generates, including the `~` that marks
+EF's truncation at Postgres's 63-byte identifier limit. Renaming them for readability would make the
+next `dotnet ef migrations add` decide the indexes are missing and emit a table-locking
+`CreateIndex` into a startup path — which is the thing the script exists to avoid.
+
+---
+
 ## Phase 40.15 — immutable lesson versioning (2026-08-17)
 
 Six forks the roadmap left to the agent, decided during an unattended run under the rules in
