@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Eventing;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -31,7 +32,7 @@ internal sealed class ExerciseService(
         var topicOrderById = await databaseContext.Topics
             .ToDictionaryAsync(topic => topic.Id, topic => topic.OrderInSkill, cancellationToken);
 
-        var allLessons = (await databaseContext.Lessons
+        var allLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .ToListAsync(cancellationToken))
             .OrderBy(lesson => topicOrderById.GetValueOrDefault(lesson.TopicId))
             .ThenBy(lesson => lesson.OrderInTopic)
@@ -91,7 +92,7 @@ internal sealed class ExerciseService(
             .Select(topic => (int?)topic.OrderInSkill)
             .FirstOrDefaultAsync(cancellationToken) ?? 0;
 
-        var allLessons = await databaseContext.Lessons
+        var allLessons = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == topicId)
             .OrderBy(lesson => lesson.OrderInTopic)
             .ToListAsync(cancellationToken);
@@ -142,7 +143,7 @@ internal sealed class ExerciseService(
 
         // Order across the whole skill by topic first (Topic.OrderInSkill), then by the
         // lesson's position within its topic — so topics stay grouped instead of interleaving.
-        var allLessons = (await databaseContext.Lessons
+        var allLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => topicIds.Contains(lesson.TopicId))
             .ToListAsync(cancellationToken))
             .OrderBy(lesson => topicOrderById[lesson.TopicId])
@@ -513,7 +514,7 @@ internal sealed class ExerciseService(
         CancellationToken cancellationToken)
     {
         // Next lesson within the same topic wins first.
-        var nextInTopic = await databaseContext.Lessons
+        var nextInTopic = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == completedLesson.TopicId
                         && lesson.OrderInTopic > completedLesson.OrderInTopic)
             .OrderBy(lesson => lesson.OrderInTopic)
@@ -537,7 +538,7 @@ internal sealed class ExerciseService(
 
         if (nextTopic is null) return null;
 
-        return await databaseContext.Lessons
+        return await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == nextTopic.Id)
             .OrderBy(lesson => lesson.OrderInTopic)
             .ThenBy(lesson => lesson.Id)
@@ -564,7 +565,7 @@ internal sealed class ExerciseService(
             .Select(topic => topic.Id)
             .ToListAsync(cancellationToken);
 
-        var totalLessonCount = await databaseContext.Lessons
+        var totalLessonCount = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => topicIds.Contains(lesson.TopicId))
             .CountAsync(cancellationToken);
 

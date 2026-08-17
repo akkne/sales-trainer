@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Features.SkillTree.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -72,9 +73,12 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         var enrolledSkillIdSet = enrolledSkillIds.ToHashSet();
         var hasAnyEnrollment = enrolledSkillIdSet.Count > 0;
 
-        // Single query: lesson count per skill via topic join.
+        // Single query: lesson count per skill via topic join. Phase 40.18: resolved, because an
+        // organization that overrode a lesson would otherwise see it counted twice — once as the
+        // base and once as its own copy — and every "3 of 7 lessons" on the tree would be wrong for
+        // exactly the customers who customized the most.
         var lessonCountBySkill = await databaseContext.Topics
-            .Join(databaseContext.Lessons,
+            .Join(databaseContext.Lessons.ResolveOverrides(databaseContext),
                 topic => topic.Id,
                 lesson => lesson.TopicId,
                 (topic, lesson) => new { topic.SkillId, lesson.Id })
