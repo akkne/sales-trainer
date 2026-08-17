@@ -26,6 +26,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<UserSkillProgress> UserSkillProgressRecords => Set<UserSkillProgress>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
+    public DbSet<LessonVersion> LessonVersions => Set<LessonVersion>();
     public DbSet<Exercise> Exercises => Set<Exercise>();
     public DbSet<UserLessonProgress> UserLessonProgressRecords => Set<UserLessonProgress>();
     public DbSet<UserExerciseAttempt> UserExerciseAttempts => Set<UserExerciseAttempt>();
@@ -71,6 +72,11 @@ public sealed class LearningDbContext : DbContext
             .HasQueryFilter(lesson => _tenantContext.IsPlatformWide || lesson.OrganizationId == null || lesson.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Exercise>()
             .HasQueryFilter(exercise => _tenantContext.IsPlatformWide || exercise.OrganizationId == null || exercise.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.15. A lesson version inherits the visibility of the lesson it snapshots, but the
+        // filter has to be stated here anyway: EF query filters are not inherited through the
+        // LessonVersion -> Lesson navigation.
+        modelBuilder.Entity<LessonVersion>()
+            .HasQueryFilter(version => _tenantContext.IsPlatformWide || version.OrganizationId == null || version.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<Technique>()
             .HasQueryFilter(technique => _tenantContext.IsPlatformWide || technique.OrganizationId == null || technique.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<ReferenceMaterial>()

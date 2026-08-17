@@ -1,6 +1,17 @@
 # Per-organization content: customization, versioning, overrides
 
-**Status:** DESIGN ONLY. Not implemented.
+**Status:** §2.1, §2.2 and the `content_hash` rule are **implemented** (Phase 40.15, 2026-08-17) —
+see [DB_SCHEMA.md](../DB_SCHEMA.md) (`LessonVersions`),
+[SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (part 3.5) and
+[LEARNING_SERVICE.md](../LEARNING_SERVICE.md). Everything else on this page is still design only:
+§2.3 (progress referencing the version) is 40.16, §2.5 (programme versioning) is 40.17, §2.6
+(overrides and the staleness queue) is 40.18, §3 (the organization profile) is 40.19.
+
+Two places where the implementation is narrower than the text below, deliberately. `is_breaking`
+(§2.4) is recorded on every publish but nothing reads it yet — the dashboard that joins and splits
+metric series is 40.16. And `parent_lesson_id` / `base_version_id` exist and are filled correctly
+when set, but nothing creates an override: copy-on-write is 40.18, and creating copies earlier would
+be the fork §1 exists to forbid.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [ASSIGNMENTS.md](ASSIGNMENTS.md).
 Current content model: [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md),

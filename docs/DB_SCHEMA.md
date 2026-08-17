@@ -24,7 +24,7 @@ Last updated: 2026-06-12
 >
 > **`learning` (Phase 8)** — the last extraction. The `learning` database owns the
 > content tree and progress: `Skills`, `SkillStages`, `Topics`,
-> `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`,
+> `UserSkillProgressRecords`, `Lessons`, `LessonVersions` (40.15), `Exercises`, `UserLessonProgressRecords`,
 > `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`,
 > `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress` (schemas
 > ported verbatim from the monolith `AppDbContext`), plus a local `UserReplicas`
@@ -299,11 +299,103 @@ Indexes: `IX_Topics_IconicName`, `IX_Topics_SkillId_OrderInSkill`
 |---------------|-----------|----------|----------------------|
 | `Id`          | `uuid`    | NOT NULL | PK                   |
 | `OrganizationId` | `uuid` | NULL | Phase 40.10 — `NULL` = global library shared by every organization; non-null = one organization's own copy (40.18). RLS policy `Lessons_tenant_isolation` (content variant: `IS NULL OR = current`). |
+| `ParentLessonId` | `uuid` | NULL | Phase 40.15 — set when this row is one organization's override of a global lesson; FK → `Lessons.Id` `ON DELETE RESTRICT`. Nothing writes it until 40.18 (copy-on-write override creation). `RESTRICT` rather than `CASCADE`/`SET NULL`: a global lesson three customers have overridden must not be deletable in one click, and silently promoting the overrides to standalone lessons would lose the fact that they were ever derived. |
+| `Slug`        | `varchar(160)` | NOT NULL | Phase 40.15 — stable identifier within the organization. |
+| `IsArchived`  | `boolean` | NOT NULL | Phase 40.15, default `false`. Retired lessons stay in the table because published versions and historical progress point at them. |
 | `TopicId`     | `uuid`    | NOT NULL | FK → `Topics.Id`     |
 | `OrderInTopic`| `integer` | NOT NULL |                      |
 | `Title`       | `text`    | NOT NULL |                      |
 
-Indexes: `IX_Lessons_TopicId_OrderInTopic`
+Indexes: `IX_Lessons_TopicId_OrderInTopic`,
+`IX_Lessons_OrganizationId_Slug` (UNIQUE), `IX_Lessons_Slug_Global` (UNIQUE, `WHERE "OrganizationId" IS NULL`),
+`IX_Lessons_ParentLessonId`
+
+> **Two slug indexes, not one.** In a composite unique index Postgres treats NULLs as **distinct**,
+> so `UNIQUE (OrganizationId, Slug)` does **not** stop two *global* lessons sharing a slug. The
+> partial index over the global rows is what preserves that guarantee, while the composite one lets
+> a second customer have its own `objections`. Exactly the pattern already used for
+> `Skill.IconicName`, `Topic.IconicName` and `Technique.Slug` (TENANCY.md §1.9).
+
+> **Slug backfill.** Existing lessons were given `'lesson-' || replace("Id"::text, '-', '')` by the
+> migration itself — derived from each row's own primary key, so unique by construction and needing
+> no separate maintenance window. Titles are Russian prose and nothing transliterates them; a
+> readable slug is an explicit rename by an admin, which is safe because nothing routes by the slug.
+> The generated form is duplicated in `LessonSlugGenerator.GenerateFromLessonId`; if one changes, so
+> must the other.
+
+---
+
+### `LessonVersions`
+
+Phase 40.15. Immutable snapshots of a lesson **together with its full ordered set of exercises**
+(docs/TENANCY/CONTENT_MODEL.md §2). The versioned unit is the whole lesson because a `Lessons` row
+has no body of its own — only a title — and because versioning each `Exercise` separately would turn
+every historical question into a reconstruction from N rows.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NULL | Denormalized copy of the owning lesson's organization. `NULL` = global library. Denormalized because an RLS policy can only compare columns of the row it filters, so the boundary needs the value here and not one join away. RLS policy `LessonVersions_tenant_isolation` (content variant: `IS NULL OR = current`). |
+| `LessonId` | `uuid` | NOT NULL | FK → `Lessons.Id` `ON DELETE CASCADE` |
+| `VersionNumber` | `integer` | NOT NULL | Monotonic per lesson, from 1 |
+| `Content` | `jsonb` | NOT NULL | The snapshot — see the shape below |
+| `ContentHash` | `varchar(64)` | NOT NULL | Lowercase hex SHA-256 of the **canonical** `Content`, UTF-8 |
+| `Status` | `varchar(16)` | NOT NULL | `draft` \| `published` \| `archived`; default `draft`; `CK_LessonVersions_Status` |
+| `BaseVersionId` | `uuid` | NULL | Which version of the parent lesson an override was forked from. FK → `LessonVersions.Id` `ON DELETE SET NULL` |
+| `IsBreaking` | `boolean` | NOT NULL | Cosmetic (`false`) or semantic (`true`) edit |
+| `CreatedBy` | `uuid` | NULL | The administrator who opened the draft |
+| `CreatedAt` | `timestamptz` | NOT NULL | |
+| `PublishedAt` | `timestamptz` | NULL | `CK_LessonVersions_PublishedAt`: NOT NULL whenever `Status = 'published'` |
+
+Indexes: `IX_LessonVersions_LessonId_VersionNumber` (UNIQUE),
+`IX_LessonVersions_LessonId_Draft` (UNIQUE, `WHERE "Status" = 'draft'`),
+`IX_LessonVersions_OrganizationId_LessonId_VersionNumber`,
+`IX_LessonVersions_BaseVersionId`
+
+**Snapshot shape** (every object's keys in ordinal order — that is what makes the hash reproducible):
+
+```json
+{
+  "exercises": [
+    { "content": {}, "customAiPrompt": null, "exerciseId": "...", "orderInLesson": 1, "type": "choose_option" }
+  ],
+  "schemaVersion": 1,
+  "title": "..."
+}
+```
+
+> **The hash is over the canonical form, not over what the database returns.** `Content` is `jsonb`,
+> so Postgres re-normalizes it on write (its own key ordering, its own whitespace) and a `SELECT`
+> gives back something equivalent to but not byte-identical with what was hashed. Recomputing
+> `ContentHash` from a `SELECT` will not match; it is defined over the output of
+> `LessonSnapshotSerializer`.
+
+> **Why canonicalize at all.** Without sorting object keys before hashing, an admin panel that
+> re-serialized an exercise's content with its keys in a different order would look like a content
+> change on every save — and `content_hash` exists precisely so that pressing "publish" with nothing
+> changed does not mint a version. Array order is preserved (it is meaningful in exercise content);
+> numbers are written through unchanged, which is the one accepted gap, since normalizing `1` and
+> `1.0` would mean picking a numeric model and rewriting customer content to fit it.
+
+> **`exerciseId` is inside the snapshot and therefore inside the hash.** That is the identity 40.16
+> needs to say *which exercise inside which version* an attempt answered. The accepted cost: deleting
+> an exercise row and recreating it with identical content produces a new hash and so a new version.
+> That is the honest answer — the identity really did change.
+
+**Frozen after publication, in the database.** Trigger
+`LessonVersions_reject_frozen_change` (`BEFORE UPDATE`) refuses any change to `Content`,
+`ContentHash`, `VersionNumber`, `LessonId`, `OrganizationId`, `IsBreaking` or `PublishedAt` once the
+row has left `draft`, and refuses `published → draft` and any exit from `archived`. It is in the
+database rather than in the service because a snapshot that can be edited afterwards is not a
+snapshot: every historical attempt scored against it would silently re-interpret, which is exactly
+the metric corruption 40.16 is being written to fix. `BaseVersionId` and `Status` stay writable on a
+frozen row on purpose — 40.18's stale-override review offers "keep the override, re-point its base"
+as one of its three actions, and archiving a version is a lifecycle move rather than a rewrite.
+
+**At most one draft per lesson**, enforced by the partial unique index rather than by application
+code: two admins pressing "edit" at the same moment is precisely the race a check-then-insert loses,
+and two drafts are two branches of a lesson with no merge story (CONTENT_MODEL.md §2.6 — merging
+prose and grading criteria automatically produces plausible nonsense that then grades a salesperson).
 
 ---
 
@@ -887,6 +979,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `InitialOrganizationSchema` (organization-service) | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
 | `AddOrganizationId` (gamification-service) | 2026-08-15 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserLearningProgress`, `Leagues`, `LeagueMemberships`, `LeagueSettings` — strict `EnableTenantRls` on all seven (no global content flavour in this database). `Achievements`, `LeagueTiers`, `GamificationSettings`, `StreakMilestones`, `ExerciseTypeRewards`, `UserReplicas`, `OutboxMessages` get nothing. Unlike 40.10–40.12, **this migration does swap four unique constraints in place** (`Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`, `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key) because each was load-bearing for correctness in the deploy-to-script window and every affected table holds at most a row per user/week. Read indexes on `UserXpRecords`/`LeagueMemberships` stay out, rebuilt by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`. |
 | `AddOrganizationId` (social-service) | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
+| `AddLessonVersioning` (learning-service) | 2026-08-17 | Phase 40.15, Stage D. `ParentLessonId uuid NULL` (self-FK, `RESTRICT`), `Slug varchar(160) NOT NULL` and `IsArchived boolean NOT NULL` on `Lessons`; new table `LessonVersions` with `EnableTenantRlsForContent`, two check constraints and the `LessonVersions_reject_frozen_change` trigger. **Unlike 40.10–40.13 this migration creates its indexes itself**, and there is no companion `_indexes_concurrently.sql`: `LessonVersions` is created empty so its indexes are built over zero rows, and `Lessons` is a content table of a few hundred rows where the build is milliseconds — the same judgement 40.13 made for the four small gamification tables. Slug uniqueness is correctness, and leaving it unenforced until someone remembers a script is the worse trade. The slug backfill is also in-migration (derived from each row's own primary key), so unlike 40.9–40.13 there is **no maintenance window and no interval in which data is invisible**. Verification script: `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` (read-only). |
 
 ---
 

@@ -4,5 +4,7 @@ public record AdminLessonDto(
     Guid Id,
     Guid TopicId,
     string Title,
-    int OrderInTopic
+    int OrderInTopic,
+    string Slug = "",
+    bool IsArchived = false
 );

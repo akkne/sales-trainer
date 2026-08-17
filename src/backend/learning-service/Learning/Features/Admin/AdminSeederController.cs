@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
@@ -544,12 +545,17 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             return existing;
         }
 
+        // Phase 40.15: the seeder feeds the global library, whose lessons need a stable slug like
+        // any other. Derived from the id, because a bundle file names lessons by title and titles
+        // are Russian prose — see LessonSlugGenerator for why nothing transliterates them.
+        var lessonId = Guid.NewGuid();
         var lesson = new Lesson
         {
-            Id = Guid.NewGuid(),
+            Id = lessonId,
             TopicId = topicId,
             Title = title,
-            OrderInTopic = orderInTopic
+            OrderInTopic = orderInTopic,
+            Slug = LessonSlugGenerator.GenerateFromLessonId(lessonId)
         };
         database.Lessons.Add(lesson);
         existingLessons.Add(lesson);
