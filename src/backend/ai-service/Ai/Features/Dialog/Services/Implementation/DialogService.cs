@@ -323,7 +323,12 @@ internal sealed class DialogService : IDialogService
                 session.BundleId,
                 session.ModeId,
                 feedbackResult.XpReward,
-                earnedXp),
+                earnedXp,
+                mode.Key,
+                // Phase 40.22. The 0-10 grade the learner sees, normalized to the 0-100 scale every
+                // score in learning-service is already on, so an assignment's threshold ("оценка
+                // >= 70") is comparable without a consumer knowing this service's internal scale.
+                Math.Clamp(feedbackResult.Score, 0, 10) * 10),
             cancellationToken);
 
         _logger.LogInformation("Completed session {SessionId} for user {UserId}, XP earned: {ExperiencePoints}", sessionId, userId, earnedXp);

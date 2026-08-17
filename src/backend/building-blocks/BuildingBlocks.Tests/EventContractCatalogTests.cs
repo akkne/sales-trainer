@@ -145,7 +145,17 @@ public sealed class EventContractCatalogTests
         var userId = Guid.NewGuid();
         var bundleId = Guid.NewGuid();
         var modeId = Guid.NewGuid();
-        var root = Serialize(new { userId, sessionId = "s-1", bundleId, modeId, rawScore = 70, xpEarned = 70 });
+        var root = Serialize(new
+        {
+            userId,
+            sessionId = "s-1",
+            bundleId,
+            modeId,
+            rawScore = 70,
+            xpEarned = 70,
+            modeKey = "discovery-call",
+            qualityScore = 80,
+        });
 
         root.GetProperty("userId").GetGuid().Should().Be(userId);
         root.GetProperty("sessionId").GetString().Should().Be("s-1");
@@ -153,6 +163,9 @@ public sealed class EventContractCatalogTests
         root.GetProperty("modeId").GetGuid().Should().Be(modeId);
         root.GetProperty("rawScore").GetInt32().Should().Be(70);
         root.GetProperty("xpEarned").GetInt32().Should().Be(70);
+        // Phase 40.22. The two fields learning-service reads to judge an assignment's threshold.
+        root.GetProperty("modeKey").GetString().Should().Be("discovery-call");
+        root.GetProperty("qualityScore").GetInt32().Should().Be(80);
     }
 
     [Test]
