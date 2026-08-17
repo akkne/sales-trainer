@@ -38,4 +38,32 @@ public interface ILessonVersionService
         bool isBreaking,
         Guid? actorId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.16. The id of the version an attempt on this lesson must be recorded against: the
+    /// newest published one, or a freshly minted "version 1" when the lesson has never been
+    /// published at all. Returns <see langword="null"/> only when the lesson does not exist or is
+    /// not visible.
+    ///
+    /// <para>
+    /// The minting branch exists because publishing is an administrator's act and, at the moment
+    /// 40.16 ships, no administrator has ever performed it: 40.15 created the table and left every
+    /// existing lesson with zero versions. An attempt on such a lesson has nothing to point at, and
+    /// the alternative — leaving it unbound — is the bug this phase exists to close. The minted
+    /// version is <c>IsBreaking = false</c> and has no author: it records the content as it already
+    /// was, which is not a change and belongs to nobody.
+    /// </para>
+    ///
+    /// <para>
+    /// It deliberately does <b>not</b> mint a version when the live rows have drifted from the last
+    /// published snapshot. An administrator who edits an exercise and does not publish has not made
+    /// the edit historically visible yet, and minting on their behalf would stamp every such
+    /// edit — including a fixed comma — as an unattributed content change, which is precisely the
+    /// series-splitting on cosmetics that <c>is_breaking</c> exists to avoid
+    /// (docs/TENANCY/CONTENT_MODEL.md §2.4). See docs/DECISIONS.md, 2026-08-17.
+    /// </para>
+    /// </summary>
+    Task<Guid?> EnsurePublishedVersionIdAsync(
+        Guid lessonId,
+        CancellationToken cancellationToken = default);
 }
