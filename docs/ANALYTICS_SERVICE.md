@@ -94,6 +94,54 @@ were: a platform-wide presence count is exactly the cross-customer headcount num
 prefixed to stop leaking, so if such a screen is ever wanted it deserves its own decision rather
 than arriving as a side effect of a role change. See `docs/DECISIONS.md` (2026-08-16).
 
+## How learning metrics are counted by lesson version (Phase 40.16)
+
+Read this before adding any accuracy, mastery or readiness number to a dashboard — including one
+that looks like it belongs here.
+
+**This service computes none of it, and that is the design.** analytics-service is Redis-only: it
+stores no attempts, no scores and no lesson ids. Its `exercise.completed` consumer increments one
+platform-wide Prometheus counter with no lesson, no version and no organization in it, on purpose
+(`FunnelEventsConsumer` declares `RequiresOrganization => false`). A funnel counter answers "is
+anyone using the product"; it cannot answer "how good is this team at objection handling", and it
+must not be made to, because a customer id as a Prometheus label puts customer identities and
+unbounded cardinality into the monitoring store.
+
+The data those questions need — `UserExerciseAttempts` and `UserLessonProgressRecords` — lives in
+learning-db and stays there. So **the accuracy series is computed in learning-service**
+(`LessonAccuracyService`, exposed as `GET /admin/lessons/{lessonId}/accuracy`), and what belongs in
+this document is the rule any consumer of those numbers has to obey.
+
+### The rule
+
+Since 40.16 every attempt carries `LessonVersionId` — the immutable snapshot of the lesson it was
+scored against — instead of only a mutable `ExerciseId`
+([CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.3, [LEARNING_SERVICE.md](LEARNING_SERVICE.md)).
+Metrics are therefore aggregated **per version**, and versions are then grouped into segments:
+
+- a segment starts at the lesson's first published version, and at every version published with
+  `is_breaking = true`;
+- a cosmetic version (`is_breaking = false`) **extends** the segment before it.
+
+Both halves matter, and they fail in opposite directions. Without the split, an administrator fixing
+a wrong correct-answer silently re-scores months of history and accuracy-per-skill — the number sold
+to the РОП as a measure of team readiness — moves retroactively. Without the join, the same chart
+steps every time somebody fixes a comma. Either way the customer stops believing the dashboard, and
+is right to (§2.4 of CONTENT_MODEL.md).
+
+### Three consequences for whoever draws the chart
+
+1. **Never average across a segment boundary.** Two segments are two populations answering two
+   different questions; a single mean over both is a number about nothing. Draw them as separate
+   runs, with a visible break.
+2. **`unversionedAttempts` is not version 1.** Attempts recorded before 40.16 carry no version until
+   `docs/TENANCY/sql/40.16_progress_version_backfill.sql` has been run, and attempts whose exercise
+   row was later deleted never get one. The endpoint reports them in their own bucket. Folding that
+   bucket into the first segment would be the same unprovable claim the phase exists to remove.
+3. **`app_exercises_completed_total` is not a learning metric.** It is a funnel counter and has no
+   version dimension by design. If a product report needs "completions of this lesson version", it
+   comes from learning-service, not from Prometheus.
+
 ## Metrics owned
 
 Defined in `Infrastructure/Metrics/AppMetrics.cs` (process-global statics, self-registered

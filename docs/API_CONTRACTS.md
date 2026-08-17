@@ -538,8 +538,8 @@ changed, so nothing was frozen and the existing version comes back unchanged. Th
 "no changes to publish" rather than show a version number that did not move.
 
 `isBreaking` is the one thing publishing cannot infer. A typo fix and a changed correct answer look
-identical to a diff, and 40.16 joins the accuracy series across the first and splits it across the
-second — so the publisher declares which it was.
+identical to a diff, and the accuracy series joins across the first and splits across the second
+(Phase 40.16, below) — so the publisher declares which it was.
 
 **Authorization is two-part.** The controller carries `RequireOrgAdmin`, which admits an
 organization's own administrator as well as any platform administrator. That alone is not enough:
@@ -549,6 +549,36 @@ otherwise. The reverse direction needs no check — another organization's lesso
 invisible before the request arrived, through the query filter and the RLS policy. As everywhere,
 the organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`,
 never from the body, the query string or the route.
+
+### Lesson accuracy by version (Phase 40.16)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/lessons/:lessonId/accuracy | — | `LessonAccuracySeriesDto` (404 if no such lesson) |
+
+`LessonAccuracySeriesDto`: `{lessonId, segments[], unversionedAttempts}`
+`LessonAccuracySegmentDto`: `{startVersionNumber, endVersionNumber, versionNumbers[], versionIds[], startsAtBreakingChange, statistics}`
+`LessonAttemptStatisticsDto`: `{attemptCount, correctAttemptCount, accuracy, averageScore, firstAttemptAt, lastAttemptAt}`
+
+`accuracy` is a fraction in `0..1`, not a percentage, and is `0` when `attemptCount` is `0` — a
+segment with no attempts is returned rather than omitted, because "nobody has answered this version
+yet" and "this version does not exist" are different answers.
+
+**A segment is a run of versions the chart may draw as one line.** It starts at the lesson's first
+published version and at every version published with `isBreaking: true`; cosmetic versions extend
+the segment they follow. Draft versions are excluded (no learner ever saw one); archived versions are
+kept (they were live once, and dropping them would erase the history of everyone who studied then).
+
+`unversionedAttempts` counts attempts with no `lessonVersionId` at all — everything recorded before
+40.16, until `docs/TENANCY/sql/40.16_progress_version_backfill.sql` is run. They are a separate
+bucket rather than part of version 1 on purpose: nobody can prove which content those answers were
+scored against, and folding them in would be the same retroactive claim the phase exists to stop.
+
+`RequireOrgAdmin`, and — unlike the publish routes above — with no second platform-level gate. This
+endpoint writes nothing and counts only the caller's own organization's attempts: the RLS policy on
+`UserExerciseAttempts` is plain equality, so an organization administrator asking about a global
+lesson gets their own team's numbers and nobody else's, which is exactly what a РОП is entitled to
+ask.
 
 ### Exercises
 | Method | Path | Body | Response |

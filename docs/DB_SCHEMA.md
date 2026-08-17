@@ -609,9 +609,17 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserLessonProgressRecords_tenant_isolation`. |
 | `UserId`      | `uuid`                     | NOT NULL | FK → `Users.Id`                            |
 | `LessonId`    | `uuid`                     | NOT NULL | FK → `Lessons.Id`                          |
+| `LessonVersionId` | `uuid`                 | NULL     | Phase 40.16 — the `LessonVersions` row this progress's `BestScore` and `CompletedAt` were achieved against. Refreshed only when the row actually advances (new best score, or the transition to completed), so "completed version 1" does not silently become "completed version 3". No FK — see `UserExerciseAttempts` below. |
 | `Status`      | `text`                     | NOT NULL | `not_started` / `in_progress` / `completed`|
 | `BestScore`   | `integer`                  | NOT NULL |                                            |
 | `CompletedAt` | `timestamp with time zone` | NULL     |                                            |
+
+Indexes: `IX_UserLessonProgressRecords_OrganizationId_UserId_LessonId`,
+`IX_UserLessonProgressRecords_OrganizationId_LessonVersionId` (40.16).
+Neither is created by a migration — both are built by hand
+(`docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql`,
+`40.16_progress_version_indexes_concurrently.sql`), because this table grows with usage and the
+migrations run from `Database.Migrate()` at startup.
 
 ---
 
@@ -622,12 +630,33 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 | `Id`                  | `uuid`                     | NOT NULL | PK                                 |
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserExerciseAttempts_tenant_isolation`. |
 | `UserId`              | `uuid`                     | NOT NULL | FK → `Users.Id`                    |
-| `ExerciseId`          | `uuid`                     | NOT NULL | FK → `Exercises.Id`                |
+| `LessonVersionId`     | `uuid`                     | NULL     | Phase 40.16 — the immutable `LessonVersions` snapshot this answer was scored against. |
+| `ExerciseId`          | `uuid`                     | NOT NULL | Since 40.16 read as the exercise's identity **inside** `LessonVersionId`'s snapshot (the `exerciseId` key in its `Content`), not as a pointer into the mutable `Exercises` table. Same value, different meaning. |
 | `SerializedAnswer`    | `jsonb`                    | NOT NULL | User's answer payload              |
 | `IsCorrect`           | `boolean`                  | NOT NULL |                                    |
 | `Score`               | `integer`                  | NOT NULL |                                    |
 | `SerializedAiFeedback`| `jsonb`                    | NULL     | Present for AI-evaluated types     |
 | `AttemptedAt`         | `timestamp with time zone` | NOT NULL |                                    |
+
+Indexes: `IX_UserExerciseAttempts_OrganizationId_UserId_ExerciseId`,
+`IX_UserExerciseAttempts_OrganizationId_LessonVersionId_Exercis~` (40.16 — the `~` is EF's
+truncation at Postgres's 63-byte identifier limit, and the name has to stay exactly that or the next
+`dotnet ef migrations add` will emit a table-locking `CreateIndex`). Both built by hand, as above.
+
+> **Why the version reference exists (Phase 40.16, CONTENT_MODEL.md §2.3).** Before it, an attempt
+> pointed only at `ExerciseId` — a row an administrator can edit. Fixing a wrong correct-answer
+> therefore re-interpreted every historical attempt, and accuracy-per-skill (the number sold to the
+> РОП as a measure of team readiness) moved retroactively. Bound to a frozen snapshot, the edit
+> produces a new version and the old series keeps pointing at the old content.
+
+> **Nullable, and no foreign key — both deliberate.** Nullable, because attempts recorded before
+> 40.16 have nothing to point at until `docs/TENANCY/sql/40.16_progress_version_backfill.sql` runs;
+> `NULL` reads as "unversioned", which `GET /admin/lessons/{id}/accuracy` reports as its own bucket
+> rather than folding into version 1 and quietly claiming to know what those answers were scored
+> against. No foreign key, because `LessonVersions` is a content table under an `IS NULL OR = current`
+> RLS policy while this is strict tenant data: a foreign key is validated with the referencing
+> statement's privileges, so under a `NOBYPASSRLS` role it would reject rows that exist. `ExerciseId`
+> has never carried one either.
 
 ---
 
@@ -980,6 +1009,7 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddOrganizationId` (gamification-service) | 2026-08-15 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserLearningProgress`, `Leagues`, `LeagueMemberships`, `LeagueSettings` — strict `EnableTenantRls` on all seven (no global content flavour in this database). `Achievements`, `LeagueTiers`, `GamificationSettings`, `StreakMilestones`, `ExerciseTypeRewards`, `UserReplicas`, `OutboxMessages` get nothing. Unlike 40.10–40.12, **this migration does swap four unique constraints in place** (`Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`, `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key) because each was load-bearing for correctness in the deploy-to-script window and every affected table holds at most a row per user/week. Read indexes on `UserXpRecords`/`LeagueMemberships` stay out, rebuilt by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`. |
 | `AddOrganizationId` (social-service) | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
 | `AddLessonVersioning` (learning-service) | 2026-08-17 | Phase 40.15, Stage D. `ParentLessonId uuid NULL` (self-FK, `RESTRICT`), `Slug varchar(160) NOT NULL` and `IsArchived boolean NOT NULL` on `Lessons`; new table `LessonVersions` with `EnableTenantRlsForContent`, two check constraints and the `LessonVersions_reject_frozen_change` trigger. **Unlike 40.10–40.13 this migration creates its indexes itself**, and there is no companion `_indexes_concurrently.sql`: `LessonVersions` is created empty so its indexes are built over zero rows, and `Lessons` is a content table of a few hundred rows where the build is milliseconds — the same judgement 40.13 made for the four small gamification tables. Slug uniqueness is correctness, and leaving it unenforced until someone remembers a script is the worse trade. The slug backfill is also in-migration (derived from each row's own primary key), so unlike 40.9–40.13 there is **no maintenance window and no interval in which data is invisible**. Verification script: `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` (read-only). |
+| `AddProgressLessonVersionBinding` (learning-service) | 2026-08-17 | Phase 40.16, Stage D. `LessonVersionId uuid NULL` on `UserExerciseAttempts` and `UserLessonProgressRecords`, and nothing else. Both columns are nullable, so Postgres 11+ adds them as a catalogue-only change — no rewrite, no long lock — which is why this one is allowed to run inside `Database.Migrate()` on two tables that grow with usage. **Indexes are not created here** (they are declared in the entity configurations so the model snapshot carries them, and built by `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql`), and **the historical backfill is not here either**: it needs a "version 1" to point at, and that snapshot's `ContentHash` is defined over the exact bytes `LessonSnapshotSerializer` emits — SQL cannot reproduce them, because Postgres orders `jsonb` keys by length and then bytes. `LessonVersionBackfill` mints those versions at startup; `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing rows. No foreign key to `LessonVersions` on purpose (see the `UserExerciseAttempts` notes above). **No window in which any data is invisible**, unlike 40.10–40.13: nothing filters on these columns. |
 
 ---
 
