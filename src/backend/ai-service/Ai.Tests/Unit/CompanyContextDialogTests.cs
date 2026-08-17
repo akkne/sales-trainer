@@ -13,6 +13,7 @@ using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Tests.Helpers;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -109,6 +110,7 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
+            new StubOrganizationProfileProvider(),
             NullLogger<DialogService>.Instance);
 
         var bundles = await dialogService.GetActiveBundlesAsync();
@@ -408,6 +410,7 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
+            new StubOrganizationProfileProvider(),
             NullLogger<DialogService>.Instance);
 
         var companyCallContext = new CompanyCallContext
@@ -435,6 +438,7 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
+            new StubOrganizationProfileProvider(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();
@@ -457,6 +461,7 @@ public class CompanyContextDialogTests
             Substitute.For<IDialogScoringWeightsProvider>(),
             Substitute.For<IDialogEventPublisher>(),
             Substitute.For<IScenarioValidationService>(),
+            new StubOrganizationProfileProvider(),
             NullLogger<DialogService>.Instance);
 
         var mode = await dialogService.GetCompanyCallModeAsync();

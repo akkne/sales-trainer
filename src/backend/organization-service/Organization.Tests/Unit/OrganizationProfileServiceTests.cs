@@ -1,5 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
+using NSubstitute;
+using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Organization.Features.Organizations.Models;
 using Sellevate.Organization.Features.Organizations.Services.Implementation;
@@ -20,6 +22,7 @@ public sealed class OrganizationProfileServiceTests
 {
     private OrganizationDbContext _databaseContext = null!;
     private TenantContext _tenantContext = null!;
+    private IEventPublisher _eventPublisher = null!;
     private OrganizationProfileService _organizationProfileService = null!;
     private string _databaseName = null!;
 
@@ -28,8 +31,9 @@ public sealed class OrganizationProfileServiceTests
     {
         _databaseName = $"organization-profile-tests-{Guid.NewGuid()}";
         _tenantContext = new TenantContext();
+        _eventPublisher = Substitute.For<IEventPublisher>();
         _databaseContext = TestOrganizationDatabaseFactory.CreateInMemory(_tenantContext, _databaseName);
-        _organizationProfileService = new OrganizationProfileService(_databaseContext, _tenantContext);
+        _organizationProfileService = new OrganizationProfileService(_databaseContext, _tenantContext, _eventPublisher);
     }
 
     [TearDown]
@@ -89,14 +93,14 @@ public sealed class OrganizationProfileServiceTests
 
         await using (var secondContext = TestOrganizationDatabaseFactory.CreateInMemory(_tenantContext, _databaseName))
         {
-            var secondService = new OrganizationProfileService(secondContext, _tenantContext);
+            var secondService = new OrganizationProfileService(secondContext, _tenantContext, _eventPublisher);
             await secondService.UpsertProfileAsync(
                 new UpdateOrganizationProfileRequestDto("Second version", null, null, null, null, null, null));
         }
 
         await using var verifyContext = TestOrganizationDatabaseFactory.CreateInMemory(_tenantContext, _databaseName);
         verifyContext.OrganizationProfiles.Count().Should().Be(1);
-        (await new OrganizationProfileService(verifyContext, _tenantContext).GetProfileAsync())!
+        (await new OrganizationProfileService(verifyContext, _tenantContext, _eventPublisher).GetProfileAsync())!
             .Product.Should().Be("Second version");
     }
 
@@ -113,7 +117,7 @@ public sealed class OrganizationProfileServiceTests
         var tenantContextB = new TenantContext();
         tenantContextB.SetOrganization(organizationBId);
         await using var contextForB = TestOrganizationDatabaseFactory.CreateInMemory(tenantContextB, _databaseName);
-        var serviceForB = new OrganizationProfileService(contextForB, tenantContextB);
+        var serviceForB = new OrganizationProfileService(contextForB, tenantContextB, _eventPublisher);
 
         var profileForB = await serviceForB.GetProfileAsync();
 

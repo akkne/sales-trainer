@@ -121,9 +121,19 @@ twenty-one.
 ### Content authoring and the seeder
 
 All content write endpoints were `RequirePlatformAdmin` from 40.10 to 40.17, so content was authored
-only by platform staff and `OrganizationId` stayed `NULL` — the seeder needs no special mode to produce a
-global library, it simply never sets an organization, and that is still true — the seeder and the
-bundle importer stay platform-only in 40.18.
+only by platform staff and `OrganizationId` stayed `NULL`. The seeder and the bundle importer stay
+platform-only in 40.18 and 40.19.
+
+**"The seeder needs no special mode" stopped being true in 40.18, and 40.19 fixed it.** Its *writes*
+were always fine — it never set an organization. Its *reads* were not: they went through the tenancy
+query filter, which admits "global or mine". A platform administrator who is also a member of an
+organization loaded that organization's override lessons alongside the base ones, and lessons upsert
+on `(topicId, title)` — so re-running a bundle import silently overwrote a customer's edited lesson
+and its exercises with the base text, with nothing in the response to say so. The `*/export`
+endpoints had the mirror bug. Since 40.19 every read in `AdminSeederController` is narrowed to
+`OrganizationId IS NULL` by query (not by role, so it holds whatever tenant header the request
+carried), every created row states that owner explicitly, and every import requires an explicit
+`target=global` field. See [SEEDER.md](SEEDER.md) §0.
 
 Since 40.18 the four content controllers carry `RequireOrgAdmin` **plus** `ContentAuthoringGuard`,
 which is the rule that decides who may write which row: a row with an owning organization belongs to
@@ -329,12 +339,42 @@ roadmap warns are easy to forget — to the same shape.
 - **Not in this block:** the review screen (the frontend was not touched — 40.20), a version table
   for techniques and reference materials, and any parameterization of base content from an
   organization profile (40.19).
+### Placeholder substitution on read (Phase 40.19)
+
+`{{organization.product}}` and its five siblings resolve from the caller's organization profile at
+**render time**. Full syntax and authoring rules:
+[CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md). Three things belong here rather than
+there, because they are properties of this service.
+
+- **Nothing on the write side renders.** `LessonSnapshotSerializer`, `ContentSnapshotSerializer`, the
+  publish path and every `/admin/*` authoring read see the template exactly as stored. That is what
+  keeps `LessonVersion.ContentHash` identical across organizations for the same base lesson — render
+  before hashing and every customer gets their own snapshot row, which is 40.18's fork reached by
+  accident and without any of its guard rails.
+- **The grader renders too, and that is not symmetry for its own sake.** `SubmitExerciseAnswerAsync`
+  renders the exercise content before handing it to the evaluation strategy, because a question
+  rendered for the learner and unrendered for the grader marks correct answers wrong: the
+  deterministic strategies compare option text, and the AI strategy would be judging an answer to a
+  question it was not shown.
+- **`banned_claims` is appended to the AI grading prompt**, in the same words ai-service appends to
+  the persona prompt (`OrganizationProfilePromptBuilder`, BuildingBlocks). Enforcing it only on the
+  persona side would be worse than nothing — a persona that stays silent while the grader keeps
+  rewarding the forbidden claim teaches the rep to say it anyway.
+
+The profile is read through `IOrganizationProfileProvider`, scoped and memoized per request: one
+lesson open resolves placeholders in a title, in every exercise and possibly in a grading prompt,
+from a row that cannot change mid-request. Platform-wide callers get the empty profile — in platform
+mode the query filter admits every organization at once, so picking a row would show Sellevate staff
+a lesson with some customer's product name in it.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
 |---|---|---|
 | `OutboxRelayBackgroundService` | system | Reads `OutboxMessages` only, which has no `OrganizationId` filter and no RLS policy — the tenant travels in the envelope payload (TENANCY.md §1.7). The single legitimate cross-tenant reader. |
 | `UserReplicaConsumer` | platform-global (`RequiresOrganization => false`) | Projects identity's cross-org user table; `UserReplicas` has no organization column. |
+| `OrganizationProfileConsumer` (40.19) | tenant from the envelope (`RequiresOrganization` inherited `true`) | Projects `organization.profile.updated` into `OrganizationProfileReplicas`, which is strict tenant data — so the write happens under ordinary tenant context, with no RLS widening. The first consumer here that does *not* opt out. |
+| `LessonVersionBackfill` (startup, once) | system | Mints "version 1" for never-published lessons; sees the global library only. |
 
 There is no per-organization iteration job in learning-service. An **unset tenant is an exception,
 never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
@@ -428,6 +468,11 @@ Gamification (XP/streaks/achievements/league) and Analytics (`exercise.completed
 
 `user.registered` / `user.updated` / `user.avatar.changed` / `user.deleted` →
 keep the local `UserReplica` in sync (idempotent, dedupe on `eventId`).
+
+`organization.profile.updated` (Phase 40.19) → keep `OrganizationProfileReplicas` in sync, so
+`{{organization.*}}` placeholders resolve without a call into organization-service on the read path
+of every lesson. Full payload every time, so a dropped message is repaired by the customer's next
+save rather than made permanent.
 
 ## Synchronous dependency
 

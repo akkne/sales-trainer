@@ -77,6 +77,8 @@ and then dead-lettered. A message is never handled without a decided tenant.
 | ai, learning, gamification, notification, social | `UserReplicaConsumer` (five copies) | `user.registered` / `updated` / `deleted` / `avatar.changed` | **`false`** in all five | `UserReplicas` is deliberately platform-global — a user is a cross-organization identity ([TENANCY.md](TENANCY.md) §4.2) |
 | analytics | `FunnelEventsConsumer` | `user.registered`, `exercise.completed`, `xp.granted` | **`false`**, [:58](../../src/backend/analytics-service/Analytics/Features/Funnels/Eventing/FunnelEventsConsumer.cs) | `user.registered` fires before the user has an organization at all |
 | ai | `GamificationDialogWeightsConsumer` | `gamification.dialog-weights.updated` | **`false`** (made explicit in 40.14) | Mirrors `GamificationSettings`, a single platform-global row, into an in-memory singleton — see §4 |
+| learning | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited, [declared by omission](../../src/backend/learning-service/Learning/Eventing/OrganizationProfileConsumer.cs)) | Writes `OrganizationProfileReplicas`, strict tenant data. Unlike identity's `OrganizationReplicaConsumer` two rows up, this event is **inside** a tenant, not about one: the profile belongs to the organization the way its lessons do. An envelope with no organization is dead-lettered rather than guessed at |
+| ai | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited) | Same table, same reason, second copy — and here the stakes are higher: a guessed tenant would apply one customer's `banned_claims` to another customer's practice calls |
 
 ### 2.3 Workers that touch no tenant data at all
 
@@ -164,6 +166,33 @@ deliberately did not widen for platform staff — refuses it. Making it possible
 the publish path, a far larger hole than the problem.
 
 Full reasoning and the rejected alternatives: `docs/DECISIONS.md` (2026-08-18).
+
+---
+
+## 4b. Phase 40.19 added two consumers and no worker, and the shape is worth naming
+
+The two new rows in §2.2 are the first Kafka consumers in this system that project **strict tenant
+data** rather than a platform-global directory. Every previous replica projection — `UserReplicas`
+five times over, `OrganizationReplicas` once — opted out of `RequiresOrganization`, because what it
+copied was cross-organization by nature. `OrganizationProfileReplicas` is the opposite: the row is
+one tenant's, its RLS policy is plain equality, and the write therefore has to happen with that
+tenant in context. The base class already does exactly that from the envelope, so the correct
+declaration here is **no declaration at all** — the default `true` is the right answer, and the two
+consumers are notable precisely because they do not override it.
+
+The thing that would have been wrong is the alternative that looks simpler: `RequiresOrganization =
+false` plus reading the organization out of the payload. The envelope would then say "no tenant"
+while the handler wrote into one, `TenantSaveChangesInterceptor` would see system mode, and the
+write would land only because the service happens to run under a `BYPASSRLS` role today. It would
+break silently on the day the role split lands — the same trap §2.1 documents for the five
+per-organization jobs, arrived at from a direction where it was avoidable.
+
+No polling worker was added. A profile is small, changes rarely and is republished in full on every
+save, so a periodic reconciler would spend its life confirming that nothing changed. The one case it
+would repair — an event lost while a consumer was down — is repaired by the next save, and until then
+the reader falls back to the neutral base wording rather than to wrong text. What that costs is
+recorded in `docs/DONT_FORGET.md`: a profile saved **before** this phase shipped has never been
+published, so it must be re-saved once by hand.
 
 ---
 

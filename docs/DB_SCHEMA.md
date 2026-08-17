@@ -1117,6 +1117,8 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 | `AddProgressLessonVersionBinding` (learning-service) | 2026-08-17 | Phase 40.16, Stage D. `LessonVersionId uuid NULL` on `UserExerciseAttempts` and `UserLessonProgressRecords`, and nothing else. Both columns are nullable, so Postgres 11+ adds them as a catalogue-only change — no rewrite, no long lock — which is why this one is allowed to run inside `Database.Migrate()` on two tables that grow with usage. **Indexes are not created here** (they are declared in the entity configurations so the model snapshot carries them, and built by `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql`), and **the historical backfill is not here either**: it needs a "version 1" to point at, and that snapshot's `ContentHash` is defined over the exact bytes `LessonSnapshotSerializer` emits — SQL cannot reproduce them, because Postgres orders `jsonb` keys by length and then bytes. `LessonVersionBackfill` mints those versions at startup; `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing rows. No foreign key to `LessonVersions` on purpose (see the `UserExerciseAttempts` notes above). **No window in which any data is invisible**, unlike 40.10–40.13: nothing filters on these columns. |
 | `AddProgramVersioning` (learning-service) | 2026-08-17 | Phase 40.17, Stage D. Three new **strict tenant** tables — `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global programme), three check constraints and two freeze triggers (`ProgramVersions_reject_frozen_change`, `ProgramItems_reject_frozen_change`). **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15 made, for the same reason: all three tables are created empty by this very migration, so every index is built over zero rows, and two of them (one draft per organization, one pin per learner) are correctness constraints that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: the migration mints no programme version and enrolls nobody, nothing filters on the new tables, and an organization without a published programme behaves exactly as it did before — learners read the live tree, unpinned. Verification script: `docs/TENANCY/sql/40.17_program_versioning_verify.sql` (read-only, never executed). |
 | `AddContentOverrides` (learning-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentTechniqueId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and `IsArchived boolean NOT NULL DEFAULT false` on `Techniques`; the same three (as `ParentMaterialId`) on `ReferenceMaterials`; two indexes on the parent pointers; and three CHECK constraints — `CK_Techniques_OverrideHasOwner`, `CK_ReferenceMaterials_OverrideHasOwner` and `CK_Lessons_OverrideHasOwner` — saying that a row with a parent always has an owning organization. `Lessons` needed nothing else: 40.15 built its override columns already. **No companion `_indexes_concurrently.sql` and no backfill, both deliberate.** Nullable columns and a NOT NULL boolean with a constant default are catalog changes on Postgres 11+; the two indexes are built over tables holding tens to hundreds of rows; the CHECKs scan the same tens. Nothing fills a column on an existing row, so — as in 40.15 and 40.17 — **there is no maintenance window and no interval in which data is invisible**: every existing row keeps a null parent, which is the correct value for "this is the library, not somebody's copy". Verification script: `docs/TENANCY/sql/40.18_content_overrides_verify.sql` (read-only, never executed). |
+| `AddOrganizationProfileReplica` (learning-service) | 2026-08-17 | Phase 40.19, Stage D. One new table, `OrganizationProfileReplicas` — a read-only copy of organization-service's `OrganizationProfiles`, fed by the `organization.profile.updated` consumer. **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`**, and that is the interesting bit: every other table this folder added since 40.15 is content, where a NULL owner means "the shared library". Here a NULL owner would mean every organization's product name and banned claims at once, so the tenant column is the primary key and a row without an owner is unrepresentable. **No backfill, no maintenance window, no companion `_indexes_concurrently.sql`** — the table is created empty, is fed by events, holds at most one row per customer, and its only query is a lookup by that primary key, so there is no second access path to index. What *is* owed to a human is a one-time republish of profiles saved before this phase (`docs/DONT_FORGET.md`). Verification: `docs/TENANCY/sql/40.19_organization_profile_verify.sql` (read-only, never executed). |
+| `AddOrganizationProfileReplica` (ai-service) | 2026-08-17 | Phase 40.19, Stage D. The same table, in `ai`, for the same reason — persona and feedback prompts resolve `{{organization.*}}` and enforce `banned_claims` locally. **This is the first non-content table in ai-db**, which is exactly why the RLS flavour is worth stating: both neighbours (`DialogBundles`, `DialogModes`) legitimately use `IS NULL OR = current`, so copying the neighbouring policy is the natural mistake and would hand one customer's compliance list to everybody. Otherwise identical to the learning-service migration: catalog-only, empty table, no backfill, no window, no index script. |
 | `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
 
 ---
@@ -1301,3 +1303,47 @@ row-level security with a `USING`/`WITH CHECK` policy on `OrganizationId = curre
 Also protected by the EF query filter and the Stage A `TenantSaveChangesInterceptor` write guard.
 `OrganizationProfileController` gates access with `[TenantScoped]`, so a request with no
 `X-Organization-Id` header never reaches the service layer at all.
+
+**Replicated since Phase 40.19.** Every successful `PUT /organizations/profile` publishes
+`organization.profile.updated` (after the commit, with the whole profile in the payload), and
+learning-service and ai-service each project it into a local `OrganizationProfileReplicas` table with
+the same columns. That is what lets `{{organization.*}}` placeholders resolve without a cross-service
+call on the read path of every lesson and every persona reply — see
+[CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md) §5 for why a replica and not a call, and
+what eventual consistency costs here.
+
+### Table: `OrganizationProfileReplicas` (learning-db and ai-db — tenant-scoped, RLS enabled)
+
+Phase 40.19. The same shape in both databases, and **read-only in both**: the only writer is
+`OrganizationProfileConsumer`; no controller, service or migration writes a row.
+
+| Column              | Type        | Constraints                                 |
+|---------------------|-------------|---------------------------------------------|
+| `OrganizationId`    | uuid        | PK, no default generation (from the Kafka envelope) |
+| `Product`           | text        | nullable                                    |
+| `Icp`               | text        | nullable                                    |
+| `Tone`              | text        | nullable                                    |
+| `ObjectionsJson`    | jsonb       | NOT NULL, DEFAULT `'[]'`                    |
+| `ScriptJson`        | jsonb       | NOT NULL, DEFAULT `'[]'`                    |
+| `GlossaryJson`      | jsonb       | NOT NULL, DEFAULT `'{}'`                    |
+| `BannedClaimsJson`  | jsonb       | NOT NULL, DEFAULT `'[]'`                    |
+| `UpdatedAt`         | timestamptz | NOT NULL — the **source** row's timestamp, not the projection's |
+
+Three things about this table are decisions, not defaults.
+
+- **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`.** Everything else the content
+  model added to these two databases uses `OrganizationId IS NULL OR = current`, because a null owner
+  means "the shared library". A null owner *here* would mean one customer's product name and one
+  customer's `banned_claims` applying to everybody — the opposite of what a profile is. In ai-db this
+  is the first table that is not content, so the mistake of copying the neighbouring policy is a live
+  one; section 2b of `docs/TENANCY/sql/40.19_organization_profile_verify.sql` checks for it explicitly.
+- **The tenant column is the whole primary key.** No surrogate id, so a second row for the same tenant
+  cannot exist and a row with no owner cannot be written. It also makes the projection idempotent for
+  free: a redelivered Kafka message updates the row it already wrote.
+- **`UpdatedAt` carries the source timestamp.** Comparing it against `OrganizationProfiles.UpdatedAt`
+  is how an operator tells "never published" (row absent) from "projection is behind" (row older) —
+  two different problems with two different fixes.
+
+The table is duplicated across two databases on purpose. Both services resolve placeholders on a hot
+path and neither can afford a hop into organization-service to do it; the alternative to duplication
+is a shared database, which is the thing the service split exists to prevent.

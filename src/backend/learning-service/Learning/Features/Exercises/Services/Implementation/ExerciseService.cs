@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.ContentTemplating;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Content;
+using Sellevate.Learning.Features.Content.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -17,8 +19,33 @@ internal sealed class ExerciseService(
     ExerciseEvaluationFactory evaluationFactory,
     ILearningEventPublisher eventPublisher,
     IExerciseDialogService exerciseDialogService,
-    ILessonVersionService lessonVersionService) : IExerciseService
+    ILessonVersionService lessonVersionService,
+    IOrganizationProfileProvider organizationProfileProvider,
+    ILogger<ExerciseService> logger) : IExerciseService
 {
+    /// <summary>
+    /// Phase 40.19. Reports <c>{{organization.*}}</c> placeholders this service could not resolve.
+    ///
+    /// <para>
+    /// <b>Where rendering happens is the whole reason the substitution is safe.</b> The rows and the
+    /// 40.15 snapshot both keep the template; only the response carries the rendered text. If it were
+    /// the other way round, publishing the same base lesson in two organizations would produce two
+    /// different <c>ContentHash</c> values and the shared library would silently fork per customer —
+    /// the expensive path 40.18 exists to make rare.
+    /// </para>
+    /// </summary>
+    private void LogUnresolved(List<string> unresolved)
+    {
+        if (unresolved.Count > 0)
+        {
+            // Warning, not an exception: the learner sees a sentence with a word missing, which is a
+            // content bug to fix, not a reason to fail the lesson they are in the middle of.
+            logger.LogWarning(
+                "Unresolved organization placeholders in learning content: {Placeholders}",
+                string.Join(", ", unresolved.Distinct()));
+        }
+    }
+
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -41,18 +68,25 @@ internal sealed class ExerciseService(
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById.GetValueOrDefault(lesson.TopicId),
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
     private async Task<Dictionary<Guid, string>> GetLessonKindsAsync(
@@ -99,18 +133,25 @@ internal sealed class ExerciseService(
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrder,
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
     public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
@@ -154,7 +195,10 @@ internal sealed class ExerciseService(
 
         var isFirstLesson = true;
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             var status = progressRecord?.Status
@@ -162,13 +206,17 @@ internal sealed class ExerciseService(
             isFirstLesson = false;
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById[lesson.TopicId],
                 status,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
     public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
@@ -183,9 +231,18 @@ internal sealed class ExerciseService(
             .Select(exercise => new { exercise.Id, exercise.Type, exercise.OrderInLesson, exercise.SerializedContent })
             .ToListAsync(cancellationToken);
 
-        return rawExercises.Select(rawExercise =>
+        // Phase 40.19. Loaded once for the whole lesson, before the loop: the profile cannot change
+        // between two exercises of the same request, and the provider memoizes anyway.
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var rendered = rawExercises.Select(rawExercise =>
         {
-            var fullContent = JsonDocument.Parse(rawExercise.SerializedContent).RootElement;
+            // Rendered before the answer key is stripped, not after, so a placeholder inside an
+            // option's text survives; stripping only removes fields, never rewrites them.
+            var renderedContent = OrganizationPlaceholderRenderer.RenderJsonStrings(
+                rawExercise.SerializedContent, profile, unresolved);
+            var fullContent = JsonDocument.Parse(renderedContent).RootElement;
             var learnerContent = StripAnswerKeyFields(rawExercise.Type, fullContent);
             return new ExerciseDto(
                 rawExercise.Id,
@@ -193,6 +250,10 @@ internal sealed class ExerciseService(
                 rawExercise.OrderInLesson,
                 learnerContent);
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return rendered;
     }
 
     /// <summary>
@@ -295,7 +356,19 @@ internal sealed class ExerciseService(
         }
 
         var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
-        var exerciseContent = JsonDocument.Parse(exercise.SerializedContent).RootElement;
+
+        // Phase 40.19. The grader has to see the same words the learner saw. A question rendered as
+        // «Как вы представите Кредит Плюс?» graded against the unrendered
+        // «Как вы представите {{organization.product}}?» would mark a correct answer wrong — the
+        // deterministic strategies compare option text, and the AI strategy is being asked to judge
+        // an answer to a question it was not shown.
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+        var exerciseContent = JsonDocument
+            .Parse(OrganizationPlaceholderRenderer.RenderJsonStrings(exercise.SerializedContent, profile, unresolved))
+            .RootElement;
+
+        LogUnresolved(unresolved);
 
         var evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
             exerciseContent, userAnswer, cancellationToken);

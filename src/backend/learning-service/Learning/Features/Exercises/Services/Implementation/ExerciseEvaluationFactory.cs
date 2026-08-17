@@ -1,4 +1,5 @@
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
@@ -12,7 +13,8 @@ internal sealed class ExerciseEvaluationFactory
     public ExerciseEvaluationFactory(
         IEnumerable<IExerciseEvaluationStrategy> deterministicStrategies,
         IAiEvaluationClient aiEvaluationClient,
-        LearningDbContext databaseContext)
+        LearningDbContext databaseContext,
+        IOrganizationProfileProvider organizationProfileProvider)
     {
         _strategyByExerciseType = deterministicStrategies
             .ToDictionary(strategy => strategy.SupportedExerciseType);
@@ -20,7 +22,8 @@ internal sealed class ExerciseEvaluationFactory
         foreach (var aiExerciseType in ExerciseTypes.AiPowered)
         {
             _strategyByExerciseType[aiExerciseType] =
-                new AiExerciseEvaluationStrategy(aiExerciseType, aiEvaluationClient, databaseContext);
+                new AiExerciseEvaluationStrategy(
+                    aiExerciseType, aiEvaluationClient, databaseContext, organizationProfileProvider);
         }
     }
 

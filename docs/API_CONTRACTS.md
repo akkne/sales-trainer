@@ -901,16 +901,35 @@ Reading the roster and a user's detail is open to both platform staff roles. Ren
 ### Seeder
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>` | `SkillsImportResultDto` |
-| POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
-| POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
-| POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>` (≤20 MB) | `BundleImportResultDto` |
+| POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>, target=global` | `SkillsImportResultDto` |
+| POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>, target=global` | `TopicsImportResultDto` |
+| POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>, target=global` | `LessonsImportResultDto` |
+| POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>, target=global` (≤20 MB) | `BundleImportResultDto` |
 | GET | /admin/seeder/skills/export | — | `SkillExportDto[]` — re-importable via POST /admin/seeder/skills |
 | GET | /admin/seeder/topics/export | — | `TopicExportDto[]` — re-importable via POST /admin/seeder/topics |
 | GET | /admin/seeder/lessons/export | — | `LessonExportDto[]` (with nested exercises) — re-importable via POST /admin/seeder/lessons |
 | GET | /admin/seeder/bundle/export | — | `BundleExportDto` (`{ skills: [...] }`) — re-importable via POST /admin/seeder/bundle |
 
-Each `GET …/export` returns the full content set shaped exactly like the matching import body, so an export file feeds straight back into its import (exercise `content` is emitted as a JSON object, not a string). Ordered by the relevant order field; skill/topic icon names are resolved from ids. UI: "Export JSON" buttons on `/admin/skills`, `/admin/topics`, `/admin/lessons`; "Export tree" on `/admin/import`.
+**`target` is required on all four imports and must be the literal `global`** (Phase 40.19). Anything
+else — a missing field, a different word, an organization id — is `400`. It states which library is
+being written, and it is **not** an organization id and must never become one: the tenant is read from
+`ITenantContext`, never from a body (docs/TENANCY/TENANCY.md §1.3, enforced by
+`scripts/tenancy-boundary-lint.py`). Since 40.19 every read inside these endpoints is also narrowed to
+`OrganizationId IS NULL`, which fixed a silent bug — the tenancy query filter admits "global or mine",
+and lessons upsert on `(topicId, title)`, so a re-run could overwrite a customer's override with the
+base text. See [SEEDER.md](SEEDER.md) §0.
+
+Each `GET …/export` returns the full **global** content set shaped exactly like the matching import
+body, so an export file feeds straight back into its import (exercise `content` is emitted as a JSON
+object, not a string). They take no `target`: there is only one thing to export, and since 40.19 they
+are narrowed to `OrganizationId IS NULL` for the mirror of the reason above — an export carrying one
+customer's overrides would re-import as if those were everybody's content. Ordered by the relevant
+order field; skill/topic icon names are resolved from ids. UI: "Export JSON" buttons on
+`/admin/skills`, `/admin/topics`, `/admin/lessons`; "Export tree" on `/admin/import`.
+
+Seeded lesson titles and exercise content may carry `{{organization.*}}` placeholders. They are stored
+verbatim and resolved per organization at render time, which is why the same seeded bundle produces the
+same `ContentHash` for every customer — see [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
 
 **Skills JSON:** `[{ iconicName, title, description?, orderInTree, stage? }]`
 **Topics JSON:** `[{ skillIconicName, iconicName, title, orderInSkill }]`
@@ -1686,3 +1705,16 @@ the route or body (docs/TENANCY/TENANCY.md §1.3). The target organization is re
 the header.
 
 `OrganizationProfileDto` / `UpdateOrganizationProfileRequestDto`: `{product?, icp?, objections[] ({text, frequency?, bestResponse?}), scriptStages: string[], tone?, glossary: {[key]: string}, bannedClaims: string[], createdAt, updatedAt}` — shape per [CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md#3-the-organization-profile--the-part-that-removes-most-forks). `PUT` upserts: the first call for an organization creates the row.
+
+**Since Phase 40.19 this `PUT` is the substitution surface of the whole product.** A successful save
+publishes `organization.profile.updated` (whole profile, after the commit), which learning-service and
+ai-service project into local replicas; from then on `{{organization.product}}` and its siblings
+resolve out of it in lesson text, exercise content, grading prompts and persona prompts, and
+`bannedClaims` binds both the AI persona and the scoring. Two consequences a caller can observe:
+
+- **It is eventually consistent.** A save takes a moment to reach a lesson or a live call. The response
+  is authoritative for organization-db; the rendered lesson is not, for a second or so.
+- **An empty profile is not an error state.** Unfilled fields render as the neutral base wording
+  («ваш продукт», «ваш клиент»), never as blanks and never as visible `{{…}}`.
+
+Syntax, fallbacks and the render-on-read rule: [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).

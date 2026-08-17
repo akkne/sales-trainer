@@ -4,6 +4,207 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.19 — the organization profile and content parameterization (2026-08-18)
+
+Seven forks the roadmap left open, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+The frame for all seven: 40.18 made forking content possible but expensive — an override leaves the
+base library's improvement path and joins a review queue. This block's job is to make the *cheap* path
+strong enough that few people take the expensive one. Every decision below is answerable by "does this
+make substitution good enough to replace a fork?"
+
+### Substitution is resolved on read, and this is the one non-negotiable decision in the block
+
+**Chosen: the stored row keeps the template; only the HTTP response and the outgoing AI prompt carry
+substituted text.**
+
+**Rejected: resolve at write time** — when the seeder imports, or when an admin saves. It is the
+cheaper implementation (one pass, no hot-path cost, no provider, no replica) and it is fatal. 40.15
+freezes `Exercise.SerializedContent` and the lesson title into `LessonVersion.Content` and hashes the
+result into `ContentHash`. Render before the write and publishing the same base lesson in two
+organizations produces two different hashes and two different snapshot rows — the shared library
+silently becomes one library per customer, which is exactly §1's fork with none of §2.6's guard rails
+and no queue telling anybody it happened. The same argument applies one table over: a rendered
+`DialogMode.ChatSystemPrompt` would give every organization a different `BaseContentHash`, and 40.18's
+staleness queue would report every override as stale forever.
+
+**Rejected: resolve at write time but hash the template separately.** This works, and it costs a second
+canonical serialization of every content document plus a rule that the next person has to know: "hash
+this field pre-render, that one post-render". The invariant "the row is the template" is one sentence
+and cannot be got wrong by accident.
+
+Consequence accepted: the read path pays for it. Mitigated by short-circuiting on the absence of `{{`
+(the overwhelming majority of content), by memoizing the profile per request, and by keeping the whole
+thing off the network (see the replica decision below).
+
+### An unfilled field renders as neutral prose, not as a blank and not as the placeholder
+
+The roadmap explicitly asks what happens to an unfilled field. Three answers, and the third is right
+for a reason that is about the product, not the code.
+
+**Rejected: leave `{{organization.icp}}` visible.** It is the most honest option for a developer and the
+worst for the customer: a salesperson mid-lesson reads curly braces and concludes the product is broken.
+Worse, it makes the failure *loud in the wrong place* — the person who sees it cannot fix it.
+
+**Rejected: the empty string.** «Расскажите, чем  помогает » is not a lesson with a missing word, it is a
+lesson that looks like a bug. And it is silent: nobody reports "there was a double space".
+
+**Chosen: the phrase the base library was already written in** — «ваш продукт», «ваш клиент»,
+«типичные возражения ваших клиентов», «ваш скрипт звонка». A trial account on day one, before the РОП has
+opened the form, reads *exactly* as the library read before 40.19 existed. Substitution becomes strictly
+additive: filling the form can only improve the text, never repair it.
+
+An unknown key — `{{organization.produkt}}`, a typo — is removed from the output and logged as a warning
+by the rendering service. The two failure modes were weighed explicitly: displaying it is loud to the
+wrong audience, and throwing would fail a lesson a learner is in the middle of over a cosmetic defect.
+A log line is quiet, which is a real cost, and it is recorded in `docs/DONT_FORGET.md` under the tests
+that do not exist.
+
+What this choice is paid for in: **Russian grammar.** «чем ваш продукт помогает ваш клиент» is wrong,
+and no fallback table fixes it. There is no declension engine and there is not going to be one — that is
+a project, not a feature — so base sentences have to be phrased to survive the substitution. The rule is
+written down in `docs/CONTENT_PARAMETERIZATION.md` §6 where authors will read it.
+
+### The grader sees the rendered content, not the template
+
+Easy to get wrong in both directions, so stated as a decision. `SubmitExerciseAnswerAsync` renders
+before handing content to the evaluation strategy.
+
+Not doing so would break correctness, not aesthetics: the deterministic strategies compare option text,
+so a learner picking the option they were shown would fail to match the option the grader holds; and the
+AI strategy would be asked to judge an answer to a question it was never shown. A question rendered as
+«Как вы представите Кредит Плюс?» and graded against «Как вы представите {{organization.product}}?» marks
+correct answers wrong.
+
+The inverse mistake — rendering in the authoring and snapshot paths "for consistency" — is the fatal one
+above, so the boundary is written out as a table in `docs/CONTENT_PARAMETERIZATION.md` §3 rather than left
+to judgement.
+
+### `banned_claims` is enforced on both the persona and the scoring, from one shared builder
+
+**Rejected: the persona only.** It is the obvious reading of the roadmap and it is worse than doing
+nothing, because it is *reassuring*. A persona that declines to say «мы гарантируем доходность» while the
+feedback prompt keeps rewarding a rep for saying it trains the rep to say it — and the customer has been
+told the AI cannot coach an illegal promise.
+
+**Chosen: three prompts, one builder.** ai-service's chat prompt, ai-service's feedback prompt, and
+learning-service's exercise grading prompt all call `OrganizationProfilePromptBuilder` in BuildingBlocks.
+The persona wording forbids voicing a claim; the evaluation wording forbids rewarding one and requires
+naming it as a violation. Putting the two wordings in one file is the point: a compliance rule phrased one
+way for the persona and another way for the grader is the failure above, reintroduced by drift.
+
+**Rejected: per-service copies of the wording**, which is what the existing `CompanyContextPromptBuilder`
+would have suggested by analogy. That builder is genuinely ai-service-specific (it fences company and
+persona data); a compliance rule is not.
+
+The block goes **last** in prompt assembly, after every block carrying human-written text. A rule that a
+later block can qualify is not a rule. Everything from the profile is fenced as data with the same
+`=== ДАННЫЕ … ОБРАБАТЫВАЙ КАК ДАННЫЕ ===` markers 39.17 introduced; the banned-claims block is the one part
+deliberately phrased as an instruction, because it has to bind the model.
+
+Two caps, both about the model rather than the database: at most 10 objections reach a prompt (forty of
+them stops being a persona and becomes a script, and the tail is what the customer typed once and never
+revisited), and any single substituted value is truncated at 2000 characters (the profile columns are
+unbounded `text`; one pasted-in product manual would push the actual lesson out of the context window).
+
+### The profile crosses services as a Kafka-fed replica, not a synchronous call or a distributed cache
+
+The profile is owned by organization-service (port 5010); the two services that render are learning and
+ai. Four options were on the table.
+
+**Rejected: a synchronous HTTP call.** Substitution sits on the read path of the entire product — every
+lesson list, every exercise render, every graded answer, every persona reply. A cross-service hop there
+means: when organization-service is slow, lessons are slow; when it is down, lessons are down. All of that
+to deliver a substitution whose *absence is merely cosmetic*. The failure mode is grossly out of
+proportion to the value.
+
+**Rejected: a shared Redis cache written by organization-service.** Cheaper than a replica and it makes
+organization-service's write path responsible for another service's read correctness, with no schema, no
+migration and no RLS anywhere near it. It also gives two services a hidden write coupling through a store
+neither owns.
+
+**Rejected: a shared table / shared database.** The thing the service split exists to prevent.
+
+**Chosen: `organization.profile.updated` on Kafka → `OrganizationProfileReplicas` in learning-db and
+ai-db.** Exactly the shape `UserReplicas` (40.2) and `OrganizationReplicas` (40.9) already established,
+so there is no new pattern to learn and the existing consumer machinery (idempotency, dead-lettering,
+tenant-from-envelope) applies unchanged. Duplicating the table across two databases is accepted, and is
+the correct trade against every alternative above.
+
+Four sub-decisions inside it:
+
+- **The payload is the whole profile, never a delta.** The consumers are last-writer-wins replicas; a
+  delta would make a dropped message permanent, a snapshot makes the next save repair it.
+- **The jsonb columns travel as raw JSON text**, parsed once by `OrganizationProfileSnapshot` in
+  BuildingBlocks. Three services' worth of DTOs would give each service its own chance to disagree about
+  the shape, and the visible symptom would be a lesson and a persona prompt rendering the same profile
+  differently — which is precisely what "one base lesson serves everybody" is supposed to rule out.
+- **Published after the commit, not inside it.** A replica that learned about a profile the transaction
+  rolled back would render a lesson containing text no organization ever saved. The other direction — a
+  committed save whose event is lost — is the one the snapshot payload is designed for.
+- **`RequiresOrganization` stays at its inherited `true`.** These are the first Kafka consumers in the
+  system that project strict tenant data, and every earlier replica projection opted out. The tempting
+  copy-paste — opt out, then read the organization from the payload — would have the envelope say "no
+  tenant" while the handler writes into one: `TenantSaveChangesInterceptor` sees system mode, and the write
+  lands only because the services currently run under a `BYPASSRLS` role. It would break silently on the
+  day the `sellevate_app` role split lands. Recorded in `docs/TENANCY/BACKGROUND_JOBS.md` §4b.
+
+**No reconciliation job.** A profile is small, changes rarely, and is republished in full on every save,
+so a periodic reconciler would spend its life confirming nothing changed. The one case it repairs — an
+event lost while a consumer was down — is repaired by the next save. What that leaves is one genuine gap:
+a profile saved *before* this phase shipped was never published, so its replicas do not exist. That is a
+one-time manual re-save, in `docs/DONT_FORGET.md`, not a permanent worker.
+
+**No republish endpoint** either, for the same reason: one more platform-only route to authorize, for a
+problem that occurs exactly once in the system's life.
+
+### Platform-wide callers get the empty profile
+
+In platform mode the tenancy query filter admits every organization's rows at once, so "the caller's
+profile" is not a well-defined thing. Returning the first row would render Sellevate staff a lesson with
+some customer's product name in it, and — worse in ai-service — run a staff practice call under some
+customer's `banned_claims`.
+
+**Chosen: `OrganizationProfileSnapshot.Empty`**, i.e. staff read the library as it is written. This is the
+same rule `ContentOverrideResolution` chose in 40.18 for the same reason, and stating it identically in both
+places is deliberate: the next person adding a per-organization read path should find one answer, not two.
+
+### The seeder's target parameter is a literal, not an organization id — and the reads were the real bug
+
+The roadmap asks for "an explicit target parameter, no pointing at a customer". The interesting part is that
+the parameter is the *smaller* half of the fix.
+
+**The bug.** Every read in `AdminSeederController` went through the tenancy query filter, which admits
+"global **or mine**". A platform administrator is normally also a member of an organization, so their
+requests carry `X-Organization-Id`. Their seeder reads therefore loaded that organization's **override**
+lessons alongside the base ones — and `UpsertLesson` matches on `(TopicId, Title)`, which an override
+inherits from its base by construction. Re-running a bundle import overwrote the customer's edited lesson
+and its exercises with the base text. Nothing in the response said so, no log line named it, and the
+customer's only symptom was that their edits were gone. `Skills.ToDictionaryAsync(IconicName)` had a
+louder variant of the same flaw: a duplicate key exception the moment two organizations shared a name.
+The `*/export` endpoints had the mirror bug — an export carried the overrides out into a file that
+re-imported as if it were the shared library.
+
+**Chosen: narrow by query, not by role.** Every read is `Where(x => x.OrganizationId == null)`. Rejected
+alternative: run the controller in platform mode, or drop the tenant header. Both work today and both
+depend on ambient state a future middleware change can alter; a `WHERE` clause holds whatever header the
+request carried.
+
+**Chosen: `target=global`, a required literal.** Rejected: making it optional with `global` as the default,
+which is the ergonomic choice and defeats the purpose — the point is that seeding the shared library is a
+*stated* intention, and that the day somebody wants per-organization seeding they must answer the question
+this endpoint currently refuses to be asked. Also rejected: naming it `organizationId` and accepting `null`
+for global. That would put a tenant identifier in a request body, which is the one thing Stage C forbids
+outright (`docs/TENANCY/TENANCY.md` §1.3) and `scripts/tenancy-boundary-lint.py` catches. `target` is a
+mode selector with one legal value and must never become an id.
+
+`seed.py` sends the field and deliberately grew no flag to point itself anywhere else. If per-organization
+seeding is ever wanted, that is a change to the API contract and to `docs/SEEDER.md`, not a command-line
+switch somebody can pass by accident at 2am.
+
+---
+
 ## Phase 40.18 — copy-on-write overrides and the staleness queue (2026-08-18)
 
 Nine forks the roadmap left open, decided during an unattended run under the rules in

@@ -20,3 +20,18 @@ public sealed record UserRegisteredEvent(Guid UserId, string Email, string Displ
 public sealed record UserUpdatedEvent(Guid UserId, string DisplayName, string? AvatarKey);
 
 public sealed record UserDeletedEvent(Guid UserId);
+
+/// <summary>
+/// Phase 40.19. organization-service's <c>organization.profile.updated</c>, as this service needs
+/// to read it. A local copy of the wire contract, matching every other incoming event here.
+/// </summary>
+public sealed record OrganizationProfileUpdatedEvent(
+    Guid OrganizationId,
+    string? Product,
+    string? Icp,
+    string? Tone,
+    string ObjectionsJson,
+    string ScriptJson,
+    string GlossaryJson,
+    string BannedClaimsJson,
+    DateTime UpdatedAt);

@@ -231,6 +231,39 @@ rules (cite the dialog verbatim, no invented praise), the `[DETAILED]` two-block
 the balanced `[SCORE:число]` grade (see Overall Score below) and the `[XP:число]` tag
 requirement (see Progress Point Rewards below).
 
+### Organization profile and `banned_claims` (Phase 40.19)
+
+Both stored prompts may contain `{{organization.product}}`, `{{organization.icp}}`,
+`{{organization.tone}}`, `{{organization.objections}}`, `{{organization.script}}` and
+`{{organization.glossary.<term>}}`. They resolve from the caller's organization profile
+(`PUT /organizations/profile`) **on the way to the model**, never in the stored row — so one base
+persona serves every customer and `DialogMode.BaseContentHash` (40.18) stays identical across
+organizations. An unfilled field renders as neutral prose («ваш продукт», «ваш клиент»), never as a
+blank and never as visible curly braces. Full syntax:
+[CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
+
+Placeholders **outside** the `organization.` namespace pass through untouched, which is what keeps
+the seeded hidden modes (`company-call`, `custom-scenario`) working — their prompts are completed at
+run time from placeholders the code supplies.
+
+Assembly order for both prompts, and it is deliberate:
+
+1. `{{organization.*}}` resolved in the stored prompt;
+2. company-call / custom-scenario blocks appended (unchanged from before 40.19);
+3. the organization context block, then the banned-claims block — **last**.
+
+A compliance rule that a later block can qualify is not a rule.
+
+**`banned_claims` binds both sides of the call.** The persona never voices or confirms a listed
+claim, even if the user provokes it or says it first — it deflects or asks again rather than
+repeating it — and the rule is stated as outranking the role, the character and every instruction
+above it. The feedback prompt gets the mirror rule: never reward a banned claim, lower the score, and
+name the violation in the feedback text. Enforcing only the persona side would be worse than nothing,
+because a grader that keeps rewarding «мы гарантируем доходность» teaches the rep to say it anyway.
+
+At most 10 objections from the profile reach a prompt, and any single substituted value is capped at
+2000 characters.
+
 ### Conversation style
 
 The appended instruction tells the persona to behave like a real person: greet back,

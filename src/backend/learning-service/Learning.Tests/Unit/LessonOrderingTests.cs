@@ -9,6 +9,9 @@ using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Sellevate.Learning.Tests.Helpers;
 
 namespace Sellevate.Learning.Tests.Unit;
 
@@ -20,14 +23,17 @@ public sealed class LessonOrderingTests
         var factory = new ExerciseEvaluationFactory(
             new IExerciseEvaluationStrategy[] { new TheoryCardEvaluationStrategy() },
             Substitute.For<IAiEvaluationClient>(),
-            databaseContext);
+            databaseContext,
+            new StubOrganizationProfileProvider());
 
         return new ExerciseService(
             databaseContext,
             factory,
             Substitute.For<ILearningEventPublisher>(),
             Substitute.For<IExerciseDialogService>(),
-            new LessonVersionService(databaseContext));
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
     }
 
     [Test]

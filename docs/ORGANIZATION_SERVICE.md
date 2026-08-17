@@ -15,11 +15,15 @@
 - **Announce** organization lifecycle changes on Kafka (`organization.created` /
   `organization.updated` / `organization.suspended`) so other services can react once they have a
   reason to (none do yet — Stage C, 40.10+).
+- **Announce** profile changes on Kafka (`organization.profile.updated`, Phase 40.19) so that
+  learning-service and ai-service can resolve `{{organization.*}}` placeholders locally instead of
+  calling this service on their read paths — see [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md) §5.
 
 Explicitly **not** in scope for 40.5: memberships, users, invites, roles (40.6/40.7), the platform
 superadmin panel and impersonation (40.9), SSO (40.8, deliberately deferred). `organization-service`
 today only manages the registry row and the profile row; nothing yet reads or writes them except
-the two controllers below.
+the two controllers below — and, since 40.19, the two replica projections that follow the profile
+into learning-db and ai-db.
 
 ## Layout
 
@@ -71,8 +75,41 @@ Migration: `InitialOrganizationSchema` (2026-08-14) creates both tables, the uni
 Produces only (no consumer — like `company-service`'s `company.followup.due`, this service
 registers `KafkaTopicProvisioner` + `KafkaEventPublisher` directly rather than the full
 `AddSellevateEventing` helper, since it never needs the Redis-backed consumer idempotency store).
-Since Phase 40.9 all three topics have a consumer on the other side: identity-service projects them
-into its `OrganizationReplicas` table so a suspended organization stops producing tokens.
+Since Phase 40.9 the first three topics have a consumer on the other side: identity-service projects
+them into its `OrganizationReplicas` table so a suspended organization stops producing tokens. Since
+40.19 there is a fourth topic, with two consumers.
+
+### `organization.profile.updated` (Phase 40.19)
+
+| Topic | Payload | When |
+|---|---|---|
+| `organization.profile.updated` | `{organizationId, product, icp, tone, objectionsJson, scriptJson, glossaryJson, bannedClaimsJson, updatedAt}` | `PUT /organizations/profile` succeeds |
+
+Four properties of this event are decisions rather than details.
+
+- **It carries an envelope `organizationId`, unlike the other three.** Those describe the tenant
+  *registry* — the organization is their payload, not their context — so identity's consumer opts out
+  of `RequiresOrganization`. A profile lives *inside* a tenant the way its lessons do, so this event
+  keeps the default and its consumers write under ordinary tenant context with no RLS widening
+  anywhere ([BACKGROUND_JOBS.md §4b](TENANCY/BACKGROUND_JOBS.md)).
+- **The payload is the whole profile, never a delta.** Its consumers are last-writer-wins replicas: a
+  delta would make a dropped message permanent, while a full snapshot makes the next save repair it.
+- **The jsonb columns travel as raw JSON text.** Re-modelling objections, script, glossary and banned
+  claims into three services' worth of DTOs would give each service its own chance to disagree about
+  the shape; `OrganizationProfileSnapshot` in BuildingBlocks parses them once, identically, for
+  everybody.
+- **It is published after the commit, not inside it.** A replica that learned about a profile the
+  transaction then rolled back would render a lesson with text no organization ever saved. The other
+  direction — a committed save whose event is lost — is the one the payload is designed for.
+
+Consumers: `OrganizationProfileConsumer` in learning-service and in ai-service, both writing
+`OrganizationProfileReplicas`.
+
+**What this service does not do:** there is no republish endpoint and no reconciliation job. A
+profile saved before 40.19 shipped has never been published, so its replicas do not exist; the fix is
+one manual re-save and it is recorded in [DONT_FORGET.md](DONT_FORGET.md). An endpoint that
+republished on demand would be one more platform-only route to authorize for a problem that occurs
+exactly once.
 
 | Topic | Payload | When |
 |---|---|---|

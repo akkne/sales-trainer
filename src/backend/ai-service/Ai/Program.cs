@@ -76,6 +76,7 @@ builder.Services.AddScoped<IDialogEventPublisher, KafkaDialogEventPublisher>();
 builder.Services.AddSingleton<IDialogScoringWeightsProvider, DialogScoringWeightsProvider>();
 builder.Services.AddHostedService<GamificationDialogWeightsConsumer>();
 builder.Services.AddHostedService<UserReplicaConsumer>();
+builder.Services.AddHostedService<OrganizationProfileConsumer>();
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
