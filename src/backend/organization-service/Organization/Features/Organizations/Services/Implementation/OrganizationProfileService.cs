@@ -1,14 +1,20 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Eventing;
+using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Organization.Common.Constants;
+using Sellevate.Organization.Eventing;
 using Sellevate.Organization.Features.Organizations.Models;
 using Sellevate.Organization.Features.Organizations.Services.Abstract;
 using Sellevate.Organization.Infrastructure.Data;
 
 namespace Sellevate.Organization.Features.Organizations.Services.Implementation;
 
-internal sealed class OrganizationProfileService(OrganizationDbContext databaseContext, ITenantContext tenantContext)
+internal sealed class OrganizationProfileService(
+    OrganizationDbContext databaseContext,
+    ITenantContext tenantContext,
+    IEventPublisher eventPublisher)
     : IOrganizationProfileService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -70,8 +76,34 @@ internal sealed class OrganizationProfileService(OrganizationDbContext databaseC
         await databaseContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        // Published after the commit, not inside it: learning-service and ai-service keep read-only
+        // replicas of this row (Phase 40.19, docs/TENANCY/BACKGROUND_JOBS.md), and a replica that
+        // learned about a profile the transaction then rolled back would render a lesson with text
+        // no organization ever saved. The other direction — a commit whose event is lost — is the
+        // one the payload is designed for: the whole profile ships every time, so the next save
+        // repairs it, and until then the reader falls back to the neutral base wording.
+        await PublishProfileUpdatedAsync(profile, cancellationToken);
+
         return ToDto(profile);
     }
+
+    private Task PublishProfileUpdatedAsync(OrganizationProfile profile, CancellationToken cancellationToken)
+        => eventPublisher.PublishAsync(
+            Topics.OrganizationProfileUpdated,
+            profile.OrganizationId.ToString(),
+            Topics.OrganizationProfileUpdated,
+            new OrganizationProfileUpdatedEvent(
+                profile.OrganizationId,
+                profile.Product,
+                profile.Icp,
+                profile.Tone,
+                profile.ObjectionsJson,
+                profile.ScriptJson,
+                profile.GlossaryJson,
+                profile.BannedClaimsJson,
+                profile.UpdatedAt),
+            organizationId: profile.OrganizationId,
+            cancellationToken: cancellationToken);
 
     private Guid RequireOrganizationId()
         => tenantContext.OrganizationId ?? throw new InvalidOperationException(ErrorMessages.OrganizationProfileContextMissing);

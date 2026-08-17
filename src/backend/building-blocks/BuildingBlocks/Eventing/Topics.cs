@@ -49,6 +49,14 @@ public static class Topics
     public const string OrganizationSuspended = "organization.suspended";
 
     /// <summary>
+    /// The content-substitution profile changed (Phase 40.19). Separate from
+    /// <see cref="OrganizationUpdated"/> on purpose: that event describes the tenant registry and
+    /// carries no organization in its envelope, while this one is <em>inside</em> a tenant and its
+    /// consumers are ordinary tenant-scoped projections.
+    /// </summary>
+    public const string OrganizationProfileUpdated = "organization.profile.updated";
+
+    /// <summary>
     /// Suffix appended to a source topic to form its dead-letter topic. A message that
     /// still fails after the configured retries is published to <c>&lt;topic&gt;.dlt</c>
     /// so it can be inspected/replayed without blocking the partition.

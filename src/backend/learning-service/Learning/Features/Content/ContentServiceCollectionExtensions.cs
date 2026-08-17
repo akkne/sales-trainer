@@ -9,6 +9,10 @@ public static class ContentServiceCollectionExtensions
     {
         services.AddScoped<IContentOverrideService, ContentOverrideService>();
 
+        // Phase 40.19. Scoped, not singleton: the memo inside it is a per-request memo, and the
+        // profile it reads is whichever tenant's the request belongs to.
+        services.AddScoped<IOrganizationProfileProvider, OrganizationProfileProvider>();
+
         return services;
     }
 }

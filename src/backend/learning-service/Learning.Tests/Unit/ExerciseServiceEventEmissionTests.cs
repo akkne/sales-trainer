@@ -11,6 +11,9 @@ using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Sellevate.Learning.Tests.Helpers;
 
 namespace Sellevate.Learning.Tests.Unit;
 
@@ -32,7 +35,8 @@ public sealed class ExerciseServiceEventEmissionTests
         return new ExerciseEvaluationFactory(
             deterministicStrategies,
             Substitute.For<IAiEvaluationClient>(),
-            databaseContext);
+            databaseContext,
+            new StubOrganizationProfileProvider());
     }
 
     private static async Task<(Guid SkillId, Guid LessonId, Guid ExerciseId)> SeedSingleLessonSkillAsync(
@@ -92,7 +96,9 @@ public sealed class ExerciseServiceEventEmissionTests
             databaseContext, CreateFactory(databaseContext),
             Substitute.For<ILearningEventPublisher>(),
             Substitute.For<IExerciseDialogService>(),
-            new LessonVersionService(databaseContext));
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -117,7 +123,9 @@ public sealed class ExerciseServiceEventEmissionTests
 
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext), eventPublisher, dialogService,
-            new LessonVersionService(databaseContext));
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -158,7 +166,9 @@ public sealed class ExerciseServiceEventEmissionTests
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext), eventPublisher,
             Substitute.For<IExerciseDialogService>(),
-            new LessonVersionService(databaseContext));
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":1}""").RootElement;

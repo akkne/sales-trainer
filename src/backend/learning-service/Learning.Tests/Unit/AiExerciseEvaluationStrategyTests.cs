@@ -6,6 +6,7 @@ using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Infrastructure.Ai;
+using Sellevate.Learning.Tests.Helpers;
 
 namespace Sellevate.Learning.Tests.Unit;
 
@@ -31,7 +32,7 @@ public sealed class AiExerciseEvaluationStrategyTests
             .Returns(new AiEvaluationResult(true, 90, "Оценка: 9/10", "Great answer"));
 
         var strategy = new AiExerciseEvaluationStrategy(
-            ExerciseTypes.FreeText, aiEvaluationClient, databaseContext);
+            ExerciseTypes.FreeText, aiEvaluationClient, databaseContext, new StubOrganizationProfileProvider());
 
         var content = JsonDocument.Parse("""{"instruction":"Respond"}""").RootElement;
         var answer = JsonDocument.Parse("""{"text":"My answer"}""").RootElement;

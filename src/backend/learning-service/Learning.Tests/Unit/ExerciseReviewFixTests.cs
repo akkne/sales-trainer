@@ -12,6 +12,9 @@ using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Sellevate.Learning.Tests.Helpers;
 
 namespace Sellevate.Learning.Tests.Unit;
 
@@ -33,12 +36,15 @@ public sealed class ExerciseReviewFixTests
             new CategorizeEvaluationStrategy(),
             new TheoryCardEvaluationStrategy(),
         };
-        return new ExerciseEvaluationFactory(strategies, Substitute.For<IAiEvaluationClient>(), databaseContext);
+        return new ExerciseEvaluationFactory(
+            strategies, Substitute.For<IAiEvaluationClient>(), databaseContext, new StubOrganizationProfileProvider());
     }
 
     private static ExerciseService CreateService(LearningDbContext db, ILearningEventPublisher publisher) =>
         new(db, CreateFactory(db), publisher, Substitute.For<IExerciseDialogService>(),
-            new LessonVersionService(db));
+            new LessonVersionService(db),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
     // ─── LE2: malformed answer → ExerciseAnswerValidationException ────────────
 

@@ -34,6 +34,7 @@ public static class LearningServiceCollectionExtensions
         services.AddTechniqueFeatureServices();
 
         services.AddHostedService<UserReplicaConsumer>();
+        services.AddHostedService<OrganizationProfileConsumer>();
 
         return services;
     }

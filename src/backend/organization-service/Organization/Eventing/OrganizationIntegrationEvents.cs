@@ -19,3 +19,27 @@ public sealed record OrganizationUpdatedEvent(Guid OrganizationId, string Name, 
 /// no consumer exists yet).
 /// </summary>
 public sealed record OrganizationSuspendedEvent(Guid OrganizationId, string Name);
+
+/// <summary>
+/// Published when an organization's content-substitution profile is saved (Phase 40.19). The
+/// payload is the whole profile rather than a delta, because its consumers are last-writer-wins
+/// replicas: a delta would make a dropped message permanent, while a full snapshot makes the next
+/// save repair it.
+///
+/// <para>
+/// The jsonb columns travel as their raw JSON text. Re-modelling objections, script, glossary and
+/// banned claims into three services' worth of DTOs would give every service its own chance to
+/// disagree about the shape; <c>OrganizationProfileSnapshot</c> in BuildingBlocks parses them once,
+/// the same way, for everybody.
+/// </para>
+/// </summary>
+public sealed record OrganizationProfileUpdatedEvent(
+    Guid OrganizationId,
+    string? Product,
+    string? Icp,
+    string? Tone,
+    string ObjectionsJson,
+    string ScriptJson,
+    string GlossaryJson,
+    string BannedClaimsJson,
+    DateTime UpdatedAt);

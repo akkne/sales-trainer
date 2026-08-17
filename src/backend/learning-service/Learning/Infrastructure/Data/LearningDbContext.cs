@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Learning.Features.Content.Models;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -50,6 +51,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<TechniqueCoach> TechniqueCoaches => Set<TechniqueCoach>();
     public DbSet<UserTechniqueProgress> UserTechniqueProgressRecords => Set<UserTechniqueProgress>();
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();
+    public DbSet<OrganizationProfileReplica> OrganizationProfileReplicas => Set<OrganizationProfileReplica>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -82,6 +84,10 @@ public sealed class LearningDbContext : DbContext
             .HasQueryFilter(item => _tenantContext.IsPlatformWide || item.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<ProgramEnrollment>()
             .HasQueryFilter(enrollment => _tenantContext.IsPlatformWide || enrollment.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
+        // is no global profile, and a null owner would read as "every organization's product name".
+        modelBuilder.Entity<OrganizationProfileReplica>()
+            .HasQueryFilter(replica => _tenantContext.IsPlatformWide || replica.OrganizationId == _tenantContext.OrganizationId);
 
         // Content: null means the global library shared by every organization, so the comparison is
         // "mine or global", never plain equality (docs/TENANCY/CONTENT_MODEL.md).
