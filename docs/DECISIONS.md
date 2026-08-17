@@ -4,6 +4,152 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.22 — completion is a quality threshold (2026-08-18)
+
+Six forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no questions,
+no new tests, nothing executed against any database).
+
+The frame: 40.21 shipped `completion_rule` as "a required object naming a kind" and deliberately
+refused to say more, so that this block could define the meaning without inheriting a guess. What is
+being decided here is not a data format — it is **what the number on the РОП's dashboard is allowed
+to mean**. Every fork below is answerable by "can a manager reach this state in four minutes without
+getting better at anything?"
+
+### The vocabulary is exactly the roadmap's two kinds, and a third was rejected
+
+**Chosen: `dialog_score` (`minimumScore`, `requiredCount`) and `exercise_accuracy`
+(`minimumAccuracyPercent`)**, an unknown kind refused with a 400 at create and update time, a bar
+outside 1–100 refused, and a bar of **zero refused explicitly** — "score at least 0" is a threshold
+every click clears, which is the failure mode wearing a discriminator.
+
+**Rejected: a composite `all_of` kind** combining several rules, which is the obvious extension and
+looked necessary because an assignment may carry both exercises and a conversation. It was dropped
+because `AssignmentProgressRecords` stores a single `BestScore`, and a composite rule has no natural
+single score: the honest options are "the minimum of the components", which is meaningless across
+different bars, and "normalized attainment", which replaces the number a РОП understands (68 points
+on a call) with an index nobody does. The consequence is real and is recorded in `DONT_FORGET.md`: an
+assignment with both an exercise set and a dialogue is judged on one of the two, and the creator has
+to decide which is the bar. That is a smaller lie than a score whose scale changes per assignment.
+
+**Rejected: tolerating an unknown kind** and treating it as "no threshold yet". A rule nothing can
+evaluate completes nobody, and on the dashboard "nobody can finish this" is indistinguishable from
+"nobody tried" — the same silent failure 40.21 refused to give a resting place in the schema,
+arriving through the front door instead.
+
+**Rejected: a `CHECK` constraint listing the kinds.** The vocabulary is a product decision that will
+grow (40.24, 40.25), and a database constraint enumerating it means a migration per addition and a
+frozen `completion_rule` on issued rows that no longer satisfies the newest constraint. The check
+stays "an object with a kind"; the vocabulary lives in the service, and
+`docs/TENANCY/sql/40.22_completion_threshold_verify.sql` asserts it by query.
+
+### Accuracy counts submissions, and the score is withheld until the set has been attempted
+
+This is the pair of details where "not a click" actually lives, so both were chosen against easier
+alternatives.
+
+**Rejected: accuracy as "exercises eventually answered correctly ÷ exercises in the set".** It is the
+kinder reading and it is brute-forceable: retry each exercise until it is green and everybody reaches
+100%. **Chosen: correct submissions ÷ all submissions**, which is the definition
+`LessonAccuracyService` already reports to the admin panel — reused rather than restated — and under
+which guessing lowers the number.
+
+**Rejected: reporting accuracy from the first submission onward.** One lucky answer out of twenty is
+100% accuracy, and it would complete an eighty-percent assignment outright. **Chosen: the score stays
+`null` until every exercise in the pinned set has been attempted at least once**, which is also the
+completion rule `UpdateLessonProgressAsync` already uses for lessons. `null` is deliberately not
+zero: "we do not know yet" and "they scored nothing" are different rows on the screen.
+
+### Attempts are matched by exercise id, not by the pinned lesson version id
+
+**Rejected: filtering attempts on `UserExerciseAttempt.LessonVersionId == the pinned version`,**
+which is the consistent-looking choice given that 40.16 exists precisely to bind attempts to
+versions. It breaks in a way nobody would find quickly: the learner's submit path binds an attempt to
+whatever version is published on the day they answer, so republishing the lesson while an assignment
+is running would make that assignment permanently unreachable, silently, for everybody still working
+on it.
+
+**Chosen: the pinned snapshot decides *which exercises* the threshold covers** — read out of
+`LessonVersion.Content` by the new `LessonSnapshotSerializer.ReadExerciseIds` — **and attempts are
+matched by exercise id.** The version still does the job it was pinned for: it says what was asked,
+immutably. Counting an attempt on a slightly reworded version of the same exercise is a much smaller
+error than an assignment nobody can finish.
+
+### `dialog.evaluated` had to be widened, because it carried no grade
+
+The roadmap says threshold evaluation reuses the existing scoring. For exercises it does, exactly.
+For conversations it could not: the event carried `rawScore`, which **despite the name is
+`FeedbackResult.XpReward`** — the pre-multiplier XP, bounded by the sum of four configurable weights
+rather than by 100 — while the 0–10 grade the learner is actually shown never left ai-service.
+
+**Rejected: interpreting `rawScore` as a quality signal.** Its scale is a runtime setting that a
+gamification-settings screen can change, so the same conversation would clear a 70 bar before the
+change and fail it after. That is worse than no threshold, because it is a threshold that moves.
+
+**Rejected: an out-of-band lookup** from learning-service into ai-service for the grade and the mode
+key, on every evaluated conversation. It is a synchronous cross-service dependency on an event path,
+which is the shape `MICROSERVICES.md` exists to avoid.
+
+**Chosen: two additive fields on the event** — `qualityScore` (the grade, normalized to 0–100 by the
+producer so no consumer needs to know ai-service's internal scale) and `modeKey` (because an
+assignment's `dialog_scenario` item addresses a mode by key, the way ai-service's own API does, and
+40.18's override keeps its parent's key while getting a new id). `rawScore` was left alone rather
+than renamed: gamification reads it, and renaming a field on a live topic buys nothing. The existing
+wire-shape test was extended to pin both.
+
+### A row per graded conversation, not a counter — which is also the idempotency answer
+
+**Rejected: incrementing `AttemptCount` on each event and keeping a running best.** It is the obvious
+implementation and it cannot express the rule: "three conversations scoring at least 70" is a
+question about a set, and a single counter cannot answer "how many cleared the bar". It also drifts:
+the shared Redis dedupe store has a TTL, so a replayed topic or a delayed redelivery inflates the
+count with no practice behind it — and "tried 4 times and did not reach the bar" is precisely the
+number the РОП uses to decide who needs coaching.
+
+**Chosen: `UserDialogScores`, one row per graded conversation, unique on
+`(OrganizationId, UserId, SessionId)`**, and both progress numbers **recomputed** from attempt rows
+on every evaluation. Reprocessing an event then writes the same rows and derives the same numbers,
+by construction rather than by a dedupe window. The table is deliberately **not** keyed to an
+assignment: one conversation may satisfy two assignments referencing the same scenario, and the row
+records what happened to a person rather than what it counted towards.
+
+### One consumer over both topics, rather than an inline call on the exercise path
+
+**Rejected: calling the evaluator at the end of `ExerciseService.SubmitExerciseAnswerAsync`.** It is
+the shorter path and it is only half a solution: a conversation is graded in **ai-service**, so its
+half must be event-driven regardless. The result would be two writers of the same two columns with
+two failure modes, two idempotency stories and two places to forget the tenant — and it would put
+work the learner is not waiting for inside their submit request.
+
+**Chosen: `AssignmentThresholdConsumer`, subscribing to `dialog.evaluated` and
+`exercise.completed`.** learning-service consuming a topic it also publishes is new in this system
+and is not a loop: the handler publishes nothing, and `exercise.completed` is used purely as a "this
+person did something" trigger — every number it might have carried is already in learning-db. The
+cost is that a threshold is met a moment after the work rather than in the same response, which is
+recorded in `DONT_FORGET.md`. `RequiresOrganization` stays at its inherited `true`, like 40.19's two
+profile consumers: both tables it writes are strict tenant data under plain-equality policies.
+
+### The evaluator updates progress rows and never creates one
+
+**Rejected: creating a progress row on first scored activity**, which would have made the block
+demonstrable instead of dormant. It reintroduces exactly what 40.21 rejected, one level along: a row
+would then mean "this person did something a referenced lesson contains", so somebody who practised
+that lesson for their own reasons would appear on the РОП's screen as though they had been assigned
+it, and "who has not started" would stay an inference from absent rows.
+
+**Chosen: the evaluator updates rows that exist and does nothing when there is none.** The honest
+consequence, stated in `ROADMAP.md`, `ASSIGNMENTS.md` and `DONT_FORGET.md` rather than buried: until
+40.23's fan-out ships, 40.22 runs over an empty set and changes nothing a human can see. An
+unobservable-but-correct block is better than a number produced by a shortcut 40.23 would have to
+unwind.
+
+The one thing 40.22 *did* add on the write path, because it is the last moment it can be added:
+`POST /activate` refuses an assignment whose rule measures content it does not carry — `dialog_score`
+with no `dialog_scenario` item, `exercise_accuracy` with no `lesson_version` item. Issuing freezes
+both the rule and the content, so after that moment the mismatch is permanent and the assignment is
+unfinishable forever.
+
+---
+
 ## Phase 40.21 — the Assignment entity (2026-08-18)
 
 Eight forks the roadmap left to the agent, decided during an unattended run under the rules in

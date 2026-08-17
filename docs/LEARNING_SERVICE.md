@@ -367,7 +367,7 @@ from a row that cannot change mid-request. Platform-wide callers get the empty p
 mode the query filter admits every organization at once, so picking a row would show Sellevate staff
 a lesson with some customer's product name in it.
 
-### Assignments (Phase 40.21)
+### Assignments (Phase 40.21, thresholds 40.22)
 
 `Assignments` / `AssignmentProgressRecords` ([ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1). Stage E
 opens here: the РОП turns an internal training session into short, dated, targeted practice for named
@@ -386,12 +386,11 @@ there is no such thing as a global assignment.
   `Exercises.SerializedContent`, the eleven existing renderers play it with no new code, and there is
   no second grading path. Pointing at mutable `Exercise` ids instead would repeat exactly the defect
   40.16 removed from progress.
-- **`completionRule` is required, has no default, and nothing evaluates it yet.** A default would have
-  to mean "no threshold", and an assignment that completes on a click is the compliance-theatre
-  failure ASSIGNMENTS.md §1.1 exists to prevent — so the column has no default, the API cannot omit
-  it, and a check constraint refuses anything that is not an object naming its `kind`. The vocabulary
-  of kinds and the evaluation are 40.22's; asserting that a kind was named is the most 40.21 can say
-  without building something 40.22 must break. Same treatment for `repeatSchedule` (40.24).
+- **`completionRule` is required and has no default.** A default would have to mean "no threshold",
+  and an assignment that completes on a click is the compliance-theatre failure ASSIGNMENTS.md §1.1
+  exists to prevent — so the column has no default, the API cannot omit it, and a check constraint
+  refuses anything that is not an object naming its `kind`. The *vocabulary* is 40.22's and is
+  described below. `repeatSchedule` still gets only the shape check (40.24).
 - **The audience column holds the rule, not the people.** The employee list lives in identity-service;
   this database has only the platform-global `UserReplicas`, so learning-service cannot resolve
   "the whole team" into names and a resolved list here would be a stale copy of somebody else's data.
@@ -404,14 +403,62 @@ there is no such thing as a global assignment.
   are ordinary acts, and a trigger that forbade them is one 40.23 and 40.24 would have to break. The
   service refuses the same edits first, with a message naming the fields, because an administrator who
   believes they moved a threshold and did not is worse off than one who is told they cannot.
-- **`AssignmentProgressRecords` has no writer in this block, and that is the honest state.** Nothing
-  fans out an audience (40.23) and nothing evaluates a threshold (40.22), so every funnel count on the
-  РОП's list reads zero and `GET /admin/assignments/:id/progress` returns `[]`. The alternative —
-  creating a row lazily when somebody first opens an assignment — would make "who has not started",
-  the single most actionable question in ASSIGNMENTS.md §5, an inference from absent rows instead of a
-  query over present ones.
+- **`AssignmentProgressRecords` has no row *creator* until 40.23, and that is the honest state.**
+  Nothing fans out an audience yet, so every funnel count on the РОП's list reads zero and
+  `GET /admin/assignments/:id/progress` returns `[]`. The alternative — creating a row lazily when
+  somebody first does the work — would make "who has not started", the single most actionable question
+  in ASSIGNMENTS.md §5, an inference from absent rows instead of a query over present ones, and would
+  put anybody who happened to practise a referenced lesson on the РОП's screen as though they had been
+  assigned it. 40.22 wrote the *updater*, below.
 - **No learner-facing routes.** `GET /assignments` and the manager's home screen are 40.23, together
   with the audience resolution they depend on.
+
+### Completion is a quality threshold (Phase 40.22)
+
+The block's whole claim: if completion means "opened everything", a team clicks through in four
+minutes, the dashboard reads 100%, and the number is a lie the РОП eventually catches. Two rule kinds,
+both from the roadmap, parsed by `AssignmentCompletionRuleReader` — strictly on write, tolerantly on
+read, the same asymmetry `AssignmentDocumentSerializer` uses for the other jsonb columns.
+
+| `kind` | One attempt is | Met when |
+|---|---|---|
+| `dialog_score` (`minimumScore`, `requiredCount`) | one graded practice conversation on one of the assignment's `dialog_scenario` items | that many conversations have each cleared the bar |
+| `exercise_accuracy` (`minimumAccuracyPercent`) | one exercise submission against the pinned `lesson_version` | every exercise in the set has been attempted **and** correct ÷ all submissions clears the bar |
+
+- **It does not score anything; the roadmap says the evaluation reuses existing scoring and it does.**
+  Exercise correctness comes from the `UserExerciseAttempt` rows the ordinary submit path writes, and
+  accuracy is `correct ÷ all` — the same definition `LessonAccuracyService` already reports to the
+  admin panel. A conversation's grade comes from ai-service's own feedback score, which 40.22 added to
+  the `dialog.evaluated` contract as `qualityScore` (normalized 0–100) because the pre-existing
+  `rawScore` field carries XP, not a grade.
+- **`AssignmentThresholdConsumer` is the writer**, listening to `dialog.evaluated` and
+  `exercise.completed`. A consumer rather than an inline call at the end of
+  `SubmitExerciseAnswerAsync`, because half the evidence arrives from another service and two writers
+  of the same two columns would mean two failure modes and two idempotency stories
+  ([BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4d).
+- **Everything is recomputed, never incremented, and that is the whole idempotency story.**
+  `AttemptCount` and `BestScore` are derived from the attempt rows on every evaluation, so a
+  redelivered message leaves the same values behind. A graded conversation is stored once in
+  `UserDialogScores` under a unique index on `(organization, user, session)`; `exercise.completed`
+  writes nothing at all and is used purely as a trigger.
+- **Two states kept apart on purpose.** `in_progress` means the work is unfinished; `failed_threshold`
+  means it is finished and under the bar. Collapsing them hides the person who needs coaching among
+  the people who have not started, and the roadmap calls that row the most valuable one on the screen.
+  `completed` is terminal — a threshold cleared once stays cleared, and a later weaker attempt is
+  practice rather than a demotion.
+- **Two details that make the bar unfakeable.** Accuracy counts *submissions*, so brute-forcing a set
+  until everything is green lowers it instead of raising it; and the accuracy score is withheld until
+  every exercise in the set has been attempted, because one lucky answer out of twenty is otherwise
+  100%. Work recorded before the assignment was issued never counts: the window opens at the later of
+  `ActivatedAt` and `OpensAt`.
+- **Attempts are matched by exercise id, not by lesson version id**, even though 40.16 binds every
+  attempt to a version. The pinned snapshot decides *which* exercises the threshold covers; the
+  learner's submit path binds their attempt to whatever version is published the day they answer, so
+  filtering on the pinned id would make an assignment silently unreachable the moment its lesson is
+  republished mid-flight.
+- **It updates rows, it never creates one**, and an unreadable or unmeasurable rule leaves the row
+  alone with a warning — fail-closed, because being short of a threshold is recoverable and a
+  completion nobody measured is not.
 
 ### Background jobs
 
@@ -514,6 +561,12 @@ Gamification (XP/streaks/achievements/league) and Analytics (`exercise.completed
 
 `user.registered` / `user.updated` / `user.avatar.changed` / `user.deleted` →
 keep the local `UserReplica` in sync (idempotent, dedupe on `eventId`).
+
+`dialog.evaluated` + `exercise.completed` (Phase 40.22, `AssignmentThresholdConsumer`) → re-judge that
+person's open assignments against their completion rules, and mirror a graded conversation into
+`UserDialogScores`. This is the one place the service consumes a topic it also produces
+(`exercise.completed`): the event is used purely as a "this person did something" trigger, and the
+handler publishes nothing.
 
 `organization.profile.updated` (Phase 40.19) → keep `OrganizationProfileReplicas` in sync, so
 `{{organization.*}}` placeholders resolve without a call into organization-service on the read path

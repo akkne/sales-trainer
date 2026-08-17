@@ -37,6 +37,7 @@ public static class LearningServiceCollectionExtensions
 
         services.AddHostedService<UserReplicaConsumer>();
         services.AddHostedService<OrganizationProfileConsumer>();
+        services.AddHostedService<AssignmentThresholdConsumer>();
 
         return services;
     }

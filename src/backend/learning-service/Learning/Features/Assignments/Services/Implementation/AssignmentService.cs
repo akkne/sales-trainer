@@ -140,8 +140,7 @@ internal sealed class AssignmentService(
             Audience = AssignmentDocumentSerializer.SerializeAudience(requestDto.Audience),
             OpensAt = requestDto.OpensAt,
             Deadline = requestDto.Deadline,
-            CompletionRule = AssignmentDocumentSerializer.SerializeRequiredRule(
-                requestDto.CompletionRule, "completionRule"),
+            CompletionRule = AssignmentDocumentSerializer.SerializeCompletionRule(requestDto.CompletionRule),
             RepeatSchedule = AssignmentDocumentSerializer.SerializeOptionalRule(
                 requestDto.RepeatSchedule, "repeatSchedule"),
             Status = AssignmentStatuses.Draft,
@@ -175,8 +174,7 @@ internal sealed class AssignmentService(
 
         var content = AssignmentDocumentSerializer.SerializeContent(requestDto.Content);
         var audience = AssignmentDocumentSerializer.SerializeAudience(requestDto.Audience);
-        var completionRule = AssignmentDocumentSerializer.SerializeRequiredRule(
-            requestDto.CompletionRule, "completionRule");
+        var completionRule = AssignmentDocumentSerializer.SerializeCompletionRule(requestDto.CompletionRule);
         var repeatSchedule = AssignmentDocumentSerializer.SerializeOptionalRule(
             requestDto.RepeatSchedule, "repeatSchedule");
 
@@ -247,10 +245,21 @@ internal sealed class AssignmentService(
                 $"Only a draft can be issued; this assignment is {assignment.Status}.");
         }
 
-        if (AssignmentDocumentSerializer.DeserializeContent(assignment.Content).Count == 0)
+        var content = AssignmentDocumentSerializer.DeserializeContent(assignment.Content);
+        if (content.Count == 0)
         {
             return AssignmentWriteResult.RejectedByStatus(
                 "An assignment with no content asks people to do nothing. Add exercises, a dialogue or theory first.");
+        }
+
+        // Phase 40.22. The last moment the rule and the content can still be reconciled: issuing
+        // freezes both, so a rule that measures something the assignment does not ask for produces
+        // an assignment nobody can ever complete — and on the РОП's screen that is indistinguishable
+        // from a team that has not started. Refused here, where the administrator can still fix it.
+        var unmeasurable = DescribeUnmeasurableRule(assignment.CompletionRule, content);
+        if (unmeasurable is not null)
+        {
+            return AssignmentWriteResult.RejectedByStatus(unmeasurable);
         }
 
         var now = DateTime.UtcNow;
@@ -353,6 +362,40 @@ internal sealed class AssignmentService(
                 record.FirstOpenedAt,
                 record.CompletedAt))
             .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Phase 40.22. Returns the refusal to show, or <see langword="null"/> when the rule and the
+    /// content agree. A rule that cannot be read at all is deliberately <b>not</b> refused here: it
+    /// cannot exist, because <see cref="AssignmentDocumentSerializer.SerializeCompletionRule"/>
+    /// parses every rule on the way in, and treating a hypothetical unreadable one as a blocker
+    /// would strand an assignment an administrator can no longer edit out of a draft.
+    /// </summary>
+    private static string? DescribeUnmeasurableRule(
+        string completionRule,
+        IReadOnlyList<AssignmentContentItemDto> content)
+    {
+        var rule = AssignmentCompletionRuleReader.TryRead(completionRule);
+        if (rule is null)
+        {
+            return null;
+        }
+
+        var requiredKind = rule.Kind switch
+        {
+            AssignmentCompletionRuleKinds.DialogScore => AssignmentContentItemKinds.DialogScenario,
+            AssignmentCompletionRuleKinds.ExerciseAccuracy => AssignmentContentItemKinds.LessonVersion,
+            _ => null,
+        };
+
+        if (requiredKind is null || content.Any(item => item.Kind == requiredKind))
+        {
+            return null;
+        }
+
+        return $"The completion rule '{rule.Kind}' is measured over '{requiredKind}' content, "
+               + "and this assignment has none. Add it, or change the rule — an issued assignment "
+               + "cannot have either changed afterwards.";
     }
 
     private static List<string> CollectFrozenFieldChanges(
