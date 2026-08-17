@@ -3,13 +3,21 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Phase 40.18. Opened to organization administrators so that a copy-on-write override is something
+/// its owner can actually edit — the third of the review screen's three actions. The policy admits
+/// them; <see cref="ContentAuthoringGuard"/> is what keeps them off the global library, because the
+/// content RLS policy cannot (its WITH CHECK admits a null owner by design).
+/// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminReferenceController(LearningDbContext database, ILogger<AdminReferenceController> logger) : ControllerBase
 {
     [HttpGet("admin/reference")]
@@ -77,6 +85,11 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
     public async Task<ActionResult<AdminReferenceMaterialDto>> Create(
         Guid skillId, [FromBody] CreateReferenceMaterialRequestDto requestDto, CancellationToken cancellationToken = default)
     {
+        // Creating brand-new material is authoring the library, not customizing it. An
+        // organization gets its own copy through the override route; originating content from
+        // nothing is a different product question (40.19/40.20).
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
         var skill = await database.Skills.FindAsync([skillId], cancellationToken);
         if (skill is null) return NotFound();
 
@@ -106,6 +119,7 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
     {
         var material = await database.ReferenceMaterials.FindAsync([id], cancellationToken);
         if (material is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, material.OrganizationId)) return Forbid();
 
         var skill = await database.Skills.FindAsync([material.SkillId], cancellationToken);
         if (skill is null) return NotFound();
@@ -129,6 +143,7 @@ public sealed class AdminReferenceController(LearningDbContext database, ILogger
     {
         var material = await database.ReferenceMaterials.FindAsync([id], cancellationToken);
         if (material is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, material.OrganizationId)) return Forbid();
 
         database.ReferenceMaterials.Remove(material);
         await database.SaveChangesAsync(cancellationToken);

@@ -676,6 +676,85 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
+### Content overrides and the staleness queue (Phase 40.18)
+
+Copy-on-write: an organization customizes the shared library one row at a time instead of forking it.
+Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §1 and §2.6.
+
+`{kind}` is one of `lessons`, `techniques`, `reference-materials` — in the path, never in a body, so
+an action cannot be aimed at a row of a different family by editing a payload.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content/overrides?staleOnly=false | — | `ContentOverrideDto[]` |
+| GET | /admin/content/overrides/:kind/:overrideId | — | `ContentOverrideReviewDto` |
+| POST | /admin/content/overrides/:kind/:baseId | — | `ContentOverrideDto` (409 if the row is already somebody's copy; 400 if the caller has no organization) |
+| POST | /admin/content/overrides/:kind/:overrideId/accept-base | — | 204 |
+| POST | /admin/content/overrides/:kind/:overrideId/keep-override | — | 204 |
+
+`ContentOverrideDto`: `{kind, overrideId, baseId, title, isStale, forkedFrom, baseCurrent}`
+`ContentOverrideReviewDto`: `{summary, override, baseAtFork, baseCurrent}` — three whole documents.
+
+**`POST /admin/content/overrides/:kind/:baseId` is the only route in the platform that creates a
+copy of anything**, and it is reachable only from a person pressing "edit". Nothing runs at
+onboarding: an organization handed a private fork of the library on day one stops receiving every
+later improvement to it, permanently, and nobody notices until the content roadmap has stopped
+existing. It is idempotent — pressing it twice returns the existing copy untouched — and it refuses a
+row that is already an organization's own copy (409). For a lesson it clones the lesson row and every
+exercise in it and opens the draft version, so the administrator lands in something editable.
+
+**`isStale` is computed on every read, not stored.** For a lesson, `forkedFrom` and `baseCurrent` are
+`LessonVersion` ids and staleness is "they differ, and the base has something published". For a
+technique or a reference material they are content hashes, because neither family has a version
+table. A null `forkedFrom` counts as stale — "unknown base, needs review" is a state 40.15 left
+expressible on purpose.
+
+**The review payload contains no diff, by design.** `baseAtFork` is populated only for lessons (40.15
+froze the snapshot it points at); for the other two kinds the base's previous text was overwritten in
+place and nothing stored it, so the field is null and the screen compares the override against the
+base's current text. Nothing is merged anywhere: a lesson is prose and grading criteria, and a
+three-way merge of those produces text that reads as if a person wrote it and then scores a real
+salesperson against a rule nobody chose.
+
+**Three actions, and the third one is elsewhere.** `accept-base` archives the override so read
+resolution stops shadowing the global row — archived, not deleted, because progress rows point at it
+without a foreign key. `keep-override` re-points the fork marker at the base as it stands now and
+touches no content: it records "we looked, ours still stands". **Edit** is the ordinary authoring
+routes (`PUT /admin/lessons/:id`, the `/admin/exercises` routes, `PUT /admin/techniques/:id`,
+`PUT /admin/reference/:id`, and `POST /admin/lessons/:id/versions/publish`), which 40.18 opened to
+organization administrators for exactly this purpose; publishing a new override version re-points the
+fork marker as a side effect, so editing clears the queue entry on its own.
+
+**Authorization: `RequireOrgAdmin`, and the organization comes from `ITenantContext`.** A caller with
+no organization at all (platform staff, or a request that reached the service without the gateway
+header) gets 400 on create and an empty queue on read — there is nobody for a copy to belong to.
+
+### Authoring the library vs authoring an override (Phase 40.18)
+
+`AdminLessonsController`, `AdminExercisesController`, `AdminTechniquesController` and
+`AdminReferenceController` were `RequirePlatformAdmin` until 40.18 and are now `RequireOrgAdmin`
+**plus a per-row ownership check**:
+
+- a row with an `OrganizationId` belongs to that organization, and RLS has already proved the caller
+  is inside it → an organization administrator may write it;
+- a row with a null `OrganizationId` is the global library → platform administrator rights required
+  (403 otherwise);
+- **creating** content from nothing (`POST /admin/topics/:iconicName/lessons`,
+  `POST /admin/techniques`, `POST /admin/techniques/import`, `POST /admin/skills/:skillId/reference`)
+  stays platform-only. An organization customizes what exists; originating an original curriculum is
+  40.19/40.20's question.
+
+The check is in application code and not in row-level security, and that is worth stating plainly
+because it looks like a gap: the content RLS policy is `OrganizationId IS NULL OR = current` in the
+`WITH CHECK` clause as well as the `USING` clause, since a customer must be able to read the shared
+library. Read as a write rule, that says any organization may write a row with a null owner — that
+is, edit every other customer's curriculum. The database cannot tell those two cases apart, because
+"global" is a null and not a tenant.
+
+One consequence for existing callers: creating an exercise under a lesson now stamps the exercise
+with the lesson's organization. Before 40.18 it left it null, which was correct while every lesson
+was global and would have put an override's exercises into the shared library the moment one existed.
+
 ### Exercises
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -980,6 +1059,51 @@ involvement.
 | DELETE | /admin/dialog/modes/:modeId | — | 204 |
 | POST | /admin/dialog/import | `multipart/form-data; file=<JSON>` (≤20 MB) | `DialogImportResultDto` |
 | GET | /admin/dialog/export | — | `DialogExportDto` — all bundles with nested modes, re-importable verbatim |
+
+#### Prompt overrides (Phase 40.18)
+
+Per-organization prompt customization, the ai-service half of copy-on-write. Design:
+[TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.6 and §4.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog/overrides/modes?staleOnly=false | — | `DialogModeOverrideDto[]` |
+| GET | /admin/dialog/overrides/modes/:overrideId | — | `DialogModeOverrideReviewDto` |
+| POST | /admin/dialog/overrides/modes/:baseModeId | — | `DialogModeOverrideDto` (409 if already a copy, or if the mode is in a seeded hidden bundle) |
+| PUT | /admin/dialog/overrides/modes/:overrideId | `UpdateModeRequestDto` | `AdminDialogModeDto` (404 if not this organization's override) |
+| POST | /admin/dialog/overrides/modes/:overrideId/accept-base | — | 204 |
+| POST | /admin/dialog/overrides/modes/:overrideId/keep-override | — | 204 |
+
+`DialogModeOverrideDto`: `{overrideId, baseModeId, bundleId, key, title, isStale, forkedFromHash, baseCurrentHash}`
+`DialogModeOverrideReviewDto`: `{summary, overrideChatSystemPrompt, overrideFeedbackSystemPrompt, baseChatSystemPrompt, baseFeedbackSystemPrompt}`
+
+`RequireOrgAdmin`; the organization comes from `ITenantContext`, never from the route or the body.
+
+The override keeps its parent's `bundleId` and `key`, so the customized prompt appears in the same
+bundle in the same position — the 40.11 unique indexes already allow it, because the composite one is
+filtered to non-global rows. `GET /dialog/bundles/:id/modes` resolves: an organization with an
+override sees its own prompt and not the base, and an organization without one sees the base.
+
+**`DialogBundle` is not override-able**, and this is the one place the implementation is narrower
+than the roadmap sentence. A bundle carries no prompt at all — title, description, emoji, sort order
+— while a copied bundle would be an empty folder needing a second resolution layer for "which modes
+are in it". An organization that wants its own bundle creates one, which 40.11 already allows.
+
+**The seeded hidden modes (`company-call`, `custom-scenario`) cannot be overridden — 409, not a
+silent no-op.** Their prompts are half code: the service completes them at run time from placeholders
+it supplies, and a per-organization copy would drift away from the code that feeds it until it
+quietly stopped matching.
+
+`PUT /admin/dialog/overrides/modes/:overrideId` is the "edit" action, and it lives on this controller
+rather than as a widened route on `AdminDialogController` for a concrete reason: stacking a second
+`[Authorize]` on one action of a platform-only controller **ANDs** the two policies rather than ORing
+them, so the code would read as though organization administrators were admitted and they would still
+be refused. A separate controller makes the weaker gate impossible to misread.
+`AdminDialogController` stays platform-only in full.
+
+`key` and `bundleId` are not editable on an override: they are its link to the row it shadows, and
+changing the key would make the copy stop resolving over its base and start appearing beside it —
+the one outcome copy-on-write exists to prevent.
 
 **Dialog export JSON:** `GET /admin/dialog/export` returns `{ bundles: [{ skillId, title, description, iconEmoji, sortOrder, isActive, modes: [{ key, title, description, chatSystemPrompt, feedbackSystemPrompt, sortOrder, isActive, voiceEnabled, voiceId }] }] }` — exactly the shape `POST /admin/dialog/import` accepts, so an export file re-imports verbatim. UI: "Export JSON" button on `/admin/dialog`.
 

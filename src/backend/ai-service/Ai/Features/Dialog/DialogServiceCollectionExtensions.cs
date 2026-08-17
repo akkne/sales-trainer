@@ -1,3 +1,4 @@
+using Sellevate.Ai.Features.Dialog.Overrides;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -17,6 +18,7 @@ public static class DialogServiceCollectionExtensions
         services.AddScoped<IDialogSessionRepository, DialogSessionRepository>();
         services.AddScoped<IDialogService, DialogService>();
         services.AddScoped<IScenarioValidationService, ScenarioValidationService>();
+        services.AddScoped<IDialogModeOverrideService, DialogModeOverrideService>();
         return services;
     }
 }

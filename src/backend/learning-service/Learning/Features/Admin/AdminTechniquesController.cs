@@ -5,14 +5,22 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Techniques;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Phase 40.18. Opened to organization administrators so that a technique override is editable by
+/// the organization that owns it. Creation, import and anything touching a global row stay platform
+/// -only, enforced by <see cref="ContentAuthoringGuard"/> rather than by RLS, whose content policy
+/// admits a null owner on write by design.
+/// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminTechniquesController(
     LearningDbContext databaseContext,
     ILogger<AdminTechniquesController> logger) : ControllerBase
@@ -75,7 +83,10 @@ public sealed class AdminTechniquesController(
         [FromBody] AdminTechniqueWriteRequestDto payload,
         CancellationToken cancellationToken)
     {
-        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: null, cancellationToken);
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
+        var validationError = await ValidatePayloadAsync(
+            payload, existingTechniqueId: null, owningOrganizationId: null, cancellationToken);
         if (validationError is not null) return validationError;
 
         var technique = new Technique
@@ -107,8 +118,10 @@ public sealed class AdminTechniquesController(
     {
         var technique = await LoadTechniqueAsync(id, cancellationToken);
         if (technique is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, technique.OrganizationId)) return Forbid();
 
-        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: id, cancellationToken);
+        var validationError = await ValidatePayloadAsync(
+            payload, existingTechniqueId: id, technique.OrganizationId, cancellationToken);
         if (validationError is not null) return validationError;
 
         technique.UpdatedAt = DateTime.UtcNow;
@@ -132,6 +145,7 @@ public sealed class AdminTechniquesController(
         var technique = await databaseContext.Techniques
             .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (technique is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, technique.OrganizationId)) return Forbid();
 
         databaseContext.Techniques.Remove(technique);
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -147,6 +161,10 @@ public sealed class AdminTechniquesController(
         [FromBody] AdminTechniqueWriteRequestDto[] payload,
         CancellationToken cancellationToken)
     {
+        // Import writes the global library wholesale — it is the seeder's sibling. An organization
+        // customizing its own techniques does that one row at a time through Update.
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
         var createdCount = 0;
         var updatedCount = 0;
         var failedCount = 0;
@@ -159,12 +177,15 @@ public sealed class AdminTechniquesController(
                 var existing = await databaseContext.Techniques
                     .Include(technique => technique.Coach)
                     .Include(technique => technique.AdditionalSkills)
-                    .FirstOrDefaultAsync(technique => technique.Slug == item.Slug, cancellationToken);
+                    .FirstOrDefaultAsync(
+                        technique => technique.Slug == item.Slug && technique.OrganizationId == null,
+                        cancellationToken);
 
                 var isNewRecord = existing is null;
                 var validationError = await ValidatePayloadAsync(
                     item,
                     existingTechniqueId: existing?.Id,
+                    owningOrganizationId: null,
                     cancellationToken);
                 if (validationError is not null)
                 {
@@ -288,6 +309,7 @@ public sealed class AdminTechniquesController(
     private async Task<ActionResult?> ValidatePayloadAsync(
         AdminTechniqueWriteRequestDto payload,
         Guid? existingTechniqueId,
+        Guid? owningOrganizationId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(payload.Slug) || string.IsNullOrWhiteSpace(payload.Name))
@@ -296,8 +318,13 @@ public sealed class AdminTechniquesController(
         if (payload.Difficulty is < TechniqueLevels.Novice or > TechniqueLevels.Master)
             return BadRequest(new { error = "Difficulty must be between 1 and 4." });
 
+        // Phase 40.18: the clash is looked for inside one owner, not across the visible set. A
+        // technique override deliberately carries its base's slug — that is what keeps the URL
+        // stable — so a check spanning "global or mine" would report a conflict with the very row
+        // this override is a copy of, and no override would ever be editable.
         var slugClashExists = await databaseContext.Techniques.AnyAsync(
             candidate => candidate.Slug == payload.Slug
+                         && candidate.OrganizationId == owningOrganizationId
                          && (existingTechniqueId == null || candidate.Id != existingTechniqueId),
             cancellationToken);
 

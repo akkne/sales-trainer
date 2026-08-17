@@ -1,5 +1,6 @@
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Learning.Eventing;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Exercises;
 using Sellevate.Learning.Features.Lessons;
 using Sellevate.Learning.Features.Programs;
@@ -23,6 +24,7 @@ public static class LearningServiceCollectionExtensions
 
         services.AddAiEvaluationClient(configuration);
 
+        services.AddContentOverrideServices();
         services.AddSkillTreeFeatureServices();
         services.AddLessonFeatureServices();
         services.AddProgramFeatureServices();

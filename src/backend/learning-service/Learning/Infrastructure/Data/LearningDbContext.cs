@@ -22,6 +22,14 @@ public sealed class LearningDbContext : DbContext
         _tenantContext = tenantContext;
     }
 
+    /// <summary>
+    /// Phase 40.18. The tenant the query filters above are built from, exposed so that
+    /// <c>ContentOverrideResolution</c> can decide whether to resolve overrides without every read
+    /// service growing a second constructor parameter for a value this context already holds.
+    /// Internal: it is a detail of how reads are composed, not part of the data model.
+    /// </summary>
+    internal ITenantContext TenantContext => _tenantContext;
+
     public DbSet<Skill> Skills => Set<Skill>();
     public DbSet<SkillStage> SkillStages => Set<SkillStage>();
     public DbSet<Topic> Topics => Set<Topic>();

@@ -7,14 +7,15 @@
 `UserLessonProgressRecords`, `ProgramVersions`/`ProgramItems`/`ProgramEnrollments`),
 [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (parts 3.5 and 3.7),
 [LEARNING_SERVICE.md](../LEARNING_SERVICE.md) and [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md)
-(how metrics are counted per version). Still design only: §2.6 (overrides and the staleness queue) is
-40.18, §3 (the organization profile) is 40.19.
+(how metrics are counted per version); §1 and §2.6 (copy-on-write overrides, read resolution and the
+staleness queue) are **implemented** (Phase 40.18, 2026-08-18) for lessons, techniques, reference
+materials and dialog-mode prompts. Still design only: §3 (the organization profile) is 40.19.
 
 Three places where the implementation is narrower than the text below, deliberately.
 
-- `parent_lesson_id` / `base_version_id` exist and are filled correctly when set, but nothing creates
-  an override: copy-on-write is 40.18, and creating copies earlier would be the fork §1 exists to
-  forbid.
+- The three review actions exist as API; **the review screen does not.** The frontend was not touched
+  in 40.18 for the same reason it was not touched in 40.15–40.17 — the РОП's admin panel is 40.20 and
+  is waiting on the owner's design. See `docs/DONT_FORGET.md`.
 - The §2.4 dashboard is an API (`GET /admin/lessons/{lessonId}/accuracy`), not a screen. The screen
   belongs with the РОП's admin panel, which is 40.20.
 - An edit that is **not** published binds new attempts to the previous snapshot. The attempt-time
@@ -240,6 +241,46 @@ grades a salesperson.
 The review queue shows: what changed upstream, what the organization changed, and three actions —
 take the new base (discard the override), keep the override (re-point `base_version_id`), or edit.
 
+**As implemented (40.18):** eight things worth stating, because each is a fork the roadmap left open
+(full reasoning in `docs/DECISIONS.md`, 2026-08-18).
+
+- **A copy is made only when an administrator presses "edit".** `POST
+  /admin/content/overrides/{kind}/{baseId}` is the only code path in either service that creates one.
+  Nothing runs at onboarding, on a Kafka event or on a schedule — the verify script's last check
+  simply counts the copies, and on a fresh deployment the answer is zero.
+- **"Stale" is not stored anywhere.** The queue is a query that compares each override's fork marker
+  against the base as it stands right now. Marking synchronously at publish time is not merely
+  awkward, it is refused by the database: it would mean writing rows into organizations the publisher
+  is not in, and the RLS `WITH CHECK` clause is the one clause the 2026-08-16 role split deliberately
+  did not widen. A background sweep would work and was rejected for lagging: while it lags, the queue
+  says an override is current when its base has already moved, which is the one error a review queue
+  must not make.
+- **The fork marker is a version id for lessons and a content fingerprint for the other three.**
+  `Technique`, `ReferenceMaterial` and `DialogMode` have no immutable version table, and building
+  three more was out of scope. The fingerprint answers "has upstream moved?" exactly as well; what it
+  gives up is the before-image, so the review payload's `baseAtFork` is populated for lessons and null
+  for the rest.
+- **The API computes no diff at all**, only returns the documents. A textual diff of prose is the
+  first half of a merge, and the pressure to "apply the non-conflicting hunks" starts the moment one
+  exists.
+- **Read resolution is an explicit call, and only on learner-facing paths.** The query filter admits
+  "mine or global", so without it an organization sees every overridden lesson twice. The authoring
+  paths deliberately keep seeing both sides — the review screen exists to show them side by side —
+  and platform-wide callers do not resolve either, or one customer's edit would hide a global lesson
+  from Sellevate staff.
+- **Retiring an override archives it, never deletes it.** Progress rows and Mongo dialog sessions
+  point at these rows without a foreign key, so deleting one to tidy a queue orphans history.
+  `IsArchived` was added to `Techniques` and `ReferenceMaterials` to match `Lessons`; in ai-service
+  the existing `IsActive` does the job.
+- **The write boundary is in C#, not in RLS.** The content policy admits a null owner on write by
+  design (the seeder and every platform authoring path need it), which read as a write rule says any
+  organization may edit the shared library. `ContentAuthoringGuard` states the real rule once, and
+  three CHECK constraints say in the database that an override always has an owner.
+- **`DialogBundle` is not copy-on-write, and that is the one place the implementation narrows the
+  roadmap.** A bundle carries no prompt; a copied one is an empty folder needing a second resolution
+  layer for "which modes are in it", whose natural answer is §1's library fork one level down. Only
+  `DialogMode` — which carries `ChatSystemPrompt` and `FeedbackSystemPrompt` — is override-able.
+
 ---
 
 ## 3. The organization profile — the part that removes most forks
@@ -282,7 +323,7 @@ expensive at ten customers.
 |----------------|--------------------------|
 | `seed.py` + `/admin/seeder/bundle` | Seeds the **global** library (`organization_id IS NULL`). Needs an explicit target, and must not be pointed at a customer. |
 | `Skill.IconicName` uniqueness | Becomes unique per organization — see [TENANCY.md §1.9](TENANCY.md#19-indexes-and-unique-constraints) |
-| `DialogMode` / `DialogBundle` prompts | Already admin-editable; become override-able per organization. The seeded hidden modes (`company-call`, `custom-scenario`) stay global. |
+| `DialogMode` / `DialogBundle` prompts | **Done (40.18)** for `DialogMode`, which is where the prompts live: `ParentModeId` + `BaseContentHash`, the override keeping its parent's `BundleId` and `Key`. `DialogBundle` is not copy-on-write — see §2.6. The seeded hidden modes (`company-call`, `custom-scenario`) stay global and the service **refuses** to override them: their prompts are completed at run time from placeholders the code supplies. |
 | `ExerciseTypePrompt` | Stays platform-global — it defines how a *type* is graded, not what a customer teaches |
-| `Technique`, `ReferenceMaterial` | Same override + versioning treatment as lessons |
+| `Technique`, `ReferenceMaterial` | **Override done (40.18)**: `ParentTechniqueId` / `ParentMaterialId`, `BaseContentHash`, `IsArchived`, read resolution and the same review queue as lessons. **Versioning not done** — neither has an immutable version table, and the fork point is a fingerprint instead (§2.6). |
 | Admin panel ([ADMIN_PANEL.md](../ADMIN_PANEL.md)) | Splits into a platform superadmin panel (organizations, global library) and an organization admin panel (the РОП's) |

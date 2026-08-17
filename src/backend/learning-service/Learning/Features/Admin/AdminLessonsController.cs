@@ -3,14 +3,21 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Phase 40.18. Opened to organization administrators so an override's title and ordering are
+/// editable by the organization that owns them; <see cref="ContentAuthoringGuard"/> keeps them off
+/// the global library, which the content RLS policy cannot do on its own.
+/// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminLessonsController(LearningDbContext database, ILogger<AdminLessonsController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons")]
@@ -30,6 +37,10 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
     [HttpGet("admin/topics/{topicIconicName}/lessons")]
     public async Task<ActionResult<IReadOnlyList<AdminLessonDto>>> GetByTopic(string topicIconicName, CancellationToken cancellationToken = default)
     {
+        // Creating a lesson creates a row in the library. An organization customizes what exists
+        // through the override route instead; originating content is 40.19/40.20.
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
         var topic = await database.Topics.FirstOrDefaultAsync(candidate => candidate.IconicName == topicIconicName, cancellationToken);
         if (topic is null) return NotFound(new { message = $"Topic '{topicIconicName}' not found." });
 
@@ -82,6 +93,7 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
     {
         var lesson = await database.Lessons.FindAsync([id], cancellationToken);
         if (lesson is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, lesson.OrganizationId)) return Forbid();
 
         // Phase 40.15: an omitted slug leaves the existing one alone rather than regenerating it.
         // Regenerating would silently change the lesson's stable identifier on every title edit,
@@ -128,6 +140,7 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
     {
         var lesson = await database.Lessons.FindAsync([id], cancellationToken);
         if (lesson is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, lesson.OrganizationId)) return Forbid();
 
         database.Lessons.Remove(lesson);
         await database.SaveChangesAsync(cancellationToken);

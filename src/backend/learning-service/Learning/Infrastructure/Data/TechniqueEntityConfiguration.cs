@@ -14,6 +14,24 @@ public sealed class TechniqueEntityConfiguration : IEntityTypeConfiguration<Tech
 
         builder.Property(technique => technique.OrganizationId);
 
+        // Phase 40.18. Restrict, not cascade: a global technique three customers have overridden
+        // must not be deletable in one click, and SetNull would silently promote the overrides to
+        // standalone techniques, losing the fact that they were ever derived. Same call as
+        // Lesson.ParentLessonId in 40.15.
+        builder.HasOne<Technique>()
+            .WithMany()
+            .HasForeignKey(technique => technique.ParentTechniqueId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(technique => technique.BaseContentHash)
+            .HasMaxLength(64);
+
+        builder.Property(technique => technique.IsArchived)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.HasIndex(technique => technique.ParentTechniqueId);
+
         builder.Property(technique => technique.Slug)
             .IsRequired()
             .HasMaxLength(120);

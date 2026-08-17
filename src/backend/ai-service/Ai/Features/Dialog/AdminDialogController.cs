@@ -9,10 +9,21 @@ using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.Dialog;
 
-// Phase 40.6 audit: manages the global dialog-content library (no org scoping exists yet
-// in ai-service) — Sellevate-staff-only. RequireSuperAdmin.
+// Phase 40.6 audit: manages the dialog-content library — Sellevate-staff-only.
+//
+// Phase 40.18 leaves this controller platform-only: it authors the shared prompt library. Editing an
+// organization's own override happens on AdminDialogOverridesController instead
+// (PUT /admin/dialog/overrides/modes/{overrideId}), and that split is deliberate rather than
+// cosmetic — stacking a second [Authorize] on one action here would AND the two policies, not OR
+// them, so an organization administrator would still be refused while the code read as if they were
+// allowed. A separate controller makes the weaker gate impossible to misread.
+//
+// [TenantTransaction] closes ai-service's long-standing gap (docs/DONT_FORGET.md): SET LOCAL only
+// takes effect inside a transaction, so without it an organization's own override is invisible even
+// to a platform administrator working inside one organization.
 [ApiController]
 [Route("admin/dialog")]
+[TenantTransaction]
 [Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminDialogController : ControllerBase
 {

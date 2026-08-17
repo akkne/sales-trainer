@@ -4,6 +4,200 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.18 — copy-on-write overrides and the staleness queue (2026-08-18)
+
+Nine forks the roadmap left open, decided during an unattended run under the rules in
+`docs/DONT_FORGET.md` (no questions, no new tests, nothing executed against any database).
+
+### An override is a row in the same table, not a link table and not a column on the version
+
+The roadmap asks where an override lives. Three shapes were possible.
+
+**Rejected: a link table** `content_override (organization_id, base_id, override_id, kind)`. It makes
+"is this row an override?" a join, on the learner's hot path, for a fact the row itself could carry;
+and it makes the invariant that matters — *a global row is never somebody's override* — inexpressible
+as a constraint, because the ownership lives in one table and the parenthood in another.
+
+**Rejected: `organization_id` on `lesson_version` alone**, leaving `Lessons` global. The unit of
+override would then be a snapshot rather than a lesson, so an organization's copy would have no
+identity between publishes, nothing for progress or a programme pin to point at, and no slug.
+
+**Chosen: the parent pointer lives on the content row.** 40.15 had already built exactly this for
+lessons (`Lessons.ParentLessonId`, `LessonVersions.BaseVersionId`), so the block's schema work was
+bringing `Techniques` and `ReferenceMaterials` — the two the roadmap warns are easy to forget — to
+the same shape, and adding the CHECK that says an override always has an owner. That CHECK is the
+one thing 40.15 left unstated, and it is now on `Lessons` too.
+
+### Staleness is derived on read; there is no `stale` flag anywhere
+
+The roadmap says overrides are "marked stale and fall into a review queue". The obvious reading is a
+column somebody sets.
+
+**Rejected: mark synchronously inside the publish transaction.** It cannot work, and the reason is
+structural rather than a matter of taste. Publishing a global lesson is done by platform staff with
+no organization set, or by one organization's administrator; marking every *other* organization's
+override means writing rows into tenants the writer is not in, and the RLS `WITH CHECK` clause — the
+one clause the 2026-08-16 role split deliberately did **not** widen for platform staff — refuses
+exactly that. Making it possible would mean giving the publish path a bypass, which is a much larger
+hole than the problem it solves.
+
+**Rejected: a background sweep** that walks overrides and sets a flag. It works, and it would have
+gone into `docs/TENANCY/BACKGROUND_JOBS.md` with a declared mode as 40.14 requires. But it buys
+nothing: it can only ever restate a comparison that two columns already answer, it can lag, and while
+it lags the queue says an override is current when its base has already moved — which is the one
+error a review queue must not make. It would also be the sixth job to inherit the `BYPASSRLS`
+dependency the registry already lists five times.
+
+**Chosen: the queue is a query.** `GET /admin/content/overrides?staleOnly=true` compares, per
+override, the fork marker against the base as it stands right now. A flag that is computed cannot
+disagree with the facts, and the three review actions resolve staleness by changing the facts the
+query reads rather than by clearing a flag: **accept base** retires the override, **keep override**
+re-points the fork marker, **edit and publish** re-points it as a side effect (40.15's
+`ResolveBaseVersionIdAsync` already reads the parent's latest published version).
+
+The cost is honest and small: the queue is O(overrides of this organization), which is single digits
+to low tens, not O(library).
+
+### Lessons compare version ids; techniques and reference materials compare a content fingerprint
+
+40.15 froze every published lesson, so a lesson's fork point can be a pointer at a snapshot that
+still exists — and the review screen can therefore show *what upstream said before* as well as what
+it says now. `Technique` and `ReferenceMaterial` have no version table.
+
+**Rejected: build two more version tables.** That is 40.15 done twice, including the freeze trigger,
+the partial unique draft index, the canonical serializer and the publish endpoint, for two families
+whose content is one row each. It would have doubled the block.
+
+**Chosen: `BaseContentHash`** — the SHA-256 of the base's canonical content at fork time, using the
+same `CanonicalJsonWriter` 40.15 built. It answers the only question the queue asks ("has upstream
+moved?") exactly as well as a version id. What it gives up is the before-image: the review screen
+shows the organization's text beside the base's *current* text and cannot show the base's previous
+text, because nothing stored it. That is the honest trade and it is written into the DTO
+(`BaseAtFork` is null for those two kinds) rather than hidden.
+
+Identity, ownership and `UpdatedAt` are deliberately outside the hash. A base re-saved unchanged has
+not changed, and a queue that cries wolf on `UpdatedAt` teaches the person reading it to click
+through without looking — which is the failure mode that ends with a stale grading criterion scoring
+a real salesperson.
+
+### No auto-merge, and no server-side diff either
+
+The roadmap is categorical about the merge. The block extends the same reasoning one step: the
+review endpoint returns three whole documents and computes no diff. A textual diff of prose is the
+first half of a merge, and once the API produces one, the pressure to "just apply the
+non-conflicting hunks" becomes a product conversation rather than an architectural one. The screen
+may diff for display; the server states facts.
+
+### Read resolution is an explicit call on the learner-facing paths, not a query filter
+
+The tenancy query filter admits "mine or global", so an organization with three overrides sees three
+lessons twice. Resolution — hide a global row when the caller's own organization has a live override
+of it — is the missing half of copy-on-write.
+
+**Rejected: fold it into `HasQueryFilter`.** A filter that references its own `DbSet` is applied
+recursively to the subquery inside it, and EF offers no way to say "the anti-join, but unfiltered".
+
+**Rejected anyway, and this is the stronger reason: the authoring paths must see both sides.** The
+review screen's entire job is showing the base next to the override; a filter that hid the base would
+make the queue unbuildable from the same context that serves it. So the rule is explicit: learner
+reads resolve, authoring reads do not, and platform-wide callers do not either — in platform mode the
+filter admits every organization at once, so "somebody's override exists" would hide a global lesson
+from Sellevate staff because one customer edited it.
+
+Cost is one `NOT EXISTS` against an index that exists for this and nothing else.
+
+### The write boundary between "my override" and "the shared library" is in C#, not in RLS
+
+This is the sharpest thing the block found, and it was true before the block: the content RLS policy
+is `OrganizationId IS NULL OR OrganizationId = current` in the `WITH CHECK` clause as well as the
+`USING` clause, because a customer must be able to read the global library. Read as a write rule that
+says *any organization may write a row with a null owner* — that is, may edit every other customer's
+curriculum. The database cannot tell the two cases apart, because "global" is a null and not a
+tenant.
+
+**Rejected: change the content `WITH CHECK` to plain equality.** It would be correct in isolation and
+would break the seeder, the bundle importer and every platform-staff authoring path, all of which
+legitimately write null-owner rows.
+
+**Chosen: `ContentAuthoringGuard`**, one rule stated once and called from every mutating content
+route: a row with an owner may be written by an administrator of that organization (RLS has already
+proved they are inside it); a row without one needs platform rights. Creating brand-new content from
+nothing stays platform-only — an organization customizes what exists, and originating an original
+curriculum is 40.19/40.20's question.
+
+### The four content admin controllers were opened to organization administrators
+
+`AdminLessonsController`, `AdminExercisesController`, `AdminTechniquesController` and
+`AdminReferenceController` were all `RequirePlatformAdmin`. Left that way, copy-on-write would have
+produced a copy that nobody but Sellevate could edit — the third of the review screen's three
+actions would have had no route at all, and the block would have shipped a mechanism with no use.
+
+They now carry `RequireOrgAdmin` plus the per-row guard above. Two real bugs surfaced while doing it,
+both of which would have been silent: an exercise created inside an override lesson inherited no
+organization and would have landed in the shared library (appearing inside that lesson for every
+other customer), and the technique slug-clash check spanned "global or mine", so an override — which
+carries its base's slug on purpose, to keep the URL stable — could never be saved.
+
+The same widening also forced `[TenantTransaction]` onto those controllers, closing the gap
+`TenantTransactionScope` had been documenting about itself since 40.10: they opened no transaction,
+so `SET LOCAL app.organization_id` never ran, and the moment an organization owned a row they would
+have stopped being able to see it. Fail-closed, and invisible in the logs.
+
+### Retiring an override archives it; it is never deleted
+
+"Take the new base" has to make the override stop shadowing its parent. Deleting the row is the
+obvious implementation and the wrong one: `UserExerciseAttempt`, `UserLessonProgress` and
+`UserTechniqueProgress` point at these rows without a foreign key (40.16's decision, for reasons that
+still hold), and Mongo dialog sessions carry `ModeId` the same way. Deleting to tidy a review queue
+would orphan the history that the whole of 40.15/40.16 exists to protect.
+
+So `IsArchived` was added to `Techniques` and `ReferenceMaterials`, matching the column 40.15 already
+put on `Lessons`, and resolution ignores archived overrides — which is exactly "the base is visible
+again". In ai-service the same job is done by the existing `IsActive` flag rather than a new column,
+because the mode list already filters on it and a second retirement flag beside it would be two
+things that can disagree.
+
+A retired override is **revived** rather than duplicated if the organization presses "edit" again:
+`UNIQUE (OrganizationId, Slug)` and `UNIQUE (OrganizationId, BundleId, Key)` make a second copy
+impossible anyway, and the organization had already discarded its text when it accepted the base, so
+the revived row is re-derived from the current base rather than recovered.
+
+### ai-service: modes are override-able, bundles are not, and no Kafka event crosses services
+
+The roadmap names `DialogMode`/`DialogBundle` together. Only the first carries a prompt: a bundle has
+a title, a description, an emoji and a sort order.
+
+**Rejected: copy-on-write for bundles.** A copied bundle is an empty folder — the global modes still
+belong to the original — so it needs a second resolution layer answering "which modes does this copy
+contain", and the natural answer ("all of the parent's, plus mine, minus the shadowed ones") is the
+whole-library fork of CONTENT_MODEL §1 reproduced one level down. An organization that wants its own
+folder creates one, which 40.11 already allows.
+
+**Chosen:** the override is a `DialogMode` row keeping its parent's `BundleId` and `Key`, which the
+40.11 unique indexes already permit (the composite one is filtered to non-global rows). The overridden
+prompt therefore appears in the same bundle in the same position with no extra machinery.
+
+The seeded hidden modes (`company-call`, `custom-scenario`) stay global and the service **refuses** to
+override them, rather than merely not offering it. Their prompts are half code: the service completes
+them at run time from placeholders (the company being called, the scenario the learner typed), and a
+per-organization copy would drift away from the code that feeds it until it silently stopped matching.
+
+**Rejected: a Kafka event between learning-service and ai-service** to propagate staleness. There is
+nothing to propagate. An override and the base it forked from are always the same content family in
+the same database, so staleness is an intra-database comparison everywhere it is asked. An event would
+add a delivery guarantee, an ordering question and a dead-letter path to a query that cannot be wrong.
+
+### No `40.18_*_indexes_concurrently.sql`, stated as a decision rather than left absent
+
+Every operation in both migrations is cheap on Postgres 11+: nullable columns and a NOT NULL boolean
+with a constant default are catalog changes; the three new indexes are built over tables holding tens
+to hundreds of rows; the CHECK constraints scan the same tens. 40.10–40.13 needed concurrent scripts
+because they rebuilt indexes on tables that were already large and already live, and nothing here has
+that shape. What exists instead is a read-only
+`docs/TENANCY/sql/40.18_content_overrides_verify.sql`.
+
+---
+
 ## Phase 40.17 — programme versioning and enrollment (2026-08-17)
 
 Twelve forks the roadmap left to the agent, decided during an unattended run under the rules in
