@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,8 +23,17 @@ public sealed class AdminTechniquesImportTests
     private static AdminTechniquesController CreateController(LearningDbContext db) =>
         new(db, NullLogger<AdminTechniquesController>.Instance)
         {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+            ControllerContext = new ControllerContext
+            {
+                // Phase 40.18: the controller now admits organization administrators too, and
+                // refuses import/create to anyone who is not Sellevate platform staff. These tests
+                // exercise the platform-staff path, so the principal has to say so.
+                HttpContext = new DefaultHttpContext { User = PlatformAdministrator() },
+            },
         };
+
+    private static ClaimsPrincipal PlatformAdministrator() =>
+        new(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Admin")], "test"));
 
     private static AdminTechniqueWriteRequestDto BuildPayload(
         string coachName = "Dana Cross",
