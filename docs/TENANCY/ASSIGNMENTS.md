@@ -1,9 +1,9 @@
 # Assignments: the РОП → manager loop, and AI inside the admin panel
 
-**Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD).
-Everything else on this page is still design: §1.1 threshold evaluation is 40.22, §2.1 repeats are
-40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the dashboard is 40.25, §5's non-completion push
-is 40.26.
+**Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD) and so
+is §1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation). Everything else on this
+page is still design: §2.1 repeats are 40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the
+dashboard is 40.25, §5's non-completion push is 40.26.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [CONTENT_MODEL.md](CONTENT_MODEL.md).
 Schema as built: [DB_SCHEMA.md](../DB_SCHEMA.md#assignments-assignmentprogressrecords).
@@ -53,6 +53,41 @@ Corollary: a failed threshold is a **normal, visible state** (`failed_threshold`
 retry. The РОП needs to see "started, tried 4 times, still under threshold" — that person needs
 coaching, and it is the most valuable row on the screen.
 
+#### What 40.22 built, and the four forks it had to settle
+
+The two examples above became the whole vocabulary — `dialog_score` and `exercise_accuracy` — and
+nothing else is accepted. Rejected alternatives are in [DECISIONS.md](../DECISIONS.md) (2026-08-18);
+the parts that change how the rest of this page should be read:
+
+- **A rule says what one attempt is and what bar it clears**, which is what lets one progress row
+  carry the whole verdict in two numbers. `dialog_score` counts conversations that each cleared the
+  bar rather than averaging them, because an average lets one strong call carry two weak ones and the
+  skill being trained is doing it right repeatedly. `exercise_accuracy` counts *submissions*, so
+  brute-forcing a set until everything is green lowers the number instead of raising it, and it
+  withholds a score until every exercise has been attempted, because one lucky answer out of twenty
+  is otherwise 100%. Those two details are where "not a click" actually lives; the rest is bookkeeping.
+- **The evaluation reuses the existing scoring, and one contract had to be widened for it to.**
+  Exercise correctness comes from the same `UserExerciseAttempt` rows the ordinary submit path
+  writes, and accuracy is the definition `LessonAccuracyService` already reports. Dialogues were the
+  gap: `dialog.evaluated` carried `rawScore`, which despite the name is the pre-multiplier XP reward
+  and says nothing about how the conversation went, while the 0–10 grade the learner sees never left
+  ai-service. 40.22 added `qualityScore` (normalized 0–100) and `modeKey` to that event.
+- **`in_progress` and `failed_threshold` are separated by whether the *work* is finished**, not by
+  whether the bar was cleared. Somebody who has done two of three required conversations is
+  unfinished; somebody who has done four and cleared none is the row §4 is about. Collapsing the two
+  would hide the person who needs coaching among the people who have not started, which is the exact
+  failure this section exists to prevent, arrived at from the other side.
+- **Everything is recomputed from attempt rows, never incremented.** A graded conversation is stored
+  once (`UserDialogScores`, unique on organization + user + session) and the two numbers on the
+  progress row are derived from what exists. That is what makes an at-least-once Kafka redelivery
+  harmless — and an attempt count that inflates while nobody practises would poison precisely the row
+  the РОП is supposed to act on.
+
+The thing to carry into §4 and §5: **`AssignmentProgressRecords` still has no row *creator*.** 40.22
+wrote the updater — what moves a row between the four states — but a row's existence means "this
+person was asked", and that is 40.23's fan-out. Until it ships, the funnel counts below still read
+zero, and threshold evaluation runs over an empty set.
+
 ### 1.2 What 40.21 built, and the five forks it had to settle
 
 The sketch above named eleven columns; turning it into a schema forced five choices the sketch left
@@ -79,9 +114,10 @@ open. All five are recorded with their rejected alternatives in [DECISIONS.md](.
   three people to a running assignment and extending a deadline are ordinary acts; rewriting the
   threshold under people who already have scores is not.
 
-The one thing to know when reading §2–§5 below: **`assignment_progress` has no writer yet.** 40.21
-built the table and nothing fills it, so every funnel count in §4 currently reads zero. That is
-deliberate scope, not an oversight — see [DONT_FORGET.md](../DONT_FORGET.md).
+The one thing to know when reading §2–§5 below: **`assignment_progress` has no row creator yet.**
+40.21 built the table, 40.22 wrote what updates a row, and nothing yet creates one — so every funnel
+count in §4 currently reads zero. That is deliberate scope, not an oversight — see
+[DONT_FORGET.md](../DONT_FORGET.md).
 
 ---
 
@@ -222,7 +258,7 @@ their team. Design for that.
 | ai-service dialog modes | the assignment's practice dialogue is a `DialogSession` with an injected persona — the same trick `company-call` already uses (`CompanyContextPromptBuilder`) |
 | `analytics-service` | assignment funnel metrics |
 | exercise types ([NEW_EXERCISE_TYPES.md](../NEW_EXERCISE_TYPES.md)) | the 11 existing types are the assignment's content vocabulary — no new renderer needed |
-| `learning-service` grading | threshold evaluation reuses existing scoring |
+| `learning-service` grading | threshold evaluation reuses existing scoring — **done in 40.22**: `UserExerciseAttempt` rows for accuracy, ai-service's own feedback grade for conversations |
 
 Nothing here needs a new service. `Assignment` most naturally belongs to `learning-service`
 (it owns progress and grading), with the AI generation calls going to `ai-service` the same way
