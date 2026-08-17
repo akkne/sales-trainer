@@ -112,8 +112,23 @@ public sealed class AdminAssignmentsController(
         {
             return BadRequest(new { message = validationException.Message });
         }
+        catch (AssignmentAudienceUnavailableException unavailableException)
+        {
+            // Editing an issued assignment re-resolves its audience (40.23), so this route inherits
+            // the same failure as issuing. Nothing was written: the top-up happens inside the same
+            // transaction as the edit.
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = unavailableException.Message });
+        }
     }
 
+    /// <summary>
+    /// Phase 40.23. Issuing is the moment the audience rule becomes named people, so this route can
+    /// now fail in a way none of the others can: identity-service may not answer, and then nobody
+    /// knows who works here. That is a 503 rather than a 500 — nothing is wrong with the request and
+    /// nothing is wrong with the assignment, and the honest instruction is "press it again".
+    /// </summary>
     [HttpPost("admin/assignments/{assignmentId:guid}/activate")]
     public async Task<ActionResult<AssignmentDto>> Activate(
         Guid assignmentId,
@@ -122,7 +137,49 @@ public sealed class AdminAssignmentsController(
         var refusal = RefuseIfNoOrganization();
         if (refusal is not null) return refusal;
 
-        return Respond(await assignmentService.ActivateAsync(assignmentId, cancellationToken));
+        try
+        {
+            return Respond(await assignmentService.ActivateAsync(assignmentId, cancellationToken));
+        }
+        catch (AssignmentValidationException validationException)
+        {
+            return BadRequest(new { message = validationException.Message });
+        }
+        catch (AssignmentAudienceUnavailableException unavailableException)
+        {
+            logger.LogWarning(
+                unavailableException,
+                "Assignment {AssignmentId} was not issued: the organization roster could not be read.",
+                assignmentId);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = unavailableException.Message });
+        }
+    }
+
+    /// <summary>
+    /// Phase 40.23. The one-click nudge docs/TENANCY/ASSIGNMENTS.md §5 asks for, addressed at
+    /// everybody on the assignment who has not finished.
+    /// </summary>
+    [HttpPost("admin/assignments/{assignmentId:guid}/remind")]
+    public async Task<ActionResult<AssignmentReminderResultDto>> Remind(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var refusal = RefuseIfNoOrganization();
+        if (refusal is not null) return refusal;
+
+        try
+        {
+            var result = await assignmentService.RemindAsync(assignmentId, cancellationToken);
+
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (AssignmentValidationException validationException)
+        {
+            return Conflict(new { message = validationException.Message });
+        }
     }
 
     [HttpPost("admin/assignments/{assignmentId:guid}/close")]

@@ -9,6 +9,7 @@ public static class AssignmentServiceCollectionExtensions
     {
         services.AddScoped<IAssignmentService, AssignmentService>();
         services.AddScoped<IAssignmentThresholdEvaluator, AssignmentThresholdEvaluator>();
+        services.AddScoped<IAssignmentAudienceResolver, AssignmentAudienceResolver>();
 
         return services;
     }
