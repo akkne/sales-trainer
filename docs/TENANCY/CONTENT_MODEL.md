@@ -2,11 +2,13 @@
 
 **Status:** §2.1, §2.2 and the `content_hash` rule are **implemented** (Phase 40.15, 2026-08-17);
 §2.3 (progress referencing the version) and §2.4 (`is_breaking`) are **implemented** (Phase 40.16,
+2026-08-17); §2.5 (programme versioning and enrollment) is **implemented** (Phase 40.17,
 2026-08-17) — see [DB_SCHEMA.md](../DB_SCHEMA.md) (`LessonVersions`, `UserExerciseAttempts`,
-`UserLessonProgressRecords`), [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (part 3.5),
+`UserLessonProgressRecords`, `ProgramVersions`/`ProgramItems`/`ProgramEnrollments`),
+[SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (parts 3.5 and 3.7),
 [LEARNING_SERVICE.md](../LEARNING_SERVICE.md) and [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md)
-(how metrics are counted per version). Still design only: §2.5 (programme versioning) is 40.17, §2.6
-(overrides and the staleness queue) is 40.18, §3 (the organization profile) is 40.19.
+(how metrics are counted per version). Still design only: §2.6 (overrides and the staleness queue) is
+40.18, §3 (the organization profile) is 40.19.
 
 Three places where the implementation is narrower than the text below, deliberately.
 
@@ -21,6 +23,11 @@ Three places where the implementation is narrower than the text below, deliberat
   series on every fixed comma — the §2.4 failure reached from the other side. Publishing is the act
   that makes an edit historically visible, and 40.20's editing screen has to make it the natural end
   of editing. See `docs/DECISIONS.md` (2026-08-17) and `docs/DONT_FORGET.md`.
+- The §2.5 pin is enforced end to end in the backend, but **the learner's existing screens do not
+  read it yet**. `GET /skill-tree`, `/lessons` and `/exercises/*` still serve the live library; the
+  pinned programme is `GET /program` and nothing in the frontend calls it. So the guarantee "nobody
+  moves a learner's programme but the learner" is real and complete, while "the learner sees the
+  pinned programme" waits on the screens that render one, which is 40.20.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [ASSIGNMENTS.md](ASSIGNMENTS.md).
 Current content model: [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md),
@@ -185,6 +192,40 @@ enrollment
 A manager on lesson 8 of 21 must not find the programme rearranged underneath them. New enrollments
 go to the new version; existing learners are offered an explicit "switch to the current version"
 with a diff.
+
+**As implemented (40.17):** `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` in learning-db,
+next to the lessons and lesson versions they reference. Six things worth stating, because each is a
+fork the roadmap left open (full reasoning in `docs/DECISIONS.md`, 2026-08-17).
+
+- **All three are strict tenant data**, not content. There is no global programme: a curriculum is a
+  decision one organization made about its own people, so `organization_id` is `NOT NULL` and the RLS
+  policy is plain equality rather than the `IS NULL OR = current` every table above uses. This is the
+  first place in Stage D where the content flavour would have been actively wrong.
+- **`program_item` carries `lesson_id` as well as `lesson_version_id`.** Not decoration: without it,
+  "the same lesson, now pinned to a newer snapshot" is inexpressible, and a curriculum could list one
+  lesson at versions 3 and 5 at once — the same material with two answer keys. It cannot drift,
+  because a published version's `lesson_id` is frozen by §2.1's trigger. The pin also survives §2.6
+  re-pointing `base_version_id`, since that column is provenance and the version's identity is not.
+- **The structure is frozen by a trigger on `program_item`, not only on `program_version`.** The
+  structure lives in the item rows, so that is where a retroactive reorder would actually be written,
+  and deleting an item from a frozen programme is the same edit seen from the other side. The reason
+  to put it in the database is sharper than it was for lessons: an edited lesson snapshot corrupts a
+  metric, an edited programme rearranges the curriculum under somebody mid-course.
+- **Enrollment is asymmetric.** The administrator's enroll call is idempotent and never moves an
+  existing pin, so re-running it after a publish enrolls the newcomers and leaves everybody
+  mid-course alone. The switch is the learner's own call, on themselves, naming the target version so
+  that a publish between showing the diff and accepting it cannot redirect them. No route moves
+  somebody else's pin — the claim in the paragraph above is about which code paths exist.
+- **The diff has four buckets** — added, removed, re-pinned, moved — and `is_breaking` on a re-pinned
+  lesson reads every published version between the two pins rather than the target's own flag. A
+  programme can skip several lesson versions at once, and reading only the target would hide a
+  changed correct answer behind a later typo fix: the §2.4 failure one level up.
+- **Enrollment does not gate access, and no "programme version 1" is minted.** An organization that
+  has published nothing has no pins and its people read the live library exactly as before. 40.16
+  could mint a lesson's version 1 because the lesson body existed and only its snapshot was missing;
+  a programme version is not a snapshot of something that exists but a curriculum decision nobody has
+  made yet, and pinning every existing learner to whatever the seeder loaded would freeze them onto
+  it silently.
 
 ### 2.6 Staleness, and no auto-merge
 
