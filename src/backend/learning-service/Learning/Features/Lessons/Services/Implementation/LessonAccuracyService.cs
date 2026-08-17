@@ -28,26 +28,45 @@ internal sealed class LessonAccuracyService(LearningDbContext databaseContext) :
         var orderedVersions = await databaseContext.LessonVersions
             .Where(version => version.LessonId == lessonId && version.Status != LessonVersionStatuses.Draft)
             .OrderBy(version => version.VersionNumber)
-            .Select(version => new PublishedVersionMarker(version.Id, version.VersionNumber, version.IsBreaking))
+            .Select(version => new { version.Id, version.VersionNumber, version.IsBreaking })
             .ToListAsync(cancellationToken);
 
-        var versionIds = orderedVersions.Select(version => version.VersionId).ToList();
+        var orderedVersionMarkers = orderedVersions
+            .Select(version => new PublishedVersionMarker(version.Id, version.VersionNumber, version.IsBreaking))
+            .ToList();
 
-        var statisticsByVersionId = await databaseContext.UserExerciseAttempts
+        var versionIds = orderedVersionMarkers.Select(version => version.VersionId).ToList();
+
+        // Projected into an anonymous type rather than straight into AttemptAggregate: a grouped
+        // projection is the one place where binding to a constructor is not reliably translatable,
+        // and a query that only fails at runtime against real Postgres is not worth the tidiness.
+        var aggregateRows = await databaseContext.UserExerciseAttempts
             .Where(attempt => attempt.LessonVersionId != null && versionIds.Contains(attempt.LessonVersionId.Value))
             .GroupBy(attempt => attempt.LessonVersionId!.Value)
-            .Select(group => new AttemptAggregate(
-                group.Key,
-                group.Count(),
-                group.Count(attempt => attempt.IsCorrect),
-                group.Sum(attempt => (long)attempt.Score),
-                group.Min(attempt => attempt.AttemptedAt),
-                group.Max(attempt => attempt.AttemptedAt)))
-            .ToDictionaryAsync(aggregate => aggregate.VersionId, cancellationToken);
+            .Select(group => new
+            {
+                VersionId = group.Key,
+                AttemptCount = group.Count(),
+                CorrectAttemptCount = group.Count(attempt => attempt.IsCorrect),
+                TotalScore = group.Sum(attempt => (long)attempt.Score),
+                FirstAttemptAt = group.Min(attempt => attempt.AttemptedAt),
+                LastAttemptAt = group.Max(attempt => attempt.AttemptedAt),
+            })
+            .ToListAsync(cancellationToken);
+
+        var statisticsByVersionId = aggregateRows.ToDictionary(
+            row => row.VersionId,
+            row => new AttemptAggregate(
+                row.VersionId,
+                row.AttemptCount,
+                row.CorrectAttemptCount,
+                row.TotalScore,
+                row.FirstAttemptAt,
+                row.LastAttemptAt));
 
         return new LessonAccuracySeriesDto(
             lessonId,
-            BuildSegments(orderedVersions, statisticsByVersionId),
+            BuildSegments(orderedVersionMarkers, statisticsByVersionId),
             await AggregateUnversionedAttemptsAsync(lessonId, cancellationToken));
     }
 
