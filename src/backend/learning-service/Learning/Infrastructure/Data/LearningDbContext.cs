@@ -46,6 +46,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<ProgramEnrollment> ProgramEnrollments => Set<ProgramEnrollment>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
     public DbSet<AssignmentProgress> AssignmentProgressRecords => Set<AssignmentProgress>();
+    public DbSet<UserDialogScore> UserDialogScores => Set<UserDialogScore>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -94,6 +95,10 @@ public sealed class LearningDbContext : DbContext
             .HasQueryFilter(assignment => _tenantContext.IsPlatformWide || assignment.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<AssignmentProgress>()
             .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.22. A graded practice conversation happens inside one organization; there is no
+        // global one, so plain equality again.
+        modelBuilder.Entity<UserDialogScore>()
+            .HasQueryFilter(score => _tenantContext.IsPlatformWide || score.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
         // is no global profile, and a null owner would read as "every organization's product name".
         modelBuilder.Entity<OrganizationProfileReplica>()
