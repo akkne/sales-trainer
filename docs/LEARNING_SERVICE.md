@@ -109,19 +109,39 @@ deliberate placements rather than a blanket request-wide transaction:
 - `ExerciseDialogService` closes its scope before a single byte of audio is generated, which is why
   the `/voice/stream` endpoint needs no request-wide transaction.
 
-**Known gap, deliberate:** the superadmin-only controllers under `Features/Admin` talk to the
-content tables with no scope. Content is global (`OrganizationId IS NULL`) for the whole of 40.10
-and the content policy admits global rows even with the session variable unset, so they keep
-working. Phase 40.18 (organization-authored content) has to revisit them.
+**That gap is now closed (40.18).** Until this block the controllers under `Features/Admin` talked
+to the content tables with no scope, which worked only because content was global for the whole of
+40.10-40.17 and the content policy admits global rows even with the session variable unset. The
+moment an organization owns a row that stops being true, and the failure is silent: the
+administrator overrides a technique and then cannot find it. The four content controllers now carry
+`[TenantTransaction]`, one filter that wraps the whole action in a scope, rather than a scope in each
+of twenty actions — because the failure mode of the per-action version is somebody adding action
+twenty-one.
 
 ### Content authoring and the seeder
 
-All content write endpoints are `RequireSuperAdministrator`, so in 40.10 content is authored only by
-platform staff and `OrganizationId` stays `NULL` — the seeder needs no special mode to produce a
-global library, it simply never sets an organization. The column and the filters are already
-forward-compatible with the copy-on-write overrides of 40.18.
+All content write endpoints were `RequirePlatformAdmin` from 40.10 to 40.17, so content was authored
+only by platform staff and `OrganizationId` stayed `NULL` — the seeder needs no special mode to produce a
+global library, it simply never sets an organization, and that is still true — the seeder and the
+bundle importer stay platform-only in 40.18.
 
-Phase 40.15 adds the one exception, and it is deliberate. `AdminLessonVersionsController` carries
+Since 40.18 the four content controllers carry `RequireOrgAdmin` **plus** `ContentAuthoringGuard`,
+which is the rule that decides who may write which row: a row with an owning organization belongs to
+that organization and RLS has already proved the caller is inside it; a row with a null owner is the
+shared library and needs platform rights. Creating content from nothing — a new lesson under a topic,
+a new technique, a technique import, a new reference material — stays platform-only, because an
+organization customizes what exists and originating an original curriculum is 40.19/40.20's question.
+
+That guard cannot be a row-level-security policy, and it is worth knowing why rather than assuming it
+was laziness. The content policy is `OrganizationId IS NULL OR = current` in the `WITH CHECK` clause
+as well as the `USING` clause, because a customer must be able to read the shared library. Read as a
+write rule it says: any organization may write a row with a null owner, i.e. edit every other
+customer's curriculum. The database cannot separate those two cases, because "global" is a null and
+not a tenant. What the database *can* enforce is the other half, and it does:
+`CK_Lessons_OverrideHasOwner`, `CK_Techniques_OverrideHasOwner` and
+`CK_ReferenceMaterials_OverrideHasOwner` say a row with a parent always has an owner.
+
+Phase 40.15 adds the first exception, and it is deliberate. `AdminLessonVersionsController` carries
 `RequireOrgAdmin` rather than `RequireSuperAdmin`, because lesson versions are the first content an
 organization will author for itself. The policy alone would be a hole — an organization
 administrator publishing into a lesson with `OrganizationId IS NULL` would be editing the curriculum
@@ -253,6 +273,62 @@ curriculum is a decision one organization made about its own people, so there is
   `docs/DECISIONS.md` (2026-08-17). The consequence, stated plainly: until the frontend reads
   `GET /program`, the pin changes nothing about what a learner sees on the existing screens.
 
+
+### Copy-on-write overrides and the staleness queue (Phase 40.18)
+
+The block that lets a customer edit the shared library without forking it
+([CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §1, §2.6). No new table: 40.15 had already built the
+override columns for lessons, and this brings `Techniques` and `ReferenceMaterials` — the two the
+roadmap warns are easy to forget — to the same shape.
+
+- **A copy is created only by `POST /admin/content/overrides/{kind}/{baseId}`**, and that route is
+  reachable only from a person pressing "edit". `ContentOverrideService` is not wired to a consumer,
+  a hosted service or an organization-created event. This is the block's whole point: an organization
+  handed a private fork of the curriculum at onboarding stops receiving improvements to the base for
+  ever, fifteen customers means fifteen forks, and every later base fix becomes fifteen merges by
+  hand.
+- **Read resolution is `ContentOverrideResolution`, called explicitly on the learner-facing paths.**
+  The tenancy query filter admits "mine or global", so without it an organization that overrode three
+  lessons sees them twice. Applied in `SkillTreeService` (the lesson-count denominator),
+  `ExerciseService` (lesson lists, next-lesson unlocking, skill completion), `TechniqueService` and
+  `ReferenceService`. Deliberately **not** applied on the authoring paths, whose job is showing the
+  base next to the override, nor for platform-wide callers, where one customer's edit would hide a
+  global lesson from Sellevate staff. For techniques it is correctness rather than tidiness: an
+  override carries its base's slug on purpose, so an unresolved lookup by slug matched two rows.
+- **Staleness is derived, never stored.** `GET /admin/content/overrides?staleOnly=true` compares each
+  override's fork marker against the base as it stands right now — `LessonVersion` ids for lessons, a
+  content fingerprint for the other two, which have no version table. Marking at publish time was
+  rejected because it is refused by the database: it would mean writing rows into organizations the
+  publisher is not in, and the RLS `WITH CHECK` clause is the one the 2026-08-16 role split
+  deliberately did not widen for platform staff. A background sweep was rejected for lagging, and
+  while it lags the queue claims an override is current when its base has already moved.
+- **Nothing merges, and the API computes no diff.** The review endpoint returns three documents. A
+  textual diff of prose is the first half of a merge, and the pressure to "apply the non-conflicting
+  hunks" starts the moment one exists — after which a rule nobody chose is grading a real
+  salesperson.
+- **"Take the new base" archives the override; it never deletes it.** `UserExerciseAttempt`,
+  `UserLessonProgress` and `UserTechniqueProgress` point at these rows without a foreign key (40.16's
+  decision), so deleting one to tidy a review queue orphans exactly the history 40.15 and 40.16 exist
+  to protect. `IsArchived` was therefore added to `Techniques` and `ReferenceMaterials` to match the
+  column `Lessons` already had.
+- **Four admin controllers were opened to organization administrators**, because otherwise an
+  override is a copy nobody but Sellevate can edit and the third review action has no route at all.
+  `AdminLessonsController`, `AdminExercisesController`, `AdminTechniquesController` and
+  `AdminReferenceController` now carry `RequireOrgAdmin` plus `ContentAuthoringGuard`: a row with an
+  owner is writable by that organization, a row without one needs platform rights, and creation from
+  nothing stays platform-only.
+- **`ContentAuthoringGuard` is in C# because RLS cannot do this job.** The content policy is
+  `OrganizationId IS NULL OR = current` in `WITH CHECK` as well as `USING`, since a customer must be
+  able to read the shared library; read as a write rule it says any organization may write a row with
+  a null owner. Three CHECK constraints (`CK_*_OverrideHasOwner`) state the half the database *can*
+  enforce: a row with a parent always has an owner.
+- **`[TenantTransaction]` on those four controllers closes a gap `TenantTransactionScope` had been
+  documenting about itself since 40.10.** They opened no transaction, so `SET LOCAL
+  app.organization_id` never ran; while all content was global that cost nothing, and the moment an
+  organization owned a row they would have stopped seeing it — fail-closed, invisible in the logs.
+- **Not in this block:** the review screen (the frontend was not touched — 40.20), a version table
+  for techniques and reference materials, and any parameterization of base content from an
+  organization profile (40.19).
 ### Background jobs
 
 | Job | Mode | Why it is safe |
