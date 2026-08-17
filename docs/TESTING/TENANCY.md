@@ -964,3 +964,78 @@ SELECT current_user, usesuper, userepl FROM pg_user WHERE usename = current_user
 
 **Не прогонялся:** `dotnet list package --vulnerable --include-transitive` — требует restore и сети.
 К границе тенанта отношения не имеет, но в приёмке это честный пробел.
+
+---
+
+## 40.16 — привязка прогресса к версии: чеклист для человека
+
+Тест-регрессия, которую требовал роадмап («правка правильного ответа не меняет историческую
+точность»), **не написана** — Правило №3 в `docs/DONT_FORGET.md`. Ниже — то, чем её пока заменяют:
+ручной прогон того же сценария. Документация Правилом №3 не запрещена, и это ровно тот же ход, что
+40.14 сделал вместо сквозного теста изоляции.
+
+### Шаг 1 — что прогоняется автоматически (секунды, ничего не поднимая)
+
+```bash
+dotnet build src/backend/Sellevate.sln
+dotnet test src/backend/learning-service/Learning.Tests/Sellevate.Learning.Tests.csproj --filter "TestCategory!=Integration"
+dotnet test src/backend/building-blocks/BuildingBlocks.Tests/Sellevate.BuildingBlocks.Tests.csproj --filter "TestCategory!=Integration"
+python3 scripts/tenancy-boundary-lint.py
+python3 scripts/tenancy-pool-lint.py
+```
+
+Ожидание: сборка без ошибок, learning 67/67, BuildingBlocks 114/118 (4 `Skipped` — нет локального
+Postgres), оба линта `clean`. Прогон 2026-08-17 дал ровно это.
+
+Важно понимать, чего этот шаг **не** проверяет: ни одного из шести свойств блока. Три существующих
+теста `ExerciseService` теперь конструируют его с настоящим `LessonVersionService`, поэтому путь
+«у урока нет версий → создать версию 1 → записать её в попытку» хотя бы **исполняется** на каждом
+прогоне; но ни один assert на `LessonVersionId` в них не смотрит.
+
+### Шаг 2 — сценарий, который должна была проверять тест-регрессия
+
+Руками, через API (экрана нет — фронт в блоке не трогался). Организация одна, роль — админ
+организации или платформенный админ.
+
+1. `POST /admin/lessons/{id}/versions/publish` с телом `{}` → в ответе `createdNewVersion: true`,
+   `versionNumber: 1`. (Если сервис уже стартовал на новом коде, версия 1 у урока уже есть — тогда
+   ответ будет `createdNewVersion: false`, и это правильно.)
+2. Продавцом ответить на упражнение урока — правильно.
+3. `GET /admin/lessons/{id}/accuracy` → один сегмент, `startVersionNumber: 1`,
+   `statistics.accuracy: 1`, `attemptCount: 1`. Записать эти числа.
+4. `PUT /admin/exercises/{id}` — **поменять правильный ответ** (не текст, а именно ключ ответа).
+5. `POST /admin/lessons/{id}/versions/publish` с телом `{"isBreaking": true}` →
+   `createdNewVersion: true`, `versionNumber: 2`.
+6. `GET /admin/lessons/{id}/accuracy` ещё раз. **Главная проверка блока:** сегмент версии 1 не
+   изменился — те же `attemptCount`, `correctAttemptCount` и `accuracy`, что на шаге 3, — и версия 2
+   лежит в **отдельном** сегменте (`startsAtBreakingChange: true`), а не продолжает первый.
+7. Контрольная половина: поправить в упражнении текст (опечатку) и опубликовать с
+   `{"isBreaking": false}` → версия 3. В ответе `/accuracy` сегментов по-прежнему **два**, и версия 3
+   лежит во втором вместе с версией 2 (`versionNumbers: [2, 3]`).
+
+Если шаг 6 показал изменившиеся числа — блок сломан, и сломан молча: ни исключения, ни строки в
+логе. Ровно поэтому этот сценарий и стоит первым в списке «Тесты, которых нет».
+
+### Шаг 3 — что смотреть глазами при первом старте на новом коде
+
+В логе `learning-service` при старте должны быть две строки:
+
+```
+Lesson version backfill starting for N lesson(s) with no published version
+Lesson version backfill created N initial version(s)
+```
+
+На втором старте — **ни одной** (бэкфилл идемпотентен и выходит по нулю строк). Если между ними есть
+`Lesson version backfill could not snapshot LessonId=...`, у этого урока содержимое упражнения — не
+валидный JSON: урок останется без версии, а шаг 2 раскатки откажется работать и назовёт их число.
+
+### Шаг 4 — операционные скрипты: не выполнялись ни против чего
+
+`docs/TENANCY/sql/40.16_progress_version_backfill.sql` и
+`docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql` написаны и **не запускались** —
+ни против настоящей `learning`, ни против одноразовой. Порядок и предусловия — в
+`docs/DONT_FORGET.md`, раздел «Блок 40.16».
+
+В отличие от 40.10–40.13, окна с невидимыми данными между шагами **нет**: по `LessonVersionId` не
+фильтрует ни query filter, ни RLS-политика. Пока бэкфилл не прогнан, исторические попытки видны в
+корзине `unversionedAttempts` — это и есть способ проверить, что он ещё не выполнялся.

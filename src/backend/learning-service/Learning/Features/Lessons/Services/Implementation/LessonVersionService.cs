@@ -185,6 +185,85 @@ internal sealed class LessonVersionService(LearningDbContext databaseContext) : 
         return new PublishLessonVersionResultDto(ToDto(draft), CreatedNewVersion: true);
     }
 
+    /// <remarks>
+    /// Three separate transactions on purpose, and it must be called with none of its own already
+    /// open (see the note on the caller in <c>ExerciseService</c>). A unique-index violation aborts
+    /// the whole Postgres transaction it happens in, so the "somebody else minted it first" recovery
+    /// read cannot live inside the transaction that lost the race — it would fail with
+    /// "current transaction is aborted" and hide the real answer.
+    /// </remarks>
+    public async Task<Guid?> EnsurePublishedVersionIdAsync(
+        Guid lessonId,
+        CancellationToken cancellationToken = default)
+    {
+        var latestPublishedVersionId = await ReadLatestPublishedVersionIdAsync(lessonId, cancellationToken);
+        if (latestPublishedVersionId is not null)
+        {
+            return latestPublishedVersionId;
+        }
+
+        try
+        {
+            return await MintInitialPublishedVersionAsync(lessonId, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Two learners answering the first exercise of a never-published lesson at the same
+            // moment both reach this point and both insert version 1; the unique index on
+            // (LessonId, VersionNumber) lets exactly one of them through. Losing that race is not an
+            // error — the other transaction produced the very row this one wanted — so the loser
+            // adopts it instead of failing a learner's submission over a bookkeeping collision.
+            databaseContext.ChangeTracker.Clear();
+            return await ReadLatestPublishedVersionIdAsync(lessonId, cancellationToken);
+        }
+    }
+
+    private async Task<Guid?> MintInitialPublishedVersionAsync(Guid lessonId, CancellationToken cancellationToken)
+    {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
+        var lesson = await databaseContext.Lessons
+            .FirstOrDefaultAsync(candidate => candidate.Id == lessonId, cancellationToken);
+        if (lesson is null)
+        {
+            return null;
+        }
+
+        var canonicalContent = await BuildCanonicalContentAsync(lesson, cancellationToken);
+        var mintedVersion = new LessonVersion
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = lesson.OrganizationId,
+            LessonId = lesson.Id,
+            VersionNumber = await ResolveNextVersionNumberAsync(lessonId, cancellationToken),
+            Content = canonicalContent,
+            ContentHash = LessonSnapshotSerializer.ComputeContentHash(canonicalContent),
+            Status = LessonVersionStatuses.Published,
+            BaseVersionId = await ResolveBaseVersionIdAsync(lesson, cancellationToken),
+            IsBreaking = false,
+            CreatedBy = null,
+            CreatedAt = DateTime.UtcNow,
+            PublishedAt = DateTime.UtcNow,
+        };
+
+        databaseContext.LessonVersions.Add(mintedVersion);
+        await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
+
+        return mintedVersion.Id;
+    }
+
+    private async Task<Guid?> ReadLatestPublishedVersionIdAsync(Guid lessonId, CancellationToken cancellationToken)
+    {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        return await databaseContext.LessonVersions
+            .Where(version => version.LessonId == lessonId && version.Status == LessonVersionStatuses.Published)
+            .OrderByDescending(version => version.VersionNumber)
+            .Select(version => (Guid?)version.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     private Task<LessonVersion?> FindDraftAsync(Guid lessonId, CancellationToken cancellationToken)
         => databaseContext.LessonVersions
             .FirstOrDefaultAsync(

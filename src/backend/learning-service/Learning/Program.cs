@@ -7,6 +7,7 @@ using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.DependencyInjection;
+using Sellevate.Learning.Features.Lessons.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
@@ -123,6 +124,12 @@ application.MapControllers();
 
 using (var serviceScope = application.Services.CreateScope())
 {
+    // Phase 40.16. Startup has no request and therefore no organization, so the scope declares
+    // system mode explicitly rather than running on a blank context indistinguishable from a
+    // forgotten one (docs/TENANCY/TENANCY.md §1.6) — the same shape gamification-service uses for
+    // its seeders.
+    serviceScope.ServiceProvider.GetRequiredService<TenantContext>().EnterSystemMode();
+
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
@@ -130,6 +137,13 @@ using (var serviceScope = application.Services.CreateScope())
 
     var databaseContext = serviceScope.ServiceProvider.GetRequiredService<LearningDbContext>();
     databaseContext.Database.Migrate();
+
+    // Phase 40.16. Gives lessons that have never been published a version 1, so the historical
+    // progress backfill has something to bind existing attempts to. Idempotent and a no-op on every
+    // start after the first; it cannot be SQL inside the migration, because the snapshot's hash is
+    // defined over bytes only LessonSnapshotSerializer produces (see ILessonVersionBackfill).
+    var lessonVersionBackfill = serviceScope.ServiceProvider.GetRequiredService<ILessonVersionBackfill>();
+    await lessonVersionBackfill.BackfillMissingInitialVersionsAsync();
 }
 
 application.Run();

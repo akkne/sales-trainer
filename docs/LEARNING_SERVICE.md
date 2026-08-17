@@ -150,11 +150,51 @@ walkthrough in [SKILLS_AND_EXERCISES.md](SKILLS_AND_EXERCISES.md), design in
 - **Every service method opens a `TenantTransactionScope` first**, per the read-transaction rule
   below — `LessonVersions` is an RLS table and a bare `SELECT` outside a transaction sees only global
   rows.
-- **Not in this block:** attaching historical attempts to a version (40.16), programme versioning and
-  enrollments (40.17), creating overrides and the staleness queue (40.18). `ParentLessonId` and
-  `BaseVersionId` exist and are filled correctly when set, so those blocks add behaviour rather than
-  schema. Nothing creates a version by itself — the first one appears when an admin opens a draft or
-  publishes.
+- **Not in this block:** programme versioning and enrollments (40.17), creating overrides and the
+  staleness queue (40.18). `ParentLessonId` and `BaseVersionId` exist and are filled correctly when
+  set, so those blocks add behaviour rather than schema.
+
+### Progress bound to a version (Phase 40.16)
+
+`UserExerciseAttempt` and `UserLessonProgress` carry `LessonVersionId`
+([CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.3). The exercise's identity **within** that version
+is the `exerciseId` key already inside the snapshot's `Content`, so `ExerciseId` stays as it is and
+changes meaning rather than shape: it is a key into a frozen document, not a pointer at an editable
+row. What this buys is the one thing the schema could not previously promise — an administrator
+fixing a wrong correct-answer no longer moves numbers that were computed months ago.
+
+- **The version is resolved on submission**, not at read time.
+  `ILessonVersionService.EnsurePublishedVersionIdAsync` returns the newest published version and,
+  when the lesson has never been published at all, mints a version 1 from the live rows
+  (`IsBreaking = false`, no author — it records content as it already was, which is not a change and
+  belongs to nobody). It runs **before** `SubmitExerciseAnswerAsync` opens its write scope, because
+  losing the mint race to another learner raises a unique violation and a unique violation aborts the
+  whole transaction it happens in.
+- **It does not mint on unpublished drift.** An administrator who edits an exercise and does not
+  publish has not made the edit historically visible, and minting on their behalf would stamp every
+  such edit — a fixed comma included — as an unattributed content change, splitting the accuracy
+  series on cosmetics. That is the failure `is_breaking` exists to prevent, so the gap is left open
+  deliberately and recorded in `docs/DECISIONS.md`.
+- **`UserLessonProgress.LessonVersionId` is refreshed only when the row advances** — a new best score
+  or the transition to completed. Stamping it on every submission would relabel a completion earned
+  on version 1 as a completion of version 3.
+- **`is_breaking` finally has a reader.** `GET /admin/lessons/{lessonId}/accuracy`
+  (`AdminLessonMetricsController` → `LessonAccuracyService`) groups the lesson's published and
+  archived versions into segments: a new segment starts at version 1 and at every version published
+  as breaking, and cosmetic versions extend the segment they follow. Attempts with no version at all
+  are reported as their own `unversionedAttempts` bucket rather than folded into version 1 — nobody
+  can prove what those answers were scored against, and merging them silently would be the same lie
+  this phase exists to stop, told by the fix instead of by the bug.
+- **The historical migration is split in two on purpose.** `LessonVersionBackfill` runs at startup in
+  system mode and gives every lesson that has never been published its version 1; it has to be C#,
+  because `ContentHash` is a SHA-256 over the exact bytes `LessonSnapshotSerializer` emits and
+  Postgres orders `jsonb` keys differently, so a snapshot built in SQL would carry a hash the service
+  never reproduces and the next publish would mint a duplicate version.
+  `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing attempts and
+  progress rows to it, in batches, run by a human.
+- **Analytics does not compute any of this.** See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md):
+  analytics-service is Redis-only, stores no attempts, and its `exercise.completed` counter is a
+  platform-wide funnel number with no lesson, no version and no organization in it.
 
 ### Background jobs
 
@@ -190,6 +230,23 @@ is invisible. Slug uniqueness is correctness, and deferring a correctness constr
 somebody has to remember is the worse trade (the same call 40.13 made for the four small gamification
 tables). What does exist is `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` — read-only, safe
 with the service up, and not run against anything either.
+
+Phase 40.16's migration (`20260817195247_AddProgressLessonVersionBinding`) sits between the two. It
+adds its two columns itself — both nullable, so Postgres treats it as a catalogue-only change with no
+rewrite and no long lock even on the two tables that grow with usage — but leaves both of its
+operational steps outside:
+
+- `docs/TENANCY/sql/40.16_progress_version_backfill.sql` — binds existing attempts and lesson
+  progress to their lesson's earliest published version, in batches, refusing to run without
+  `BYPASSRLS`. Requires the service to have started once first, so `LessonVersionBackfill` has minted
+  the versions it binds to.
+- `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql` — the two read-path indexes,
+  under the exact names EF generates (including EF's `~` truncation marker; renaming them makes the
+  next `dotnet ef migrations add` emit a table-locking `CreateIndex`).
+
+Unlike 40.10–40.13 there is **no window in which data is invisible**: nothing filters on
+`LessonVersionId`, so the deployment and the backfill do not have to share a maintenance window.
+Neither file has been run against any database.
 
 ## Coupling broken during extraction
 

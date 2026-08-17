@@ -5,6 +5,7 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
 
@@ -14,7 +15,8 @@ internal sealed class ExerciseService(
     LearningDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory,
     ILearningEventPublisher eventPublisher,
-    IExerciseDialogService exerciseDialogService) : IExerciseService
+    IExerciseDialogService exerciseDialogService,
+    ILessonVersionService lessonVersionService) : IExerciseService
 {
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
@@ -297,10 +299,19 @@ internal sealed class ExerciseService(
         var evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
             exerciseContent, userAnswer, cancellationToken);
 
+        // Phase 40.16. Resolved before the write scope below and deliberately outside it: minting a
+        // lesson's first version can lose a unique-index race with another learner, and a
+        // unique-index violation aborts the entire Postgres transaction it happens in — inside the
+        // scope below, that would take the learner's answer down with it. The snapshot is immutable
+        // once published, so reading it a moment earlier costs nothing.
+        var lessonVersionId = await lessonVersionService.EnsurePublishedVersionIdAsync(
+            exercise.LessonId, cancellationToken);
+
         var newAttempt = new UserExerciseAttempt
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            LessonVersionId = lessonVersionId,
             ExerciseId = exerciseId,
             SerializedAnswer = userAnswer.GetRawText(),
             IsCorrect = evaluationResult.IsCorrect,
@@ -329,7 +340,7 @@ internal sealed class ExerciseService(
         // submission (correct or wrong) so a lesson can always be completed by going
         // through all of its exercises.
         var (lessonWasCompleted, lessonBestScore) = await UpdateLessonProgressAsync(
-            userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
+            userId, exercise.LessonId, evaluationResult.Score, lessonVersionId, cancellationToken);
 
         // Stage the exercise/lesson outbox rows BEFORE the commit so the progress mutations
         // and their integration events are persisted in the SAME transaction (no lost events
@@ -373,11 +384,20 @@ internal sealed class ExerciseService(
     /// for EVERY exercise in the lesson — a lesson can always be passed by going through it.
     /// BestScore = max(existing best, current score).
     /// Returns (transitionedToCompleted, bestScore).
+    ///
+    /// <para>
+    /// Phase 40.16: <paramref name="lessonVersionId"/> is stamped on the row when it is created and
+    /// refreshed only when the row actually advances — a new best score, or the transition to
+    /// completed. Refreshing it on every submission would relabel a completion earned on version 1
+    /// as a completion of version 3, which is the retroactive rewrite this phase exists to stop,
+    /// arrived at from the progress side.
+    /// </para>
     /// </summary>
     private async Task<(bool TransitionedToCompleted, int BestScore)> UpdateLessonProgressAsync(
         Guid userId,
         Guid lessonId,
         int currentScore,
+        Guid? lessonVersionId,
         CancellationToken cancellationToken = default)
     {
         // Count how many distinct exercises exist in this lesson.
@@ -414,6 +434,7 @@ internal sealed class ExerciseService(
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 LessonId = lessonId,
+                LessonVersionId = lessonVersionId,
                 Status = newStatus,
                 BestScore = bestScore,
                 CompletedAt = allAttempted ? DateTime.UtcNow : null
@@ -423,6 +444,7 @@ internal sealed class ExerciseService(
         }
         else
         {
+            var bestScoreImproved = currentScore > progressRecord.BestScore;
             bestScore = Math.Max(progressRecord.BestScore, currentScore);
             progressRecord.BestScore = bestScore;
 
@@ -431,6 +453,11 @@ internal sealed class ExerciseService(
                 progressRecord.Status = LessonProgressStatuses.Completed;
                 progressRecord.CompletedAt = DateTime.UtcNow;
                 transitionedToCompleted = true;
+            }
+
+            if (bestScoreImproved || transitionedToCompleted)
+            {
+                progressRecord.LessonVersionId = lessonVersionId;
             }
         }
 

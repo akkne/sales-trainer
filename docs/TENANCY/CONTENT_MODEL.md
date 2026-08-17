@@ -1,17 +1,26 @@
 # Per-organization content: customization, versioning, overrides
 
-**Status:** §2.1, §2.2 and the `content_hash` rule are **implemented** (Phase 40.15, 2026-08-17) —
-see [DB_SCHEMA.md](../DB_SCHEMA.md) (`LessonVersions`),
-[SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (part 3.5) and
-[LEARNING_SERVICE.md](../LEARNING_SERVICE.md). Everything else on this page is still design only:
-§2.3 (progress referencing the version) is 40.16, §2.5 (programme versioning) is 40.17, §2.6
+**Status:** §2.1, §2.2 and the `content_hash` rule are **implemented** (Phase 40.15, 2026-08-17);
+§2.3 (progress referencing the version) and §2.4 (`is_breaking`) are **implemented** (Phase 40.16,
+2026-08-17) — see [DB_SCHEMA.md](../DB_SCHEMA.md) (`LessonVersions`, `UserExerciseAttempts`,
+`UserLessonProgressRecords`), [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (part 3.5),
+[LEARNING_SERVICE.md](../LEARNING_SERVICE.md) and [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md)
+(how metrics are counted per version). Still design only: §2.5 (programme versioning) is 40.17, §2.6
 (overrides and the staleness queue) is 40.18, §3 (the organization profile) is 40.19.
 
-Two places where the implementation is narrower than the text below, deliberately. `is_breaking`
-(§2.4) is recorded on every publish but nothing reads it yet — the dashboard that joins and splits
-metric series is 40.16. And `parent_lesson_id` / `base_version_id` exist and are filled correctly
-when set, but nothing creates an override: copy-on-write is 40.18, and creating copies earlier would
-be the fork §1 exists to forbid.
+Three places where the implementation is narrower than the text below, deliberately.
+
+- `parent_lesson_id` / `base_version_id` exist and are filled correctly when set, but nothing creates
+  an override: copy-on-write is 40.18, and creating copies earlier would be the fork §1 exists to
+  forbid.
+- The §2.4 dashboard is an API (`GET /admin/lessons/{lessonId}/accuracy`), not a screen. The screen
+  belongs with the РОП's admin panel, which is 40.20.
+- An edit that is **not** published binds new attempts to the previous snapshot. The attempt-time
+  resolver mints a version only when a lesson has none at all, never on unpublished drift, because
+  an unattributed content change would have to be treated as breaking and would then split the
+  series on every fixed comma — the §2.4 failure reached from the other side. Publishing is the act
+  that makes an edit historically visible, and 40.20's editing screen has to make it the natural end
+  of editing. See `docs/DECISIONS.md` (2026-08-17) and `docs/DONT_FORGET.md`.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [ASSIGNMENTS.md](ASSIGNMENTS.md).
 Current content model: [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md),
@@ -136,6 +145,14 @@ they are right to.
 So attempts and lesson progress carry `lesson_version_id` (and the exercise's identity **within**
 that version), not a bare `exercise_id`.
 
+**As implemented (40.16):** one new nullable column, `LessonVersionId`, on both tables. The
+exercise's identity within the version needs no column of its own — `exerciseId` is already inside
+the snapshot and inside its hash (§2.2), so `ExerciseId` stays and changes meaning rather than shape:
+a key into a frozen document instead of a pointer at an editable row. Nullable because attempts
+recorded before the phase have nothing to point at until the backfill runs, and no foreign key
+because a content table under an `IS NULL OR = current` policy and strict tenant data under plain
+equality must not be joined by a constraint validated with the writer's privileges.
+
 ### 2.4 `is_breaking`
 
 A publish is flagged by the admin as cosmetic (typo, rewording) or semantic (the correct answer
@@ -144,6 +161,15 @@ changed, grading criteria changed).
 The dashboard joins metric series across cosmetic versions and splits them across semantic ones.
 Without this, the accuracy chart for a skill steps every time someone fixes a comma, and the РОП
 stops trusting it — the same failure as §2.3, arrived at from the other direction.
+
+**As implemented (40.16):** `GET /admin/lessons/{lessonId}/accuracy` in learning-service, which owns
+the attempts. A segment starts at the first published version and at every version flagged breaking;
+cosmetic versions extend the segment before them. Attempts with no version are a separate
+`unversionedAttempts` bucket, never folded into version 1 — nobody can prove what they were scored
+against. analytics-service computes none of this and is not going to: it is Redis-only, stores no
+attempts, and its `exercise.completed` counter is a platform-wide funnel number with no lesson, no
+version and no organization in it. The rule for anyone drawing the chart lives in
+[ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md).
 
 ### 2.5 Programme versioning
 
