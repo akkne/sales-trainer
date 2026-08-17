@@ -7,6 +7,7 @@ import { useLessonsForSkill } from "@/features/exercise/hooks/use-lesson";
 import { useSelectedSkillStore } from "@/shared/stores/selected-skill-store";
 import { Icon } from "@/shared/components/icon";
 import { ErrorState } from "@/shared/components/error-state";
+import { ActiveAssignmentCard } from "@/features/assignments/components/active-assignment-card";
 import { getStageMeta, type SkillStageMeta } from "@/features/skills/constants/skill-stages";
 import { formatTimeAgo } from "@/features/discuss/lib/format";
 import type { LessonSummary } from "@/features/exercise/hooks/use-lesson";
@@ -755,7 +756,13 @@ export default function SkillTreePage() {
         : "";
 
     return (
-        <div className="path-grid">
+        // Phase 40.23. The assignment strip renders nothing when there is none, so a manager with
+        // no assignments lands on exactly the screen they landed on before — the roadmap is
+        // explicit that the tree must not be replaced by an empty assignment screen.
+        <div className="path-shell">
+            <ActiveAssignmentCard />
+
+            <div className="path-grid">
             {/* MOBILE: sticky skill picker + bottom sheet (hidden on desktop) */}
             <PathMobilePicker activeStageLabel={activeStageLabel} />
 
@@ -789,6 +796,7 @@ export default function SkillTreePage() {
                 skillSlug={selectedSkill?.slug}
                 allSkills={allSkills}
             />
+            </div>
         </div>
     );
 }
