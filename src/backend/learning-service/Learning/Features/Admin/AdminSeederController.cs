@@ -13,21 +13,80 @@ using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Bulk import and export of the <b>global</b> content library (docs/SEEDER.md).
+///
+/// <para>
+/// <b>Phase 40.19 — the seeder can only ever be pointed at the global library, and now says so.</b>
+/// Two things were wrong once organizations could own content (40.18). First, every read here goes
+/// through the tenancy query filter, which admits "global or mine": a platform administrator who is
+/// also a member of an organization would load that organization's override lessons alongside the
+/// base ones, and <c>UpsertLesson</c> matches on <c>(TopicId, Title)</c> — so re-seeding the bundle
+/// would silently overwrite a customer's edited lesson and exercises with the base text. Nothing in
+/// the response would say so; the customer would simply find their edits gone. Second, an export
+/// taken by that same administrator would carry those overrides out into a file that re-imports as
+/// if it were the shared library.
+/// </para>
+///
+/// <para>
+/// The fix is a query, not a role: every read is narrowed to <c>OrganizationId IS NULL</c> and every
+/// created row states that owner explicitly. Narrowing by query rather than by "run as platform
+/// staff" means it holds no matter what tenant header the request happened to carry.
+/// </para>
+///
+/// <para>
+/// The <c>target</c> field is the roadmap's explicit target parameter. It accepts exactly one value,
+/// <c>global</c>, and exists so that seeding the shared library is a stated intention rather than a
+/// default — and so that the day somebody wants a per-organization import, they have to add a value
+/// here and answer the question this controller currently refuses to be asked. It is <b>not</b> an
+/// organization id and must never become one: the organization comes from <c>ITenantContext</c>,
+/// never from the request body (docs/TENANCY/TENANCY.md §1.3).
+/// </para>
+/// </summary>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminSeederController(LearningDbContext database, ILogger<AdminSeederController> logger) : ControllerBase
 {
+    /// <summary>The only accepted value of the <c>target</c> field: the shared base library.</summary>
+    public const string GlobalTarget = "global";
+
+    private static readonly string TargetRejectionMessage =
+        $"target must be '{GlobalTarget}'. The seeder writes the shared base library "
+        + "(organization_id IS NULL) and cannot be pointed at a customer's content — an organization "
+        + "customizes the base library through its profile or an override, never through an import.";
+
+    /// <summary>
+    /// Every read below goes through one of these. They are the boundary: the query filter alone
+    /// would admit the caller's own organization's rows.
+    /// </summary>
+    private IQueryable<Skill> GlobalSkills => database.Skills.Where(skill => skill.OrganizationId == null);
+
+    private IQueryable<Topic> GlobalTopics => database.Topics.Where(topic => topic.OrganizationId == null);
+
+    private IQueryable<Lesson> GlobalLessons => database.Lessons.Where(lesson => lesson.OrganizationId == null);
+
+    private IQueryable<Exercise> GlobalExercises => database.Exercises.Where(exercise => exercise.OrganizationId == null);
+
+    private static bool IsGlobalTarget(string? target)
+        => string.Equals(target?.Trim(), GlobalTarget, StringComparison.OrdinalIgnoreCase);
+
     [HttpPost("admin/seeder/skills")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<SkillsImportResultDto>> ImportSkills(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<SkillsImportResultDto>> ImportSkills(
+        IFormFile file,
+        [FromForm] string? target = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsGlobalTarget(target))
+            return BadRequest(new { message = TargetRejectionMessage });
+
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
+        var existingSkills = await GlobalSkills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
         var state = new SkillsImportState();
 
         try
@@ -85,6 +144,9 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             var skill = new Skill
             {
                 Id = Guid.NewGuid(),
+                // Phase 40.19: stated, not left to the default. A row the seeder writes belongs to
+                // the shared library and to no customer.
+                OrganizationId = null,
                 IconicName = iconicName,
                 Title = title,
                 Description = description,
@@ -99,16 +161,22 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/topics")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<TopicsImportResultDto>> ImportTopics(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<TopicsImportResultDto>> ImportTopics(
+        IFormFile file,
+        [FromForm] string? target = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsGlobalTarget(target))
+            return BadRequest(new { message = TargetRejectionMessage });
+
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var skillsByIconicName = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
-        var existingTopics = await database.Topics.ToListAsync(cancellationToken);
+        var skillsByIconicName = await GlobalSkills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
+        var existingTopics = await GlobalTopics.ToListAsync(cancellationToken);
         var state = new TopicsImportState();
 
         try
@@ -167,6 +235,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             var topic = new Topic
             {
                 Id = Guid.NewGuid(),
+                OrganizationId = null,
                 SkillId = skillId,
                 IconicName = iconicName,
                 Title = title,
@@ -180,17 +249,23 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/lessons")]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<LessonsImportResultDto>> ImportLessons(
+        IFormFile file,
+        [FromForm] string? target = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsGlobalTarget(target))
+            return BadRequest(new { message = TargetRejectionMessage });
+
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var topicsByIconicName = await database.Topics.ToDictionaryAsync(topic => topic.IconicName, cancellationToken);
-        var allLessons = await database.Lessons.ToListAsync(cancellationToken);
-        var allExercises = await database.Exercises.ToListAsync(cancellationToken);
+        var topicsByIconicName = await GlobalTopics.ToDictionaryAsync(topic => topic.IconicName, cancellationToken);
+        var allLessons = await GlobalLessons.ToListAsync(cancellationToken);
+        var allExercises = await GlobalExercises.ToListAsync(cancellationToken);
         var state = new LessonsImportState();
 
         try
@@ -266,18 +341,24 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     [HttpPost("admin/seeder/bundle")]
     [RequestSizeLimit(20 * 1024 * 1024)]
-    public async Task<ActionResult<BundleImportResultDto>> ImportBundle(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<BundleImportResultDto>> ImportBundle(
+        IFormFile file,
+        [FromForm] string? target = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsGlobalTarget(target))
+            return BadRequest(new { message = TargetRejectionMessage });
+
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
 
         if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingSkills = await database.Skills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
-        var existingTopics = await database.Topics.ToListAsync(cancellationToken);
-        var allLessons = await database.Lessons.ToListAsync(cancellationToken);
-        var allExercises = await database.Exercises.ToListAsync(cancellationToken);
+        var existingSkills = await GlobalSkills.ToDictionaryAsync(skill => skill.IconicName, cancellationToken);
+        var existingTopics = await GlobalTopics.ToListAsync(cancellationToken);
+        var allLessons = await GlobalLessons.ToListAsync(cancellationToken);
+        var allExercises = await GlobalExercises.ToListAsync(cancellationToken);
 
         var skillsState = new SkillsImportState();
         var topicsState = new TopicsImportState();
@@ -427,7 +508,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
     [HttpGet("admin/seeder/skills/export")]
     public async Task<ActionResult<IReadOnlyList<SkillExportDto>>> ExportSkills(CancellationToken cancellationToken = default)
     {
-        var skills = await database.Skills.AsNoTracking()
+        var skills = await GlobalSkills.AsNoTracking()
             .OrderBy(skill => skill.OrderInTree).ThenBy(skill => skill.IconicName)
             .ToListAsync(cancellationToken);
 
@@ -442,9 +523,9 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
     [HttpGet("admin/seeder/topics/export")]
     public async Task<ActionResult<IReadOnlyList<TopicExportDto>>> ExportTopics(CancellationToken cancellationToken = default)
     {
-        var skillIconicById = await database.Skills.AsNoTracking()
+        var skillIconicById = await GlobalSkills.AsNoTracking()
             .ToDictionaryAsync(skill => skill.Id, skill => skill.IconicName, cancellationToken);
-        var topics = await database.Topics.AsNoTracking().ToListAsync(cancellationToken);
+        var topics = await GlobalTopics.AsNoTracking().ToListAsync(cancellationToken);
 
         var payload = topics
             .OrderBy(topic => skillIconicById.GetValueOrDefault(topic.SkillId, "")).ThenBy(topic => topic.OrderInSkill)
@@ -459,9 +540,9 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
     [HttpGet("admin/seeder/lessons/export")]
     public async Task<ActionResult<IReadOnlyList<LessonExportDto>>> ExportLessons(CancellationToken cancellationToken = default)
     {
-        var topicIconicById = await database.Topics.AsNoTracking()
+        var topicIconicById = await GlobalTopics.AsNoTracking()
             .ToDictionaryAsync(topic => topic.Id, topic => topic.IconicName, cancellationToken);
-        var lessons = await database.Lessons.AsNoTracking().ToListAsync(cancellationToken);
+        var lessons = await GlobalLessons.AsNoTracking().ToListAsync(cancellationToken);
         var exercisesByLesson = await LoadExercisesByLessonAsync(cancellationToken);
 
         var payload = lessons
@@ -479,11 +560,11 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
     [HttpGet("admin/seeder/bundle/export")]
     public async Task<ActionResult<BundleExportDto>> ExportBundle(CancellationToken cancellationToken = default)
     {
-        var skills = await database.Skills.AsNoTracking()
+        var skills = await GlobalSkills.AsNoTracking()
             .OrderBy(skill => skill.OrderInTree).ThenBy(skill => skill.IconicName)
             .ToListAsync(cancellationToken);
-        var topics = await database.Topics.AsNoTracking().ToListAsync(cancellationToken);
-        var lessons = await database.Lessons.AsNoTracking().ToListAsync(cancellationToken);
+        var topics = await GlobalTopics.AsNoTracking().ToListAsync(cancellationToken);
+        var lessons = await GlobalLessons.AsNoTracking().ToListAsync(cancellationToken);
         var exercisesByLesson = await LoadExercisesByLessonAsync(cancellationToken);
 
         var topicsBySkill = topics.GroupBy(topic => topic.SkillId)
@@ -509,7 +590,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
 
     private async Task<Dictionary<Guid, List<Exercise>>> LoadExercisesByLessonAsync(CancellationToken cancellationToken)
     {
-        var exercises = await database.Exercises.AsNoTracking().ToListAsync(cancellationToken);
+        var exercises = await GlobalExercises.AsNoTracking().ToListAsync(cancellationToken);
         return exercises
             .GroupBy(exercise => exercise.LessonId)
             .ToDictionary(group => group.Key, group => group.OrderBy(exercise => exercise.OrderInLesson).ToList());
@@ -552,6 +633,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
         var lesson = new Lesson
         {
             Id = lessonId,
+            OrganizationId = null,
             TopicId = topicId,
             Title = title,
             OrderInTopic = orderInTopic,
@@ -581,6 +663,7 @@ public sealed class AdminSeederController(LearningDbContext database, ILogger<Ad
             var exercise = new Exercise
             {
                 Id = Guid.NewGuid(),
+                OrganizationId = null,
                 LessonId = lesson.Id,
                 Type = type,
                 OrderInLesson = orderInLesson,
