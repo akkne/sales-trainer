@@ -270,6 +270,39 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 
 ---
 
+## Programme (Phase 40.17)
+
+The learner's own view of the frozen curriculum they are pinned to, and the only route in the system
+that moves a pin. Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.5.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /program | — | `MyProgramDto` |
+| POST | /program/switch | `{targetProgramVersionId}` | `MyProgramDto` (409 if the target cannot be switched to) |
+
+`MyProgramDto`: `{isEnrolled, programVersionId, programVersionNumber, enrolledAt, switchedAt, items[], latestPublishedProgramVersionId, latestPublishedProgramVersionNumber, switchAvailable, pendingDiff}`
+`ProgramItemDto`: `{id, skillId, lessonId, lessonVersionId, lessonVersionNumber, lessonTitle, orderIndex}`
+
+`lessonTitle` is read out of the **pinned snapshot**, not off the live `Lessons` row. Showing the
+current title next to an old pin is exactly the retroactive substitution the phase exists to stop;
+`null` means the snapshot is no longer visible, which is a truer answer than the new title.
+
+`isEnrolled: false` is a normal answer, not an error. An organization that has published no
+programme version has no pins, and its people go on reading the live skill tree as they always have
+— enrollment narrows and freezes, it does not gate (see [DECISIONS.md](DECISIONS.md), 2026-08-17).
+
+`pendingDiff` is present only when `switchAvailable` is true, and is the same `ProgramDiffDto` the
+admin diff route returns. **Nothing about it is applied until the learner calls `/program/switch`.**
+
+`POST /program/switch` acts on the caller's own pin and takes no user id; there is deliberately no
+route by which anyone moves anybody else's. The target version is **named** rather than implied, so
+that a version published between showing the diff and accepting it cannot become the one the learner
+lands on. 409 covers all three refusals — not enrolled, target is not a published version of this
+organization, target is the version they are already on — because each of them means "there is
+nothing here to switch to" and none should resolve into a move nobody asked for.
+
+---
+
 ## Lessons & Exercises
 
 | Method | Path | Body | Response |
@@ -579,6 +612,69 @@ endpoint writes nothing and counts only the caller's own organization's attempts
 `UserExerciseAttempts` is plain equality, so an organization administrator asking about a global
 lesson gets their own team's numbers and nobody else's, which is exactly what a РОП is entitled to
 ask.
+
+### Programme versions and enrollment (Phase 40.17)
+
+The РОП's curriculum: an ordered list of references, frozen on publish, and who is standing on which
+frozen copy. Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.5.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/program/versions | — | `ProgramVersionSummaryDto[]`, newest first |
+| GET | /admin/program/versions/:programVersionId | — | `ProgramVersionDto` |
+| GET | /admin/program/versions/:programVersionId/diff/:baselineProgramVersionId | — | `ProgramDiffDto` (from baseline → version) |
+| POST | /admin/program/versions/draft | — | `ProgramVersionDto` (the organization's single draft, created if absent) |
+| POST | /admin/program/versions/publish | — | `PublishProgramVersionResultDto` (409 if there is no draft) |
+| GET | /admin/program/enrollments | — | `ProgramEnrollmentDto[]` |
+| POST | /admin/program/enrollments | `{userId}` | `ProgramEnrollmentDto` (409 if nothing is published yet) |
+
+`ProgramVersionSummaryDto`: `{id, versionNumber, status, itemCount, enrollmentCount, createdBy, createdAt, publishedAt}`
+`ProgramVersionDto`: `{id, versionNumber, status, createdBy, createdAt, publishedAt, items[]}`
+`PublishProgramVersionResultDto`: `{version, createdNewVersion}`
+`ProgramEnrollmentDto`: `{userId, programVersionId, programVersionNumber, previousProgramVersionId, enrolledAt, switchedAt}`
+
+`POST .../draft` re-derives the draft's items from the live skill tree every time it is called:
+skills by their position in the tree, topics by theirs, lessons by theirs, archived lessons left out.
+Each item is pinned to the lesson's newest published version, minting a version 1 for a lesson that
+has never been published — through the same resolver an exercise attempt goes through, so a
+programme and the progress recorded against it can never disagree about which snapshot a lesson
+currently is.
+
+`createdNewVersion: false` means the draft's items were identical to the last published version's:
+nothing was frozen, the draft was discarded, and the existing version comes back. This matters more
+than the lesson equivalent — a version that changed nothing would still tell every enrolled learner
+that a new programme is waiting and then show them an empty diff, which is how a switch notice stops
+being read.
+
+`ProgramDiffDto`: `{fromProgramVersionId, fromVersionNumber, toProgramVersionId, toVersionNumber, addedLessons[], removedLessons[], changedLessons[], movedLessons[], hasBreakingChanges}`
+`ProgramDiffLessonDto` (added/removed): `{lessonId, skillId, lessonVersionId, lessonVersionNumber, lessonTitle, orderIndex}`
+`ProgramDiffVersionChangeDto` (changed): `{lessonId, skillId, lessonTitle, fromLessonVersionId, fromLessonVersionNumber, toLessonVersionId, toLessonVersionNumber, isBreaking}`
+`ProgramDiffMoveDto` (moved): `{lessonId, lessonTitle, fromSkillId, toSkillId, fromOrderIndex, toOrderIndex}`
+
+Four buckets rather than one list, because they mean four different things to whoever decides.
+`movedLessons` is the whole content of a "reorder the skills" edit and is the proof that such an edit
+touched no lesson — same lesson, same pinned snapshot, different place.
+
+`isBreaking` on a changed lesson is **not** read off the target version's own flag. A programme can
+skip several lesson versions at once, so the answer is "did any published version of this lesson
+between the two pins declare itself breaking" — every version strictly after the lower of the two
+version numbers and up to and including the higher, so that a move back to an older programme is
+reported just as loudly. A pin whose snapshot is missing or invisible counts as breaking: "the
+content changed and nobody can say how" is a breaking change.
+
+**Enrollment is asymmetric, and that asymmetry is the block.** `POST /admin/program/enrollments`
+puts a learner with no pin on the newest published version and is idempotent — a learner who already
+has a pin comes back **unchanged**, not moved. An administrator re-running it after publishing
+therefore enrolls the newcomers and leaves everybody mid-course exactly where they were. Moving an
+existing pin is the learner's own act (`POST /program/switch`), and no admin route does it.
+
+**Authorization is one-part, unlike the lesson-version routes above.** `RequireOrgAdmin` and nothing
+else: there is no such thing as a global programme — `ProgramVersions.OrganizationId` is `NOT NULL`
+and the RLS policy is plain equality — so the "is this the global library?" question that forced a
+second gate onto lesson publishing has no analogue here. The write routes do refuse a caller with no
+organization in context at all (403): platform staff satisfy `RequireOrgAdmin` without holding a
+membership, and a programme with no owner is not a thing that can be written. As everywhere, the
+organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
 ### Exercises
 | Method | Path | Body | Response |
