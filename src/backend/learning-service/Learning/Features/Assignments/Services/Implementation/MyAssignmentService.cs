@@ -38,23 +38,7 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
 
         await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
-        var now = DateTime.UtcNow;
-
-        var rows = await (
-                from record in databaseContext.AssignmentProgressRecords.AsNoTracking()
-                join assignment in databaseContext.Assignments.AsNoTracking()
-                    on record.AssignmentId equals assignment.Id
-                where record.UserId == userId
-                      && assignment.Status == AssignmentStatuses.Active
-                      // "пока не выполнено": a completed assignment stops taking the top of the
-                      // screen. failed_threshold stays — the work is finished and the bar was not
-                      // met, and hiding it would leave the person who most needs another attempt
-                      // with no way back to it.
-                      && record.Status != AssignmentProgressStatuses.Completed
-                      // An assignment scheduled to open later is not yet this person's problem.
-                      && (assignment.OpensAt == null || assignment.OpensAt <= now)
-                select new { Record = record, Assignment = assignment })
-            .ToListAsync(cancellationToken);
+        var rows = await ReadOpenRowsAsync(userId, cancellationToken);
 
         if (rows.Count == 0)
         {
@@ -92,6 +76,96 @@ internal sealed class MyAssignmentService(LearningDbContext databaseContext) : I
                 row.Record.CompletedAt))
             .ToList();
     }
+
+    /// <summary>
+    /// Phase 40.23. Finds the practice conversation this person owes on one dialog mode.
+    ///
+    /// <para>
+    /// It shares <see cref="ReadOpenRowsAsync"/> with the screen above rather than writing a
+    /// narrower query, which keeps one definition of "an assignment this person currently owes" —
+    /// including the parts that are easy to forget, like an assignment whose opening date has not
+    /// arrived. A second definition here would eventually let ai-service inject a persona for work
+    /// the home screen does not show.
+    /// </para>
+    ///
+    /// <para>
+    /// It reads the <b>stored</b> content rather than the DTO the browser gets, because the persona
+    /// is deliberately absent from that DTO: a persona the learner can read before the conversation
+    /// starts is a rehearsal against a known script, and a persona the learner can send is one they
+    /// can rewrite.
+    /// </para>
+    /// </summary>
+    public async Task<AssignmentPracticeContextDto?> GetPracticeContextAsync(
+        Guid userId,
+        string dialogModeKey,
+        CancellationToken cancellationToken = default)
+    {
+        var modeKey = (dialogModeKey ?? string.Empty).Trim();
+        if (userId == Guid.Empty || modeKey.Length == 0)
+        {
+            return null;
+        }
+
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var rows = await ReadOpenRowsAsync(userId, cancellationToken);
+
+        // Nearest deadline first, so when a repeat (40.24) and its original both name the same mode
+        // the one they are closest to being late for wins.
+        foreach (var row in rows.OrderBy(row => row.Assignment.Deadline ?? DateTime.MaxValue))
+        {
+            var item = AssignmentDocumentSerializer
+                .DeserializeContent(row.Assignment.Content)
+                .FirstOrDefault(candidate =>
+                    candidate.Kind == AssignmentContentItemKinds.DialogScenario
+                    && string.Equals(candidate.Reference, modeKey, StringComparison.Ordinal));
+
+            if (item is null)
+            {
+                continue;
+            }
+
+            return new AssignmentPracticeContextDto(
+                row.Assignment.Id,
+                row.Assignment.Title,
+                row.Assignment.Goal,
+                item.Persona?.Name,
+                item.Persona?.Position,
+                item.Persona?.Personality,
+                item.Persona?.Difficulty);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Phase 40.23. The one definition of "an assignment this person currently owes", shared by
+    /// both public methods so the two can never drift apart.
+    /// </summary>
+    private async Task<IReadOnlyList<OpenAssignmentRow>> ReadOpenRowsAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+
+        return await (
+                from record in databaseContext.AssignmentProgressRecords.AsNoTracking()
+                join assignment in databaseContext.Assignments.AsNoTracking()
+                    on record.AssignmentId equals assignment.Id
+                where record.UserId == userId
+                      && assignment.Status == AssignmentStatuses.Active
+                      // "пока не выполнено": a completed assignment stops taking the top of the
+                      // screen. failed_threshold stays — the work is finished and the bar was not
+                      // met, and hiding it would leave the person who most needs another attempt
+                      // with no way back to it.
+                      && record.Status != AssignmentProgressStatuses.Completed
+                      // An assignment scheduled to open later is not yet this person's problem.
+                      && (assignment.OpensAt == null || assignment.OpensAt <= now)
+                select new OpenAssignmentRow(record, assignment))
+            .ToListAsync(cancellationToken);
+    }
+
+    private sealed record OpenAssignmentRow(AssignmentProgress Record, Assignment Assignment);
 
     private static ActiveAssignmentItemDto ToItemDto(
         AssignmentContentItemDto item,

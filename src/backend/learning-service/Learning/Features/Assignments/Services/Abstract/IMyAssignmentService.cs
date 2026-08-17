@@ -23,4 +23,19 @@ public interface IMyAssignmentService
     Task<IReadOnlyList<ActiveAssignmentDto>> GetActiveForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.23. The persona and framing for a practice conversation this person owes on the
+    /// named dialog mode, or <see langword="null"/> when they owe none.
+    ///
+    /// <para>
+    /// Called by ai-service at session start, not by a browser. When several open assignments name
+    /// the same mode — a repeat from 40.24 is exactly that — the one with the nearest deadline wins,
+    /// because that is the one the person is about to be late for.
+    /// </para>
+    /// </summary>
+    Task<AssignmentPracticeContextDto?> GetPracticeContextAsync(
+        Guid userId,
+        string dialogModeKey,
+        CancellationToken cancellationToken = default);
 }

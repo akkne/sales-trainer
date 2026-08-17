@@ -195,6 +195,8 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
       - Kafka__BootstrapServers=kafka:29092
+      # Phase 40.23: a practice conversation asks learning-service whether it is somebody's assignment.
+      - LearningService__BaseUrl=http://learning:8080
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100

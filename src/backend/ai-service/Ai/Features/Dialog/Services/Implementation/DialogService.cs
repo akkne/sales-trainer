@@ -9,6 +9,7 @@ using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Organizations;
 using Sellevate.BuildingBlocks.ContentTemplating;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Learning;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
@@ -21,6 +22,7 @@ internal sealed class DialogService : IDialogService
     private readonly IDialogEventPublisher _dialogEventPublisher;
     private readonly IScenarioValidationService _scenarioValidationService;
     private readonly IOrganizationProfileProvider _organizationProfileProvider;
+    private readonly IAssignmentPracticeContextClient _assignmentPracticeContextClient;
     private readonly ILogger<DialogService> _logger;
 
     public DialogService(
@@ -31,6 +33,7 @@ internal sealed class DialogService : IDialogService
         IDialogEventPublisher dialogEventPublisher,
         IScenarioValidationService scenarioValidationService,
         IOrganizationProfileProvider organizationProfileProvider,
+        IAssignmentPracticeContextClient assignmentPracticeContextClient,
         ILogger<DialogService> logger)
     {
         _databaseContext = databaseContext;
@@ -40,6 +43,7 @@ internal sealed class DialogService : IDialogService
         _dialogEventPublisher = dialogEventPublisher;
         _scenarioValidationService = scenarioValidationService;
         _organizationProfileProvider = organizationProfileProvider;
+        _assignmentPracticeContextClient = assignmentPracticeContextClient;
         _logger = logger;
     }
 
@@ -160,6 +164,14 @@ internal sealed class DialogService : IDialogService
             customScenarioContext.Scenario = customScenarioContext.Scenario.Trim();
         }
 
+        // Phase 40.23. Asked for, never accepted from the request. If this conversation is a piece
+        // of work somebody was assigned, learning-service says so and supplies the persona; the
+        // learner's client is not consulted, because the learner is the person being graded against
+        // that persona. Resolved once here and frozen on the session, so editing or closing the
+        // assignment mid-conversation cannot change the character they are already talking to.
+        var assignmentPracticeContext =
+            await _assignmentPracticeContextClient.GetPracticeContextAsync(userId, mode.Key, cancellationToken);
+
         var session = new DialogSession
         {
             UserId = userId,
@@ -168,7 +180,8 @@ internal sealed class DialogService : IDialogService
             Status = DialogSessionStatus.Active,
             Messages = [],
             CompanyCallContext = companyCallContext,
-            CustomScenarioContext = customScenarioContext
+            CustomScenarioContext = customScenarioContext,
+            AssignmentPracticeContext = assignmentPracticeContext
         };
 
         await _sessionRepository.InsertAsync(session, cancellationToken);
@@ -233,6 +246,10 @@ internal sealed class DialogService : IDialogService
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(modeChatPrompt, session.CompanyCallContext);
         chatSystemPrompt = CustomScenarioPromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.CustomScenarioContext);
+        // Phase 40.23. Third in the chain and before the organization blocks, for the reason the
+        // ordering comment above gives: human-authored data blocks come after template substitution
+        // and before the compliance rule, which stays last so nothing can qualify it.
+        chatSystemPrompt = AssignmentPracticePromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.AssignmentPracticeContext);
         chatSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
         chatSystemPrompt += OrganizationProfilePromptBuilder.BuildPersonaBannedClaimsBlock(organizationProfile);
         var chatResult = await _openAiChatService.SendChatMessageAsync(chatSystemPrompt, session.Messages, cancellationToken);
@@ -300,6 +317,10 @@ internal sealed class DialogService : IDialogService
 
         var feedbackSystemPrompt = CompanyContextPromptBuilder.BuildFeedbackSystemPrompt(modeFeedbackPrompt, session.CompanyCallContext);
         feedbackSystemPrompt = CustomScenarioPromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.CustomScenarioContext);
+        // Phase 40.23. The grader is told the same thing the character was, so a conversation held
+        // against an assignment's persona is judged as that conversation rather than as a generic
+        // one — which is what makes the score the threshold reads a score of the assigned work.
+        feedbackSystemPrompt = AssignmentPracticePromptBuilder.BuildFeedbackSystemPrompt(feedbackSystemPrompt, session.AssignmentPracticeContext);
         feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildContextBlock(organizationProfile);
         feedbackSystemPrompt += OrganizationProfilePromptBuilder.BuildEvaluationBannedClaimsBlock(organizationProfile);
         var feedbackResult = await _openAiChatService.GenerateFeedbackAsync(feedbackSystemPrompt, session.Messages, xpWeights, cancellationToken);
