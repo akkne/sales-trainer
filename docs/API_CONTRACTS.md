@@ -2094,3 +2094,90 @@ resolve out of it in lesson text, exercise content, grading prompts and persona 
   («ваш продукт», «ваш клиент»), never as blanks and never as visible `{{…}}`.
 
 Syntax, fallbacks and the render-on-read rule: [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
+
+---
+
+## Admin content pipeline (Phase 40.27, learning-service)
+
+The РОП's «структурировать → **остановиться** → сгенерировать» run. Every route is
+`RequireOrgAdmin` and carries `[TenantTransaction]`; the organization comes from the
+gateway-validated header and appears in no route, query string or body
+([TENANCY.md §1.3](TENANCY/TENANCY.md)). Gateway cluster `learning`, routes
+`/admin/content-generation` and `/admin/content-generation/{**catch-all}`.
+
+Full description of the pipeline and why the stop is the whole feature:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content-generation?status= | — | `ContentGenerationJobSummaryDto[]`, newest first |
+| GET | /admin/content-generation/{jobId} | — | `ContentGenerationJobDto` or `404` |
+| POST | /admin/content-generation | `{title, material}` | `201` + `ContentGenerationJobDto` (status `structuring`) |
+| PUT | /admin/content-generation/{jobId}/structure | `ContentStructureDto` | `ContentGenerationJobDto`, `409` outside `awaiting_review` |
+| POST | /admin/content-generation/{jobId}/approve | — | `ContentGenerationJobDto` (status `generating`) |
+| POST | /admin/content-generation/{jobId}/retry | — | `ContentGenerationJobDto`, `409` unless the run failed |
+
+```jsonc
+// ContentStructureDto — the artifact at the checkpoint. Field for field the organization
+// profile of CONTENT_MODEL.md §3, and deliberately a separate draft (DECISIONS.md, 2026-08-18).
+{
+  "product": "…",                                    // or null
+  "icp": "…",                                        // or null
+  "tone": "…",                                       // or null
+  "objections":   [{ "text": "Дорого", "bestResponse": "…" }],   // ≤ 10
+  "scriptStages": ["Приветствие", "Выявление потребности"],      // ≤ 12
+  "glossary":     { "СДЭК": "…" },                               // ≤ 30 terms
+  "bannedClaims": ["гарантированная доходность"]                 // ≤ 20
+}
+
+// ContentGenerationJobDto
+{
+  "id": "…", "title": "…", "status": "awaiting_review",
+  "sourceMaterial": "…",
+  "structure": { /* ContentStructureDto */ },        // null until structuring returns
+  "structuredAt": "…", "approvedAt": null,
+  "producedLessonId": null, "producedLessonVersionId": null,
+  "producedExerciseCount": 0, "generatedAt": null,
+  "failureReason": null,
+  "createdAt": "…", "updatedAt": "…"
+}
+```
+
+Behaviour a caller can observe, and each of these is a decision:
+
+- **The two long halves are asynchronous.** `POST` returns immediately with status `structuring`;
+  a background sweep makes the LLM call and moves the run to `awaiting_review`. The screen polls
+  `GET /admin/content-generation/{jobId}`. Same for `approve` → `generating` → `completed`.
+- **`approve` is idempotent by state.** Approving a run that is already `generating` or `completed`
+  returns it unchanged rather than re-queueing it — a double-clicked button must not buy two lessons.
+  Approving a `structuring` or `failed` run is `409`.
+- **`400` on start** when `material` is under 200 characters or over 60 000, or `title` is blank.
+  The floor is a length, not a judgement: «не хватает примеров возражений» is roadmap 40.28.
+- **`400` on approve** when the structure has no product, no ICP, no objections and no script
+  stages — there would be nothing to generate from.
+- **Every value in a structure is bounded** at 2000 characters and every list is capped, on write and
+  on read, matching the 40.19 render path's caps.
+- **The produced lesson arrives archived.** `producedLessonId` names a real `Lesson` with real
+  `Exercise` rows and a published `LessonVersion`, owned by the caller's organization, invisible to
+  learners until `PUT /admin/lessons/{id}` sends `isArchived: false`. Per-item accept/reject of
+  generated exercises is roadmap 40.32.
+
+**`PUT /admin/lessons/{id}` gained an optional `isArchived` in this block.** Omitted, it leaves the
+flag alone, so existing callers are unaffected. It exists because archiving previously had no reverse
+and a generated lesson would otherwise be stranded.
+
+### Internal (ai-service, not exposed through the gateway)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /ai/content/structure | `{material, knownStructure?}` | `ExtractedContentStructureDto` |
+| POST | /ai/content/generate | `{structure, focus?, maximumExerciseCount}` | `{title, exercises: [{type, content}]}` |
+
+Both are guarded by `InternalServiceAuthFilter` (`X-Internal-Service-Secret`) exactly like
+`POST /ai/evaluate`, and both are stateless — no organization, no database, no job. `503` on any
+provider failure, `400` on a missing or oversized `material`.
+
+**The material is deliberately absent from `/ai/content/generate`.** That is the token saving the
+roadmap asks for, and it is what makes the human's edit at the checkpoint binding rather than
+advisory: a model that could still see the source would keep re-finding the objection the reviewer
+deleted.
