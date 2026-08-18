@@ -478,7 +478,7 @@ except a lease, which is what the lease is for.
 
 `ContentAdaptationSweepService` answers a batch's items — «перепиши все упражнения этапа "закрытие"»,
 or the same sweep asking what is methodically wrong with them instead
-([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6). It is §2.1's ninth row, in the shape the eight
+([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a). It is §2.1's ninth row, in the shape the eight
 above it established: per-organization iteration over a system enumeration, `BYPASSRLS` required for
 the enumeration only, and the seventh `IgnoreQueryFilters()` call site in production code.
 
