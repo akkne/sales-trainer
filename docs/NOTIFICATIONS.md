@@ -25,6 +25,10 @@ In-app notification system with a bell dropdown in the top app bar.
 | `AssignmentIssued`      | learning-service, `assignment.issued` (40.23)       | `/tree?assignment={assignmentId}`         |
 | `AssignmentDeadlineApproaching` | learning-service deadline sweep, `assignment.deadline.approaching` (40.23) | `/tree?assignment={assignmentId}` |
 | `AssignmentReminder`    | learning-service, `assignment.reminder` — a РОП pressed "remind" (40.23) | `/tree?assignment={assignmentId}` |
+| `DialogReviewCommented` | learning-service, `dialog.review.commented` — the РОП annotated a fragment of this person's call (40.25) | `/dialog-reviews?note={noteId}` |
+| `DialogReviewResolved`  | learning-service, `dialog.review.resolved` — the РОП ruled on this person's dispute (40.25) | `/dialog-reviews?note={noteId}` |
+| `AssignmentDeadlineDigest` | learning-service deadline sweep, `assignment.deadline.digest` — **to the РОП**, a day before the deadline, naming who has not started (40.26) | `/admin/assignments/{assignmentId}?action=remind&scope=not_started` |
+| `DialogReviewDisputed`  | learning-service, `dialog.review.disputed` — **to the РОП**, a manager contests an AI score (40.26) | `/admin/dialog-reviews?note={noteId}` |
 
 Streak milestones fire on 3, 7, 14, 30, 60, 90, 180, 365 days.
 
@@ -47,10 +51,23 @@ Domain enum values (stored as integers):
 - `10` — AssignmentIssued *(Phase 40.23)*
 - `11` — AssignmentDeadlineApproaching *(Phase 40.23)*
 - `12` — AssignmentReminder *(Phase 40.23)*
+- `13` — DialogReviewCommented *(Phase 40.25)*
+- `14` — DialogReviewResolved *(Phase 40.25)*
+- `15` — AssignmentDeadlineDigest *(Phase 40.26)* — the first notification in the product addressed
+  to a РОП about somebody else's work
+- `16` — DialogReviewDisputed *(Phase 40.26)*
 
 The three assignment values are separate rather than one type carrying a sub-kind: a single type
 with a discriminator in the body would make the reminder — the escalation that exists because the
 first two notices were ignored — indistinguishable in the inbox from the thing it escalates.
+
+The two 40.26 values are separate from that family for the same reason one step up: the **recipient**
+is different. `AssignmentDeadlineApproaching` says «сделай» to the person who owes the work;
+`AssignmentDeadlineDigest` says «дожми» to the person who assigned it, names the people who have not
+started, and carries the reminder as its action rather than a link to a report. An inbox where those
+two look alike is an inbox where the second one is skipped, and
+[TENANCY/ASSIGNMENTS.md §5](TENANCY/ASSIGNMENTS.md) argues that the second one is where adoption
+actually turns.
 
 ## Backend
 

@@ -46,6 +46,21 @@ public static class Topics
     public const string AssignmentReminder = "assignment.reminder";
 
     /// <summary>
+    /// Phase 40.26. A day before an assignment's deadline, somebody on the team has still not opened
+    /// it — addressed to the organization's administrators rather than to the person who owes the
+    /// work (docs/TENANCY/ASSIGNMENTS.md §5).
+    ///
+    /// <para>
+    /// Separate from <see cref="AssignmentDeadlineApproaching"/> although the same sweep publishes
+    /// both in the same transaction: that one is «сделай», this one is «дожми», and the roadmap's
+    /// claim is that adoption turns on the second. One topic carrying a recipient role would have
+    /// made the digest's dedupe key, its body and its action indistinguishable from the notice it is
+    /// about.
+    /// </para>
+    /// </summary>
+    public const string AssignmentDeadlineDigest = "assignment.deadline.digest";
+
+    /// <summary>
     /// Phase 40.25. The РОП selected a fragment of this person's practice conversation and commented
     /// on it (docs/TENANCY/ASSIGNMENTS.md §4.1). Addressed to the manager whose conversation it was.
     /// </summary>
@@ -71,6 +86,14 @@ public static class Topics
     /// exists to open.
     /// </summary>
     public const string DialogReviewResolved = "dialog.review.resolved";
+
+    /// <summary>
+    /// Phase 40.26. A manager has disputed an AI score and it is waiting for a verdict. Addressed to
+    /// the organization's administrators — the half of the two-way loop 40.25 built the queue for and
+    /// could not push, because nothing in the platform could enumerate an organization's
+    /// administrators until this block widened <c>GET /internal/memberships/active</c>.
+    /// </summary>
+    public const string DialogReviewDisputed = "dialog.review.disputed";
 
     // ── AI Engine (produces) ───────────────────────────────────────────────
     public const string DialogEvaluated = "dialog.evaluated";

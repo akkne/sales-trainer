@@ -23,4 +23,14 @@ public static class NotificationTitles
 
     /// <summary>Phase 40.25. The РОП ruled on a disputed AI score.</summary>
     public const string DialogReviewResolved = "Ваше оспаривание оценки рассмотрено";
+
+    /// <summary>
+    /// Phase 40.26. The day-before digest, addressed to the РОП. The title names the problem rather
+    /// than the object — «Дедлайн задания приближается» is what the manager gets, and a РОП who reads
+    /// the same words assumes it is the same notice and stops opening it.
+    /// </summary>
+    public const string AssignmentDeadlineDigest = "Завтра дедлайн, а команда не начала";
+
+    /// <summary>Phase 40.26. A manager disputed an AI score and it is waiting for the РОП.</summary>
+    public const string DialogReviewDisputed = "Менеджер оспорил оценку";
 }

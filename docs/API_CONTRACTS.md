@@ -676,7 +676,7 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
-### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23, automatic repeats 40.24)
+### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23, automatic repeats 40.24, the РОП's push 40.26)
 
 The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
 what counts as done, and who is where on it. Design:
@@ -692,7 +692,7 @@ what counts as done, and who is where on it. Design:
 | POST | /admin/assignments/:assignmentId/activate | — | `AssignmentDto` (409 if it is not a draft, or has no content) |
 | POST | /admin/assignments/:assignmentId/close | — | `AssignmentDto` (409 if it is not active) |
 | DELETE | /admin/assignments/:assignmentId | — | 204 (409 for anything that has been issued) |
-| POST | /admin/assignments/:assignmentId/remind | — | `AssignmentReminderResultDto` (409 if it is not active) |
+| POST | /admin/assignments/:assignmentId/remind?scope=unfinished\|not_started | — | `AssignmentReminderResultDto` (409 if it is not active or the scope is unknown; **503** when the roster cannot be read) |
 
 Learner-facing (`[Authorize]`, no admin gate, takes no user id — the caller is the token):
 
@@ -705,7 +705,7 @@ gateway**):
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | /internal/memberships/active *(identity-service)* | — | `{userIds: uuid[]}` — active memberships of the organization in the header |
+| GET | /internal/memberships/active *(identity-service)* | — | `{userIds: uuid[], administratorUserIds: uuid[]}` — active memberships of the organization in the header, and (40.26) the subset who administer it |
 | GET | /internal/assignments/practice-context?userId=&modeKey= *(learning-service)* | — | `AssignmentPracticeContextDto`, or 204 when this person owes no conversation on that mode |
 
 `CreateAssignmentRequestDto` / `UpdateAssignmentRequestDto`:
@@ -716,7 +716,17 @@ gateway**):
 `AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, repeatOfAssignmentId, repeatWaveIndex, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
 `repeatOfAssignmentId` / `repeatWaveIndex` (40.24) are set only on a generated repeat and say which wave of which origin it is; both null on anything a human created. There is **no route that creates a repeat** — the sweep does, on its own — and `createdBy` is null on every one of them
 `AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
-`AssignmentReminderResultDto`: `{notifiedCount}`
+`AssignmentReminderResultDto`: `{notifiedCount, scope}`
+
+**`scope` on `POST /remind` (40.26), and the two failure modes it inherited.** `unfinished` is the
+default and 40.23's behaviour — everybody who has not completed it, including the people under the
+threshold. `not_started` is the set the day-before digest names, and it exists because that digest
+carries the remind button: a notice listing five names whose button then messages twelve people is
+the product doing something other than what it just said. The route now also **consults the live
+roster before nudging anybody**, so it can answer 503 the way `POST /activate` does — a progress row
+outlives employment on purpose, and reminding without checking means mailing an ex-employee their
+former employer's homework. `notifiedCount` therefore counts people who both owe the work and still
+work there.
 `ActiveAssignmentDto`: `{id, title, goal, opensAt, deadline, completionRule, content: ActiveAssignmentItemDto[], status, bestScore, attemptCount, firstOpenedAt, completedAt}`
 `ActiveAssignmentItemDto`: `{kind, reference, orderIndex, title, lessonId}` — `title` is null when the referenced content was archived after the assignment was issued, `lessonId` is set only for `lesson_version`. **No persona is ever in this DTO** — see below.
 `AssignmentPracticeContextDto`: `{assignmentId, title, goal, personaName, personaPosition, personaPersonality, personaDifficulty}`

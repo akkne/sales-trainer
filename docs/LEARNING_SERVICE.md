@@ -367,7 +367,7 @@ from a row that cannot change mid-request. Platform-wide callers get the empty p
 mode the query filter admits every organization at once, so picking a row would show Sellevate staff
 a lesson with some customer's product name in it.
 
-### Assignments (Phase 40.21, thresholds 40.22, issuing 40.23, repeats 40.24)
+### Assignments (Phase 40.21, thresholds 40.22, issuing 40.23, repeats 40.24, dashboard 40.25, the РОП's push 40.26)
 
 `Assignments` / `AssignmentProgressRecords` ([ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1). Stage E
 opens here: the РОП turns an internal training session into short, dated, targeted practice for named
@@ -576,6 +576,36 @@ the one place the loop runs back the other way. Full argument in [DECISIONS.md](
   `GET /admin/dialog-sessions[/{id}]`, so `IDialogSessionRepository` stays the single holder of the
   session collection (TENANCY.md §1.6). The screen asks each service for what it owns.
 
+### Non-completion as a working scenario (Phase 40.26)
+
+The block that makes the РОП act instead of read. No new table, no new column, no migration, no new
+job. Full argument in [DECISIONS.md](DECISIONS.md) (2026-08-18); ASSIGNMENTS.md §5.1 is the design.
+
+- **`IOrganizationMemberDirectory` became one call returning two facts.**
+  `GetRosterAsync` → `OrganizationRoster { MemberIds, AdministratorIds }`, from the same
+  `GET /internal/memberships/active`, which identity-service widened with an `administratorUserIds`
+  subset. That capability is what 40.25's dispute push was waiting on. `AdministratorIds` is
+  **nullable and null means "this identity-service predates 40.26"**, which is deliberately not the
+  same value as an empty list: collapsing the two would let a rolling deploy swallow a digest and
+  leave nothing behind to notice.
+- **`AssignmentDeadlineNoticeService` publishes both families in one transaction.** The manager
+  notices it already sent, plus one `assignment.deadline.digest` per administrator naming up to five
+  people who have never opened the assignment, with the true total beside them. **No digest when that
+  list is empty** — «все молодцы» is what teaches a РОП to skip the channel — and no notices at all
+  for an organization whose administrators cannot be addressed, because the stamp is permanent.
+- **`POST /admin/assignments/{id}/remind` gained `?scope=` and a roster read.** `not_started` is the
+  set the digest names and is what its action link asks for; `unfinished` is the default and 40.23's
+  behaviour. The roster read is **fail-closed** (503, like `activate`): this was the last path in the
+  feature that could still mail an ex-employee their former employer's homework.
+- **`DialogReviewService` now pushes a filed dispute** to every administrator except its author, with
+  the manager's name, the grade they contest and their own sentence. That read is **fail-open**: the
+  row is already written and already in the queue, so identity-service being unreachable costs the
+  notice and never the dispute.
+- **One behaviour changed outside this block's own code**: `assignment.reminder`'s dedupe key
+  coarsened from the exact instant to the hour, in notification-service. The digest puts the remind
+  button in front of every administrator at once, and five presses in one meeting used to be five
+  separate messages to the same manager.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -584,7 +614,7 @@ the one place the loop runs back the other way. Full argument in [DECISIONS.md](
 | `UserReplicaConsumer` | platform-global (`RequiresOrganization => false`) | Projects identity's cross-org user table; `UserReplicas` has no organization column. |
 | `OrganizationProfileConsumer` (40.19) | tenant from the envelope (`RequiresOrganization` inherited `true`) | Projects `organization.profile.updated` into `OrganizationProfileReplicas`, which is strict tenant data — so the write happens under ordinary tenant context, with no RLS widening. The first consumer here that does *not* opt out. |
 | `LessonVersionBackfill` (startup, once) | system | Mints "version 1" for never-published lessons; sees the global library only. |
-| `AssignmentDeadlineSweepService` (40.23) | **per-organization iteration** over a **system** enumeration | Warns everybody who has not finished an assignment whose deadline is inside the lead window (24h by default), then stamps `Assignments.DeadlineNoticeSentAt`. The enumeration reads one column — organization ids of rows already known to be due — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before warning anybody, so a progress row belonging to somebody who has left does not mail them their old employer's deadline. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4e and DONT_FORGET. |
+| `AssignmentDeadlineSweepService` (40.23, digest 40.26) | **per-organization iteration** over a **system** enumeration | Warns everybody who has not finished an assignment whose deadline is inside the lead window (24h by default), sends the organization's administrators a digest naming who has not **started** it (40.26, and only when that list is non-empty), then stamps `Assignments.DeadlineNoticeSentAt` — one timestamp for both, because they announce the same date. The enumeration reads one column — organization ids of rows already known to be due — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before warning anybody, so a progress row belonging to somebody who has left does not mail them their old employer's deadline. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4e and DONT_FORGET. |
 
 | `AssignmentRepeatSweepService` (40.24) | **per-organization iteration** over a **system** enumeration | Issues the repeat waves whose day has come, as new assignments linked to their origin. The enumeration reads one column — organization ids of assignments that carry a repeat schedule and were issued recently enough for a wave to still be pending — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before issuing anything, and a failure to read it skips that organization for the tick with nothing recorded, so the next tick retries. **Needs `BYPASSRLS` for the enumeration only** — and this is the job where that matters most, because its output is invisible by nature: nobody notices a repeat that was never created. See [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4f and DONT_FORGET. |
 
@@ -677,6 +707,8 @@ open once the current one is finished. Regression covered by
 | `assignment.progress.changed` (40.25) | a progress row moves between the four funnel states | `{ assignmentId, userId, previousStatus, status, bestScore, attemptCount }` |
 | `dialog.review.commented` (40.25) | the РОП comments on a fragment of somebody's graded call | `{ noteId, userId, sessionId, quotedText, comment }` |
 | `dialog.review.resolved` (40.25) | the РОП rules on a disputed AI score | `{ noteId, userId, sessionId, outcome, disputedScore, adjustedScore, resolution }` |
+| `assignment.deadline.digest` (40.26) | the deadline sweep, once per assignment per **administrator**, only when somebody has not started | `{ assignmentId, administratorUserId, title, deadline, notStartedCount, notStartedNames }` |
+| `dialog.review.disputed` (40.26) | a manager files a score dispute, once per **administrator** except its author | `{ noteId, administratorUserId, subjectUserId, subjectDisplayName, sessionId, disputedScore, comment }` |
 
 The first three match the gamification-service consumer contract verbatim
 (`ExerciseCompletedEvent`, `LessonCompletedEvent`, `SkillCompletedEvent`). Consumed by

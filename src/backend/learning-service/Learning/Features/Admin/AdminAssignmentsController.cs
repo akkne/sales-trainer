@@ -181,10 +181,20 @@ public sealed class AdminAssignmentsController(
     /// <summary>
     /// Phase 40.23. The one-click nudge docs/TENANCY/ASSIGNMENTS.md §5 asks for, addressed at
     /// everybody on the assignment who has not finished.
+    ///
+    /// <para>
+    /// Phase 40.26 made this the endpoint behind the deadline digest's action link and gave it a
+    /// <paramref name="scope"/> for it: <c>not_started</c> nudges exactly the people that notice
+    /// named, and the default <c>unfinished</c> is 40.23's behaviour unchanged. It can now also fail
+    /// the way issuing fails — the live roster is consulted before anybody is nudged, so an
+    /// unreachable identity-service is a 503 and a retry rather than an email to somebody's former
+    /// employee.
+    /// </para>
     /// </summary>
     [HttpPost("admin/assignments/{assignmentId:guid}/remind")]
     public async Task<ActionResult<AssignmentReminderResultDto>> Remind(
         Guid assignmentId,
+        [FromQuery] string? scope = null,
         CancellationToken cancellationToken = default)
     {
         var refusal = RefuseIfNoOrganization();
@@ -192,13 +202,24 @@ public sealed class AdminAssignmentsController(
 
         try
         {
-            var result = await assignmentService.RemindAsync(assignmentId, cancellationToken);
+            var result = await assignmentService.RemindAsync(assignmentId, scope, cancellationToken);
 
             return result is null ? NotFound() : Ok(result);
         }
         catch (AssignmentValidationException validationException)
         {
             return Conflict(new { message = validationException.Message });
+        }
+        catch (AssignmentAudienceUnavailableException unavailableException)
+        {
+            logger.LogWarning(
+                unavailableException,
+                "Assignment {AssignmentId} reminder was not sent: the organization roster could not be read.",
+                assignmentId);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = unavailableException.Message });
         }
     }
 

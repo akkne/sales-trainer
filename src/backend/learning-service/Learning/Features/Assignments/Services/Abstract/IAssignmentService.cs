@@ -52,9 +52,19 @@ public interface IAssignmentService
     /// <summary>
     /// Phase 40.23. Nudges everybody on an active assignment who has not completed it. Returns
     /// <see langword="null"/> when there is no such assignment in the caller's organization.
+    ///
+    /// <para>
+    /// Phase 40.26 gave it a <paramref name="scope"/> — <c>unfinished</c> (the default, and 40.23's
+    /// behaviour) or <c>not_started</c>, the set the deadline digest names — and made it consult the
+    /// live roster first. It therefore raises <c>AssignmentAudienceUnavailableException</c> when
+    /// identity-service cannot be reached, exactly as issuing does: reminding without the roster
+    /// means mailing an ex-employee their former employer's homework, and 40.23 refused that in the
+    /// sweep for the same reason.
+    /// </para>
     /// </summary>
     Task<AssignmentReminderResultDto?> RemindAsync(
         Guid assignmentId,
+        string? scope = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Ends it: <c>active → closed</c>. There is no way back, by design.</summary>

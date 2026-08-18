@@ -50,6 +50,55 @@ public sealed record AssignmentReminderEvent(
     DateTime RequestedAt);
 
 /// <summary>
+/// Phase 40.26. A day before the deadline, these people have still not opened the assignment — sent
+/// to one administrator of the organization (docs/TENANCY/ASSIGNMENTS.md §5).
+///
+/// <para>
+/// <b>One event per administrator, like every other family here</b>, because notification-service
+/// addresses a user id and dedupes per recipient. The alternative — one event carrying the list of
+/// administrators — would move the fan-out into the consumer, where a partial failure loses part of
+/// a batch instead of retrying one message.
+/// </para>
+///
+/// <para>
+/// <b>The names travel with the event, and there are at most a handful of them.</b> The whole point
+/// of the notice is that it opens with «Иванов и Петров не начали»: a digest that says "somebody has
+/// not started" is a report, and the roadmap's requirement is precisely that this not be a report.
+/// notification-service has no database and no business reading learning-db, so what it cannot be
+/// told it cannot show. <see cref="NotStartedCount"/> is the true total and
+/// <see cref="NotStartedNames"/> is the readable prefix of it — a body listing forty names is a body
+/// nobody reads either.
+/// </para>
+/// </summary>
+public sealed record AssignmentDeadlineDigestEvent(
+    Guid AssignmentId,
+    Guid AdministratorUserId,
+    string Title,
+    DateTime Deadline,
+    int NotStartedCount,
+    IReadOnlyList<string> NotStartedNames);
+
+/// <summary>
+/// Phase 40.26. A manager disputed an AI score; it is now waiting for a verdict from whoever
+/// administers the organization (docs/TENANCY/ASSIGNMENTS.md §4.1).
+///
+/// <para>
+/// This is the notice 40.25 wrote its queue for and could not send. <see cref="SubjectDisplayName"/>
+/// travels because a dispute the РОП cannot attribute to a person is one more queue item rather than
+/// a thing to do, and <see cref="Comment"/> because the manager's own sentence is the whole content
+/// of the complaint.
+/// </para>
+/// </summary>
+public sealed record DialogReviewDisputedEvent(
+    Guid NoteId,
+    Guid AdministratorUserId,
+    Guid SubjectUserId,
+    string? SubjectDisplayName,
+    string SessionId,
+    int? DisputedScore,
+    string Comment);
+
+/// <summary>
 /// Phase 40.25. One person's standing on one assignment moved between the four funnel states
 /// (docs/TENANCY/ASSIGNMENTS.md §4).
 ///

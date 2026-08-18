@@ -3,9 +3,11 @@
 **Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD), so is
 §1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation), so is §1.3 (Phase 40.23 —
 issuing, the manager's screen and the three notices), so is §2.1 (Phase 40.24 — automatic repeats),
-and so is **§4 and §4.1 (Phase 40.25 — the funnel, the heat map, the quotes and the two-way loop)**,
-as API and as data. Everything else on this page is still design: §2/§3 the AI pipeline is Stage F
-(40.27+), and §5's non-completion push is 40.26.
+so is §4 and §4.1 (Phase 40.25 — the funnel, the heat map, the quotes and the two-way loop), and so
+is **§5's second mine (Phase 40.26 — the day-before digest to the РОП, the one-click reminder behind
+it, and the dispute push 40.25 could not send)**, as API and as data. Everything else on this page is
+still design: §2/§3 the AI pipeline is Stage F (40.27+), and §5's *first* mine — the sufficiency gate
+on thin input — is 40.28.
 
 **One thing to read §4 with:** 40.25 shipped the whole of it as endpoints and one new table, and the
 РОП has no screen to see any of it on. The admin panel split is 40.20 and it is waiting on the
@@ -140,7 +142,7 @@ because the first two were ignored. The deadline sweep lives in learning-service
 assignments, deadlines and progress; notification-service has no database) and runs as
 per-organization iteration over a system enumeration, per
 [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) §4e. The notice goes to the person who owes the work; the
-РОП's "who has not started" digest is still §5's, i.e. 40.26's.
+РОП's "who has not started" digest arrived in 40.26 as the second half of the same tick (§5.1).
 
 ### 1.2 What 40.21 built, and the five forks it had to settle
 
@@ -419,12 +421,16 @@ silence recreates the black box. And **one open dispute per conversation**, by p
 a queue that can be flooded with duplicates of one complaint is a queue the РОП stops opening. It is
 partial, so the same call may be disputed again after a verdict.
 
-Two things this does **not** have, both stated plainly because both look like bugs from the outside.
-**The РОП gets no push when a dispute arrives** — notifications are addressed to a user id and
-nothing in the platform can enumerate an organization's administrators; the dispute lands in the
-queue the dashboard reads, and the push belongs with 40.26. And **the РОП has no screen** for any of
-§4 or §4.1; the manager's half — the dispute button in the feedback modal and the `/dialog-reviews`
-inbox — did ship. Both are in [DONT_FORGET.md](../DONT_FORGET.md).
+Two things 40.25 shipped without, both stated plainly because both looked like bugs from the outside.
+**The РОП got no push when a dispute arrived** — notifications are addressed to a user id and nothing
+in the platform could enumerate an organization's administrators. **40.26 closed that**: widening
+`GET /internal/memberships/active` with an `administratorUserIds` subset (§5.1) gave the platform the
+address, and filing a dispute now publishes `dialog.review.disputed` to each administrator except its
+own author, carrying the manager's name, the grade they contest and their own sentence. That read is
+**fail-open**: identity-service being unreachable costs the notice, never the dispute, because the
+row is already written and already in the queue the dashboard reads. And **the РОП still has no
+screen** for any of §4 or §4.1; the manager's half — the dispute button in the feedback modal and the
+`/dialog-reviews` inbox — did ship. The screen is in [DONT_FORGET.md](../DONT_FORGET.md).
 
 ---
 
@@ -442,13 +448,79 @@ customer churns. So non-completion must be visible *and* immediately actionable:
 one-click reminder. Adoption does not fail on content quality — it fails on whether the РОП pushes
 their team. Design for that.
 
+### 5.1 What 40.26 built for the second mine, and the six choices that carry it
+
+No new table, no new column, no migration, and no new background job — the whole block is one new
+capability in identity-service, two notification families, and a scope on a button that already
+existed. Eight forks are recorded with their rejected alternatives in
+[DECISIONS.md](../DECISIONS.md) (2026-08-18); these six change how the rest of this page reads.
+
+- **The platform can now name an organization's administrators, and that is the block's real
+  unlock.** Every РОП-facing notice was blocked on the same missing fact, which is why 40.25's
+  dispute push was deferred *here* rather than fixed there. `GET /internal/memberships/active` gained
+  `administratorUserIds` — a **subset of the ids it already returned**, not a role per member.
+  Returning roles would have answered the question by publishing the organization's role directory to
+  every service holding the shared secret, and nothing in learning-service ever asks "what is this
+  person"; it asks "who should hear about this". Both tenancy administrator roles qualify: they
+  differ only in who may hire and fire, which has nothing to do with who should be told the team is
+  missing a deadline.
+- **It goes to every administrator, not to `created_by`.** Addressing the author is cheaper and
+  quieter and it fails three ways: `created_by` is null on every automatic repeat (40.24), so a
+  wave's digest would have nobody to go to; the author may have left, and 40.23 spent a block making
+  sure the product does not mail ex-employees; and a nudge aimed at one named person is a nudge that
+  dies when they are on holiday, which is precisely the week nobody does the training. The cost is
+  real and worth naming: in an organization with five administrators, five people read the same
+  digest and four of them assume the fifth will act. That is a diffusion the screen can fix (40.20)
+  and the addressing cannot.
+- **Nobody has failed to start ⇒ no notification at all.** The alternative — a digest that says «все
+  молодцы» — is not neutral, it is the message that teaches a РОП the channel is filler, and a
+  channel they have learned to skip is exactly the failure this section is written against. The
+  assignment is still stamped as announced, so the silence costs one tick's work rather than a sweep
+  that re-examines it every half hour.
+- **Only `not_started`, although the sweep knows who is under the threshold.** §1.1 calls «начал,
+  пробовал 4 раза, не дотянул» the most valuable row on the screen, and it is — for coaching. A push
+  telling that person "you have not finished" is the product being obtuse at somebody who knows
+  better than it does. They are on 40.25's dashboard, ordered first, and deliberately not in this
+  notice. The roadmap asks for «список тех, кто не начал» and means it.
+- **The one-click reminder is a deep link with a scope, and the endpoint behind it works today.**
+  `actionUrl` is `/admin/assignments/{id}?action=remind&scope=not_started`, and
+  `POST /admin/assignments/{id}/remind?scope=not_started` answers. Two things follow. The link opens
+  a screen rather than acting by itself, because a URL in an email that messages a team the moment it
+  is opened is a URL a mail scanner can fire. And the **scope had to exist**: 40.23's remind nudged
+  everybody unfinished, which was right while the only way to press it was to be looking at the
+  assignment — a notice naming five people whose button then messages twelve is the product doing
+  something other than what it just said. The screen does not exist yet (40.20 waits on the owner's
+  design), which is the reason the parameters are decided here: whoever draws it reads the action out
+  of the link instead of inventing one.
+- **Two hazards this block created and closed in the same breath.** Putting the button in front of
+  every administrator made five presses of the same reminder possible within a minute, so the
+  reminder's dedupe key coarsened from the exact instant to the hour — presses on different days
+  still reach people, a chorus in one meeting does not. And the reminder now **consults the live
+  roster**, fail-closed like issuing: it was the last path in the feature that could still mail an
+  ex-employee their former employer's homework.
+
+**Idempotency needed nothing new**, and that is the shape to preserve. `DeadlineNoticeSentAt` — the
+column 40.23 added — already answers "have I announced this deadline", the digest describes the same
+date as the notices beside it, and moving the deadline already clears the stamp and re-arms both. A
+second column would have been a second answer to one question. The one case that forced a decision is
+a tick that can read the roster but not the administrators, which means an identity-service older
+than this block: it **skips the organization entirely** rather than sending the manager notices and
+stamping, because a stamp is permanent and the digest would be gone with nothing left to notice.
+Details in [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) §4g.
+
+**What this block did not do, deliberately.** An assignment whose deadline passes still stays
+`active` until somebody closes it — the gap §4c and §4d both recorded as "40.26 owes one". It is not
+in this block's three lines, and closing on a timer takes away the ordinary act of extending a
+deadline that 40.21 kept editable on purpose. It is in [DONT_FORGET.md](../DONT_FORGET.md) as a
+product decision rather than left as a silent omission.
+
 ---
 
 ## 6. Fit with what exists
 
 | Existing | Reuse |
 |----------|-------|
-| `notification-service` | assignment issued / deadline approaching / reminder — **done in 40.23**: three topics, three `NotificationType` values, mapped in `NotificationEventMapper` onto the existing `org:{orgId}:` inbox and the generic email template |
+| `notification-service` | assignment issued / deadline approaching / reminder — **done in 40.23**: three topics, three `NotificationType` values, mapped in `NotificationEventMapper` onto the existing `org:{orgId}:` inbox and the generic email template. **40.26 added the two РОП-facing ones** (`assignment.deadline.digest`, `dialog.review.disputed`) the same way — no template, no schema, no new service |
 | ai-service dialog modes | the assignment's practice dialogue is a `DialogSession` with an injected persona — **done in 40.23**: `AssignmentPracticePromptBuilder`, the same seam `CompanyContextPromptBuilder` defines. The persona is stored on the `dialog_scenario` content item and **fetched by ai-service** rather than carried by the learner's browser, because the browser belongs to the person being graded against it |
 | `analytics-service` | assignment funnel metrics |
 | exercise types ([NEW_EXERCISE_TYPES.md](../NEW_EXERCISE_TYPES.md)) | the 11 existing types are the assignment's content vocabulary — **confirmed in 40.23**: a `lesson_version` item links to `/session/:lessonId`, the ordinary lesson screen, and no renderer was added |

@@ -110,7 +110,9 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
     `friend.request.received`, `friend.request.accepted`, `chat.message.sent`,
     `chat.message.read`, `discuss.reply.created`, `company.followup.due`, and the three
     assignment topics added in Phase 40.23: `assignment.issued`,
-    `assignment.deadline.approaching`, `assignment.reminder`. Each maps to a
+    `assignment.deadline.approaching`, `assignment.reminder`, the two 40.25 review topics
+    `dialog.review.commented` and `dialog.review.resolved`, and the two 40.26 РОП-facing ones
+    `assignment.deadline.digest` and `dialog.review.disputed`. Each maps to a
     notification written to the recipient's Redis inbox via `INotificationEventMapper`.
     `discuss.reply.created` also emails immediately; `chat.message.sent`
     schedules a delayed unread-email and `chat.message.read` cancels it. Unmappable or
@@ -136,6 +138,30 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
     notice, and "you have new practice" is not read differently for being generated. The dedupe key
     is the assignment id, and a repeat is a new one, so redelivery still collapses and a genuine
     second wave still arrives. No mapper, template or `NotificationType` changed in that block.
+
+    **Phase 40.26 added the first two notifications in the product addressed to a РОП about somebody
+    else's work.** `assignment.deadline.digest` is published by the same deadline sweep, in the same
+    transaction, one event per administrator of the organization; `dialog.review.disputed` is
+    published when a manager contests an AI score. Three things about them are worth knowing here:
+
+    - **The digest's `actionUrl` is the feature, not a link to it.**
+      `/admin/assignments/{id}?action=remind&scope=not_started` opens the assignment with the
+      reminder already named and already scoped to the people the body just listed —
+      `docs/TENANCY/ASSIGNMENTS.md` §5 asks for «не отчёт, который РОП может открыть, а адресный пуш
+      с действием», and a link to a dashboard is the report. It is a deep link rather than a URL that
+      acts on its own: a link in an email that messages a team the moment it is opened is a link a
+      mail scanner can fire.
+    - **The body opens with names.** «3 сотрудника не начали» sends its reader somewhere else to find
+      out who; the notice carries up to five names with the true total beside them, because a digest
+      that has to be looked up is the thing it was meant to replace.
+    - **A digest is never sent when nobody has failed to start**, and the mapper refuses a payload
+      claiming otherwise. «Все молодцы» is the message that teaches a РОП the channel is filler.
+
+    The **reminder's dedupe key coarsened from the exact instant to the hour in 40.26**, and that is
+    the one behaviour change this block made to an existing notification. The digest puts the remind
+    button in front of every administrator at once, so five РОПs opening the same notice used to mean
+    five separate reminders landing on one manager inside a minute. Presses on different days still
+    produce different reminders, which is what the key was for.
   - `UserReplicaConsumer` — `user.registered`/`user.updated`/`user.deleted`, projecting a
     minimal `{ email, displayName }` replica into Redis so recipients can be addressed by email.
 

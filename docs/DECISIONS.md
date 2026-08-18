@@ -4,6 +4,220 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## Phase 40.26 — non-completion as a working scenario (2026-08-18)
+
+Eight forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no
+questions, no new tests, nothing executed against any database).
+
+The frame: 40.21–40.25 built the assignment, the threshold, the fan-out, the repeat waves and the
+screen to look at all of it — and the roadmap's own sentence about this block says the screen is not
+where adoption is decided. **«Внедрение упирается не в качество контента, а в то, дожмёт ли РОП
+команду».** So the test every fork below is answered against is not "is this correct" but "does this
+make the РОП act tonight". A report the РОП *might* open fails that test by construction, which is
+why the roadmap phrases the requirement as a push with an action rather than as a screen.
+
+The block has **no migration**, no new table, no new column and no new background job. Its whole
+footprint is one widened internal route, two notification families, a scope on a button that already
+existed, and two behaviour changes to paths 40.23 built.
+
+### Administrators are enumerated as a second list of ids, not as a role per member
+
+**Chosen: `GET /internal/memberships/active` gained `administratorUserIds`** — the subset of the
+`userIds` it already returned whose membership holds `TenancyAdmin` or `TenancySuperAdmin`, filtered
+in identity-service where the roles live. learning-service's `IOrganizationMemberDirectory` collapsed
+to a single `GetRosterAsync` returning both lists from one call.
+
+This is the decision 40.25 explicitly deferred. It wrote the dispute queue, could not push to it, and
+recorded the reason: notifications are addressed to a user id and nothing in the platform could name
+an organization's administrators. It also recorded that widening this route is a change to the
+security surface and deserved a decision of its own rather than a side effect. This is that decision,
+taken as narrowly as the question allows.
+
+**Rejected: returning `role` on every member.** It is the obvious shape, it is one line shorter, and
+it answers a question nobody asked. Every caller in the system wants to know *who should hear about
+this organization*, never *what is this person*; a role per member turns one internal route into the
+organization's role directory, readable in full by anything holding the shared secret. The route's
+own documented property since 40.23 is "ids and nothing else, because the caller already has display
+names in its own replica" — a subset of ids keeps that property intact and a role map breaks it.
+
+**Rejected: a `membership.role.changed` Kafka family and a replica in learning-db.** The same
+alternative 40.23 rejected for the roster itself, failing the same way and worse. A stale replica
+resolves the administrator set to the person who left last month; the digest goes to nobody who is
+still there; nothing errors, and the feature is silently dead for that customer. Its failure is
+invisible precisely because a notification that was never sent leaves no row. The synchronous call
+fails loudly and is retried by the next tick.
+
+**Rejected: not enumerating administrators at all and addressing `Assignment.CreatedBy`.** Cheapest
+of all and it is the next fork below, where it loses on three counts.
+
+### The digest goes to every administrator, not to the assignment's author
+
+**Chosen: one event per active `TenancyAdmin`/`TenancySuperAdmin` of the organization.**
+
+**Rejected: `Assignment.CreatedBy`.** It reads like the right answer — the person who assigned the
+work is the person who should push for it — and it fails three ways, each independently
+disqualifying. `CreatedBy` is **null on every automatic repeat**: 40.24 made a wave a new
+`Assignments` row created by a background sweep with no human pressing anything, so a repeat's digest
+would have no recipient at all, and repeats are exactly the assignments whose completion decays. The
+author **may have left**; 40.23 spent a block making sure the product never mails an ex-employee, and
+this would reintroduce it on a different path. And a nudge aimed at one named person **dies when they
+are away**, which is disproportionately the week nobody does the training.
+
+The cost of the chosen option is real and is recorded rather than argued away: in an organization
+with five administrators, five people read the same digest and four of them assume the fifth will act.
+That diffusion is a screen problem (40.20 can show "напоминание отправлено 18.08 в 10:12") and not an
+addressing problem — the fix for "nobody acted" is never "tell fewer people".
+
+**Rejected: only `TenancySuperAdmin`.** The two roles differ only in who may add and remove people
+(2026-08-16), and nothing about hiring bears on who should be told the team is missing a deadline.
+
+### The digest rides the existing deadline sweep, and reuses its sent-ness column
+
+**Chosen: `AssignmentDeadlineNoticeService` publishes both families in one transaction, stamped by
+the one `DeadlineNoticeSentAt` 40.23 added.**
+
+**Rejected: a second background job.** It looks tidier — one job per audience — and it buys two
+clocks that can disagree about when "a day before" is, two roster reads per organization per tick,
+and two sent-ness stories for one fact. The two notices announce **the same date about the same
+assignment**; they are one act seen from two ends, which is the same argument 40.25 used to put
+coaching notes and disputes in one table.
+
+**Rejected: a second column, `AdminDigestSentAt`.** Considered seriously, because it would let the
+digest be retried when the manager notices have already gone out. Refused because it makes two
+answers to one question — "has this deadline been announced" — and the moment they can disagree,
+somebody has to decide which is right. Extending a deadline already clears the one column and re-arms
+both notices; two columns would have to be cleared together anyway, which is the tell that they are
+one fact.
+
+### A tick that cannot name the administrators does nothing at all
+
+**Chosen: if identity-service answers without `administratorUserIds`, the organization is skipped for
+that tick — no manager notices, no digest, no stamp.** `OrganizationRoster.AdministratorIds` is
+therefore nullable, and null (the field was absent) is deliberately **not** the same value as an
+empty list (the organization genuinely has no administrator).
+
+The only way to see that null is a rolling deploy in which learning-service is on 40.26 and
+identity-service is not yet. The window is minutes.
+
+**Rejected: treating an absent list as empty.** One line shorter and it converts a transient version
+skew into permanent data loss: the sweep would send the manager notices, stamp the deadline as
+announced, and the digest for that assignment would never exist. Nothing would error, no row would be
+missing, and the only evidence would be a РОП who never got told — which is indistinguishable from
+the feature working and nobody having failed to start. This codebase has spent four blocks
+(`BACKGROUND_JOBS.md` §4c–§4f) refusing exactly this shape of silent gap.
+
+**Rejected: sending the manager notices and retrying only the digest next tick.** That is the
+two-column design above, arrived at from the other side, and it costs the same second source of
+truth. Skipping costs one tick — thirty minutes by default, against a lead window of twenty-four
+hours.
+
+### No digest when nobody has failed to start
+
+**Chosen: an empty not-started list means no notification at all.** The assignment is still stamped,
+so the silence costs one tick's work rather than a re-examination every half hour until the deadline.
+
+**Rejected: sending it anyway with a count of zero.** It is not a neutral message. A channel that
+sends «все молодцы» is a channel whose reader learns that opening it is usually wasted, and the one
+notice that matters — the one that says four people have not started — arrives in an inbox that has
+already been trained to skip. That is the failure this whole block is written against, manufactured
+by the block itself. The guard exists in both services: the sweep does not publish it and the mapper
+refuses a payload claiming otherwise, because a defence that lives in one place is one refactor away
+from gone.
+
+### Only `not_started`, although the sweep knows who is under the threshold
+
+**Chosen: the digest names the people whose progress row is `not_started` and who still hold an
+active membership. Nobody else.**
+
+**Rejected: including `failed_threshold`.** §1.1 of `ASSIGNMENTS.md` calls «начал, пробовал 4 раза,
+не дотянул» the most valuable row on the screen, and it is — for **coaching**. A push telling that
+person "you have not finished" is the product being obtuse at somebody who knows better than it does,
+and it is the fastest way to make the notification channel feel stupid. They are already first on
+40.25's dashboard, ordered by attention. The roadmap asks for «список тех, кто не начал» and the
+narrow reading is the correct one.
+
+**Rejected: including `in_progress`.** Same reasoning, weaker case: somebody mid-way through does not
+need a nudge from their boss on day four of five.
+
+### The one-click reminder is a scoped deep link, and the scope had to be invented
+
+**Chosen:** the digest's `actionUrl` is `/admin/assignments/{id}?action=remind&scope=not_started`,
+and `POST /admin/assignments/{id}/remind?scope=not_started` answers today.
+
+**Rejected: an `actionUrl` that performs the reminder by being opened.** It is literally "one click"
+and it is unsafe in a way that has nothing to do with this product: a URL in an email that messages a
+team the moment it is fetched is a URL a corporate mail scanner, a link preview or a prefetching
+client will fire on its own. The РОП would discover they had nudged the team by not opening anything.
+
+**Rejected: reusing `POST /remind` unchanged.** This is the fork that matters. 40.23's remind nudges
+everybody unfinished, which was right while the only way to press it was to be looking at the
+assignment. Put that same button inside a notice that names five people and it messages twelve — the
+product doing something other than what it just told its user it would do. `AssignmentReminderScopes`
+has exactly two values and `unfinished` remains the default, so the older behaviour is untouched.
+
+**Rejected: waiting for 40.20 to design the screen before deciding the link.** The screen does not
+exist and is blocked on the owner. Deciding the parameters now means whoever draws it reads the
+action out of the link instead of inventing one — and the API answers today, so the screen is the
+only missing piece rather than the design being. The honest cost is that the link 404s until the
+screen exists; it is in `docs/DONT_FORGET.md`.
+
+### Two hazards this block created, closed in the same block
+
+**Chosen: `assignment.reminder`'s dedupe key coarsens from the exact instant to the hour.** Before
+this block, a reminder could only be pressed by somebody looking at the assignment. Now every
+administrator gets a notice with the button in it, so five of them opening the same digest after the
+same planning meeting used to mean five separate reminders landing on one manager inside a minute.
+Presses on different days still reach people, which is what the key was for; a chorus in one meeting
+collapses to one message.
+
+**Rejected: a cooldown column on the assignment.** It would let the API tell the truth ("nothing was
+sent, the last reminder was 12 minutes ago") instead of reporting a `notifiedCount` for messages that
+the consumer then dedupes away. It also adds schema and a second sent-ness story to a feature that
+has just spent a fork arguing against exactly that. The residual dishonesty — `notifiedCount` counts
+intent, not delivery — is recorded in `docs/DONT_FORGET.md` rather than papered over.
+
+**Chosen: `POST /remind` now reads the live roster, fail-closed.** A progress row outlives employment
+by design (40.23), so "still owes the work" and "should hear about it" are different sets. The
+deadline sweep has checked this since 40.23 and the manually pressed button was the one path in the
+feature that could still mail an ex-employee their former employer's homework. Fail-closed rather
+than fail-open — a 503 and "press it again" — for the reason issuing is: the wrong answer here sends
+mail that cannot be recalled, whereas a nudge nobody sent can be sent a minute later.
+
+The dispute push takes the **opposite** trade, and the difference is the rule worth carrying forward:
+a read that decides **who is asked to do work** fails loudly; a read that decides **who is told about
+a row that already exists** must never take the row away with it. `DialogReviewService` writes the
+dispute and queues it whatever identity-service says; only the notice is lost, and 40.25's dashboard
+already shows the queue.
+
+### Nothing closes at the deadline, and that is still true after this block
+
+`BACKGROUND_JOBS.md` §4c and §4d both recorded that an assignment whose deadline passes stays
+`active` until somebody closes it, and both said the job that would close it "also has to notify
+people, which is 40.26's whole subject". 40.26 built the notification and **did not** build the
+auto-close.
+
+**Chosen: leave it.** It is not among the block's three roadmap lines, and closing on a timer removes
+the ordinary act 40.21 deliberately kept available — extending a deadline on a running assignment.
+There is also a real product question behind it (does a passed deadline mean the work is no longer
+accepted, or merely late?) that an autonomous run should not answer by writing a sweep. It is in
+`docs/DONT_FORGET.md` as a product decision.
+
+### No schema change, and therefore no `_indexes_concurrently.sql`
+
+Stated explicitly because every block from 40.21 to 40.25 shipped a migration and the next reader
+will look for this one. There is none: the digest is derived from `AssignmentProgressRecords` rows
+and stamped by an existing column, the scope is a query parameter, and the administrator list lives
+in another service's existing table. No index was added either — the sweep's queries are the ones
+40.23 already runs, over `IX_Assignments_OrganizationId_Status_Deadline` and the per-assignment
+progress index 40.21 created.
+
+What does exist is `docs/TENANCY/sql/40.26_deadline_digest_verify.sql`, read-only and never executed
+by anything: it writes out the sweep's own predicate so an operator can see who would be told what
+tonight. That is not verification of a migration; it is the only window onto this feature until the
+РОП has a screen.
+
+---
+
 ## Phase 40.25 — the РОП's dashboard and the two-way feedback loop (2026-08-18)
 
 Nine forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no questions,

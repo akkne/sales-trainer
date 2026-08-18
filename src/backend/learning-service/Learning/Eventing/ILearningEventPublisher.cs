@@ -25,6 +25,20 @@ public interface ILearningEventPublisher
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Phase 40.26. Stages the two РОП-facing notices — the deadline digest and a filed dispute.
+    /// Through the outbox like everything above, and for the digest that matters more than usual: the
+    /// timestamp that records the digest as announced is written in the same transaction, so a crash
+    /// between the two cannot produce an assignment that is marked as announced to nobody.
+    /// </summary>
+    Task PublishAssignmentDeadlineDigestAsync(
+        AssignmentDeadlineDigestEvent payload,
+        CancellationToken cancellationToken = default);
+
+    Task PublishDialogReviewDisputedAsync(
+        DialogReviewDisputedEvent payload,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Phase 40.25. One progress row changed state. Staged in the same transaction as the change,
     /// so the funnel counter analytics-service keeps cannot drift from the rows it describes.
     /// </summary>

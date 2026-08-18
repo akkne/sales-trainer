@@ -58,7 +58,7 @@ superuser onto the `NOBYPASSRLS` role `sellevate_app`
 | identity | `ExpiredRefreshTokenCleanupService` | Deletes expired/revoked refresh tokens | **System** | `EnterSystemMode` at [:56](../../src/backend/identity-service/Identity/Features/Auth/ExpiredRefreshTokenCleanupService.cs) | No — `RefreshTokens` is platform-global, not tenant-scoped |
 | identity | `ExpiredEmailVerificationCleanupService` | Deletes expired verification tokens | **System** | `EnterSystemMode` at [:50](../../src/backend/identity-service/Identity/Features/Auth/ExpiredEmailVerificationCleanupService.cs) | No — same, platform-global table |
 | identity, learning, gamification | `OutboxRelayBackgroundService` | Reads pending outbox rows of every tenant and forwards them to Kafka | **System** — the one legitimate cross-tenant reader in the system | `EnterSystemMode` at [:56](../../src/backend/building-blocks/BuildingBlocks/Outbox/OutboxRelayBackgroundService.cs) | No — `OutboxMessages` carries no RLS policy (it is plumbing, §3 below) |
-| learning | `AssignmentDeadlineSweepService` (40.23) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
+| learning | `AssignmentDeadlineSweepService` (40.23, digest 40.26) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, tells the organization's administrators who has not **started** it, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
 | learning | `AssignmentRepeatSweepService` (40.24) | Re-issues a shortened version of an assignment at the offsets its `repeat_schedule` names (+7 and +21 days by default), as a new assignment linked to its origin | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:87](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs); `EnterSystemMode` at [:134](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs) | **Yes** — the enumeration only |
 | learning | `LessonVersionBackfill` (startup, once) | Mints a published "version 1" for lessons that have never been published, so 40.16's progress backfill has something to bind to | **System** | `EnterSystemMode` in the startup scope of [Program.cs](../../src/backend/learning-service/Learning/Program.cs), the same shape gamification's seeders use | No — it sees the **global** library only, and the content RLS policy admits `OrganizationId IS NULL` rows with no session variable set. An organization's own lessons (40.18) are deliberately out of its reach: their first version comes from their own admin or their own learners, inside that organization's context |
 
@@ -74,7 +74,7 @@ and then dead-lettered. A message is never handled without a decided tenant.
 |---------|----------|--------|------------------------|-----|
 | gamification | `LearningEventsConsumer` | `exercise.completed`, `lesson.completed`, `skill.completed` | `true` (inherited) | Grants XP into tenant-scoped tables |
 | gamification | `DialogEvaluatedConsumer` | `dialog.evaluated` | `true` (inherited) | Same |
-| notification | `NotificationEventConsumer` | thirteen topics — achievements, friends, chat, follow-ups, the three `assignment.*` (40.23) and the two `dialog.review.*` (40.25) | `true` (inherited, [deliberately documented at :48](../../src/backend/notification-service/Notification/Eventing/NotificationEventConsumer.cs)) | Writes into `org:{orgId}:` Redis inboxes; a notification with no organization has no inbox to land in |
+| notification | `NotificationEventConsumer` | fifteen topics — achievements, friends, chat, follow-ups, the four `assignment.*` (three in 40.23, the digest in 40.26) and the three `dialog.review.*` (two in 40.25, `disputed` in 40.26) | `true` (inherited, [deliberately documented at :48](../../src/backend/notification-service/Notification/Eventing/NotificationEventConsumer.cs)) | Writes into `org:{orgId}:` Redis inboxes; a notification with no organization has no inbox to land in |
 | identity | `OrganizationReplicaConsumer` | `organization.created` / `updated` / `suspended` | **`false`**, [:41](../../src/backend/identity-service/Identity/Eventing/OrganizationReplicaConsumer.cs) | The tenant *registry* projection: these events are **about** organizations, they are not **inside** one |
 | ai, learning, gamification, notification, social | `UserReplicaConsumer` (five copies) | `user.registered` / `updated` / `deleted` / `avatar.changed` | **`false`** in all five | `UserReplicas` is deliberately platform-global — a user is a cross-organization identity ([TENANCY.md](TENANCY.md) §4.2) |
 | analytics | `FunnelEventsConsumer` | `user.registered`, `exercise.completed`, `xp.granted`, and since 40.25 `assignment.issued`, `assignment.progress.changed` | **`false`**, [:58](../../src/backend/analytics-service/Analytics/Features/Funnels/Eventing/FunnelEventsConsumer.cs) | `user.registered` fires before the user has an organization at all |
@@ -360,6 +360,57 @@ seam, unchanged.
 **No consumer was added and no new notification topic.** A repeat stages `assignment.issued` per
 recipient, exactly as a human-pressed issue does; notification-service's dedupe key is the assignment
 id and a repeat *is* a new assignment id, so nothing there needed to change.
+
+---
+
+## 4g. Phase 40.26 added no worker at all, and grew the one §4e built
+
+The РОП's day-before digest looks like a new job — it has a clock, a lead window and a per-tenant
+list of recipients. It is not one, and the reason is worth stating because the next person will look
+for the entry: **it is the same notice about the same date.** `AssignmentDeadlineSweepService` already
+walks the organizations with an unannounced deadline coming, already opens a fresh scope per
+organization, and already reads the roster there. Adding a second sweep would have meant two clocks
+that can disagree about when "a day before" is, two roster reads per organization per tick, and two
+sent-ness stories for one fact.
+
+So §2.1's sixth row keeps its mode, its declaration line and its `BYPASSRLS` footnote unchanged, and
+`AssignmentDeadlineNoticeService` — the per-organization half — publishes both families in one
+transaction. Four properties came out of that and are the ones to preserve:
+
+- **One timestamp still answers "has this deadline been announced".** `DeadlineNoticeSentAt` covers
+  the manager notices and the РОП digest together, because they go out in the same pass and describe
+  the same date. Extending the deadline still clears it and re-arms both.
+- **A tick that cannot address the administrators does nothing at all** — it does not send the
+  manager notices alone. That case is a rolling deploy in which identity-service is still older than
+  40.26 and answers without `administratorUserIds`; stamping then would mark the deadline announced
+  and lose the digest with nothing left behind to notice. Skipping costs one tick, and the next one
+  picks the organization up because nothing was stamped. Both halves of the tick therefore fail
+  together, which is also true of the older failure mode: an unreadable roster already skipped the
+  organization in 40.23.
+- **Zero non-starters means no digest and a stamp anyway.** «Все молодцы» is the message that teaches
+  a РОП to ignore the channel, and re-examining a finished assignment every half hour until its
+  deadline is the cost §4e already refused to pay.
+- **No new `IgnoreQueryFilters()` call site.** The count in §5 check 3 stays at **five**. The digest
+  is computed inside the per-organization scope from rows the query filter and the RLS policy already
+  constrain; the enumeration is the one §4e wrote and is untouched.
+
+**One synchronous call left the background world and entered a user-facing write in this block**,
+which this registry should name even though it is not a job. `DialogReviewService` now asks
+identity-service for the administrators when a manager files a score dispute, so the notice 40.25
+could not address goes out. It is **fail-open** — the dispute is written and queued whatever
+identity-service says — which is the opposite of the fan-out's contract and the same as the
+dashboard's, for the reason 40.25 gave: a read that decides *who is asked to do work* must fail
+loudly, and a read that decides *who is told about a row that already exists* must not take the row
+away with it.
+
+`POST /admin/assignments/{id}/remind` also reads the roster now, and that one is **fail-closed**, like
+issuing: the alternative is mailing an ex-employee their former employer's homework, which 40.23
+refused in the sweep and this was the last path that still could.
+
+**No new consumer and no new `IHostedService`.** The two new topics are produced by learning-service's
+outbox and consumed by notification-service's existing `NotificationEventConsumer` (§2.2), whose
+inherited `RequiresOrganization = true` stays correct: a digest addressed to a РОП still lands in one
+organization's `org:{orgId}:` inbox.
 
 ---
 

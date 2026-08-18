@@ -42,7 +42,8 @@ public sealed class InternalMembershipsController(
     ITenantContext tenantContext) : ControllerBase
 {
     /// <summary>
-    /// The user ids of every <b>active</b> membership in the calling organization.
+    /// The user ids of every <b>active</b> membership in the calling organization, plus the subset
+    /// of them who administer it.
     ///
     /// <para>
     /// Deactivated memberships are excluded, and that is the behaviour the whole feature rests on:
@@ -50,6 +51,16 @@ public sealed class InternalMembershipsController(
     /// without this filter every assignment issued after somebody's last day would still be issued
     /// to them — an email to an ex-employee about homework, and a permanent "has not started" row
     /// on the РОП's screen.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Phase 40.26 added the administrator list, and the filter is applied here rather than by the
+    /// caller.</b> The question "who runs this organization" is identity-service's to answer, and
+    /// returning a role per member so the caller could ask it themselves would publish an
+    /// organization's role directory to every service holding the shared secret — see
+    /// <see cref="OrganizationMemberIdsDto"/>. Both tenancy administrator roles qualify: they differ
+    /// only in who may add and remove people (docs/DECISIONS.md, 2026-08-16), and nothing about that
+    /// difference bears on who should be told the team is missing a deadline.
     /// </para>
     /// </summary>
     [HttpGet("active")]
@@ -68,14 +79,23 @@ public sealed class InternalMembershipsController(
         // the organization filter is written out here rather than inherited from a query filter.
         // That is the same shape MembershipsController uses one file over, and it is the reason this
         // controller reads the tenant explicitly instead of trusting an ambient filter to exist.
-        var userIds = await databaseContext.Memberships
+        var activeMemberships = await databaseContext.Memberships
             .AsNoTracking()
             .Where(membership => membership.OrganizationId == currentOrganizationId
                                  && membership.Status == MembershipStatus.Active)
-            .Select(membership => membership.UserId)
-            .OrderBy(userId => userId)
+            .Select(membership => new { membership.UserId, membership.Role })
+            .OrderBy(membership => membership.UserId)
             .ToListAsync(cancellationToken);
 
-        return Ok(new OrganizationMemberIdsDto(userIds));
+        var userIds = activeMemberships
+            .Select(membership => membership.UserId)
+            .ToList();
+
+        var administratorUserIds = activeMemberships
+            .Where(membership => membership.Role is OrgRole.TenancyAdmin or OrgRole.TenancySuperAdmin)
+            .Select(membership => membership.UserId)
+            .ToList();
+
+        return Ok(new OrganizationMemberIdsDto(userIds, administratorUserIds));
     }
 }

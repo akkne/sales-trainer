@@ -187,7 +187,7 @@ internal sealed class AssignmentDashboardService(
     {
         try
         {
-            return (await memberDirectory.GetActiveMemberIdsAsync(cancellationToken)).ToHashSet();
+            return (await memberDirectory.GetRosterAsync(cancellationToken)).MemberIds.ToHashSet();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
