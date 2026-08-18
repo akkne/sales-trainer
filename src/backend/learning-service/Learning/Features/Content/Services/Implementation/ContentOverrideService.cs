@@ -188,8 +188,26 @@ internal sealed class ContentOverrideService(
         return true;
     }
 
-    // ---------------------------------------------------------------- lessons
-
+    /// <summary>
+    /// Forks a global lesson into an organization-owned copy.
+    ///
+    /// <para>
+    /// <b>A retired override is revived, not duplicated.</b> <c>UNIQUE (OrganizationId, Slug)</c>
+    /// makes a second copy impossible anyway, and reviving is the honest reading of the sequence: the
+    /// organization took the base back, so its old text was already discarded. Pressing "edit" again
+    /// is therefore a fresh fork, which is why the body below is re-derived from the base rather than
+    /// recovered from the retired row.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Opening the draft at the end is what records the fork point.</b>
+    /// <c>LessonVersionService</c> resolves <c>BaseVersionId</c> from the parent lesson's latest
+    /// published version, so the draft is not a convenience — without it the copy has no recorded
+    /// base and <see cref="DescribeLessonOverrideAsync"/> can only report it as stale. It is also the
+    /// state the authoring screens expect, so "press edit" lands the administrator in an editable
+    /// lesson rather than in a copy nobody has opened.
+    /// </para>
+    /// </summary>
     private async Task<ContentOverrideResult> CreateLessonOverrideAsync(
         Guid baseLessonId,
         Guid organizationId,
@@ -222,11 +240,6 @@ internal sealed class ContentOverrideService(
 
         var overrideLesson = existing ?? new Lesson { Id = Guid.NewGuid() };
 
-        // A retired override is revived rather than duplicated. UNIQUE (OrganizationId, Slug) makes
-        // a second copy impossible anyway, and reviving is also the honest reading of the sequence:
-        // the organization took the base, so its old text was already discarded — pressing "edit"
-        // again is a fresh fork, which is why the body below is re-derived from the base rather than
-        // recovered.
         overrideLesson.OrganizationId = organizationId;
         overrideLesson.ParentLessonId = baseLesson.Id;
         overrideLesson.TopicId = baseLesson.TopicId;
@@ -273,10 +286,6 @@ internal sealed class ContentOverrideService(
 
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Opening the draft is what records the fork point: LessonVersionService resolves
-        // BaseVersionId from the parent lesson's latest published version. It is also the state the
-        // authoring screens expect to find, so "press edit" lands the administrator in an editable
-        // lesson rather than in a copy nobody has opened.
         await lessonVersionService.EnsureDraftAsync(overrideLesson.Id, actorId, cancellationToken);
 
         return new ContentOverrideResult(
@@ -305,6 +314,24 @@ internal sealed class ContentOverrideService(
         return described;
     }
 
+    /// <summary>
+    /// Describes one lesson override, including whether the base has moved under it.
+    ///
+    /// <para>
+    /// Staleness compares two version pointers, and the two null cases mean different things. A base
+    /// with nothing published cannot have moved — there is no version to have moved from — so it is
+    /// never stale. A missing fork point, by contrast, <b>counts as stale</b>: 40.15 left
+    /// <c>BaseVersionId</c> nullable precisely so that "unknown base, needs review" is a state the
+    /// review queue can show rather than a silent assumption that the copy is current.
+    /// </para>
+    ///
+    /// <para>
+    /// Note this is the version-identifier mechanism, which only notices a base change when someone
+    /// explicitly publishes. Techniques and reference materials hash the base live instead and so
+    /// catch ordinary edits. The difference is deliberate and is recorded as an open owner-level gap
+    /// in <c>docs/DONT_FORGET.md</c>.
+    /// </para>
+    /// </summary>
     private async Task<ContentOverrideDto> DescribeLessonOverrideAsync(
         Lesson overrideLesson,
         CancellationToken cancellationToken)
@@ -313,10 +340,6 @@ internal sealed class ContentOverrideService(
         var currentBaseVersionId = await ReadLatestPublishedVersionIdAsync(
             overrideLesson.ParentLessonId!.Value, cancellationToken);
 
-        // A base with nothing published cannot have moved: there is no version to have moved from.
-        // Everything else compares two pointers, and a missing fork point counts as stale — 40.15
-        // left BaseVersionId nullable precisely so "unknown base, needs review" would be a state the
-        // queue can show rather than a silent assumption of currency.
         var isStale = currentBaseVersionId is not null && currentBaseVersionId != forkedFromVersionId;
 
         return new ContentOverrideDto(
@@ -432,8 +455,6 @@ internal sealed class ContentOverrideService(
 
         return Parse(content);
     }
-
-    // ------------------------------------------------------------- techniques
 
     private async Task<ContentOverrideResult> CreateTechniqueOverrideAsync(
         Guid baseTechniqueId,
@@ -559,6 +580,17 @@ internal sealed class ContentOverrideService(
             currentBaseHash);
     }
 
+    /// <summary>
+    /// Builds the review payload for a technique override: the organization's current text, the base
+    /// as it stands now, and — deliberately — <see langword="null"/> for the before-image.
+    ///
+    /// <para>
+    /// A technique's fork point is a content <i>fingerprint</i>, not a stored copy, and the text that
+    /// fingerprint described was overwritten in place by whoever edited the base. So there is nothing
+    /// to show as "the base as it was when you forked", and inventing one would be a guess presented
+    /// as a record.
+    /// </para>
+    /// </summary>
     private async Task<ContentOverrideReviewDto?> BuildTechniqueReviewAsync(
         Guid overrideId,
         Guid organizationId,
@@ -579,8 +611,6 @@ internal sealed class ContentOverrideService(
                 overrideTechnique,
                 overrideTechnique.Coach,
                 [.. overrideTechnique.AdditionalSkills.Select(link => link.SkillId)])),
-            // No before-image: the fork point of a technique is a fingerprint, and the text it
-            // fingerprinted was overwritten in place by whoever edited the base.
             null,
             baseTechnique is null
                 ? null
@@ -639,8 +669,6 @@ internal sealed class ContentOverrideService(
                 technique,
                 technique.Coach,
                 [.. technique.AdditionalSkills.Select(link => link.SkillId)]));
-
-    // ----------------------------------------------------- reference material
 
     private async Task<ContentOverrideResult> CreateReferenceMaterialOverrideAsync(
         Guid baseMaterialId,
@@ -799,8 +827,6 @@ internal sealed class ContentOverrideService(
     private static string ComputeReferenceMaterialHash(ReferenceMaterial material)
         => ContentSnapshotSerializer.ComputeContentHash(
             ContentSnapshotSerializer.BuildCanonicalContent(material));
-
-    // ------------------------------------------------------------------ misc
 
     private async Task<bool> RetireAsync<TEntity>(
         TEntity? entity,
