@@ -367,3 +367,30 @@ expensive at ten customers.
 | `ExerciseTypePrompt` | Stays platform-global — it defines how a *type* is graded, not what a customer teaches |
 | `Technique`, `ReferenceMaterial` | **Override done (40.18)**: `ParentTechniqueId` / `ParentMaterialId`, `BaseContentHash`, `IsArchived`, read resolution and the same review queue as lessons. **Versioning not done** — neither has an immutable version table, and the fork point is a fingerprint instead (§2.6). |
 | Admin panel ([ADMIN_PANEL.md](../ADMIN_PANEL.md)) | Splits into a platform superadmin panel (organizations, global library) and an organization admin panel (the РОП's) |
+| Where an organization's *own* lessons come from | **Done (40.27):** the admin content pipeline ([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md)) — material in, a structure the РОП confirms, then a `Lesson` + `Exercise` rows + a published `LessonVersion`, `organization_id` set and archived until reviewed. It is §1's third row (the profile) reached from the other end: what a profile cannot express, a customer now generates rather than forks |
+
+---
+
+## 5. Generated content (Phase 40.27)
+
+The one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md):
+**generated content is not a fourth kind of content.** A run produces the same three things every
+lesson in the product is made of — a `Lesson` row, `Exercise` rows, a published `LessonVersion`
+snapshot — so §2's versioning, §2.6's override machinery and §3's substitution all apply to it with no
+new code, and the eleven existing renderers play it.
+
+Three consequences follow from that, and each one was a fork.
+
+- **It is owned, never global.** `organization_id` is the caller's. The shared library has exactly one
+  authoring path and it is the seeder ([SEEDER.md §0](../SEEDER.md)); a pipeline that could write a
+  null owner would be that rule's back door.
+- **It is not an override.** `parent_lesson_id` is null: the lesson was written from the customer's
+  own material and forked nothing, so there is no base to go stale against and it never enters §2.6's
+  review queue. That is the difference between "we adapted your version of our lesson" and "we made
+  you a lesson".
+- **It arrives archived.** §1's argument is about not forking the curriculum; this is the adjacent
+  worry, which is not forking *quality*. The checkpoint 40.27 buys sits before generation, so whether
+  the generated exercises are any good is still unanswered when the lesson is written, and 40.32 owns
+  answering it item by item. Until then the lesson exists, is versioned and is addressable, and
+  learners do not see it. Un-archiving is `PUT /admin/lessons/{id}` with `isArchived: false`, which
+  40.27 added because archiving had no reverse before it.

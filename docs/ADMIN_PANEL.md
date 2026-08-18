@@ -595,3 +595,38 @@ Each component includes the canonical TypeScript schema and client-side validati
 - **Exercises** have `sortOrder` by their position within a lesson
 - Backend queries always `OrderBy(x => x.SortOrder)` to ensure consistent ordering
 - Visual editor allows reordering via up/down arrows
+
+---
+
+## The РОП's content pipeline — API only (Phase 40.27)
+
+**There is no screen for this yet.** The РОП's admin panel is roadmap 40.20 and is waiting on the
+owner's design, the same reason 40.15–40.26 shipped API-only. What exists is the whole pipeline
+behind `/admin/content-generation/*` — see [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) and
+[API_CONTRACTS.md](API_CONTRACTS.md).
+
+What the screen has to do, when it is designed, in the order that matters:
+
+1. **A textarea and a title.** The material is pasted text — a product deck's contents, a call script,
+   notes from a training session. File upload and call recordings are 40.30.
+2. **A spinner with a poll.** `POST` returns immediately with status `structuring`; the structuring
+   call takes tens of seconds to minutes. `GET /admin/content-generation/{jobId}` is the poll.
+3. **The checkpoint, which is the whole screen.** Product, who they sell to, tone, the objections,
+   the stages of their script, the glossary, the banned claims — every one editable, every one
+   deletable, and gaps shown as gaps rather than hidden. «Всё верно? что убрать, что добавить?»
+   `PUT …/structure` saves the edit; it is idempotent and can be pressed as often as the reviewer
+   likes.
+4. **One approve button**, and it should be obvious that it is the expensive one. Everything before it
+   costs seconds; after it, the same correction means re-generating a lesson.
+5. **The result.** `producedLessonId` names a real archived lesson with real exercises. The screen
+   should link into the existing lesson editor rather than growing a viewer of its own — it is an
+   ordinary lesson, which is the point.
+
+Two things the screen must not do, because the backend deliberately does not support them:
+
+- **Do not offer per-exercise accept/reject.** That is roadmap 40.32 and it has its own vocabulary to
+  invent. The lesson arrives archived precisely because that gate does not exist yet; the way to
+  accept it today is to un-archive it (`PUT /admin/lessons/{id}` with `isArchived: false`).
+- **Do not write the reviewed structure into the organization profile.** It looks like the same form —
+  it is the same field list — and it is deliberately a separate draft. Promoting one into the other is
+  roadmap 40.29, which has to answer the merge question first. See `docs/DECISIONS.md` (2026-08-18).

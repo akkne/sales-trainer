@@ -34,6 +34,7 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Production Migration (monolith → microservices)](MICROSERVICES_PRODUCTION_MIGRATION.md) | Single-server cutover runbook: resource/cost impact (RAM/CPU/disk, no GPU), backup, DB-per-service split via `scripts/migrate-monolith-to-services.sh`, cutover order, rollback, `.env` tunables |
 | [Integrations](INTEGRATIONS.md) | External service integrations: MinIO/S3 object storage, endpoints, env keys |
 | [Monitoring & Product Metrics](MONITORING.md) | Usage metrics on Prometheus/Grafana: online users, visits/day/week, page views, UI events, logins/registrations — catalog, cardinality rules, dashboard |
+| [Content Pipeline](CONTENT_PIPELINE.md) | Phase 40.27: the РОП's «структурировать → **остановиться** → сгенерировать» run — `ContentGenerationJobs` in learning-db, the two internal ai-service calls, and the checkpoint enforced by a CHECK constraint. API-only; the screen is 40.20 |
 | [Seeder](SEEDER.md) | JSON import format for skills, topics, lessons and whole bundles — plus §0 (Phase 40.19): the seeder writes the global library only, requires an explicit `target=global`, and narrows every read to `organization_id IS NULL` |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
