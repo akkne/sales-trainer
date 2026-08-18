@@ -10,10 +10,15 @@ namespace Sellevate.Learning.Features.ContentGeneration.Models;
 /// is missing sends the administrator into a detail screen to find out — for every refused run.
 /// </para>
 /// </summary>
+/// <param name="GapSourceRef">
+/// Phase 40.31. Non-null when the dashboard started this run rather than a person: it names the
+/// funnel stage the team was failing and the day that was measured.
+/// </param>
 public sealed record ContentGenerationJobSummaryDto(
     Guid Id,
     string Title,
     string Status,
+    string? GapSourceRef,
     ContentInsufficiencyDto? Insufficiency,
     Guid? ProducedLessonId,
     int ProducedExerciseCount,

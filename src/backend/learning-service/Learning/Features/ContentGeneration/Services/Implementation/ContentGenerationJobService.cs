@@ -18,6 +18,9 @@ internal sealed class ContentGenerationJobService(
     public const int MaximumMaterialLength = 60000;
     public const int MaximumTitleLength = 200;
 
+    /// <summary>Phase 40.31. The width of <c>Assignments.SourceRef</c>, which is where it ends up.</summary>
+    public const int MaximumGapSourceRefLength = 200;
+
     public async Task<IReadOnlyList<ContentGenerationJobSummaryDto>> GetJobsAsync(
         string? status,
         CancellationToken cancellationToken = default)
@@ -46,6 +49,7 @@ internal sealed class ContentGenerationJobService(
                 job.Id,
                 job.Title,
                 job.Status,
+                job.GapSourceRef,
                 job.Insufficiency,
                 job.ProducedLessonId,
                 job.ProducedExerciseCount,
@@ -60,6 +64,7 @@ internal sealed class ContentGenerationJobService(
                 row.Id,
                 row.Title,
                 row.Status,
+                row.GapSourceRef,
                 ContentInsufficiencyDocumentSerializer.Deserialize(row.Insufficiency),
                 row.ProducedLessonId,
                 row.ProducedExerciseCount,
@@ -85,6 +90,7 @@ internal sealed class ContentGenerationJobService(
     public async Task<ContentGenerationJobDto> StartAsync(
         StartContentGenerationRequestDto request,
         Guid? actorId,
+        string? gapSourceRef = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -131,6 +137,10 @@ internal sealed class ContentGenerationJobService(
             CreatedBy = actorId,
             Title = title,
             SourceMaterial = material,
+            // Phase 40.31. Refused rather than truncated when it is not one of ours: a provenance
+            // string nobody can parse back to a stage is worse than none, because the panel would
+            // then neither suppress on it nor be able to say why.
+            GapSourceRef = NormalizeGapSourceRef(gapSourceRef),
             Status = insufficiency is null
                 ? ContentGenerationJobStatuses.Structuring
                 : ContentGenerationJobStatuses.Insufficient,
@@ -412,10 +422,34 @@ internal sealed class ContentGenerationJobService(
         return ToDto(job);
     }
 
+    /// <summary>
+    /// Phase 40.31. A gap reference is either in the <c>skill-gap:</c> namespace and short enough to
+    /// be copied into <c>Assignments.SourceRef</c>, or it is not recorded at all.
+    /// </summary>
+    private static string? NormalizeGapSourceRef(string? gapSourceRef)
+    {
+        var normalizedGapSourceRef = (gapSourceRef ?? string.Empty).Trim();
+
+        if (normalizedGapSourceRef.Length == 0)
+        {
+            return null;
+        }
+
+        if (!SkillGapSourceRefs.IsSkillGapReference(normalizedGapSourceRef)
+            || normalizedGapSourceRef.Length > MaximumGapSourceRefLength)
+        {
+            throw new ContentGenerationValidationException(
+                $"'{gapSourceRef}' is not a usable gap reference.");
+        }
+
+        return normalizedGapSourceRef;
+    }
+
     internal static ContentGenerationJobDto ToDto(ContentGenerationJob job) => new(
         job.Id,
         job.Title,
         job.Status,
+        job.GapSourceRef,
         job.SourceMaterial,
         job.Structure is null ? null : ContentStructureDocumentSerializer.Deserialize(job.Structure),
         ContentInsufficiencyDocumentSerializer.Deserialize(job.Insufficiency),
