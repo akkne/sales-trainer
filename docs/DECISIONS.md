@@ -4001,3 +4001,158 @@ needs the model's opinion, and inventing half of it here would put the vocabular
 What 40.27 does is refuse an empty textarea, which would otherwise buy a structuring call to learn
 nothing, and refuse to approve a structure with no product, no ICP, no objections and no script
 stages, which would otherwise buy a generation call to produce exercises about nothing.
+
+---
+
+## 2026-08-18 — Phase 40.28: the input sufficiency threshold
+
+Roadmap block 40.28, the second of stage F. The pipeline of 40.27 is allowed to say no, and the
+refusal has to be more useful than the lesson it withholds. Full description:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) §4a.
+
+The block's premise is reputational rather than technical, and it decides everything below: **a РОП
+who uploads a three-slide deck and gets fifteen bland exercises blames the product, not their deck.**
+They are not wrong to — we are the ones who chose to answer.
+
+### Both stages, and the free one keeps the lexical check
+
+This was the fork the block was told to decide: deterministic in learning-service, or a cheap LLM
+call in ai-service that can say «это не про продажи»?
+
+Both, and neither in the form the question implied.
+
+- **The free stage is arithmetic and a word list**, run in learning-service before anything is sent
+  anywhere: under ~400 characters or 60 words, or not a single word in the entire document that
+  belongs to selling. The length half replaces 40.27's crude 200-character floor. The lexical half is
+  what the fork was actually about — it is the only thing that distinguishes three slides about a CRM
+  from three pages of a recipe **for free**.
+- **The paid stage costs nothing extra**, because it is not a call. The structuring call already
+  reads the whole material and already forms the judgement as a side effect of extracting nothing
+  from it, so `POST /ai/content/structure` returns `{structure, sufficiency}` and there is no second
+  round trip. A separate "is this about sales?" pre-call was rejected on three counts: it doubles the
+  latency on the path a person is watching, it can disagree with the structure the other call
+  produces, and it pays twice to read the same text.
+
+**The lexical rule blocks, and the threshold is zero hits rather than a ratio.** A ratio would be a
+quality score and would start refusing unusual but perfectly good material. Zero occurrences of any
+of ~45 Russian and English stems across an entire document is not thin sales material, it is the
+wrong file. A false positive is possible and it is survivable and self-correcting: the refusal names
+what to add, and one sentence about what the company sells clears it. That escape hatch is the only
+reason a word list is allowed to block anything at all.
+
+### The structure is judged too, and that is the more honest signal
+
+The roadmap asked whether sufficiency should also be checked *after* structuring. It should, and it
+turns out to be the check that matters.
+
+Length is a proxy for substance. What actually decides whether four good exercises can be built is
+what came back: no objections **and** no script stages means there is a topic and no task; no product
+**and** no ICP means there is nothing to ground it in. Two objections rather than one, because one
+objection makes one exercise and the promise is four.
+
+This is also the answer to «порог не должен быть обходимым случайно». A model that returns an empty
+objections list and an invented ICP over a three-slide deck is the same failure arriving later and
+looking like success. Judging the artefact rather than trusting the process is what catches it, and
+it is why the check runs again at approval: between an edit and an approval there is a network and a
+stale second tab.
+
+### The model's verdict can add a refusal and never lift one — and an unjustified refusal is ignored
+
+Two asymmetries, in opposite directions, and both are deliberate.
+
+- **«Выглядит достаточно» cannot open the gate** over a structure with no objections and no script
+  stages. Otherwise the threshold is bypassed by whichever completion happens to be confident, and
+  the block reduces to a prompt instruction.
+- **«Недостаточно» with no codes is discarded.** A refusal that does not say what is missing gives
+  the customer nothing to do, and an unactionable refusal is the one thing this block must never
+  produce. A model that will not name a gap is treated as having no opinion. In practice this also
+  bounds the damage from an over-eager model: it can only refuse in the vocabulary we gave it.
+
+`isOffTopic` is separate from `isSufficient` because the answers differ. «Добавьте ещё» is wrong
+advice for somebody who uploaded a cooking recipe; «это не тот файл» is.
+
+### The refusal is a job state with a machine-readable list, not a 400
+
+`insufficient` is the sixth state, and the database enforces the pairing:
+`CK_ContentGenerationJobs_Insufficiency` makes `Insufficiency` non-null **if and only if** the status
+is `insufficient`. A refused run with no list is a dead end on a screen; a list left behind on a run
+that has moved on reads as a warning about the lesson it is about to produce.
+
+A 400 was rejected because it makes the refusal unusable. The customer would start over, the material
+would be structured a second time, and they would pay for it. It also throws away the only durable
+place to put the answer: a screen polling `GET …/{jobId}` sees the same list without having caught
+anything, which is what lets the approval path both record the refusal and return 409.
+
+The state fits the existing constraints rather than sitting beside them.
+`CK_..._Checkpoint` is untouched — `insufficient` is not `generating`. `CK_..._Structure` still holds:
+a run refused *before* structuring has no structure and is not `awaiting_review`; one refused *after*
+has a structure. `CK_..._Produced` already forbids a lesson id outside `completed`.
+
+### The refusal is arguable but not waivable
+
+Three doors, and none of them is «сгенерировать всё равно» — there is no route for that.
+
+- **`POST …/material` appends and resumes.** Not replaces: the extracted structure has to stay
+  answerable to the text it came from, and a replace leaves a run whose stated source no longer
+  contains what was read out of it.
+- **`PUT …/structure` is open on a refused run.** Somebody who knows their four objections should
+  type them rather than hunt for a document containing them. The result is re-inspected, so the
+  threshold is answerable and not waivable — and only the deterministic half runs, because the human
+  has just overruled the material with knowledge the material did not contain, and buying a second
+  opinion on their own typing would be expensive and rude.
+- **`POST …/approve` re-inspects and records before it refuses.**
+
+`retry` was deliberately *not* extended to `insufficient`. It resumes a half that failed; nothing
+failed here, and retrying would produce the identical refusal at the identical price.
+
+### `StructuredMaterialLength`: an offset, so arguing costs the price of the argument
+
+The roadmap's constraint was that a supplemented run must continue rather than start over, **and not
+pay twice for structuring the same text**. The column records how much of `SourceMaterial` the last
+structuring call read; the worker sends only the tail, with the already-extracted structure as the
+`knownStructure` the 40.27 prompt is already told to keep rather than rewrite. A РОП answering «нет
+ни одного возражения» pays for reading their objections list, not for reading the fifty-page deck a
+second time.
+
+The alternatives were both worse. A `MaterialChunks` child table is a schema for an append-only log
+nobody reads. Re-sending everything is one line shorter and bills the customer for our refusal.
+
+Its CHECK bounds it to `length("SourceMaterial")` because it is a substring index, and an index past
+the end of the string throws inside a background worker — the least visible place in the service.
+
+### Codes on the wire, sentences on the server
+
+ai-service returns codes from a closed list of seven and one diagnostic note; learning-service owns
+the Russian sentence per code. A model-authored refusal would be a different sentence every run,
+untranslatable, and would occasionally demand something the product cannot accept («пришлите
+договор», «загрузите видео»). Codes are also what let the 40.20 screen render bullets rather than a
+paragraph — the roadmap's own requirement.
+
+The list is redeclared on both sides of the wire rather than shared, exactly as `ExtractedObjectionDto`
+is: this is the wire shape of an internal endpoint and it must not move when a constant in another
+service does. Unknown codes are dropped twice, on the way out of ai-service and again when the
+refusal document is written.
+
+Every sentence names a concrete artefact the customer already has somewhere — a deck, a script, a
+call recording. «Добавьте больше информации» is a refusal that teaches nothing, and the roadmap's
+own example («добавьте примеры возражений или запись звонка») is the standard.
+
+### No long index, and therefore no `40.28_*.sql`
+
+Stated explicitly because five blocks before this one shipped such a file. There is nothing to build
+concurrently: the only query filtering on the new state is the administrator's list, already served
+by `IX_ContentGenerationJobs_OrganizationId_Status_CreatedAt`, and nothing queries *inside* the
+`Insufficiency` document — it is read whole, so a GIN index on it would be maintenance nobody reads.
+Both `ADD COLUMN`s are metadata-only in Postgres 11+, so the migration does not rewrite the table.
+The two recreated `CHECK`s validate against a table that is empty on every real deployment.
+
+### Not done, on purpose
+
+- **No quality judgement on the generated exercises.** This block is about the input. Whether the
+  four that came out are any good is 40.32.
+- **No tests.** Rule №3 in [DONT_FORGET.md](DONT_FORGET.md). The roadmap names a test item for this
+  block explicitly («тесты на тонкий вход») and it is marked `[~]`, with the cases that should have
+  been covered written out under «Тесты, которых нет».
+- **No prompt was ever executed.** Same as 40.27: the sufficiency instructions have never been run
+  against a live provider, so the calibration of `isSufficient` is a design, not an observation. The
+  first live run is a human's.
