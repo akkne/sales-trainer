@@ -47,11 +47,28 @@ def lint_file(path: pathlib.Path):
     return violations
 
 
+def enumerate_source_files(root: str):
+    """Yields the .cs files under `root`, or `root` itself when it is one.
+
+    A bare `rglob` over a file path yields nothing, so passing this script a single file used to
+    print "clean" while checking nothing at all — a check that silently checks nothing is worse than
+    no check, because it answers.
+    """
+    path = pathlib.Path(root)
+    if path.is_file():
+        if path.suffix == ".cs":
+            yield path
+        return
+    if not path.exists():
+        raise FileNotFoundError(f"codestyle-lint: '{root}' does not exist.")
+    yield from sorted(path.rglob("*.cs"))
+
+
 def main(argv):
     roots = argv[1:] or ["src/backend"]
     total = 0
     for root in roots:
-        for path in sorted(pathlib.Path(root).rglob("*.cs")):
+        for path in enumerate_source_files(root):
             if is_skipped(path):
                 continue
             for line_number, reason in lint_file(path):
