@@ -66,6 +66,48 @@ public interface IDialogSessionRepository
         DateTime dayStart,
         DateTime monthStart,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.25. Graded conversations of the current organization, newest first — what the РОП
+    /// reads on Monday (docs/TENANCY/ASSIGNMENTS.md §4).
+    ///
+    /// <para>
+    /// <b>It is the reason this interface grew rather than a second reader appearing.</b> The quotes
+    /// the roadmap asks for live in Mongo and the assignments they are about live in learning-db, so
+    /// the tempting shape is a learning-service query straight into the collection. That would be a
+    /// second holder of the tenant filter, which is exactly what this interface exists to prevent.
+    /// The РОП's screen asks each service for what it owns instead.
+    /// </para>
+    ///
+    /// <para>
+    /// Only conversations that were actually graded are returned. An abandoned session has no
+    /// feedback, no score and nothing to quote against, and including it would put rows on the
+    /// screen that cannot be acted on.
+    /// </para>
+    /// </summary>
+    /// <param name="userId">One manager, or <see langword="null"/> for the whole team.</param>
+    /// <param name="modeId">One scenario, or <see langword="null"/> for all of them.</param>
+    /// <param name="maximumScore">
+    /// Upper bound, inclusive, on the 0–10 grade the learner was shown — the filter that turns "all
+    /// our conversations" into "the ones that went badly", which is the only list worth a meeting.
+    /// </param>
+    /// <param name="limit">Page size; clamped by the implementation.</param>
+    Task<List<DialogSession>> ListGradedForOrganizationAsync(
+        Guid? userId,
+        Guid? modeId,
+        int? maximumScore,
+        int limit,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.25. One conversation of the current organization in full, whoever held it — the
+    /// transcript the РОП selects a fragment out of. Unlike <see cref="FindForUserAsync"/> this is
+    /// not scoped to one learner, because the administrator reading it is by definition not the
+    /// person who held the conversation.
+    /// </summary>
+    Task<DialogSession?> FindForOrganizationAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>One user's aggregated voice usage inside the current organization.</summary>

@@ -41,6 +41,13 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
     /// </summary>
     private const string CollectionName = "dialog_sessions";
 
+    /// <summary>
+    /// Phase 40.25. Ceiling on the РОП's transcript list. A meeting is prepared from a handful of
+    /// conversations, and an unbounded list of documents that each carry their whole message array
+    /// is a response nobody reads and a query nobody notices growing.
+    /// </summary>
+    private const int MaximumAdminPageSize = 100;
+
     private readonly IMongoCollection<DialogSession> _sessions;
     private readonly ITenantContext _tenantContext;
 
@@ -232,6 +239,62 @@ internal sealed class DialogSessionRepository : IDialogSessionRepository
         }
 
         return usageEntries;
+    }
+
+    /// <summary>
+    /// Phase 40.25. The РОП's list of graded conversations. The tenant filter comes first, as it
+    /// does everywhere in this class, so no combination of the optional filters can widen the read.
+    /// </summary>
+    public async Task<List<DialogSession>> ListGradedForOrganizationAsync(
+        Guid? userId,
+        Guid? modeId,
+        int? maximumScore,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var filters = new List<FilterDefinition<DialogSession>>
+        {
+            TenantReadFilter(),
+            Builders<DialogSession>.Filter.Ne(session => session.Feedback, null),
+        };
+
+        if (userId is { } requestedUserId && requestedUserId != Guid.Empty)
+        {
+            filters.Add(Builders<DialogSession>.Filter.Eq(session => session.UserId, requestedUserId));
+        }
+
+        if (modeId is { } requestedModeId && requestedModeId != Guid.Empty)
+        {
+            filters.Add(Builders<DialogSession>.Filter.Eq(session => session.ModeId, requestedModeId));
+        }
+
+        if (maximumScore is { } score)
+        {
+            filters.Add(Builders<DialogSession>.Filter.Lte(session => session.Feedback!.Score, score));
+        }
+
+        var sort = Builders<DialogSession>.Sort.Descending(session => session.CreatedAt);
+
+        return await _sessions
+            .Find(Builders<DialogSession>.Filter.And(filters))
+            .Sort(sort)
+            .Limit(Math.Clamp(limit, 1, MaximumAdminPageSize))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Phase 40.25. One conversation of this organization, whoever held it. A read, so platform
+    /// staff reach it under the same rule as every other read here.
+    /// </summary>
+    public async Task<DialogSession?> FindForOrganizationAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<DialogSession>.Filter.And(
+            TenantReadFilter(),
+            Builders<DialogSession>.Filter.Eq(session => session.Id, sessionId));
+
+        return await _sessions.Find(filter).FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>
