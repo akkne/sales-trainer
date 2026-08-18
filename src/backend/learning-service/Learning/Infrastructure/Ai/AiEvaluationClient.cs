@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Infrastructure.Configuration;
 
 namespace Sellevate.Learning.Infrastructure.Ai;
@@ -13,15 +14,18 @@ internal sealed class AiEvaluationClient : IAiEvaluationClient
 
     private readonly HttpClient _httpClient;
     private readonly AiServiceConfiguration _configuration;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<AiEvaluationClient> _logger;
 
     public AiEvaluationClient(
         HttpClient httpClient,
         IOptions<AiServiceConfiguration> configurationOptions,
+        ITenantContext tenantContext,
         ILogger<AiEvaluationClient> logger)
     {
         _httpClient = httpClient;
         _configuration = configurationOptions.Value;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -33,8 +37,16 @@ internal sealed class AiEvaluationClient : IAiEvaluationClient
 
         var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.EvaluatePath;
 
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri, request, SerializerOptions, cancellationToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
+        {
+            Content = JsonContent.Create(request, options: SerializerOptions),
+        };
+
+        // Phase 40.33. A learner is waiting on their grade, so this is interactive work and runs to
+        // the organization's full allowance rather than stopping at the batch reserve.
+        AiCallHeaders.Apply(httpRequest, _tenantContext, AiCallHeaders.InteractiveWorkload);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
