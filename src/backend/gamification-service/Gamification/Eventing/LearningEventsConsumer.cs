@@ -6,6 +6,17 @@ using Sellevate.Gamification.Features.Gamification.Services.Abstract;
 
 namespace Sellevate.Gamification.Eventing;
 
+/// <summary>
+/// Consumes learning-service's completion events and hands each to the gamification fan-out.
+///
+/// <para>
+/// Requires an organization on the envelope (inherited default): every consequence writes tenant-scoped
+/// tables, so an envelope without one is retried and dead-lettered rather than guessed at. The envelope's
+/// event id is forwarded as the grant's idempotency key, which is what makes at-least-once redelivery
+/// safe. An envelope whose payload does not deserialize is dropped, not retried — a malformed message
+/// will not become well-formed on the next attempt.
+/// </para>
+/// </summary>
 internal sealed class LearningEventsConsumer : KafkaConsumerBackgroundService
 {
     public LearningEventsConsumer(

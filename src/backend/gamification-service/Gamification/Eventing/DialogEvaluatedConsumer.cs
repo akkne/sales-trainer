@@ -6,6 +6,15 @@ using Sellevate.Gamification.Features.Gamification.Services.Abstract;
 
 namespace Sellevate.Gamification.Eventing;
 
+/// <summary>
+/// Consumes evaluated practice dialogs and converts the score into experience points, a streak
+/// registration and an achievement re-evaluation.
+///
+/// <para>
+/// Requires an organization on the envelope (inherited default). The envelope's event id is forwarded as
+/// the grant's idempotency key, so a redelivered evaluation cannot pay twice.
+/// </para>
+/// </summary>
 internal sealed class DialogEvaluatedConsumer : KafkaConsumerBackgroundService
 {
     public DialogEvaluatedConsumer(

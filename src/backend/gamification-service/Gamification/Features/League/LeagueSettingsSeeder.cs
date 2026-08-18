@@ -4,8 +4,10 @@ using Sellevate.Gamification.Infrastructure.Data;
 namespace Sellevate.Gamification.Features.League;
 
 /// <summary>
-/// GA6(a): Seeds the singleton GamificationSettings row at startup so that read-path getters never
-/// need to write. Idempotent — no-ops if the row already exists.
+/// Seeds the singleton <c>GamificationSettings</c> row at startup so that read-path getters never
+/// need to write. Idempotent — no-ops if the row already exists, and a concurrent second instance
+/// winning the insert is treated as success rather than as an error, because the outcome it produces
+/// is exactly the outcome this seeder wanted.
 ///
 /// <para>
 /// Phase 40.13 removed LeagueSettings from this seeder. That row became tenant-scoped, and startup
@@ -39,7 +41,6 @@ public sealed class LeagueSettingsSeeder(GamificationDbContext databaseContext)
         }
         catch (DbUpdateException)
         {
-            // Another startup instance seeded first — that is fine.
         }
     }
 }

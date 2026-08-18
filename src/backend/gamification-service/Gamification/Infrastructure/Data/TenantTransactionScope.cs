@@ -39,6 +39,12 @@ namespace Sellevate.Gamification.Infrastructure.Data;
 /// concurrency guard around the period rollover, not for tenancy, and re-entrancy means the two
 /// mechanisms do not fight.
 /// </para>
+///
+/// <para>
+/// <c>IsRelational()</c> is false only for the in-memory provider the unit tests use, which has no
+/// transactions and no row-level security — there is nothing to scope there, so the scope becomes an
+/// inert wrapper rather than failing the test suite.
+/// </para>
 /// </summary>
 internal sealed class TenantTransactionScope : IAsyncDisposable
 {
@@ -61,8 +67,6 @@ internal sealed class TenantTransactionScope : IAsyncDisposable
         GamificationDbContext databaseContext,
         CancellationToken cancellationToken)
     {
-        // IsRelational() is false only for the in-memory provider the unit tests use, which has no
-        // transactions and no row-level security — there is nothing to scope there.
         if (!databaseContext.Database.IsRelational() || databaseContext.Database.CurrentTransaction is not null)
         {
             return new TenantTransactionScope(null);

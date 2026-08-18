@@ -17,6 +17,13 @@ namespace Sellevate.Gamification.Features.Gamification;
 /// mode 40.14 exists to hunt, so the enumeration is explicit and every write happens under a
 /// concrete organization.
 /// </para>
+///
+/// <para>
+/// One organization's failure is logged and swallowed on purpose: it must not stop every other
+/// organization's reset for the rest of the night, which is the whole reason the loop exists. The
+/// exception is never silently dropped — it is logged with the organization it belongs to, and the
+/// run's summary line reports how many organizations were visited.
+/// </para>
 /// </summary>
 public sealed class StreakResetJob(
     IServiceScopeFactory scopeFactory,
@@ -52,8 +59,6 @@ public sealed class StreakResetJob(
             }
             catch (Exception exception)
             {
-                // One organization's failure must not stop every other organization's reset for the
-                // rest of the night — that is the whole reason the loop exists.
                 logger.LogError(
                     exception,
                     "StreakResetJob failed for organization {OrganizationId}; other organizations continue",

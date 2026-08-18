@@ -29,6 +29,12 @@ public class GamificationTenancyModelTests
     /// EF does not inherit a query filter through a navigation, so listing entities once in
     /// <c>OnModelCreating</c> is not enough — each needs its own. This walks the built model rather
     /// than the source, so an entity added later is covered without anyone remembering to.
+    ///
+    /// <para>
+    /// <c>OutboxMessage</c> is the one deliberate exception, the same call learning (40.10) and company
+    /// (40.12) made: it carries the organization as payload for the system-mode relay to republish, and
+    /// has no RLS policy (docs/TENANCY/TENANCY.md §1.7).
+    /// </para>
     /// </summary>
     [Test]
     public void Every_entity_with_an_organization_id_has_its_own_query_filter()
@@ -42,9 +48,6 @@ public class GamificationTenancyModelTests
             .OrderBy(name => name)
             .ToList();
 
-        // OutboxMessage is the one deliberate exception, the same call learning (40.10) and company
-        // (40.12) made: it carries the organization as payload for the system-mode relay to
-        // republish, and has no RLS policy (docs/TENANCY/TENANCY.md §1.7).
         entitiesMissingAFilter.Should().BeEquivalentTo(["OutboxMessage"]);
     }
 

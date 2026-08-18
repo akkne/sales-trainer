@@ -22,6 +22,11 @@ public sealed class StreakResetJobTests
     [TearDown]
     public void TearDown() => _databaseContext.Dispose();
 
+    /// <summary>
+    /// Phase 40.13: <c>StreakResetJob.ExecuteAsync</c> is the per-organization loop and needs a service
+    /// provider, so the rule under test is driven through <c>ResetStaleStreaksAsync</c> — which takes
+    /// the already-scoped context the loop would have handed it.
+    /// </summary>
     [Test]
     public async Task ExecuteAsync_ResetsStaleStreaksButKeepsRecentOnes()
     {
@@ -36,9 +41,6 @@ public sealed class StreakResetJobTests
             new UserStreak { Id = Guid.NewGuid(), UserId = yesterdayUserId, CurrentStreakDayCount = 3, LongestStreakDayCount = 3, LastActivityDate = today.AddDays(-1) });
         await _databaseContext.SaveChangesAsync();
 
-        // Phase 40.13: StreakResetJob.ExecuteAsync is now the per-organization loop and needs a
-        // service provider; the reset rule itself moved to this method, which takes the scoped
-        // context the loop would have handed it.
         await StreakResetJob.ResetStaleStreaksAsync(
             _databaseContext, new FixedStreakClock(), CancellationToken.None);
 

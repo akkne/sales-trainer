@@ -1,22 +1,30 @@
+using Microsoft.Extensions.Options;
 using Sellevate.Gamification.Features.Gamification.Services.Abstract;
+using Sellevate.Gamification.Infrastructure.Configuration;
 
 namespace Sellevate.Gamification.Features.Gamification.Services.Implementation;
 
 /// <summary>
 /// Returns "today" in the product-configured streak timezone.
-/// The timezone is read from Gamification:StreakTimezone (IANA or Windows id, default "UTC").
-/// A single product-wide timezone is intentional — streaks are a product concept, not per-user.
+///
+/// <para>
+/// The timezone is resolved once, in the constructor, which is why this is registered as a singleton:
+/// a streak boundary that moved mid-process would let two requests in the same second disagree about
+/// what day it is. Changing <c>Gamification:StreakTimezone</c> therefore requires a restart.
+/// </para>
 /// </summary>
 internal sealed class StreakClock : IStreakClock
 {
     private readonly TimeZoneInfo _timeZone;
 
-    public StreakClock(IConfiguration configuration)
+    public StreakClock(IOptions<StreakConfiguration> streakConfiguration)
     {
-        var tzId = configuration["Gamification:StreakTimezone"];
-        _timeZone = string.IsNullOrWhiteSpace(tzId)
+        ArgumentNullException.ThrowIfNull(streakConfiguration);
+
+        var timeZoneId = streakConfiguration.Value.StreakTimezone;
+        _timeZone = string.IsNullOrWhiteSpace(timeZoneId)
             ? TimeZoneInfo.Utc
-            : TimeZoneInfo.FindSystemTimeZoneById(tzId);
+            : TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
     }
 
     public DateOnly Today()

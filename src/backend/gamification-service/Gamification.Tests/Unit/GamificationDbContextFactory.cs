@@ -5,6 +5,19 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Tests.Unit;
 
+/// <summary>
+/// Builds in-memory contexts for the unit tests.
+///
+/// <para>
+/// Two provider details are configured deliberately. The in-memory provider does not support
+/// transactions, so the transaction-ignored warning is suppressed — otherwise
+/// <c>LeagueService.CloseCurrentLeagueAndCreateNextAsync</c> would throw the moment it opened its
+/// concurrency guard. And the real <c>TenantSaveChangesInterceptor</c> is installed rather than a
+/// stand-in: it is what stamps <c>OrganizationId</c> onto rows the services create without naming one,
+/// and what raises <c>CrossTenantWriteException</c> on a foreign one. Leaving it out would make every
+/// unit test pass with <c>Guid.Empty</c>.
+/// </para>
+/// </summary>
 internal static class GamificationDbContextFactory
 {
     /// <summary>
@@ -25,13 +38,7 @@ internal static class GamificationDbContextFactory
     {
         var options = new DbContextOptionsBuilder<GamificationDbContext>()
             .UseInMemoryDatabase(databaseName ?? Guid.NewGuid().ToString())
-            // The in-memory provider does not support transactions; suppress the warning
-            // so that LeagueService.CloseCurrentLeagueAndCreateNextAsync can call
-            // BeginTransactionAsync without throwing in unit tests.
-            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
-            // The real write guard, not a stand-in: it is what stamps OrganizationId on rows the
-            // services create without naming one, and what raises CrossTenantWriteException on a
-            // foreign one. Leaving it out would make every unit test pass with Guid.Empty.
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .AddInterceptors(new TenantSaveChangesInterceptor(tenantContext))
             .Options;
 

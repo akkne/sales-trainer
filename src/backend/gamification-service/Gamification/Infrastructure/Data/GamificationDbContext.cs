@@ -8,6 +8,30 @@ using Sellevate.Gamification.Identity;
 
 namespace Sellevate.Gamification.Infrastructure.Data;
 
+/// <summary>
+/// gamification-db's EF Core context.
+///
+/// <para>
+/// Phase 40.13. The global query filters installed in <see cref="OnModelCreating"/> are
+/// <b>convenience, not security</b> — the boundary is the RLS policy the <c>AddOrganizationId</c>
+/// migration installs (docs/TENANCY/TENANCY.md §1.4-§1.5).
+/// </para>
+///
+/// <para>
+/// Every tenant-scoped entity is listed one by one, because EF does not inherit query filters through
+/// navigations. <c>GamificationTenancyModelTests</c> walks the model and fails the build if an entity
+/// grows an <c>OrganizationId</c> without appearing there.
+/// </para>
+///
+/// <para>
+/// Strict equality throughout, with no <c>IS NULL OR</c> branch: gamification-db has no global content
+/// library. The tables that <em>are</em> platform-global — <c>Achievements</c> and <c>LeagueTiers</c>
+/// (catalogues), <c>GamificationSettings</c>, <c>StreakMilestones</c> and <c>ExerciseTypeRewards</c>
+/// (installation-wide configuration), <c>UserReplicas</c> (cross-org identities, §4.2) and
+/// <c>OutboxMessages</c> (read only by the system-mode relay) — carry no <c>OrganizationId</c> at all,
+/// which is what keeps "a row with no organization is invisible, not shared" true here.
+/// </para>
+/// </summary>
 public sealed class GamificationDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
@@ -50,19 +74,6 @@ public sealed class GamificationDbContext : DbContext
         modelBuilder.ApplyConfiguration(new UserReplicaEntityConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageEntityConfiguration());
 
-        // Phase 40.13. Convenience, not security — the boundary is the RLS policy the
-        // AddOrganizationId migration installs (docs/TENANCY/TENANCY.md §1.4-§1.5).
-        //
-        // Every tenant-scoped entity is listed one by one, because EF does not inherit query
-        // filters through navigations. GamificationTenancyModelTests walks the model and fails the
-        // build if an entity grows an OrganizationId without appearing here.
-        //
-        // Strict equality throughout, with no `IS NULL OR` branch: gamification-db has no global
-        // content library. The tables that ARE platform-global — Achievements and LeagueTiers
-        // (catalogues), GamificationSettings, StreakMilestones and ExerciseTypeRewards
-        // (installation-wide configuration), UserReplicas (cross-org identities, §4.2) and
-        // OutboxMessages (read only by the system-mode relay) — carry no OrganizationId at all,
-        // which is what keeps "a row with no organization is invisible, not shared" true here.
         modelBuilder.Entity<UserExperiencePointsRecord>()
             .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
         modelBuilder.Entity<UserStreak>()

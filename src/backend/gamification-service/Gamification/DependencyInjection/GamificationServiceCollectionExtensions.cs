@@ -9,14 +9,36 @@ using Sellevate.Gamification.Features.Gamification.Services.Implementation;
 using Sellevate.Gamification.Features.League;
 using Sellevate.Gamification.Features.League.Services.Abstract;
 using Sellevate.Gamification.Features.League.Services.Implementation;
+using Sellevate.Gamification.Infrastructure.Configuration;
 
 namespace Sellevate.Gamification.DependencyInjection;
 
+/// <summary>
+/// The single registration point for gamification-service's own services, so no lifetime decision
+/// is made in <c>Program.cs</c> where it would be invisible next to framework wiring.
+/// </summary>
 public static class GamificationServiceCollectionExtensions
 {
-    public static IServiceCollection AddGamificationServices(this IServiceCollection services)
+    /// <summary>
+    /// Everything is <c>Scoped</c> apart from <see cref="IStreakClock"/>, which is a stateless
+    /// singleton because its timezone is read once at construction and never changes, and the hosted
+    /// services, which create a scope of their own per unit of work. Nothing scoped is captured by a
+    /// singleton here: the Kafka consumers and the outbox relay take
+    /// <c>IServiceScopeFactory</c> rather than the scoped services themselves, and so do the two
+    /// Hangfire jobs, which are registered scoped and activated per run.
+    /// </summary>
+    public static IServiceCollection AddGamificationServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        // IStreakClock is singleton: the timezone is read once from config and never changes.
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<StreakConfiguration>(
+            configuration.GetSection(StreakConfiguration.SectionName));
+        services.Configure<RecurringJobConfiguration>(
+            configuration.GetSection(RecurringJobConfiguration.SectionName));
+
         services.AddSingleton<IStreakClock, StreakClock>();
 
         services.AddScoped<IGamificationEventPublisher, KafkaGamificationEventPublisher>();
