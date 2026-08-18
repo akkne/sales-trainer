@@ -827,8 +827,13 @@ grep -rn --include=*.cs "AddHostedService" src/backend | grep -v /obj/ | grep -v
 # 2.2 IgnoreQueryFilters в продакшн-коде — ТОЛЬКО перечисление организаций.
 #     На 40.14 ожидалось ровно три попадания: FollowUpReminderBackgroundService,
 #     StreakResetJob, WeeklyLeagueClosureJob. С 40.23 к ним добавился
-#     AssignmentDeadlineSweepService, с 40.24 — AssignmentRepeatSweepService:
-#     итого пять. Шестое — находка, пока не доказано обратное.
+#     AssignmentDeadlineSweepService, с 40.24 — AssignmentRepeatSweepService,
+#     с 40.27 — ContentGenerationSweepService, с 40.32 —
+#     ContentAdaptationSweepService. На 40.34 ожидается ровно СЕМЬ попаданий и
+#     ни одним больше; восьмое — находка, пока не доказано обратное.
+#     (Число проверено грепом в блоке 40.34. Формулировка «остаётся шесть» из
+#     заметки блока 40.31 в DONT_FORGET.md была верна на момент 40.31 и
+#     устарела в 40.32 — сверяйтесь с этой строкой, а не с той.)
 grep -rn --include=*.cs "IgnoreQueryFilters" src/backend | grep -v /obj/ | grep -v Tests
 
 # 2.3 Сырого SQL в бэкенде быть не должно вообще (на 40.14 — ноль попаданий)
