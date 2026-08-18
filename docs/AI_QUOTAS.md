@@ -87,7 +87,22 @@ free night of voice. What a missing row costs is precision, not enforcement.
 | `BatchReservePercent` | share of the LLM allowance batch work may not touch | `…DefaultBatchReservePercent` (10) |
 | `Note` | free text for the operator: which contract this number came from | — |
 
-`0` in any limit disables that window explicitly. Null and zero mean different things on purpose.
+Null and zero mean different things on purpose, but **not the two things this document used to
+claim**. It said `0` "disables that window explicitly", which reads as *closes* it. The code says the
+opposite: every gate short-circuits on a non-positive limit —
+`AiSpendMeter.EnsureLlmBudgetAsync` and `HasLlmBudgetAsync` both `return` early when
+`LlmMonthlyTokenLimit <= 0`, the Lua reserve script guards on `limit > 0`, and
+`AiQuotaService.DescribeState` reports no state for one. So:
+
+| Value | What actually happens |
+|-------|-----------------------|
+| `null` | the platform default applies (`AiQuotas:Default*`) |
+| `0` (or negative) | **the ceiling is removed — that window is unmetered** |
+
+Corrected 2026-08-19, when the platform quota screen was built against the code rather than against
+this page. The screen warns about it inline, because an operator typing `0` to shut a customer off
+would achieve exactly the reverse. If «closed» is a state the product needs, it needs a
+representation of its own — `0` is already taken.
 
 ---
 
