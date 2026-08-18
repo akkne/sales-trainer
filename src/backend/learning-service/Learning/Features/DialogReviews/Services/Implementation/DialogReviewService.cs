@@ -4,6 +4,7 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.DialogReviews.Models;
 using Sellevate.Learning.Features.DialogReviews.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
+using Sellevate.Learning.Infrastructure.Identity;
 
 namespace Sellevate.Learning.Features.DialogReviews.Services.Implementation;
 
@@ -28,6 +29,7 @@ namespace Sellevate.Learning.Features.DialogReviews.Services.Implementation;
 /// </summary>
 internal sealed class DialogReviewService(
     LearningDbContext databaseContext,
+    IOrganizationMemberDirectory memberDirectory,
     ILearningEventPublisher eventPublisher,
     ILogger<DialogReviewService> logger) : IDialogReviewService
 {
@@ -152,11 +154,10 @@ internal sealed class DialogReviewService(
 
         databaseContext.DialogReviewNotes.Add(note);
 
-        // No notice is published here, and that is a gap rather than a decision that the РОП does
-        // not need telling. Notifications are addressed to a user id and nothing in the platform can
-        // currently enumerate an organization's administrators — identity-service's internal roster
-        // route returns ids without roles. The dispute lands in the queue the dashboard reads; the
-        // push is recorded in docs/DONT_FORGET.md and belongs with 40.26's РОП-facing notices.
+        // Phase 40.26 closes the gap 40.25 left open here: administrators are now enumerable, so a
+        // filed dispute pushes rather than only queuing.
+        await PublishDisputeNoticesAsync(note, authorUserId, cancellationToken);
+
         await databaseContext.SaveChangesAsync(cancellationToken);
         await tenantScope.CommitAsync(cancellationToken);
 
@@ -165,6 +166,72 @@ internal sealed class DialogReviewService(
             note.Id, note.AuthorUserId, note.SessionId, note.DisputedScore);
 
         return ToDto(note, subjectDisplayName: null, authorDisplayName: null);
+    }
+
+    /// <summary>
+    /// Phase 40.26. Tells whoever administers the organization that a dispute is waiting.
+    ///
+    /// <para>
+    /// <b>Fail-open, unlike issuing an assignment and unlike the reminder.</b> Those two decide who
+    /// is asked to do work, and a wrong answer there is silent and permanent. This one decides who
+    /// hears about a row that has already been written and is already visible in
+    /// <c>GET /admin/dialog-reviews</c>. Refusing the dispute because identity-service is slow would
+    /// take away the mechanism that exists to keep the team trusting the numbers, in order to protect
+    /// a notification — the wrong trade, and the same one 40.25's dashboard made in the same
+    /// direction.
+    /// </para>
+    ///
+    /// <para>
+    /// An administrator who filed the dispute themselves is skipped. Nothing in the platform stops a
+    /// РОП from practising, and a notice telling somebody that somebody has disputed a score, where
+    /// both are them, is the product not paying attention.
+    /// </para>
+    /// </summary>
+    private async Task PublishDisputeNoticesAsync(
+        DialogReviewNote note,
+        Guid authorUserId,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Guid>? administratorIds;
+        try
+        {
+            administratorIds = (await memberDirectory.GetRosterAsync(cancellationToken)).AdministratorIds;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                exception,
+                "Dispute {NoteId} was filed but its notice could not be addressed: the organization "
+                + "roster could not be read. It is still in the review queue.",
+                note.Id);
+
+            return;
+        }
+
+        if (administratorIds is null || administratorIds.Count == 0)
+        {
+            return;
+        }
+
+        var subjectDisplayName = await databaseContext.UserReplicas
+            .AsNoTracking()
+            .Where(replica => replica.UserId == note.SubjectUserId)
+            .Select(replica => replica.DisplayName)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        foreach (var administratorId in administratorIds.Where(candidate => candidate != authorUserId))
+        {
+            await eventPublisher.PublishDialogReviewDisputedAsync(
+                new DialogReviewDisputedEvent(
+                    note.Id,
+                    administratorId,
+                    note.SubjectUserId,
+                    subjectDisplayName,
+                    note.SessionId,
+                    note.DisputedScore,
+                    note.Comment),
+                cancellationToken);
+        }
     }
 
     public async Task<DialogReviewNoteDto?> ResolveScoreDisputeAsync(
