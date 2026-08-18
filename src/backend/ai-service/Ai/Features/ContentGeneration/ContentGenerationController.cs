@@ -27,6 +27,13 @@ namespace Sellevate.Ai.Features.ContentGeneration;
 /// and no tenant read: the caller supplies the material or the structure, and gets a document back.
 /// The organization these documents belong to is a fact of the learning-service row that holds them.
 /// </para>
+///
+/// <para>
+/// Phase 40.28. <c>structure</c> now answers two questions in one completion: what is in the material
+/// and whether there is enough of it (<see cref="StructuredMaterialDto"/>). It still does not
+/// <i>refuse</i> anything — a refusal is a state of a learning-service run, not an HTTP status here,
+/// because the customer has to be able to add material and carry on rather than start over.
+/// </para>
 /// </summary>
 [ApiController]
 [Route("ai/content")]
