@@ -4,6 +4,7 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Assignments.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
+using Sellevate.Learning.Infrastructure.Identity;
 
 namespace Sellevate.Learning.Features.Assignments.Services.Implementation;
 
@@ -32,6 +33,7 @@ namespace Sellevate.Learning.Features.Assignments.Services.Implementation;
 internal sealed class AssignmentService(
     LearningDbContext databaseContext,
     IAssignmentAudienceResolver audienceResolver,
+    IOrganizationMemberDirectory memberDirectory,
     ILearningEventPublisher eventPublisher,
     ILogger<AssignmentService> logger) : IAssignmentService
 {
@@ -366,8 +368,18 @@ internal sealed class AssignmentService(
     /// </summary>
     public async Task<AssignmentReminderResultDto?> RemindAsync(
         Guid assignmentId,
+        string? scope = null,
         CancellationToken cancellationToken = default)
     {
+        var requestedScope = string.IsNullOrWhiteSpace(scope)
+            ? AssignmentReminderScopes.Unfinished
+            : scope.Trim();
+
+        if (!AssignmentReminderScopes.IsKnown(requestedScope))
+        {
+            throw new AssignmentValidationException($"'{scope}' is not a known reminder scope.");
+        }
+
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
         var assignment = await databaseContext.Assignments
@@ -383,18 +395,41 @@ internal sealed class AssignmentService(
                 $"Only an active assignment can be reminded about; this one is {assignment.Status}.");
         }
 
-        var unfinishedUserIds = await databaseContext.AssignmentProgressRecords
+        var candidateUserIds = await databaseContext.AssignmentProgressRecords
             .AsNoTracking()
             .Where(record => record.AssignmentId == assignmentId
-                             && record.Status != AssignmentProgressStatuses.Completed)
+                             && record.Status != AssignmentProgressStatuses.Completed
+                             && (requestedScope != AssignmentReminderScopes.NotStarted
+                                 || record.Status == AssignmentProgressStatuses.NotStarted))
             .Select(record => record.UserId)
             .ToListAsync(cancellationToken);
+
+        // Phase 40.26. The roster is consulted here for the reason 40.23 consults it in the deadline
+        // sweep: a progress row outlives employment on purpose, so "still owes the work" and "should
+        // be nudged about it" are different sets, and the difference is an email to somebody's former
+        // employee. Fail-closed, like issuing and unlike the dashboard — a nudge nobody sent can be
+        // sent again in a minute, and a nudge sent to the wrong person cannot be taken back.
+        IReadOnlyList<Guid> activeMemberIds;
+        try
+        {
+            activeMemberIds = (await memberDirectory.GetRosterAsync(cancellationToken)).MemberIds;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new AssignmentAudienceUnavailableException(
+                "The list of people in this organization could not be read just now, so nobody was "
+                + "reminded. Nothing was changed — try again in a moment.",
+                exception);
+        }
+
+        var liveMemberIds = activeMemberIds.ToHashSet();
+        var recipientUserIds = candidateUserIds.Where(liveMemberIds.Contains).ToList();
 
         // One instant for the whole press, so every reminder from this click shares a dedupe key
         // suffix and a redelivery of any of them collapses onto the original.
         var requestedAt = DateTime.UtcNow;
 
-        foreach (var userId in unfinishedUserIds)
+        foreach (var userId in recipientUserIds)
         {
             await eventPublisher.PublishAssignmentReminderAsync(
                 new AssignmentReminderEvent(
@@ -406,10 +441,10 @@ internal sealed class AssignmentService(
         await tenantScope.CommitAsync(cancellationToken);
 
         logger.LogInformation(
-            "Assignment reminder sent AssignmentId={AssignmentId} Recipients={RecipientCount}",
-            assignment.Id, unfinishedUserIds.Count);
+            "Assignment reminder sent AssignmentId={AssignmentId} Scope={Scope} Recipients={RecipientCount}",
+            assignment.Id, requestedScope, recipientUserIds.Count);
 
-        return new AssignmentReminderResultDto(unfinishedUserIds.Count);
+        return new AssignmentReminderResultDto(recipientUserIds.Count, requestedScope);
     }
 
     public async Task<AssignmentWriteResult> CloseAsync(
