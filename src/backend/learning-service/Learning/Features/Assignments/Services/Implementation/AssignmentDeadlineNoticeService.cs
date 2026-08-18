@@ -205,7 +205,10 @@ internal sealed class AssignmentDeadlineNoticeService(
             .Select(userId => displayNamesByUserId.GetValueOrDefault(userId))
             .Where(displayName => !string.IsNullOrWhiteSpace(displayName))
             .Select(displayName => displayName!)
-            .OrderBy(displayName => displayName, StringComparer.CurrentCultureIgnoreCase)
+            // Ordinal rather than culture-aware, like the dashboard next door: the container's
+            // culture data is not something this service controls, and which five names a digest
+            // spells out must not depend on it.
+            .OrderBy(displayName => displayName, StringComparer.OrdinalIgnoreCase)
             .Take(MaximumNamesInDigest)
             .ToList();
 
