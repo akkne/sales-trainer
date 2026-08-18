@@ -4,6 +4,7 @@ using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Features.ContentAdaptation.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
+using Sellevate.Learning.Infrastructure.Ai;
 
 namespace Sellevate.Learning.Features.ContentAdaptation;
 
@@ -82,6 +83,20 @@ internal sealed class ContentAdaptationSweepService(
             // cross-tenant write into an exception.
             using var scope = scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
+
+            var quotaClient = scope.ServiceProvider.GetRequiredService<IAiQuotaClient>();
+            if (!await quotaClient.HasBatchAllowanceAsync(cancellationToken))
+            {
+                // Phase 40.33. Asked **before** the runner claims a lease, because the claim is one
+                // conditional UPDATE that also spends an attempt: discovering the wall afterwards
+                // would burn attempts on an organization that cannot be served and eventually fail
+                // runs for a reason that has nothing to do with them. Information, not Warning — an
+                // organization at its ceiling is a commercial fact, not an incident.
+                logger.LogInformation(
+                    "Skipping organization {OrganizationId} this tick — batch AI allowance is spent",
+                    organizationId);
+                continue;
+            }
 
             var stepRunner = scope.ServiceProvider.GetRequiredService<IContentAdaptationStepRunner>();
 

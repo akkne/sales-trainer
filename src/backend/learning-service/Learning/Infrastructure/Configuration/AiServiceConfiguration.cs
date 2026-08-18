@@ -32,6 +32,9 @@ public sealed class AiServiceConfiguration
     /// <summary>Phase 40.33. Speech synthesis, for the same exercise's voice mode.</summary>
     public string TextToSpeechPath { get; init; } = "/ai/tts";
 
+    /// <summary>Phase 40.33. «Есть ли ещё бюджет?», asked by a sweep before it claims a lease.</summary>
+    public string QuotaPreflightPath { get; init; } = "/ai/quota/preflight";
+
     /// <summary>
     /// Phase 40.33. Outer bound on one interactive chat or synthesis call. Ninety seconds is what the
     /// removed in-process client used, so a stalled provider degrades on the same clock it always

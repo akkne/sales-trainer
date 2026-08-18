@@ -32,6 +32,17 @@ public static class AiEvaluationServiceCollectionExtensions
         var contentPipelineTimeout = TimeSpan.FromSeconds(Math.Clamp(
             aiServiceConfiguration.GetValue("ContentPipelineTimeoutSeconds", 300), 30, 900));
 
+        // Phase 40.33. The preflight a sweep asks before it claims work. Short timeout on purpose:
+        // it is an optimisation, and a slow answer must not delay the tick it was meant to save.
+        services.AddHttpClient<IAiQuotaClient, AiQuotaClient>(httpClient =>
+        {
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+            var internalServiceSecret = configuration["InternalAuth:ServiceSecret"];
+            if (!string.IsNullOrWhiteSpace(internalServiceSecret))
+                httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);
+        });
+
         services.AddHttpClient<IAiContentPipelineClient, AiContentPipelineClient>(httpClient =>
         {
             httpClient.Timeout = contentPipelineTimeout;
