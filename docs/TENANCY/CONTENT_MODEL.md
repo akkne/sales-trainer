@@ -371,7 +371,7 @@ expensive at ten customers.
 
 ---
 
-## 5. Generated content (Phase 40.27)
+## 5. Generated content (Phases 40.27–40.28)
 
 The one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md):
 **generated content is not a fourth kind of content.** A run produces the same three things every
@@ -379,7 +379,7 @@ lesson in the product is made of — a `Lesson` row, `Exercise` rows, a publishe
 snapshot — so §2's versioning, §2.6's override machinery and §3's substitution all apply to it with no
 new code, and the eleven existing renderers play it.
 
-Three consequences follow from that, and each one was a fork.
+Four consequences follow from that, and each one was a fork.
 
 - **It is owned, never global.** `organization_id` is the caller's. The shared library has exactly one
   authoring path and it is the seeder ([SEEDER.md §0](../SEEDER.md)); a pipeline that could write a
@@ -394,3 +394,10 @@ Three consequences follow from that, and each one was a fork.
   answering it item by item. Until then the lesson exists, is versioned and is addressable, and
   learners do not see it. Un-archiving is `PUT /admin/lessons/{id}` with `isArchived: false`, which
   40.27 added because archiving had no reverse before it.
+- **Sometimes it is not written at all (40.28).** A run whose material was too thin — or whose
+  extracted structure came back with no objections, no script stages and nothing about the product —
+  ends in `insufficient` with a list of what to add, and writes no content. That is the same argument
+  as the two above, applied one step earlier: the risk §1 guards against is a customer's tree filling
+  with forks of our curriculum; this guards against it filling with lessons generated from nothing.
+  A `Lesson` row is cheap to create and expensive to be wrong about — it is versioned, assignable and
+  reportable — so a run with nothing to say produces no row rather than an empty one.

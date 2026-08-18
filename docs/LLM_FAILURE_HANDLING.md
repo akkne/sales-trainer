@@ -63,6 +63,37 @@ gets a short reply instead of a torn connection.
 Client cancellation (`OperationCanceledException`) is logged at `Information` and is never
 answered with a fallback reply.
 
+## A refusal is not a failure (Phase 40.28)
+
+The content pipeline has an outcome this document's table does not cover, and conflating the two
+would be the most expensive mistake in it: **«материала не хватает» is the feature working.**
+
+| | A provider failure | A sufficiency refusal |
+|---|---|---|
+| Cause | upstream: quota, transport, an unparseable body | our own judgement about the customer's input |
+| Job state | `failed` after 3 attempts, `FailureReason` set | `insufficient` immediately, `Insufficiency` set |
+| Retryable | yes — `POST …/retry` resumes the half that failed | no, and retrying would change nothing: `POST …/material` or `PUT …/structure` is the answer |
+| Log level | `Warning` / `Error` per the table above | **`Information`** |
+| What the customer sees | «попробуйте позже» | a list of what to add, and each item names an artefact they already have |
+
+Three rules follow.
+
+- **Never log a refusal at `Warning`.** Nothing is wrong. A run of refusals against one organization
+  *is* a signal — their onboarding never told them what to upload — but it is a product signal, not
+  an incident.
+- **Never degrade a provider failure into a refusal.** `MaterialStructuringService` throws on an
+  unparseable completion rather than returning an empty structure, precisely because an empty
+  structure would be read downstream as «ваш материал ничего не содержит» and the РОП would go and
+  rewrite a deck that was fine.
+- **Never degrade a refusal into an error.** It is a state on the run, with a machine-readable list,
+  reachable by polling. A 400 on the start call would make the customer begin again and re-pay for
+  structuring the material that was already read.
+
+A missing or malformed `sufficiency` block in an otherwise valid completion is read as
+**"sufficient"** — the one place in this pipeline where a parse problem degrades silently, because
+degrading the other way would tell a customer their material is thin on the strength of our own
+model dropping a field. The deterministic structure check still runs, so nothing empty gets through.
+
 ## Graceful degradation, where it exists
 
 Some paths prefer a canned answer over an error:

@@ -1,7 +1,7 @@
 # The admin content pipeline — structure, stop, generate
 
-**Status:** implemented (Phase 40.27, 2026-08-18), **API-only** — the screen is 40.20 and is waiting
-on the owner's design.
+**Status:** implemented (Phases 40.27–40.28, 2026-08-18), **API-only** — the screen is 40.20 and is
+waiting on the owner's design.
 
 The РОП pastes their material and gets a lesson. Between those two things the pipeline **stops** and
 shows what it read — the product, who they sell to, the objections, the stages of their script, the
@@ -40,41 +40,51 @@ putting it back, and the checkpoint would be advisory rather than binding.
 ```
         POST /admin/content-generation
                     │
+                    │ 40.28: the free check on the raw text
+                    ├───────────────────────────────► insufficient ◄────┐
+                    ▼                                     │  ▲          │
+             structuring ──────(3 failed attempts)──► failed │          │
+                    │                                     │  │          │
+        (ai/content/structure, + sufficiency verdict)      │  │          │
+                    │                                POST …/material    │
+                    ├── 40.28: structure too thin ────────┘  │          │
+                    ▼                                        │          │
+            awaiting_review  ◄── PUT …/structure ────────────┘          │
+                    │           (the checkpoint)                        │
+        POST …/approve  ← the only transition no worker can make ───────┘
+                    │           (409 + insufficiency if the structure is thin)
                     ▼
-             structuring ──────────(3 failed attempts)──────► failed
+              generating ──────────(3 failed attempts)──────► failed
                     │                                            │
-        (ai/content/structure)                                   │ POST …/retry
-                    ▼                                            │ resumes the half
-            awaiting_review  ◄── PUT …/structure ──┐             │ that failed
-                    │           (the checkpoint)   │             │
-        POST …/approve  ← the only transition no worker can make │
-                    ▼                                            │
-              generating ──────────(3 failed attempts)───────────┘
-                    │
-        (ai/content/generate → Lesson + Exercises + LessonVersion)
-                    ▼
-               completed
+        (ai/content/generate → Lesson + Exercises + LessonVersion)  POST …/retry
+                    ▼                                         resumes the half
+               completed                                        that failed
 ```
 
 `awaiting_review` is not a convenience. **`CK_ContentGenerationJobs_Checkpoint` says in the database**
 that a run may not be in `generating` without both a structure and an `ApprovedAt`, so a second writer
 added later inherits the rule instead of having to remember it.
 
+`insufficient` (40.28) is not a failure. Nothing broke — the material was thin, and the run says
+exactly what is missing. It is a state rather than an error precisely so that it can be argued with:
+see §4a.
+
 ---
 
 ## 3. The API
 
-All five routes are `RequireOrgAdmin` and carry `[TenantTransaction]`. The organization is never in a
+All seven routes are `RequireOrgAdmin` and carry `[TenantTransaction]`. The organization is never in a
 route, a query string or a body — it comes from `ITenantContext`
 ([TENANCY.md §1.3](TENANCY/TENANCY.md)).
 
 | Route | What it does |
 |---|---|
-| `POST /admin/content-generation` | Starts a run. `{title, material}`. 400 under 200 characters of material — a length, not a judgement; the real refusal («добавьте примеры возражений») is 40.28 |
-| `GET /admin/content-generation?status=` | The runs, newest first. No material and no structure — both are documents |
+| `POST /admin/content-generation` | Starts a run. `{title, material}`. 400 only on an empty textarea or over 60 000 characters; **thin material is a run in `insufficient`, not an error** (40.28) |
+| `GET /admin/content-generation?status=` | The runs, newest first. No material and no structure — both are documents. The refusal *is* carried: it is why the run is sitting there |
 | `GET /admin/content-generation/{jobId}` | One run **with** its structure. This is what the checkpoint screen polls |
-| `PUT /admin/content-generation/{jobId}/structure` | The reviewer's edit. 409 outside `awaiting_review` |
-| `POST /admin/content-generation/{jobId}/approve` | «Всё верно». Idempotent by state: approving a run that is already generating or finished returns it unchanged |
+| `PUT /admin/content-generation/{jobId}/structure` | The reviewer's edit. Allowed at the checkpoint and on a refused run (40.28); the result is re-inspected. 409 elsewhere |
+| `POST /admin/content-generation/{jobId}/material` | **40.28.** «Вот ещё материал» — appends and resumes. 409 unless the run is `insufficient` |
+| `POST /admin/content-generation/{jobId}/approve` | «Всё верно». Idempotent by state: approving a run that is already generating or finished returns it unchanged. 409 + `insufficiency` if the structure is too thin |
 | `POST /admin/content-generation/{jobId}/retry` | Puts a failed run back into the half it failed in. 409 on anything else |
 
 Full request/response shapes: [API_CONTRACTS.md](API_CONTRACTS.md).
@@ -118,6 +128,79 @@ Two rules the prompts enforce and the caps that back them:
 - **Every value is bounded** at 2000 characters and every list is capped (10 objections, 12 script
   stages, 30 glossary terms, 20 banned claims), the same caps the 40.19 render path uses, so a value
   that survives extraction survives being put in a prompt.
+
+---
+
+## 4a. The sufficiency threshold (Phase 40.28)
+
+The product problem is reputational, and it is stated best by the roadmap: **a РОП who uploads a
+three-slide deck and gets fifteen bland exercises blames the product, not their deck.** They are not
+wrong to — we are the ones who chose to answer. Four good exercises, or an honest «добавьте примеры
+возражений или запись звонка», are both better outcomes than fifteen bland ones.
+
+So the pipeline is allowed to say no. **The refusal must be a useful answer, not an error 400.**
+
+### Two stages, because neither one alone is honest
+
+| Stage | Where | Cost | What it can see |
+|---|---|---|---|
+| `material` | learning-service, on `POST` and on every `POST …/material` | free | how much text there is (~400 characters / 60 words), and whether a single word in it belongs to selling |
+| `structure` | learning-service, after the structuring call returns | already paid for | what could actually be **read** out of the material, plus the model's verdict, which rode the same completion |
+
+The deterministic stage cannot tell three slides about a CRM from three pages of a recipe on length
+alone — which is exactly why the lexical check is there. A document about selling that contains no
+word about selling does not exist, and establishing that costs nothing. The test is **zero hits, not
+a ratio**: a ratio would be a quality score and would start refusing unusual but perfectly good
+material. A false positive is survivable and self-correcting, because the refusal says what to add
+and one sentence about what they sell clears it — which is the only reason a lexical rule is allowed
+to block anything.
+
+**The structure stage is the more honest signal**, and it is the answer to «порог не должен быть
+обходимым случайно». Length is a proxy. What decides whether four good exercises can be built is what
+came back: no objections **and** no script stages means there is a topic and no task; no product
+**and** no ICP means there is nothing to ground it in. A model that returned an invented ICP over an
+empty deck is the same failure arriving later, and judging the artefact rather than trusting it is
+what catches it.
+
+### The model's opinion is free, and it can only tighten the gate
+
+`POST /ai/content/structure` returns `{structure, sufficiency}` — one completion, two answers about
+the same reading. A separate cheap «это про продажи?» call was rejected: this one already reads the
+whole material and forms the judgement anyway.
+
+The verdict may **add** a refusal and may never lift one. «Выглядит достаточно» over an empty
+structure must not open the gate, or the threshold is bypassed by whichever completion happens to be
+confident. Symmetrically, a bare «недостаточно» with no codes is **ignored**: an unactionable refusal
+is the one thing this block must never produce, so a model that will not say what is missing is
+treated as having no opinion.
+
+### The refusal is arguable, and arguing with it is cheap
+
+This is why it is a state and not a status code.
+
+- `POST …/material` appends text and puts the run back to `structuring`. The next call reads **only
+  the added part** — `StructuredMaterialLength` records how much has been paid for — alongside the
+  structure already extracted, which the prompt is told to keep rather than rewrite. A РОП answering
+  «нет ни одного возражения» pays for reading their objections list, not for reading the fifty-page
+  deck a second time.
+- `PUT …/structure` is open on a refused run too. Somebody who knows their four objections may simply
+  type them; that is a better outcome than sending them to find a document containing them. The
+  edited structure is **re-inspected**, so the threshold is answerable but not waivable — and only
+  the deterministic half runs, because the human has just overruled the material with knowledge the
+  material did not contain, and buying a second opinion on their own typing would be expensive and
+  rude.
+- `POST …/approve` re-inspects as well. Between an edit and an approval there is a network and a
+  stale second tab; the run is moved to `insufficient` **before** the 409 is returned, so a polling
+  screen and the caller who pressed the button see the same list.
+
+### What the customer actually reads
+
+A list, not a paragraph — the 40.20 screen has to show items that can be ticked off, and usually only
+one of them is actionable today. Each item is `{code, message}` from a **closed** vocabulary of
+seven: `off_topic`, `too_short`, `no_product`, `no_icp`, `no_objections`, `no_script`, `no_examples`.
+The sentences live in `ContentSufficiencyCodes` and every one names a concrete artefact the customer
+already has somewhere — a deck, a script, a call recording — because «добавьте больше информации» is
+a refusal that teaches nothing.
 
 ---
 
@@ -183,12 +266,16 @@ structuring.
 
 ---
 
-## 7. What this block deliberately did not do
+## 7. What these blocks deliberately did not do
 
-- **No screen.** Same as 40.15–40.26: the РОП's admin panel is 40.20 and waits on the owner's design.
-  See [ADMIN_PANEL.md](ADMIN_PANEL.md).
-- **No refusal on thin input.** A 200-character floor is all there is; «загрузите ещё материал, не
-  хватает примеров возражений» needs the model's opinion and is 40.28.
+- **No screen.** Same as 40.15–40.27: the РОП's admin panel is 40.20 and waits on the owner's design.
+  See [ADMIN_PANEL.md](ADMIN_PANEL.md). The refusal is machine-readable specifically so that screen
+  can render bullets rather than a paragraph when it arrives.
+- **No quality judgement on what was generated.** The threshold is about the *input*. Whether the
+  four exercises that came out are any good is 40.32.
+- **No second LLM call anywhere in 40.28.** The verdict rides the structuring completion; the free
+  stage is arithmetic and a word list. The block adds no cost per run and removes cost on the runs it
+  refuses before structuring.
 - **No promotion into the organization profile.** 40.29.
 - **No file upload and no call recordings.** The material is pasted text. 40.30 owns recordings, and
   the consent and retention question it has to answer first.
