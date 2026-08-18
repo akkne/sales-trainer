@@ -137,12 +137,14 @@ internal sealed class AssignmentRepeatIssueService(
             return [];
         }
 
-        var originIds = origins.Select(origin => origin.Id).ToList();
+        // Typed nullable so the generated SQL compares the column itself rather than an unwrapped
+        // projection of it — the same list, one less thing for the provider to translate.
+        var originIds = origins.Select(origin => (Guid?)origin.Id).ToList();
 
         var issuedWaves = (await databaseContext.Assignments
                 .AsNoTracking()
                 .Where(assignment => assignment.RepeatOfAssignmentId != null
-                                     && originIds.Contains(assignment.RepeatOfAssignmentId.Value))
+                                     && originIds.Contains(assignment.RepeatOfAssignmentId))
                 .Select(assignment => new { assignment.RepeatOfAssignmentId, assignment.RepeatWaveIndex })
                 .ToListAsync(cancellationToken))
             .Select(wave => (OriginId: wave.RepeatOfAssignmentId!.Value, WaveIndex: wave.RepeatWaveIndex ?? 0))
