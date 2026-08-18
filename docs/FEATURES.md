@@ -115,6 +115,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
 | [TENANCY.md](TESTING/TENANCY.md) | **All of Phase 40**, block by block: the Stage A write guard, gateway header/middleware, event envelope and Postgres RLS checklist (including the real-Postgres `TenantRowLevelSecurityIntegrationTests`, written but never run), then per-block acceptance checklists through 40.26. Ends with the **40.34 two-organization acceptance run** — the only section that tests the tenant boundary itself rather than one block's behaviour, and the one that covers the six blocks which never got a checklist of their own (40.15, 40.17, 40.18, 40.21 and all of Stage F) |
 | [ORGANIZATION_SERVICE.md](TESTING/ORGANIZATION_SERVICE.md) | Phase 40.5: organization-service unit tests (registry CRUD + Kafka event contracts, profile upsert/tenant-isolation, controller status-code mapping, tenancy-scope structural checks) + gateway route-flip |
+| [PHASE_40_BACKLOG.md](TESTING/PHASE_40_BACKLOG.md) | Build plan for the 57 Phase 40 items left untested under Rule #3: each mapped to a verified test project, class under test, file and case count (~620 cases), plus the harnesses to reuse, ten work packages, and six stale items in the source list |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
