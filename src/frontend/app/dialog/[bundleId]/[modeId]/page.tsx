@@ -592,7 +592,7 @@ export default function ChatPage() {
             </main>
 
             {feedback && (
-                <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />
+                <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} sessionId={sessionId} />
             )}
         </div>
     );
