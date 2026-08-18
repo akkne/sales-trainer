@@ -431,3 +431,105 @@ The behaviours worth naming, because they are the ones that break quietly:
 | Titles of the content items on O4 | `AssignmentDto.content` is `(kind, reference, orderIndex, persona)` — the learner-facing `ActiveAssignmentDto` resolves titles, the admin one does not | the kind plus the raw reference (a dialog mode key is already readable; a lesson version is a uuid) |
 | A people picker for the audience | identity-service has no `GET /memberships` (§6.1) | `GET /admin/team/skill-map` members, with the caveat printed under the list |
 | Per-status counts on the filter chips | `GET /admin/assignments` has no counts endpoint and does not paginate | the whole array is read once and both the counts and the filtering are done on the client |
+
+---
+
+## Slice 3 — Разговоры и споры (O5, O6, O7)
+
+Screens: `/org/dialogs`, `/org/dialogs/[sessionId]`, `/org/reviews`.
+Code: `src/frontend/features/org-dialogs/**`, `src/frontend/app/(org)/org/{dialogs,reviews}/**`.
+
+Endpoints, and nothing else:
+
+| Screen | Reads | Writes |
+|---|---|---|
+| O5 | `GET /admin/dialog-sessions?userId=&modeId=&maxScore=&limit=` (ai-service), `GET /admin/team/skill-map` for the names | — |
+| O6 | `GET /admin/dialog-sessions/{sessionId}` (ai-service), `GET /admin/dialog-reviews?sessionId=` (learning-service) | `POST /admin/dialog-reviews` |
+| O7 | `GET /admin/dialog-reviews` (unfiltered — see below) | `POST /admin/dialog-reviews/{noteId}/resolve` |
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgDialogSessions.test.ts` | the two grade scales and the conversion between them, the `GET /admin/dialog-sessions` query string, the 25→100 paging arithmetic, «вчера, 14:20»/«18 авг», and the «Без имени · 8 символов» fallback |
+| `__tests__/orgTranscriptSelection.test.ts` | click / shift+click range selection on the server's message `index`, and the quoted text it builds |
+| `__tests__/orgDisputeVerdict.test.ts` | the verdict form's rules — a rejection needs words, an agreement does not, a corrected score is 0–100 and only on an agreement |
+| `__tests__/orgReviewNotes.test.ts` | one note read as a two-sided thread, «это вы» on either side, the three queues, and `?note=` pinning |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **One conversation, two grade scales.** ai-service grades 0–10 and its `maxScore` filter compares
+  against that; learning-service stores the same grade ×10 and every dispute (`disputedScore`,
+  `adjustedScore`) argues about *that* number. The panel shows 0–100 everywhere and converts on the
+  ai-service edge, so «не выше 60» on screen is `maxScore=6` on the wire.
+- **The grade ceiling is a select of whole tens, not a number box.** A box would accept 65 and
+  quietly search for 60.
+- **The message `index` is the server's**, never a position in the array — the test transcript says
+  the same sentence at index 5 and index 7 and asserts that quoting 7 quotes 7.
+- **`quotedText` is sent whole**, because the server copies it into the row: the note has to still
+  read after Mongo has trimmed the session.
+- **An ungraded conversation cannot be commented on** — the composer is replaced by the sentence
+  saying so, before the server's 400.
+- **A rejection with no reason is refused on screen**, in the server's own words, and a corrected
+  score is never sent alongside one.
+- **«Справедливая оценка» always carries its caption** — the number is recorded and never applied.
+- **`?note={id}` pins that note above whichever tab is open** rather than switching tabs: a verdict
+  moves its note between queues the moment it is given, and a tab that followed it would move the
+  reader mid-sentence. A stale or foreign id opens the queue, never an error.
+- **A dead ai-service leaves O6 half-working**, not broken: the transcript column shows the error
+  and the already-sent notes beside it keep rendering. Two services, two failures.
+- **No XP, no streaks, no leagues.**
+
+### Manual — O5 `/org/dialogs`
+
+Preconditions: a `TenancyAdmin`, and a team with at least one graded conversation.
+
+| Scenario | Expect |
+|---|---|
+| Open the screen | the grade ceiling is already 60; the list is the conversations that went badly |
+| A brand-new organization | «Команда ещё не провела ни одного оценённого разговора» — appears only with the filters cleared |
+| Filter down to nothing | «Под фильтр не попал ни один разговор» **plus** «Показать все разговоры», which clears every filter |
+| A manager the heat map has never seen | «Без имени · 3f2a1b9c», never a placeholder name |
+| A conversation held for an assignment | a «по заданию» chip linking to O4; the rest of the row still opens the transcript |
+| «Показать ещё 25» four times | the button is replaced by «Показаны первые 100. Сузьте фильтр…» |
+| Stop ai-service, keep learning-service | «Не удалось получить разговоры» here, while `/org` still draws its heat map |
+
+### Manual — O6 `/org/dialogs/[sessionId]`
+
+| Scenario | Expect |
+|---|---|
+| Click a reply | it highlights; clicking it again clears it |
+| Shift+click a later reply | the range covers both, and «Выделено: реплики 5–6» appears |
+| Send with no comment, or with nothing selected | «Отправить менеджеру» stays disabled, with the sentence saying what to do first |
+| Send a note | it appears under «Уже отправлено» and the selection clears |
+| Open a conversation with no grade | the composer is replaced by «Разговор не оценён — прокомментировать его нельзя» |
+| Open a session id from another company | «Разговор не найден», not an error banner |
+| Stop ai-service | the left column errors, the right column still lists what was sent |
+| A note the manager has read | its thread shows a second turn «Иванов А. · прочитал заметку» |
+
+### Manual — O7 `/org/reviews`
+
+| Scenario | Expect |
+|---|---|
+| Open with an open dispute | the manager's words first, on their side of the thread; the verdict controls below them |
+| «Оставить оценку» with an empty reason | «Вынести решение» disabled, «Оценка остаётся в силе, потому что…» under the field |
+| «Согласиться» | no reason required; «Справедливая оценка» appears with its caption about not changing anything |
+| Type 101 into «Справедливая оценка» | «Оценка — целое число от 0 до 100.» |
+| Give a verdict | the card re-renders as a two-turn thread and the sidebar badge drops by one |
+| A dispute another administrator ruled on | their name on the verdict turn, no «это вы» chip |
+| Open `/admin/dialog-reviews?note={noteId}` from the notification | slice 0 redirects to `/org/reviews?note={noteId}`; that card is outlined, its quote unfolded, and the page is scrolled to it |
+| The same link after the dispute was already ruled on | the card is still pinned and shows the verdict |
+| «Мои заметки» | the coaching notes the organization sent, each with its read/unread status |
+| Empty «Открытые» | «Открытых споров нет» + how a dispute gets here |
+
+### What the backend cannot serve, and what the screens do instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| «Оценка не выше 60» filtering on the same numbers the cards show | `GET /admin/dialog-sessions?maxScore=` compares against ai-service's 0–10 grade, while O7's `disputedScore`/`adjustedScore` are 0–100 | the panel shows 0–100 and divides the ceiling by ten on the way out; the ceiling is a select of whole tens because nothing between them exists |
+| «Иванов А. оспаривает 41 балл» | the grade reaching learning-service is always a multiple of ten (`score × 10`), so 41 cannot occur | «оспаривает 40 баллов» |
+| «Жёсткий закупщик» on a dispute card | `DialogReviewNoteDto` carries `dialogModeKey` and no title, and no endpoint names an organization's dialog modes | the raw key (`tough-buyer`) — not prettified into something the backend never said |
+| A scenario selector on O5 | there is no route listing the dialog modes one organization uses | distinct `modeId`/`modeTitle` over the rows already returned, keeping the applied one so the control never offers only its own value |
+| Manager names on O5/O6 | `AdminDialogSessionSummaryDto` carries `userId` only — ai-service holds no user replica | `GET /admin/team/skill-map` through `useTeamMemberNames`, and «Без имени · {8 символов id}» for anybody it does not know |
+| Three filtered reads for O7's three tabs | `GET /admin/dialog-reviews` does not paginate, and there is no by-id route for `?note=` | one unfiltered read; tabs, counts and the deep link are resolved from it |
+| «Открытые 2» counting only what is addressed to *this* administrator | the queue is the organization's; the endpoint has no author filter, and «Мои заметки» is `kind=coaching_note`, which is every administrator's | both tabs are the organization's, and each turn of a thread is labelled «это вы» when it is the reader's |
