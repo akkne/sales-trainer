@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Common.Extensions;
 using Sellevate.Learning.Features.Lessons.Models;
@@ -124,6 +125,5 @@ public sealed class AdminLessonVersionsController(
     }
 
     private bool IsPlatformAdministrator()
-        => User.IsInRole(AuthorizationPolicies.AdministratorRole)
-           || User.IsInRole(AuthorizationPolicies.SuperAdministratorRole);
+        => PlatformRoles.All.Any(User.IsInRole);
 }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
 
 namespace Sellevate.Learning.Features.Content;
@@ -31,8 +32,7 @@ internal static class ContentAuthoringGuard
     {
         ArgumentNullException.ThrowIfNull(caller);
 
-        return caller.IsInRole(AuthorizationPolicies.AdministratorRole)
-               || caller.IsInRole(AuthorizationPolicies.SuperAdministratorRole);
+        return PlatformRoles.All.Any(caller.IsInRole);
     }
 
     /// <summary>

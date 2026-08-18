@@ -19,9 +19,6 @@ namespace Sellevate.BuildingBlocks.Tenancy;
 /// </summary>
 public sealed class TenantContextMiddleware(RequestDelegate next)
 {
-    /// <summary>The `role` claim values that read across every organization. Sellevate's own staff
-    /// (docs/DECISIONS.md, 2026-08-16) — never an organization's `org_role`.</summary>
-    private static readonly string[] PlatformRoles = ["Admin", "SuperAdmin"];
 
     /// <summary>
     /// Resolves the organization and platform-wide mode onto <paramref name="tenantContext"/>, then
@@ -62,17 +59,11 @@ public sealed class TenantContextMiddleware(RequestDelegate next)
     }
 
     /// <summary>
-    /// Reads the role off the validated principal only. An impersonation token is minted with
+    /// Reads the role off the validated principal only, through <see cref="Tenancy.PlatformRoles"/> so
+    /// the two role names live in exactly one place. An impersonation token is minted with
     /// <c>role: User</c> on purpose (Phase 40.9), so impersonating never confers platform-wide
     /// reads — the impersonator sees exactly the one organization they borrowed.
     /// </summary>
     private static bool IsPlatformStaff(ClaimsPrincipal? principal)
-    {
-        if (principal?.Identity?.IsAuthenticated is not true)
-        {
-            return false;
-        }
-
-        return PlatformRoles.Any(principal.IsInRole);
-    }
+        => Tenancy.PlatformRoles.IsPlatformStaff(principal);
 }
