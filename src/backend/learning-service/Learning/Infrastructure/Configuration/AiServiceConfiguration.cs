@@ -21,6 +21,25 @@ public sealed class AiServiceConfiguration
     public string ContentReviewPath { get; init; } = "/ai/content/review";
 
     /// <summary>
+    /// Phase 40.33. The generic completion this service used to make itself, for the interactive
+    /// <c>ai_dialogue</c> exercise.
+    /// </summary>
+    public string ChatPath { get; init; } = "/ai/chat";
+
+    /// <summary>Phase 40.33. The same completion, streamed as newline-delimited deltas.</summary>
+    public string ChatStreamPath { get; init; } = "/ai/chat/stream";
+
+    /// <summary>Phase 40.33. Speech synthesis, for the same exercise's voice mode.</summary>
+    public string TextToSpeechPath { get; init; } = "/ai/tts";
+
+    /// <summary>
+    /// Phase 40.33. Outer bound on one interactive chat or synthesis call. Ninety seconds is what the
+    /// removed in-process client used, so a stalled provider degrades on the same clock it always
+    /// did — Polly's per-attempt budget now lives in ai-service, on the other side of this hop.
+    /// </summary>
+    public int ChatTimeoutSeconds { get; init; } = 90;
+
+    /// <summary>
     /// Phase 40.27. How long one pipeline call may take. The default <see cref="HttpClient"/> timeout
     /// is 100 seconds and generating a lesson routinely exceeds it — a timeout there would abandon a
     /// call the provider has already been paid for, and the retry would pay again.
