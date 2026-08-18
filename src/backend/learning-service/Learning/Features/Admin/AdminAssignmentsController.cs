@@ -32,6 +32,7 @@ namespace Sellevate.Learning.Features.Admin;
 [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminAssignmentsController(
     IAssignmentService assignmentService,
+    IAssignmentDashboardService assignmentDashboardService,
     ITenantContext tenantContext,
     ILogger<AdminAssignmentsController> logger) : ControllerBase
 {
@@ -68,6 +69,25 @@ public sealed class AdminAssignmentsController(
         var progressRecords = await assignmentService.GetProgressAsync(assignmentId, cancellationToken);
 
         return progressRecords is null ? NotFound() : Ok(progressRecords);
+    }
+
+    /// <summary>
+    /// Phase 40.25. The screen the РОП actually opens: the funnel, the named people behind it, and
+    /// every wave of the repeat series next to each other (docs/TENANCY/ASSIGNMENTS.md §4).
+    ///
+    /// <para>
+    /// It supersedes nothing — <c>/progress</c> stays, because it is the raw, name-free list and the
+    /// only one of the two that cannot be affected by identity-service being down.
+    /// </para>
+    /// </summary>
+    [HttpGet("admin/assignments/{assignmentId:guid}/dashboard")]
+    public async Task<ActionResult<AssignmentDashboardDto>> GetDashboard(
+        Guid assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var dashboard = await assignmentDashboardService.GetDashboardAsync(assignmentId, cancellationToken);
+
+        return dashboard is null ? NotFound() : Ok(dashboard);
     }
 
     [HttpPost("admin/assignments")]
