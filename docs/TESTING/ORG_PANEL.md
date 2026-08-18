@@ -118,3 +118,71 @@ As a `TenancyAdmin`:
 Walk every screen of the panel: no XP, no streaks, no leagues, no «очки прогресса», even on
 screens whose endpoint returns `xpEarned`. The only numbers a РОП sees are accuracy in percent and
 a dialog score out of 100.
+
+---
+
+## Slice 9 — «Расход ИИ» (O17, `/org/usage`)
+
+What it covers: `app/(org)/org/usage/page.tsx` and `features/org-usage/**`. Design:
+[docs/TENANCY/ADMIN_UI_DESIGN.md → O17](../TENANCY/ADMIN_UI_DESIGN.md#o17--orgusage--расход-ии).
+Semantics: [docs/AI_QUOTAS.md](../AI_QUOTAS.md).
+
+**Endpoint.** `GET /admin/ai-usage` only — it takes no parameters, always the current UTC calendar
+month. The screen is **read-only by design**: `GET`/`PUT /admin/ai-quota` are
+`RequirePlatformAdministrator` and are never called from here — a quota is what the organization
+bought, not something a РОП raises on themself.
+
+### Automated (vitest, from `src/frontend`)
+
+```
+npx tsc --noEmit
+npx vitest run
+```
+
+| File | Covers |
+|---|---|
+| `__tests__/orgUsageFormatting.test.ts` | `formatModelCost`, `formatTotalCost`, `formatUsagePeriodLabel`, `formatWholeNumberRu`, `pluralizeRussianCount`/`describeCallCount`, `resolveMetricTone`/`hasConfiguredLimit`, `describeUsageKind`, and the `QUOTA_STATE_BANNER_COPY` dictionary |
+| `__tests__/orgUsageComponents.test.tsx` | `ModelUsageTable`, `QuotaMeters`, `QuotaStateBanner` rendered with `@testing-library/react` |
+
+The behaviours worth naming:
+
+- **`estimatedCost: null` renders as «нет цены», never as `"0 ₽"`.** Pinned twice: once on the
+  formatter (`formatModelCost(null, ...)`) and once end-to-end through `ModelUsageTable`, which
+  also asserts `"0 ₽"`/`"0,00 ₽"` do **not** appear on that row. A genuinely free (`0`) line is
+  covered separately and must render `"0,00 ₽"` — the two cases are different and must not collapse
+  into each other.
+- **The report-level total** reads `TOTAL_COST_UNAVAILABLE_LABEL` — «Итоговая стоимость не
+  считается: для части моделей не задана цена.» — whenever `hasUnpricedModels` is true, regardless
+  of what `estimatedCost` happens to hold; the flag is authoritative, not the null check alone.
+- **A limit of `0` draws no bar.** `hasConfiguredLimit` and `QuotaMeters` render «без лимита» as
+  plain text instead of an empty `MetricBar` — a zero-percent bar and "no ceiling configured" are
+  different statements, per docs/AI_QUOTAS.md §2.
+- **`quotaState: "ok"` renders no banner at all** — `QuotaStateBanner` returns `null`, not an empty
+  card. `batch_paused` and `exhausted` render visibly different copy: the former says conversations
+  keep working while background generation stopped; the latter says both are down.
+- **Russian call-count pluralization.** `describeCallCount` agrees with the design mock's own two
+  examples, which disagree with each other on purpose: `"231 вызов"` (one-form) next to
+  `"1 610 вызовов"` (many-form), plus the 11–14 exception (`"11 вызовов"`, not `"11 вызов"`).
+- **`llmEstimatedCallCount` is never rendered as a second number** next to `llmCallCount` — it does
+  not appear anywhere in `features/org-usage/**` outside its own type definition and a comment
+  explaining why.
+- **A fresh organization with no spend** (`models: []`) shows `ModelUsageTable`'s own `EmptyState`
+  («В этом месяце расхода ещё не было») rather than a bare table; the three meters still render at
+  `0` against whatever limit is configured, which is the ordinary zero-usage case, not an empty
+  state of its own.
+
+### Manual
+
+Preconditions: a `TenancyAdmin` account, and a way to move an organization's `AiUsageRecords` /
+`OrganizationQuotas` rows for the three non-`ok` states (or wait for real spend to cross them).
+
+| Scenario | Expect |
+|---|---|
+| Open `/org/usage` on a slow connection | three skeleton blocks, then the real content — no flash of an empty table |
+| Stop ai-service, open `/org/usage` | `ErrorState` with a working «Повторить» button; clicking it refetches |
+| Fresh organization, no usage this month | meters at 0 against the configured (or default) limits, no banner, model table shows its empty state |
+| Organization past `SoftWarningPercent` | amber "Приближаетесь к лимиту" banner; token meter turns amber past 80% of its own limit |
+| Organization past the batch ceiling | "Фоновая генерация приостановлена" banner; a manager can still hold a conversation |
+| Organization at the monthly token limit | red "Лимит исчерпан" banner; per docs/AI_QUOTAS.md §5, interactive calls now 429 too |
+| A model with no price-table entry was used this month | its row shows «нет цены»; the total line shows the "not calculated" sentence, not a partial figure |
+| Try to find a quota-editing control anywhere on the screen | there is none — raising the limit is a platform-admin action on a different route entirely |
