@@ -43,7 +43,13 @@ public sealed class AiSpendReportDto
 
     public int VoiceMonthlyLimitMinutes { get; init; }
 
-    /// <summary>Derived from the price table, never stored. Null when no price is configured for any model used.</summary>
+    /// <summary>
+    /// Derived from the price table, never stored. Null as soon as <b>any</b> model used this month
+    /// is unpriced — not merely when all of them are. A total that silently omits the unpriced lines
+    /// is a partial sum wearing the clothes of a complete one, and since the shipped table prices
+    /// speech but no LLM model, that partial sum was the whole point of the report missing. Same
+    /// reasoning as the per-line value: unpriced reports null, never zero, because zero reads as free.
+    /// </summary>
     public decimal? EstimatedCost { get; init; }
 
     /// <summary>True when at least one model used this month has no entry in the price table.</summary>

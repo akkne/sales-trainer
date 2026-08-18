@@ -96,8 +96,12 @@ internal sealed class AiQuotaService : IAiQuotaService
         var periodKey = AiUsagePeriod.Current();
         var quota = await ResolveAsync(cancellationToken);
 
+        // Explicit organization predicate for the same reason as LoadRowAsync below: the query
+        // filter admits every row in platform-wide mode, so a report meant for one customer would
+        // otherwise total the installation. Review, 40.34.
+        var organizationId = _tenantContext.OrganizationId;
         var rows = await _databaseContext.AiUsageRecords
-            .Where(record => record.PeriodKey == periodKey)
+            .Where(record => record.OrganizationId == organizationId && record.PeriodKey == periodKey)
             .OrderBy(record => record.Model)
             .ToListAsync(cancellationToken);
 
@@ -110,6 +114,12 @@ internal sealed class AiQuotaService : IAiQuotaService
             var lineCost = PriceLine(row, configuration, out var unpriced);
             hasUnpricedModels |= unpriced;
 
+            // A partial total is worse than none. Skipping unpriced lines and summing the rest
+            // produced a concrete-looking figure that omitted the dominant cost, because the shipped
+            // price table lists yandex-tts and no LLM model at all — the whole LLM bill contributed
+            // zero while `hasUnpricedModels` sat quietly beside a number that read as complete. The
+            // same reasoning already governs the per-line value: an unpriced model reports null, and
+            // never zero, because zero reads as "this model is free". Review, 40.34.
             if (lineCost is { } cost)
             {
                 totalCost = (totalCost ?? 0m) + cost;
@@ -150,7 +160,7 @@ internal sealed class AiQuotaService : IAiQuotaService
             VoiceDailyLimitMinutes = quota.VoiceDailyLimitMinutes,
             VoiceUsedMinutesThisMonth = monthSeconds / 60,
             VoiceMonthlyLimitMinutes = quota.VoiceMonthlyLimitMinutes,
-            EstimatedCost = totalCost,
+            EstimatedCost = hasUnpricedModels ? null : totalCost,
             HasUnpricedModels = hasUnpricedModels,
             Models = lines,
         };
@@ -226,14 +236,20 @@ internal sealed class AiQuotaService : IAiQuotaService
 
     private async Task<OrganizationQuota?> LoadRowAsync(CancellationToken cancellationToken)
     {
-        if (_tenantContext.OrganizationId is null)
+        // The predicate is explicit rather than left to the global query filter. That filter reads
+        // `IsPlatformWide || OrganizationId == current`, so for Sellevate staff who also hold a
+        // membership — a combination TenantContext supports on purpose — a filter-only query returns
+        // whichever row Postgres hands back first. GET /admin/ai-quota would render another
+        // customer's limits and free-text note, and a PUT of that same form would copy them onto the
+        // caller's own organization. Found in review, 40.34; SaveSettingsAsync above always had it.
+        if (_tenantContext.OrganizationId is not { } organizationId)
         {
             return null;
         }
 
         return await _databaseContext.OrganizationQuotas
             .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(quota => quota.OrganizationId == organizationId, cancellationToken);
     }
 
     private ResolvedAiQuota Resolve(OrganizationQuota? row)

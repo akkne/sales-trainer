@@ -113,7 +113,25 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                     continue;
                 }
 
-                await ProcessMessageAsync(consumer, result, stoppingToken);
+                try
+                {
+                    await ProcessMessageAsync(consumer, result, stoppingToken);
+                }
+                catch (Exception exception)
+                {
+                    // Handler exceptions are already caught by RunHandlerWithRetriesAsync. What this
+                    // catches is everything *around* the handler: the Redis idempotency store, the
+                    // offset commit, and the scope's service resolution. None of that was guarded,
+                    // and .NET's default BackgroundServiceExceptionBehavior is StopHost — so a
+                    // five-second Redis restart or a routine consumer-group rebalance took the whole
+                    // service down, HTTP API included, and `restart:` turned that into a crash loop.
+                    // This base class backs thirteen consumers across the platform. Review, 40.34.
+                    Logger.LogError(
+                        exception,
+                        "Unhandled error processing a Kafka message in group '{Group}'; continuing", _settings.ConsumerGroupId);
+
+                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                }
             }
         }
         catch (OperationCanceledException)
