@@ -5,14 +5,22 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Techniques;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Phase 40.18. Opened to organization administrators so that a technique override is editable by
+/// the organization that owns it. Creation, import and anything touching a global row stay platform
+/// -only, enforced by <see cref="ContentAuthoringGuard"/> rather than by RLS, whose content policy
+/// admits a null owner on write by design.
+/// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminTechniquesController(
     LearningDbContext databaseContext,
     ILogger<AdminTechniquesController> logger) : ControllerBase
@@ -75,7 +83,10 @@ public sealed class AdminTechniquesController(
         [FromBody] AdminTechniqueWriteRequestDto payload,
         CancellationToken cancellationToken)
     {
-        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: null, cancellationToken);
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
+        var validationError = await ValidatePayloadAsync(
+            payload, existingTechniqueId: null, owningOrganizationId: null, cancellationToken);
         if (validationError is not null) return validationError;
 
         var technique = new Technique
@@ -107,16 +118,12 @@ public sealed class AdminTechniquesController(
     {
         var technique = await LoadTechniqueAsync(id, cancellationToken);
         if (technique is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, technique.OrganizationId)) return Forbid();
 
-        var validationError = await ValidatePayloadAsync(payload, existingTechniqueId: id, cancellationToken);
+        var validationError = await ValidatePayloadAsync(
+            payload, existingTechniqueId: id, technique.OrganizationId, cancellationToken);
         if (validationError is not null) return validationError;
 
-        databaseContext.TechniqueSkills.RemoveRange(technique.AdditionalSkills);
-        if (technique.Coach is not null)
-            databaseContext.TechniqueCoaches.Remove(technique.Coach);
-
-        technique.AdditionalSkills = new List<TechniqueSkill>();
-        technique.Coach = null;
         technique.UpdatedAt = DateTime.UtcNow;
 
         ApplyPayload(technique, payload);
@@ -138,6 +145,7 @@ public sealed class AdminTechniquesController(
         var technique = await databaseContext.Techniques
             .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         if (technique is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, technique.OrganizationId)) return Forbid();
 
         databaseContext.Techniques.Remove(technique);
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -148,11 +156,22 @@ public sealed class AdminTechniquesController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Platform staff only: import writes the global library wholesale — it is the seeder's sibling. An
+    /// organization customizing its own techniques does that one row at a time through <c>Update</c>.
+    ///
+    /// <para>
+    /// Each item is committed on its own and counted only after the row is actually persisted, so a
+    /// failed item never shows up as both "updated" and "failed".
+    /// </para>
+    /// </summary>
     [HttpPost("admin/techniques/import")]
     public async Task<ActionResult<AdminTechniqueImportResultDto>> Import(
         [FromBody] AdminTechniqueWriteRequestDto[] payload,
         CancellationToken cancellationToken)
     {
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
         var createdCount = 0;
         var updatedCount = 0;
         var failedCount = 0;
@@ -165,12 +184,15 @@ public sealed class AdminTechniquesController(
                 var existing = await databaseContext.Techniques
                     .Include(technique => technique.Coach)
                     .Include(technique => technique.AdditionalSkills)
-                    .FirstOrDefaultAsync(technique => technique.Slug == item.Slug, cancellationToken);
+                    .FirstOrDefaultAsync(
+                        technique => technique.Slug == item.Slug && technique.OrganizationId == null,
+                        cancellationToken);
 
                 var isNewRecord = existing is null;
                 var validationError = await ValidatePayloadAsync(
                     item,
                     existingTechniqueId: existing?.Id,
+                    owningOrganizationId: null,
                     cancellationToken);
                 if (validationError is not null)
                 {
@@ -189,23 +211,17 @@ public sealed class AdminTechniquesController(
                     };
                     ApplyPayload(existing, item);
                     databaseContext.Techniques.Add(existing);
-                    createdCount++;
                 }
                 else
                 {
-                    databaseContext.TechniqueSkills.RemoveRange(existing!.AdditionalSkills);
-                    if (existing.Coach is not null)
-                        databaseContext.TechniqueCoaches.Remove(existing.Coach);
-
-                    existing.AdditionalSkills = new List<TechniqueSkill>();
-                    existing.Coach = null;
-                    existing.UpdatedAt = DateTime.UtcNow;
-
+                    existing!.UpdatedAt = DateTime.UtcNow;
                     ApplyPayload(existing, item);
-                    updatedCount++;
                 }
 
                 await databaseContext.SaveChangesAsync(cancellationToken);
+
+                if (isNewRecord) createdCount++;
+                else updatedCount++;
             }
             catch (Exception exception)
             {
@@ -295,9 +311,16 @@ public sealed class AdminTechniquesController(
             .ToDictionaryAsync(projection => projection.Id, cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.18: the slug clash is looked for <b>inside one owner</b>, not across the visible set. A
+    /// technique override deliberately carries its base's slug — that is what keeps the URL stable — so a
+    /// check spanning "global or mine" would report a conflict with the very row this override is a copy
+    /// of, and no override would ever be editable.
+    /// </summary>
     private async Task<ActionResult?> ValidatePayloadAsync(
         AdminTechniqueWriteRequestDto payload,
         Guid? existingTechniqueId,
+        Guid? owningOrganizationId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(payload.Slug) || string.IsNullOrWhiteSpace(payload.Name))
@@ -308,6 +331,7 @@ public sealed class AdminTechniquesController(
 
         var slugClashExists = await databaseContext.Techniques.AnyAsync(
             candidate => candidate.Slug == payload.Slug
+                         && candidate.OrganizationId == owningOrganizationId
                          && (existingTechniqueId == null || candidate.Id != existingTechniqueId),
             cancellationToken);
 
@@ -325,7 +349,7 @@ public sealed class AdminTechniquesController(
         return null;
     }
 
-    private static void ApplyPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
+    private void ApplyPayload(Technique technique, AdminTechniqueWriteRequestDto payload)
     {
         technique.Slug = payload.Slug;
         technique.Name = payload.Name;
@@ -338,7 +362,32 @@ public sealed class AdminTechniquesController(
         technique.DialogJson = SerializeNullable(payload.Dialog);
         technique.CaseJson = SerializeNullable(payload.Case);
 
-        foreach (var skillId in (payload.AdditionalSkillIds ?? Array.Empty<Guid>()).Distinct())
+        SyncAdditionalSkills(technique, payload.AdditionalSkillIds);
+        SyncCoach(technique, payload.Coach);
+    }
+
+    /// <summary>
+    /// Child rows are reconciled in place rather than deleted and re-inserted: a delete plus an insert
+    /// carrying the same key inside one <c>SaveChanges</c> makes EF fail with a concurrency error
+    /// (<c>TechniqueCoaches</c> has a unique <c>TechniqueId</c>, <c>TechniqueSkills</c> a composite key),
+    /// which broke every re-import of an existing technique.
+    /// </summary>
+    private void SyncAdditionalSkills(Technique technique, Guid[]? additionalSkillIds)
+    {
+        var desiredSkillIds = (additionalSkillIds ?? Array.Empty<Guid>()).Distinct().ToHashSet();
+
+        var obsoleteLinks = technique.AdditionalSkills
+            .Where(link => !desiredSkillIds.Contains(link.SkillId))
+            .ToList();
+
+        foreach (var link in obsoleteLinks)
+        {
+            technique.AdditionalSkills.Remove(link);
+            databaseContext.TechniqueSkills.Remove(link);
+        }
+
+        var existingSkillIds = technique.AdditionalSkills.Select(link => link.SkillId).ToHashSet();
+        foreach (var skillId in desiredSkillIds.Where(skillId => !existingSkillIds.Contains(skillId)))
         {
             technique.AdditionalSkills.Add(new TechniqueSkill
             {
@@ -346,20 +395,36 @@ public sealed class AdminTechniquesController(
                 SkillId = skillId,
             });
         }
+    }
 
-        if (payload.Coach is not null)
+    private void SyncCoach(Technique technique, AdminTechniqueCoachDto? payload)
+    {
+        if (payload is null)
         {
-            technique.Coach = new TechniqueCoach
+            if (technique.Coach is not null)
+            {
+                databaseContext.TechniqueCoaches.Remove(technique.Coach);
+                technique.Coach = null;
+            }
+            return;
+        }
+
+        var coach = technique.Coach;
+        if (coach is null)
+        {
+            coach = new TechniqueCoach
             {
                 Id = Guid.NewGuid(),
                 TechniqueId = technique.Id,
-                AvatarSeed = payload.Coach.AvatarSeed,
-                Name = payload.Coach.Name,
-                Role = payload.Coach.Role,
-                Quote = payload.Coach.Quote,
-                ChallengesJson = SerializeNullable(payload.Coach.Challenges),
             };
+            technique.Coach = coach;
         }
+
+        coach.AvatarSeed = payload.AvatarSeed;
+        coach.Name = payload.Name;
+        coach.Role = payload.Role;
+        coach.Quote = payload.Quote;
+        coach.ChallengesJson = SerializeNullable(payload.Challenges);
     }
 
     private static string? SerializeNullable(JsonNode? node)

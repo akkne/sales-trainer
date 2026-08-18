@@ -9,6 +9,13 @@ import { EnvironmentConfiguration } from "@/config/environment";
 import { TimingConstants } from "@/shared/constants/timing-constants";
 import { usePageViewTracker } from "@/shared/analytics/use-page-view-tracker";
 import { Toaster } from "@/features/notifications/components/toaster";
+import dynamic from "next/dynamic";
+
+// Reads localStorage during its first render, so it must never be server-rendered.
+const DevThemePanel = dynamic(
+    () => import("@/features/devtools/components/dev-theme-panel").then((module) => module.DevThemePanel),
+    { ssr: false }
+);
 
 function AuthInitializer() {
     useInitAuth();
@@ -55,6 +62,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
                 <ThemeInitializer />
                 <PageViewTracker />
                 <Toaster />
+                {process.env.NODE_ENV === "development" && <DevThemePanel />}
                 {children}
             </QueryClientProvider>
         </GoogleOAuthProvider>

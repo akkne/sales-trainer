@@ -1,20 +1,33 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Social.Common.Extensions;
 using Sellevate.Social.Features.Friends.Models;
 using Sellevate.Social.Features.Friends.Services.Abstract;
 
 namespace Sellevate.Social.Features.Friends;
 
+/// <summary>
+/// Friend requests, the friend list, user search and public profiles. Business rules live in
+/// <see cref="IFriendService"/>; this maps its exceptions to status codes —
+/// <see cref="KeyNotFoundException"/> to 404, <see cref="InvalidOperationException"/> to 400.
+///
+/// <para>
+/// Phase 40.13. Friendships are tenant data, and without an organization there is no correct answer
+/// to any route here, so <c>[TenantScoped]</c> makes the middleware refuse the request rather than
+/// serve an empty list that reads as "you have no friends".
+/// </para>
+/// </summary>
 [ApiController]
 [Route("friends")]
+[TenantScoped]
 [Authorize]
 public sealed class FriendController(IFriendService friendService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<FriendDto>>> GetFriends(CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var friends = await friendService.GetFriendsAsync(userId, cancellationToken);
@@ -24,7 +37,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
     [HttpGet("requests")]
     public async Task<ActionResult<List<FriendRequestDto>>> GetPendingRequests(CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var pendingRequests = await friendService.GetPendingRequestsAsync(userId, cancellationToken);
@@ -36,7 +49,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         [FromBody] SendFriendRequestDto request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -59,7 +72,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         Guid friendshipId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -82,7 +95,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         Guid friendshipId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -105,7 +118,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         Guid friendshipId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -128,7 +141,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         Guid friendUserId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -147,7 +160,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         [FromQuery] string query,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var searchResults = await friendService.SearchUsersAsync(userId, query, cancellationToken);
@@ -157,7 +170,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
     [HttpGet("leaderboard")]
     public async Task<ActionResult<List<FriendLeaderboardEntryDto>>> GetFriendLeaderboard(CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var leaderboardEntries = await friendService.GetFriendLeaderboardAsync(userId, cancellationToken);
@@ -167,7 +180,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
     [HttpGet("activity")]
     public async Task<ActionResult<List<FriendActivityDto>>> GetFriendActivityFeed(CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         var activityFeed = await friendService.GetFriendActivityFeedAsync(userId, cancellationToken: cancellationToken);
@@ -179,7 +192,7 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         Guid targetUserId,
         CancellationToken cancellationToken)
     {
-        if (!TryGetCurrentUserId(out var userId))
+        if (!User.TryResolveUserId(out var userId))
             return Unauthorized();
 
         try
@@ -191,13 +204,5 @@ public sealed class FriendController(IFriendService friendService) : ControllerB
         {
             return NotFound(new { message = exception.Message });
         }
-    }
-
-    private bool TryGetCurrentUserId(out Guid userId)
-    {
-        var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        return Guid.TryParse(rawUserId, out userId);
     }
 }

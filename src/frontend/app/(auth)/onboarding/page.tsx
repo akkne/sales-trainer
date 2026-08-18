@@ -34,7 +34,7 @@ const EXPERIENCE_OPTIONS = [
 const DEFAULT_SKILL_SLUG = "sales-basics";
 
 function PersonaShape({ shape, selected }: { shape: string; selected: boolean }) {
-    const c = selected ? "var(--primary)" : "var(--ink-3)";
+    const c = selected ? "var(--primary-ink)" : "var(--ink-3)";
     return (
         <svg width={22} height={22} viewBox="0 0 26 26" fill="none" aria-hidden>
             {shape === "square" && <rect x="4" y="4" width="18" height="18" rx="2" fill={c} />}

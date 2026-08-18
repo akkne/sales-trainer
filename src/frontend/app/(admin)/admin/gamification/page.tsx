@@ -63,7 +63,7 @@ function GoalsCard() {
                 <button
                     onClick={() => updateSettings.mutate(current)}
                     disabled={updateSettings.isPending || current.dailyXpGoal <= 0 || current.weeklyXpGoal <= 0}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                    className="text-sm px-3 py-1.5 rounded-lg bg-indigo text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                     {updateSettings.isPending ? "Saving..." : "Save"}
                 </button>
@@ -195,7 +195,7 @@ function StreakMilestonesCard() {
                 <button
                     onClick={handleAdd}
                     disabled={createMilestone.isPending || newDayCount <= 0}
-                    className="px-3 py-1.5 text-xs bg-indigo text-white rounded-md hover:opacity-90 disabled:opacity-40 transition-colors"
+                    className="px-3 py-1.5 text-xs bg-indigo text-on-primary rounded-md hover:opacity-90 disabled:opacity-40 transition-colors"
                 >
                     + Add milestone
                 </button>

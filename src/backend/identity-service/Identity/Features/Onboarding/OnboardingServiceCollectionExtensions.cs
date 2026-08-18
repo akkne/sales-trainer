@@ -3,6 +3,9 @@ using Sellevate.Identity.Features.Onboarding.Services.Implementation;
 
 namespace Sellevate.Identity.Features.Onboarding;
 
+/// <summary>
+/// Registers the onboarding feature.
+/// </summary>
 public static class OnboardingServiceCollectionExtensions
 {
     public static IServiceCollection AddOnboardingFeatureServices(this IServiceCollection services)

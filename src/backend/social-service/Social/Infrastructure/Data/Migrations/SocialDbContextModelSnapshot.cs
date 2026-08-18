@@ -44,6 +44,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.Property<int>("OrderIndex")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
@@ -55,7 +58,7 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OwnerType", "OwnerId", "OrderIndex");
+                    b.HasIndex("OrganizationId", "OwnerType", "OwnerId", "OrderIndex");
 
                     b.ToTable("DiscussPhotos", (string)null);
                 });
@@ -80,6 +83,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.Property<bool>("IsAccepted")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ThreadId")
                         .HasColumnType("uuid");
 
@@ -91,9 +97,11 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AuthorId");
+                    b.HasIndex("ThreadId");
 
-                    b.HasIndex("ThreadId", "CreatedAt");
+                    b.HasIndex("OrganizationId", "AuthorId");
+
+                    b.HasIndex("OrganizationId", "ThreadId", "CreatedAt");
 
                     b.ToTable("DiscussReplies", (string)null);
                 });
@@ -115,6 +123,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -122,9 +133,14 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsCurated");
-
                     b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("IX_DiscussTags_Slug_Global")
+                        .HasFilter("\"OrganizationId\" IS NULL");
+
+                    b.HasIndex("OrganizationId", "IsCurated");
+
+                    b.HasIndex("OrganizationId", "Slug")
                         .IsUnique();
 
                     b.ToTable("DiscussTags", (string)null);
@@ -159,6 +175,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.Property<DateTime>("LastActivityAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("ReplyCount")
                         .HasColumnType("integer");
 
@@ -178,15 +197,15 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AuthorId");
+                    b.HasIndex("OrganizationId", "AuthorId");
 
-                    b.HasIndex("CreatedAt");
+                    b.HasIndex("OrganizationId", "CreatedAt");
 
-                    b.HasIndex("IsPinned");
+                    b.HasIndex("OrganizationId", "IsPinned");
 
-                    b.HasIndex("LastActivityAt");
+                    b.HasIndex("OrganizationId", "LastActivityAt");
 
-                    b.HasIndex("UpvoteCount");
+                    b.HasIndex("OrganizationId", "UpvoteCount");
 
                     b.ToTable("DiscussThreads", (string)null);
                 });
@@ -195,6 +214,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TagId")
@@ -207,7 +229,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasIndex("TagId");
 
-                    b.HasIndex("ThreadId", "TagId")
+                    b.HasIndex("ThreadId");
+
+                    b.HasIndex("OrganizationId", "ThreadId", "TagId")
                         .IsUnique();
 
                     b.ToTable("DiscussThreadTags", (string)null);
@@ -222,6 +246,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TargetId")
                         .HasColumnType("uuid");
 
@@ -233,9 +260,9 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TargetType", "TargetId");
+                    b.HasIndex("OrganizationId", "TargetType", "TargetId");
 
-                    b.HasIndex("UserId", "TargetType", "TargetId")
+                    b.HasIndex("OrganizationId", "UserId", "TargetType", "TargetId")
                         .IsUnique();
 
                     b.ToTable("DiscussVotes", (string)null);
@@ -254,15 +281,20 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CanonicalHighId")
+                        .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("uuid")
-                        .HasComputedColumnSql("GREATEST(\"RequesterId\", \"AddresseeId\")", stored: true);
+                        .HasComputedColumnSql("GREATEST(\"RequesterId\", \"AddresseeId\")", true);
 
                     b.Property<Guid>("CanonicalLowId")
+                        .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("uuid")
-                        .HasComputedColumnSql("LEAST(\"RequesterId\", \"AddresseeId\")", stored: true);
+                        .HasComputedColumnSql("LEAST(\"RequesterId\", \"AddresseeId\")", true);
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("RequesterId")
                         .HasColumnType("uuid");
@@ -272,15 +304,15 @@ namespace Sellevate.Social.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AddresseeId");
+                    b.HasIndex("OrganizationId", "AddresseeId");
 
-                    b.HasIndex("CanonicalLowId", "CanonicalHighId")
+                    b.HasIndex("OrganizationId", "RequesterId");
+
+                    b.HasIndex("OrganizationId", "CanonicalLowId", "CanonicalHighId")
                         .IsUnique()
                         .HasDatabaseName("IX_Friendships_CanonicalPair");
 
-                    b.HasIndex("RequesterId");
-
-                    b.HasIndex("RequesterId", "AddresseeId")
+                    b.HasIndex("OrganizationId", "RequesterId", "AddresseeId")
                         .IsUnique();
 
                     b.ToTable("Friendships", null, t =>

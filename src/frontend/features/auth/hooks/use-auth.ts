@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiClient } from "@/shared/api/api-client";
-import { useAuthStore, type UserRole } from "@/shared/stores/auth-store";
+import { useAuthStore, type OrgRole, type UserRole } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 
 const PENDING_VERIFICATION_EMAIL_KEY = "pendingVerificationEmail";
@@ -13,6 +13,8 @@ interface AuthTokenResponse {
     displayName: string;
     isOnboardingCompleted: boolean;
     role: UserRole;
+    orgId?: string | null;
+    orgRole?: OrgRole | null;
 }
 
 export function readPendingVerificationEmail(): string {
@@ -40,6 +42,8 @@ function useHandleSuccessfulAuth() {
             displayName: authResponse.displayName,
             isOnboardingCompleted: authResponse.isOnboardingCompleted,
             role: authResponse.role ?? "User",
+            orgId: authResponse.orgId ?? null,
+            orgRole: authResponse.orgRole ?? null,
         });
 
         if (authResponse.isOnboardingCompleted) {
@@ -63,6 +67,8 @@ export function useInitAuth() {
                 email: string;
                 displayName: string;
                 role: UserRole;
+                orgId?: string | null;
+                orgRole?: OrgRole | null;
                 isOnboardingCompleted: boolean;
             }>("/auth/me")
             .then((user) => setAuthenticatedUser(user))
@@ -71,26 +77,24 @@ export function useInitAuth() {
     }, [accessToken]);
 }
 
-export function useRegister() {
-    // TEMP: email confirmation disabled — registration returns tokens and logs in immediately.
+// Phase 40.7: there is no public registration. An account is created only by accepting an
+// invite, and the invite token itself already proves control of the email address, so this
+// replaces both the old useRegister hook and the email-verification step for invited users.
+export function useAcceptInvite(token: string) {
     const handleSuccessfulAuth = useHandleSuccessfulAuth();
 
     return useMutation({
-        mutationFn: (credentials: {
-            email: string;
-            password: string;
-            displayName: string;
-        }) => apiClient.post<AuthTokenResponse>("/auth/register", credentials),
-        onSuccess: (data, variables) => {
-            clientLogger.info("Registration successful", {
-                userId: data.userId,
-                email: variables.email,
-            });
+        mutationFn: (credentials: { displayName?: string; password?: string }) =>
+            apiClient.post<AuthTokenResponse>(
+                `/auth/invites/${encodeURIComponent(token)}/accept`,
+                credentials,
+            ),
+        onSuccess: (data) => {
+            clientLogger.info("Invite accepted", { userId: data.userId });
             handleSuccessfulAuth(data);
         },
-        onError: (error, variables) => {
-            clientLogger.warn("Registration failed", {
-                email: variables.email,
+        onError: (error) => {
+            clientLogger.warn("Invite acceptance failed", {
                 error: (error as Error).message,
             });
         },
@@ -125,6 +129,31 @@ export function useResendVerificationCode() {
             apiClient.post<void>("/auth/resend-code", { email }),
         onError: (error) => {
             clientLogger.warn("Resend verification code failed", {
+                error: (error as Error).message,
+            });
+        },
+    });
+}
+
+/**
+ * Phase 40.8, step 1 of the three-step login flow: the server answers which credential to ask
+ * for, because the login method is per-organization configuration (docs/TENANCY/TENANCY.md §4.5).
+ *
+ * The response deliberately carries nothing but the method — no organization, no "this address
+ * exists" flag — so the screen cannot be used to probe which addresses belong to a customer.
+ */
+export type LoginMethod = "password" | "oidc" | "saml";
+
+interface LoginStartResponse {
+    method: LoginMethod;
+}
+
+export function useLoginStart() {
+    return useMutation({
+        mutationFn: (email: string) =>
+            apiClient.post<LoginStartResponse>("/auth/login/start", { email }),
+        onError: (error) => {
+            clientLogger.warn("Login method lookup failed", {
                 error: (error as Error).message,
             });
         },

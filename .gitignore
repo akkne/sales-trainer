@@ -80,3 +80,11 @@ docs/Sellevate_Presentation_RU.pptx
 
 # Presentation (local only)
 presentation/
+
+# Python bytecode from the lint scripts in scripts/
+__pycache__/
+*.pyc
+
+# Tenancy rollout (scripts/tenancy-rollout.sh) — local run state and database dumps
+.tenancy-rollout-state
+backups/

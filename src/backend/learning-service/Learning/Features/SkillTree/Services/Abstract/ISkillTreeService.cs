@@ -2,6 +2,16 @@ using Sellevate.Learning.Features.SkillTree.Models;
 
 namespace Sellevate.Learning.Features.SkillTree.Services.Abstract;
 
+/// <summary>
+/// Reads the skill tree and its stages, and maintains which skills a learner is enrolled in.
+///
+/// <para>
+/// The progress-bearing reads are per-user and tenant-scoped; the counts they return are already
+/// resolved for tenant content overrides, so a caller must not add its own de-duplication. A user
+/// with no enrollment rows at all counts as enrolled in every skill — see the implementation for why
+/// that branch has to stay.
+/// </para>
+/// </summary>
 public interface ISkillTreeService
 {
     Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(

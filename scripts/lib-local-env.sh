@@ -23,10 +23,21 @@ LOCAL_LOKI_PORT="${LOCAL_LOKI_PORT:-3100}"
 # Port the locally-run backend listens on (matches the 5001 the frontend expects).
 LOCAL_BACKEND_PORT="${LOCAL_BACKEND_PORT:-5001}"
 LOCAL_FRONTEND_PORT="${LOCAL_FRONTEND_PORT:-3000}"
-# Port the locally-run API gateway (YARP) listens on.
-LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5000}"
+# Port the locally-run API gateway (YARP) listens on. NOT 5000: on macOS the
+# ControlCenter AirPlay Receiver holds that port, so the gateway cannot bind it —
+# the same reason docker-compose.local.yml remaps the containerised gateway. 5001 is
+# also where src/frontend/.env.local already points, so the frontend reaches the
+# gateway with no extra config. (5001 was the retired monolith's port; it and the
+# gateway must not be run at the same time.)
+LOCAL_GATEWAY_PORT="${LOCAL_GATEWAY_PORT:-5001}"
 # Port the locally-run Identity microservice listens on.
 LOCAL_IDENTITY_PORT="${LOCAL_IDENTITY_PORT:-5002}"
+# Port the locally-run AI Engine microservice listens on.
+LOCAL_AI_PORT="${LOCAL_AI_PORT:-5003}"
+# Port the locally-run Notifications microservice listens on.
+LOCAL_NOTIFICATION_PORT="${LOCAL_NOTIFICATION_PORT:-5004}"
+# Port the locally-run Analytics microservice listens on.
+LOCAL_ANALYTICS_PORT="${LOCAL_ANALYTICS_PORT:-5005}"
 # Port the locally-run Gamification microservice listens on.
 LOCAL_GAMIFICATION_PORT="${LOCAL_GAMIFICATION_PORT:-5007}"
 # Port the locally-run Social microservice listens on.
@@ -35,6 +46,8 @@ LOCAL_SOCIAL_PORT="${LOCAL_SOCIAL_PORT:-5006}"
 LOCAL_LEARNING_PORT="${LOCAL_LEARNING_PORT:-5008}"
 # Port the locally-run Company microservice listens on.
 LOCAL_COMPANY_PORT="${LOCAL_COMPANY_PORT:-5009}"
+# Port the locally-run Organization microservice listens on.
+LOCAL_ORGANIZATION_PORT="${LOCAL_ORGANIZATION_PORT:-5010}"
 # Host port published by docker-compose.infra.yml for MinIO (S3 API).
 LOCAL_MINIO_PORT="${LOCAL_MINIO_PORT:-9000}"
 
@@ -76,6 +89,12 @@ export_backend_env() {
   export OpenAI__ApiKey="${OPENAI_API_KEY}"
   export OpenAI__BaseUrl="${OPENAI_BASE_URL}"
   export OpenAI__ChatCompletionsPath="${OPENAI_CHAT_COMPLETIONS_PATH}"
+  # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
+  # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
+  export OpenAI__Provider="${OPENAI_PROVIDER:-OpenAi}"
+  export OpenAI__DialogModel="${OPENAI_DIALOG_MODEL:-gpt-4o}"
+  export OpenAI__DialogTemperature="${OPENAI_DIALOG_TEMPERATURE:-0.7}"
+  export OpenAI__MaximumDialogTokenCount="${OPENAI_MAX_TOKENS_DIALOG:-500}"
   export Deepgram__ApiKey="${DEEPGRAM_API_KEY}"
   export YandexTts__ApiKey="${YANDEX_TTS_API_KEY}"
   export SuperAdmin__Email="${SUPERADMIN_EMAIL}"
@@ -87,7 +106,11 @@ export_backend_env() {
 }
 
 # Config overrides for running the API gateway (YARP) on the host. It validates the
-# same JWT the monolith issues and proxies everything to the host-run monolith.
+# shared JWT and proxies each route to the host-run service that owns it.
+#
+# Every cluster in appsettings.json must be overridden here. The committed defaults are
+# Docker hostnames (http://ai:8080/ etc.) which do not resolve on the host, so any
+# cluster missing below 502s instead of failing loudly at startup.
 export_gateway_env() {
   export ASPNETCORE_ENVIRONMENT="Development"
   export ASPNETCORE_URLS="http://localhost:${LOCAL_GATEWAY_PORT}"
@@ -98,10 +121,14 @@ export_gateway_env() {
   # Proxy targets = the extracted microservices run on the host. The monolith has been
   # retired (no catch-all): every route is owned by a service, and unknown routes 404.
   export ReverseProxy__Clusters__identity__Destinations__d1__Address="http://localhost:${LOCAL_IDENTITY_PORT}/"
+  export ReverseProxy__Clusters__ai__Destinations__d1__Address="http://localhost:${LOCAL_AI_PORT}/"
+  export ReverseProxy__Clusters__notification__Destinations__d1__Address="http://localhost:${LOCAL_NOTIFICATION_PORT}/"
+  export ReverseProxy__Clusters__analytics__Destinations__d1__Address="http://localhost:${LOCAL_ANALYTICS_PORT}/"
   export ReverseProxy__Clusters__gamification__Destinations__d1__Address="http://localhost:${LOCAL_GAMIFICATION_PORT}/"
   export ReverseProxy__Clusters__social__Destinations__d1__Address="http://localhost:${LOCAL_SOCIAL_PORT}/"
   export ReverseProxy__Clusters__learning__Destinations__d1__Address="http://localhost:${LOCAL_LEARNING_PORT}/"
   export ReverseProxy__Clusters__company__Destinations__d1__Address="http://localhost:${LOCAL_COMPANY_PORT}/"
+  export ReverseProxy__Clusters__organization__Destinations__d1__Address="http://localhost:${LOCAL_ORGANIZATION_PORT}/"
 }
 
 # Config overrides for running the Identity microservice on the host. It owns its own
@@ -112,6 +139,11 @@ export_identity_env() {
   export ASPNETCORE_URLS="http://localhost:${LOCAL_IDENTITY_PORT}"
 
   export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  # AddSellevateEventing's RedisIdempotencyStore needs a live multiplexer at startup
+  # (Program.cs registers it eagerly), so this override is not optional: without it the
+  # committed appsettings value `redis:6379` — a Docker hostname — fails to resolve on the
+  # host and the service dies with a RedisConnectionException before binding its port.
+  export ConnectionStrings__Redis="localhost:${LOCAL_REDIS_PORT}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 
@@ -178,10 +210,10 @@ export_learning_env() {
 
   export Jwt__Key="${JWT_KEY}"
 
-  export AiService__BaseUrl="http://localhost:${LOCAL_AI_PORT:-5003}"
-  export OpenAI__ApiKey="${OPENAI_API_KEY}"
-  export OpenAI__BaseUrl="${OPENAI_BASE_URL}"
-  export OpenAI__ChatCompletionsPath="${OPENAI_CHAT_COMPLETIONS_PATH}"
+  # Phase 40.33: learning-service holds no provider key at all any more. Its interactive
+  # ai_dialogue exercise and the speech for it go through ai-service, which is where
+  # per-organization LLM and voice spend is metered.
+  export AiService__BaseUrl="http://localhost:${LOCAL_AI_PORT}"
 }
 
 # Config overrides for running the Company microservice on the host. It owns its own
@@ -193,6 +225,21 @@ export_company_env() {
   export ASPNETCORE_URLS="http://localhost:${LOCAL_COMPANY_PORT}"
 
   export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
+  export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
+
+  export Jwt__Key="${JWT_KEY}"
+}
+
+# Config overrides for running the Organization microservice on the host. It owns its own
+# Postgres database (organization) on the shared local Postgres instance. No Redis or Mongo
+# dependency — the tenant registry and the per-organization profile are relational only.
+# Kafka-only for organization.created/updated/suspended (no consumer, per Program.cs).
+export_organization_env() {
+  export ASPNETCORE_ENVIRONMENT="Development"
+  export ASPNETCORE_URLS="http://localhost:${LOCAL_ORGANIZATION_PORT}"
+
+  export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 

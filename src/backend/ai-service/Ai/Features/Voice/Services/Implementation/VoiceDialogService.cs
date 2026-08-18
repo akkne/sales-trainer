@@ -1,33 +1,61 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
+using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
 
 namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 
+/// <summary>
+/// Turns one learner utterance into an interleaved stream of reply text and synthesized audio.
+///
+/// <para>
+/// <b>Text is yielded before its audio, and synthesis runs ahead of playback.</b> Each extracted
+/// sentence is emitted immediately and its synthesis queued; completed audio is drained whenever the
+/// head of the queue is ready. That ordering is what makes the character start speaking while the
+/// model is still writing — awaiting each synthesis inline would serialise the two and roughly double
+/// the wait before the first sound.
+/// </para>
+///
+/// <para>
+/// <b>A failed synthesis degrades to text.</b> Only cancellation propagates; anything else is logged
+/// and the turn continues silently, because a learner reading the reply is a degraded call and a torn
+/// stream is a broken one.
+/// </para>
+///
+/// <para>
+/// Both messages are persisted, so a voice turn is replayable and gradable exactly like a typed one —
+/// including <c>IsStopSignal</c>, which is how the character hanging up survives a page reload.
+/// </para>
+///
+/// <para>
+/// Phase 40.23. A voice turn is graded by the same completion path as a typed one and counts towards
+/// the same assignment threshold, so it has to meet the same character: the assignment persona is
+/// spliced in here too. The context was resolved and frozen when the session started; this path only
+/// reads it.
+/// </para>
+/// </summary>
 internal sealed class VoiceDialogService : IVoiceDialogService
 {
     private readonly AiDbContext _dbContext;
-    private readonly MongoDbContext _mongoContext;
+    private readonly IDialogSessionRepository _sessionRepository;
     private readonly IOpenAiChatService _openAiService;
     private readonly ITtsRouter _ttsRouter;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
         AiDbContext dbContext,
-        MongoDbContext mongoContext,
+        IDialogSessionRepository sessionRepository,
         IOpenAiChatService openAiService,
         ITtsRouter ttsRouter,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
-        _mongoContext = mongoContext;
+        _sessionRepository = sessionRepository;
         _openAiService = openAiService;
         _ttsRouter = ttsRouter;
         _logger = logger;
@@ -37,13 +65,9 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         string sessionId,
         Guid userId,
         string transcript,
-        [EnumeratorCancellation] CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
-        );
-        var session = await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(ct);
+        var session = await _sessionRepository.FindForUserAsync(sessionId, userId, cancellationToken);
 
         if (session == null)
             throw new InvalidOperationException($"Session {sessionId} not found for user {userId}");
@@ -51,34 +75,32 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             throw new InvalidOperationException($"Session {sessionId} is not active");
 
         var mode = await _dbContext.DialogModes
-            .Include(m => m.Bundle)
-            .FirstOrDefaultAsync(m => m.Id == session.ModeId, ct);
+            .Include(dialogMode => dialogMode.Bundle)
+            .FirstOrDefaultAsync(dialogMode => dialogMode.Id == session.ModeId, cancellationToken);
 
         if (mode == null)
             throw new InvalidOperationException($"Mode {session.ModeId} not found");
         if (!mode.VoiceEnabled)
             throw new InvalidOperationException($"Voice is not enabled for mode {session.ModeId}");
 
-        var userMsg = new DialogMessage
+        var userMessage = new DialogMessage
         {
-            Role = "user",
+            Role = DialogMessageRoles.User,
             Content = transcript,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = false
         };
-        session.Messages.Add(userMsg);
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            filter,
-            Builders<DialogSession>.Update.Push(s => s.Messages, userMsg),
-            cancellationToken: ct);
+        session.Messages.Add(userMessage);
+        await _sessionRepository.AppendMessagesAsync(sessionId, userId, [userMessage], cancellationToken);
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        chatSystemPrompt = AssignmentPracticePromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.AssignmentPracticeContext);
 
         var replyParser = new StreamingChatReplyParser();
         var sentenceChunker = new SentenceChunker();
         var pendingAudio = new Queue<Task<byte[]?>>();
 
-        await foreach (var delta in _openAiService.StreamChatMessageAsync(chatSystemPrompt, session.Messages, ct))
+        await foreach (var delta in _openAiService.StreamChatMessageAsync(chatSystemPrompt, session.Messages, cancellationToken))
         {
             var replyText = replyParser.Push(delta);
             if (replyText.Length == 0) continue;
@@ -87,11 +109,11 @@ internal sealed class VoiceDialogService : IVoiceDialogService
 
             while (sentenceChunker.TryExtractSentence(out var sentence))
             {
-                var cleaned = sentence.Trim();
-                if (string.IsNullOrWhiteSpace(cleaned)) continue;
+                var cleanedSentence = sentence.Trim();
+                if (string.IsNullOrWhiteSpace(cleanedSentence)) continue;
 
-                yield return new VoiceStreamChunk(cleaned, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
-                pendingAudio.Enqueue(TrySynthesizeAsync(cleaned, mode.VoiceId, sessionId, ct));
+                yield return new VoiceStreamChunk(cleanedSentence, Array.Empty<byte>(), IsStopSignal: false, IsFinal: false);
+                pendingAudio.Enqueue(TrySynthesizeAsync(cleanedSentence, mode.VoiceId, sessionId, cancellationToken));
             }
 
             while (pendingAudio.Count > 0 && pendingAudio.Peek().IsCompleted)
@@ -111,11 +133,11 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             sentenceChunker.Replace(parseResult.Reply);
         }
 
-        var tailCleaned = sentenceChunker.DrainRemaining().Trim();
-        if (!string.IsNullOrWhiteSpace(tailCleaned))
+        var cleanedTail = sentenceChunker.DrainRemaining().Trim();
+        if (!string.IsNullOrWhiteSpace(cleanedTail))
         {
-            yield return new VoiceStreamChunk(tailCleaned, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
-            pendingAudio.Enqueue(TrySynthesizeAsync(tailCleaned, mode.VoiceId, sessionId, ct));
+            yield return new VoiceStreamChunk(cleanedTail, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: false);
+            pendingAudio.Enqueue(TrySynthesizeAsync(cleanedTail, mode.VoiceId, sessionId, cancellationToken));
         }
 
         while (pendingAudio.Count > 0)
@@ -125,18 +147,15 @@ internal sealed class VoiceDialogService : IVoiceDialogService
                 yield return new VoiceStreamChunk(string.Empty, audio, IsStopSignal: false, IsFinal: false);
         }
 
-        var assistantMsg = new DialogMessage
+        var assistantMessage = new DialogMessage
         {
-            Role = "assistant",
+            Role = DialogMessageRoles.Assistant,
             Content = parseResult.Reply,
             Timestamp = DateTime.UtcNow,
             IsStopSignal = parseResult.EndCall
         };
-        session.Messages.Add(assistantMsg);
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            filter,
-            Builders<DialogSession>.Update.Push(s => s.Messages, assistantMsg),
-            cancellationToken: ct);
+        session.Messages.Add(assistantMessage);
+        await _sessionRepository.AppendMessagesAsync(sessionId, userId, [assistantMessage], cancellationToken);
 
         _logger.LogInformation(
             "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}, endCallReason={EndCallReason}",
@@ -145,31 +164,35 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         yield return new VoiceStreamChunk(string.Empty, Array.Empty<byte>(), IsStopSignal: parseResult.EndCall, IsFinal: true);
     }
 
-    private async Task<byte[]?> TrySynthesizeAsync(string text, string? voiceId, string sessionId, CancellationToken ct)
+    /// <summary>
+    /// Synthesis that never breaks the turn. Cancellation propagates; any other failure yields
+    /// <see langword="null"/> so the reply is delivered as text only.
+    /// </summary>
+    private async Task<byte[]?> TrySynthesizeAsync(string text, string? voiceId, string sessionId, CancellationToken cancellationToken)
     {
         try
         {
-            return await SynthesizeAsync(text, voiceId, ct);
+            return await SynthesizeAsync(text, voiceId, cancellationToken);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogError(ex, "TTS synthesis failed for session {SessionId} ({TextLength} chars); reply delivered as text only", sessionId, text.Length);
+            _logger.LogWarning(exception, "TTS synthesis failed for session {SessionId} ({TextLength} chars); reply delivered as text only", sessionId, text.Length);
             return null;
         }
     }
 
-    private async Task<byte[]> SynthesizeAsync(string text, string? voiceId, CancellationToken ct)
+    private async Task<byte[]> SynthesizeAsync(string text, string? voiceId, CancellationToken cancellationToken)
     {
-        var stream = await _ttsRouter.SynthesizeSpeechAsync(text, voiceId, ct);
-        await using (stream)
+        var audioStream = await _ttsRouter.SynthesizeSpeechAsync(text, voiceId, cancellationToken);
+        await using (audioStream)
         {
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, ct);
-            return ms.ToArray();
+            using var buffer = new MemoryStream();
+            await audioStream.CopyToAsync(buffer, cancellationToken);
+            return buffer.ToArray();
         }
     }
 }

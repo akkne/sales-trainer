@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLogout } from "@/features/auth/hooks/use-auth";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { useThemeStore } from "@/shared/stores/theme-store";
 import { useNotificationPreferencesStore } from "@/shared/stores/notification-preferences-store";
 
@@ -46,9 +46,10 @@ export default function SettingsPage() {
         setProductUpdatesEnabled,
     } = useNotificationPreferencesStore();
 
-    const isAdmin =
-        authenticatedUser?.role === "Admin" ||
-        authenticatedUser?.role === "SuperAdmin";
+    // The platform admin panel is open to both Sellevate staff roles (docs/DECISIONS.md,
+    // 2026-08-16). The organization-scoped admin panel is a separate screen still to come
+    // (roadmap 40.20).
+    const isAdmin = isPlatformStaff(authenticatedUser?.role);
 
     // Collapse "system" to the nearest explicit choice for the 2-segment selector.
     // The underlying store still records "system" — we just display it as the

@@ -1,10 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Companies.Models;
 using Sellevate.Ai.Features.Companies.Services.Abstract;
 using Sellevate.Ai.Features.Evaluation;
 
 namespace Sellevate.Ai.Features.Companies;
 
+/// <summary>
+/// Composes a pre-call briefing for one company from its description, the goal, recent calls and past
+/// feedback.
+///
+/// <para>
+/// The payload guard is defence in depth on a user-controlled body: it prevents runaway provider cost and
+/// latency even when an upstream caller fails to bound its own field sizes. The cap itself lives in
+/// <see cref="Sellevate.Ai.Common.Constants.AiRequestSizeLimits"/> so the several routes that apply "the
+/// same" bound cannot drift apart.
+/// </para>
+///
+/// <para>
+/// Every provider failure is answered as a 503 and never a 500: a rejected request, a spent quota or a bad
+/// credential is upstream state, and reporting it as a server fault here would send somebody looking
+/// through ai-service logs for a bug that is not in ai-service.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("ai")]
 [ServiceFilter(typeof(InternalServiceAuthFilter))]
@@ -18,11 +37,6 @@ public sealed class BriefingController : ControllerBase
         _briefingService = briefingService;
         _logger = logger;
     }
-
-    // Defense-in-depth cap on the composed user-controlled payload, mirroring
-    // EvaluationController's 16000-char guard. Prevents runaway LLM cost/latency
-    // even if an upstream caller fails to bound its own field sizes.
-    private const int MaxContextLength = 60000;
 
     [HttpPost("companies/briefing")]
     public async Task<IActionResult> GenerateBriefing(
@@ -38,7 +52,7 @@ public sealed class BriefingController : ControllerBase
                 (call.Outcome?.Length ?? 0)) ?? 0) +
             (request.FeedbackSummaries?.Sum(summary => summary?.Length ?? 0) ?? 0);
 
-        if (contextLength > MaxContextLength)
+        if (contextLength > AiRequestSizeLimits.MaximumSourceMaterialCharacters)
         {
             return BadRequest(new { message = "briefing context exceeds maximum allowed size." });
         }
@@ -48,15 +62,26 @@ public sealed class BriefingController : ControllerBase
             var content = await _briefingService.GenerateBriefingAsync(request, cancellationToken);
             return Ok(new BriefingResultDto(content, DateTime.UtcNow));
         }
+        catch (OpenAiException openAiException)
+        {
+            _logger.LogWarning(openAiException, "AI provider error during briefing generation");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
+        }
         catch (InvalidOperationException invalidOperationException)
         {
             _logger.LogWarning(invalidOperationException, "Briefing generation failed");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
         catch (HttpRequestException httpRequestException)
         {
             _logger.LogWarning(httpRequestException, "AI provider error during briefing generation");
-            return StatusCode(503, new { message = "AI service unavailable. Please try again later." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = AiProviderFailureMessages.ServiceUnavailable });
         }
     }
 }

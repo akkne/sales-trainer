@@ -76,7 +76,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                                             ? "1px solid var(--primary-tint-border)"
                                             : "1px solid var(--line)",
                                         boxShadow: isExpanded
-                                            ? "0 6px 20px rgba(108,91,217,.10)"
+                                            ? "0 6px 20px rgba(124,209,0,.18)"
                                             : "var(--sh-1)",
                                         transition: "border-color var(--transition), box-shadow var(--transition)",
                                     }}
@@ -112,7 +112,7 @@ export default function ReferencePage({ params }: ReferencePageProps) {
                                         </span>
                                         <span
                                             style={{
-                                                color: isExpanded ? "var(--primary)" : "var(--ink-4)",
+                                                color: isExpanded ? "var(--primary-ink)" : "var(--ink-4)",
                                                 flexShrink: 0,
                                                 display: "flex",
                                                 alignItems: "center",

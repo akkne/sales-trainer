@@ -1,12 +1,39 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Features.SkillTree.Models;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Features.Techniques.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Techniques.Services.Implementation;
 
+/// <summary>
+/// Read model for the technique library: cards, detail pages, facet counts, and the
+/// first-seen marker.
+///
+/// <para>
+/// <b>Every technique query goes through <c>ResolveOverrides</c>.</b> A tenant override row carries
+/// the same slug and identity as the platform base row it replaces, so an unresolved query returns
+/// both and the caller sees a duplicate — or, on a single-row lookup, whichever row the query planner
+/// reached first. Resolution collapses the pair down to the row this organization should see, so a
+/// new query added here must keep the call (docs/TENANCY/CONTENT_MODEL.md).
+/// </para>
+///
+/// <para>
+/// <b>Free-text search runs in memory, not in SQL.</b> The <c>searchTerm</c> filter is applied after
+/// materialization because it is case-insensitive across four fields including the technique body,
+/// and the library is small enough that a scan costs less than the index machinery a database-side
+/// match would need. Tag and skill filters do run in SQL, so the in-memory pass only ever sees an
+/// already narrowed set.
+/// </para>
+///
+/// <para>
+/// <b>Malformed embedded JSON degrades, it does not throw.</b> <c>DialogJson</c>, <c>CaseJson</c> and
+/// the coach's <c>ChallengesJson</c> are author-supplied documents; a deserialization failure yields
+/// an empty section so the rest of the technique still renders rather than failing the whole page.
+/// </para>
+/// </summary>
 internal sealed class TechniqueService(LearningDbContext databaseContext) : ITechniqueService
 {
     private static readonly JsonSerializerOptions DefaultJsonOptions = new(JsonSerializerDefaults.Web);
@@ -18,7 +45,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         IReadOnlyCollection<string>? tags,
         CancellationToken cancellationToken = default)
     {
-        var techniquesQuery = databaseContext.Techniques.AsNoTracking().AsQueryable();
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var techniquesQuery = databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext);
 
         if (!string.IsNullOrWhiteSpace(skillIconicName))
         {
@@ -81,12 +110,23 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
             progressByTechniqueId)).ToList();
     }
 
+    /// <summary>
+    /// Loads one technique by slug, or <c>null</c> when this organization cannot see it.
+    ///
+    /// <para>
+    /// <b>Override resolution is correctness here, not tidiness (Phase 40.18).</b> An override
+    /// carries the same slug as its base — that is what keeps the URL stable — so an unresolved
+    /// lookup by slug matches two rows and returns whichever the planner reached first.
+    /// </para>
+    /// </summary>
     public async Task<TechniqueDetailDto?> GetTechniqueBySlugAsync(
         string slug,
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var technique = await databaseContext.Techniques.AsNoTracking()
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var technique = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
             .Include(loadedTechnique => loadedTechnique.Coach)
             .Include(loadedTechnique => loadedTechnique.AdditionalSkills)
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
@@ -134,7 +174,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking()
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
             .Where(technique => technique.PrimarySkillId != null)
             .GroupBy(technique => technique.PrimarySkillId!.Value)
             .Select(group => new { SkillId = group.Key, Count = group.Count() })
@@ -156,7 +198,7 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
                 countById.GetValueOrDefault(skill.Id)))
             .ToArray();
 
-        var totalCount = await databaseContext.Techniques.CountAsync(cancellationToken);
+        var totalCount = await databaseContext.Techniques.ResolveOverrides(databaseContext).CountAsync(cancellationToken);
 
         var userCounts = new TechniqueUserCountsDto(0, 0, totalCount);
 
@@ -182,7 +224,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var technique = await databaseContext.Techniques
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
+        var technique = await databaseContext.Techniques.ResolveOverrides(databaseContext)
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
 
         if (technique is null)
@@ -208,6 +252,7 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         });
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyDictionary<Guid, Skill>> LoadSkillLookupAsync(

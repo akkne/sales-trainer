@@ -14,7 +14,7 @@ interface ProgressProps {
 const TONE_COLORS: Record<ProgressTone, string> = {
     rust: "var(--flame)",
     olive: "var(--success)",
-    indigo: "linear-gradient(90deg, var(--primary), var(--violet))",
+    indigo: "var(--grad-bar)",
     ink: "var(--ink)",
 };
 
@@ -22,7 +22,7 @@ const TONE_COLORS: Record<ProgressTone, string> = {
 const TONE_STROKE: Record<ProgressTone, string> = {
     rust: "var(--flame)",
     olive: "var(--success)",
-    indigo: "var(--primary)",
+    indigo: "var(--primary-strong)",
     ink: "var(--ink)",
 };
 

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using Sellevate.Ai.Features.Evaluation.Services.Implementation;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -10,11 +11,14 @@ namespace Sellevate.Ai.Tests.Unit;
 [TestFixture]
 public class AiEvaluationStrategyBaseParseTests
 {
-    // ParseAiResponse is protected static, but InternalsVisibleTo is set and the class is internal.
-    // We use a thin test subclass to expose it.
+    /// <summary>
+    /// <c>ParseAiResponse</c> is <c>protected static</c> on an <c>internal</c> class, and
+    /// <c>InternalsVisibleTo</c> is set, so a thin subclass is enough to reach it without making the
+    /// method itself more visible than it should be.
+    /// </summary>
     private sealed class Exposed : AiEvaluationStrategyBase
     {
-        public Exposed() : base(null!, null!, null!) { }
+        public Exposed() : base(null!, null!, null!, null!) { }
 
         public static global::Sellevate.Ai.Features.Evaluation.Models.ExerciseEvaluationResult Parse(string json)
             => ParseAiResponse(json);
@@ -30,14 +34,14 @@ public class AiEvaluationStrategyBaseParseTests
         result.AiFeedback.Should().Be("Good");
     }
 
+    /// <summary>A model that returns the rating as a quoted string still scores.</summary>
     [Test]
     public void ParseAiResponse_RatingAsString_ParsedGracefully()
     {
-        // AI returns rating as a quoted string instead of a number
         var result = Exposed.Parse("""{"passed": false, "rating": "7", "feedback": "ok"}""");
 
         result.Score.Should().Be(70);
-        result.IsCorrect.Should().BeFalse(); // rating 7 < 8 and passed=false
+        result.IsCorrect.Should().BeFalse();
     }
 
     [Test]
@@ -45,7 +49,7 @@ public class AiEvaluationStrategyBaseParseTests
     {
         var result = Exposed.Parse("""{"passed": true, "rating": 99, "feedback": "overrated"}""");
 
-        result.Score.Should().Be(100); // clamped to 10, score = 10*10
+        result.Score.Should().Be(100);
     }
 
     [Test]
@@ -53,35 +57,40 @@ public class AiEvaluationStrategyBaseParseTests
     {
         var result = Exposed.Parse("""{"passed": false, "rating": -5, "feedback": "bad"}""");
 
-        result.Score.Should().Be(10); // clamped to 1, score = 1*10
+        result.Score.Should().Be(10);
     }
 
+    /// <summary>
+    /// <c>passed</c> arrives as the string <c>"true"</c>, which parses as the boolean. The result is
+    /// correct on the strength of that alone: a rating of 6 would not have reached the
+    /// rating-at-least-8 threshold on its own.
+    /// </summary>
     [Test]
     public void ParseAiResponse_PassedAsStringTrue_TreatedAsTrue()
     {
-        // passed is the string "true" — GetBooleanSafe should parse it as true
         var result = Exposed.Parse("""{"passed": "true", "rating": 6, "feedback": "ok"}""");
 
-        // IsCorrect = passed(true) || rating>=8(false) = true
         result.IsCorrect.Should().BeTrue();
         result.Score.Should().Be(60);
     }
 
+    /// <summary>
+    /// Every field has the wrong type — <c>passed</c> is a number, <c>rating</c> is an object. Nothing
+    /// throws: a non-zero number reads as true and the rating falls back to its default of 5.
+    /// </summary>
     [Test]
     public void ParseAiResponse_WrongJsonTypes_PassedIsNumber_DegradeGracefully()
     {
-        // passed is a number (not bool/string), rating is an object — completely wrong types
         var result = Exposed.Parse("""{"passed": 1, "rating": {"value": 5}, "feedback": null}""");
 
-        // Should not throw; rating defaults to 5, passed=true (nonzero number)
         result.Should().NotBeNull();
-        result.Score.Should().Be(50); // default rating 5
+        result.Score.Should().Be(50);
     }
 
+    /// <summary>Not JSON at all: the answer degrades to a failed result rather than an exception.</summary>
     [Test]
     public void ParseAiResponse_CompletelyUnparseable_DegradeToFailedResult()
     {
-        // Not JSON at all
         var result = Exposed.Parse("Sorry, I cannot provide a score right now.");
 
         result.IsCorrect.Should().BeFalse();
@@ -89,12 +98,12 @@ public class AiEvaluationStrategyBaseParseTests
         result.AiFeedback.Should().BeNull();
     }
 
+    /// <summary>No fields at all: not passed, and the rating falls back to its default of 5.</summary>
     [Test]
     public void ParseAiResponse_EmptyJson_DegradeGracefully()
     {
         var result = Exposed.Parse("{}");
 
-        // No fields present: passed=false, rating defaults to 5
         result.Should().NotBeNull();
         result.Score.Should().Be(50);
         result.IsCorrect.Should().BeFalse();

@@ -6,6 +6,10 @@ using Sellevate.Ai.Features.Dialog.Services.Abstract;
 
 namespace Sellevate.Ai.Features.Companies.Services.Implementation;
 
+/// <summary>
+/// Asks the provider for a buyer persona, seeded from whatever the caller already knows about the contact
+/// and tuned by the requested difficulty.
+/// </summary>
 internal sealed class PersonaService : IPersonaService
 {
     private const string SystemPromptTemplate = @"Ты — ассистент менеджера по продажам, который придумывает персонажа для тренировочного звонка. На основе описания компании ниже придумай яркого, но реалистичного собеседника (сотрудника этой компании), с которым пользователь потренируется вести переговоры.

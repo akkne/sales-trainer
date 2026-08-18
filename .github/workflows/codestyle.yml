@@ -1,11 +1,17 @@
 name: codestyle
 
+# Widened from identity-service to the whole backend on 2026-08-18, when the cleanliness audit took
+# src/backend from 2699 violations to zero. Gating one service was all the old rule allowed: it
+# forbade every comment including `///`, so the other ten services were thousands of violations deep
+# and could never have been added. CODESTYLE.md §9 now requires `///` on service and infrastructure
+# classes and bans only `//` prose, and the whole tree satisfies it — so the gate is what stops it
+# drifting back.
 on:
   pull_request:
     paths:
-      - "src/backend/identity-service/**"
+      - "src/backend/**"
       - "scripts/codestyle-lint.*"
-      - "src/backend/.editorconfig"
+      - "scripts/lib_csharp_source.py"
       - ".github/workflows/codestyle.yml"
 
 jobs:
@@ -19,15 +25,17 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: CODESTYLE rules (comments, abbreviations)
-        run: python3 scripts/codestyle-lint.py src/backend/identity-service/Identity src/backend/identity-service/Identity.Tests
+      - name: CODESTYLE rules (comments, abbreviations) — whole backend
+        run: python3 scripts/codestyle-lint.py src/backend
 
-      - name: Formatting and analyzers (dotnet format)
+      # dotnet format stays scoped to identity-service. Its own gate has always been green there, and
+      # widening formatting and analyser enforcement to eleven projects at once is a separate decision
+      # with its own diff — not something to smuggle in under a lint widening.
+      - name: Formatting and analyzers (dotnet format, identity-service)
         working-directory: src/backend/identity-service
         run: |
           dotnet format --verify-no-changes Identity/Sellevate.Identity.csproj
           dotnet format --verify-no-changes Identity.Tests/Sellevate.Identity.Tests.csproj
 
       - name: Build
-        working-directory: src/backend/identity-service
-        run: dotnet build Identity.Tests/Sellevate.Identity.Tests.csproj --configuration Release
+        run: dotnet build src/backend/Sellevate.sln --configuration Release

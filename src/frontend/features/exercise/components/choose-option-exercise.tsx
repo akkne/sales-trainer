@@ -117,7 +117,6 @@ export function ChooseOptionExercise({
                     score={submittedResult.score}
                     explanation={submittedResult.explanation ?? null}
                     aiFeedback={submittedResult.aiFeedback ?? null}
-                    xpEarned={submittedResult.xpEarned}
                     onContinue={onContinue ?? (() => {})}
                     userAnswer={selectedOptionIndex !== null ? content.options[selectedOptionIndex]?.text ?? null : null}
                     correctAnswer={content.options.find((o) => o.is_correct)?.text ?? null}

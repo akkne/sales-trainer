@@ -1,0 +1,30 @@
+# Build context for every per-service Dockerfile is src/backend (the backend root),
+# because each service references the shared building-blocks project next to it.
+# Without this file the context is ~2.1 GB of host build artifacts, which is sent
+# to the daemon once per service and starves the Docker VM during a parallel build.
+#
+# The Dockerfiles restore and publish inside the image, so host build output is
+# never needed — and copying it in can poison the container build with artifacts
+# compiled for a different RID.
+
+# .NET build output
+**/bin/
+**/obj/
+
+# Test results / coverage
+**/TestResults/
+**/*.trx
+**/coverage*.xml
+
+# NOTE: appsettings.*.json is deliberately NOT excluded. gateway/Gateway/
+# appsettings.Development.json is tracked and carries YARP cluster config, and the
+# containers run with ASPNETCORE_ENVIRONMENT=Development. docker-compose environment
+# variables override those values, but dropping the files would still be a change to
+# the deploy image, not just a context trim.
+
+# User/IDE cruft
+**/*.user
+**/*.suo
+.vs/
+.idea/
+.DS_Store

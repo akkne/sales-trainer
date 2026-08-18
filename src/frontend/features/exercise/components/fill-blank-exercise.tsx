@@ -95,7 +95,7 @@ export function FillBlankExercise({
                         padding: "4px 12px",
                         borderRadius: 8,
                         background: selectedText ? "var(--primary-soft)" : "var(--bg-2)",
-                        color: selectedText ? "var(--primary-strong)" : "var(--ink-4)",
+                        color: selectedText ? "var(--primary-ink)" : "var(--ink-4)",
                         border: selectedText ? "1px dashed var(--primary)" : "1px dashed var(--line-2)",
                         textAlign: "center",
                         fontSize: 18,
@@ -144,7 +144,6 @@ export function FillBlankExercise({
                     score={submittedResult.score}
                     explanation={submittedResult.explanation ?? null}
                     aiFeedback={submittedResult.aiFeedback ?? null}
-                    xpEarned={submittedResult.xpEarned}
                     onContinue={onContinue ?? (() => {})}
                     userAnswer={selectedOptionIndex !== null ? content.options[selectedOptionIndex]?.text ?? null : null}
                     correctAnswer={(content.options ?? []).find((o) => o.is_correct)?.text ?? null}

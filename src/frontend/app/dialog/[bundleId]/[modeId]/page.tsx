@@ -56,6 +56,10 @@ export default function ChatPage() {
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
     const [isEnded, setIsEnded] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
+    // Below the mobile breakpoint the sidebar is an overlay drawer, so it needs its own
+    // state: `showSidebar` starts open (correct for the desktop column) but the drawer
+    // must start closed. The one toggle button drives both; CSS decides which applies.
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const [voiceError, setVoiceError] = useState<string | null>(null);
     const [sessionTimer, setSessionTimer] = useState(0);
@@ -320,11 +324,14 @@ export default function ChatPage() {
         setTimeout(() => setVoiceError(null), TimingConstants.fiveSecondsMs);
     }, []);
 
-    const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
-        setSessionId(newSessionId);
+    const handleVoiceSessionReady = useCallback((readySessionId: string) => {
+        // Also fires when voice reuses the session this page is already showing — only a
+        // genuinely new session may wipe the transcript.
+        if (readySessionId === sessionId) return;
+        setSessionId(readySessionId);
         setMessages([]);
         refetchSessions();
-    }, [refetchSessions]);
+    }, [sessionId, refetchSessions]);
 
     const {
         state: voiceState,
@@ -337,7 +344,7 @@ export default function ChatPage() {
         modeVoiceEnabled: chatMode === "voice" && (currentMode?.voiceEnabled ?? false),
         bundleId,
         modeId,
-        onSessionCreated: handleVoiceSessionCreated,
+        onSessionReady: handleVoiceSessionReady,
         onTranscript: handleVoiceTranscript,
         onAiResponse: handleVoiceAiResponse,
         onError: handleVoiceError,
@@ -348,16 +355,17 @@ export default function ChatPage() {
     if (isLoading && !sessionId && !isInitialized) {
         return (
             <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
-                {showSidebar && (
-                    <SessionHistorySidebar
-                        sessions={filteredSessions}
-                        currentSessionId={null}
-                        onSessionClick={handleSessionClick}
-                        onNewChat={handleNewChat}
-                        onDeleteSession={handleDeleteSession}
-                        onClose={handleClose}
-                    />
-                )}
+                <SessionHistorySidebar
+                    mobileOpen={mobileSidebarOpen}
+                    desktopHidden={!showSidebar}
+                    onMobileClose={() => setMobileSidebarOpen(false)}
+                    sessions={filteredSessions}
+                    currentSessionId={null}
+                    onSessionClick={handleSessionClick}
+                    onNewChat={handleNewChat}
+                    onDeleteSession={handleDeleteSession}
+                    onClose={handleClose}
+                />
                 <main className="dc-main">
                     <div className="dc-head">
                         <span className="dc-head-title">Загрузка...</span>
@@ -373,16 +381,17 @@ export default function ChatPage() {
     if (error && !sessionId) {
         return (
             <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
-                {showSidebar && (
-                    <SessionHistorySidebar
-                        sessions={filteredSessions}
-                        currentSessionId={null}
-                        onSessionClick={handleSessionClick}
-                        onNewChat={handleNewChat}
-                        onDeleteSession={handleDeleteSession}
-                        onClose={handleClose}
-                    />
-                )}
+                <SessionHistorySidebar
+                    mobileOpen={mobileSidebarOpen}
+                    desktopHidden={!showSidebar}
+                    onMobileClose={() => setMobileSidebarOpen(false)}
+                    sessions={filteredSessions}
+                    currentSessionId={null}
+                    onSessionClick={handleSessionClick}
+                    onNewChat={handleNewChat}
+                    onDeleteSession={handleDeleteSession}
+                    onClose={handleClose}
+                />
                 <main className="dc-main">
                     <div className="dc-head">
                         <span className="dc-head-title">Ошибка</span>
@@ -405,23 +414,27 @@ export default function ChatPage() {
 
     return (
         <div className="chat-screen" style={showSidebar ? undefined : { gridTemplateColumns: "1fr" }}>
-            {showSidebar && (
-                <SessionHistorySidebar
-                    sessions={filteredSessions}
-                    currentSessionId={sessionId}
-                    onSessionClick={handleSessionClick}
-                    onNewChat={handleNewChat}
-                    onDeleteSession={handleDeleteSession}
-                    onClose={handleClose}
-                />
-            )}
+            <SessionHistorySidebar
+                mobileOpen={mobileSidebarOpen}
+                desktopHidden={!showSidebar}
+                onMobileClose={() => setMobileSidebarOpen(false)}
+                sessions={filteredSessions}
+                currentSessionId={sessionId}
+                onSessionClick={handleSessionClick}
+                onNewChat={handleNewChat}
+                onDeleteSession={handleDeleteSession}
+                onClose={handleClose}
+            />
 
             <main className="dc-main">
                 {/* Header */}
                 <div className="dc-head">
                     <button
                         className="icon-btn"
-                        onClick={() => setShowSidebar(!showSidebar)}
+                        onClick={() => {
+                            setShowSidebar((open) => !open);
+                            setMobileSidebarOpen((open) => !open);
+                        }}
                         aria-label="История диалогов"
                         style={{ flex: "none" }}
                     >
@@ -493,7 +506,7 @@ export default function ChatPage() {
                     <div className="dc-thread-inner">
                         {!sessionId && messages.length === 0 && (
                             <div className="empty" style={{ padding: "80px 20px" }}>
-                                <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
+                                <div className="ic" style={{ background: "var(--primary-soft)", color: "var(--primary-ink)" }}>
                                     <Icon name="phone" size="xl" />
                                 </div>
                                 <p className="h4" style={{ marginBottom: 8 }}>Начни разговор</p>
@@ -579,7 +592,7 @@ export default function ChatPage() {
             </main>
 
             {feedback && (
-                <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />
+                <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} sessionId={sessionId} />
             )}
         </div>
     );

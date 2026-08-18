@@ -3,29 +3,67 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Common.Constants;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+/// <summary>
+/// Phase 40.6 audit: authors the shared dialog-content library — bundles, modes and their prompts.
+/// Sellevate-staff-only.
+///
+/// <para>
+/// <b>Platform-only, and a separate controller from the override surface.</b> Editing an organization's
+/// own copy happens on <see cref="Overrides.AdminDialogOverridesController"/>. That split is deliberate
+/// rather than cosmetic: stacking a second <c>[Authorize]</c> on an action here would AND the two
+/// policies, not OR them, so an organization administrator would still be refused while the code read
+/// as if they were allowed. Two controllers make the weaker gate impossible to misread.
+/// </para>
+///
+/// <para>
+/// <c>[TenantTransaction]</c> closes ai-service's long-standing gap (docs/DONT_FORGET.md):
+/// <c>SET LOCAL</c> only takes effect inside a transaction, so without it an organization's own
+/// override is invisible even to a platform administrator working inside that organization.
+/// </para>
+///
+/// <para>
+/// <b>Import is partially tolerant on purpose.</b> A malformed bundle or mode is collected into the
+/// error list and the rest of the file is still applied, because an operator importing sixty modes
+/// wants the fifty-nine good ones in and a list of what to fix — not an all-or-nothing rejection.
+/// Matching is by natural key (skill plus title, bundle plus mode key), so re-importing the same file
+/// updates rather than duplicates.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("admin/dialog")]
-[Authorize(Policy = "RequireAdmin")]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
 public sealed class AdminDialogController : ControllerBase
 {
-    private readonly AiDbContext _dbContext;
+    /// <summary>
+    /// Kestrel's body ceiling for a content import. A compile-time constant because
+    /// <c>[RequestSizeLimit]</c> is an attribute argument and cannot read configuration.
+    /// </summary>
+    private const int MaximumImportFileSizeBytes = 20 * 1024 * 1024;
+
+    private const string DefaultBundleIconEmoji = "💬";
+    private const string JsonFileExtension = ".json";
+
+    private readonly AiDbContext _databaseContext;
     private readonly ILogger<AdminDialogController> _logger;
 
-    public AdminDialogController(AiDbContext dbContext, ILogger<AdminDialogController> logger)
+    public AdminDialogController(AiDbContext databaseContext, ILogger<AdminDialogController> logger)
     {
-        _dbContext = dbContext;
+        _databaseContext = databaseContext;
         _logger = logger;
     }
 
     [HttpGet("bundles")]
     public async Task<IActionResult> GetAllBundles()
     {
-        var bundles = await _dbContext.DialogBundles
+        var bundles = await _databaseContext.DialogBundles
             .OrderBy(bundle => bundle.SortOrder)
             .ToListAsync();
 
@@ -36,12 +74,12 @@ public sealed class AdminDialogController : ControllerBase
     [HttpGet("bundles/{bundleId:guid}")]
     public async Task<IActionResult> GetBundle(Guid bundleId)
     {
-        var bundle = await _dbContext.DialogBundles
-            .FirstOrDefaultAsync(b => b.Id == bundleId);
+        var bundle = await _databaseContext.DialogBundles
+            .FirstOrDefaultAsync(bundle => bundle.Id == bundleId);
 
         if (bundle == null)
         {
-            return NotFound(new { message = "Bundle not found" });
+            return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
         return Ok(DialogBundleDto.FromEntity(bundle));
@@ -60,8 +98,8 @@ public sealed class AdminDialogController : ControllerBase
             IsActive = request.IsActive
         };
 
-        _dbContext.DialogBundles.Add(bundle);
-        await _dbContext.SaveChangesAsync();
+        _databaseContext.DialogBundles.Add(bundle);
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Created dialog bundle {BundleId}: {Title}", bundle.Id, bundle.Title);
 
@@ -71,12 +109,12 @@ public sealed class AdminDialogController : ControllerBase
     [HttpPut("bundles/{bundleId:guid}")]
     public async Task<IActionResult> UpdateBundle(Guid bundleId, [FromBody] UpdateBundleRequestDto request)
     {
-        var bundle = await _dbContext.DialogBundles
-            .FirstOrDefaultAsync(b => b.Id == bundleId);
+        var bundle = await _databaseContext.DialogBundles
+            .FirstOrDefaultAsync(bundle => bundle.Id == bundleId);
 
         if (bundle == null)
         {
-            return NotFound(new { message = "Bundle not found" });
+            return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
         if (request.SkillId.HasValue)
@@ -93,7 +131,7 @@ public sealed class AdminDialogController : ControllerBase
 
         bundle.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync();
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Updated dialog bundle {BundleId}", bundleId);
 
@@ -103,15 +141,15 @@ public sealed class AdminDialogController : ControllerBase
     [HttpDelete("bundles/{bundleId:guid}")]
     public async Task<IActionResult> DeleteBundle(Guid bundleId)
     {
-        var bundle = await _dbContext.DialogBundles.FindAsync(bundleId);
+        var bundle = await _databaseContext.DialogBundles.FindAsync(bundleId);
 
         if (bundle == null)
         {
-            return NotFound(new { message = "Bundle not found" });
+            return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
-        _dbContext.DialogBundles.Remove(bundle);
-        await _dbContext.SaveChangesAsync();
+        _databaseContext.DialogBundles.Remove(bundle);
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Deleted dialog bundle {BundleId}", bundleId);
 
@@ -121,11 +159,11 @@ public sealed class AdminDialogController : ControllerBase
     [HttpGet("export")]
     public async Task<ActionResult<DialogExportDto>> Export(CancellationToken cancellationToken)
     {
-        var bundles = await _dbContext.DialogBundles
+        var bundles = await _databaseContext.DialogBundles
             .OrderBy(bundle => bundle.SortOrder)
             .ToListAsync(cancellationToken);
 
-        var modesByBundle = (await _dbContext.DialogModes
+        var modesByBundle = (await _databaseContext.DialogModes
                 .OrderBy(mode => mode.SortOrder)
                 .ToListAsync(cancellationToken))
             .GroupBy(mode => mode.BundleId)
@@ -161,16 +199,16 @@ public sealed class AdminDialogController : ControllerBase
     }
 
     [HttpPost("import")]
-    [RequestSizeLimit(20 * 1024 * 1024)]
+    [RequestSizeLimit(MaximumImportFileSizeBytes)]
     public async Task<ActionResult<DialogImportResultDto>> Import(IFormFile file)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "File is required." });
-        if (!file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        if (!file.FileName.EndsWith(JsonFileExtension, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = "Only .json files are accepted." });
 
-        var existingBundles = await _dbContext.DialogBundles.ToListAsync();
-        var existingModes = await _dbContext.DialogModes.ToListAsync();
+        var existingBundles = await _databaseContext.DialogBundles.ToListAsync();
+        var existingModes = await _databaseContext.DialogModes.ToListAsync();
 
         var bundlesCreated = 0;
         var bundlesUpdated = 0;
@@ -183,8 +221,8 @@ public sealed class AdminDialogController : ControllerBase
         {
             using var document = await JsonDocument.ParseAsync(file.OpenReadStream());
             var root = document.RootElement;
-            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("bundles", out var bundlesProp))
-                root = bundlesProp;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("bundles", out var bundlesProperty))
+                root = bundlesProperty;
             if (root.ValueKind != JsonValueKind.Array)
                 return BadRequest(new { message = "JSON must be an object { \"bundles\": [...] } or an array of bundle objects." });
 
@@ -206,11 +244,11 @@ public sealed class AdminDialogController : ControllerBase
                         throw new InvalidOperationException("title is empty.");
 
                     var description = ReadString(bundleElement, "description") ?? "";
-                    var iconEmoji = ReadString(bundleElement, "iconEmoji") ?? "💬";
-                    var sortOrder = bundleElement.TryGetProperty("sortOrder", out var soProp) ? soProp.GetInt32() : 0;
-                    var isActive = !bundleElement.TryGetProperty("isActive", out var iaProp) || iaProp.GetBoolean();
+                    var iconEmoji = ReadString(bundleElement, "iconEmoji") ?? DefaultBundleIconEmoji;
+                    var sortOrder = bundleElement.TryGetProperty("sortOrder", out var sortOrderProperty) ? sortOrderProperty.GetInt32() : 0;
+                    var isActive = !bundleElement.TryGetProperty("isActive", out var isActiveProperty) || isActiveProperty.GetBoolean();
 
-                    var existingBundle = existingBundles.FirstOrDefault(b => b.SkillId == skillId && b.Title == bundleTitle);
+                    var existingBundle = existingBundles.FirstOrDefault(candidate => candidate.SkillId == skillId && candidate.Title == bundleTitle);
                     if (existingBundle is not null)
                     {
                         existingBundle.Description = description;
@@ -235,7 +273,7 @@ public sealed class AdminDialogController : ControllerBase
                             CreatedAt = now,
                             UpdatedAt = now
                         };
-                        _dbContext.DialogBundles.Add(bundle);
+                        _databaseContext.DialogBundles.Add(bundle);
                         existingBundles.Add(bundle);
                         bundlesCreated++;
                     }
@@ -263,12 +301,12 @@ public sealed class AdminDialogController : ControllerBase
                         var description = ReadString(modeElement, "description") ?? "";
                         var chatPrompt = ReadString(modeElement, "chatSystemPrompt") ?? "";
                         var feedbackPrompt = ReadString(modeElement, "feedbackSystemPrompt") ?? "";
-                        var sortOrder = modeElement.TryGetProperty("sortOrder", out var soProp) ? soProp.GetInt32() : 0;
-                        var isActive = !modeElement.TryGetProperty("isActive", out var iaProp) || iaProp.GetBoolean();
-                        var voiceEnabled = modeElement.TryGetProperty("voiceEnabled", out var veProp) && veProp.GetBoolean();
+                        var sortOrder = modeElement.TryGetProperty("sortOrder", out var sortOrderProperty) ? sortOrderProperty.GetInt32() : 0;
+                        var isActive = !modeElement.TryGetProperty("isActive", out var isActiveProperty) || isActiveProperty.GetBoolean();
+                        var voiceEnabled = modeElement.TryGetProperty("voiceEnabled", out var voiceEnabledProperty) && voiceEnabledProperty.GetBoolean();
                         var voiceId = ReadString(modeElement, "voiceId");
 
-                        var existingMode = existingModes.FirstOrDefault(m => m.BundleId == bundle.Id && m.Key == key);
+                        var existingMode = existingModes.FirstOrDefault(candidate => candidate.BundleId == bundle.Id && candidate.Key == key);
                         if (existingMode is not null)
                         {
                             existingMode.Title = modeTitle;
@@ -300,7 +338,7 @@ public sealed class AdminDialogController : ControllerBase
                                 CreatedAt = now,
                                 UpdatedAt = now
                             };
-                            _dbContext.DialogModes.Add(mode);
+                            _databaseContext.DialogModes.Add(mode);
                             existingModes.Add(mode);
                             modesCreated++;
                         }
@@ -314,10 +352,11 @@ public sealed class AdminDialogController : ControllerBase
         }
         catch (JsonException exception) { return BadRequest(new { message = $"JSON parse error: {exception.Message}" }); }
 
-        await _dbContext.SaveChangesAsync();
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Dialog import: Bundles={BC}/{BU} Modes={MC}/{MU} Errors={ErrorCount} by ActorId={ActorId}",
+            "Dialog import: BundlesCreated={BundlesCreated} BundlesUpdated={BundlesUpdated} "
+            + "ModesCreated={ModesCreated} ModesUpdated={ModesUpdated} Errors={ErrorCount} by ActorId={ActorId}",
             bundlesCreated, bundlesUpdated, modesCreated, modesUpdated, errors.Count,
             User.FindFirstValue(ClaimTypes.NameIdentifier));
 
@@ -325,14 +364,14 @@ public sealed class AdminDialogController : ControllerBase
     }
 
     private static string? ReadString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
-            ? prop.GetString()
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
             : null;
 
     [HttpGet("bundles/{bundleId:guid}/modes")]
     public async Task<IActionResult> GetModesForBundle(Guid bundleId)
     {
-        var modes = await _dbContext.DialogModes
+        var modes = await _databaseContext.DialogModes
             .Where(mode => mode.BundleId == bundleId)
             .OrderBy(mode => mode.SortOrder)
             .ToListAsync();
@@ -344,10 +383,10 @@ public sealed class AdminDialogController : ControllerBase
     [HttpPost("bundles/{bundleId:guid}/modes")]
     public async Task<IActionResult> CreateMode(Guid bundleId, [FromBody] CreateModeRequestDto request)
     {
-        var bundleExists = await _dbContext.DialogBundles.AnyAsync(b => b.Id == bundleId);
+        var bundleExists = await _databaseContext.DialogBundles.AnyAsync(bundle => bundle.Id == bundleId);
         if (!bundleExists)
         {
-            return NotFound(new { message = "Bundle not found" });
+            return NotFound(new { message = DialogMessages.BundleNotFound });
         }
 
         var mode = new DialogMode
@@ -364,8 +403,8 @@ public sealed class AdminDialogController : ControllerBase
             VoiceId = request.VoiceId
         };
 
-        _dbContext.DialogModes.Add(mode);
-        await _dbContext.SaveChangesAsync();
+        _databaseContext.DialogModes.Add(mode);
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Created dialog mode {ModeId}: {Title} for bundle {BundleId}", mode.Id, mode.Title, bundleId);
 
@@ -375,11 +414,11 @@ public sealed class AdminDialogController : ControllerBase
     [HttpGet("modes/{modeId:guid}")]
     public async Task<IActionResult> GetMode(Guid modeId)
     {
-        var mode = await _dbContext.DialogModes.FindAsync(modeId);
+        var mode = await _databaseContext.DialogModes.FindAsync(modeId);
 
         if (mode == null)
         {
-            return NotFound(new { message = "Mode not found" });
+            return NotFound(new { message = DialogMessages.ModeNotFound });
         }
 
         return Ok(AdminDialogModeDto.FromEntity(mode));
@@ -388,11 +427,11 @@ public sealed class AdminDialogController : ControllerBase
     [HttpPut("modes/{modeId:guid}")]
     public async Task<IActionResult> UpdateMode(Guid modeId, [FromBody] UpdateModeRequestDto request)
     {
-        var mode = await _dbContext.DialogModes.FindAsync(modeId);
+        var mode = await _databaseContext.DialogModes.FindAsync(modeId);
 
         if (mode == null)
         {
-            return NotFound(new { message = "Mode not found" });
+            return NotFound(new { message = DialogMessages.ModeNotFound });
         }
 
         if (request.Key != null) mode.Key = request.Key;
@@ -407,7 +446,7 @@ public sealed class AdminDialogController : ControllerBase
 
         mode.UpdatedAt = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync();
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Updated dialog mode {ModeId}", modeId);
 
@@ -417,15 +456,15 @@ public sealed class AdminDialogController : ControllerBase
     [HttpDelete("modes/{modeId:guid}")]
     public async Task<IActionResult> DeleteMode(Guid modeId)
     {
-        var mode = await _dbContext.DialogModes.FindAsync(modeId);
+        var mode = await _databaseContext.DialogModes.FindAsync(modeId);
 
         if (mode == null)
         {
-            return NotFound(new { message = "Mode not found" });
+            return NotFound(new { message = DialogMessages.ModeNotFound });
         }
 
-        _dbContext.DialogModes.Remove(mode);
-        await _dbContext.SaveChangesAsync();
+        _databaseContext.DialogModes.Remove(mode);
+        await _databaseContext.SaveChangesAsync();
 
         _logger.LogInformation("Deleted dialog mode {ModeId}", modeId);
 

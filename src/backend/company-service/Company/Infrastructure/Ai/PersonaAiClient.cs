@@ -1,25 +1,33 @@
-using System.Net.Http.Json;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Infrastructure.Configuration;
 
 namespace Sellevate.Company.Infrastructure.Ai;
 
+/// <summary>
+/// Calls ai-service to draft a buyer persona — name, position, personality — for a practice call
+/// against a company, optionally seeded from a real contact. Persists nothing; the caller decides
+/// whether the draft becomes a saved persona.
+/// </summary>
 internal sealed class PersonaAiClient : IPersonaAiClient
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const string FailureLogTemplate = "AI persona generation returned {StatusCode}: {Body}";
+    private const string ServiceLabel = "AI persona service";
 
     private readonly HttpClient _httpClient;
     private readonly AiServiceConfiguration _configuration;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<PersonaAiClient> _logger;
 
     public PersonaAiClient(
         HttpClient httpClient,
         IOptions<AiServiceConfiguration> configurationOptions,
+        ITenantContext tenantContext,
         ILogger<PersonaAiClient> logger)
     {
         _httpClient = httpClient;
         _configuration = configurationOptions.Value;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -29,27 +37,14 @@ internal sealed class PersonaAiClient : IPersonaAiClient
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.PersonaPath;
+        using var response = await AiServiceCall.PostAsync(
+            _httpClient,
+            _tenantContext,
+            AiServiceCall.BuildRequestUri(_configuration.BaseUrl, _configuration.PersonaPath),
+            request,
+            cancellationToken);
 
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri, request, SerializerOptions, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning(
-                "AI persona generation returned {StatusCode}: {Body}",
-                response.StatusCode, responseBody);
-            throw new InvalidOperationException(
-                $"AI persona service returned {(int)response.StatusCode}.");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<PersonaAiResult>(
-            SerializerOptions, cancellationToken);
-
-        if (result is null)
-            throw new InvalidOperationException("AI persona service returned an empty body.");
-
-        return result;
+        return await AiServiceCall.ReadResultAsync<PersonaAiResult>(
+            response, _logger, FailureLogTemplate, ServiceLabel, cancellationToken);
     }
 }

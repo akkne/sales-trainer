@@ -1,0 +1,68 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.ContentAdaptation.Models;
+
+namespace Sellevate.Learning.Infrastructure.Data;
+
+/// <summary>
+/// Maps one batch adaptation run.
+///
+/// <para>
+/// The stage key is the same width <c>TeamSkillGapDismissals.StageKey</c> has, and for the same reason:
+/// both hold a <c>Skill.Stage</c> value, and a mismatch would let one table accept a key the other
+/// truncates.
+/// </para>
+///
+/// <para>
+/// Two indexes serve the worker's own query — which batches of this organization still owe somebody a
+/// call — and the administrator's list, newest first.
+/// </para>
+///
+/// <para>
+/// «Не запускай второй такой же прогон»: <b>one live batch per stage per mode</b>, enforced by the
+/// database rather than by a read-then-insert. Under READ COMMITTED two clicks a second apart would both
+/// see no live batch and both start one, and the customer would pay twice for sixty rewrites of the same
+/// sixty exercises. The index is partial, because a finished batch must not block the next one — the
+/// whole point of the queue is that it eventually empties.
+/// </para>
+/// </summary>
+public sealed class ContentAdaptationJobEntityConfiguration : IEntityTypeConfiguration<ContentAdaptationJob>
+{
+    public void Configure(EntityTypeBuilder<ContentAdaptationJob> builder)
+    {
+        builder.ToTable("ContentAdaptationJobs");
+
+        builder.HasKey(job => job.Id);
+
+        builder.Property(job => job.OrganizationId).IsRequired();
+
+        builder.Property(job => job.Mode)
+            .IsRequired()
+            .HasMaxLength(32)
+            .HasDefaultValue(ContentAdaptationModes.ToneRewrite);
+
+        builder.Property(job => job.StageKey).IsRequired().HasMaxLength(64);
+
+        builder.Property(job => job.Status)
+            .IsRequired()
+            .HasMaxLength(20)
+            .HasDefaultValue(ContentAdaptationStatuses.Preparing);
+
+        builder.Property(job => job.FailureReason).HasMaxLength(1000);
+
+        builder.HasMany(job => job.Items)
+            .WithOne(item => item.Job)
+            .HasForeignKey(item => item.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(job => new { job.OrganizationId, job.Status, job.CreatedAt });
+
+        builder.HasIndex(job => new { job.OrganizationId, job.CreatedAt });
+
+        builder.HasIndex(job => new { job.OrganizationId, job.Mode, job.StageKey })
+            .IsUnique()
+            .HasDatabaseName("UX_ContentAdaptationJobs_Live")
+            .HasFilter("\"Status\" IN ('preparing', 'awaiting_review')");
+    }
+}

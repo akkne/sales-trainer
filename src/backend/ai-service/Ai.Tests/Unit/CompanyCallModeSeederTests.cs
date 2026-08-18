@@ -11,8 +11,11 @@ namespace Sellevate.Ai.Tests.Unit;
 [TestFixture]
 public sealed class CompanyCallModeSeederTests
 {
-    // Byte-for-byte copies of the prompts seeded before the "warmer tone" change. The seeder upgrades
-    // a row in place only when it still holds these exact strings (i.e. no admin has customized them).
+    /// <summary>
+    /// A byte-for-byte copy of the prompt seeded before the "warmer tone" change. The seeder upgrades a
+    /// row in place only while it still holds this exact string — that is how it tells an untouched
+    /// default from a prompt an administrator has customized, and it must never overwrite the second.
+    /// </summary>
     private const string PreviousChatSystemPrompt =
         "Ты — сотрудник или лицо, принимающее решения, в компании-потенциальном клиенте. " +
         "Твоя задача — вести себя реалистично: задавать встречные вопросы, выдвигать возражения, " +
@@ -24,7 +27,11 @@ public sealed class CompanyCallModeSeederTests
         "Отвечай ТОЛЬКО в формате JSON: {\"reply\": \"<твоя реплика>\", \"endCall\": true|false}. " +
         "Поле reply всегда первым.";
 
-    // The first "warmer tone" prompt, before the "live conversation / greet back" instructions.
+    /// <summary>
+    /// The first "warmer tone" prompt, before the live-conversation and greet-back instructions were
+    /// added. Superseded defaults are kept rather than deleted, so a roll-forward can still recognise
+    /// each of them as untouched.
+    /// </summary>
     private const string PreviousWarmChatSystemPrompt =
         "Ты — сотрудник или лицо, принимающее решения, в компании-потенциальном клиенте. " +
         "Веди себя как живой человек, а не как робот-охранник: у тебя есть настроение, и оно " +
@@ -62,22 +69,19 @@ public sealed class CompanyCallModeSeederTests
         "- Достижение цели звонка: до 25 XP\n" +
         "Калибровка: 0-20 провал, 21-45 слабо, 46-70 нормально, 71-85 хорошо, 86-100 исключительно (редко).";
 
-    private static AiDbContext CreateInMemory() =>
-        new(new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options);
+    private static AiDbContext CreateInMemory() => AiDbContextFactory.CreateInMemory();
 
-    private static async Task<DialogMode> GetSeededModeAsync(AiDbContext db) =>
-        await db.DialogModes.FirstAsync(mode => mode.Key == DialogModeKeys.CompanyCall);
+    private static async Task<DialogMode> GetSeededModeAsync(AiDbContext databaseContext) =>
+        await databaseContext.DialogModes.FirstAsync(mode => mode.Key == DialogModeKeys.CompanyCall);
 
     [Test]
     public async Task SeedAsync_FreshDatabase_SeedsWarmerPrompts()
     {
-        await using var db = CreateInMemory();
+        await using var databaseContext = CreateInMemory();
 
-        await CompanyCallModeSeeder.SeedAsync(db);
+        await CompanyCallModeSeeder.SeedAsync(databaseContext);
 
-        var mode = await GetSeededModeAsync(db);
+        var mode = await GetSeededModeAsync(databaseContext);
         mode.ChatSystemPrompt.Should().Contain("робот-охранник");
         mode.ChatSystemPrompt.Should().Contain("не повод завершать звонок");
         mode.ChatSystemPrompt.Should().Contain("поздоровайся");
@@ -89,8 +93,8 @@ public sealed class CompanyCallModeSeederTests
     [Test]
     public async Task SeedAsync_ExistingModeWithFirstWarmPrompt_RollsForwardToLiveConversationPrompt()
     {
-        await using var db = CreateInMemory();
-        db.DialogModes.Add(new DialogMode
+        await using var databaseContext = CreateInMemory();
+        databaseContext.DialogModes.Add(new DialogMode
         {
             Id = CompanyCallModeSeeder.CompanyCallModeId,
             BundleId = CompanyCallModeSeeder.CompanyCallBundleId,
@@ -103,11 +107,11 @@ public sealed class CompanyCallModeSeederTests
             IsActive = true,
             VoiceEnabled = true,
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        await CompanyCallModeSeeder.SeedAsync(db);
+        await CompanyCallModeSeeder.SeedAsync(databaseContext);
 
-        var mode = await GetSeededModeAsync(db);
+        var mode = await GetSeededModeAsync(databaseContext);
         mode.ChatSystemPrompt.Should().NotBe(PreviousWarmChatSystemPrompt);
         mode.ChatSystemPrompt.Should().Contain("поздоровайся");
     }
@@ -115,8 +119,8 @@ public sealed class CompanyCallModeSeederTests
     [Test]
     public async Task SeedAsync_ExistingModeWithOldDefaults_UpgradesPromptsInPlace()
     {
-        await using var db = CreateInMemory();
-        db.DialogModes.Add(new DialogMode
+        await using var databaseContext = CreateInMemory();
+        databaseContext.DialogModes.Add(new DialogMode
         {
             Id = CompanyCallModeSeeder.CompanyCallModeId,
             BundleId = CompanyCallModeSeeder.CompanyCallBundleId,
@@ -129,11 +133,11 @@ public sealed class CompanyCallModeSeederTests
             IsActive = true,
             VoiceEnabled = true,
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        await CompanyCallModeSeeder.SeedAsync(db);
+        await CompanyCallModeSeeder.SeedAsync(databaseContext);
 
-        var mode = await GetSeededModeAsync(db);
+        var mode = await GetSeededModeAsync(databaseContext);
         mode.ChatSystemPrompt.Should().NotBe(PreviousChatSystemPrompt);
         mode.ChatSystemPrompt.Should().Contain("робот-охранник");
         mode.FeedbackSystemPrompt.Should().Contain("«пряник»");
@@ -145,8 +149,8 @@ public sealed class CompanyCallModeSeederTests
         const string customChat = "Кастомный промпт диалога, отредактированный админом.";
         const string customFeedback = "Кастомный промпт оценки, отредактированный админом.";
 
-        await using var db = CreateInMemory();
-        db.DialogModes.Add(new DialogMode
+        await using var databaseContext = CreateInMemory();
+        databaseContext.DialogModes.Add(new DialogMode
         {
             Id = CompanyCallModeSeeder.CompanyCallModeId,
             BundleId = CompanyCallModeSeeder.CompanyCallBundleId,
@@ -159,11 +163,11 @@ public sealed class CompanyCallModeSeederTests
             IsActive = true,
             VoiceEnabled = true,
         });
-        await db.SaveChangesAsync();
+        await databaseContext.SaveChangesAsync();
 
-        await CompanyCallModeSeeder.SeedAsync(db);
+        await CompanyCallModeSeeder.SeedAsync(databaseContext);
 
-        var mode = await GetSeededModeAsync(db);
+        var mode = await GetSeededModeAsync(databaseContext);
         mode.ChatSystemPrompt.Should().Be(customChat);
         mode.FeedbackSystemPrompt.Should().Be(customFeedback);
     }

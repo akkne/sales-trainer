@@ -7,9 +7,13 @@ using Sellevate.Learning.Eventing;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Implementation;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Sellevate.Learning.Tests.Helpers;
 
 namespace Sellevate.Learning.Tests.Unit;
 
@@ -31,7 +35,8 @@ public sealed class ExerciseServiceEventEmissionTests
         return new ExerciseEvaluationFactory(
             deterministicStrategies,
             Substitute.For<IAiEvaluationClient>(),
-            databaseContext);
+            databaseContext,
+            new StubOrganizationProfileProvider());
     }
 
     private static async Task<(Guid SkillId, Guid LessonId, Guid ExerciseId)> SeedSingleLessonSkillAsync(
@@ -58,11 +63,13 @@ public sealed class ExerciseServiceEventEmissionTests
         return (skillId, lessonId, exerciseId);
     }
 
+    /// <summary>
+    /// Regression: finishing a topic's last lesson must roll over and unlock the first lesson of the next
+    /// topic, not leave it locked.
+    /// </summary>
     [Test]
     public async Task CompletingLastLessonInTopic_UnlocksFirstLessonOfNextTopic()
     {
-        // Regression: finishing a topic's last lesson must roll over and unlock the
-        // first lesson of the next topic, not leave it Locked.
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
 
         var skillId = Guid.NewGuid();
@@ -90,7 +97,10 @@ public sealed class ExerciseServiceEventEmissionTests
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext),
             Substitute.For<ILearningEventPublisher>(),
-            Substitute.For<IExerciseDialogService>());
+            Substitute.For<IExerciseDialogService>(),
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -114,7 +124,10 @@ public sealed class ExerciseServiceEventEmissionTests
         var dialogService = Substitute.For<IExerciseDialogService>();
 
         var service = new ExerciseService(
-            databaseContext, CreateFactory(databaseContext), eventPublisher, dialogService);
+            databaseContext, CreateFactory(databaseContext), eventPublisher, dialogService,
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":0}""").RootElement;
@@ -143,18 +156,23 @@ public sealed class ExerciseServiceEventEmissionTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// Lesson completion is <b>attempt-based</b>: attempting the only exercise, even wrongly, means every
+    /// exercise has been attempted, so the lesson can still be passed.
+    /// </summary>
     [Test]
     public async Task SubmitWrongAnswer_SingleExerciseLesson_StillCompletesLesson()
     {
-        // Lesson completion is attempt-based: attempting the only exercise (even wrongly)
-        // means every exercise has been attempted, so the lesson can still be passed.
         await using var databaseContext = LearningDbContextFactory.CreateInMemory();
         var (skillId, lessonId, exerciseId) = await SeedSingleLessonSkillAsync(databaseContext);
 
         var eventPublisher = Substitute.For<ILearningEventPublisher>();
         var service = new ExerciseService(
             databaseContext, CreateFactory(databaseContext), eventPublisher,
-            Substitute.For<IExerciseDialogService>());
+            Substitute.For<IExerciseDialogService>(),
+            new LessonVersionService(databaseContext),
+            new StubOrganizationProfileProvider(),
+            NullLogger<ExerciseService>.Instance);
 
         var userId = Guid.NewGuid();
         var answer = JsonDocument.Parse("""{"selectedOptionIndex":1}""").RootElement;

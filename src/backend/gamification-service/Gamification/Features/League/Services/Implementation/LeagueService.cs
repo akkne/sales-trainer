@@ -1,11 +1,38 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Gamification.Common.Constants;
+using Sellevate.Gamification.Common.Extensions;
 using Sellevate.Gamification.Features.League.Models;
 using Sellevate.Gamification.Features.League.Services.Abstract;
 using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.League.Services.Implementation;
 
+/// <summary>
+/// Places users into weekly competitive cohorts, keeps their weekly experience-point totals in sync,
+/// and rolls one period into the next.
+///
+/// <para>
+/// Phase 40.13 made a league week per-organization. Every read and write here is tenant-scoped by the
+/// query filter; nothing in this class writes an organization predicate of its own.
+/// </para>
+///
+/// <para>
+/// <b>Transaction shape is load-bearing.</b> Reads are grouped into short scopes rather than one
+/// wrapping a whole method, because the create/join helpers recover from a unique violation and carry
+/// on — inside one long transaction that violation would poison the transaction and the recovery
+/// could not run. A write must never be nested inside a read scope, which rolls back on dispose.
+/// Writes need no scope of their own: EF opens an implicit transaction per <c>SaveChangesAsync</c>,
+/// and that is what triggers <c>SET LOCAL</c>.
+/// </para>
+///
+/// <para>
+/// <see cref="CloseCurrentLeagueAndCreateNextAsync"/> is the exception and opens its own transaction
+/// directly: it has always relied on that transaction for the optimistic concurrency guard around the
+/// period rollover, not for tenancy, so the cron and the admin endpoint cannot both advance the
+/// period. The unique index on <c>Leagues(OrganizationId, WeekStartDate, Tier)</c> is the final
+/// safety net underneath it.
+/// </para>
+/// </summary>
 internal sealed class LeagueService(
     GamificationDbContext databaseContext) : ILeagueService
 {
@@ -32,47 +59,56 @@ internal sealed class LeagueService(
         var tierKeys = tiers.Select(tier => tier.Key).ToList();
         var entryTier = tierKeys[0];
 
-        var previousMembershipData = await databaseContext.LeagueMemberships
-            .Where(membership => membership.UserId == userId)
-            .Join(
-                databaseContext.Leagues,
-                membership => membership.LeagueId,
-                league => league.Id,
-                (membership, league) => new { membership.PromotionOutcome, league.Tier, league.WeekStartDate })
-            .Where(membershipLeague => membershipLeague.WeekStartDate < weekStart)
-            .OrderByDescending(membershipLeague => membershipLeague.WeekStartDate)
-            .Select(membershipLeague => new { membershipLeague.PromotionOutcome, membershipLeague.Tier })
-            .FirstOrDefaultAsync(cancellationToken);
+        string? previousWeekOutcome;
+        string userTier;
+        Models.League? existingLeagueThisWeek;
 
-        var previousWeekOutcome = previousMembershipData?.PromotionOutcome;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            var previousMembershipData = await databaseContext.LeagueMemberships
+                .Where(membership => membership.UserId == userId)
+                .Join(
+                    databaseContext.Leagues,
+                    membership => membership.LeagueId,
+                    league => league.Id,
+                    (membership, league) => new { membership.PromotionOutcome, league.Tier, league.WeekStartDate })
+                .Where(membershipLeague => membershipLeague.WeekStartDate < weekStart)
+                .OrderByDescending(membershipLeague => membershipLeague.WeekStartDate)
+                .Select(membershipLeague => new { membershipLeague.PromotionOutcome, membershipLeague.Tier })
+                .FirstOrDefaultAsync(cancellationToken);
 
-        var userTier = previousMembershipData is null
-            ? entryTier
-            : GetNextTierForOutcome(tierKeys, previousMembershipData.Tier, previousMembershipData.PromotionOutcome);
+            previousWeekOutcome = previousMembershipData?.PromotionOutcome;
 
-        var existingThisWeek = await databaseContext.LeagueMemberships
-            .Join(
-                databaseContext.Leagues,
-                membership => membership.LeagueId,
-                league => league.Id,
-                (membership, league) => new { Membership = membership, League = league })
-            .Where(membershipLeague => membershipLeague.Membership.UserId == userId && membershipLeague.League.WeekStartDate == weekStart)
-            .FirstOrDefaultAsync(cancellationToken);
+            userTier = previousMembershipData is null
+                ? entryTier
+                : GetNextTierForOutcome(tierKeys, previousMembershipData.Tier, previousMembershipData.PromotionOutcome);
+
+            existingLeagueThisWeek = await databaseContext.LeagueMemberships
+                .Join(
+                    databaseContext.Leagues,
+                    membership => membership.LeagueId,
+                    league => league.Id,
+                    (membership, league) => new { Membership = membership, League = league })
+                .Where(membershipLeague => membershipLeague.Membership.UserId == userId && membershipLeague.League.WeekStartDate == weekStart)
+                .Select(membershipLeague => membershipLeague.League)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         Models.League currentLeague;
-        if (existingThisWeek is not null)
+        if (existingLeagueThisWeek is not null)
         {
-            currentLeague = existingThisWeek.League;
+            currentLeague = existingLeagueThisWeek;
         }
         else
         {
-            // GA5: use idempotent helpers that tolerate concurrent first-hits via unique-violation catch.
             currentLeague = await GetOrCreateLeagueForWeekAsync(weekStart, weekEnd, userTier, cancellationToken);
             await GetOrJoinLeagueAsync(userId, currentLeague.Id, cancellationToken);
         }
 
         await SyncWeeklyExperiencePointsForLeagueAsync(
             currentLeague.Id, currentLeague.WeekStartDate, currentLeague.WeekEndDate, cancellationToken);
+
+        await using var membershipReadScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         var allMemberships = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == currentLeague.Id)
@@ -116,14 +152,21 @@ internal sealed class LeagueService(
             settings.MaximumLeagueParticipantCount);
     }
 
+    /// <summary>
+    /// Ranks every membership of the open period, stamps promotion outcomes, opens the next period's
+    /// leagues, and moves each member into the tier their outcome earned.
+    ///
+    /// <para>
+    /// Settings are re-read with a fresh query <em>inside</em> the transaction, and the method returns
+    /// without effect if the period has already been advanced. That is the concurrency guard: the
+    /// fifteen-minute cron and the admin "close now" button can fire at the same moment, and only one
+    /// of them may advance the week.
+    /// </para>
+    /// </summary>
     public async Task CloseCurrentLeagueAndCreateNextAsync(CancellationToken cancellationToken = default)
     {
-        // GA4: re-check inside a transaction so concurrent calls (cron + admin endpoint)
-        // cannot both advance the period. The unique index on Leagues(WeekStartDate, Tier)
-        // provides the final safety net at the DB level.
         await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
 
-        // Re-read settings with a fresh query inside the transaction to get the current state.
         var settings = await databaseContext.LeagueSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is null)
         {
@@ -143,7 +186,6 @@ internal sealed class LeagueService(
         var nextWeekStart = currentEnd.AddDays(1);
         var nextWeekEnd = nextWeekStart.AddDays(periodLength - 1);
 
-        // Guard: if the period has already been advanced by a concurrent call, bail out.
         if (settings.CurrentPeriodStartDate.Value >= nextWeekStart)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -209,6 +251,8 @@ internal sealed class LeagueService(
 
     public async Task SyncLeagueWeeklyExperiencePointsAsync(Guid leagueId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var league = await databaseContext.Leagues
             .FirstOrDefaultAsync(leagueRecord => leagueRecord.Id == leagueId, cancellationToken);
         if (league is null)
@@ -218,35 +262,47 @@ internal sealed class LeagueService(
 
         await SyncWeeklyExperiencePointsForLeagueAsync(
             league.Id, league.WeekStartDate, league.WeekEndDate, cancellationToken);
+
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     /// <summary>
-    /// GA6(a): Read-only getter — does not write. Settings are seeded once at startup
-    /// via <see cref="LeagueSettingsSeeder"/>. Returns defaults if missing (in-memory/test scenarios).
+    /// Read-only getter — never writes, which is what keeps a plain <c>GET /league</c> free of a
+    /// database write.
+    ///
+    /// <para>
+    /// Phase 40.13 made LeagueSettings per-organization, so "missing" is now the normal state of a
+    /// customer that has never edited its league settings, not just a test scenario. The unsaved
+    /// default returned here is what keeps the read path from writing; the row is created the first
+    /// time an admin saves settings (<c>AdminLeaguesController.UpdateSettings</c> attaches it).
+    /// </para>
     /// </summary>
     public async Task<LeagueSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var settings = await databaseContext.LeagueSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is not null)
         {
             return settings;
         }
 
-        // Fallback for in-memory/test scenarios where seeder hasn't run.
-        var fallback = new LeagueSettings();
-        if (fallback.CurrentPeriodStartDate is null || fallback.CurrentPeriodEndsAt is null)
+        var unsavedDefault = new LeagueSettings();
+        if (unsavedDefault.CurrentPeriodStartDate is null || unsavedDefault.CurrentPeriodEndsAt is null)
         {
-            var start = GetCurrentWeekStart();
-            var end = start.AddDays(fallback.PeriodLengthDays - 1);
-            fallback.CurrentPeriodStartDate = start;
-            fallback.CurrentPeriodEndsAt = EndOfDay(end);
+            var periodStart = DateOnly.FromDateTime(DateTime.UtcNow).StartOfWeek();
+            var periodEnd = periodStart.AddDays(unsavedDefault.PeriodLengthDays - 1);
+            unsavedDefault.CurrentPeriodStartDate = periodStart;
+            unsavedDefault.CurrentPeriodEndsAt = EndOfDay(periodEnd);
         }
 
-        return fallback;
+        return unsavedDefault;
     }
 
     private async Task<IReadOnlyList<LeagueTier>> LoadTiersAsync(CancellationToken cancellationToken)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var tiers = await databaseContext.LeagueTiers
             .AsNoTracking()
             .OrderBy(tier => tier.Order)
@@ -256,9 +312,9 @@ internal sealed class LeagueService(
     }
 
     /// <summary>
-    /// GA4+GA5: idempotent league creation. If two concurrent callers race, the unique
-    /// index on Leagues(WeekStartDate, Tier) causes one to get a unique-violation;
-    /// we catch it and re-read the winner.
+    /// Idempotent league creation. If two concurrent callers race, the unique index on
+    /// <c>Leagues(OrganizationId, WeekStartDate, Tier)</c> makes one of them fail; the loser catches
+    /// the violation and re-reads the winner, so both callers end up with the same league.
     /// </summary>
     private async Task<Models.League> GetOrCreateLeagueForWeekAsync(
         DateOnly weekStart,
@@ -266,8 +322,13 @@ internal sealed class LeagueService(
         string tier,
         CancellationToken cancellationToken = default)
     {
-        var existing = await databaseContext.Leagues
-            .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        Models.League? existing;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            existing = await databaseContext.Leagues
+                .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        }
+
         if (existing is not null)
         {
             return existing;
@@ -288,14 +349,13 @@ internal sealed class LeagueService(
             await databaseContext.SaveChangesAsync(cancellationToken);
             return newLeague;
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException exception) when (exception.IsUniqueConstraintViolation())
         {
-            // Concurrent caller created the league first; detach and re-read.
-            var entry = databaseContext.ChangeTracker.Entries<Models.League>()
-                .FirstOrDefault(e => e.Entity.Id == newLeague.Id);
-            if (entry is not null)
+            var failedEntry = databaseContext.ChangeTracker.Entries<Models.League>()
+                .FirstOrDefault(entry => entry.Entity.Id == newLeague.Id);
+            if (failedEntry is not null)
             {
-                entry.State = EntityState.Detached;
+                failedEntry.State = EntityState.Detached;
             }
 
             return await databaseContext.Leagues
@@ -304,17 +364,25 @@ internal sealed class LeagueService(
     }
 
     /// <summary>
-    /// GA4+GA5: idempotent join. If two concurrent callers race, the unique index on
-    /// LeagueMemberships(UserId, LeagueId) causes one to get a unique-violation;
-    /// we catch it and re-read the winner.
+    /// Idempotent join. If two concurrent callers race, the unique index on
+    /// <c>LeagueMemberships(OrganizationId, UserId, LeagueId)</c> makes one of them fail; the loser
+    /// catches the violation and re-reads the winner, so a user never holds two memberships of one
+    /// league.
     /// </summary>
     private async Task<LeagueMembership> GetOrJoinLeagueAsync(
         Guid userId,
         Guid leagueId,
         CancellationToken cancellationToken = default)
     {
-        var existing = await databaseContext.LeagueMemberships
-            .FirstOrDefaultAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+        LeagueMembership? existing;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            existing = await databaseContext.LeagueMemberships
+                .FirstOrDefaultAsync(
+                    membership => membership.UserId == userId && membership.LeagueId == leagueId,
+                    cancellationToken);
+        }
+
         if (existing is not null)
         {
             return existing;
@@ -336,17 +404,19 @@ internal sealed class LeagueService(
             await databaseContext.SaveChangesAsync(cancellationToken);
             return newMembership;
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException exception) when (exception.IsUniqueConstraintViolation())
         {
-            var entry = databaseContext.ChangeTracker.Entries<LeagueMembership>()
-                .FirstOrDefault(e => e.Entity.Id == newMembership.Id);
-            if (entry is not null)
+            var failedEntry = databaseContext.ChangeTracker.Entries<LeagueMembership>()
+                .FirstOrDefault(entry => entry.Entity.Id == newMembership.Id);
+            if (failedEntry is not null)
             {
-                entry.State = EntityState.Detached;
+                failedEntry.State = EntityState.Detached;
             }
 
             return await databaseContext.LeagueMemberships
-                .FirstAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+                .FirstAsync(
+                    membership => membership.UserId == userId && membership.LeagueId == leagueId,
+                    cancellationToken);
         }
     }
 
@@ -356,6 +426,8 @@ internal sealed class LeagueService(
         DateOnly weekEnd,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var membershipUserIds = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == leagueId)
             .Select(membership => membership.UserId)
@@ -383,14 +455,7 @@ internal sealed class LeagueService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
-    }
-
-    private static bool IsUniqueViolation(DbUpdateException ex)
-    {
-        var inner = ex.InnerException;
-        return inner is not null &&
-               (inner.GetType().Name == "PostgresException" || inner.GetType().FullName?.Contains("Npgsql") == true) &&
-               inner.Message.Contains("23505");
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private static string GetNextTierForOutcome(List<string> tierOrder, string currentTier, string? outcome)
@@ -410,12 +475,7 @@ internal sealed class LeagueService(
     }
 
     private static DateTimeOffset EndOfDay(DateOnly date) =>
-        new(date.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc));
+        new(date.ToDateTime(LastSecondOfDay, DateTimeKind.Utc));
 
-    private static DateOnly GetCurrentWeekStart()
-    {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
-        return today.AddDays(-daysFromMonday);
-    }
+    private static readonly TimeOnly LastSecondOfDay = new(23, 59, 59);
 }

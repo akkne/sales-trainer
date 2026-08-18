@@ -5,6 +5,7 @@ using NSubstitute;
 using NUnit.Framework;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Eventing;
 using Sellevate.Company.Features.Companies.FollowUpReminders;
 using Sellevate.Company.Tests.Helpers;
@@ -19,15 +20,17 @@ public sealed class FollowUpReminderServiceTests
     private FollowUpReminderService _reminderService = null!;
 
     private static readonly Guid UserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid OrganizationId = TestCompanyDatabaseFactory.DefaultOrganizationId;
 
     [SetUp]
     public void SetUp()
     {
-        _databaseContext = TestCompanyDatabaseFactory.CreateInMemory();
+        var tenantContext = TestCompanyDatabaseFactory.BuildTenantContext();
+        _databaseContext = TestCompanyDatabaseFactory.CreateInMemory(tenantContext);
         _eventPublisher = Substitute.For<IEventPublisher>();
         var options = Options.Create(new FollowUpReminderOptions { BatchSize = 100 });
         _reminderService = new FollowUpReminderService(
-            _databaseContext, _eventPublisher, options, NullLogger<FollowUpReminderService>.Instance);
+            _databaseContext, tenantContext, _eventPublisher, options, NullLogger<FollowUpReminderService>.Instance);
     }
 
     [TearDown]
@@ -53,6 +56,7 @@ public sealed class FollowUpReminderServiceTests
                 && payload.CompanyName == "Acme"
                 && payload.Note == "Call about pricing"),
             1,
+            OrganizationId,
             Arg.Any<CancellationToken>());
     }
 
@@ -66,7 +70,7 @@ public sealed class FollowUpReminderServiceTests
 
         publishedCount.Should().Be(0);
         await _eventPublisher.DidNotReceiveWithAnyArgs().PublishAsync<CompanyFollowUpDueEvent>(
-            default!, default!, default!, default!, default, default);
+            default!, default!, default!, default!, default, default, default);
     }
 
     [Test]
@@ -91,7 +95,7 @@ public sealed class FollowUpReminderServiceTests
 
         publishedCount.Should().Be(0);
         await _eventPublisher.DidNotReceiveWithAnyArgs().PublishAsync<CompanyFollowUpDueEvent>(
-            default!, default!, default!, default!, default, default);
+            default!, default!, default!, default!, default, default, default);
     }
 
     [Test]
@@ -107,7 +111,7 @@ public sealed class FollowUpReminderServiceTests
         secondRunCount.Should().Be(0);
         await _eventPublisher.Received(1).PublishAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -144,7 +148,7 @@ public sealed class FollowUpReminderServiceTests
         _eventPublisher
             .PublishAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 callCount++;
@@ -162,6 +166,11 @@ public sealed class FollowUpReminderServiceTests
         callCount.Should().Be(2);
     }
 
+    /// <summary>
+    /// Gives up after <c>PublishMaxAttempts</c> tries (so two retries at the default), and the
+    /// company stays claimed rather than being retried next tick — the at-most-once contract:
+    /// dropping one reminder is preferred to risking a duplicate notification.
+    /// </summary>
     [Test]
     public async Task ProcessDueFollowUpsAsync_gives_up_after_exhausting_retries_on_a_persistent_publish_failure()
     {
@@ -172,7 +181,7 @@ public sealed class FollowUpReminderServiceTests
         _eventPublisher
             .PublishAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CompanyFollowUpDueEvent>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
             .Returns<Task>(_ =>
             {
                 callCount++;
@@ -181,8 +190,6 @@ public sealed class FollowUpReminderServiceTests
 
         var publishedCount = await _reminderService.ProcessDueFollowUpsAsync();
 
-        // Gives up after 3 attempts (2 retries), but the company stays claimed — at-most-once,
-        // not retried again this tick — matching the pre-existing "already claimed" contract.
         publishedCount.Should().Be(0);
         callCount.Should().Be(3);
 

@@ -4,6 +4,11 @@ using Sellevate.Learning.Features.Techniques.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps the coach persona attached to a technique. Unique on the technique — at most one coach per
+/// technique — which is why <c>AdminTechniquesController</c> reconciles this row in place rather than
+/// deleting and re-inserting it inside one <c>SaveChanges</c>.
+/// </summary>
 public sealed class TechniqueCoachEntityConfiguration : IEntityTypeConfiguration<TechniqueCoach>
 {
     public void Configure(EntityTypeBuilder<TechniqueCoach> builder)

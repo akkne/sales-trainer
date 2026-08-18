@@ -2,12 +2,30 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Features.Transcription.Constants;
 using Sellevate.Ai.Features.Transcription.Models;
 using Sellevate.Ai.Features.Transcription.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Transcription;
 
+/// <summary>
+/// Speech-to-text for an uploaded audio file.
+///
+/// <para>
+/// Two size limits guard this endpoint and both are needed.
+/// <see cref="WhisperConfiguration.RequestSizeLimitBytesDefault"/> is Kestrel's hard ceiling, applied
+/// before any code here runs and expressed as an attribute because attributes cannot read
+/// configuration; <c>Whisper:MaximumFileSizeMegabytes</c> is the smaller, configurable limit the
+/// caller is actually told about. Keeping the outer one larger is what turns an oversized upload into
+/// a readable message instead of a dropped connection.
+/// </para>
+///
+/// <para>
+/// A cancelled upload answers 499 rather than 500: the client going away is not a failure of this
+/// service, and filing it as one buries real provider faults in the same bucket.
+/// </para>
+/// </summary>
 [ApiController]
 [Route("transcription")]
 [Authorize]
@@ -17,24 +35,26 @@ public sealed class TranscriptionController(
     ILogger<TranscriptionController> logger) : ControllerBase
 {
     [HttpPost("transcribe")]
-    [RequestSizeLimit(50 * 1024 * 1024)]
+    [RequestSizeLimit(WhisperConfiguration.RequestSizeLimitBytesDefault)]
     public async Task<ActionResult<TranscriptionResponseDto>> Transcribe(
         IFormFile file,
         CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { error = "Аудиофайл не передан или пустой." });
+            return BadRequest(new { error = TranscriptionMessages.FileMissingOrEmpty });
 
-        var maximumFileSizeMegabytes = whisperOptions.Value.MaximumFileSizeMegabytes;
-        var maxBytes = maximumFileSizeMegabytes * 1024 * 1024;
+        var configuration = whisperOptions.Value;
 
-        if (file.Length > maxBytes)
-            return BadRequest(new { error = $"Размер файла превышает {maximumFileSizeMegabytes} МБ." });
+        if (file.Length > configuration.MaximumFileSizeBytes)
+            return BadRequest(new { error = TranscriptionMessages.FileTooLarge(configuration.MaximumFileSizeMegabytes) });
 
-        var allowed = new[] { ".mp3", ".mp4", ".m4a", ".mpeg", ".mpga", ".wav", ".webm", ".ogg" };
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!allowed.Contains(ext))
-            return BadRequest(new { error = $"Формат {ext} не поддерживается. Допустимые: {string.Join(", ", allowed)}." });
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!TranscriptionAudioFormats.MimeTypesByExtension.ContainsKey(extension))
+            return BadRequest(new
+            {
+                error = TranscriptionMessages.UnsupportedFormat(
+                    extension, TranscriptionAudioFormats.AcceptedExtensions),
+            });
 
         try
         {
@@ -48,12 +68,16 @@ public sealed class TranscriptionController(
         }
         catch (OperationCanceledException)
         {
-            return StatusCode(NonStandardHttpStatusCodes.ClientClosedRequest, new { error = "Запрос отменён клиентом." });
+            return StatusCode(
+                NonStandardHttpStatusCodes.ClientClosedRequest,
+                new { error = TranscriptionMessages.CancelledByClient });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
-            logger.LogError(ex, "Whisper API call failed for file {FileName}", file.FileName);
-            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Ошибка при обращении к Whisper API." });
+            logger.LogError(exception, "Whisper API call failed for file {FileName}", file.FileName);
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new { error = TranscriptionMessages.ProviderFailed });
         }
     }
 }

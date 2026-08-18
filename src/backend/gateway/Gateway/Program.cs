@@ -29,12 +29,6 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Gateway");
 });
 
-// ── Central JWT validation ───────────────────────────────────────────────────
-// The gateway validates the token once (same signing key/issuer/audience as the
-// Identity issuer). Tokens are NOT required here — public monolith endpoints
-// (login, swagger, metrics) must still pass through. When a valid token IS present
-// we forward trusted X-User-* headers downstream; otherwise the downstream service
-// enforces its own [Authorize] as it does today (strangler passthrough).
 var jwtSigningKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(jwtOptions =>
@@ -54,10 +48,9 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddSellevateHealthChecks();
 
-// ── YARP reverse proxy ───────────────────────────────────────────────────────
-// Routes/clusters come from the "ReverseProxy" config section. The monolith is
-// retired (Phase 9): every prefix is owned by a microservice cluster and there is
-// no catch-all, so an unknown route returns 404 instead of falling through.
+builder.Services.Configure<FrontendOptions>(
+    builder.Configuration.GetSection(FrontendOptions.SectionName));
+
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddTransforms(transformBuilderContext =>
@@ -73,6 +66,8 @@ var application = builder.Build();
 
 application.UseSerilogRequestLogging();
 
+application.UseMiddleware<GatewayErrorCorsMiddleware>();
+
 application.MapSellevateHealthChecks();
 
 application.UseAuthentication();
@@ -82,5 +77,22 @@ application.MapReverseProxy();
 
 application.Run();
 
-// Exposed so the integration test host (WebApplicationFactory) can boot the gateway.
+/// <summary>
+/// Composition root of the API gateway. Public and <c>partial</c> only so the integration test
+/// host (<c>WebApplicationFactory&lt;Program&gt;</c>) can boot the real pipeline.
+///
+/// <para>
+/// A JWT is validated centrally here — same signing key, issuer and audience as the Identity
+/// issuer — but is never <em>required</em>: public endpoints (login, swagger, metrics) must still
+/// pass through anonymously. When a valid token is present the validated identity is forwarded
+/// downstream as trusted headers (see <see cref="IdentityForwarding"/>); otherwise the downstream
+/// service enforces its own <c>[Authorize]</c>.
+/// </para>
+///
+/// <para>
+/// Routes and clusters come exclusively from the <c>ReverseProxy</c> configuration section. The
+/// monolith is retired (Phase 9): every prefix is owned by a microservice cluster and there is
+/// deliberately no catch-all route, so an unknown path returns 404 instead of falling through.
+/// </para>
+/// </summary>
 public partial class Program { }

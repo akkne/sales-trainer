@@ -1,22 +1,63 @@
-using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
+using Sellevate.Ai.Common.Constants;
+using Sellevate.Ai.Common.Implementation;
+using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
+using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
+/// <summary>
+/// The single door to the OpenAI-compatible provider for every non-evaluation call in the platform:
+/// dialog replies, feedback, personas, briefings and the generic chat other services borrow.
+///
+/// <para>
+/// <b>Every path is metered, and the placement of each charge is deliberate.</b> Non-streaming calls
+/// carry the provider's own <c>usage</c> block, so those numbers are a measurement — and they are the
+/// expensive calls. The streaming path gets an estimate instead: an SSE stream carries no usage block,
+/// and asking for one via <c>stream_options</c> is a request shape not every compatible gateway
+/// accepts, so breaking every voice call to make the cheapest call in the product exact is a bad
+/// trade. The streaming charge sits in a <c>finally</c> rather than after the loop, because this is an
+/// async iterator: a client that hangs up mid-turn disposes the iterator at the <c>yield</c>, so
+/// anything written after the loop never runs while the provider has still billed us in full.
+/// </para>
+///
+/// <para>
+/// <b>The allowance is checked before the request is built</b>, so a refused organization pays nothing
+/// at all rather than being cut off after the money is spent.
+/// </para>
+///
+/// <para>
+/// <b>Provider differences are resolved from an explicit enum, never by sniffing the URL.</b> The two
+/// supported providers disagree about which header carries the key and about how a JSON schema is
+/// wrapped; both are selected from <see cref="OpenAiConfiguration.Provider"/>.
+/// </para>
+///
+/// <para>
+/// <b>A non-2xx body never escapes this class.</b> It is redacted, truncated, logged — as a warning
+/// for a rejection and an error only for a genuine provider fault — and replaced by a typed exception
+/// the controllers map onto a status code.
+/// </para>
+/// </summary>
 internal sealed class OpenAiChatService : IOpenAiChatService
 {
+    private const string SseDataFieldPrefix = "data:";
+    private const string SseStreamTerminator = "[DONE]";
+    private const string ChatReplySchemaName = "chat_reply";
+    private const int LowestServerErrorStatusCode = 500;
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<OpenAiConfiguration> _openAiOptions;
+    private readonly IAiSpendMeter _spendMeter;
     private readonly ILogger<OpenAiChatService> _logger;
-
-    private const string PlaceholderApiKey = "REPLACE_WITH_OPENAI_API_KEY";
 
     private const string StructuredReplyInstruction = @"
 
@@ -55,8 +96,11 @@ endCall: false ЗАПРЕЩЕНО.
 Если endCall: true — укажи короткую причину строкой (""оскорбления"", ""агрессия"", ""манипуляция"",
 ""бессмыслица"", ""договорились"", ""отказ"" и т.п.). Если endCall: false — верни null.";
 
-    // Built per-request from admin-editable criterion weights (see GamificationSettings).
-    // Only the criteria block at the very end varies; everything above it is fixed guidance.
+    /// <summary>
+    /// Built per request from the administrator-editable criterion weights. Only the criteria block at
+    /// the very end varies with the weights; everything above it is fixed guidance, which is why the
+    /// two are separate constants rather than one interpolated block.
+    /// </summary>
     private static string BuildExperiencePointsSuffix(DialogXpWeights weights) =>
         ExperiencePointsInstructionPrefix + $@"
 
@@ -133,23 +177,16 @@ endCall: false ЗАПРЕЩЕНО.
     public OpenAiChatService(
         IHttpClientFactory httpClientFactory,
         IOptions<OpenAiConfiguration> openAiOptions,
+        IAiSpendMeter spendMeter,
         ILogger<OpenAiChatService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _openAiOptions = openAiOptions;
+        _spendMeter = spendMeter;
         _logger = logger;
     }
 
-    public bool IsConfigured
-    {
-        get
-        {
-            var apiKey = _openAiOptions.Value.ApiKey;
-            return !string.IsNullOrWhiteSpace(apiKey) &&
-                   apiKey != PlaceholderApiKey &&
-                   !apiKey.StartsWith("REPLACE", StringComparison.OrdinalIgnoreCase);
-        }
-    }
+    public bool IsConfigured => AiSecretPlaceholders.IsRealSecret(_openAiOptions.Value.ApiKey);
 
     public async Task<ChatMessageResult> SendChatMessageAsync(
         string systemPrompt,
@@ -195,6 +232,8 @@ endCall: false ЗАПРЕЩЕНО.
         var chatModel = _openAiOptions.Value.DialogModel;
         var maxTokens = _openAiOptions.Value.MaximumDialogTokenCount;
 
+        await _spendMeter.EnsureLlmAllowanceAsync($"streaming chat ({chatModel})", cancellationToken);
+
         var (httpClient, apiUrl) = CreateConfiguredClient();
 
         var messages = BuildMessages(systemPrompt + StructuredReplyInstruction, conversationHistory);
@@ -210,7 +249,7 @@ endCall: false ЗАПРЕЩЕНО.
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Post, apiUrl)
         {
-            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, AiMediaTypes.Json)
         };
 
         _logger.LogInformation("Streaming OpenAI completion with model {Model}", chatModel);
@@ -219,58 +258,84 @@ endCall: false ЗАПРЕЩЕНО.
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("OpenAI streaming error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(errorBody));
-            throw new HttpRequestException("AI provider error");
+            throw TranslateProviderError(response.StatusCode, errorBody, "streaming chat");
         }
 
+        var promptLength = systemPrompt.Length + StructuredReplyInstruction.Length
+                           + conversationHistory.Sum(message => message.Content.Length);
+        var replyLength = 0;
+
         var contentType = response.Content.Headers.ContentType?.MediaType;
-        if (!string.Equals(contentType, "text/event-stream", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(contentType, AiMediaTypes.ServerSentEvents, StringComparison.OrdinalIgnoreCase))
         {
             var fullBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogInformation("Provider returned non-SSE chat completion ({ContentType}); yielding it as a single delta", contentType);
-            var fullContent = ExtractContentFromCompletionResponse(fullBody, _logger);
-            if (!string.IsNullOrEmpty(fullContent))
-                yield return fullContent;
+            var completion = ExtractCompletion(fullBody, _logger);
+            await ChargeAsync(
+                chatModel,
+                completion.Usage,
+                new AiCompletionUsage(
+                    _spendMeter.EstimateTokensFromLength(promptLength),
+                    _spendMeter.EstimateTokens(completion.Content)),
+                cancellationToken);
+
+            if (!string.IsNullOrEmpty(completion.Content))
+                yield return completion.Content;
             yield break;
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
 
-        while (!reader.EndOfStream)
+        try
         {
-            if (cancellationToken.IsCancellationRequested) yield break;
-
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
-
-            var payload = line["data:".Length..].Trim();
-            if (payload == "[DONE]") yield break;
-
-            string? delta = null;
-            try
+            while (!reader.EndOfStream)
             {
-                using var doc = JsonDocument.Parse(payload);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                if (cancellationToken.IsCancellationRequested) break;
+
+                var line = await reader.ReadLineAsync(cancellationToken);
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!line.StartsWith(SseDataFieldPrefix, StringComparison.Ordinal)) continue;
+
+                var payload = line[SseDataFieldPrefix.Length..].Trim();
+                if (payload == SseStreamTerminator) break;
+
+                string? delta = null;
+                try
                 {
-                    var first = choices[0];
-                    if (first.TryGetProperty("delta", out var deltaElement) &&
-                        deltaElement.TryGetProperty("content", out var contentElement))
+                    using var doc = JsonDocument.Parse(payload);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
                     {
-                        delta = contentElement.GetString();
+                        var first = choices[0];
+                        if (first.TryGetProperty("delta", out var deltaElement) &&
+                            deltaElement.TryGetProperty("content", out var contentElement))
+                        {
+                            delta = contentElement.GetString();
+                        }
                     }
                 }
-            }
-            catch (JsonException)
-            {
-                _logger.LogDebug("Skipping non-JSON SSE payload: {Payload}", payload);
-                continue;
-            }
+                catch (JsonException)
+                {
+                    _logger.LogDebug("Skipping non-JSON SSE payload: {Payload}", payload);
+                    continue;
+                }
 
-            if (!string.IsNullOrEmpty(delta))
+                if (string.IsNullOrEmpty(delta)) continue;
+
+                replyLength += delta.Length;
                 yield return delta;
+            }
+        }
+        finally
+        {
+            await ChargeAsync(
+                chatModel,
+                reported: null,
+                new AiCompletionUsage(
+                    _spendMeter.EstimateTokensFromLength(promptLength),
+                    _spendMeter.EstimateTokensFromLength(replyLength)),
+                CancellationToken.None);
         }
     }
 
@@ -283,8 +348,6 @@ endCall: false ЗАПРЕЩЕНО.
         var feedbackModel = _openAiOptions.Value.OpenQuestionModel;
         var maxTokens = _openAiOptions.Value.MaximumFeedbackTokenCount;
 
-        // AI3: Keep scoring instructions in system role; put untrusted transcript in a
-        // clearly delimited user block so it cannot override scoring instructions.
         var conversationAsText = FormatConversationForFeedback(conversationHistory);
         var systemPrompt =
             "You are an expert sales coach providing detailed feedback in Russian.\n\n" +
@@ -298,7 +361,7 @@ endCall: false ЗАПРЕЩЕНО.
 
         var userMessage = new List<DialogMessage>
         {
-            new() { Role = "user", Content = userBlock, Timestamp = DateTime.UtcNow }
+            new() { Role = DialogMessageRoles.User, Content = userBlock, Timestamp = DateTime.UtcNow }
         };
 
         var response = await CallOpenAiAsync(systemPrompt, userMessage, feedbackModel, maxTokens, responseFormat: null, cancellationToken);
@@ -307,7 +370,7 @@ endCall: false ЗАПРЕЩЕНО.
 
         var xpReward = ExtractExperiencePointsReward(response, xpWeights.Total);
         var score = ExtractScore(response);
-        var cleanedContent = Regex.Replace(response, @"\[(?:XP|SCORE):\d+\]", "").Trim();
+        var cleanedContent = Regex.Replace(response, DialogFeedbackMarkup.AnyScoringTagPattern, "").Trim();
         var (summary, detailedContent) = ExtractSummaryAndContent(cleanedContent);
 
         _logger.LogInformation("Extracted feedback summary length: {SummaryLength}, content length: {ContentLength}, score: {Score}", summary.Length, detailedContent.Length, score);
@@ -333,42 +396,56 @@ endCall: false ЗАПРЕЩЕНО.
 
         var userMessage = new List<DialogMessage>
         {
-            new() { Role = "user", Content = userPrompt, Timestamp = DateTime.UtcNow }
+            new() { Role = DialogMessageRoles.User, Content = userPrompt, Timestamp = DateTime.UtcNow }
         };
 
         var response = await CallOpenAiAsync(systemPrompt, userMessage, resolvedModel, resolvedMaxTokens, responseFormat: null, cancellationToken);
         return response.Trim();
     }
 
+    /// <summary>
+    /// Resolves the named client and attaches the key in whichever header the configured provider
+    /// expects. Both candidate headers are removed first: the factory hands back a pooled client, so a
+    /// header left over from a previous provider selection would travel with the next request.
+    /// </summary>
     private (HttpClient Client, string ApiUrl) CreateConfiguredClient()
     {
-        var config = _openAiOptions.Value;
-        var apiUrl = config.BaseUrl.TrimEnd('/') + config.ChatCompletionsPath;
+        var configuration = _openAiOptions.Value;
+        var apiUrl = configuration.BaseUrl.TrimEnd('/') + configuration.ChatCompletionsPath;
 
-        var client = _httpClientFactory.CreateClient("OpenAI");
-        client.DefaultRequestHeaders.Remove("Authorization");
-        client.DefaultRequestHeaders.Remove("X-Auth-Token");
+        var client = _httpClientFactory.CreateClient(AiProviderHttpConstants.OpenAiClientName);
+        client.DefaultRequestHeaders.Remove(AiProviderHttpConstants.AuthorizationHeaderName);
+        client.DefaultRequestHeaders.Remove(AiProviderHttpConstants.F5AuthenticationTokenHeaderName);
 
-        // AI7c: use explicit provider enum — no magic-string URL sniffing.
-        if (config.Provider == OpenAiProvider.F5Ai)
-            client.DefaultRequestHeaders.Add("X-Auth-Token", config.ApiKey);
+        if (configuration.Provider == OpenAiProvider.F5Ai)
+            client.DefaultRequestHeaders.Add(
+                AiProviderHttpConstants.F5AuthenticationTokenHeaderName, configuration.ApiKey);
         else
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", config.ApiKey);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                AiProviderHttpConstants.BearerScheme, configuration.ApiKey);
 
         return (client, apiUrl);
     }
 
     private static List<object> BuildMessages(string systemPrompt, List<DialogMessage> history)
     {
-        var messages = new List<object> { new { role = "system", content = systemPrompt } };
+        var messages = new List<object>
+        {
+            new { role = DialogMessageRoles.System, content = systemPrompt },
+        };
         foreach (var message in history)
             messages.Add(new { role = message.Role, content = message.Content });
         return messages;
     }
 
+    /// <summary>
+    /// Splits the short summary from the detailed breakdown. A model that omitted the delimiter is not
+    /// an error: the leading sentences become the summary and the whole answer the detail, so the
+    /// learner still gets both panes filled rather than one blank one.
+    /// </summary>
     private static (string Summary, string Content) ExtractSummaryAndContent(string response)
     {
-        const string delimiter = "[DETAILED]";
+        var delimiter = DialogFeedbackMarkup.DetailedSectionDelimiter;
         var delimiterIndex = response.IndexOf(delimiter, StringComparison.OrdinalIgnoreCase);
 
         if (delimiterIndex >= 0)
@@ -378,7 +455,7 @@ endCall: false ЗАПРЕЩЕНО.
             return (summary, content);
         }
 
-        var summaryFallback = ExtractFirstSentences(response, 3);
+        var summaryFallback = ExtractFirstSentences(response, DialogFeedbackMarkup.SummaryFallbackSentenceCount);
         return (summaryFallback, response);
     }
 
@@ -393,26 +470,40 @@ endCall: false ЗАПРЕЩЕНО.
         return string.IsNullOrWhiteSpace(result) ? text : result;
     }
 
-    private int ExtractExperiencePointsReward(string response, int maxScore)
+    /// <summary>
+    /// Clamped rather than trusted: the tag is text the model wrote, so a model that ignored the stated
+    /// ceiling cannot award more experience than the configured weights allow. A missing tag awards
+    /// nothing, which is the safe direction for a value that feeds a learner's progress.
+    /// </summary>
+    private int ExtractExperiencePointsReward(string response, int maximumExperiencePoints)
     {
-        var match = Regex.Match(response, @"\[XP:(\d+)\]");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var xp))
-            return Math.Clamp(xp, 0, maxScore);
+        var match = Regex.Match(response, DialogFeedbackMarkup.ExperiencePointsTagPattern);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var experiencePoints))
+            return Math.Clamp(experiencePoints, 0, maximumExperiencePoints);
 
         _logger.LogWarning("Feedback response did not contain an [XP:N] tag; awarding 0 XP");
         return 0;
     }
 
+    /// <summary>
+    /// Clamped to the published grade range for the same reason as the experience award. A missing tag
+    /// scores zero rather than throwing: the written feedback is still worth showing.
+    /// </summary>
     private int ExtractScore(string response)
     {
-        var match = Regex.Match(response, @"\[SCORE:(\d+)\]");
+        var match = Regex.Match(response, DialogFeedbackMarkup.ScoreTagPattern);
         if (match.Success && int.TryParse(match.Groups[1].Value, out var score))
-            return Math.Clamp(score, 0, 10);
+            return Math.Clamp(score, DialogScoreScale.Minimum, DialogScoreScale.Maximum);
 
         _logger.LogWarning("Feedback response did not contain a [SCORE:N] tag; defaulting score to 0");
-        return 0;
+        return DialogScoreScale.Minimum;
     }
 
+    /// <summary>
+    /// The strict JSON schema a dialog reply must satisfy, wrapped the way the configured provider
+    /// expects. The two supported providers differ only in the wrapper — a flat object versus a nested
+    /// <c>json_schema</c> — and the choice is made from the provider enum, never from the URL.
+    /// </summary>
     private object BuildChatReplyResponseFormat()
     {
         var replySchema = new
@@ -428,11 +519,14 @@ endCall: false ЗАПРЕЩЕНО.
             additionalProperties = false
         };
 
-        // AI7c: provider-specific schema wrapper selected via explicit enum, not URL sniffing.
         if (_openAiOptions.Value.Provider == OpenAiProvider.F5Ai)
-            return new { type = "json_schema", name = "chat_reply", strict = true, schema = replySchema };
+            return new { type = "json_schema", name = ChatReplySchemaName, strict = true, schema = replySchema };
 
-        return new { type = "json_schema", json_schema = new { name = "chat_reply", strict = true, schema = replySchema } };
+        return new
+        {
+            type = "json_schema",
+            json_schema = new { name = ChatReplySchemaName, strict = true, schema = replySchema },
+        };
     }
 
     private async Task<string> CallOpenAiAsync(
@@ -446,6 +540,8 @@ endCall: false ЗАПРЕЩЕНО.
         if (!IsConfigured)
             throw new InvalidOperationException("OpenAI API is not configured");
 
+        await _spendMeter.EnsureLlmAllowanceAsync($"chat completion ({model})", cancellationToken);
+
         var (httpClient, apiUrl) = CreateConfiguredClient();
 
         var requestBody = new Dictionary<string, object>
@@ -458,7 +554,7 @@ endCall: false ЗАПРЕЩЕНО.
         if (responseFormat != null)
             requestBody["response_format"] = responseFormat;
 
-        var httpContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        var httpContent = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, AiMediaTypes.Json);
 
         _logger.LogInformation("Calling OpenAI API with model {Model}", model);
 
@@ -466,30 +562,100 @@ endCall: false ЗАПРЕЩЕНО.
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("OpenAI API error: {StatusCode} - {Content}", response.StatusCode, RedactAndTruncate(responseContent));
-
-            if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
-                throw new OpenAiPaymentRequiredException("AI service requires payment. Please check your API balance.");
-
-            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                throw new OpenAiRateLimitException("AI service rate limit exceeded. Please try again later.");
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                throw new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration.");
-
-            throw new HttpRequestException("AI provider error");
-        }
+            throw TranslateProviderError(response.StatusCode, responseContent, $"chat completion ({model})");
 
         _logger.LogDebug("OpenAI API response: {Response}", responseContent);
 
-        return ExtractContentFromCompletionResponse(responseContent, _logger);
+        var completion = ExtractCompletion(responseContent, _logger);
+
+        await ChargeAsync(model, completion.Usage, EstimateUsage(systemPrompt, conversationHistory, completion.Content), cancellationToken);
+
+        return completion.Content;
     }
 
-    private static string ExtractContentFromCompletionResponse(string responseContent, ILogger logger)
+    /// <summary>
+    /// Phase 40.33. Writes one completion to the meter, preferring the provider's reported token
+    /// counts and falling back to an estimate when it reported none.
+    ///
+    /// <para>
+    /// The fallback matters because not every OpenAI-compatible gateway returns <c>usage</c>, and a
+    /// call recorded as zero tokens is worse than a call recorded approximately: zero reads as "this
+    /// was free" on the spend report, and the month would quietly understate itself. Estimated calls
+    /// are counted separately so nobody mistakes one for the other.
+    /// </para>
+    /// </summary>
+    private async Task ChargeAsync(
+        string model,
+        AiCompletionUsage? reported,
+        AiCompletionUsage estimated,
+        CancellationToken cancellationToken)
     {
-        using var responseJson = JsonDocument.Parse(responseContent);
+        var usage = reported ?? estimated;
+        await _spendMeter.RecordLlmUsageAsync(
+            model,
+            usage.PromptTokens,
+            usage.CompletionTokens,
+            wasEstimated: reported is null,
+            cancellationToken);
+    }
+
+    private AiCompletionUsage EstimateUsage(string systemPrompt, List<DialogMessage> history, string reply)
+    {
+        var promptLength = systemPrompt.Length + history.Sum(message => message.Content.Length);
+        return new AiCompletionUsage(
+            _spendMeter.EstimateTokensFromLength(promptLength),
+            _spendMeter.EstimateTokens(reply));
+    }
+
+    /// <summary>
+    /// Maps a non-2xx provider response onto a typed exception the controllers can turn into a
+    /// proper status code. A rejected request (bad payload, quota, auth) is an expected operational
+    /// state and is logged as a warning; only genuine provider-side failures are logged as errors,
+    /// so a malformed prompt no longer shows up as a service defect in the logs.
+    /// </summary>
+    private Exception TranslateProviderError(System.Net.HttpStatusCode statusCode, string responseBody, string operation)
+    {
+        var redactedBody = ProviderResponseRedactor.RedactAndTruncate(responseBody);
+
+        if ((int)statusCode >= LowestServerErrorStatusCode)
+            _logger.LogError("AI provider failed on {Operation}: {StatusCode} - {Content}", operation, statusCode, redactedBody);
+        else
+            _logger.LogWarning("AI provider rejected {Operation}: {StatusCode} - {Content}", operation, statusCode, redactedBody);
+
+        return statusCode switch
+        {
+            System.Net.HttpStatusCode.PaymentRequired =>
+                new OpenAiPaymentRequiredException(AiProviderFailureMessages.PaymentRequired),
+            System.Net.HttpStatusCode.TooManyRequests =>
+                new OpenAiRateLimitException(AiProviderFailureMessages.RateLimited),
+            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden =>
+                new OpenAiAuthenticationException("AI service authentication failed. Please check API configuration."),
+            _ => new OpenAiRequestException("AI provider error", (int)statusCode),
+        };
+    }
+
+    /// <summary>
+    /// Phase 40.33. Same tolerant content extraction as before, plus the <c>usage</c> block this
+    /// service used to drop on the floor. It is the only place the provider tells us what a call
+    /// cost, and reading it here rather than counting characters is the difference between a spend
+    /// report and a guess.
+    /// </summary>
+    private static CompletionResult ExtractCompletion(string responseContent, ILogger logger)
+    {
+        JsonDocument responseJson;
+        try
+        {
+            responseJson = JsonDocument.Parse(responseContent);
+        }
+        catch (JsonException jsonException)
+        {
+            logger.LogWarning(jsonException, "AI provider returned a non-JSON body: {Response}", ProviderResponseRedactor.RedactAndTruncate(responseContent));
+            throw new OpenAiRequestException("AI provider returned an unreadable response");
+        }
+
+        using var _ = responseJson;
         var root = responseJson.RootElement;
+        var usage = OpenAiUsageReader.Read(root);
 
         if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
@@ -497,50 +663,51 @@ endCall: false ЗАПРЕЩЕНО.
             if (firstChoice.TryGetProperty("message", out var message) &&
                 message.TryGetProperty("content", out var content))
             {
-                return content.GetString() ?? string.Empty;
+                return new CompletionResult(content.GetString() ?? string.Empty, usage);
             }
         }
 
         if (root.TryGetProperty("message", out var directMessage) &&
             directMessage.TryGetProperty("content", out var messageContent))
         {
-            return messageContent.GetString() ?? string.Empty;
+            return new CompletionResult(messageContent.GetString() ?? string.Empty, usage);
         }
 
         if (root.TryGetProperty("content", out var directContent))
-            return directContent.GetString() ?? string.Empty;
+            return new CompletionResult(directContent.GetString() ?? string.Empty, usage);
 
         if (root.TryGetProperty("text", out var textContent))
-            return textContent.GetString() ?? string.Empty;
+            return new CompletionResult(textContent.GetString() ?? string.Empty, usage);
 
         if (root.TryGetProperty("result", out var result))
         {
             if (result.TryGetProperty("content", out var resultContent))
-                return resultContent.GetString() ?? string.Empty;
+                return new CompletionResult(resultContent.GetString() ?? string.Empty, usage);
             if (result.TryGetProperty("text", out var resultText))
-                return resultText.GetString() ?? string.Empty;
+                return new CompletionResult(resultText.GetString() ?? string.Empty, usage);
         }
 
-        logger.LogError("Unable to parse OpenAI response format: {Response}", responseContent);
-        throw new InvalidOperationException($"Unexpected API response format: {responseContent}");
+        logger.LogWarning("Unable to parse OpenAI response format: {Response}", ProviderResponseRedactor.RedactAndTruncate(responseContent));
+        throw new OpenAiRequestException("AI provider returned an unexpected response format");
     }
 
-    private static string RedactAndTruncate(string body)
-    {
-        const int maxLength = 500;
-        var redacted = Regex.Replace(body, @"sk-[A-Za-z0-9\-_]{8,}", "[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        redacted = Regex.Replace(redacted, @"(?i)(Authorization|X-Auth-Token)\s*[:=]\s*\S+", "$1=[REDACTED]", RegexOptions.None, TimeSpan.FromSeconds(1));
-        return redacted.Length > maxLength ? redacted[..maxLength] + "…" : redacted;
-    }
+    private sealed record CompletionResult(string Content, AiCompletionUsage? Usage);
 
+    /// <summary>
+    /// Renders the transcript for the grader with the two sides named in the language of the exercise,
+    /// so the model reads "who said what" without being told the technical role vocabulary.
+    /// </summary>
     private static string FormatConversationForFeedback(List<DialogMessage> messages)
     {
-        var sb = new StringBuilder();
+        const string clientLabel = "Клиент";
+        const string managerLabel = "Менеджер";
+
+        var transcript = new StringBuilder();
         foreach (var message in messages)
         {
-            var roleLabel = message.Role == "assistant" ? "Клиент" : "Менеджер";
-            sb.AppendLine($"{roleLabel}: {message.Content}");
+            var roleLabel = message.Role == DialogMessageRoles.Assistant ? clientLabel : managerLabel;
+            transcript.AppendLine($"{roleLabel}: {message.Content}");
         }
-        return sb.ToString();
+        return transcript.ToString();
     }
 }

@@ -1,25 +1,38 @@
-using System.Net.Http.Json;
-using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Infrastructure.Configuration;
 
 namespace Sellevate.Company.Infrastructure.Ai;
 
+/// <summary>
+/// Calls ai-service to compose a pre-call briefing from a company's description, its latest practice
+/// goal and its recent call log. Stateless: the caller owns caching the result on the company row.
+///
+/// <para>
+/// Any failure — refusal, transport error, empty body — surfaces as an exception rather than a
+/// degraded briefing, because a briefing the salesperson cannot tell apart from a real one is worse
+/// than no briefing.
+/// </para>
+/// </summary>
 internal sealed class BriefingAiClient : IBriefingAiClient
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const string FailureLogTemplate = "AI briefing generation returned {StatusCode}: {Body}";
+    private const string ServiceLabel = "AI briefing service";
 
     private readonly HttpClient _httpClient;
     private readonly AiServiceConfiguration _configuration;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<BriefingAiClient> _logger;
 
     public BriefingAiClient(
         HttpClient httpClient,
         IOptions<AiServiceConfiguration> configurationOptions,
+        ITenantContext tenantContext,
         ILogger<BriefingAiClient> logger)
     {
         _httpClient = httpClient;
         _configuration = configurationOptions.Value;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -29,27 +42,14 @@ internal sealed class BriefingAiClient : IBriefingAiClient
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var requestUri = _configuration.BaseUrl.TrimEnd('/') + _configuration.BriefingPath;
+        using var response = await AiServiceCall.PostAsync(
+            _httpClient,
+            _tenantContext,
+            AiServiceCall.BuildRequestUri(_configuration.BaseUrl, _configuration.BriefingPath),
+            request,
+            cancellationToken);
 
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri, request, SerializerOptions, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning(
-                "AI briefing generation returned {StatusCode}: {Body}",
-                response.StatusCode, responseBody);
-            throw new InvalidOperationException(
-                $"AI briefing service returned {(int)response.StatusCode}.");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<BriefingAiResult>(
-            SerializerOptions, cancellationToken);
-
-        if (result is null)
-            throw new InvalidOperationException("AI briefing service returned an empty body.");
-
-        return result;
+        return await AiServiceCall.ReadResultAsync<BriefingAiResult>(
+            response, _logger, FailureLogTemplate, ServiceLabel, cancellationToken);
     }
 }

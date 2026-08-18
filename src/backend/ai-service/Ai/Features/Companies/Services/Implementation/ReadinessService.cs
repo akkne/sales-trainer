@@ -6,6 +6,17 @@ using Sellevate.Ai.Features.Dialog.Services.Abstract;
 
 namespace Sellevate.Ai.Features.Companies.Services.Implementation;
 
+/// <summary>
+/// Collects the feedback summaries of a seller's training sessions and asks the provider to score their
+/// readiness.
+///
+/// <para>
+/// Session ids arrive from the caller and are re-checked against the owning user here, so a compromised or
+/// buggy caller cannot read another learner's feedback through this route. The collected summaries are
+/// wrapped in explicit markers and declared to be data: they contain model-written text about a
+/// conversation, which is exactly the shape an injection hides in.
+/// </para>
+/// </summary>
 internal sealed class ReadinessService : IReadinessService
 {
     private const string SystemPromptTemplate = @"Ты — ассистент менеджера по продажам, который оценивает готовность пользователя к реальному звонку на основе резюме его тренировочных звонков.
@@ -62,6 +73,15 @@ internal sealed class ReadinessService : IReadinessService
         return ParseAiResponse(response);
     }
 
+    /// <summary>
+    /// Reads the feedback summary of each requested session, scoped to the owning user.
+    ///
+    /// <para>
+    /// The user scope is not redundant: it makes ai-service verify independently that the
+    /// caller-supplied session ids belong to that user, beyond company-service's own ownership check and
+    /// the internal-service filter. A session that is not theirs contributes nothing rather than raising.
+    /// </para>
+    /// </summary>
     private async Task<List<string>> CollectFeedbackSummariesAsync(
         Guid userId,
         List<string> sessionIds,
@@ -70,9 +90,6 @@ internal sealed class ReadinessService : IReadinessService
         var summaries = new List<string>();
         foreach (var sessionId in sessionIds)
         {
-            // Scope to the owning user so ai-service independently verifies the
-            // caller-supplied session ids belong to that user (defense in depth
-            // beyond company-service's ownership check + InternalServiceAuthFilter).
             var session = await _dialogService.GetSessionForUserAsync(sessionId, userId, cancellationToken);
             var summary = session?.Feedback?.Summary;
             if (!string.IsNullOrWhiteSpace(summary))

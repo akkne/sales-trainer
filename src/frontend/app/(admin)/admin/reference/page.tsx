@@ -178,12 +178,12 @@ export default function AdminReferenceAllPage() {
                                                     {material.skillTitle}
                                                 </span>
                                                 {material.category && (
-                                                    <span className="text-xs bg-accent-soft text-accent rounded px-2 py-0.5">
+                                                    <span className="text-xs bg-accent-soft text-accent-ink rounded px-2 py-0.5">
                                                         {material.category}
                                                     </span>
                                                 )}
                                                 {material.tags.map((tag) => (
-                                                    <span key={tag} className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">
+                                                    <span key={tag} className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">
                                                         {tag}
                                                     </span>
                                                 ))}

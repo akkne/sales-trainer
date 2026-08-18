@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
+import { resolveLegacyAdminRedirect } from "@/features/org-shell/lib/legacy-admin-redirects";
 
 const NAV_ICONS: Record<string, IconName> = {
     "/admin/import": "grid",
@@ -23,6 +24,7 @@ const NAV_ICONS: Record<string, IconName> = {
     "/admin/leagues": "trophy",
     "/admin/gamification": "star",
     "/admin/users": "users",
+    "/admin/organizations": "briefcase",
 };
 
 export default function AdminLayout({
@@ -45,17 +47,27 @@ export default function AdminLayout({
         setSidebarOpen(false);
     }, [pathname]);
 
+    /// Runs ahead of the role gate below and for every visitor, platform staff included: the
+    /// screens these paths name were never built under /admin/*, and the notification actionUrls
+    /// baked into rows already in the store point straight at them
+    /// (docs/TENANCY/ADMIN_UI_DESIGN.md §1.5). `replace` so that Back leaves the panel instead of
+    /// bouncing off the redirect.
+    const legacyRedirectTarget = resolveLegacyAdminRedirect(pathname);
+
     useEffect(() => {
+        if (!legacyRedirectTarget) return;
+        const search = typeof window === "undefined" ? "" : window.location.search;
+        router.replace(`${legacyRedirectTarget}${search}`);
+    }, [legacyRedirectTarget, router]);
+
+    useEffect(() => {
+        if (legacyRedirectTarget) return;
         if (!accessToken) {
             clientLogger.warn("Admin panel access denied — not authenticated", { path: pathname });
             router.replace("/login");
             return;
         }
-        if (
-            authenticatedUser &&
-            authenticatedUser.role !== "Admin" &&
-            authenticatedUser.role !== "SuperAdmin"
-        ) {
+        if (authenticatedUser && !isPlatformStaff(authenticatedUser.role)) {
             clientLogger.warn("Admin panel access denied — insufficient role", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -63,14 +75,10 @@ export default function AdminLayout({
             });
             router.replace("/tree");
         }
-    }, [accessToken, authenticatedUser, router, pathname]);
+    }, [accessToken, authenticatedUser, router, pathname, legacyRedirectTarget]);
 
     useEffect(() => {
-        if (
-            accessToken &&
-            authenticatedUser &&
-            (authenticatedUser.role === "Admin" || authenticatedUser.role === "SuperAdmin")
-        ) {
+        if (accessToken && authenticatedUser && isPlatformStaff(authenticatedUser.role)) {
             clientLogger.info("Admin panel opened", {
                 userId: authenticatedUser.id,
                 role: authenticatedUser.role,
@@ -82,6 +90,8 @@ export default function AdminLayout({
 
     if (!mounted) return null;
 
+    if (legacyRedirectTarget) return null;
+
     if (accessToken && !authenticatedUser) {
         return (
             <div className="min-h-screen flex items-center justify-center text-ink-3 text-sm bg-surface">
@@ -90,17 +100,19 @@ export default function AdminLayout({
         );
     }
 
-    if (
-        !accessToken ||
-        !authenticatedUser ||
-        (authenticatedUser.role !== "Admin" && authenticatedUser.role !== "SuperAdmin")
-    ) {
+    if (!accessToken || !authenticatedUser || !isPlatformStaff(authenticatedUser.role)) {
         return null;
     }
 
-    const isSuperAdmin = authenticatedUser.role === "SuperAdmin";
-
+    // Every screen below is the *platform* admin panel: Sellevate-staff-only, and open to
+    // both `Admin` and `SuperAdmin` (RequirePlatformAdmin on the backend). Reaching this point
+    // already implies platform staff, so no nav item needs a gate of its own — the
+    // superadmin-only affordances are gated inside the screens that own them.
+    //
+    // The separate organization-scoped admin panel (for TenancyAdmin/TenancySuperAdmin) is
+    // roadmap block 40.20 and is waiting on the owner's design.
     const navItems = [
+        { href: "/admin/organizations", label: "Organizations" },
         { href: "/admin/import", label: "Bundle Import" },
         { href: "/admin/skills", label: "Skills" },
         { href: "/admin/skill-stages", label: "Skill Stages" },
@@ -115,7 +127,7 @@ export default function AdminLayout({
         { href: "/admin/voice/usage", label: "Voice Usage" },
         { href: "/admin/leagues", label: "Leagues" },
         { href: "/admin/gamification", label: "Gamification" },
-        ...(isSuperAdmin ? [{ href: "/admin/users", label: "Users" }] : []),
+        { href: "/admin/users", label: "Users" },
     ];
 
     return (
@@ -163,7 +175,11 @@ export default function AdminLayout({
                         <Icon name="close" size="sm" />
                     </button>
                 </div>
-                <nav className="flex-1 py-2 px-2 space-y-0.5">
+                {/* min-h-0 is required for overflow-y-auto to take effect: a flex item's
+                    auto minimum size otherwise refuses to shrink below its content height.
+                    Without this the ~760px of nav links overflowed the fixed inset-y-0
+                    aside on short viewports and the last entries were unreachable. */}
+                <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-0.5">
                     {navItems.map((item) => {
                         const isActive = pathname.startsWith(item.href);
                         return (
@@ -172,7 +188,7 @@ export default function AdminLayout({
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 text-sm rounded-xl transition-colors ${
                                     isActive
-                                        ? "bg-indigo-soft text-indigo font-medium"
+                                        ? "bg-indigo-soft text-indigo-ink font-medium"
                                         : "text-ink-3 hover:text-ink hover:bg-bg-2"
                                 }`}
                             >

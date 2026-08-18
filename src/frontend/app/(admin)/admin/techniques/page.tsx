@@ -184,7 +184,7 @@ export default function AdminTechniquesPage() {
                 </div>
             )}
             {importResult && (
-                <div className="bg-accent-soft text-accent rounded-lg px-4 py-3 mb-4 text-sm">
+                <div className="bg-accent-soft text-accent-ink rounded-lg px-4 py-3 mb-4 text-sm">
                     Import finished — created {importResult.createdCount}, updated {importResult.updatedCount}, failed {importResult.failedCount}
                     {importResult.errors.length > 0 && (
                         <ul className="mt-2 list-disc list-inside text-xs">
@@ -268,7 +268,7 @@ export default function AdminTechniquesPage() {
                                                 <span className="text-xs text-ink-3 font-mono">({technique.slug})</span>
                                             </h3>
                                             <div className="flex flex-wrap gap-2 mt-1">
-                                                <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">
+                                                <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">
                                                     {technique.difficultyName}
                                                 </span>
                                                 {technique.primarySkillTitle && (
@@ -277,19 +277,19 @@ export default function AdminTechniquesPage() {
                                                     </span>
                                                 )}
                                                 {technique.tags.map((tag) => (
-                                                    <span key={tag} className="text-xs bg-accent-soft text-accent rounded px-2 py-0.5">
+                                                    <span key={tag} className="text-xs bg-accent-soft text-accent-ink rounded px-2 py-0.5">
                                                         {tag}
                                                     </span>
                                                 ))}
                                                 <span className="text-xs text-ink-3">order: {technique.sortOrder}</span>
                                                 {technique.dialog ? (
-                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">dialog</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">dialog</span>
                                                 ) : null}
                                                 {technique.case ? (
-                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">case</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">case</span>
                                                 ) : null}
                                                 {technique.coach && (
-                                                    <span className="text-xs bg-indigo-soft text-indigo rounded px-2 py-0.5">coach</span>
+                                                    <span className="text-xs bg-indigo-soft text-indigo-ink rounded px-2 py-0.5">coach</span>
                                                 )}
                                             </div>
                                         </div>

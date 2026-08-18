@@ -47,6 +47,9 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                     b.Property<bool>("IsHidden")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("SkillId")
                         .HasColumnType("uuid");
 
@@ -67,6 +70,8 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
 
                     b.HasIndex("SortOrder");
 
+                    b.HasIndex("OrganizationId", "SortOrder");
+
                     b.ToTable("DialogBundles", (string)null);
                 });
 
@@ -75,6 +80,10 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("BaseContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("BundleId")
                         .HasColumnType("uuid");
@@ -103,6 +112,12 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ParentModeId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
@@ -124,10 +139,134 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
 
                     b.HasIndex("BundleId");
 
+                    b.HasIndex("ParentModeId");
+
                     b.HasIndex("BundleId", "Key")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_DialogModes_BundleId_Key_Global")
+                        .HasFilter("\"OrganizationId\" IS NULL");
+
+                    b.HasIndex("OrganizationId", "BundleId", "Key")
+                        .IsUnique()
+                        .HasFilter("\"OrganizationId\" IS NOT NULL");
 
                     b.ToTable("DialogModes", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Ai.Features.Organizations.OrganizationProfileReplica", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BannedClaimsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("GlossaryJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}");
+
+                    b.Property<string>("Icp")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ObjectionsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("Product")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ScriptJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("Tone")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrganizationId");
+
+                    b.ToTable("OrganizationProfileReplicas", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Ai.Features.Quotas.Models.AiUsageRecord", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PeriodKey")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("CallCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CompletionTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("EstimatedCallCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("PromptTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SpeechCharacters")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrganizationId", "PeriodKey", "Model");
+
+                    b.ToTable("AiUsageRecords", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Ai.Features.Quotas.Models.OrganizationQuota", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BatchReservePercent")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("LlmMonthlyTokenLimit")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("VoiceDailyLimitMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("VoiceMonthlyLimitMinutes")
+                        .HasColumnType("integer");
+
+                    b.HasKey("OrganizationId");
+
+                    b.ToTable("OrganizationQuotas", (string)null);
                 });
 
             modelBuilder.Entity("Sellevate.Ai.Identity.UserReplica", b =>
@@ -164,6 +303,11 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                         .HasForeignKey("BundleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Sellevate.Ai.Features.Dialog.Models.DialogMode", null)
+                        .WithMany()
+                        .HasForeignKey("ParentModeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Bundle");
                 });

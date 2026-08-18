@@ -8,6 +8,11 @@ namespace Sellevate.Notification.Features.Notifications.Emails;
 /// <see cref="NotificationType"/> at construction; an unmapped type falls back to the generic
 /// template. The relative action path is rewritten to an absolute URL (against the frontend
 /// origin) before the template runs, so templates only ever see ready-to-click links.
+///
+/// <para>
+/// Two templates claiming the same <see cref="NotificationType"/> is a registration mistake and
+/// fails fast at construction — that is, at application startup — rather than silently picking one.
+/// </para>
 /// </summary>
 public sealed class NotificationEmailRenderer : INotificationEmailRenderer
 {
@@ -23,7 +28,6 @@ public sealed class NotificationEmailRenderer : INotificationEmailRenderer
         ArgumentNullException.ThrowIfNull(templates);
         ArgumentNullException.ThrowIfNull(fallbackTemplate);
 
-        // Last registration wins if two templates ever claim the same type.
         _templatesByType = templates.ToDictionary(template => template.NotificationType);
         _fallbackTemplate = fallbackTemplate;
         _frontendBaseUrl = (frontendBaseUrl ?? string.Empty).TrimEnd('/');
@@ -38,6 +42,13 @@ public sealed class NotificationEmailRenderer : INotificationEmailRenderer
         return template.Render(resolved);
     }
 
+    /// <summary>
+    /// Rewrites a stored relative action path against the frontend origin, and passes through a
+    /// path that is already fully qualified — defensively, since notifications normally carry
+    /// relative paths. Detection is by scheme separator rather than
+    /// <c>Uri.TryCreate(UriKind.Absolute)</c>, which treats a Unix-style "/path" as an absolute
+    /// <c>file://</c> URI and would wrongly skip the rewrite, mailing a link to nowhere.
+    /// </summary>
     private string? ToAbsoluteUrl(string? actionPath)
     {
         if (string.IsNullOrWhiteSpace(actionPath))
@@ -45,9 +56,6 @@ public sealed class NotificationEmailRenderer : INotificationEmailRenderer
             return null;
         }
 
-        // Already a fully-qualified URL (defensive — notifications normally carry relative paths).
-        // Detect by scheme rather than Uri.TryCreate(Absolute), which treats a Unix-style
-        // "/path" as an absolute file:// URI and would wrongly skip the rewrite.
         if (actionPath.Contains("://", StringComparison.Ordinal))
         {
             return actionPath;

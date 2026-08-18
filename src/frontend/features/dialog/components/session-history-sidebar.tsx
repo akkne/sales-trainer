@@ -14,6 +14,11 @@ interface SessionHistorySidebarProps {
     onNewChat: () => void;
     onDeleteSession: (sessionId: string) => void;
     onClose: () => void;
+    /** Below the mobile breakpoint the sidebar is a drawer rather than a column. */
+    mobileOpen?: boolean;
+    /** Collapsed by the desktop toggle. Stays mounted so the drawer can still open. */
+    desktopHidden?: boolean;
+    onMobileClose?: () => void;
 }
 
 function formatSessionDate(dateString: string): string {
@@ -52,6 +57,9 @@ export function SessionHistorySidebar({
     onNewChat,
     onDeleteSession,
     onClose,
+    mobileOpen = false,
+    desktopHidden = false,
+    onMobileClose,
 }: SessionHistorySidebarProps) {
     const groupedSessions = groupSessionsByDate(sessions);
     const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
@@ -68,9 +76,16 @@ export function SessionHistorySidebar({
         }
     };
 
+    const sidebarClasses = ["dc-side"];
+    if (desktopHidden) sidebarClasses.push("dc-side--hidden");
+    if (mobileOpen) sidebarClasses.push("mobile-open");
+
     return (
         <>
-            <aside className="dc-side">
+            {mobileOpen && (
+                <div className="dc-side-scrim" onClick={onMobileClose} aria-hidden />
+            )}
+            <aside className={sidebarClasses.join(" ")}>
                 <div className="dc-side-top">
                     <button className="btn btn-dark btn-sm" onClick={onNewChat}>
                         <Icon name="plus" size="sm" />
@@ -106,11 +121,6 @@ export function SessionHistorySidebar({
                                                 {session.modeTitle}
                                             </span>
                                             <span className="row gap-1" style={{ flex: "none" }}>
-                                                {session.status === "completed" && session.xpEarned > 0 && (
-                                                    <span className="badge" style={{ background: "var(--primary-soft)", color: "var(--primary)" }}>
-                                                        +{session.xpEarned}
-                                                    </span>
-                                                )}
                                                 <span
                                                     onClick={(e) => handleDeleteClick(e, session.id)}
                                                     role="button"

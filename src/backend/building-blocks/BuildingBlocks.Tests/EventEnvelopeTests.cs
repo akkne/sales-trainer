@@ -24,6 +24,25 @@ public class EventEnvelopeTests
     }
 
     [Test]
+    public void Create_defaults_organization_id_to_null()
+    {
+        var envelope = EventEnvelope.Create(Topics.UserRegistered, new SamplePayload(Guid.NewGuid(), "Alice"));
+
+        envelope.OrganizationId.Should().BeNull();
+    }
+
+    [Test]
+    public void Create_stamps_the_supplied_organization_id()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var envelope = EventEnvelope.Create(
+            Topics.ExerciseCompleted, new SamplePayload(Guid.NewGuid(), "Alice"), organizationId: organizationId);
+
+        envelope.OrganizationId.Should().Be(organizationId);
+    }
+
+    [Test]
     public void DataAs_round_trips_the_payload()
     {
         var payload = new SamplePayload(Guid.NewGuid(), "Bob");
@@ -47,7 +66,24 @@ public class EventEnvelopeTests
         restored!.EventId.Should().Be(original.EventId);
         restored.Type.Should().Be(original.Type);
         restored.Version.Should().Be(original.Version);
+        restored.OrganizationId.Should().BeNull();
         restored.DataAs<SamplePayload>().Should().Be(payload);
+    }
+
+    [Test]
+    public void Envelope_with_an_organization_survives_a_full_json_serialize_deserialize_cycle()
+    {
+        var organizationId = Guid.NewGuid();
+        var payload = new SamplePayload(Guid.NewGuid(), "Dana");
+        var original = EventEnvelope.Create(Topics.ExerciseCompleted, payload, organizationId: organizationId);
+
+        var json = JsonSerializer.Serialize(original, EventEnvelope.JsonOptions);
+        var restored = JsonSerializer.Deserialize<EventEnvelope>(json, EventEnvelope.JsonOptions);
+
+        restored.Should().NotBeNull();
+        restored!.OrganizationId.Should().Be(organizationId);
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
     }
 
     [Test]

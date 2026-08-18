@@ -1,15 +1,23 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications.Models;
 using Sellevate.Notification.Features.Notifications.Services.Abstract;
 
 namespace Sellevate.Notification.Features.Notifications.Endpoints;
 
+/// <summary>
+/// Phase 40.13 marked the whole controller <see cref="TenantScopedAttribute"/>. Every route here
+/// reads or writes one organization's inbox, so a request without the gateway-validated
+/// organization header is refused by the tenant middleware rather than reaching a service that
+/// would have to raise anyway — the difference is a 403 instead of a 500.
+/// </summary>
 [ApiController]
 [Route(RouteConstants.NotificationsBase)]
 [Authorize]
+[TenantScoped]
 public sealed class NotificationController : ControllerBase
 {
     private const int DefaultPageLimit = 20;
@@ -83,10 +91,14 @@ public sealed class NotificationController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Every route addresses the caller's own inbox, so the recipient is taken from the token and
+    /// never from the request — there is no route or query parameter that could name someone else.
+    /// </summary>
     private bool TryGetCurrentUserId(out Guid recipientUserId)
     {
         var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+            ?? User.FindFirstValue(ClaimTypeNames.Subject);
 
         return Guid.TryParse(rawUserId, out recipientUserId);
     }

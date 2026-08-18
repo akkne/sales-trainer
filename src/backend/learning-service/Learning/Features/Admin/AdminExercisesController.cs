@@ -4,14 +4,23 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Admin;
 
+/// <summary>
+/// Phase 40.18. Opened to organization administrators, because this is where a lesson override is
+/// actually edited: a lesson has no body of its own, and everything a customer wants to change —
+/// question text, options, correct answers, grading prompts — lives in its exercise rows
+/// (docs/TENANCY/CONTENT_MODEL.md §0). Ownership is checked per row, against the owning
+/// <em>lesson</em> for creation and against the exercise itself for update and delete.
+/// </summary>
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[TenantTransaction]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 public sealed class AdminExercisesController(LearningDbContext database, ILogger<AdminExercisesController> logger) : ControllerBase
 {
     [HttpGet("admin/lessons/{lessonId:guid}/exercises")]
@@ -34,6 +43,12 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         return Ok(result);
     }
 
+    /// <summary>
+    /// Phase 40.18. An exercise belongs to whoever owns its lesson, so its organization is copied from
+    /// the lesson rather than from the caller. Left null — as it was while every lesson was global — an
+    /// exercise added to an organization's override would land in the shared library and appear inside
+    /// that lesson for every other customer.
+    /// </summary>
     [HttpPost("admin/lessons/{lessonId:guid}/exercises")]
     public async Task<ActionResult<AdminExerciseDto>> Create(
         Guid lessonId, [FromBody] CreateExerciseRequestDto requestDto, CancellationToken cancellationToken = default)
@@ -42,13 +57,16 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
         if (contentErrors.Count > 0)
             return BadRequest(new { message = string.Join(" ", contentErrors) });
 
-        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId, cancellationToken);
-        if (!lessonExists) return NotFound();
+        var owningLesson = await database.Lessons
+            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
+        if (owningLesson is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, owningLesson.OrganizationId)) return Forbid();
 
         var now = DateTime.UtcNow;
         var exercise = new Exercise
         {
             Id = Guid.NewGuid(),
+            OrganizationId = owningLesson.OrganizationId,
             LessonId = lessonId,
             Type = requestDto.Type,
             OrderInLesson = requestDto.OrderInLesson,
@@ -73,8 +91,10 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
     public async Task<ActionResult<ExercisesImportResultDto>> Import(
         Guid lessonId, [FromBody] List<CreateExerciseRequestDto> items, CancellationToken cancellationToken = default)
     {
-        var lessonExists = await database.Lessons.AnyAsync(lesson => lesson.Id == lessonId, cancellationToken);
-        if (!lessonExists) return NotFound();
+        var owningLesson = await database.Lessons
+            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
+        if (owningLesson is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, owningLesson.OrganizationId)) return Forbid();
 
         if (items is null || items.Count == 0)
             return BadRequest(new { message = "JSON must be a non-empty array of exercise objects." });
@@ -120,6 +140,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
                     var exercise = new Exercise
                     {
                         Id = Guid.NewGuid(),
+                        OrganizationId = owningLesson.OrganizationId,
                         LessonId = lessonId,
                         Type = item.Type,
                         OrderInLesson = item.OrderInLesson,
@@ -158,6 +179,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
 
         var exercise = await database.Exercises.FindAsync([id], cancellationToken);
         if (exercise is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, exercise.OrganizationId)) return Forbid();
 
         exercise.Type = requestDto.Type;
         exercise.OrderInLesson = requestDto.OrderInLesson;
@@ -180,6 +202,7 @@ public sealed class AdminExercisesController(LearningDbContext database, ILogger
     {
         var exercise = await database.Exercises.FindAsync([id], cancellationToken);
         if (exercise is null) return NotFound();
+        if (!ContentAuthoringGuard.MayAuthor(User, exercise.OrganizationId)) return Forbid();
 
         database.Exercises.Remove(exercise);
         await database.SaveChangesAsync(cancellationToken);

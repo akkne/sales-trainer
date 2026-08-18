@@ -16,7 +16,7 @@ export type { VoicePipelineState } from "@/features/voice/types/voice-pipeline-s
 export type { UseVoiceOptions } from "@/features/voice/types/use-voice-options";
 
 export function useVoice(options: UseVoiceOptions) {
-    const { sessionId, modeVoiceEnabled, bundleId, modeId, companyContext, onSessionCreated, onTranscript, onAiText, onAiResponse, onError } = options;
+    const { sessionId, modeVoiceEnabled, bundleId, modeId, companyContext, onSessionReady, onTranscript, onAiText, onAiResponse, onError } = options;
 
     const [state, setState] = useState<VoicePipelineState>("idle");
     const [currentTranscript, setCurrentTranscript] = useState("");
@@ -112,6 +112,10 @@ export function useVoice(options: UseVoiceOptions) {
                         : `Дневной лимит звонков (${limit} мин) исчерпан`,
                 );
             }
+            if (response.status === 409) {
+                // The session is finished or gone — every further turn would be silent.
+                throw new Error("Этот звонок уже завершён. Начните новый");
+            }
             if (!response.ok) {
                 throw new Error(`Ошибка голосового запроса: ${response.status}`);
             }
@@ -120,9 +124,11 @@ export function useVoice(options: UseVoiceOptions) {
             const aggregatedText: string[] = [];
             let stopSignal = false;
 
+            let receivedAnyFrame = false;
             const streamReader = new VoiceStreamReader(response);
             for await (const frame of streamReader.read(controller.signal)) {
                 if (controller.signal.aborted) break;
+                receivedAnyFrame = true;
                 if (frame.text) {
                     aggregatedText.push(frame.text);
                     onAiText?.(frame.text);
@@ -141,6 +147,13 @@ export function useVoice(options: UseVoiceOptions) {
 
             if (!controller.signal.aborted) {
                 audioPlayerRef.current?.markQueueComplete();
+
+                // An empty stream is a failed turn, not an answer. Saying nothing at all looks
+                // exactly like a broken microphone from the user's side, so name it.
+                if (!receivedAnyFrame) {
+                    throw new Error("Собеседник не ответил. Попробуйте сказать ещё раз");
+                }
+
                 onAiResponse?.(aggregatedText.join(" "), stopSignal);
             }
         } catch (error) {
@@ -172,7 +185,6 @@ export function useVoice(options: UseVoiceOptions) {
                 });
                 activeSessionId = session.id;
                 currentSessionIdRef.current = activeSessionId;
-                onSessionCreated?.(activeSessionId);
             } catch (error) {
                 onError?.(error instanceof Error ? error : new Error("Не удалось создать сессию"));
                 setState("error");
@@ -185,6 +197,10 @@ export function useVoice(options: UseVoiceOptions) {
             setState("error");
             return;
         }
+
+        // Fires for a reused session too (a scenario pre-started elsewhere), otherwise the caller
+        // would never learn the line is up and would stay stuck on "dialing" for the whole call.
+        onSessionReady?.(activeSessionId);
 
         try {
             endpointerRef.current = new SpeechEndpointer({
@@ -234,23 +250,43 @@ export function useVoice(options: UseVoiceOptions) {
             onError?.(error instanceof Error ? error : new Error("Не удалось инициализировать голосовой режим"));
             setState("error");
         }
-    }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionCreated, onError, processSpeech]);
+    }, [isVoiceAvailable, bundleId, modeId, companyContext, voiceConfig, onSessionReady, onError, processSpeech]);
 
-    const stopVoice = useCallback(() => {
+    const releaseMicrophone = useCallback(() => {
         endpointerRef.current?.reset();
         endpointerRef.current = null;
+
+        speechClientRef.current?.stop();
+        speechClientRef.current = null;
+
+        setCurrentTranscript("");
+    }, []);
+
+    /**
+     * The conversation itself is over (hang-up, or the persona ended the call). Releases the
+     * microphone — the closing line keeps playing — and drops the session, which must never be
+     * reused: the caller completes it right after and the backend refuses a completed session.
+     * Clearing the ref is what forces the next `startVoice` to create a fresh one; the caller
+     * resets its own `sessionId` state in the same tick, too late for the sync effect.
+     *
+     * Distinct from `stopVoice`, which only stops *listening* and keeps the session alive
+     * (the chat mic button toggles voice input off and on within one dialog).
+     */
+    const endSession = useCallback(() => {
+        releaseMicrophone();
+        currentSessionIdRef.current = null;
+    }, [releaseMicrophone]);
+
+    const stopVoice = useCallback(() => {
+        releaseMicrophone();
 
         streamAbortRef.current?.abort();
         streamAbortRef.current = null;
 
-        speechClientRef.current?.stop();
         audioPlayerRef.current?.stop();
 
-        speechClientRef.current = null;
-
         setState("idle");
-        setCurrentTranscript("");
-    }, []);
+    }, [releaseMicrophone]);
 
     useEffect(() => {
         return () => {
@@ -266,5 +302,6 @@ export function useVoice(options: UseVoiceOptions) {
         isVoiceAvailable,
         startVoice,
         stopVoice,
+        endSession,
     };
 }

@@ -24,6 +24,37 @@ public sealed class EventContractCatalogTests
     }
 
     [Test]
+    public void Envelope_CarriesOrganizationId_AlongsideTheFrozenOuterShape()
+    {
+        var organizationId = Guid.NewGuid();
+        var envelope = EventEnvelope.Create(
+            Topics.ExerciseCompleted,
+            new { userId = Guid.NewGuid(), exerciseType = "spot_mistake", score = 80, isCorrect = true },
+            organizationId: organizationId);
+
+        var root = Serialize(envelope);
+
+        root.GetProperty("eventId").GetGuid().Should().Be(envelope.EventId);
+        root.GetProperty("occurredAt").GetDateTimeOffset().Should().Be(envelope.OccurredAt);
+        root.GetProperty("type").GetString().Should().Be(Topics.ExerciseCompleted);
+        root.GetProperty("version").GetInt32().Should().Be(envelope.Version);
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.TryGetProperty("data", out _).Should().BeTrue();
+    }
+
+    [Test]
+    public void Envelope_OrganizationId_IsNullOnTheWire_WhenNoProducerHasPopulatedItYet()
+    {
+        var envelope = EventEnvelope.Create(
+            Topics.UserRegistered,
+            new { userId = Guid.NewGuid(), email = "a@b.com", displayName = "Ann", avatarKey = "k" });
+
+        var root = Serialize(envelope);
+
+        root.GetProperty("organizationId").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Test]
     public void UserRegistered_IdentityProducer_MatchesReplicaConsumers()
     {
         Topics.UserRegistered.Should().Be("user.registered");
@@ -108,13 +139,27 @@ public sealed class EventContractCatalogTests
     }
 
     [Test]
+    /// <summary>
+    /// <c>modeKey</c> and <c>qualityScore</c> are the two fields learning-service reads to judge an
+    /// assignment's threshold (Phase 40.22), so they are part of the contract, not incidental payload.
+    /// </summary>
     public void DialogEvaluated_AiProducer_MatchesGamificationConsumer()
     {
         Topics.DialogEvaluated.Should().Be("dialog.evaluated");
         var userId = Guid.NewGuid();
         var bundleId = Guid.NewGuid();
         var modeId = Guid.NewGuid();
-        var root = Serialize(new { userId, sessionId = "s-1", bundleId, modeId, rawScore = 70, xpEarned = 70 });
+        var root = Serialize(new
+        {
+            userId,
+            sessionId = "s-1",
+            bundleId,
+            modeId,
+            rawScore = 70,
+            xpEarned = 70,
+            modeKey = "discovery-call",
+            qualityScore = 80,
+        });
 
         root.GetProperty("userId").GetGuid().Should().Be(userId);
         root.GetProperty("sessionId").GetString().Should().Be("s-1");
@@ -122,6 +167,8 @@ public sealed class EventContractCatalogTests
         root.GetProperty("modeId").GetGuid().Should().Be(modeId);
         root.GetProperty("rawScore").GetInt32().Should().Be(70);
         root.GetProperty("xpEarned").GetInt32().Should().Be(70);
+        root.GetProperty("modeKey").GetString().Should().Be("discovery-call");
+        root.GetProperty("qualityScore").GetInt32().Should().Be(80);
     }
 
     [Test]
@@ -229,5 +276,41 @@ public sealed class EventContractCatalogTests
         root.GetProperty("companyName").GetString().Should().Be("Acme");
         root.GetProperty("nextActionAt").GetDateTime().Should().Be(nextActionAt);
         root.GetProperty("note").GetString().Should().Be("Call back about pricing");
+    }
+
+    [Test]
+    public void OrganizationCreated_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationCreated.Should().Be("organization.created");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales", slug = "acme-sales" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
+        root.GetProperty("slug").GetString().Should().Be("acme-sales");
+    }
+
+    [Test]
+    public void OrganizationUpdated_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationUpdated.Should().Be("organization.updated");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales", slug = "acme-sales", status = "Active" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
+        root.GetProperty("slug").GetString().Should().Be("acme-sales");
+        root.GetProperty("status").GetString().Should().Be("Active");
+    }
+
+    [Test]
+    public void OrganizationSuspended_OrganizationProducer_MatchesFutureIdentityConsumer()
+    {
+        Topics.OrganizationSuspended.Should().Be("organization.suspended");
+        var organizationId = Guid.NewGuid();
+        var root = Serialize(new { organizationId, name = "Acme Sales" });
+
+        root.GetProperty("organizationId").GetGuid().Should().Be(organizationId);
+        root.GetProperty("name").GetString().Should().Be("Acme Sales");
     }
 }

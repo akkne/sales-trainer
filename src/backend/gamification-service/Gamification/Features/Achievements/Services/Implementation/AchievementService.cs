@@ -7,6 +7,23 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Achievements.Services.Implementation;
 
+/// <summary>
+/// Evaluates the achievement catalogue against a user's current counters and unlocks whatever the
+/// latest activity earned.
+///
+/// <para>
+/// Only locked achievements are considered, and an unlock is never reversed — so this may be called
+/// after every event without re-publishing a notification somebody has already seen. An unrecognised
+/// condition type unlocks nothing rather than throwing, so a catalogue row added by a newer version of
+/// the service degrades to "not yet unlockable" instead of failing every evaluation.
+/// </para>
+///
+/// <para>
+/// All newly unlocked rows and their notifications are written in one scope and committed together:
+/// an achievement that exists in the database but whose event never went out would leave the user
+/// with a silently unlocked badge.
+/// </para>
+/// </summary>
 internal sealed class AchievementService(
     GamificationDbContext databaseContext,
     IGamificationEventPublisher eventPublisher) : IAchievementService
@@ -15,6 +32,7 @@ internal sealed class AchievementService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         var allAchievements = await databaseContext.Achievements
             .OrderBy(achievement => achievement.SortOrder)
             .ToListAsync(cancellationToken);
@@ -41,6 +59,7 @@ internal sealed class AchievementService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
         var allAchievements = await databaseContext.Achievements.ToListAsync(cancellationToken);
 
         var alreadyUnlockedIds = await databaseContext.UserAchievements
@@ -117,6 +136,7 @@ internal sealed class AchievementService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
 
         return newlyUnlockedKeys;
     }

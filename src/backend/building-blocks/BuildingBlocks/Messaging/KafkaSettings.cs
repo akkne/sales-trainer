@@ -22,6 +22,14 @@ public sealed class KafkaSettings
     public int IdempotencyTtlDays { get; set; } = 7;
 
     /// <summary>
+    /// How long a produce may block the caller before the publisher gives up. librdkafka's own
+    /// default (<c>message.timeout.ms</c> = 5 minutes) means an unreachable broker freezes the
+    /// request that publishes the event — the user's action hangs on a side channel that has
+    /// nothing to do with the answer they are waiting for.
+    /// </summary>
+    public int PublishTimeoutSeconds { get; set; } = 10;
+
+    /// <summary>
     /// When true (default), every service provisions all known topics (and their
     /// <c>.dlt</c> companions) on startup via an admin client. This makes the platform
     /// independent of the broker's <c>auto.create.topics.enable</c> setting — on a

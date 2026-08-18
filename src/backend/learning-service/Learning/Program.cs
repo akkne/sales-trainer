@@ -1,10 +1,11 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Common.Security;
 using Sellevate.Learning.DependencyInjection;
 using Sellevate.Learning.Infrastructure.Data;
 using Serilog;
@@ -33,8 +34,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Learning");
 });
 
-builder.Services.AddDbContext<LearningDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+builder.Services.AddLearningDataAccess(builder.Configuration);
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
@@ -73,15 +73,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireAdministrator, policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.IsInRole(AuthorizationPolicies.AdministratorRole)
-            || authorizationContext.User.IsInRole(AuthorizationPolicies.SuperAdministratorRole)));
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireSuperAdministrator, policy =>
-        policy.RequireRole(AuthorizationPolicies.SuperAdministratorRole));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -91,6 +83,8 @@ builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy 
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()));
+
+builder.Services.AddScoped<InternalServiceAuthFilter>();
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
@@ -111,21 +105,13 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 
 application.MapControllers();
 
-using (var serviceScope = application.Services.CreateScope())
-{
-    var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<LearningDbContext>();
-    databaseContext.Database.Migrate();
-}
+await application.MigrateAndBackfillAsync(builder.Configuration);
 
 application.Run();
 

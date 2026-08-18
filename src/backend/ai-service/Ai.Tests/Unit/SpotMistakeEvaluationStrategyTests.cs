@@ -6,6 +6,7 @@ using NSubstitute;
 using NUnit.Framework;
 using Sellevate.Ai.Features.Evaluation.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -16,7 +17,11 @@ public class SpotMistakeEvaluationStrategyTests
     {
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         var options = Options.Create(new OpenAiConfiguration { ApiKey = "test-key" });
-        return new SpotMistakeEvaluationStrategy(httpClientFactory, options, NullLogger<SpotMistakeEvaluationStrategy>.Instance);
+        return new SpotMistakeEvaluationStrategy(
+            httpClientFactory,
+            options,
+            Substitute.For<IAiSpendMeter>(),
+            NullLogger<SpotMistakeEvaluationStrategy>.Instance);
     }
 
     private const string Dialogue = """

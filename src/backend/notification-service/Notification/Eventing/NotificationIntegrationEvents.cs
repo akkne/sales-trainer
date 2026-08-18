@@ -55,8 +55,91 @@ public sealed record CompanyFollowUpDueEvent(
     DateTime NextActionAt,
     string? Note);
 
-// User-profile replica events — consumed to resolve a recipient's email/display name locally
-// (the notification service has no database, so the replica is held in Redis).
+/// <summary>Published by learning-service when an assignment is issued to one named person
+/// (Phase 40.23) — one event per resolved recipient, staged in the same transaction as their
+/// progress row. Field names match learning-service's
+/// <c>OutgoingIntegrationEvents.AssignmentIssuedEvent</c>.</summary>
+public sealed record AssignmentIssuedEvent(
+    Guid AssignmentId,
+    Guid UserId,
+    string Title,
+    string? Goal,
+    DateTime? Deadline);
+
+/// <summary>Published by learning-service's deadline sweep when an assignment this person has not
+/// finished is close to its due date (Phase 40.23). <see cref="Deadline"/> is part of the dedupe
+/// key, so extending a deadline arms a fresh notice rather than being swallowed by the old one —
+/// the same trick <see cref="CompanyFollowUpDueEvent"/> uses for a rescheduled follow-up.</summary>
+public sealed record AssignmentDeadlineApproachingEvent(
+    Guid AssignmentId,
+    Guid UserId,
+    string Title,
+    DateTime Deadline);
+
+/// <summary>Published by learning-service when a РОП presses "remind" on an assignment
+/// (Phase 40.23). Deliberately its own type rather than a re-send of
+/// <see cref="AssignmentIssuedEvent"/>: this one came from a person, and it is the escalation that
+/// exists because the first two were ignored.</summary>
+public sealed record AssignmentReminderEvent(
+    Guid AssignmentId,
+    Guid UserId,
+    string Title,
+    DateTime? Deadline,
+    DateTime RequestedAt);
+
+/// <summary>Published by learning-service's deadline sweep, a day before the deadline, to each
+/// administrator of the organization (Phase 40.26). <see cref="NotStartedNames"/> is the readable
+/// prefix of <see cref="NotStartedCount"/>, not the whole of it: the body has to open with names to
+/// be a thing to act on rather than a report, and it has to stay one sentence to be read at all.
+/// <see cref="Deadline"/> is part of the dedupe key for the same reason it is on
+/// <see cref="AssignmentDeadlineApproachingEvent"/>.</summary>
+public sealed record AssignmentDeadlineDigestEvent(
+    Guid AssignmentId,
+    Guid AdministratorUserId,
+    string Title,
+    DateTime Deadline,
+    int NotStartedCount,
+    IReadOnlyList<string>? NotStartedNames);
+
+/// <summary>Published by learning-service when a manager disputes an AI score (Phase 40.26),
+/// addressed to each administrator of the organization. The counterpart of
+/// <see cref="DialogReviewResolvedEvent"/>, which travels the other way.</summary>
+public sealed record DialogReviewDisputedEvent(
+    Guid NoteId,
+    Guid AdministratorUserId,
+    Guid SubjectUserId,
+    string? SubjectDisplayName,
+    string SessionId,
+    int? DisputedScore,
+    string Comment);
+
+/// <summary>Published by learning-service when the РОП comments on a fragment of somebody's
+/// practice conversation (Phase 40.25). The quoted lines travel with the event rather than being
+/// fetched, because this service has no database beyond its inbox and because a notice reading
+/// "you have a comment" is one more thing to ignore.</summary>
+public sealed record DialogReviewCommentedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string? QuotedText,
+    string Comment);
+
+/// <summary>Published by learning-service when the РОП rules on a disputed AI score (Phase 40.25).
+/// <see cref="Outcome"/> travels because "upheld" and "rejected" read completely differently to the
+/// person who filed it, and a notice that says only "reviewed" recreates the black box the dispute
+/// mechanism exists to open.</summary>
+public sealed record DialogReviewResolvedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string Outcome,
+    int? DisputedScore,
+    int? AdjustedScore,
+    string? Resolution);
+
+/// <summary>Published by Identity on e-mail and first-time Google sign-up. Consumed to resolve a
+/// recipient's email and display name locally: the notification service has no database, so the user
+/// replica is held in Redis.</summary>
 public sealed record UserRegisteredEvent(Guid UserId, string Email, string DisplayName, string? AvatarKey);
 
 public sealed record UserUpdatedEvent(Guid UserId, string DisplayName, string? AvatarKey);

@@ -11,6 +11,8 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Microservices Roadmap](MICROSERVICES_ROADMAP.md) | Phased strangler-fig migration of the monolith into microservices, with atomic per-phase tasks |
 | [Microservices Review & Remediation](REVIEW_MICROSERVICES.md) | Post-migration code-review findings (7 services + gateway + BuildingBlocks), severity-rated, with remediation status tracker |
 | [AI Engine Service](AI_SERVICE.md) | Phase 6: extracted `ai-service` (Dialog, Voice, Transcription, `/ai/evaluate`); Postgres+Mongo, `dialog.evaluated`, cached scoring weights |
+| [AI Quotas & Spend](AI_QUOTAS.md) | Phase 40.33: per-organization voice-minute and LLM-token limits enforced at ai-service — the single point every paid call passes through, now checked by `scripts/ai-provider-lint.py`; `OrganizationQuotas` + `AiUsageRecords` in ai-db, batch work reserved out before interactive work, `GET /admin/ai-usage` and the `sellevate-ai-spend` Grafana dashboard |
+| [LLM Failure Handling](LLM_FAILURE_HANDLING.md) | Cross-cutting contract for every LLM/speech call: `OpenAiException` hierarchy, status mapping, warning-vs-error log levels, body redaction, graceful stream termination, Polly transport resilience |
 | [Gamification Service](GAMIFICATION_SERVICE.md) | Phase 7: extracted event-driven `gamification-service` (progress points, activity consistency, milestones, team progress) on Postgres `gamification`; consumes `exercise.completed`/`dialog.evaluated`/`lesson.completed`/`skill.completed`, produces `xp.granted`/`achievement.unlocked`/`streak.milestone`/`gamification.dialog-weights.updated`; Hangfire streak-reset + weekly-team-progress-closure jobs; `/gamification/*`, `/league/*`, `/profile/achievements`, `/admin/gamification/*`, `/admin/leagues/*` flipped at the gateway |
 | [Analytics Service](ANALYTICS_SERVICE.md) | Phase 1: extracted Redis-only `analytics-service` (tracking, presence, funnels); `/tracking/*` flipped at the gateway; consumes `user.registered`/`exercise.completed`/`xp.granted`; owns the product Prometheus metrics |
 | [Notification Service](NOTIFICATION_SERVICE.md) | Phase 4: extracted `notification-service` (Redis-only); consumes 5 social/gamification events, per-user capped inbox + unread counter with 30-day TTL (replaces Hangfire cleanup job) |
@@ -21,7 +23,9 @@ All significant features, architectural decisions, and infrastructure docs.
 | [API Contracts](API_CONTRACTS.md) | All REST endpoints with request/response schemas |
 | [DB Schema](DB_SCHEMA.md) | PostgreSQL tables, MongoDB collections, Redis keys |
 | [Decisions](DECISIONS.md) | Non-trivial engineering decisions with alternatives and rationale |
+| [Dont Forget](DONT_FORGET.md) | Written in Russian — what the agent must never do on its own (server-side work, destructive SQL, asking questions during unattended runs) and the manual follow-ups it has deferred to a human |
 | [Code Style](CODESTYLE.md) | Naming, file structure, patterns, DI rules |
+| [Branding](BRANDING.md) | Logo source of truth (`public/logo.svg`), favicon/apple-icon files, `Wordmark` component, how to replace the mark |
 | [Localization](LOCALIZATION.md) | User-facing frontend is Russian (admin stays English); in-place translation, no i18n library, translate/leave rules + glossary |
 | [Codestyle Enforcement](CODESTYLE_ENFORCEMENT.md) | PR CI gate for CODESTYLE.md — custom linter (no comments, no abbreviations) + `dotnet format` + `.editorconfig` |
 | [Task Workflow](TASK_WORKFLOW.md) | Board-driven PLAN→STOP→EXECUTE→VERIFY pipeline (OMC agents) — `/run-task` command + `run-tasks-poll` automation |
@@ -31,7 +35,8 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Production Migration (monolith → microservices)](MICROSERVICES_PRODUCTION_MIGRATION.md) | Single-server cutover runbook: resource/cost impact (RAM/CPU/disk, no GPU), backup, DB-per-service split via `scripts/migrate-monolith-to-services.sh`, cutover order, rollback, `.env` tunables |
 | [Integrations](INTEGRATIONS.md) | External service integrations: MinIO/S3 object storage, endpoints, env keys |
 | [Monitoring & Product Metrics](MONITORING.md) | Usage metrics on Prometheus/Grafana: online users, visits/day/week, page views, UI events, logins/registrations — catalog, cardinality rules, dashboard |
-| [Seeder](SEEDER.md) | CSV/JSON import format for skills and lessons |
+| [Content Pipeline](CONTENT_PIPELINE.md) | Phases 40.27–40.28: the РОП's «структурировать → **остановиться** → сгенерировать» run — `ContentGenerationJobs` in learning-db, the two internal ai-service calls, and the checkpoint enforced by a CHECK constraint. 40.28 added the input sufficiency threshold: the pipeline refuses thin material and says what to bring instead, as a job state with a machine-readable list rather than an error — and the refusal is arguable, since adding material resumes the run without re-paying for structuring what was already read. **Phase 40.32 added §6a — batch adaptation:** «перепиши все упражнения этапа "закрытие" под наш продукт и тон» as a batch of per-exercise proposals a person accepts or rejects **one at a time, never automatically**, plus an AI review of content the РОП wrote by hand (ambiguous answers, obvious distractors, unmeasurable criteria) as a closed vocabulary of seven codes. Same two tables serve both, applying a rewrite to a global exercise forks the lesson through 40.18's copy-on-write, and the worker cannot write an `Exercise` at all. API-only; the screen is 40.20 |
+| [Seeder](SEEDER.md) | JSON import format for skills, topics, lessons and whole bundles — plus §0 (Phase 40.19): the seeder writes the global library only, requires an explicit `target=global`, and narrows every read to `organization_id IS NULL` |
 | [Admin Panel](ADMIN_PANEL.md) | Roles, authorization, CRUD endpoints, UI structure |
 | [Redesign Prompt](REDESIGN_PROMPT.md) | Ready-to-paste Claude Design / Stitch brief for the full UI redesign |
 | [UI Current State](UI_CURRENT_STATE.md) | Exhaustive baseline snapshot of all screens, elements, and visual tokens for the redesign |
@@ -42,6 +47,29 @@ All significant features, architectural decisions, and infrastructure docs.
 | [Redesign Roadmap](REDESIGN_ROADMAP.md) | New design system rollout (electric blue/violet, Manrope/Unbounded) — phase status and verification notes |
 | [Redesign V2 Roadmap](REDESIGN_V2/ROADMAP.md) | **Active** — violet/Hanken Grotesk/left-nav-rail re-skin; removes team-progress view + milestones from UI; phase status |
 | [Redesign V2 Spec](REDESIGN_V2/DESIGN_SPEC.md) | Implementation-ready tokens + per-screen layout spec extracted from `.design/Project redesign for SalesTrainer/` |
+| [Brand Palette](BRAND_PALETTE.md) | **Current** — V3 electric-lime (`#96F500`) color system: fill/ink/on-primary token contract, supporting + semantic colors, legacy aliases |
+| [Custom Scenario](CUSTOM_SCENARIO.md) | **Shipped** — user-authored practice scenarios on «Практика»: compose dialog, LLM sales-relevance gate with a Redis verdict cache, prompt fencing, hidden seeded `custom-scenario` mode. Tests: [TESTING/CUSTOM_SCENARIO.md](TESTING/CUSTOM_SCENARIO.md) |
+
+## Multi-tenancy (Phase 40 complete — Stages A–F built, 40.20/40.30 wait on the owner, 40.35/40.36 skipped)
+
+**Start here: [Phase 40 — summary for the human](TENANCY/PHASE_40_SUMMARY.md)** — what each stage
+built, the single deployment order across all seven services (the per-block notes never had one),
+what has never been run against anything, and the verification numbers from the final acceptance
+block. Read it before deploying, not after.
+
+| Document | Description |
+|----------|-------------|
+| [Tenancy runbook — how it works and how to roll it out](TENANCY/RUNBOOK.md) | **Operational (2026-08-18)** — the owner-facing document: Part I is the complete tenant scheme in one place (naming, the three table categories, the request path through all three isolation layers, the RLS policy shape and why it currently filters nothing, the platform/organization role split with a permission matrix, closed access and invites, the three background-job tenant modes, content versioning, assignments, quotas), Part II is the server procedure step by step — backup, the role-privilege precondition, the corrected service order (ai before learning, and why the summary's steps 4 and 10 collapse into one start), every rollout script with its real flags, the RLS switch as a separate event with the migration-connection-string gap it depends on, rollbacks, and the seven traps this breaks on most often |
+| [Phase 40 — summary and deployment order](TENANCY/PHASE_40_SUMMARY.md) | **Shipped (Phase 40.34)** — the whole phase in one document: what Stages A–F built, the thirteen-step rollout sequence with its one hard cross-service constraint (ai-service before learning-service, which 40.22 and 40.33 arrived at independently), the role-privilege precondition every migration since 40.9 shares, the honest inventory of what was written but never executed (twelve verify-SQL files, five rollout scripts, every Stage F prompt, the 40.33 learning→ai HTTP seam), and the verified counters |
+| [Final PR — commands and body](TENANCY/RELEASE_PR.md) | **Shipped (Phase 40.34)** — the push/`gh pr create` procedure and a ready PR body for `feature/tenancy` → `main`. The agent deliberately did not push or open the PR: 111k lines with no tests over Stages D/E/F is an owner decision |
+| [Tenancy — isolation & access](TENANCY/TENANCY.md) | **Design** — `Organization` as the tenant (NOT `Company`, which is the prospect CRM); three isolation layers (gateway header → EF query filter → Postgres RLS), the `SaveChanges` write guard, composite-index column order, background-job/Kafka/Redis/Mongo tenant propagation, no public registration, `memberships` from day one, per-org auth method |
+| [Tenancy — background job registry](TENANCY/BACKGROUND_JOBS.md) | **Shipped (Phase 40.14)** — every `BackgroundService` / `IHostedService` / Hangfire job / Kafka consumer in `src/backend` with the tenant mode it runs in and the line of code that declares it: per-organization iteration, system, or tenant-from-the-envelope. Includes why `OutboxRelayBackgroundService` is the only legitimate cross-tenant reader, the workers that touch no tenant data at all, and three greps that keep the registry honest |
+| [Tenancy — content model](TENANCY/CONTENT_MODEL.md) | **Built (40.15–40.19)** — why not to fork the curriculum per customer; immutable lesson versioning (`Lessons` + `LessonVersions`, canonical-JSON `content_hash`, one draft, freeze trigger), progress bound to a version, programme versioning and enrollment pins, copy-on-write overrides with a no-auto-merge stale review queue, and the organization profile that removes most forks by substitution |
+| [Content parameterization](CONTENT_PARAMETERIZATION.md) | **Shipped (Phase 40.19)** — the `{{organization.*}}` placeholder syntax, the neutral-prose fallback for an unfilled profile field, why substitution happens on read and never on write (`ContentHash` must not depend on the tenant), how `banned_claims` binds both the AI persona and the scoring, and how the profile reaches learning-service and ai-service as a Kafka-fed replica |
+| [Tenancy — assignments & AI admin](TENANCY/ASSIGNMENTS.md) | **§1, §1.1, §1.3, §2.1, §4, §4.1 and §5.1 built (Phases 40.21–40.26), the rest design** — the post-training practice loop (РОП → managers). Built: the `Assignment` entity and `assignment_progress`, both strict tenant data, with content stored as references to frozen lesson versions (so the eleven existing exercise types render an assignment with no new code), an audience *rule* rather than a resolved list, and a freeze trigger on issue; the completion-rule vocabulary (`dialog_score`, `exercise_accuracy`) and its evaluation, which reuses the existing scoring, keeps `failed_threshold` a visible state, and derives every number from attempt rows so a redelivered event cannot inflate it; the fan-out that finally *creates* progress rows — the audience resolved by asking identity-service at issue time, one row and one notice per recipient in one transaction — plus the manager's assignment strip and three notification families; and automatic repeats, a shortened re-issue at +7 and +21 days as a new assignment linked to its origin, driven by a per-organization background sweep whose idempotency is the existence of the row rather than any counter. Also built: the РОП's dashboard — a five-stage funnel with names, the team skill heat map, dialogue quotes fetched from ai-service, and one `DialogReviewNotes` table carrying both directions of the feedback loop (40.25); and non-completion as a working scenario (40.26) — the platform can now enumerate an organization's administrators, so the deadline sweep sends them a digest naming who has not started, with a scoped one-click reminder as its action rather than a link to a report, and a filed score dispute finally pushes instead of only queuing. **Stage F is now built too (40.27–40.33)**: the structure/generate checkpoint that makes a human approve an outline before generation spends money, the input-sufficiency threshold that rejects unusable material with a named reason instead of producing a meaningless lesson, the company profile as an interview rather than a form, the metric→content loop, batch tone adaptation and AI content review (which write a *proposal* and apply nothing), and per-organization AI quotas and spend. Not built: 40.30, recorded calls, which waits on the owner's legal decision. **No screen for any of the РОП-facing half exists** — the admin-panel split is 40.20 and waits on the owner's design |
+| [Tenancy — разделение админки (UI-дизайн блока 40.20)](TENANCY/ADMIN_UI_DESIGN.md) | **Design (2026-08-18), written in Russian — slice 0 (the shell) is built; screens O1–O19 are slices 1–11.** The owner's missing design for block 40.20: two panels in two places (platform stays at `/admin/*` in English and does not move; the organization panel is a new `/org/*` tree in Russian built from `shared/components`), the role gates on both axes and what happens to a user who holds both, the "no organization in context" state that sends platform staff through 40.9 impersonation, and a redirect table that keeps 40.26's two notification deep links from 404-ing without touching the backend. Then a screen-by-screen spec for the whole РОП-facing half that shipped API-only across 40.15–40.33 — the team heat map with the skill-gap panel beside it, assignments list / create flow / five-stage funnel with the scoped one-click reminder, graded conversations and the coaching-note + score-dispute loop, the company profile as an interview rather than a seven-field form, the generation checkpoint with its refusal state, the per-item adaptation and content-review queues, the copy-on-write override queue across both services, people, AI spend and programme versions — each with its verified endpoints, an ASCII wireframe, every empty/loading/error/partial state and one primary action. Closes with the route audit (what stays platform, what becomes org-aware), a component inventory, eleven non-colliding implementation slices with the file paths each owns, and the three things the backend is still missing (`GET /invites`, `GET /memberships`, org-role change) |
+| [Organization Service](ORGANIZATION_SERVICE.md) | **Shipped (Phase 40.5)** — new microservice `organization-service` (port 5010): tenant registry (`Organizations`, not tenant-scoped) + per-organization content profile (`OrganizationProfiles`, tenant-scoped with RLS, `[TenantScoped]`); the first live consumer of the Stage A tenancy primitives. Produces `organization.created`/`updated`/`suspended` |
+| [Tenancy — execution plan](ROADMAP.md) | **Phase 40** in the main roadmap (Russian) — stages A–G: BuildingBlocks primitives → gateway/events → organizations & access → per-service `organization_id` rollout → content versioning → assignments → AI admin → quotas & release |
 
 ## Feature Documentation
 
@@ -73,7 +101,7 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [EXERCISE_CONTENT_VALIDATION.md](TESTING/EXERCISE_CONTENT_VALIDATION.md) | Per-type content validation: unit tests, integration tests, frontend type checking |
 | [HEADER_PROFILE_BUTTON.md](TESTING/HEADER_PROFILE_BUTTON.md) | Desktop header profile chip and milestone button cleanup |
 | [VOICE_CALL.md](TESTING/VOICE_CALL.md) | Telephone call mode: connect, barge-in, hangup, minute limits |
-| [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call sounds/vibration/barge-in, voice usage report, skeletons & error states |
+| [NIGHT_POLISH.md](TESTING/NIGHT_POLISH.md) | Phase 37: April palette purge, call vibration/barge-in (call sounds since removed), voice usage report, skeletons & error states |
 | [DISCUSS.md](TESTING/DISCUSS.md) | Community forum: threads, replies, voting, tags, accepted answer, admin moderation |
 | [DISCUSS_PHOTOS.md](TESTING/DISCUSS_PHOTOS.md) | Discuss photo attachments: upload, max-count, auth, magic-byte validation, cascade delete, PhotoPicker component |
 | [USER_AVATARS.md](TESTING/USER_AVATARS.md) | User avatar upload on own profile: hover overlay, file picker, cache-busting, fallback |
@@ -87,6 +115,10 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 | [LEARNING_SERVICE.md](TESTING/LEARNING_SERVICE.md) | Phase 8: learning-service unit tests (deterministic grading, AI grading via mocked `/ai/evaluate`, submit event emission, skill-tree progress, technique progress, outgoing event contracts) + gateway route-flip |
 | [COMPANIES.md](TESTING/COMPANIES.md) | Phase 39: company-service CRUD/ownership unit tests, ai-service company-context prompt tests, gateway route-flip, frontend vitest coverage + manual checklist (CRUD, ownership isolation, goal handoff, voice/chat practice calls, timeline, real-call log, mobile nav) |
 | [HARDENING.md](TESTING/HARDENING.md) | Phase 10: health-check response shape + gateway liveness, dead-letter/retry policy (`EventMessageProcessor`), and cross-service Kafka schema contract catalogue |
+| [TENANCY.md](TESTING/TENANCY.md) | **All of Phase 40**, block by block: the Stage A write guard, gateway header/middleware, event envelope and Postgres RLS checklist (including the real-Postgres `TenantRowLevelSecurityIntegrationTests`, written but never run), then per-block acceptance checklists through 40.26. Ends with the **40.34 two-organization acceptance run** — the only section that tests the tenant boundary itself rather than one block's behaviour, and the one that covers the six blocks which never got a checklist of their own (40.15, 40.17, 40.18, 40.21 and all of Stage F) |
+| [ORG_PANEL.md](TESTING/ORG_PANEL.md) | Block 40.20, the organization panel (`/org/*`): the slice-0 shell — the role gate on both axes, state O0, the nine nav entries and their three badges, the legacy `/admin/*` redirect table that keeps 40.26's two notification deep links alive, the seven new `shared/components`, and the manual checklist for all of it. Each screen slice appends its own section |
+| [ORGANIZATION_SERVICE.md](TESTING/ORGANIZATION_SERVICE.md) | Phase 40.5: organization-service unit tests (registry CRUD + Kafka event contracts, profile upsert/tenant-isolation, controller status-code mapping, tenancy-scope structural checks) + gateway route-flip |
+| [PHASE_40_BACKLOG.md](TESTING/PHASE_40_BACKLOG.md) | Build plan for the 57 Phase 40 items left untested under Rule #3: each mapped to a verified test project, class under test, file and case count (~620 cases), plus the harnesses to reuse, ten work packages, and six stale items in the source list |
 | Feature checklists | Manual test checklists for each feature |
 
 ---
@@ -114,14 +146,21 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - A lesson can always be passed: completion is attempt-based (going through every exercise once completes it, regardless of correctness)
 - Mistakes review (once): after the first pass, if any exercises were answered wrong, an intro screen ("Работа над ошибками") gates a single review round replaying only those exercises
 - Keyboard shortcuts (1-4 select, Enter submit)
-- Skip button, post-session stats (progress points, accuracy, time)
+- Skip button, post-session stats (accuracy, time)
 - Completion screen with session summary
 - **Theory lessons** (`theory_card` type): stories-style cards (text / dialogue / bullets / quote)
   the learner swipes through before practice — no answer, no AI. Dialogue cards reuse the
   Guidebook bubble renderer. Marked with a book icon on the path; reaching the last card
-  completes the lesson and awards a small fixed number of progress points (seeded 5, admin-editable)
+  completes the lesson
 
 ### Progress & Recognition
+
+> **Not shown to the user (2026-08-14).** The whole points/streak/league layer was removed from the
+> product UI: no XP anywhere (lesson path, exercise result, call analysis, session history), no
+> streak tiles, no `/league` route, no friends leaderboard, and achievement/streak notifications are
+> dropped on arrival. The services below still run and still compute all of it — the numbers are
+> reachable only through the admin panel. See [DECISIONS.md](DECISIONS.md).
+
 - **Fully DB-driven, admin-editable progress-points economy** (no hardcoded constants) — see `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones` in [DB_SCHEMA](DB_SCHEMA.md):
   - Per-exercise-type base progress points (edited at `/admin/gamification/exercise-rewards`)
   - Dialog points = `round(AI score × multiplier)` with admin-tunable multiplier + per-criterion weights (edited at `/admin/dialog`)
@@ -156,13 +195,16 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Deepgram Nova-3 streaming STT
 - ElevenLabs Flash v2.5 TTS
 - Target latency: ≤700ms end-to-end
+- Calls are silent — no ringback or busy tones, only a connect vibration on mobile
+- No XP shown for a call: the analysis is the reward (the backend still returns `xpEarned`)
+- Post-call analysis is bounded: a fresh session per call, a 120s cap on `/complete`,
+  an honest ended-state hint, and a «Повторить разбор» retry on failure
 
 ### Friends & Chat
 - Friend request system (send, accept, decline, cancel own pending request, remove)
 - Public profiles with stats and friendship status
 - User search by display name and email
-- Friend progress-points overview (non-ranked)
-- Friend activity feed (milestones, progress points earned)
+- Friend activity feed (milestones, progress points earned) — backend feed; the leaderboard is gone
 - 1-to-1 chat between friends (MongoDB, 5s polling)
 - Conversations list with last message preview
 - Navigation badge for pending friend requests
@@ -184,6 +226,15 @@ All test documentation is in the [TESTING/](TESTING/) folder:
 - Daily quote scheduling on a month calendar (`/admin/quotes`) — drives the "Совет дня" widget
 - Discuss moderation (`/admin/discuss`): pin/hot/delete threads, delete replies, curated tag CRUD
 - User management (`/admin/users`, admins): rich user list (avatar, email + verification, auth provider, role), per-user detail modal with activity stats (progress points, activity consistency, skills, avg score, persona), moderation rename of inappropriate nicknames, and removal of inappropriate uploaded photos (resets to default avatar). Role changes remain SuperAdmin-only.
+
+### Organization Panel (`/org/*`, block 40.20 — shell shipped)
+- A second admin tree beside `/admin/*`: the customer's РОП, in Russian, built from `shared/components`. Nothing in the platform panel moved
+- Gate `isOrganizationStaff(orgRole) || isPlatformStaff(role)`; platform staff with no membership see state O0 and are sent to `/admin/organizations` to impersonate (40.9), which is logged
+- Nine navigation entries with three counters — active assignments, open score disputes, and a dot for stale content overrides
+- The two `actionUrl`s Phase 40.26 already minted into notifications (`/admin/assignments/{id}?action=remind&scope=not_started`, `/admin/dialog-reviews?note=`) keep working through a redirect table; the parameters are read, never obeyed on load
+- Seven components added to `shared/components` for it: `Modal`, `ConfirmDialog`, `DataTable`, `EmptyState`, `PageHeader`, `Tabs`, `MetricBar`
+- No gamification anywhere in this panel — no XP, no streaks, no leagues, even where an endpoint returns them
+- Screens O1–O19 are slices 1–11: [ADMIN_PANEL.md](ADMIN_PANEL.md#two-panels-4020), [TENANCY/ADMIN_UI_DESIGN.md](TENANCY/ADMIN_UI_DESIGN.md), tests [TESTING/ORG_PANEL.md](TESTING/ORG_PANEL.md)
 
 ### Edit Profile
 - "Edit profile" button on `/profile` opens a modal (same pattern as "Manage skills") to edit **name**, **position (persona)** and **photo** together

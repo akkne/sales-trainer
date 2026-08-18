@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Features.Reference.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -11,7 +12,9 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
         Guid skillId,
         CancellationToken cancellationToken = default)
     {
-        return await databaseContext.ReferenceMaterials
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        return await databaseContext.ReferenceMaterials.ResolveOverrides(databaseContext)
             .Where(material => material.SkillId == skillId)
             .OrderBy(material => material.SortOrder)
             .Select(material => new ReferenceMaterialDto(
@@ -32,7 +35,9 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
         string? search,
         CancellationToken cancellationToken = default)
     {
-        var query = databaseContext.ReferenceMaterials.AsQueryable();
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var query = databaseContext.ReferenceMaterials.ResolveOverrides(databaseContext);
 
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(material => material.Category == category);
@@ -65,7 +70,9 @@ internal sealed class ReferenceService(LearningDbContext databaseContext) : IRef
 
     public async Task<IReadOnlyList<string>> GetAllCategoriesAsync(CancellationToken cancellationToken = default)
     {
-        return await databaseContext.ReferenceMaterials
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        return await databaseContext.ReferenceMaterials.ResolveOverrides(databaseContext)
             .Where(material => material.Category != null)
             .Select(material => material.Category!)
             .Distinct()

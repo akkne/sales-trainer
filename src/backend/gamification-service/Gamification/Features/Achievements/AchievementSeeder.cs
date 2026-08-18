@@ -5,6 +5,20 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Achievements;
 
+/// <summary>
+/// Installs the built-in achievement catalogue at startup.
+///
+/// <para>
+/// Idempotent and additive: it inserts only the keys that are missing and never updates or removes an
+/// existing row. An administrator's edit to a seeded achievement therefore survives every restart —
+/// the key is the identity, the title and threshold are theirs to change.
+/// </para>
+///
+/// <para>
+/// The catalogue is platform-global by design and is seeded in the startup scope's system mode; the
+/// rows carry no organization.
+/// </para>
+/// </summary>
 public sealed class AchievementSeeder(GamificationDbContext databaseContext, ILogger<AchievementSeeder> logger)
 {
     private static readonly IReadOnlyList<Achievement> DefaultAchievements =

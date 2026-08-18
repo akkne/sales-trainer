@@ -22,7 +22,7 @@ public sealed class ChatServiceTests
     {
         _databaseContext = TestSocialDatabaseFactory.CreateInMemory();
         _eventPublisher = new RecordingSocialEventPublisher();
-        _chatService = new ChatService(mongoContext: null!, _databaseContext, _eventPublisher);
+        _chatService = new ChatService(conversations: null!, _databaseContext, _eventPublisher);
 
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, UserId, "User");
         await TestSocialDatabaseFactory.SeedUserAsync(_databaseContext, FriendUserId, "Friend");

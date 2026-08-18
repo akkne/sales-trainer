@@ -33,12 +33,21 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=identity;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Kafka__BootstrapServers=kafka:29092
       - Logging__Loki__Url=http://loki:3100
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       # --- Identity tunables (override in .env; defaults are the in-code values) ---
       - Jwt__AccessTokenLifetimeMinutes=${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-15}
       - Jwt__RefreshTokenLifetimeDays=${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-30}
@@ -190,13 +199,24 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=ai;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=ai;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=ai;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Mongo=mongodb://mongo:27017
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
       - Kafka__BootstrapServers=kafka:29092
+      # Phase 40.23: a practice conversation asks learning-service whether it is somebody's assignment.
+      - LearningService__BaseUrl=http://learning:8080
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
@@ -221,6 +241,13 @@ services:
       - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
       - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
       - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
+      # Phase 40.33 — platform-wide defaults every organization is metered against until it is
+      # given limits of its own through PUT /admin/ai-quota. An absent quota row means these
+      # numbers, never "unmetered".
+      - AiQuotas__DefaultVoiceDailyLimitMinutes=${AI_QUOTA_VOICE_DAILY_MINUTES:-600}
+      - AiQuotas__DefaultVoiceMonthlyLimitMinutes=${AI_QUOTA_VOICE_MONTHLY_MINUTES:-6000}
+      - AiQuotas__DefaultLlmMonthlyTokenLimit=${AI_QUOTA_LLM_MONTHLY_TOKENS:-20000000}
+      - AiQuotas__DefaultBatchReservePercent=${AI_QUOTA_BATCH_RESERVE_PERCENT:-10}
     depends_on:
       postgres:
         condition: service_healthy
@@ -300,7 +327,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=gamification;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=gamification;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
@@ -329,7 +361,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=social;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=social;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Mongo=mongodb://mongo:27017
       - ConnectionStrings__Redis=redis:6379
       - Mongo__DatabaseName=sallevate
@@ -366,30 +403,27 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=learning;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=learning;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=learning;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__Redis=redis:6379
       - Kafka__BootstrapServers=kafka:29092
       - AiService__BaseUrl=http://ai:8080
-      - OpenAI__ApiKey=${OPENAI_API_KEY}
-      - OpenAI__BaseUrl=${OPENAI_BASE_URL}
-      - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
-      # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
-      # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
-      - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
-      # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
-      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4o}
-      - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
-      - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
-      - Voice__TtsProvider=${TTS_PROVIDER:-yandex}
-      - Voice__Enabled=${VOICE_ENABLED:-true}
-      - Voice__DailyLimitMinutes=${VOICE_DAILY_LIMIT_MINUTES:-30}
-      - Voice__MonthlyLimitMinutes=${VOICE_MONTHLY_LIMIT_MINUTES:-300}
-      - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
-      - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
-      - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
-      - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
+      # Phase 40.23: resolving an assignment's audience asks identity-service who works here.
+      - IdentityService__BaseUrl=http://identity:8080
+      # Phase 40.33: learning-service no longer holds a provider key of any kind. Its exercise
+      # dialogue and the speech for it go through ai-service, which is where per-organization spend
+      # is metered — the OpenAI__* and YandexTts__* variables that used to live here were the second
+      # door around that meter.
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
     depends_on:
       postgres:
@@ -412,9 +446,18 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=company;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
@@ -425,6 +468,38 @@ services:
       # service_started (not a broker readiness check) is intentionally lenient: the topic
       # provisioner and reminder publisher both tolerate a not-yet-ready broker at startup
       # (logged, not fatal) and self-heal once Kafka accepts connections.
+      kafka:
+        condition: service_started
+
+  organization:
+    build:
+      context: ./src/backend
+      dockerfile: organization-service/Organization/Dockerfile
+    pull_policy: build
+    # Localhost only — reached through the gateway over the docker network.
+    ports:
+      - "127.0.0.1:5010:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Runtime connection. Flip APP_POSTGRES_USER/PASSWORD to the sellevate_app role to turn
+      # row-level security on; until then it falls back to the owner and behaves as before.
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=organization;Username=${APP_POSTGRES_USER:-$POSTGRES_USER};Password=${APP_POSTGRES_PASSWORD:-$POSTGRES_PASSWORD}
+      # DDL connection: always the owning role, because a role its own tables' RLS applies to
+      # cannot run migrations — it would run them "successfully" against nothing.
+      - ConnectionStrings__PostgresMigrations=Host=postgres;Port=5432;Database=organization;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
+      - Jwt__Key=${JWT_KEY}
+      - Logging__Loki__Url=http://loki:3100
+      - Kafka__BootstrapServers=kafka:29092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      loki:
+        condition: service_started
+      # service_started (not a broker readiness check) is intentionally lenient: the topic
+      # provisioner tolerates a not-yet-ready broker at startup (logged, not fatal) and
+      # self-heals once Kafka accepts connections.
       kafka:
         condition: service_started
 
@@ -441,6 +516,7 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100
+      - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - ReverseProxy__Clusters__ai__Destinations__d1__Address=http://ai:8080/
       - ReverseProxy__Clusters__analytics__Destinations__d1__Address=http://analytics:8080/
       - ReverseProxy__Clusters__notification__Destinations__d1__Address=http://notification:8080/
@@ -449,6 +525,7 @@ services:
       - ReverseProxy__Clusters__social__Destinations__d1__Address=http://social:8080/
       - ReverseProxy__Clusters__learning__Destinations__d1__Address=http://learning:8080/
       - ReverseProxy__Clusters__company__Destinations__d1__Address=http://company:8080/
+      - ReverseProxy__Clusters__organization__Destinations__d1__Address=http://organization:8080/
       - Kafka__BootstrapServers=kafka:29092
     depends_on:
       - ai
@@ -459,6 +536,7 @@ services:
       - social
       - learning
       - company
+      - organization
       - kafka
       - loki
 

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sellevate.Gamification.Common.Extensions;
 using Sellevate.Gamification.Eventing;
 using Sellevate.Gamification.Features.Gamification.Models;
 using Sellevate.Gamification.Features.Gamification.Services.Abstract;
@@ -6,6 +7,28 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Gamification.Services.Implementation;
 
+/// <summary>
+/// Appends rows to the experience-point ledger. The ledger is append-only: a grant is never updated
+/// or deleted, and every balance in the product is a sum over it.
+///
+/// <para>
+/// <b>A grant carrying a <c>sourceEventId</c> is applied at most once, ever.</b> That is what makes
+/// the service safe behind an at-least-once Kafka consumer, and it is enforced twice — by an
+/// application-level check and, authoritatively, by a filtered unique index on the column. Callers
+/// must pass the originating event id whenever one exists; a grant without one is trusted to be
+/// deliberate and is applied unconditionally.
+/// </para>
+///
+/// <para>
+/// Phase 40.13: the idempotency read needs a transaction to see anything under row-level security,
+/// but <see cref="GrantAsync"/> deliberately does <b>not</b> wrap its whole body in one. The insert
+/// recovers from a unique violation and carries on; inside a single long transaction that violation
+/// would poison the transaction and the recovery path could not run. Writes need no scope of their
+/// own — EF opens an implicit transaction per <c>SaveChangesAsync</c>, which is what triggers
+/// <c>SET LOCAL</c> — so scoping the read alone is both sufficient and the only shape that keeps the
+/// concurrency guard working.
+/// </para>
+/// </summary>
 internal sealed class ExperiencePointsGrantService(
     GamificationDbContext databaseContext,
     IGamificationEventPublisher eventPublisher,
@@ -26,11 +49,14 @@ internal sealed class ExperiencePointsGrantService(
             return;
         }
 
-        // Application-level idempotency guard: skip if this event was already processed.
         if (sourceEventId.HasValue)
         {
-            var alreadyGranted = await databaseContext.UserExperiencePointsRecords
-                .AnyAsync(record => record.SourceEventId == sourceEventId, cancellationToken);
+            bool alreadyGranted;
+            await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+            {
+                alreadyGranted = await databaseContext.UserExperiencePointsRecords
+                    .AnyAsync(record => record.SourceEventId == sourceEventId, cancellationToken);
+            }
 
             if (alreadyGranted)
             {
@@ -57,15 +83,14 @@ internal sealed class ExperiencePointsGrantService(
         {
             await databaseContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (sourceEventId.HasValue && IsUniqueViolation(ex))
+        catch (DbUpdateException exception)
+            when (sourceEventId.HasValue && exception.IsUniqueConstraintViolation())
         {
-            // Race fallback: another process inserted the same SourceEventId concurrently.
-            // Detach the tracked entity so the context remains usable.
-            var entry = databaseContext.ChangeTracker.Entries<UserExperiencePointsRecord>()
-                .FirstOrDefault(e => e.Entity.SourceEventId == sourceEventId);
-            if (entry is not null)
+            var failedEntry = databaseContext.ChangeTracker.Entries<UserExperiencePointsRecord>()
+                .FirstOrDefault(entry => entry.Entity.SourceEventId == sourceEventId);
+            if (failedEntry is not null)
             {
-                entry.State = EntityState.Detached;
+                failedEntry.State = EntityState.Detached;
             }
 
             logger.LogInformation(
@@ -75,14 +100,5 @@ internal sealed class ExperiencePointsGrantService(
 
         logger.LogInformation(
             "Granted {Amount} XP to user {UserId} from {Source}", amount, userId, source);
-    }
-
-    private static bool IsUniqueViolation(DbUpdateException ex)
-    {
-        // Npgsql surfaces unique constraint violations as PostgresException with SqlState 23505.
-        var inner = ex.InnerException;
-        return inner is not null &&
-               (inner.GetType().Name == "PostgresException" || inner.GetType().FullName?.Contains("Npgsql") == true) &&
-               inner.Message.Contains("23505");
     }
 }

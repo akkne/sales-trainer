@@ -1,18 +1,20 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     useDialogBundles,
     useDialogModes,
     completeDialogSession,
+    fetchDialogSession,
     DialogFeedback,
 } from "@/features/dialog/hooks/use-dialog";
 import { useVoice, VoicePipelineState } from "@/features/voice/hooks/use-voice";
 import { useVoiceUsage } from "@/features/voice/hooks/use-voice-usage";
 import { TimingConstants } from "@/shared/constants/timing-constants";
-import { CallSoundsPlayer } from "@/features/voice/services/call-sounds-player";
+import { CallHaptics } from "@/features/voice/services/call-haptics";
+import { describeCompletionError } from "@/features/dialog/services/completion-error-message";
 import { FeedbackModal } from "@/features/dialog/components/feedback-modal";
 import { Icon } from "@/shared/components/icon";
 import { GeoAvatar } from "@/shared/components/geo-avatar";
@@ -39,7 +41,14 @@ interface StateInfo {
     pulse: boolean;
 }
 
-function describePipeline(state: VoicePipelineState, callStatus: CallStatus): StateInfo {
+function describeEndedCall(isCompleting: boolean, hasFeedback: boolean, hasAnalysisError: boolean): string {
+    if (isCompleting) return "Готовим разбор…";
+    if (hasAnalysisError) return "Не удалось подготовить разбор";
+    if (hasFeedback) return "Разбор готов";
+    return "Разбирать нечего — в этом звонке не было реплик";
+}
+
+function describePipeline(state: VoicePipelineState, callStatus: CallStatus, endedHint: string): StateInfo {
     if (callStatus === "idle") {
         return {
             label: "Готов к звонку",
@@ -59,7 +68,7 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
     if (callStatus === "ended") {
         return {
             label: "Звонок завершён",
-            hint: "Готовим разбор…",
+            hint: endedHint,
             ringColor: "var(--line-strong)",
             pulse: false,
         };
@@ -113,6 +122,7 @@ function describePipeline(state: VoicePipelineState, callStatus: CallStatus): St
 export default function VoiceCallPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const bundleId = params.bundleId as string;
     const modeId = params.modeId as string;
@@ -124,22 +134,36 @@ export default function VoiceCallPage() {
     const currentBundle = bundles?.find((bundle) => bundle.id === bundleId);
     const currentMode = modes?.find((mode) => mode.id === modeId);
 
-    const [sessionId, setSessionId] = useState<string | null>(null);
+    // A session created before we got here — a custom scenario, whose text this page never sees.
+    // Seeding it means useVoice reuses it instead of starting a fresh, context-free one.
+    const preStartedSessionId = searchParams.get("session");
+
+    // Hidden bundles (custom scenario, company call) are absent from GET /dialog/bundles, so there
+    // is no mode list to go back to; those land on the practice page instead.
+    const backHref = bundles && !currentBundle ? "/dialog" : `/dialog/${bundleId}`;
+
+    const [sessionId, setSessionId] = useState<string | null>(preStartedSessionId);
     const [callStatus, setCallStatus] = useState<CallStatus>("idle");
     const [feedback, setFeedback] = useState<DialogFeedback | null>(null);
     const [isCompleting, setIsCompleting] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [sessionTimer, setSessionTimer] = useState(0);
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
+    // The pre-started scenario session has already been played out — only a new one can be called.
+    const [isScenarioSpent, setIsScenarioSpent] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const callSoundsPlayerRef = useRef<CallSoundsPlayer>(new CallSoundsPlayer());
+    const callHapticsRef = useRef<CallHaptics>(new CallHaptics());
     const previousCallStatusRef = useRef<CallStatus>("idle");
     const previousVoiceStateRef = useRef<VoicePipelineState>("idle");
     const assistantReplyOpenRef = useRef<boolean>(false);
     const subtitleScrollRef = useRef<HTMLDivElement>(null);
+    const callEndedRef = useRef(false);
+    const isCompletingRef = useRef(false);
+    // Filled in below from useVoice — the AI-reply callback is defined before the hook that owns it.
+    const endVoiceSessionRef = useRef<() => void>(() => {});
 
-    useEffect(() => () => callSoundsPlayerRef.current.stopRinging(), []);
     useEffect(() => {
         if (callStatus === "connected") {
             timerRef.current = setInterval(() => {
@@ -160,16 +184,8 @@ export default function VoiceCallPage() {
         const previous = previousCallStatusRef.current;
         previousCallStatusRef.current = callStatus;
 
-        if (callStatus === "dialing") {
-            callSoundsPlayerRef.current.startRinging();
-        } else {
-            callSoundsPlayerRef.current.stopRinging();
-        }
         if (callStatus === "connected" && previous === "dialing") {
-            callSoundsPlayerRef.current.vibrateOnConnect();
-        }
-        if (callStatus === "ended" && (previous === "connected" || previous === "dialing")) {
-            callSoundsPlayerRef.current.playHangupBeep();
+            callHapticsRef.current.vibrateOnConnect();
         }
     }, [callStatus]);
 
@@ -178,16 +194,21 @@ export default function VoiceCallPage() {
         setTimeout(() => setError(null), TimingConstants.fiveSecondsMs);
     }, []);
 
-    const handleVoiceSessionCreated = useCallback((newSessionId: string) => {
-        setSessionId(newSessionId);
+    const handleVoiceSessionReady = useCallback((readySessionId: string) => {
+        if (callEndedRef.current) return;
+        setSessionId(readySessionId);
         setCallStatus("connected");
     }, []);
 
-    const completeSession = useCallback(async (sid: string) => {
-        if (isCompleting) return;
+    const completeSession = useCallback(async (sessionToComplete: string) => {
+        // A ref, not the `isCompleting` state: the hang-up and the AI's stop signal can land in
+        // the same tick, and both would read a stale `false` from the state closure.
+        if (isCompletingRef.current) return;
+        isCompletingRef.current = true;
         setIsCompleting(true);
+        setAnalysisError(null);
         try {
-            const sessionFeedback = await completeDialogSession(sid);
+            const sessionFeedback = await completeDialogSession(sessionToComplete);
             if (sessionFeedback) {
                 setFeedback(sessionFeedback);
                 queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -195,11 +216,12 @@ export default function VoiceCallPage() {
                 setSessionId(null);
             }
         } catch (error) {
-            setError(error instanceof Error ? error.message : "Не удалось завершить звонок");
+            setAnalysisError(describeCompletionError(error));
         } finally {
+            isCompletingRef.current = false;
             setIsCompleting(false);
         }
-    }, [isCompleting, queryClient]);
+    }, [queryClient]);
 
     const handleTranscript = useCallback((transcript: string) => {
         assistantReplyOpenRef.current = false;
@@ -222,11 +244,16 @@ export default function VoiceCallPage() {
 
     const handleAiResponse = useCallback((_content: string, isStopSignal: boolean) => {
         assistantReplyOpenRef.current = false;
-        if (isStopSignal && sessionId) {
-            setCallStatus("ended");
-            completeSession(sessionId);
-        }
-    }, [sessionId, completeSession]);
+        if (!isStopSignal || !sessionId) return;
+
+        // The persona hung up: release the microphone (the closing line keeps playing) so nothing
+        // is sent to a session that is about to be completed.
+        callEndedRef.current = true;
+        endVoiceSessionRef.current();
+        setCallStatus("ended");
+        refetchUsage();
+        completeSession(sessionId);
+    }, [sessionId, completeSession, refetchUsage]);
 
     const {
         state: voiceState,
@@ -234,17 +261,22 @@ export default function VoiceCallPage() {
         isVoiceAvailable,
         startVoice,
         stopVoice,
+        endSession,
     } = useVoice({
         sessionId,
         modeVoiceEnabled: currentMode?.voiceEnabled ?? false,
         bundleId,
         modeId,
-        onSessionCreated: handleVoiceSessionCreated,
+        onSessionReady: handleVoiceSessionReady,
         onTranscript: handleTranscript,
         onAiText: handleAiText,
         onAiResponse: handleAiResponse,
         onError: handleVoiceError,
     });
+
+    useEffect(() => {
+        endVoiceSessionRef.current = endSession;
+    }, [endSession]);
 
     useEffect(() => {
         const previous = previousVoiceStateRef.current;
@@ -269,12 +301,29 @@ export default function VoiceCallPage() {
 
     const handlePickUp = useCallback(async () => {
         if (callStatus !== "idle" && callStatus !== "ended") return;
+
+        // A pre-started session is single-use: it carries scenario text this page never sees, so it
+        // cannot be recreated here, and calling on a finished one used to produce a persona that
+        // never said a word (the backend refuses the turn, the stream comes back empty).
+        if (preStartedSessionId) {
+            const preStartedSession = await fetchDialogSession(preStartedSessionId).catch(() => null);
+            if (preStartedSession && preStartedSession.status !== "active") {
+                setIsScenarioSpent(true);
+                setError("Этот сценарий уже отыгран. Создайте новый, чтобы позвонить снова");
+                return;
+            }
+        }
+
         setCallStatus("dialing");
         setError(null);
+        setAnalysisError(null);
         setSessionTimer(0);
         setFeedback(null);
         setSubtitles([]);
         assistantReplyOpenRef.current = false;
+        // Without this the previous call's "the call is over" latch would swallow the new
+        // session and the call would hang on "dialing" forever.
+        callEndedRef.current = false;
         if (callStatus === "ended") {
             setSessionId(null);
         }
@@ -283,34 +332,59 @@ export default function VoiceCallPage() {
         } catch {
             setCallStatus("idle");
         }
-    }, [callStatus, startVoice]);
+    }, [callStatus, preStartedSessionId, startVoice]);
 
     const handleHangUp = useCallback(() => {
         if (callStatus !== "connected" && callStatus !== "dialing") return;
+        callEndedRef.current = true;
         setCallStatus("ended");
         stopVoice();
+        // The conversation is over, not just the microphone: drop the session so «Позвонить снова»
+        // starts a fresh one instead of a completed one the backend refuses.
+        endSession();
         refetchUsage();
         if (sessionId) {
             completeSession(sessionId);
         }
-    }, [callStatus, stopVoice, refetchUsage, sessionId, completeSession]);
+    }, [callStatus, stopVoice, endSession, refetchUsage, sessionId, completeSession]);
+
+    const handleRetryAnalysis = useCallback(() => {
+        if (sessionId) completeSession(sessionId);
+    }, [sessionId, completeSession]);
 
     const handleClose = useCallback(() => {
         stopVoice();
+        endSession();
         if ((callStatus === "connected" || callStatus === "dialing") && sessionId) {
             completeDialogSession(sessionId).catch(() => {});
         }
-        router.push(`/dialog/${bundleId}`);
-    }, [stopVoice, callStatus, sessionId, router, bundleId]);
+        router.push(backHref);
+    }, [stopVoice, endSession, callStatus, sessionId, router, backHref]);
 
     const handleCloseFeedback = useCallback(() => {
+        // A pre-started session carries context this page cannot recreate, so "call again" would
+        // silently start a context-free conversation. Send the user back to start a new one properly.
+        if (preStartedSessionId) {
+            router.push(backHref);
+            return;
+        }
+
         setFeedback(null);
         setSessionId(null);
         setSessionTimer(0);
         setCallStatus("idle");
-    }, []);
+    }, [preStartedSessionId, router, backHref]);
 
-    const info = describePipeline(voiceState, callStatus);
+    // A scenario session is played once. After that (or if it was already spent when we got here)
+    // the only honest next step is going back to start a new scenario — dialling again would
+    // create a session with no scenario attached, which the backend rejects outright.
+    const mustReturnForNewScenario = !!preStartedSessionId && (isScenarioSpent || callStatus === "ended");
+    const canRetryAnalysis = callStatus === "ended" && !!analysisError && !isCompleting && !!sessionId;
+    const info = describePipeline(
+        voiceState,
+        callStatus,
+        describeEndedCall(isCompleting, !!feedback, !!analysisError),
+    );
     const personaSeed = `${currentMode?.id ?? "persona"}-${currentMode?.title ?? ""}`;
     const isCallActive = callStatus === "connected" || callStatus === "dialing";
 
@@ -363,7 +437,7 @@ export default function VoiceCallPage() {
                 </div>
 
                 {/* Right: voice quota */}
-                <div style={{ minWidth: 100, display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ minWidth: 0, flex: "none", display: "flex", justifyContent: "flex-end" }}>
                     {usage && usage.dailyLimitSeconds > 0 && (
                         <div
                             className={"voice-quota num" + (usage.dailyExceeded ? " exceeded" : "")}
@@ -436,14 +510,14 @@ export default function VoiceCallPage() {
                 <p className="voice-hint" style={{ minHeight: 38 }}>{info.hint}</p>
 
                 {/* Error alert */}
-                {error && (
+                {(error || analysisError) && (
                     <span
                         className="badge"
                         role="alert"
                         style={{ background: "var(--heart-soft)", color: "var(--heart)", padding: "10px 16px", fontSize: 13, borderRadius: "var(--r-xs)", display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
                         <Icon name="warning" size="sm" />
-                        {error}
+                        {error ?? analysisError}
                     </span>
                 )}
 
@@ -464,7 +538,25 @@ export default function VoiceCallPage() {
 
             {/* Call controls footer */}
             <div className="voice-foot">
-                {!isCallActive && !feedback && (
+                {canRetryAnalysis && (
+                    <button className="btn btn-dark btn-lg voice-cta" onClick={handleRetryAnalysis}>
+                        <Icon name="warning" size="md" />
+                        Повторить разбор
+                    </button>
+                )}
+
+                {!isCallActive && !feedback && mustReturnForNewScenario && (
+                    <button
+                        className="btn btn-primary btn-lg voice-cta"
+                        onClick={() => router.push(backHref)}
+                        disabled={isCompleting}
+                        style={isCompleting ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                    >
+                        К сценариям
+                    </button>
+                )}
+
+                {!isCallActive && !feedback && !mustReturnForNewScenario && (
                     <button
                         className="btn btn-success btn-lg voice-cta"
                         onClick={handlePickUp}
@@ -491,7 +583,7 @@ export default function VoiceCallPage() {
                 )}
             </div>
 
-            {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />}
+            {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} sessionId={sessionId} />}
         </div>
     );
 }

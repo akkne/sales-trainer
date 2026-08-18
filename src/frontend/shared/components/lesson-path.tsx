@@ -49,7 +49,7 @@ function LessonNode({
     const cfg = isCompleted
         ? { bg: "var(--success)", color: "#fff", icon: "check" as const, shadow: "0 8px 20px var(--success-soft), var(--sh-1)" }
         : isActive
-            ? { bg: "var(--primary)", color: "#fff", icon: (isTheory ? "book" : "play") as "book" | "play", shadow: "0 8px 20px var(--primary-soft), var(--sh-1)" }
+            ? { bg: "var(--primary)", color: "var(--on-primary)", icon: (isTheory ? "book" : "play") as "book" | "play", shadow: "0 8px 20px var(--primary-soft), var(--sh-1)" }
             : { bg: "var(--surface-2)", color: "var(--ink-4)", icon: (isTheory ? "book" : "lock") as "book" | "lock", shadow: "var(--sh-inner)" };
 
     const justify = offset === 1 ? "flex-end" : offset === -1 ? "flex-start" : "center";
@@ -71,10 +71,6 @@ function LessonNode({
                     <span className="lp-type">{isTheory ? "Теория" : `Урок ${index + 1}`}</span>
                     <span className="lp-title" style={isLocked ? { color: "var(--ink-4)" } : undefined}>
                         {lesson.title}
-                    </span>
-                    <span className="lp-xp">
-                        <Icon name="bolt" size={13} />
-                        {isTheory ? "5 XP" : "60 XP"}
                     </span>
                 </div>
 
@@ -114,9 +110,6 @@ function LessonNode({
                                     <Icon name="layers" size={13} /> 6 упр.
                                 </span>
                             )}
-                            <span className="row gap-1">
-                                <Icon name="bolt" size={13} /> {isTheory ? "5 XP" : "60 XP"}
-                            </span>
                         </div>
 
                         <Link href={`/session/${lesson.lessonId}`} onClick={onClosePopover}>

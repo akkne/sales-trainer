@@ -122,7 +122,7 @@ export default function AdminPromptsPage() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                     {wasSaved && (
-                                        <span className="text-xs text-indigo">Saved</span>
+                                        <span className="text-xs text-indigo-ink">Saved</span>
                                     )}
                                     <button
                                         onClick={() => handleSave(type)}

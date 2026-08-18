@@ -3,6 +3,9 @@ using Sellevate.Identity.Features.Profile.Services.Implementation;
 
 namespace Sellevate.Identity.Features.Profile;
 
+/// <summary>
+/// Registers the profile feature.
+/// </summary>
 public static class ProfileServiceCollectionExtensions
 {
     public static IServiceCollection AddProfileFeatureServices(this IServiceCollection services)

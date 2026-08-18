@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Social.Common.Constants;
+using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
+using Sellevate.Social.Infrastructure.Data;
 
 namespace Sellevate.Social.Features.Discuss.Services.Implementation;
 
@@ -9,6 +11,8 @@ internal sealed partial class DiscussService
 {
     public async Task<List<DiscussTagDto>> GetTagsAsync(bool curatedOnly, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         IQueryable<DiscussTag> query = _databaseContext.DiscussTags;
         if (curatedOnly) query = query.Where(tag => tag.IsCurated);
 
@@ -20,7 +24,9 @@ internal sealed partial class DiscussService
 
     public async Task<List<PopularTagDto>> GetPopularTagsAsync(int limit, CancellationToken cancellationToken = default)
     {
-        if (limit < 1) limit = 10;
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
+        if (limit < 1) limit = DiscussFeedConstants.DefaultPopularTagLimit;
 
         return await _databaseContext.DiscussTags
             .Where(tag => tag.ThreadTags.Count > 0)
@@ -31,12 +37,19 @@ internal sealed partial class DiscussService
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Forum totals plus the authors whose threads and replies were upvoted most over the trailing
+    /// window in <see cref="DiscussFeedConstants"/>. Ranked by votes <em>received</em>, not by volume
+    /// posted, so the panel rewards being useful rather than being loud.
+    /// </summary>
     public async Task<DiscussStatsDto> GetStatsAsync(CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         var totalThreads = await _databaseContext.DiscussThreads.CountAsync(cancellationToken);
         var totalReplies = await _databaseContext.DiscussReplies.CountAsync(cancellationToken);
 
-        var since = DateTime.UtcNow.AddDays(-7);
+        var since = DateTime.UtcNow.AddDays(-DiscussFeedConstants.TopAuthorsWindowDays);
 
         var threadAuthorVotes = await (
             from vote in _databaseContext.DiscussVotes
@@ -62,7 +75,7 @@ internal sealed partial class DiscussService
 
         var top = totals
             .OrderByDescending(entry => entry.Value)
-            .Take(TopAuthorsCount)
+            .Take(DiscussFeedConstants.TopAuthorsCount)
             .ToList();
 
         var authorNames = await ResolveAuthorNamesAsync(top.Select(entry => entry.Key), cancellationToken);
@@ -75,6 +88,8 @@ internal sealed partial class DiscussService
 
     public async Task<bool> DeleteThreadAsync(Guid threadId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var thread = await _databaseContext.DiscussThreads
             .Include(candidate => candidate.Replies)
             .FirstOrDefaultAsync(candidate => candidate.Id == threadId, cancellationToken);
@@ -96,6 +111,7 @@ internal sealed partial class DiscussService
 
         _databaseContext.DiscussThreads.Remove(thread);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         foreach (var objectKey in photoObjectKeys)
             await DeleteObjectBestEffortAsync(objectKey, cancellationToken);
@@ -105,6 +121,8 @@ internal sealed partial class DiscussService
 
     public async Task<bool> DeleteReplyAsync(Guid replyId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var reply = await _databaseContext.DiscussReplies.FirstOrDefaultAsync(candidate => candidate.Id == replyId, cancellationToken);
         if (reply == null) return false;
 
@@ -129,6 +147,7 @@ internal sealed partial class DiscussService
 
         _databaseContext.DiscussReplies.Remove(reply);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         foreach (var objectKey in photoObjectKeys)
             await DeleteObjectBestEffortAsync(objectKey, cancellationToken);
@@ -139,6 +158,8 @@ internal sealed partial class DiscussService
     public async Task<DiscussThreadSummaryDto?> SetThreadFlagsAsync(
         Guid threadId, bool? isPinned, bool? isHot, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var thread = await _databaseContext.DiscussThreads
             .Include(candidate => candidate.ThreadTags).ThenInclude(threadTag => threadTag.Tag)
             .FirstOrDefaultAsync(candidate => candidate.Id == threadId, cancellationToken);
@@ -148,6 +169,7 @@ internal sealed partial class DiscussService
         if (isHot.HasValue) thread.IsHot = isHot.Value;
         thread.UpdatedAt = DateTime.UtcNow;
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         var authorNames = await ResolveAuthorNamesAsync([thread.AuthorId], cancellationToken);
         var photosByThreadId = await LoadThreadPhotosByThreadIdAsync([thread.Id], cancellationToken);
@@ -158,9 +180,23 @@ internal sealed partial class DiscussService
         return ToSummary(thread, authorNames, viewerHasUpvoted: false, threadPhotos.Count, firstPhotoUrl);
     }
 
+    /// <summary>
+    /// Adds a tag to the vocabulary every organization shares, which is why the row is left global
+    /// (<c>NULL</c> organization). That is only the right default because this path is reachable by
+    /// platform staff alone — the same <c>NULL</c> would be wrong in
+    /// <c>ResolveOrCreateTagsAsync</c>, where the author is one customer's salesperson and the tag
+    /// may well be their own product name.
+    ///
+    /// <para>
+    /// The slug is derived from the name when none is given, and a slug already taken — globally or
+    /// by any organization — is a conflict rather than a second tag.
+    /// </para>
+    /// </summary>
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> CreateCuratedTagAsync(
         string name, string? slug, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var finalSlug = Slugify(string.IsNullOrWhiteSpace(slug) ? name : slug!);
         if (finalSlug.Length == 0) return (DiscussOperationStatus.Conflict, null);
 
@@ -170,6 +206,7 @@ internal sealed partial class DiscussService
         var tag = new DiscussTag
         {
             Id = Guid.NewGuid(),
+            OrganizationId = null,
             Slug = finalSlug,
             Name = name.Trim(),
             IsCurated = true,
@@ -177,6 +214,7 @@ internal sealed partial class DiscussService
         };
         _databaseContext.DiscussTags.Add(tag);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         return (DiscussOperationStatus.Success, new DiscussTagDto(tag.Id, tag.Slug, tag.Name, tag.IsCurated));
     }
@@ -184,6 +222,8 @@ internal sealed partial class DiscussService
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> UpdateTagAsync(
         Guid tagId, string? name, string? slug, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var tag = await _databaseContext.DiscussTags.FirstOrDefaultAsync(candidate => candidate.Id == tagId, cancellationToken);
         if (tag == null) return (DiscussOperationStatus.NotFound, null);
 
@@ -199,16 +239,20 @@ internal sealed partial class DiscussService
         if (!string.IsNullOrWhiteSpace(name)) tag.Name = name!.Trim();
 
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
         return (DiscussOperationStatus.Success, new DiscussTagDto(tag.Id, tag.Slug, tag.Name, tag.IsCurated));
     }
 
     public async Task<bool> DeleteTagAsync(Guid tagId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var tag = await _databaseContext.DiscussTags.FirstOrDefaultAsync(candidate => candidate.Id == tagId, cancellationToken);
         if (tag == null) return false;
 
         _databaseContext.DiscussTags.Remove(tag);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -300,14 +344,25 @@ internal sealed partial class DiscussService
             photos);
 
     private static string Preview(string body) =>
-        body.Length <= BodyPreviewLength ? body : body[..BodyPreviewLength].TrimEnd() + "…";
+        body.Length <= DiscussFeedConstants.BodyPreviewLength
+            ? body
+            : body[..DiscussFeedConstants.BodyPreviewLength].TrimEnd() + DiscussFeedConstants.PreviewEllipsis;
 
+    /// <summary>
+    /// The one way a tag label becomes a slug, used both for labels a member typed and for slugs an
+    /// administrator supplied by hand — so an administrator cannot create a slug a member could never
+    /// produce. Truncated to the stored column width, and never left with a trailing dash, because a
+    /// slug is compared for equality when tags are deduplicated. An input that reduces to nothing
+    /// yields an empty slug, which callers treat as a rejected label.
+    /// </summary>
     private static string Slugify(string value)
     {
         var slug = value.Trim().ToLowerInvariant();
         slug = WhitespaceRegex().Replace(slug, "-");
         slug = DashCollapseRegex().Replace(slug, "-").Trim('-');
-        return slug.Length > 60 ? slug[..60].Trim('-') : slug;
+        return slug.Length > DiscussContentLimits.TagSlugMaximumLength
+            ? slug[..DiscussContentLimits.TagSlugMaximumLength].Trim('-')
+            : slug;
     }
 
     [GeneratedRegex(@"\s+")]

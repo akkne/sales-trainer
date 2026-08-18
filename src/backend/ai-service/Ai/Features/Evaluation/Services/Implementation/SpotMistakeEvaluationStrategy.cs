@@ -3,15 +3,20 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Evaluation.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Grades a spot-the-mistake exercise: which planted errors the learner found, and what they said about them.
+/// </summary>
 internal sealed class SpotMistakeEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,
+    IAiSpendMeter spendMeter,
     ILogger<SpotMistakeEvaluationStrategy> logger)
-    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, logger), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, spendMeter, logger), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.SpotMistake;
 

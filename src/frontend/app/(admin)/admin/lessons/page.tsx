@@ -227,7 +227,7 @@ export default function LessonsPage() {
                     {groupedByTopic.map(([topicId, group]) => (
                         <div key={topicId}>
                             <h3 className="text-sm font-medium text-ink-3 mb-2 flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-indigo-soft text-indigo rounded text-xs">
+                                <span className="px-2 py-0.5 bg-indigo-soft text-indigo-ink rounded text-xs">
                                     {group.topicTitle}
                                 </span>
                                 <span className="text-xs text-ink-3">

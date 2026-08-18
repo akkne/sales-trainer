@@ -7,6 +7,17 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Eventing;
 
+/// <summary>
+/// Projects identity-service's user events into the local <c>UserReplicas</c> table, so league
+/// standings can show a display name and avatar without a synchronous call to identity-service.
+///
+/// <para>
+/// Deliberately <b>not</b> organization-scoped — see <see cref="RequiresOrganization"/>. Every handler
+/// is an upsert or a tolerant delete: a registration for a user already present updates instead of
+/// failing, and an update or delete for a user never seen is ignored rather than treated as an error.
+/// That is what keeps the projection convergent under out-of-order and redelivered events.
+/// </para>
+/// </summary>
 internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
 {
     public UserReplicaConsumer(
@@ -25,6 +36,12 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.UserDeleted,
         BuildingBlocks.Eventing.Topics.UserAvatarChanged,
     ];
+
+    /// <summary>
+    /// Identity users are cross-org identities with no organization column
+    /// (docs/TENANCY/TENANCY.md §4.2), so this replica projection is platform-global by design.
+    /// </summary>
+    protected override bool RequiresOrganization => false;
 
     protected override async Task HandleAsync(EventEnvelope envelope, IServiceProvider scopedServices, CancellationToken cancellationToken)
     {

@@ -3,19 +3,26 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Persistence;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Infrastructure.Data;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 
+const string defaultLokiUrl = "http://loki:3100";
+const string defaultFrontendOrigin = "http://localhost:3000";
+const int minimumJwtSigningKeyByteCount = 32;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[CompanyConfigurationKeys.LokiUrl] ?? defaultLokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
@@ -33,15 +40,17 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Company");
 });
 
-builder.Services.AddDbContext<CompanyDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<CompanyDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString(CompanyConfigurationKeys.PostgresConnectionName))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddCompanyFeatureServices(builder.Configuration);
 
-// company-service only *produces* Kafka events (company.followup.due) — it never consumes, so it
-// registers the publisher + topic provisioner directly rather than the full AddSellevateEventing
-// helper, which also wires the Redis-backed consumer idempotency store. That would add a Redis
-// dependency this service has never needed. Revisit if company-service ever needs to consume events.
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddHostedService<KafkaTopicProvisioner>();
 builder.Services.AddSingleton<KafkaEventPublisher>();
@@ -55,12 +64,10 @@ builder.Services.AddHealthChecks()
         CompanyHealthCheckConstants.PostgresCheckName,
         tags: [CompanyHealthCheckConstants.ReadinessTag]);
 
-const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[CompanyConfigurationKeys.JwtKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
-    throw new InvalidOperationException(
-        "Jwt:Key must be configured and at least 32 bytes (256 bits) long for HMAC-SHA256.");
+    throw new InvalidOperationException(CompanyErrorMessages.JwtSigningKeyMisconfigured);
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -69,9 +76,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[CompanyConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[CompanyConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
@@ -80,7 +87,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[CompanyConfigurationKeys.FrontendUrl] ?? defaultFrontendOrigin)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -111,6 +118,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 
@@ -120,11 +128,8 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<CompanyDbContext>();
-    await databaseContext.Database.MigrateAsync();
+    await DatabaseMigrator.MigrateAsync<CompanyDbContext>(
+        serviceScope.ServiceProvider, builder.Configuration, startupLogger);
 }
 
 application.Run();

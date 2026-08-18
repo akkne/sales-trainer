@@ -8,8 +8,17 @@ theory, guidebook, reference), dialog practice + voice, the social area (friends
 chat, discussions, team/cohort progress), profile, settings, notifications, and the
 companies module.
 
-The **admin panel** (`app/(admin)/**`, `features/admin/**`) is intentionally left
-in **English** — it is only seen by internal staff.
+The **platform admin panel** (`app/(admin)/**`, `features/admin/**`) is intentionally
+left in **English** — it is only seen by internal staff.
+
+The **organization panel** (`app/(org)/**`, `features/org-*/**`, block 40.20) is
+**Russian**, and in the **«вы»-form** rather than the app's «ты». It is not an admin
+panel in the sense of the rule above: the customer's РОП opens it every week, so it is
+a product surface. The «вы» is deliberate — the app coaches one person, this panel is
+one company talking to another. Backend values (`not_started`, `score_dispute`,
+`failed_threshold`, …) are translated **once per feature** in
+`features/<feature>/constants/`, never as a literal in JSX; the fixed dictionary is
+[TENANCY/ADMIN_UI_DESIGN.md §1.4](TENANCY/ADMIN_UI_DESIGN.md).
 
 ## Approach
 - **No i18n library.** Strings are translated **in place** in the components

@@ -1,0 +1,17 @@
+name: tenancy-pool
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/**"
+      - "scripts/tenancy-pool-lint.*"
+      - ".github/workflows/tenancy-pool.yml"
+
+jobs:
+  tenancy-pool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Forbid AddDbContextPool (TENANCY.md 1.4, CODESTYLE.md)
+        run: python3 scripts/tenancy-pool-lint.py src/backend

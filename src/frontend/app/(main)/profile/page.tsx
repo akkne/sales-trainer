@@ -186,23 +186,6 @@ export default function ProfilePage() {
                         </div>
                     </div>
 
-                    {/* Best streak */}
-                    <div className="pv2-stat">
-                        <div className="pv2-stat-ic amber">
-                            {/* trophy */}
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 9H3a1 1 0 0 0-1 1v1a5 5 0 0 0 5 5"/><path d="M18 9h3a1 1 0 0 1 1 1v1a5 5 0 0 1-5 5"/><path d="M7 21h10"/><path d="M12 17v4"/><path d="M7 4h10l-1 9a5 5 0 0 1-8 0L7 4z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <div className="pv2-stat-label">Лучшая серия</div>
-                            <div className="pv2-stat-value">
-                                {profileStats.longestStreakDayCount}
-                                <small>д</small>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Skills completed */}
                     <div className="pv2-stat">
                         <div className="pv2-stat-ic violet">

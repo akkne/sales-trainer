@@ -17,6 +17,7 @@ public static class NotificationEmailLayout
     private const string AccentColor = "#4f46e5";
     private const string TextColor = "#1f2933";
     private const string MutedColor = "#7b8794";
+    private const string ButtonTextColor = "#ffffff";
 
     /// <summary>HTML-encodes untrusted text for safe inclusion in an HTML body.</summary>
     public static string Encode(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
@@ -45,12 +46,10 @@ public static class NotificationEmailLayout
             "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" " +
             "style=\"max-width:560px;width:100%;\">");
 
-        // Header
         builder.Append(
             $"<tr><td style=\"padding:8px 8px 16px;font-size:20px;font-weight:700;color:{AccentColor};\">" +
             $"{Encode(BrandName)}</td></tr>");
 
-        // Card
         builder.Append(
             $"<tr><td style=\"background-color:{CardColor};border-radius:12px;padding:32px;" +
             "box-shadow:0 1px 3px rgba(0,0,0,0.08);\">");
@@ -67,13 +66,12 @@ public static class NotificationEmailLayout
                 $"<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px 0 4px;\">" +
                 $"<tr><td style=\"border-radius:8px;background-color:{AccentColor};\">" +
                 $"<a href=\"{Encode(actionUrl)}\" style=\"display:inline-block;padding:12px 24px;" +
-                "font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;\">" +
+                $"font-size:16px;font-weight:600;color:{ButtonTextColor};text-decoration:none;border-radius:8px;\">" +
                 $"{Encode(actionLabel)}</a></td></tr></table>");
         }
 
         builder.Append("</td></tr>");
 
-        // Footer
         builder.Append(
             $"<tr><td style=\"padding:20px 8px;font-size:12px;line-height:1.5;color:{MutedColor};\">" +
             $"You're receiving this email because of activity on your {Encode(BrandName)} account." +

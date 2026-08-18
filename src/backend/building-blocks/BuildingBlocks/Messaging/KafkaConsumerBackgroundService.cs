@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Idempotency;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.BuildingBlocks.Messaging;
 
@@ -27,6 +28,12 @@ namespace Sellevate.BuildingBlocks.Messaging;
 /// </summary>
 public abstract class KafkaConsumerBackgroundService : BackgroundService
 {
+    /// <summary>
+    /// How long the consume loop pauses after an unhandled error around the handler, so a broker or
+    /// Redis outage becomes a slow retry rather than a tight spin against a failing dependency.
+    /// </summary>
+    private static readonly TimeSpan UnhandledErrorBackoff = TimeSpan.FromSeconds(1);
+
     private readonly KafkaSettings _settings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IIdempotencyStore _idempotencyStore;
@@ -36,6 +43,16 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
 
     /// <summary>The topics this consumer subscribes to.</summary>
     protected abstract IReadOnlyCollection<string> Topics { get; }
+
+    /// <summary>
+    /// Whether every event this consumer handles must carry an <see cref="EventEnvelope.OrganizationId"/>.
+    /// <c>true</c> by default: a tenant-scoped consumer must never silently process a message
+    /// with no tenant context (docs/TENANCY/TENANCY.md §1.6/§1.7). Override to <c>false</c> only
+    /// for a consumer that is genuinely platform-global by design (e.g. replicating Identity's
+    /// cross-org user directory) — this must be an explicit, auditable opt-in, never the default
+    /// reaction to an empty context.
+    /// </summary>
+    protected virtual bool RequiresOrganization => true;
 
     protected KafkaConsumerBackgroundService(
         IOptions<KafkaSettings> settings,
@@ -59,13 +76,34 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
         IServiceProvider scopedServices,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Hands the consume loop to a dedicated background thread. Confluent's <c>Consume()</c> is a
+    /// blocking call, so running it inline would stall the host's startup/shutdown thread.
+    /// </summary>
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Confluent's Consume() blocks; run the loop on a dedicated background thread
-        // so we never stall the host's startup/shutdown thread.
         return Task.Run(() => ConsumeLoop(stoppingToken), stoppingToken);
     }
 
+    /// <summary>
+    /// Consumes until cancellation, committing an offset only once its message is accounted for.
+    ///
+    /// <para>
+    /// The outer <c>catch</c> around <see cref="ProcessMessageAsync"/> is load-bearing and must not
+    /// be narrowed. Handler exceptions are already caught by the processor's retry path; what this
+    /// catches is everything <em>around</em> the handler — the Redis idempotency store, the offset
+    /// commit, and the scope's service resolution. None of that was guarded, and .NET's default
+    /// <c>BackgroundServiceExceptionBehavior</c> is <c>StopHost</c>, so a five-second Redis restart
+    /// or a routine consumer-group rebalance took the whole service down, HTTP API included, and
+    /// <c>restart:</c> turned that into a crash loop. This base class backs thirteen consumers
+    /// across the platform.
+    /// </para>
+    ///
+    /// <para>
+    /// An <see cref="OperationCanceledException"/> reaching the outer handler is a normal shutdown,
+    /// not a failure, and is deliberately absorbed without logging.
+    /// </para>
+    /// </summary>
     private async Task ConsumeLoop(CancellationToken stoppingToken)
     {
         var config = new ConsumerConfig
@@ -91,9 +129,9 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                 {
                     result = consumer.Consume(stoppingToken);
                 }
-                catch (ConsumeException ex)
+                catch (ConsumeException consumeException)
                 {
-                    Logger.LogError(ex, "Kafka consume error in group '{Group}'", _settings.ConsumerGroupId);
+                    Logger.LogError(consumeException, "Kafka consume error in group '{Group}'", _settings.ConsumerGroupId);
                     continue;
                 }
 
@@ -102,12 +140,22 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                     continue;
                 }
 
-                await ProcessMessageAsync(consumer, result, stoppingToken);
+                try
+                {
+                    await ProcessMessageAsync(consumer, result, stoppingToken);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(
+                        exception,
+                        "Unhandled error processing a Kafka message in group '{Group}'; continuing", _settings.ConsumerGroupId);
+
+                    await Task.Delay(UnhandledErrorBackoff, stoppingToken);
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            // Normal shutdown.
         }
         finally
         {
@@ -123,6 +171,7 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var deadLetterPublisher = scope.ServiceProvider.GetRequiredService<IDeadLetterPublisher>();
         var resilience = scope.ServiceProvider.GetRequiredService<IOptions<ConsumerResilienceSettings>>().Value;
+        var tenantContext = scope.ServiceProvider.GetRequiredService<TenantContext>();
 
         var processor = new EventMessageProcessor(
             _settings.ConsumerGroupId, _idempotencyStore, deadLetterPublisher, resilience, Logger);
@@ -131,12 +180,42 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
             result.Topic,
             result.Message.Key,
             result.Message.Value,
-            (envelope, cancellationToken) => HandleAsync(envelope, scope.ServiceProvider, cancellationToken),
+            (envelope, cancellationToken) =>
+            {
+                ApplyTenantContext(tenantContext, envelope, RequiresOrganization, GetType().Name);
+                return HandleAsync(envelope, scope.ServiceProvider, cancellationToken);
+            },
             stoppingToken);
 
         if (outcome != MessageProcessingOutcome.Redeliver)
         {
             consumer.Commit(result);
         }
+    }
+
+    /// <summary>
+    /// Sets <paramref name="tenantContext"/> from <paramref name="envelope"/> before the handler
+    /// runs. Throws if the envelope carries no organization and <paramref name="requiresOrganization"/>
+    /// is <c>true</c> — the exception surfaces through the handler's retry/dead-letter path exactly
+    /// like any other handler failure, so a message can never be processed silently without a
+    /// tenant. Safe to call again on a retry: re-setting the same organization, or re-entering
+    /// system mode, is a no-op on an already-set <see cref="TenantContext"/>.
+    /// </summary>
+    internal static void ApplyTenantContext(
+        TenantContext tenantContext, EventEnvelope envelope, bool requiresOrganization, string consumerName)
+    {
+        if (envelope.OrganizationId is { } organizationId)
+        {
+            tenantContext.SetOrganization(organizationId);
+            return;
+        }
+
+        if (requiresOrganization)
+        {
+            throw new InvalidOperationException(
+                $"Event {envelope.Type} ({envelope.EventId}) carries no organization, but consumer '{consumerName}' requires one.");
+        }
+
+        tenantContext.EnterSystemMode();
     }
 }

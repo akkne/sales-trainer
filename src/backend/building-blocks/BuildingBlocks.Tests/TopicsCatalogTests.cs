@@ -26,6 +26,9 @@ public sealed class TopicsCatalogTests
             Topics.AchievementUnlocked,
             Topics.StreakMilestone,
             Topics.CompanyFollowUpDue,
+            Topics.OrganizationCreated,
+            Topics.OrganizationUpdated,
+            Topics.OrganizationSuspended,
         });
     }
 

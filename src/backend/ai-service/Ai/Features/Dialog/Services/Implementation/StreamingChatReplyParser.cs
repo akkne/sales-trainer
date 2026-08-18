@@ -2,9 +2,32 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Sellevate.Ai.Features.Dialog.Constants;
 
 namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 
+/// <summary>
+/// Incrementally decodes the <c>reply</c> field out of the structured JSON answer while it is still
+/// arriving, so the first words can be spoken or shown before the object closes.
+///
+/// <para>
+/// A hand-written state machine rather than a JSON parser because the input is not JSON yet: a delta can
+/// end mid-escape, mid-surrogate or mid-key, and a parser that needs a complete document would have to
+/// wait for the whole turn — which is the latency the streaming path exists to remove. The
+/// <c>reply</c> field is required to come first for exactly this reason.
+/// </para>
+///
+/// <para>
+/// <b>Nothing here can fail the turn.</b> A model that ignored the JSON contract entirely is recovered
+/// from by <see cref="Complete"/> — the raw text becomes the reply and <c>UsedFallback</c> says so —
+/// because a learner mid-conversation is better served by a plain answer than by an error.
+/// </para>
+///
+/// <para>
+/// Stateful and single-threaded: one instance belongs to one turn, and <see cref="Push"/> must be
+/// called with deltas in order.
+/// </para>
+/// </summary>
 internal sealed class StreamingChatReplyParser
 {
     private enum ParserState
@@ -148,12 +171,17 @@ internal sealed class StreamingChatReplyParser
         }
 
         var fallbackReply = ExtractFallbackReply(rawText);
-        var fallbackEndCall = ResolveEndCallFlag(rawText) || rawText.Contains("[DIALOG_END]", StringComparison.Ordinal);
+        var fallbackEndCall = ResolveEndCallFlag(rawText)
+            || rawText.Contains(DialogFeedbackMarkup.LegacyDialogEndMarker, StringComparison.Ordinal);
         return BuildResult(fallbackReply, fallbackEndCall, ResolveEndCallReason(rawText), usedFallback: true);
     }
 
-    // Safety net: models sometimes voice a goodbye in the reply but leave endCall=false, so the call never
-    // hangs up (observed with abusive callers). A persona farewell always terminates the call, so force it.
+    /// <summary>
+    /// Safety net over the model's own <c>endCall</c> flag. Models sometimes voice a goodbye in the reply
+    /// and still report <c>endCall: false</c>, so the call never hung up — observed with abusive callers,
+    /// where the character says "всего доброго" and then keeps answering. A persona farewell always
+    /// terminates the call, so it is forced here rather than trusted from the answer.
+    /// </summary>
     private static ChatReplyParseResult BuildResult(string reply, bool endCall, string? endCallReason, bool usedFallback)
     {
         if (!endCall && LooksLikeFarewell(reply))
@@ -265,7 +293,7 @@ internal sealed class StreamingChatReplyParser
         catch (JsonException) { }
 
         return withoutCodeFence
-            .Replace("[DIALOG_END]", string.Empty, StringComparison.Ordinal)
+            .Replace(DialogFeedbackMarkup.LegacyDialogEndMarker, string.Empty, StringComparison.Ordinal)
             .Trim();
     }
 

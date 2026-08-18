@@ -14,7 +14,8 @@ export interface UseVoiceOptions {
     bundleId?: string;
     modeId?: string;
     companyContext?: VoiceCompanyContext;
-    onSessionCreated?: (sessionId: string) => void;
+    /** The call has a live session — either just created, or the one handed in via `sessionId`. */
+    onSessionReady?: (sessionId: string) => void;
     onTranscript?: (transcript: string) => void;
     onAiText?: (textChunk: string) => void;
     onAiResponse?: (content: string, isStopSignal: boolean) => void;

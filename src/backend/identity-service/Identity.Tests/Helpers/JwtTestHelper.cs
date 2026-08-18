@@ -12,18 +12,36 @@ public static class JwtTestHelper
     public const string JwtIssuer = "sallevate";
     public const string JwtAudience = "sallevate";
 
-    public static string BuildToken(Guid userId, string email, string displayName, UserRole role = UserRole.User)
+    public static string BuildToken(
+        Guid userId,
+        string email,
+        string displayName,
+        UserRole role = UserRole.User,
+        Guid? organizationId = null,
+        string? orgRole = null)
     {
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey));
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new(JwtRegisteredClaimNames.Email, email),
+            new("displayName", displayName),
+            new(ClaimTypes.Role, role.ToString())
+        };
+
+        if (organizationId is not null)
+        {
+            claims.Add(new Claim("org_id", organizationId.Value.ToString()));
+        }
+
+        if (orgRole is not null)
+        {
+            claims.Add(new Claim("org_role", orgRole));
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(
-            [
-                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, email),
-                new Claim("displayName", displayName),
-                new Claim(ClaimTypes.Role, role.ToString())
-            ]),
+            Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(30),
             Issuer = JwtIssuer,
             Audience = JwtAudience,

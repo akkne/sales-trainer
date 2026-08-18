@@ -43,6 +43,10 @@ public sealed class SkillTreeServiceTests
         skills[0].TotalLessonCount.Should().Be(1);
     }
 
+    /// <summary>
+    /// Enrolling in one skill keeps the core skill enrolled automatically and leaves every other skill out:
+    /// the core track is not something a learner can opt out of by omitting it from the request.
+    /// </summary>
     [Test]
     public async Task UpdateEnrolledSkills_MarksUnenrolledSkillsLocked_AndKeepsCoreEnrolled()
     {
@@ -59,7 +63,6 @@ public sealed class SkillTreeServiceTests
         var userId = Guid.NewGuid();
         var service = new SkillTreeService(databaseContext);
 
-        // Enroll only "objections"; core is kept automatically, "closing" stays out.
         await service.UpdateEnrolledSkillsAsync(userId, new[] { "objections" });
 
         var skills = await service.GetAllSkillsWithProgressAsync(userId);

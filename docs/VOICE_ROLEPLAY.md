@@ -31,15 +31,36 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
 ### Call state machine
 
 ```
- idle ──«Позвонить»──▶ dialing ──first AI reply──▶ connected ──hangup/endCall──▶ ended
-  ▲                       │ ringback tone 425Hz        │ call timer, live          │ busy beeps,
-  └──«Позвонить ещё раз»──┘ (1s on / 4s off)           │ subtitles, no barge-in    ▼ feedback modal
-                                                       │ vibrate on connect     /complete
+ idle ──«Позвонить»──▶ dialing ──session ready──▶ connected ──hangup/endCall──▶ ended
+  ▲                       │                          │ call timer, live         │ /complete,
+  └──«Позвонить ещё раз»──┘                          │ subtitles, no barge-in   ▼ feedback modal
+                                                     │ vibrate on connect
 ```
 
-- **Sounds** (`lib/voice/callSounds.ts`): ringback while `dialing`, triple busy
-  beep on `ended` — synthesized with Web Audio oscillators, no binary assets.
-- **Vibration**: `navigator.vibrate(80)` on `dialing → connected` (mobile).
+- **Silent by design**: no ringback and no busy tones. The synthesized Web Audio
+  tones were removed — they added nothing to a training call and only made the
+  page noisy. The only remaining state cue is haptic.
+- **Vibration** (`features/voice/services/call-haptics.ts`): `navigator.vibrate(80)`
+  on `dialing → connected` (mobile).
+- **The call connects on "session ready"** (`useVoice.onSessionReady`), which fires
+  both for a freshly created session and for one handed in from outside (a custom
+  scenario pre-started on another page). Reused sessions used to skip the callback,
+  leaving the call on «Соединение…» for its whole duration.
+- **Every call gets its own session**: `endSession()` drops the session id inside
+  `useVoice`, so «Позвонить снова» always creates a fresh one. (`stopVoice()` only
+  stops listening and keeps the session — the chat mic button toggles voice input
+  off and on inside one dialog; the call pages call both on hang-up.)
+  Reusing a completed session made the backend reject every turn and left the page
+  hanging on «Соединение…» → «Готовим разбор…» with nothing in flight.
+- **A refused turn is never silent.** `POST .../voice/stream` answers `409` when the
+  session is finished/missing/not voice-enabled (it used to set `200` before calling
+  the service, so a rejected turn arrived as an empty body — the persona just never
+  spoke). The client turns `409` into «Этот звонок уже завершён», and a stream that
+  yields zero frames for any other reason raises «Собеседник не ответил».
+- **A pre-started scenario session is single-use.** `/dialog/[bundleId]/[modeId]/voice?session=…`
+  checks the session's status before dialling; once it is played out the CTA becomes
+  «К сценариям» instead of «Позвонить снова» — the page cannot recreate the scenario
+  text, and a session started here without it is rejected by the backend (400).
 - **No barge-in (persona finishes first)**: the microphone is paused for the whole
   AI turn (paused before the `/voice/stream` request, resumed only when playback
   ends). We deliberately do **not** listen while the persona is speaking — barge-in
@@ -58,8 +79,16 @@ CTA on the mode card). Continuous VAD — no push-to-talk.
   backend returns 429 when `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes`
   exceeded. Per-user spend report for admins: `GET /admin/voice/usage` +
   `/admin/voice/usage` page. Quota bars also shown on `/profile`.
+  **Since Phase 40.33 there is a second, organization-wide window under the per-user one** —
+  see "Per-organization voice limits" below.
 - Leaving the page mid-call completes the session (fire-and-forget) so minutes
-  and history are recorded; all tones stop on unmount.
+  and history are recorded.
+- **The analysis never spins forever**: `POST /dialog/sessions/{id}/complete` is
+  capped at 120s client-side (`RequestTimeoutError`; the backend's own upstream
+  budget is 90s), a failure shows the reason plus a «Повторить разбор» button, and
+  a call that ended with no session says so («Разбирать нечего…») instead of
+  claiming «Готовим разбор…». A retry on a session the backend already completed
+  returns the stored feedback instead of an error.
 
 Manual checklist: [TESTING/VOICE_CALL.md](TESTING/VOICE_CALL.md)
 
@@ -135,6 +164,55 @@ which the service wraps in a WAV header (v1 REST API has no mp3; OggOpus is not
 decodable in Safari). A TTS failure is logged and swallowed — the user still
 gets the reply as text, and the stream finishes normally with the final sentinel.
 
+### Per-organization voice limits (Phase 40.33)
+
+Until 40.33 the only voice limit was **per user**: 30 minutes a day, 300 a month, the same numbers
+for every customer, from `Voice:DailyLimitMinutes` / `MonthlyLimitMinutes`. A customer's *total*
+voice spend was therefore however many users they had times that allowance — adding seats added
+budget, and nothing anywhere capped the organization. That is the roadmap's «один клиент, гоняющий
+голос сутками».
+
+40.33 adds an organization-wide window **under** the per-user one. Both apply on every turn:
+
+```
+org:{orgId}:voice:{userId}:day:{y}:{m}:{d}     ← per user   (since the feature shipped)
+org:{orgId}:voice:{userId}:month:{y}:{m}
+org:{orgId}:voice:org:day:{y}:{m}:{d}          ← per organization (40.33)
+org:{orgId}:voice:org:month:{y}:{m}
+```
+
+Both are kept deliberately. The per-user limit stops one person burning the whole organization's day,
+which the organization limit alone cannot; the organization limit stops the customer the roadmap
+names, which the per-user limit alone could not.
+
+- **The organization's numbers come from `OrganizationQuotas` in ai-db**, per organization, set by
+  platform staff through `PUT /admin/ai-quota`. An organization with no row is metered against the
+  platform defaults in `AiQuotas:DefaultVoice*LimitMinutes` (600/day, 6000/month) — never unmetered.
+  Full reasoning: [AI_QUOTAS.md](AI_QUOTAS.md) §2.
+- **The reservation order is per-user first, organization second**, and an organization refusal rolls
+  both per-user reservations back before it throws, so a blocked call leaves no phantom reservation.
+- **The client contract is unchanged**: still `429`, still `{error, period, usedSeconds,
+  limitSeconds}`. The `period` reads `organization day` / `organization month` when it is the
+  organization window that closed.
+- **`GET /admin/voice/usage` grew four fields** — `organizationDailyLimitSeconds`,
+  `organizationMonthlyLimitSeconds`, `organizationUsedSecondsToday`,
+  `organizationUsedSecondsThisMonth`. The per-user rows answer «кто много говорит»; these answer
+  «сколько осталось у компании», which is the number that decides whether the next call connects.
+- **Durable accounting is unchanged**: actual seconds still land in Mongo `dialog_sessions` during
+  the refund step. Redis holds the reservation window only.
+
+### Synthesis is now metered too, and the exercise path stopped bypassing it (Phase 40.33)
+
+`YandexTtsService` records every synthesized character against the calling organization
+(`AiUsageRecords`, kind `tts`) — charged at the provider call, so a `CachingTtsRouter` hit costs
+nothing and is recorded as nothing.
+
+This is also where a real hole closed. The interactive `ai_dialogue` exercise
+(`POST /exercises/{id}/voice/stream`) was served by **learning-service's own copy** of `TtsRouter` and
+`YandexTtsService`, against a `YandexTts:ApiKey` that service held itself. Every sentence it spoke was
+synthesized outside the voice meter entirely. learning-service now calls `POST /ai/tts` and holds no
+speech key at all. `scripts/ai-provider-lint.py` keeps it that way.
+
 ### Configuration (appsettings.json)
 
 ```json
@@ -160,9 +238,19 @@ gets the reply as text, and the stream finishes normally with the final sentinel
     "MaxRecordingSeconds": 60,
     "DailyLimitMinutes": 30,
     "MonthlyLimitMinutes": 300
+  },
+  "AiQuotas": {
+    "DefaultVoiceDailyLimitMinutes": 600,
+    "DefaultVoiceMonthlyLimitMinutes": 6000,
+    "DefaultLlmMonthlyTokenLimit": 20000000,
+    "DefaultBatchReservePercent": 10
   }
 }
 ```
+
+`Voice:*LimitMinutes` remain the **per-user** allowance and stay platform-wide. `AiQuotas:Default*`
+are the **per-organization** defaults, overridden per customer in `OrganizationQuotas`. Both sections
+live in ai-service only — learning-service no longer reads either.
 
 ### Buying voice API access from Russia
 

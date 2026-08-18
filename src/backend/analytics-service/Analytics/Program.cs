@@ -6,6 +6,7 @@ using Sellevate.Analytics;
 using Sellevate.Analytics.Common.Constants;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Tenancy;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
@@ -14,36 +15,43 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[ConfigurationKeys.LokiUrl] ?? ConfigurationDefaults.LokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
-        .WriteTo.Console(outputTemplate:
-            "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+        .WriteTo.Console(outputTemplate: LoggingConstants.ConsoleOutputTemplate)
         .WriteTo.GrafanaLoki(
             lokiUrl,
             labels:
             [
-                new LokiLabel { Key = "service", Value = "sellevate-analytics" },
-                new LokiLabel { Key = "env",     Value = context.HostingEnvironment.EnvironmentName }
+                new LokiLabel
+                {
+                    Key = LoggingConstants.ServiceLabelName,
+                    Value = LoggingConstants.ServiceLabelValue
+                },
+                new LokiLabel
+                {
+                    Key = LoggingConstants.EnvironmentLabelName,
+                    Value = context.HostingEnvironment.EnvironmentName
+                }
             ],
-            propertiesAsLabels: ["RequestId", "UserId"])
+            propertiesAsLabels: LoggingConstants.PropertiesPromotedToLabels)
         .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", "Sellevate.Analytics");
+        .Enrich.WithProperty(
+            LoggingConstants.ApplicationPropertyName,
+            LoggingConstants.ApplicationPropertyValue);
 });
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
-
+builder.Services.AddAnalyticsRedisConnection(builder.Configuration);
 builder.Services.AddSellevateEventing(builder.Configuration);
-builder.Services.AddAnalyticsServices();
+builder.Services.AddAnalyticsServices(builder.Configuration);
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
     .AddKafka();
 
 const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[ConfigurationKeys.JwtKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
     throw new InvalidOperationException(ErrorMessages.JwtSigningKeyTooShort);
@@ -55,9 +63,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[ConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[ConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
@@ -66,7 +74,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[ConfigurationKeys.FrontendUrl] ?? ConfigurationDefaults.FrontendUrl)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -96,6 +104,8 @@ application.UseHttpMetrics();
 
 application.UseAuthentication();
 application.UseAuthorization();
+
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 application.MapMetrics();

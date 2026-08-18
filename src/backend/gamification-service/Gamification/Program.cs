@@ -1,27 +1,22 @@
 using System.Text;
 using Hangfire;
 using Hangfire.PostgreSql;
-using Npgsql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
+using Sellevate.BuildingBlocks.Persistence;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.DependencyInjection;
-using Sellevate.Gamification.Features.Achievements;
-using Sellevate.Gamification.Features.Gamification;
-using Sellevate.Gamification.Features.League;
 using Sellevate.Gamification.Infrastructure.Data;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[ConfigurationKeys.LokiUrl] ?? ConfigurationKeys.DefaultLokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
@@ -39,24 +34,10 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Gamification");
 });
 
-builder.Services.AddDbContext<GamificationDbContext>(databaseOptions =>
-{
-    // Pin the Npgsql session timezone to UTC so that DateOnly.FromDateTime(timestamptz)
-    // comparisons in XP-sync queries always bucket dates consistently, regardless of
-    // the host OS timezone.
-    var connectionString = builder.Configuration.GetConnectionString("Postgres");
-    var npgsqlBuilder = new NpgsqlConnectionStringBuilder(connectionString)
-    {
-        Timezone = "UTC",
-    };
-    databaseOptions.UseNpgsql(npgsqlBuilder.ConnectionString);
-});
-
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
+builder.Services.AddGamificationDataAccess(builder.Configuration);
 
 builder.Services.AddSellevateEventing(builder.Configuration);
-builder.Services.AddGamificationServices();
+builder.Services.AddGamificationServices(builder.Configuration);
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -68,15 +49,15 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddHangfire(hangfireConfiguration =>
     hangfireConfiguration.UsePostgreSqlStorage(storageOptions =>
-        storageOptions.UseNpgsqlConnection(builder.Configuration.GetConnectionString("Postgres"))));
+        storageOptions.UseNpgsqlConnection(
+            PostgresConnectionStrings.Migrations(builder.Configuration))));
 builder.Services.AddHangfireServer();
 
 const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[ConfigurationKeys.JwtSigningKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
-    throw new InvalidOperationException(
-        "Jwt:Key must be configured and at least 32 bytes (256 bits) long for HMAC-SHA256.");
+    throw new InvalidOperationException(ErrorMessages.JwtSigningKeyTooShort(minimumJwtSigningKeyByteCount));
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -85,26 +66,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[ConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[ConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireAdministrator, policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.IsInRole(AuthorizationPolicies.AdministratorRole)
-            || authorizationContext.User.IsInRole(AuthorizationPolicies.SuperAdministratorRole)));
-    authorizationOptions.AddPolicy(AuthorizationPolicies.RequireSuperAdministrator, policy =>
-        policy.RequireRole(AuthorizationPolicies.SuperAdministratorRole));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[ConfigurationKeys.FrontendUrl] ?? ConfigurationKeys.DefaultFrontendUrl)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -120,59 +93,11 @@ builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
-application.UseExceptionHandler();
-application.UseSerilogRequestLogging();
-application.UseCors();
+application.UseGamificationRequestPipeline();
 
-if (application.Environment.IsDevelopment())
-{
-    application.UseSwagger();
-    application.UseSwaggerUI();
-}
+await GamificationStartupInitializer.RunAsync(application);
 
-application.UseAuthentication();
-application.UseAuthorization();
-
-application.MapSellevateHealthChecks();
-
-application.MapControllers();
-
-using (var serviceScope = application.Services.CreateScope())
-{
-    var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<GamificationDbContext>();
-    databaseContext.Database.Migrate();
-
-    var achievementSeeder = serviceScope.ServiceProvider.GetRequiredService<AchievementSeeder>();
-    await achievementSeeder.SeedAsync();
-
-    // GA6(a): seed singleton settings rows so read-path getters never write.
-    var leagueSettingsSeeder = serviceScope.ServiceProvider.GetRequiredService<LeagueSettingsSeeder>();
-    await leagueSettingsSeeder.SeedAsync();
-}
-
-// Use the DI-resolved IRecurringJobManager, not the static RecurringJob facade:
-// the static API reads JobStorage.Current, which is only set once the Hangfire
-// server has started — calling it here (before application.Run()) throws
-// "Current JobStorage instance has not been initialized yet".
-using (var recurringJobScope = application.Services.CreateScope())
-{
-    var recurringJobManager = recurringJobScope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
-
-    recurringJobManager.AddOrUpdate<WeeklyLeagueClosureJob>(
-        HangfireJobIdentifiers.WeeklyLeagueClosure,
-        weeklyLeagueClosureJob => weeklyLeagueClosureJob.ExecuteAsync(),
-        HangfireJobIdentifiers.WeeklyLeagueClosureCron);
-
-    recurringJobManager.AddOrUpdate<StreakResetJob>(
-        HangfireJobIdentifiers.DailyStreakReset,
-        streakResetJob => streakResetJob.ExecuteAsync(),
-        HangfireJobIdentifiers.DailyStreakResetCron);
-}
+GamificationRecurringJobRegistrar.Register(application);
 
 application.Run();
 

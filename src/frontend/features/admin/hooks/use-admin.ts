@@ -463,6 +463,10 @@ export function useImportSkills() {
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
+            // Phase 40.19: the seeder writes the shared base library and refuses any other target.
+            // Stated explicitly on every call so that pointing an import at a customer would have to
+            // be a deliberate edit here, not an omission (docs/SEEDER.md).
+            formData.append("target", "global");
             return apiClient.postFile<SkillsImportResult>("/admin/seeder/skills", formData);
         },
         onSuccess: (data) => {
@@ -485,6 +489,10 @@ export function useImportTopics() {
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
+            // Phase 40.19: the seeder writes the shared base library and refuses any other target.
+            // Stated explicitly on every call so that pointing an import at a customer would have to
+            // be a deliberate edit here, not an omission (docs/SEEDER.md).
+            formData.append("target", "global");
             return apiClient.postFile<TopicsImportResult>("/admin/seeder/topics", formData);
         },
         onSuccess: (data) => {
@@ -507,6 +515,10 @@ export function useImportLessons() {
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
+            // Phase 40.19: the seeder writes the shared base library and refuses any other target.
+            // Stated explicitly on every call so that pointing an import at a customer would have to
+            // be a deliberate edit here, not an omission (docs/SEEDER.md).
+            formData.append("target", "global");
             return apiClient.postFile<LessonsImportResult>("/admin/seeder/lessons", formData);
         },
         onSuccess: (data) => {
@@ -542,6 +554,10 @@ export function useImportBundle() {
         mutationFn: (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
+            // Phase 40.19: the seeder writes the shared base library and refuses any other target.
+            // Stated explicitly on every call so that pointing an import at a customer would have to
+            // be a deliberate edit here, not an omission (docs/SEEDER.md).
+            formData.append("target", "global");
             return apiClient.postFile<BundleImportResult>("/admin/seeder/bundle", formData);
         },
         onSuccess: (data) => {

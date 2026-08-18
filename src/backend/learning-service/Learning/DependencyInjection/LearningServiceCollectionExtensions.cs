@@ -1,10 +1,19 @@
 using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.Learning.Eventing;
+using Sellevate.Learning.Features.Assignments;
+using Sellevate.Learning.Features.Content;
+using Sellevate.Learning.Features.ContentAdaptation;
+using Sellevate.Learning.Features.ContentGeneration;
+using Sellevate.Learning.Features.DialogReviews;
 using Sellevate.Learning.Features.Exercises;
+using Sellevate.Learning.Features.Lessons;
+using Sellevate.Learning.Features.Programs;
 using Sellevate.Learning.Features.Reference;
 using Sellevate.Learning.Features.SkillTree;
 using Sellevate.Learning.Features.Techniques;
+using Sellevate.Learning.Features.TeamInsights;
 using Sellevate.Learning.Infrastructure.Ai;
+using Sellevate.Learning.Infrastructure.Identity;
 
 namespace Sellevate.Learning.DependencyInjection;
 
@@ -20,14 +29,25 @@ public static class LearningServiceCollectionExtensions
         services.AddHostedService<OutboxRelayBackgroundService>();
 
         services.AddAiEvaluationClient(configuration);
+        services.AddIdentityDirectoryClient(configuration);
 
+        services.AddContentOverrideServices();
+        services.AddContentGenerationFeatureServices(configuration);
+        services.AddContentAdaptationFeatureServices(configuration);
         services.AddSkillTreeFeatureServices();
+        services.AddLessonFeatureServices();
+        services.AddProgramFeatureServices();
+        services.AddAssignmentFeatureServices(configuration);
+        services.AddTeamInsightsFeatureServices();
+        services.AddDialogReviewFeatureServices();
         services.AddExerciseFeatureServices();
         services.AddExerciseDialogServices(configuration);
         services.AddReferenceFeatureServices();
         services.AddTechniqueFeatureServices();
 
         services.AddHostedService<UserReplicaConsumer>();
+        services.AddHostedService<OrganizationProfileConsumer>();
+        services.AddHostedService<AssignmentThresholdConsumer>();
 
         return services;
     }

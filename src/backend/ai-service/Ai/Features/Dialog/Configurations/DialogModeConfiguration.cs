@@ -4,6 +4,23 @@ using Sellevate.Ai.Features.Dialog.Models;
 
 namespace Sellevate.Ai.Features.Dialog;
 
+/// <summary>
+/// EF mapping for dialog modes, including the two constraints that make copy-on-write safe.
+///
+/// <para>
+/// <b>The self-referencing parent link is <c>Restrict</c>, not <c>Cascade</c> and not
+/// <c>SetNull</c></b> (Phase 40.18). A global mode three customers have overridden must not be deletable
+/// in one click, and <c>SetNull</c> would silently promote those overrides to standalone modes, losing
+/// the fact that they were ever derived.
+/// </para>
+///
+/// <para>
+/// <b>The mode key is unique per organization, which takes two indexes</b> (Phase 40.11). Postgres
+/// treats NULLs in a composite unique index as distinct, so the composite index alone would let the
+/// global library grow two rows with the same <c>(BundleId, Key)</c> — hence the second, partial index
+/// over exactly the global rows. Same shape as 40.10's <c>Skill.IconicName</c>.
+/// </para>
+/// </summary>
 public sealed class DialogModeConfiguration : IEntityTypeConfiguration<DialogMode>
 {
     public void Configure(EntityTypeBuilder<DialogMode> builder)
@@ -35,7 +52,24 @@ public sealed class DialogModeConfiguration : IEntityTypeConfiguration<DialogMod
             .HasForeignKey(mode => mode.BundleId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasOne<DialogMode>()
+            .WithMany()
+            .HasForeignKey(mode => mode.ParentModeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(mode => mode.BaseContentHash)
+            .HasMaxLength(64);
+
+        builder.HasIndex(mode => mode.ParentModeId);
+
         builder.HasIndex(mode => mode.BundleId);
-        builder.HasIndex(mode => new { mode.BundleId, mode.Key }).IsUnique();
+
+        builder.HasIndex(mode => new { mode.OrganizationId, mode.BundleId, mode.Key })
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NOT NULL");
+        builder.HasIndex(mode => new { mode.BundleId, mode.Key })
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NULL")
+            .HasDatabaseName("IX_DialogModes_BundleId_Key_Global");
     }
 }

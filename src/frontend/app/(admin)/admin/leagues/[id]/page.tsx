@@ -13,7 +13,7 @@ import {
 
 const outcomeBadgeClass: Record<string, string> = {
     promoted: "bg-olive-soft text-olive",
-    demoted: "bg-accent-soft text-accent",
+    demoted: "bg-accent-soft text-accent-ink",
 };
 
 export default function AdminLeagueDetailPage({

@@ -4,55 +4,56 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
-using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Persistence;
+using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
+using Sellevate.Identity.Common.Security;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
+using Sellevate.Identity.Features.Invites;
 using Sellevate.Identity.Features.Onboarding;
+using Sellevate.Identity.Features.PlatformAdmin;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
 using Sellevate.Identity.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
-using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, loggerConfiguration) =>
 {
-    var lokiUrl = context.Configuration["Logging:Loki:Url"] ?? "http://loki:3100";
+    var lokiUrl = context.Configuration[ConfigurationKeys.LokiUrl] ?? ConfigurationDefaults.LokiUrl;
 
     loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
-        .WriteTo.Console(outputTemplate:
-            "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+        .WriteTo.Console(outputTemplate: LoggingConstants.ConsoleOutputTemplate)
         .WriteTo.GrafanaLoki(
             lokiUrl,
             labels:
             [
-                new LokiLabel { Key = "service", Value = "sellevate-identity" },
-                new LokiLabel { Key = "env",     Value = context.HostingEnvironment.EnvironmentName }
+                new LokiLabel
+                {
+                    Key = LoggingConstants.ServiceLabelName,
+                    Value = LoggingConstants.ServiceLabelValue
+                },
+                new LokiLabel
+                {
+                    Key = LoggingConstants.EnvironmentLabelName,
+                    Value = context.HostingEnvironment.EnvironmentName
+                }
             ],
-            propertiesAsLabels: ["RequestId", "UserId"])
+            propertiesAsLabels: LoggingConstants.PropertiesPromotedToLabels)
         .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", "Sellevate.Identity");
+        .Enrich.WithProperty(
+            LoggingConstants.ApplicationPropertyName,
+            LoggingConstants.ApplicationPropertyValue);
 });
 
-builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
-
-// Required by AddSellevateEventing's idempotency store (RedisIdempotencyStore).
-// Without this the DI container fails validation at builder.Build() and the
-// service crashes on startup.
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
-
-builder.Services.AddSellevateEventing(builder.Configuration);
-builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
-builder.Services.AddScoped<IOutboxWriter, IdentityOutboxWriter>();
-builder.Services.AddScoped<IOutboxStore, IdentityOutboxStore>();
-builder.Services.AddHostedService<OutboxRelayBackgroundService>();
+builder.Services.AddIdentityDataAccess(builder.Configuration);
+builder.Services.AddIdentityEventing(builder.Configuration);
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -63,11 +64,10 @@ builder.Services.AddHealthChecks()
         tags: [HealthCheckConstants.ReadinessTag]);
 
 const int minimumJwtSigningKeyByteCount = 32;
-var jwtSigningKey = builder.Configuration["Jwt:Key"];
+var jwtSigningKey = builder.Configuration[ConfigurationKeys.JwtKey];
 if (string.IsNullOrEmpty(jwtSigningKey) || Encoding.UTF8.GetByteCount(jwtSigningKey) < minimumJwtSigningKeyByteCount)
 {
-    throw new InvalidOperationException(
-        "Jwt:Key must be configured and at least 32 bytes (256 bits) long for HMAC-SHA256.");
+    throw new InvalidOperationException(ErrorMessages.JwtSigningKeyTooShort);
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -76,25 +76,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         jwtOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = builder.Configuration[ConfigurationKeys.JwtIssuer],
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = builder.Configuration[ConfigurationKeys.JwtAudience],
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey))
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy("RequireAdmin", policy =>
-        policy.RequireAssertion(context =>
-            context.User.IsInRole("Admin") || context.User.IsInRole("SuperAdmin")));
-    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
-        policy.RequireRole("SuperAdmin"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
-var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
+var allowedOrigins = (builder.Configuration[ConfigurationKeys.FrontendUrl] ?? ConfigurationDefaults.FrontendUrl)
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(corsOptions => corsOptions.AddDefaultPolicy(corsPolicy =>
     corsPolicy
@@ -109,8 +102,12 @@ builder.Services.AddHttpClient();
 
 builder.Services
     .AddAuthenticationFeatureServices(builder.Configuration)
+    .AddInviteFeatureServices(builder.Configuration)
     .AddOnboardingFeatureServices()
+    .AddPlatformAdminFeatureServices(builder.Configuration)
     .AddProfileFeatureServices();
+
+builder.Services.AddScoped<InternalServiceAuthFilter>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -133,6 +130,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 
@@ -142,11 +140,8 @@ using (var serviceScope = application.Services.CreateScope())
 {
     var startupLogger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    await DatabaseBootstrapper.EnsureDatabaseExistsAsync(
-        builder.Configuration.GetConnectionString("Postgres")!, startupLogger);
-
-    var databaseContext = serviceScope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    databaseContext.Database.Migrate();
+    await DatabaseMigrator.MigrateAsync<IdentityDbContext>(
+        serviceScope.ServiceProvider, builder.Configuration, startupLogger);
 
     var superAdminSeeder = serviceScope.ServiceProvider.GetRequiredService<SuperAdminSeeder>();
     await superAdminSeeder.SeedAsync();
@@ -161,7 +156,7 @@ using (var serviceScope = application.Services.CreateScope())
     }
     catch (Exception exception)
     {
-        startupLogger.LogWarning(exception, "Avatar storage init failed at startup; continuing without default avatars");
+        startupLogger.LogWarning(exception, ErrorMessages.AvatarStorageInitializationFailed);
     }
 }
 

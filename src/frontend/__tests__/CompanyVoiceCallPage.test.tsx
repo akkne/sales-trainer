@@ -38,10 +38,12 @@ vi.mock("@/features/voice/hooks/use-voice-usage", () => ({
 }));
 
 let capturedVoiceOptions: Record<string, unknown> | null = null;
+let nextSessionId = "sess-1";
 const startVoiceMock = vi.fn(async () => {
-    (capturedVoiceOptions?.onSessionCreated as ((id: string) => void) | undefined)?.("sess-1");
+    (capturedVoiceOptions?.onSessionReady as ((id: string) => void) | undefined)?.(nextSessionId);
 });
 const stopVoiceMock = vi.fn();
+const endSessionMock = vi.fn();
 vi.mock("@/features/voice/hooks/use-voice", () => ({
     useVoice: (options: Record<string, unknown>) => {
         capturedVoiceOptions = options;
@@ -51,6 +53,7 @@ vi.mock("@/features/voice/hooks/use-voice", () => ({
             isVoiceAvailable: true,
             startVoice: startVoiceMock,
             stopVoice: stopVoiceMock,
+            endSession: endSessionMock,
         };
     },
 }));
@@ -91,7 +94,9 @@ describe("CompanyVoiceCallPage", () => {
         mockReplace.mockReset();
         startVoiceMock.mockClear();
         stopVoiceMock.mockClear();
+        endSessionMock.mockClear();
         capturedVoiceOptions = null;
+        nextSessionId = "sess-1";
         mockSearchParamsGoal = null;
         window.sessionStorage.clear();
 
@@ -179,6 +184,55 @@ describe("CompanyVoiceCallPage", () => {
 
         await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-1"));
         expect(mutateCreatePracticeCall).not.toHaveBeenCalled();
+    });
+
+    it("connects a second call after the first one was completed", async () => {
+        // Regression: the "call is over" latch stayed armed, so the repeat call never reached
+        // «connected» and its hang-up left the page on «Готовим разбор…» forever.
+        completeDialogSession.mockResolvedValue(null);
+
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+        await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-1"));
+
+        nextSessionId = "sess-2";
+        fireEvent.click(await screen.findByRole("button", { name: "Позвонить" }));
+
+        expect(await screen.findByRole("button", { name: "Завершить звонок" })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Завершить звонок" }));
+        await waitFor(() => expect(completeDialogSession).toHaveBeenCalledWith("sess-2"));
+    });
+
+    it("does not promise an analysis when the call ended before a session existed", async () => {
+        startVoiceMock.mockImplementationOnce(async () => {});
+
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
+        await waitFor(() => expect(screen.getByText("Звонок завершён")).toBeTruthy());
+        expect(completeDialogSession).not.toHaveBeenCalled();
+        expect(screen.queryByText("Готовим разбор…")).toBeNull();
+    });
+
+    it("offers a retry when the analysis request fails", async () => {
+        completeDialogSession.mockRejectedValueOnce(new Error("Сервер не ответил вовремя"));
+
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Позвонить" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Завершить звонок" }));
+
+        const retryButton = await screen.findByRole("button", { name: /Повторить разбор/ });
+        expect(screen.getByRole("alert").textContent).toContain("Сервер не ответил вовремя");
+
+        completeDialogSession.mockResolvedValueOnce({
+            summary: "Хорошо", content: "Разбор", score: 80, generatedAt: "2026-07-09T00:00:00Z", xpEarned: 10,
+        });
+        fireEvent.click(retryButton);
+
+        await waitFor(() => expect(screen.getByText("Закрыть разбор")).toBeTruthy());
+        expect(completeDialogSession).toHaveBeenCalledTimes(2);
     });
 
     it("navigates back to /companies/[id] on the back link (not /dialog)", () => {

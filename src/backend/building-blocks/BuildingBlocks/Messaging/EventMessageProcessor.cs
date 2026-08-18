@@ -42,6 +42,23 @@ public sealed class EventMessageProcessor
         _logger = logger;
     }
 
+    /// <summary>
+    /// Runs one consumed message through parse → dedupe → handle → dead-letter and reports whether
+    /// its offset may be committed. <paramref name="rawValue"/> is kept unparsed for the dead-letter
+    /// path so a poison message is parked byte-for-byte as it arrived and stays replayable.
+    ///
+    /// <para>
+    /// An unparseable or null envelope returns <see cref="MessageProcessingOutcome.Commit"/>, not
+    /// <see cref="MessageProcessingOutcome.Redeliver"/>: redelivering a message no consumer version
+    /// can ever parse would block the partition forever.
+    /// </para>
+    ///
+    /// <para>
+    /// An <see cref="OperationCanceledException"/> from <paramref name="handler"/> propagates rather
+    /// than counting as a handler failure — a shutdown must not consume a retry or dead-letter a
+    /// message that was never really tried.
+    /// </para>
+    /// </summary>
     public async Task<MessageProcessingOutcome> ProcessAsync(
         string topic,
         string? key,
@@ -65,7 +82,7 @@ public sealed class EventMessageProcessor
             return MessageProcessingOutcome.Commit;
         }
 
-        if (await _idempotencyStore.HasProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken))
+        if (await _idempotencyStore.HasProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken))
         {
             _logger.LogDebug(
                 "Skipping duplicate event {EventId} ({Type}) in group '{Group}'",
@@ -86,7 +103,7 @@ public sealed class EventMessageProcessor
         var handlerError = await RunHandlerWithRetriesAsync(envelope, handler, cancellationToken);
         if (handlerError is null)
         {
-            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken);
+            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken);
             return MessageProcessingOutcome.Commit;
         }
 
@@ -160,7 +177,7 @@ public sealed class EventMessageProcessor
                 handlerError.Message,
                 cancellationToken);
 
-            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, cancellationToken);
+            await _idempotencyStore.MarkProcessedAsync(_consumerGroupId, envelope.EventId, envelope.OrganizationId, cancellationToken);
 
             _logger.LogError(
                 handlerError, "Dead-lettered event {EventId} ({Type}) to {DeadLetterTopic} after exhausting retries",

@@ -2,6 +2,18 @@ using Sellevate.Social.Features.Discuss.Models;
 
 namespace Sellevate.Social.Features.Discuss.Services.Abstract;
 
+/// <summary>
+/// The discussion feed: threads, replies, votes, photos and tags. Every member-facing method answers
+/// within the caller's organization; the tag methods additionally see the curated vocabulary shared
+/// by all organizations, which is why a tag's organization may be <see langword="null"/>.
+///
+/// <para>
+/// Nothing here throws for an absent or unauthorized target. A missing thread, reply, tag or photo
+/// comes back as <see langword="null"/>, <see langword="false"/> or a
+/// <see cref="Models.DiscussOperationStatus"/>, and the controller decides the status code — so a
+/// caller must inspect the result rather than assume success.
+/// </para>
+/// </summary>
 public interface IDiscussService
 {
     Task<PagedResultDto<DiscussThreadSummaryDto>> ListThreadsAsync(

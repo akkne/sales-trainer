@@ -29,7 +29,7 @@ export function ThemeToggle() {
                         onClick={() => setTheme(option.value)}
                         className={`flex-1 flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all ${
                             theme === option.value
-                                ? "bg-indigo text-white"
+                                ? "bg-indigo text-on-primary"
                                 : "bg-bg-2 text-ink-3 hover:text-ink"
                         }`}
                         style={theme === option.value ? { boxShadow: "var(--sh-2)" } : undefined}

@@ -2,15 +2,20 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Evaluation.Models;
 using Sellevate.Ai.Features.Evaluation.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// Grades a rewrite exercise: whether the learner's version fixes what the original got wrong.
+/// </summary>
 internal sealed class RewriteEvaluationStrategy(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,
+    IAiSpendMeter spendMeter,
     ILogger<RewriteEvaluationStrategy> logger)
-    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, logger), IExerciseEvaluationStrategy
+    : AiEvaluationStrategyBase(httpClientFactory, openAiOptions, spendMeter, logger), IExerciseEvaluationStrategy
 {
     public string SupportedExerciseType => ExerciseTypes.Rewrite;
 

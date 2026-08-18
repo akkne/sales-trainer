@@ -2,6 +2,7 @@ using Sellevate.Ai.Features.Companies.Models;
 
 namespace Sellevate.Ai.Features.Companies.Services.Abstract;
 
+/// <summary>Composes the pre-call cheat sheet for one company. Stateless.</summary>
 public interface IBriefingService
 {
     /// <summary>

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/shared/api/api-client";
+import { ApiError, apiClient } from "@/shared/api/api-client";
 
 export interface DialogBundle {
     id: string;
@@ -86,10 +86,14 @@ export function useDialogSessions() {
     });
 }
 
+export async function fetchDialogSession(sessionId: string): Promise<DialogSession> {
+    return apiClient.get<DialogSession>(`/dialog/sessions/${sessionId}`);
+}
+
 export function useDialogSession(sessionId: string | null) {
     return useQuery({
         queryKey: ["dialog", "sessions", sessionId],
-        queryFn: () => apiClient.get<DialogSession>(`/dialog/sessions/${sessionId}`),
+        queryFn: () => fetchDialogSession(sessionId!),
         enabled: !!sessionId,
     });
 }
@@ -108,11 +112,13 @@ export async function startDialogSession(
     bundleId: string,
     modeId: string,
     companyContext?: DialogSessionCompanyContext,
+    customScenario?: string,
 ): Promise<DialogSession> {
     return apiClient.post<DialogSession>("/dialog/sessions", {
         bundleId,
         modeId,
         ...(companyContext ? { companyContext } : {}),
+        ...(customScenario ? { customScenario } : {}),
     });
 }
 
@@ -121,13 +127,36 @@ export async function sendDialogMessage(sessionId: string, content: string): Pro
 }
 
 /**
+ * Feedback generation goes through the LLM; the backend caps its own upstream call at 90s,
+ * so anything past this budget is a request that will never answer. Without a cap the caller
+ * sits on "Готовим разбор…" forever.
+ */
+const COMPLETE_SESSION_TIMEOUT_MS = 120_000;
+
+/**
  * Completes the session and returns AI feedback. Returns null when the call
  * had no user messages (backend responds 204) — nothing was evaluated and
  * no feedback should be shown.
+ *
+ * A session that is already completed (double hang-up, or a retry after the first
+ * attempt timed out client-side while the backend finished it) is answered with the
+ * stored feedback instead of an error.
  */
 export async function completeDialogSession(sessionId: string): Promise<DialogFeedback | null> {
-    const feedback = await apiClient.post<DialogFeedback | undefined>(`/dialog/sessions/${sessionId}/complete`, {});
-    return feedback ?? null;
+    try {
+        const feedback = await apiClient.post<DialogFeedback | undefined>(
+            `/dialog/sessions/${sessionId}/complete`,
+            {},
+            { timeoutMs: COMPLETE_SESSION_TIMEOUT_MS },
+        );
+        return feedback ?? null;
+    } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 400) throw error;
+
+        const session = await fetchDialogSession(sessionId);
+        if (session.status === "active") throw error;
+        return session.feedback;
+    }
 }
 
 export async function deleteDialogSession(sessionId: string): Promise<void> {

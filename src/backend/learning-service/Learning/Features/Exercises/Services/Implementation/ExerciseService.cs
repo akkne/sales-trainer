@@ -1,25 +1,81 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.ContentTemplating;
 using Sellevate.Learning.Common.Constants;
 using Sellevate.Learning.Eventing;
+using Sellevate.Learning.Features.Content;
+using Sellevate.Learning.Features.Content.Services.Abstract;
+using Sellevate.Learning.Features.Exercises.Constants;
 using Sellevate.Learning.Features.Exercises.Models;
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Lessons.Models;
+using Sellevate.Learning.Features.Lessons.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
 
 namespace Sellevate.Learning.Features.Exercises.Services.Implementation;
 
+/// <summary>
+/// The learner's path through the library: which lessons they may open, what an exercise looks like
+/// with the answer key removed, and what happens to their progress when they submit an answer.
+///
+/// <para>
+/// <b>Nothing here holds a Postgres transaction across a network call.</b> The submit path reads the
+/// exercise in a short read scope, closes it, calls the grader (which for AI-graded types is an HTTP
+/// hop to ai-service), and only then opens the write scope. Widening the first scope to cover the
+/// grading would pin a connection for the duration of a model call.
+/// </para>
+///
+/// <para>
+/// <b>Lesson completion is attempt-based, not correctness-based.</b> A lesson is passed once the
+/// learner has attempted every exercise in it, right or wrong, so a lesson can always be finished by
+/// working through it — deliberately, so a single hard exercise cannot strand somebody mid-programme.
+/// <c>BestScore</c> is what carries how well they did, and it only ever rises.
+/// </para>
+///
+/// <para>
+/// <b>Organization placeholders are rendered in the response and never in the stored rows.</b> The
+/// exercise rows and the 40.15 snapshot both keep the raw template; only what goes over the wire
+/// carries the substituted text. The other way round, publishing the same base lesson in two
+/// organizations would produce two different <c>ContentHash</c> values and the shared library would
+/// silently fork per customer — the expensive path 40.18 exists to make rare.
+/// </para>
+/// </summary>
 internal sealed class ExerciseService(
     LearningDbContext databaseContext,
     ExerciseEvaluationFactory evaluationFactory,
     ILearningEventPublisher eventPublisher,
-    IExerciseDialogService exerciseDialogService) : IExerciseService
+    IExerciseDialogService exerciseDialogService,
+    ILessonVersionService lessonVersionService,
+    IOrganizationProfileProvider organizationProfileProvider,
+    ILogger<ExerciseService> logger) : IExerciseService
 {
+    /// <summary>
+    /// Phase 40.19. Reports <c>{{organization.*}}</c> placeholders this service could not resolve.
+    ///
+    /// <para>
+    /// <b>A warning, never an exception.</b> The learner sees a sentence with a word missing, which is
+    /// a content bug for somebody to fix — not a reason to fail the lesson they are in the middle of.
+    /// The names are de-duplicated because one unresolved placeholder in a lesson title repeats once
+    /// per lesson in the list.
+    /// </para>
+    /// </summary>
+    private void LogUnresolved(List<string> unresolved)
+    {
+        if (unresolved.Count > 0)
+        {
+            logger.LogWarning(
+                "Unresolved organization placeholders in learning content: {Placeholders}",
+                string.Join(", ", unresolved.Distinct()));
+        }
+    }
+
     public async Task<IReadOnlyList<LessonSummaryDto>> GetAllLessonsAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
@@ -27,7 +83,7 @@ internal sealed class ExerciseService(
         var topicOrderById = await databaseContext.Topics
             .ToDictionaryAsync(topic => topic.Id, topic => topic.OrderInSkill, cancellationToken);
 
-        var allLessons = (await databaseContext.Lessons
+        var allLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .ToListAsync(cancellationToken))
             .OrderBy(lesson => topicOrderById.GetValueOrDefault(lesson.TopicId))
             .ThenBy(lesson => lesson.OrderInTopic)
@@ -36,18 +92,25 @@ internal sealed class ExerciseService(
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById.GetValueOrDefault(lesson.TopicId),
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
     private async Task<Dictionary<Guid, string>> GetLessonKindsAsync(
@@ -76,6 +139,8 @@ internal sealed class ExerciseService(
         Guid topicId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var lessonProgressByLessonId = await databaseContext.UserLessonProgressRecords
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
@@ -85,32 +150,53 @@ internal sealed class ExerciseService(
             .Select(topic => (int?)topic.OrderInSkill)
             .FirstOrDefaultAsync(cancellationToken) ?? 0;
 
-        var allLessons = await databaseContext.Lessons
+        var allLessons = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == topicId)
             .OrderBy(lesson => lesson.OrderInTopic)
             .ToListAsync(cancellationToken);
 
         var lessonKinds = await GetLessonKindsAsync(allLessons.Select(lesson => lesson.Id), cancellationToken);
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrder,
                 progressRecord?.Status ?? LessonProgressStatuses.Locked,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
+    /// <summary>
+    /// The skill's lessons in the order a learner walks them: topics by their position in the skill,
+    /// then each lesson by its position in its topic, so topics stay grouped instead of interleaving.
+    /// An unknown slug, or a skill with no topics, yields an empty list rather than an error.
+    ///
+    /// <para>
+    /// <b>The first lesson is offered even with no progress row; the rest start locked.</b> That is
+    /// what makes a freshly enrolled skill enterable at all. Any existing progress row wins over the
+    /// default, so the unlock chain written by <c>UnlockNextLessonInTopicAsync</c> is never overridden
+    /// here.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<LessonSummaryDto>> GetLessonsForSkillAsync(
         Guid userId,
         string skillSlug,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var skill = await databaseContext.Skills
             .FirstOrDefaultAsync(candidate => candidate.IconicName == skillSlug, cancellationToken);
 
@@ -132,9 +218,7 @@ internal sealed class ExerciseService(
             .Where(progressRecord => progressRecord.UserId == userId)
             .ToDictionaryAsync(progressRecord => progressRecord.LessonId, cancellationToken);
 
-        // Order across the whole skill by topic first (Topic.OrderInSkill), then by the
-        // lesson's position within its topic — so topics stay grouped instead of interleaving.
-        var allLessons = (await databaseContext.Lessons
+        var allLessons = (await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => topicIds.Contains(lesson.TopicId))
             .ToListAsync(cancellationToken))
             .OrderBy(lesson => topicOrderById[lesson.TopicId])
@@ -145,7 +229,10 @@ internal sealed class ExerciseService(
 
         var isFirstLesson = true;
 
-        return allLessons.Select(lesson =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var summaries = allLessons.Select(lesson =>
         {
             lessonProgressByLessonId.TryGetValue(lesson.Id, out var progressRecord);
             var status = progressRecord?.Status
@@ -153,28 +240,55 @@ internal sealed class ExerciseService(
             isFirstLesson = false;
             return new LessonSummaryDto(
                 lesson.Id,
-                lesson.Title,
+                OrganizationPlaceholderRenderer.Render(lesson.Title, profile, unresolved),
                 lesson.OrderInTopic,
                 topicOrderById[lesson.TopicId],
                 status,
                 progressRecord?.BestScore ?? 0,
                 lessonKinds.GetValueOrDefault(lesson.Id, LessonKinds.Practice));
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return summaries;
     }
 
+    /// <summary>
+    /// The lesson's exercises in play order, rendered for this organization and with the answer key
+    /// removed.
+    ///
+    /// <para>
+    /// <b>The order of the two transformations matters.</b> Placeholders are rendered first and the
+    /// answer key stripped second, so a placeholder inside an option's text still resolves; stripping
+    /// only removes fields and never rewrites them, so it cannot undo the rendering. Reversed, an
+    /// option carrying a placeholder would reach the learner unrendered.
+    /// </para>
+    ///
+    /// <para>
+    /// The organization profile is loaded once for the whole lesson rather than per exercise: it cannot
+    /// change between two exercises of one request, and the provider memoizes in any case.
+    /// </para>
+    /// </summary>
     public async Task<IReadOnlyList<ExerciseDto>> GetExercisesForLessonAsync(
         Guid lessonId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var rawExercises = await databaseContext.Exercises
             .Where(exercise => exercise.LessonId == lessonId)
             .OrderBy(exercise => exercise.OrderInLesson)
             .Select(exercise => new { exercise.Id, exercise.Type, exercise.OrderInLesson, exercise.SerializedContent })
             .ToListAsync(cancellationToken);
 
-        return rawExercises.Select(rawExercise =>
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+
+        var rendered = rawExercises.Select(rawExercise =>
         {
-            var fullContent = JsonDocument.Parse(rawExercise.SerializedContent).RootElement;
+            var renderedContent = OrganizationPlaceholderRenderer.RenderJsonStrings(
+                rawExercise.SerializedContent, profile, unresolved);
+            var fullContent = JsonDocument.Parse(renderedContent).RootElement;
             var learnerContent = StripAnswerKeyFields(rawExercise.Type, fullContent);
             return new ExerciseDto(
                 rawExercise.Id,
@@ -182,111 +296,165 @@ internal sealed class ExerciseService(
                 rawExercise.OrderInLesson,
                 learnerContent);
         }).ToList();
+
+        LogUnresolved(unresolved);
+
+        return rendered;
     }
 
     /// <summary>
-    /// Removes answer-key fields (is_correct, correct_position, is_mistake, category, ai_prompt)
-    /// from exercise content before sending it to learners, so they cannot trivially cheat.
+    /// Removes the answer-key fields of <paramref name="exerciseType"/> from a content body before it
+    /// is sent to a learner.
+    ///
+    /// <para>
+    /// <b>This is the only place the answer is withheld, so a new type defaults to leaking it.</b>
+    /// Types with nothing to hide fall through the switch and return the body untouched — correct for
+    /// <c>theory_card</c>, <c>match_pairs</c>, <c>rewrite</c>, <c>free_text</c> and
+    /// <c>evaluate_call</c>, whose grading is either AI-side or symmetric — but that also means a type
+    /// added to <see cref="ExerciseTypes"/> and forgotten here ships its own answer key to the client.
+    /// The field names come from <see cref="ExerciseContentFields"/> precisely so the grader and this
+    /// method cannot disagree about what the key is.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Stripping removes fields and never rewrites them.</b> Unrecognized fields are copied through
+    /// verbatim, which is what lets placeholder rendering run first; only the named keys disappear. The
+    /// body is rebuilt through a serialize/re-parse round trip because <see cref="JsonElement"/> is a
+    /// read-only view over its parent document and cannot be edited in place.
+    /// </para>
     /// </summary>
     private static JsonElement StripAnswerKeyFields(string exerciseType, JsonElement content)
     {
-        // Fields to strip at item/option level, keyed by exercise type.
-        // Top-level fields to remove are handled separately.
-        string[]? itemArrayProperty = null;
-        string[]? itemFieldsToStrip = null;
-        string[]? topLevelFieldsToStrip = null;
+        string? itemArrayFieldName = null;
+        string? itemFieldToStrip = null;
+        string? topLevelFieldToStrip = null;
 
         switch (exerciseType)
         {
             case ExerciseTypes.ChooseOption:
             case ExerciseTypes.FillBlank:
-                itemArrayProperty = ["options"];
-                itemFieldsToStrip = ["is_correct"];
+                itemArrayFieldName = ExerciseContentFields.Options;
+                itemFieldToStrip = ExerciseContentFields.IsCorrect;
                 break;
             case ExerciseTypes.Reorder:
-                itemArrayProperty = ["items"];
-                itemFieldsToStrip = ["correct_position"];
+                itemArrayFieldName = ExerciseContentFields.Items;
+                itemFieldToStrip = ExerciseContentFields.CorrectPosition;
                 break;
             case ExerciseTypes.Categorize:
-                itemArrayProperty = ["items"];
-                itemFieldsToStrip = ["category"];
+                itemArrayFieldName = ExerciseContentFields.Items;
+                itemFieldToStrip = ExerciseContentFields.Category;
                 break;
             case ExerciseTypes.SpotMistake:
-                itemArrayProperty = ["dialogue"];
-                itemFieldsToStrip = ["is_mistake"];
+                itemArrayFieldName = ExerciseContentFields.Dialogue;
+                itemFieldToStrip = ExerciseContentFields.IsMistake;
                 break;
             case ExerciseTypes.AiDialogue:
-                topLevelFieldsToStrip = ["ai_prompt"];
+                topLevelFieldToStrip = ExerciseContentFields.AiPrompt;
                 break;
             default:
-                // No answer-key fields for theory_card, match_pairs, rewrite, free_text, evaluate_call.
                 return content;
         }
 
-        // Rebuild as a plain dictionary so we can mutate freely.
-        var dict = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        foreach (var prop in content.EnumerateObject())
-            dict[prop.Name] = prop.Value;
+        var learnerFields = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var contentField in content.EnumerateObject())
+            learnerFields[contentField.Name] = contentField.Value;
 
-        // Strip top-level fields.
-        if (topLevelFieldsToStrip is not null)
+        if (topLevelFieldToStrip is not null)
         {
-            foreach (var field in topLevelFieldsToStrip)
-                dict.Remove(field);
+            learnerFields.Remove(topLevelFieldToStrip);
         }
 
-        // Strip per-item fields from a named array.
-        if (itemArrayProperty is not null && itemFieldsToStrip is not null)
+        if (itemArrayFieldName is not null && itemFieldToStrip is not null
+            && learnerFields.TryGetValue(itemArrayFieldName, out var itemArrayValue)
+            && itemArrayValue.ValueKind == JsonValueKind.Array)
         {
-            foreach (var arrayProp in itemArrayProperty)
+            var strippedItems = new List<Dictionary<string, JsonElement>>();
+            foreach (var item in itemArrayValue.EnumerateArray())
             {
-                if (!dict.TryGetValue(arrayProp, out var arrayEl) ||
-                    arrayEl.ValueKind != JsonValueKind.Array)
-                    continue;
-
-                var strippedItems = new List<Dictionary<string, JsonElement>>();
-                foreach (var item in arrayEl.EnumerateArray())
+                var strippedItem = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+                foreach (var itemField in item.EnumerateObject())
                 {
-                    var itemDict = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-                    foreach (var itemProp in item.EnumerateObject())
-                    {
-                        if (Array.IndexOf(itemFieldsToStrip, itemProp.Name) < 0)
-                            itemDict[itemProp.Name] = itemProp.Value;
-                    }
-                    strippedItems.Add(itemDict);
+                    if (!string.Equals(itemField.Name, itemFieldToStrip, StringComparison.Ordinal))
+                        strippedItem[itemField.Name] = itemField.Value;
                 }
-
-                // Re-serialise the sanitised array back into a JsonElement.
-                var sanitisedJson = JsonSerializer.Serialize(new { array = strippedItems });
-                var sanitisedDoc = JsonDocument.Parse(sanitisedJson);
-                dict[arrayProp] = sanitisedDoc.RootElement.GetProperty("array");
+                strippedItems.Add(strippedItem);
             }
+
+            var strippedArrayJson = JsonSerializer.Serialize(new { array = strippedItems });
+            var strippedArrayDocument = JsonDocument.Parse(strippedArrayJson);
+            learnerFields[itemArrayFieldName] = strippedArrayDocument.RootElement.GetProperty("array");
         }
 
-        var resultJson = JsonSerializer.Serialize(dict);
-        return JsonDocument.Parse(resultJson).RootElement;
+        var learnerContentJson = JsonSerializer.Serialize(learnerFields);
+        return JsonDocument.Parse(learnerContentJson).RootElement;
     }
 
+    /// <summary>
+    /// Grades one submitted answer, records the attempt, advances the learner's lesson progress, and
+    /// stages the resulting integration events.
+    ///
+    /// <para>
+    /// <b>Three phases in a fixed order, each for its own reason.</b> The exercise is read in a read
+    /// scope that closes immediately, because the grading that follows can be an HTTP call to
+    /// ai-service and must never run with a Postgres transaction held open. The lesson version is then
+    /// resolved <em>outside</em> any scope of ours: minting a lesson's first version can lose a
+    /// unique-index race with another learner, and a unique-index violation aborts the entire
+    /// transaction it happens in — inside the write scope that would take the learner's answer down
+    /// with it. Only then does the write scope open.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The grader sees the rendered content, not the template.</b> A question rendered as
+    /// «Как вы представите Кредит Плюс?» but graded against
+    /// «Как вы представите {{organization.product}}?» would mark a correct answer wrong: the
+    /// deterministic strategies compare option text, and the AI strategy would be judging an answer to
+    /// a question it was never shown.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The whole write phase is one transaction, and the ordering inside it is load-bearing.</b> The
+    /// attempt is flushed before progress is recomputed, because the all-exercises-attempted gate counts
+    /// attempt rows and would miss this one. The outbox rows are staged before the commit so progress and
+    /// its events land atomically — a crash cannot leave progress advanced with no event. Skill
+    /// completion is the exception: it is decided by querying committed lesson progress, so it runs after
+    /// that flush and its own outbox row is flushed behind it, all still inside the one transaction.
+    /// </para>
+    /// </summary>
     public async Task<ExerciseSubmissionResultDto> SubmitExerciseAnswerAsync(
         Guid userId,
         Guid exerciseId,
         JsonElement userAnswer,
         CancellationToken cancellationToken = default)
     {
-        var exercise = await databaseContext.Exercises
-            .FirstOrDefaultAsync(exerciseRecord => exerciseRecord.Id == exerciseId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        Exercise exercise;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            exercise = await databaseContext.Exercises
+                .FirstOrDefaultAsync(exerciseRecord => exerciseRecord.Id == exerciseId, cancellationToken)
+                ?? throw new KeyNotFoundException($"Exercise {exerciseId} not found.");
+        }
 
         var evaluationStrategy = evaluationFactory.GetStrategyForExerciseType(exercise.Type);
-        var exerciseContent = JsonDocument.Parse(exercise.SerializedContent).RootElement;
+
+        var profile = await organizationProfileProvider.GetCurrentAsync(cancellationToken);
+        var unresolved = new List<string>();
+        var exerciseContent = JsonDocument
+            .Parse(OrganizationPlaceholderRenderer.RenderJsonStrings(exercise.SerializedContent, profile, unresolved))
+            .RootElement;
+
+        LogUnresolved(unresolved);
 
         var evaluationResult = await evaluationStrategy.EvaluateAnswerAsync(
             exerciseContent, userAnswer, cancellationToken);
+
+        var lessonVersionId = await lessonVersionService.EnsurePublishedVersionIdAsync(
+            exercise.LessonId, cancellationToken);
 
         var newAttempt = new UserExerciseAttempt
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            LessonVersionId = lessonVersionId,
             ExerciseId = exerciseId,
             SerializedAnswer = userAnswer.GetRawText(),
             IsCorrect = evaluationResult.IsCorrect,
@@ -297,21 +465,14 @@ internal sealed class ExerciseService(
             AttemptedAt = DateTime.UtcNow
         };
 
+        await using var writeScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         databaseContext.UserExerciseAttempts.Add(newAttempt);
-        // Persist the attempt first so UpdateLessonProgressAsync can count it
-        // when querying passed exercises (required for LE3 all-exercises-passed gate).
         await databaseContext.SaveChangesAsync(cancellationToken);
 
-        // Lesson completion is attempt-based: a lesson is "passed" once the user has
-        // attempted EVERY exercise in it, regardless of correctness. This runs on every
-        // submission (correct or wrong) so a lesson can always be completed by going
-        // through all of its exercises.
         var (lessonWasCompleted, lessonBestScore) = await UpdateLessonProgressAsync(
-            userId, exercise.LessonId, evaluationResult.Score, cancellationToken);
+            userId, exercise.LessonId, evaluationResult.Score, lessonVersionId, cancellationToken);
 
-        // Stage the exercise/lesson outbox rows BEFORE the commit so the progress mutations
-        // and their integration events are persisted in the SAME transaction (no lost events
-        // if the process crashes right after the business state commits).
         await eventPublisher.PublishExerciseCompletedAsync(
             new ExerciseCompletedEvent(userId, exercise.Type, evaluationResult.Score, evaluationResult.IsCorrect),
             cancellationToken);
@@ -322,17 +483,16 @@ internal sealed class ExerciseService(
                 new LessonCompletedEvent(userId, exercise.LessonId, lessonBestScore), cancellationToken);
         }
 
-        // Atomically commit lesson/skill progress + the exercise/lesson outbox rows.
         await databaseContext.SaveChangesAsync(cancellationToken);
 
         if (lessonWasCompleted)
         {
-            // Skill completion is decided by querying the now-committed lesson progress, so it
-            // must run after the commit above; its skill.completed outbox row is flushed below.
             await PublishSkillCompletionIfFinishedAsync(userId, exercise.LessonId, cancellationToken);
 
             await databaseContext.SaveChangesAsync(cancellationToken);
         }
+
+        await writeScope.CommitAsync(cancellationToken);
 
         return new ExerciseSubmissionResultDto(
             evaluationResult.IsCorrect,
@@ -344,32 +504,47 @@ internal sealed class ExerciseService(
     }
 
     /// <summary>
-    /// Updates lesson progress after an answer submission.
-    /// Lesson is marked complete once the user has at least one attempt (correct or wrong)
-    /// for EVERY exercise in the lesson — a lesson can always be passed by going through it.
-    /// BestScore = max(existing best, current score).
-    /// Returns (transitionedToCompleted, bestScore).
+    /// Folds one graded submission into the learner's lesson progress and reports whether the lesson
+    /// has just been completed, along with its best score.
+    ///
+    /// <para>
+    /// <b>Completed means every exercise attempted, right or wrong.</b> The gate counts distinct
+    /// exercises with at least one attempt, so a lesson can always be passed by working through it.
+    /// <c>BestScore</c> is the maximum of the existing best and this submission and therefore never
+    /// falls: a weaker retry is practice, not a demotion.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Phase 40.16: the version stamp is refreshed only when the row actually advances</b> — a new
+    /// best score, or the transition to completed — and set once at creation. Refreshing it on every
+    /// submission would relabel a completion earned on version 1 as a completion of version 3, which is
+    /// the retroactive rewrite this phase exists to stop, arrived at from the progress side.
+    /// </para>
+    ///
+    /// <para>
+    /// A lesson with no exercises at all never completes, which keeps an empty draft lesson from
+    /// counting towards a skill.
+    /// </para>
     /// </summary>
     private async Task<(bool TransitionedToCompleted, int BestScore)> UpdateLessonProgressAsync(
         Guid userId,
         Guid lessonId,
         int currentScore,
+        Guid? lessonVersionId,
         CancellationToken cancellationToken = default)
     {
-        // Count how many distinct exercises exist in this lesson.
         var totalExercises = await databaseContext.Exercises
-            .Where(e => e.LessonId == lessonId)
+            .Where(exercise => exercise.LessonId == lessonId)
             .CountAsync(cancellationToken);
 
-        // Count how many distinct exercises the user has attempted (correct or wrong).
         var attemptedExercises = await databaseContext.UserExerciseAttempts
-            .Where(a => a.UserId == userId)
+            .Where(attempt => attempt.UserId == userId)
             .Join(databaseContext.Exercises,
                 attempt => attempt.ExerciseId,
                 exercise => exercise.Id,
                 (attempt, exercise) => exercise)
-            .Where(e => e.LessonId == lessonId)
-            .Select(e => e.Id)
+            .Where(exercise => exercise.LessonId == lessonId)
+            .Select(exercise => exercise.Id)
             .Distinct()
             .CountAsync(cancellationToken);
 
@@ -390,6 +565,7 @@ internal sealed class ExerciseService(
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 LessonId = lessonId,
+                LessonVersionId = lessonVersionId,
                 Status = newStatus,
                 BestScore = bestScore,
                 CompletedAt = allAttempted ? DateTime.UtcNow : null
@@ -399,6 +575,7 @@ internal sealed class ExerciseService(
         }
         else
         {
+            var bestScoreImproved = currentScore > progressRecord.BestScore;
             bestScore = Math.Max(progressRecord.BestScore, currentScore);
             progressRecord.BestScore = bestScore;
 
@@ -407,6 +584,11 @@ internal sealed class ExerciseService(
                 progressRecord.Status = LessonProgressStatuses.Completed;
                 progressRecord.CompletedAt = DateTime.UtcNow;
                 transitionedToCompleted = true;
+            }
+
+            if (bestScoreImproved || transitionedToCompleted)
+            {
+                progressRecord.LessonVersionId = lessonVersionId;
             }
         }
 
@@ -424,6 +606,16 @@ internal sealed class ExerciseService(
         return (transitionedToCompleted, bestScore);
     }
 
+    /// <summary>
+    /// Opens the lesson that follows the one just completed, creating its progress row if the learner
+    /// has none.
+    ///
+    /// <para>
+    /// Only a <c>Locked</c> row is moved to <c>Available</c>; a row already available, in progress or
+    /// completed is left alone, so unlocking can never walk a learner's status backwards when they
+    /// re-complete an earlier lesson.
+    /// </para>
+    /// </summary>
     private async Task UnlockNextLessonInTopicAsync(
         Guid userId,
         Lesson completedLesson,
@@ -453,16 +645,22 @@ internal sealed class ExerciseService(
     }
 
     /// <summary>
-    /// Resolves the lesson that follows <paramref name="completedLesson"/> in the skill's global
-    /// order (topics by OrderInSkill, then lessons by OrderInTopic). This rolls over topic
-    /// boundaries: finishing a topic's last lesson unlocks the first lesson of the next topic.
+    /// The lesson following <paramref name="completedLesson"/> in the skill's global order — topics by
+    /// their position in the skill, then lessons by their position in the topic — or
+    /// <see langword="null"/> at the end of the skill.
+    ///
+    /// <para>
+    /// <b>It rolls over topic boundaries deliberately.</b> Finishing a topic's last lesson unlocks the
+    /// first lesson of the next topic, so a learner is never left with a completed topic and nothing
+    /// open. Row id is the final tie-break at every level, so two lessons sharing a position cannot
+    /// swap places between calls and hand the learner a different "next" each time.
+    /// </para>
     /// </summary>
     private async Task<Lesson?> ResolveNextLessonInSkillAsync(
         Lesson completedLesson,
         CancellationToken cancellationToken)
     {
-        // Next lesson within the same topic wins first.
-        var nextInTopic = await databaseContext.Lessons
+        var nextInTopic = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == completedLesson.TopicId
                         && lesson.OrderInTopic > completedLesson.OrderInTopic)
             .OrderBy(lesson => lesson.OrderInTopic)
@@ -471,7 +669,6 @@ internal sealed class ExerciseService(
 
         if (nextInTopic is not null) return nextInTopic;
 
-        // Topic exhausted → find the first lesson of the next topic in the same skill.
         var currentTopic = await databaseContext.Topics
             .FirstOrDefaultAsync(topic => topic.Id == completedLesson.TopicId, cancellationToken);
 
@@ -486,13 +683,28 @@ internal sealed class ExerciseService(
 
         if (nextTopic is null) return null;
 
-        return await databaseContext.Lessons
+        return await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => lesson.TopicId == nextTopic.Id)
             .OrderBy(lesson => lesson.OrderInTopic)
             .ThenBy(lesson => lesson.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Emits <c>skill.completed</c> when the lesson just finished was the skill's last outstanding one.
+    ///
+    /// <para>
+    /// <b>Recomputed from committed progress rows, never counted incrementally.</b> That makes it
+    /// idempotent under a replayed submission, and it is why the caller runs this after flushing the
+    /// progress change rather than before. The lesson total is resolved for tenant overrides so an
+    /// organization that overrode a lesson is not asked to complete both copies of it.
+    /// </para>
+    ///
+    /// <para>
+    /// A skill with no lessons emits nothing — "completed nothing" is not an achievement — and a lesson
+    /// whose skill cannot be resolved is silently skipped rather than failing the submission.
+    /// </para>
+    /// </summary>
     private async Task PublishSkillCompletionIfFinishedAsync(
         Guid userId,
         Guid lessonId,
@@ -513,7 +725,7 @@ internal sealed class ExerciseService(
             .Select(topic => topic.Id)
             .ToListAsync(cancellationToken);
 
-        var totalLessonCount = await databaseContext.Lessons
+        var totalLessonCount = await databaseContext.Lessons.ResolveOverrides(databaseContext)
             .Where(lesson => topicIds.Contains(lesson.TopicId))
             .CountAsync(cancellationToken);
 

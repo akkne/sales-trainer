@@ -33,6 +33,12 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.UserDeleted,
     ];
 
+    /// <summary>
+    /// Identity users are cross-org identities with no organization column
+    /// (docs/TENANCY/TENANCY.md §4.2), so this replica projection is platform-global by design.
+    /// </summary>
+    protected override bool RequiresOrganization => false;
+
     protected override async Task HandleAsync(
         EventEnvelope envelope,
         IServiceProvider scopedServices,
@@ -54,11 +60,6 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
                     new UserProfile(payload.UserId, payload.Email, payload.DisplayName ?? string.Empty),
                     cancellationToken);
 
-                // Onboarding side channel: now that the replica carries the recipient's email, send a
-                // one-time welcome notification (in-app + email). This lives here rather than in
-                // NotificationEventConsumer because that consumer shares a group with this one on a
-                // disjoint topic set — both subscribing to user.registered would split the partitions.
-                // Domain-level dedup on the user id makes a Kafka replay a no-op.
                 await SendWelcomeNotificationAsync(scopedServices, payload, cancellationToken);
                 break;
             }
@@ -90,6 +91,18 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
         }
     }
 
+    /// <summary>
+    /// The onboarding side channel, deliberately triggered from this consumer rather than from
+    /// <see cref="NotificationEventConsumer"/>. The two share a Kafka group on disjoint topic sets,
+    /// so <c>user.registered</c> can only be owned by one of them — and it has to be this one,
+    /// because the welcome email needs the replica row that the caller has just written.
+    ///
+    /// <para>
+    /// Deduped on the user id, so a Kafka replay re-upserts the replica but never re-welcomes.
+    /// Best-effort by design: a failure is logged and swallowed so it can never fail the replica
+    /// projection the caller has already persisted, which every later email depends on.
+    /// </para>
+    /// </summary>
     private async Task SendWelcomeNotificationAsync(
         IServiceProvider scopedServices,
         UserRegisteredEvent payload,
@@ -106,15 +119,12 @@ internal sealed class UserReplicaConsumer : KafkaConsumerBackgroundService
                     NotificationTitles.Welcome,
                     "Welcome to Sellevate! Your account is ready — start your first training session.",
                     NotificationActionRoutes.Home,
-                    // Dedupe on the user id so a redelivered registration event never re-welcomes.
                     payload.UserId.ToString(),
                     SendEmail: true),
                 cancellationToken);
         }
         catch (Exception exception)
         {
-            // The welcome message is a best-effort side channel; never let it fail the critical
-            // replica projection (which has already been persisted above).
             Logger.LogError(
                 exception,
                 "Failed to send welcome notification to user {UserId}",

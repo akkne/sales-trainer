@@ -13,12 +13,16 @@ public interface IDelayedChatEmailScheduler
     /// <summary>Record that <paramref name="readerUserId"/> read <paramref name="conversationId"/>
     /// up to <paramref name="readAt"/>, suppressing pending emails for messages sent at or before it.</summary>
     Task MarkConversationReadAsync(
-        Guid readerUserId, Guid? conversationId, DateTime readAt, CancellationToken cancellationToken = default);
+        Guid organizationId,
+        Guid readerUserId,
+        Guid? conversationId,
+        DateTime readAt,
+        CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically claim up to <paramref name="maxItems"/> pending emails whose grace period
+    /// <summary>Atomically claim up to <paramref name="maximumItems"/> pending emails whose grace period
     /// has elapsed by <paramref name="asOf"/>. Claimed items are removed from the queue.</summary>
     Task<IReadOnlyList<PendingChatEmail>> ClaimDueAsync(
-        DateTime asOf, int maxItems, CancellationToken cancellationToken = default);
+        DateTime asOf, int maximumItems, CancellationToken cancellationToken = default);
 
     /// <summary>True if the conversation was read at or after the message was sent (so no email is due).</summary>
     Task<bool> WasReadAsync(PendingChatEmail pending, CancellationToken cancellationToken = default);

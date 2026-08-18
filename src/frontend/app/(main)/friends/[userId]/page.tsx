@@ -96,16 +96,8 @@ export default function PublicProfilePage() {
 
             {/* Body */}
             <div className="frd-profile-body">
-                {/* Stats grid — 2-up; no achievement count (removed in P3) */}
                 <p className="frd-profile-section">Статистика</p>
                 <div className="frd-profile-stats">
-                    <StatTile
-                        label="Лучшая серия"
-                        value={profile.currentStreakDayCount}
-                        unit="д"
-                        tone="rust"
-                        icon={<Icon name="flame" size="xs" />}
-                    />
                     <StatTile
                         label="Средний балл"
                         value={profile.averageExerciseScore}

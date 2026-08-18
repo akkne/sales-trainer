@@ -45,6 +45,9 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Outcome")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -63,11 +66,16 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("ContactId");
 
-                    b.HasIndex("CompanyId", "OccurredAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("IX_CallLogEntries_CompanyId_OccurredAt");
+                    b.HasIndex("OrganizationId", "UserId")
+                        .HasDatabaseName("IX_CallLogEntries_OrganizationId_UserId");
+
+                    b.HasIndex("OrganizationId", "CompanyId", "OccurredAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_CallLogEntries_OrganizationId_CompanyId_OccurredAt");
 
                     b.ToTable("CallLogEntries", (string)null);
                 });
@@ -109,6 +117,9 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ReadinessGeneratedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -133,10 +144,12 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NextActionAt")
+                    b.HasIndex("OrganizationId", "NextActionAt")
+                        .HasDatabaseName("IX_Companies_OrganizationId_NextActionAt")
                         .HasFilter("\"NextActionAt\" IS NOT NULL");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("OrganizationId", "UserId")
+                        .HasDatabaseName("IX_Companies_OrganizationId_UserId");
 
                     b.ToTable("Companies", (string)null);
                 });
@@ -165,6 +178,9 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasDefaultValue("");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Position")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -180,9 +196,14 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("IX_CompanyContacts_CompanyId_CreatedAt");
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .HasDatabaseName("IX_CompanyContacts_OrganizationId_UserId");
+
+                    b.HasIndex("OrganizationId", "CompanyId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_CompanyContacts_OrganizationId_CompanyId_CreatedAt");
 
                     b.ToTable("CompanyContacts", (string)null);
                 });
@@ -211,6 +232,9 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Personality")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -226,9 +250,14 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("IX_CompanyPersonas_CompanyId_CreatedAt");
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .HasDatabaseName("IX_CompanyPersonas_OrganizationId_UserId");
+
+                    b.HasIndex("OrganizationId", "CompanyId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_CompanyPersonas_OrganizationId_CompanyId_CreatedAt");
 
                     b.ToTable("CompanyPersonas", (string)null);
                 });
@@ -255,14 +284,22 @@ namespace Sellevate.Company.Infrastructure.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
-                        .IsDescending(false, true)
-                        .HasDatabaseName("IX_PracticeCalls_CompanyId_CreatedAt");
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .HasDatabaseName("IX_PracticeCalls_OrganizationId_UserId");
+
+                    b.HasIndex("OrganizationId", "CompanyId", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_PracticeCalls_OrganizationId_CompanyId_CreatedAt");
 
                     b.ToTable("PracticeCalls", (string)null);
                 });

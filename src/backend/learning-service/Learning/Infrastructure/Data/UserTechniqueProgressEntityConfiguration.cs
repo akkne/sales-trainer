@@ -4,6 +4,9 @@ using Sellevate.Learning.Features.Techniques.Models;
 
 namespace Sellevate.Learning.Infrastructure.Data;
 
+/// <summary>
+/// Maps one learner's standing on one technique. Organization first, per docs/TENANCY/TENANCY.md §3.
+/// </summary>
 public sealed class UserTechniqueProgressEntityConfiguration : IEntityTypeConfiguration<UserTechniqueProgress>
 {
     public void Configure(EntityTypeBuilder<UserTechniqueProgress> builder)
@@ -12,9 +15,12 @@ public sealed class UserTechniqueProgressEntityConfiguration : IEntityTypeConfig
 
         builder.HasKey(progress => progress.Id);
 
-        builder.HasIndex(progress => new { progress.UserId, progress.TechniqueId })
+        builder.Property(progress => progress.OrganizationId)
+            .IsRequired();
+
+        builder.HasIndex(progress => new { progress.OrganizationId, progress.UserId, progress.TechniqueId })
             .IsUnique();
 
-        builder.HasIndex(progress => progress.UserId);
+        builder.HasIndex(progress => new { progress.OrganizationId, progress.UserId });
     }
 }

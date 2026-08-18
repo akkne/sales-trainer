@@ -27,6 +27,7 @@ public class IntegrationTestSetup
 
         await Postgres.StartAsync();
 
+        TestWebApplicationFactory.ExportSettingsToEnvironment(Postgres.GetConnectionString());
         Factory = new TestWebApplicationFactory(Postgres.GetConnectionString());
 
         using var scope = Factory.Services.CreateScope();

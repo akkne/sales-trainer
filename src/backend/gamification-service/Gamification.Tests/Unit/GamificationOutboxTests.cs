@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Gamification.Eventing;
 
 namespace Sellevate.Gamification.Tests.Unit;
@@ -14,7 +15,7 @@ public sealed class GamificationOutboxTests
     public async Task Publisher_EnqueuesAnOutboxRowThatTheStoreReadsBackAsPending()
     {
         await using var databaseContext = GamificationDbContextFactory.CreateInMemory();
-        var writer = new GamificationOutboxWriter(databaseContext);
+        var writer = new GamificationOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaGamificationEventPublisher(writer);
         var userId = Guid.NewGuid();
 
@@ -31,10 +32,33 @@ public sealed class GamificationOutboxTests
     }
 
     [Test]
+    public async Task Enqueue_StampsOrganizationId_FromTheCurrentTenantContext_OnBothTheRowAndTheEnvelope()
+    {
+        var organizationId = Guid.NewGuid();
+        var tenantContext = new TenantContext();
+        tenantContext.SetOrganization(organizationId);
+
+        await using var databaseContext = GamificationDbContextFactory.CreateInMemory();
+        var writer = new GamificationOutboxWriter(databaseContext, tenantContext);
+        var publisher = new KafkaGamificationEventPublisher(writer);
+
+        await publisher.PublishExperiencePointsGrantedAsync(new ExperiencePointsGrantedEvent(Guid.NewGuid(), 40, "exercise"));
+        await databaseContext.SaveChangesAsync();
+
+        var store = new GamificationOutboxStore(databaseContext);
+        var pending = await store.GetPendingAsync(10);
+
+        pending.Should().ContainSingle();
+        pending[0].OrganizationId.Should().Be(organizationId);
+        var envelope = System.Text.Json.JsonSerializer.Deserialize<EventEnvelope>(pending[0].Payload, EventEnvelope.JsonOptions);
+        envelope!.OrganizationId.Should().Be(organizationId);
+    }
+
+    [Test]
     public async Task RelayProcessor_ForwardsThePendingRowAndMarksItDispatched()
     {
         await using var databaseContext = GamificationDbContextFactory.CreateInMemory();
-        var writer = new GamificationOutboxWriter(databaseContext);
+        var writer = new GamificationOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaGamificationEventPublisher(writer);
         await publisher.PublishAchievementUnlockedAsync(new AchievementUnlockedEvent(Guid.NewGuid(), "first_lesson", "First step"));
         await databaseContext.SaveChangesAsync();
@@ -54,7 +78,7 @@ public sealed class GamificationOutboxTests
     public async Task EnqueuedPayload_IsAValidEventEnvelopeForTheConsumerContract()
     {
         await using var databaseContext = GamificationDbContextFactory.CreateInMemory();
-        var writer = new GamificationOutboxWriter(databaseContext);
+        var writer = new GamificationOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaGamificationEventPublisher(writer);
         var userId = Guid.NewGuid();
         await publisher.PublishStreakMilestoneAsync(new StreakMilestoneEvent(userId, 7, 50));

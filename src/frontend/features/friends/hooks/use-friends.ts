@@ -41,15 +41,6 @@ export interface PublicProfile {
     friendshipId?: string | null;
 }
 
-export interface FriendLeaderboardEntry {
-    userId: string;
-    displayName: string;
-    totalXpAmount: number;
-    rank: number;
-    isCurrentUser: boolean;
-    avatarUrl?: string | null;
-}
-
 export interface FriendActivity {
     userId: string;
     displayName: string;
@@ -88,13 +79,6 @@ export function usePublicProfile(userId: string) {
     });
 }
 
-export function useFriendLeaderboard() {
-    return useQuery({
-        queryKey: ["friendLeaderboard"],
-        queryFn: () => apiClient.get<FriendLeaderboardEntry[]>("/friends/leaderboard"),
-    });
-}
-
 export function useFriendActivity() {
     return useQuery({
         queryKey: ["friendActivity"],
@@ -126,7 +110,6 @@ export function useAcceptFriendRequest() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["friends"] });
             queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
-            queryClient.invalidateQueries({ queryKey: ["friendLeaderboard"] });
         },
     });
 }
@@ -166,7 +149,6 @@ export function useRemoveFriend() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["friends"] });
             queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
-            queryClient.invalidateQueries({ queryKey: ["friendLeaderboard"] });
         },
     });
 }

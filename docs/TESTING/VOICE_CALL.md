@@ -6,8 +6,9 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 ## Connect
 
 - [ ] Mode card on `/dialog/[bundleId]` shows «Позвонить» next to «Чат»
-- [ ] «Позвонить» → status pill «Соединение...», ringback tone loops (1s beep / 4s pause)
-- [ ] First AI reply: tone stops, status «На связи», call timer starts (mm:ss mono)
+- [ ] «Позвонить» → status pill «Соединение...», **no sound at all** (calls are silent — no ringback, no busy tone)
+- [ ] Session ready: status «На связи», call timer starts (mm:ss mono)
+- [ ] Voice practice of a custom scenario (`?session=…`): the timer starts too — the call does not stay on «Соединение…»
 - [ ] Mobile: short vibration on connect
 - [ ] Header shows `X/Y МИН СЕГОДНЯ` when daily limit configured
 
@@ -33,11 +34,19 @@ Chrome/Edge desktop (Web Speech API) or configured Deepgram.
 
 ## Hangup & feedback
 
-- [ ] «Положить трубку» → triple busy beep, status «Звонок завершён», «Готовим разбор...»
-- [ ] Feedback modal opens with score/progress points; «Закрыть разбор» resets to idle
-- [ ] AI-initiated end (endCall=true) triggers the same completion flow
-- [ ] Empty call (no phrases) completes without a feedback modal
-- [ ] Leaving the page mid-call: session completed in background, no stuck tones
+- [ ] «Положить трубку» → status «Звонок завершён», «Готовим разбор...» (silently)
+- [ ] Feedback modal opens with the score and the analysis; «Закрыть разбор» resets to idle
+- [ ] **No XP anywhere for a call**: no «+N XP получено» in the modal, no `+N` badge in the session
+      history — even though the backend still returns `xpEarned`
+- [ ] AI-initiated end (endCall=true) triggers the same completion flow and releases the mic
+- [ ] Empty call (no phrases) completes without a feedback modal, hint reads «Разбирать нечего…» — never a stuck «Готовим разбор…»
+- [ ] **Second call**: «Позвонить снова» connects and can be hung up again (a new session each time)
+- [ ] Custom scenario (`?session=…`): after the call the CTA is «К сценариям», not «Позвонить снова»;
+      re-opening the page on a played-out session refuses to dial with «Этот сценарий уже отыгран»
+- [ ] A turn the backend refuses (409) or that returns nothing shows an error — the persona is never
+      silently mute
+- [ ] Analysis failure/timeout → error badge + «Повторить разбор»; the retry produces the feedback
+- [ ] Leaving the page mid-call: session completed in background
 
 ## Limits
 

@@ -1,21 +1,54 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Infrastructure.Data;
 using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Tests.Helpers;
 
+/// <summary>
+/// Builds <see cref="CompanyDbContext"/> instances for the unit tests and seeds rows into them.
+///
+/// <para>
+/// Every context gets the real <see cref="TenantSaveChangesInterceptor"/>, not a stand-in: it is what
+/// stamps <c>OrganizationId</c> on an entity <c>CompanyService</c> creates without naming one, and
+/// what raises <c>CrossTenantWriteException</c> on a foreign one. Leaving it out would make every
+/// tenancy test pass with <c>Guid.Empty</c>.
+/// </para>
+/// </summary>
 internal static class TestCompanyDatabaseFactory
 {
-    public static CompanyDbContext CreateInMemory(string? databaseName = null)
+    /// <summary>
+    /// Phase 40.12. The organization every unit-test row belongs to unless a test names another
+    /// one. Company-service's scope is double — organization AND user — so a test fixture has to
+    /// pin both halves, not just the user id it always pinned before.
+    /// </summary>
+    public static readonly Guid DefaultOrganizationId = Guid.Parse("0d9b8f8e-0000-4000-8000-000000000012");
+
+    public static CompanyDbContext CreateInMemory(string? databaseName = null, Guid? organizationId = null)
+        => CreateInMemory(BuildTenantContext(organizationId), databaseName);
+
+    /// <summary>
+    /// InMemory context for a caller that wants to control the tenant context itself — a different
+    /// organization, or no organization at all (the "unset tenant reads nothing" case).
+    /// </summary>
+    public static CompanyDbContext CreateInMemory(ITenantContext tenantContext, string? databaseName = null)
     {
         var options = new DbContextOptionsBuilder<CompanyDbContext>()
             .UseInMemoryDatabase(databaseName ?? $"company-tests-{Guid.NewGuid()}")
             .EnableSensitiveDataLogging()
+            .AddInterceptors(new TenantSaveChangesInterceptor(tenantContext))
             .Options;
 
-        return new CompanyDbContext(options);
+        return new CompanyDbContext(options, tenantContext);
+    }
+
+    public static TenantContext BuildTenantContext(Guid? organizationId = null)
+    {
+        var tenantContext = new TenantContext();
+        tenantContext.SetOrganization(organizationId ?? DefaultOrganizationId);
+        return tenantContext;
     }
 
     /// <summary>
@@ -25,15 +58,19 @@ internal static class TestCompanyDatabaseFactory
     /// enforce foreign keys) for the ContactId concurrent-delete race — see
     /// CompanyServiceTests' *_translates_DbUpdateException_on_ContactId_fk_race_* tests.
     /// </summary>
-    public static CompanyDbContext CreateInMemoryWithInterceptor(string databaseName, ISaveChangesInterceptor interceptor)
+    public static CompanyDbContext CreateInMemoryWithInterceptor(
+        string databaseName,
+        ISaveChangesInterceptor interceptor,
+        Guid? organizationId = null)
     {
+        var tenantContext = BuildTenantContext(organizationId);
         var options = new DbContextOptionsBuilder<CompanyDbContext>()
             .UseInMemoryDatabase(databaseName)
             .EnableSensitiveDataLogging()
-            .AddInterceptors(interceptor)
+            .AddInterceptors(new TenantSaveChangesInterceptor(tenantContext), interceptor)
             .Options;
 
-        return new CompanyDbContext(options);
+        return new CompanyDbContext(options, tenantContext);
     }
 
     public static async Task<CompanyEntity> SeedCompanyAsync(

@@ -411,7 +411,7 @@ function DetailPanel({
                                     className="chip"
                                     style={{
                                         background: "var(--primary-soft)",
-                                        color: "var(--primary-strong)",
+                                        color: "var(--primary-ink)",
                                         border: "1px solid var(--primary-tint-border-2)",
                                     }}
                                 >

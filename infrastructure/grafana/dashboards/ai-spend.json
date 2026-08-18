@@ -1,0 +1,209 @@
+{
+  "title": "Sellevate AI Spend",
+  "uid": "sellevate-ai-spend",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "description": "Phase 40.33. Platform-wide AI spend, so the curve is visible before the provider's invoice is. Deliberately carries NO per-organization series: a customer id in a Prometheus label would put identities and unbounded cardinality into the monitoring store (docs/MONITORING.md). Per-organization spend is GET /admin/ai-usage, served from ai-service's AiUsageRecords rows.",
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "LLM Tokens (24h)",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_llm_tokens_total{job=\"sellevate-ai\"}[1d]))",
+          "legendFormat": "tokens"
+        }
+      ],
+      "description": "Prompt + completion, every organization, every model."
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "LLM Calls (24h)",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_llm_calls_total{job=\"sellevate-ai\"}[1d]))",
+          "legendFormat": "calls"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Speech Characters (24h)",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_speech_characters_total{job=\"sellevate-ai\"}[1d]))",
+          "legendFormat": "chars"
+        }
+      ],
+      "description": "Synthesized (tts) plus transcribed (stt). Yandex SpeechKit bills per character."
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Quota Refusals (24h)",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_quota_refusals_total{job=\"sellevate-ai\"}[1d]))",
+          "legendFormat": "refusals"
+        }
+      ],
+      "description": "Calls refused because an organization reached its allowance. A rising line is a commercial signal, not an incident \u2014 do not alert on it."
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Token Burn Rate by Direction",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (direction) (rate(ai_llm_tokens_total{job=\"sellevate-ai\"}[15m]))",
+          "legendFormat": "{{direction}}"
+        }
+      ],
+      "description": "Tokens per second. The shape that tells you a customer started a batch."
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Speech Characters by Kind",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (kind) (rate(ai_speech_characters_total{job=\"sellevate-ai\"}[15m]))",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Refusals by Resource and Window",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (resource, period) (increase(ai_quota_refusals_total{job=\"sellevate-ai\"}[1h]))",
+          "legendFormat": "{{resource}} / {{period}}"
+        }
+      ],
+      "description": "month_batch_reserve means a content pipeline stopped while conversations kept running \u2014 the deliberate degradation order, not a fault."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Estimated vs Reported Accounting",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (accounting) (increase(ai_llm_calls_total{job=\"sellevate-ai\"}[1h]))",
+          "legendFormat": "{{accounting}}"
+        }
+      ],
+      "description": "Streamed dialog turns are estimated from characters; everything else carries the provider's own usage block. If 'estimated' ever dominates, the spend report is a guess and stream_options support is worth revisiting."
+    }
+  ]
+}

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Tests.Helpers;
 
@@ -15,7 +16,7 @@ public sealed class KafkaUserEventPublisherTests
     public async Task PublishRegistered_EnqueuesAnOutboxRowThatTheStoreReadsBackAsPending()
     {
         await using var databaseContext = InMemoryDbContextFactory.Create();
-        var writer = new IdentityOutboxWriter(databaseContext);
+        var writer = new IdentityOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaUserEventPublisher(writer);
         var userId = Guid.NewGuid();
 
@@ -35,7 +36,7 @@ public sealed class KafkaUserEventPublisherTests
     public async Task PublishAvatarChanged_EnqueuesWithAvatarChangedTopic()
     {
         await using var databaseContext = InMemoryDbContextFactory.Create();
-        var writer = new IdentityOutboxWriter(databaseContext);
+        var writer = new IdentityOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaUserEventPublisher(writer);
         var userId = Guid.NewGuid();
 
@@ -54,7 +55,7 @@ public sealed class KafkaUserEventPublisherTests
     public async Task RelayProcessor_ForwardsThePendingRowAndMarksItDispatched()
     {
         await using var databaseContext = InMemoryDbContextFactory.Create();
-        var writer = new IdentityOutboxWriter(databaseContext);
+        var writer = new IdentityOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaUserEventPublisher(writer);
         await publisher.PublishRegisteredAsync(new UserRegisteredEvent(Guid.NewGuid(), "x@y.com", "Bob", null));
         await databaseContext.SaveChangesAsync();
@@ -74,7 +75,7 @@ public sealed class KafkaUserEventPublisherTests
     public async Task EnqueuedPayload_IsAValidEventEnvelopeWithCorrectData()
     {
         await using var databaseContext = InMemoryDbContextFactory.Create();
-        var writer = new IdentityOutboxWriter(databaseContext);
+        var writer = new IdentityOutboxWriter(databaseContext, new TenantContext());
         var publisher = new KafkaUserEventPublisher(writer);
         var userId = Guid.NewGuid();
         await publisher.PublishRegisteredAsync(new UserRegisteredEvent(userId, "test@example.com", "Test User", null));
@@ -95,7 +96,7 @@ public sealed class KafkaUserEventPublisherTests
     public async Task OutboxRoundTrip_EnqueueGetPendingMarkDispatched()
     {
         await using var databaseContext = InMemoryDbContextFactory.Create();
-        var writer = new IdentityOutboxWriter(databaseContext);
+        var writer = new IdentityOutboxWriter(databaseContext, new TenantContext());
         var store = new IdentityOutboxStore(databaseContext);
         var userId = Guid.NewGuid();
 

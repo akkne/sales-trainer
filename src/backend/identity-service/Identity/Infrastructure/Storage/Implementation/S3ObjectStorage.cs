@@ -6,7 +6,17 @@ using Sellevate.Identity.Infrastructure.Storage.Abstract;
 
 namespace Sellevate.Identity.Infrastructure.Storage.Implementation;
 
-public sealed class S3ObjectStorage : IObjectStorage
+/// <summary>
+/// S3-compatible implementation, used against MinIO in every environment today. Registered as a
+/// singleton over a configuration snapshot: the underlying client is thread-safe and pools its
+/// connections, so a per-request instance would only churn sockets.
+///
+/// <para>
+/// <c>EnsureBucketExistsAsync</c> is idempotent by swallowing exactly the two "already exists" error
+/// codes and nothing else, which is what makes it safe to call on every startup.
+/// </para>
+/// </summary>
+internal sealed class S3ObjectStorage : IObjectStorage
 {
     private readonly IAmazonS3 _client;
     private readonly string _bucket;
@@ -19,7 +29,7 @@ public sealed class S3ObjectStorage : IObjectStorage
             BuildClientConfig(configuration));
     }
 
-    public static AmazonS3Config BuildClientConfig(S3Configuration configuration) =>
+    private static AmazonS3Config BuildClientConfig(S3Configuration configuration) =>
         new AmazonS3Config
         {
             ServiceURL = configuration.Endpoint,
