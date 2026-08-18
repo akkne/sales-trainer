@@ -14,6 +14,7 @@ using Sellevate.Ai.Features.ContentGeneration;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Evaluation;
+using Sellevate.Ai.Features.Quotas;
 using Sellevate.Ai.Features.Transcription;
 using Sellevate.Ai.Features.Voice;
 using Sellevate.Ai.Infrastructure.Data;
@@ -132,7 +133,8 @@ builder.Services
     .AddEvaluationFeatureServices()
     .AddCompanyAiFeatureServices()
     .AddContentGenerationFeatureServices()
-    .AddContentAdaptationFeatureServices();
+    .AddContentAdaptationFeatureServices()
+    .AddQuotaFeatureServices(builder.Configuration);
 
 // AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
 // HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.
