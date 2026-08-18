@@ -78,7 +78,7 @@ public sealed class OrganizationProfileController(IOrganizationProfileService or
     /// How many questions to return. Defaults to three and is clamped to one … seven; the small
     /// default is the roadmap's «5 минут вместо часа» expressed as an integer.
     /// </param>
-    [HttpGet("gaps")]
+    [HttpGet(RouteConstants.OrganizationProfileGaps)]
     public async Task<ActionResult<OrganizationProfileGapsDto>> GetGaps(
         [FromQuery] int limit = OrganizationProfileGapInspector.DefaultQuestionLimit,
         CancellationToken cancellationToken = default)
@@ -99,7 +99,7 @@ public sealed class OrganizationProfileController(IOrganizationProfileService or
     /// Phase 40.29. «Вот что ИИ вытащил из ваших материалов» — what promoting this draft would do to
     /// each field, and which questions would still be left afterwards. Writes nothing.
     /// </summary>
-    [HttpPost("draft")]
+    [HttpPost(RouteConstants.OrganizationProfileDraft)]
     public async Task<ActionResult<OrganizationProfileDraftPreviewDto>> PreviewDraft(
         [FromBody] ExtractedProfileDraftDto request,
         CancellationToken cancellationToken)
@@ -110,7 +110,7 @@ public sealed class OrganizationProfileController(IOrganizationProfileService or
     /// that already had a value is replaced only when its name appears in <c>acceptedFields</c>, and
     /// <c>banned_claims</c> is never replaced at all.
     /// </summary>
-    [HttpPost("draft/apply")]
+    [HttpPost(RouteConstants.OrganizationProfileDraftApply)]
     [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
     public async Task<ActionResult<OrganizationProfileDraftAppliedDto>> ApplyDraft(
         [FromBody] ApplyOrganizationProfileDraftRequestDto request,

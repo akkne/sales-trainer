@@ -11,9 +11,16 @@ namespace Sellevate.Organization.Features.Organizations.Endpoints;
 /// Manages the tenant registry (create/list/get/update/suspend/reactivate an organization).
 /// Not tenant-scoped: these routes are for the platform to administer organizations, not for an
 /// organization to act on itself, so they carry no <c>[TenantScoped]</c> gate. Phase 40.9 closes
-/// the placeholder that used to let any authenticated user in — the whole controller is now
-/// <c>RequireSuperAdmin</c>, which is also why addressing an organization by a route id is
-/// legitimate here and nowhere else (docs/TENANCY/TENANCY.md §1.3, docs/DECISIONS.md).
+/// the placeholder that used to let any authenticated user in — the whole controller is gated, which
+/// is also why addressing an organization by a route id is legitimate here and nowhere else
+/// (docs/TENANCY/TENANCY.md §1.3, docs/DECISIONS.md).
+///
+/// <para>
+/// The 2026-08-16 role split moved that gate from <c>RequireSuperAdmin</c> to
+/// <c>RequirePlatformAdmin</c>: running the registry is ordinary platform administration, and only
+/// adding or removing users is superadmin-exclusive. It is still Sellevate-staff-only — no
+/// organization-scoped role satisfies it.
+/// </para>
 /// </summary>
 [ApiController]
 [Route(RouteConstants.OrganizationsBase)]

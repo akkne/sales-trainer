@@ -46,10 +46,6 @@ builder.Services.AddDbContext<OrganizationDbContext>((serviceProvider, databaseO
 
 builder.Services.AddOrganizationFeatureServices();
 
-// organization-service only *produces* Kafka events (organization.created/updated/suspended) —
-// it never consumes, so it registers the publisher + topic provisioner directly rather than the
-// full AddSellevateEventing helper, which also wires the Redis-backed consumer idempotency store
-// this service has never needed. Mirrors company-service's rationale (see its Program.cs).
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddHostedService<KafkaTopicProvisioner>();
 builder.Services.AddSingleton<KafkaEventPublisher>();
@@ -85,10 +81,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Phase 40.9 stopped the tenant registry being world-writable; the 2026-08-16 role split moved it
-// from `RequireSuperAdmin` to `RequirePlatformAdmin`, since running the registry is ordinary
-// platform administration and only adding/removing users is superadmin-exclusive. The policy set
-// is declared identically in every service so the same token means the same thing everywhere.
 builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")

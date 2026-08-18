@@ -2,6 +2,16 @@ using Npgsql;
 
 namespace Sellevate.Organization.Infrastructure.Data;
 
+/// <summary>
+/// Creates the service's own Postgres database on first boot, before EF migrations run — migrations can
+/// create tables but not the database that holds them.
+///
+/// <para>
+/// Connects to the <c>postgres</c> maintenance database to do it, and treats a
+/// <c>DuplicateDatabase</c> error as success: several services boot at once against the same server, so
+/// two of them racing on <c>CREATE DATABASE</c> is the expected case rather than a fault.
+/// </para>
+/// </summary>
 public static class DatabaseBootstrapper
 {
     public static async Task EnsureDatabaseExistsAsync(string connectionString, ILogger logger, CancellationToken cancellationToken = default)

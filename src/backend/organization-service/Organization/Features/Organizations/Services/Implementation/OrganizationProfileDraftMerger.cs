@@ -47,6 +47,13 @@ internal static class OrganizationProfileDraftMerger
     /// Plans the merge without performing it. The preview route returns the plan; the apply route
     /// takes the same plan and saves <see cref="OrganizationProfileMergePlan.Merged"/>. One function
     /// for both, so the screen cannot describe a merge different from the one that runs.
+    ///
+    /// <para>
+    /// The returned proposals are ordered by the interview's ordering
+    /// (<c>OrganizationProfileGapCodes.All</c>) rather than by the order the per-field merges below
+    /// happen to run in, for the same reason the gap list is: a screen that renders these top to bottom
+    /// should read product-first however this method is later refactored.
+    /// </para>
     /// </summary>
     /// <param name="profile">The profile as stored, or <see langword="null"/> if there is none yet.</param>
     /// <param name="draft">What was extracted from the material.</param>
@@ -88,9 +95,6 @@ internal static class OrganizationProfileDraftMerger
             mergedGlossary,
             mergedBannedClaims);
 
-        // Ordered by the interview's ordering rather than by the order the merges above happen to
-        // run in, for the same reason the gap list is: a screen that renders these top to bottom
-        // should read product-first whichever way this method is later refactored.
         var orderedProposals = OrganizationProfileGapCodes.All
             .Select(code => proposals.First(proposal => proposal.Field == code))
             .ToList();
@@ -102,6 +106,12 @@ internal static class OrganizationProfileDraftMerger
     /// One value in, one value out. Blank profile plus a suggestion is a fill; two different values
     /// is a conflict that only <paramref name="acceptedFields"/> resolves; everything else changes
     /// nothing.
+    ///
+    /// <para>
+    /// A conflict is <b>reported as a conflict whether or not it was accepted</b>. The screen has to be
+    /// able to say «мы заменили ваше значение» afterwards, and a proposal that reported itself as
+    /// unchanged once it had been applied would be the one place the audit of this merge could lie.
+    /// </para>
     /// </summary>
     private static string? MergeSingleValue(
         string field,
@@ -137,9 +147,6 @@ internal static class OrganizationProfileDraftMerger
             return suggested;
         }
 
-        // Reported as a conflict whether or not it was accepted. The screen has to be able to say
-        // «мы заменили ваше значение» afterwards, and a proposal that reported itself as unchanged
-        // once it had been applied would be the one place the audit of this merge could lie.
         proposals.Add(new OrganizationProfileFieldProposalDto(
             field,
             OrganizationProfileFieldProposalDto.DecisionConflict,
@@ -330,9 +337,8 @@ internal static class OrganizationProfileDraftMerger
 
     private static List<string> CleanList(IEnumerable<string>? values)
         => (values ?? [])
-            .Select(Normalize)
-            .Where(value => value is not null)
-            .Select(value => value!)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
             .ToList();
 
     /// <summary>

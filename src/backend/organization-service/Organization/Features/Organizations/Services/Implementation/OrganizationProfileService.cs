@@ -12,6 +12,20 @@ using Sellevate.Organization.Infrastructure.Data;
 
 namespace Sellevate.Organization.Features.Organizations.Services.Implementation;
 
+/// <summary>
+/// The only writer of the <c>OrganizationProfiles</c> row, and the only reader of it that other
+/// services' replicas are built on. The organization is never a parameter here: it comes from the
+/// scoped <c>ITenantContext</c>, so no caller can address a profile that is not its own
+/// (docs/TENANCY/TENANCY.md §1.3).
+///
+/// <para>
+/// <b>Every database access on this class opens an explicit transaction, including the reads.</b>
+/// <c>SET LOCAL app.organization_id</c> — the statement <c>TenantConnectionInterceptor</c> issues to
+/// drive row-level security — is scoped to a transaction, and EF opens an implicit one only around
+/// <c>SaveChangesAsync</c>. A bare <c>SELECT</c> would therefore run with the setting unset under a
+/// <c>NOBYPASSRLS</c> role and return nothing at all (docs/TENANCY/TENANCY.md §1.5).
+/// </para>
+/// </summary>
 internal sealed class OrganizationProfileService(
     OrganizationDbContext databaseContext,
     ITenantContext tenantContext,
@@ -24,9 +38,6 @@ internal sealed class OrganizationProfileService(
     {
         var currentOrganizationId = RequireOrganizationId();
 
-        // A bare SELECT has no implicit EF transaction, so SET LOCAL app.organization_id (from
-        // TenantConnectionInterceptor) has nothing to scope to unless one is opened explicitly —
-        // see docs/TENANCY/TENANCY.md §1.5 and BuildingBlocks/Tenancy/TenantConnectionInterceptor.cs.
         await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
 
         var profile = await databaseContext.OrganizationProfiles
@@ -50,15 +61,18 @@ internal sealed class OrganizationProfileService(
     /// Phase 40.29. Which questions the interview has left. A read, and a cheap one: nothing here
     /// calls a model, because which columns are blank is arithmetic
     /// (<see cref="OrganizationProfileGapInspector"/>).
+    ///
+    /// <para>
+    /// A missing profile row is answered, not refused. It is the case the roadmap's second bullet is
+    /// about — «профиль останется пустым» — and an organization that has never saved one has seven
+    /// questions to answer, which is a more useful answer than «не найдено».
+    /// </para>
     /// </summary>
     public async Task<OrganizationProfileGapsDto> GetGapsAsync(
         int questionLimit, CancellationToken cancellationToken = default)
     {
         var profile = await GetProfileAsync(cancellationToken);
 
-        // A missing row is the case the roadmap's second bullet is about — «профиль останется
-        // пустым» — so it is not a 404 here. An organization that has never saved a profile has
-        // seven questions to answer, which is a more useful answer than «не найдено».
         return OrganizationProfileGapInspector.Inspect(profile, questionLimit);
     }
 
@@ -84,6 +98,17 @@ internal sealed class OrganizationProfileService(
             cancellationToken);
     }
 
+    /// <summary>
+    /// Phase 40.29. What promoting a draft would do, computed and discarded — this method writes
+    /// nothing.
+    ///
+    /// <para>
+    /// The plan is built with <b>every</b> overwritable field accepted, because the preview's job is to
+    /// show the most the draft could do. Planning it against the caller's current selection instead
+    /// would show fewer conflicts the more of them they had already agreed to, which is backwards: the
+    /// conflicts are what the screen exists to display.
+    /// </para>
+    /// </summary>
     public async Task<OrganizationProfileDraftPreviewDto> PreviewDraftAsync(
         ExtractedProfileDraftDto draft, CancellationToken cancellationToken = default)
     {
@@ -91,10 +116,6 @@ internal sealed class OrganizationProfileService(
 
         var profile = await GetProfileAsync(cancellationToken);
 
-        // Planned with every overwritable field accepted, because the preview's job is to show the
-        // most the draft could do. A preview computed with the caller's current selection would show
-        // fewer conflicts the more of them they had already agreed to, which is backwards: the
-        // conflicts are what the screen exists to display.
         var plan = OrganizationProfileDraftMerger.Plan(
             profile, draft, OrganizationProfileFields.Overwritable);
 
@@ -112,6 +133,13 @@ internal sealed class OrganizationProfileService(
     /// goes through <see cref="WriteProfileAsync"/>, so the promotion publishes
     /// <c>organization.profile.updated</c> like every other save and the two replicas of 40.19 learn
     /// about it the same way.
+    ///
+    /// <para>
+    /// The plan is computed <b>inside</b> the write transaction, against the row as it is at that
+    /// moment. Planning it outside and saving the result afterwards would let a save that landed in
+    /// between be silently discarded — and on this row that means a banned claim somebody entered while
+    /// the reviewer was reading the preview.
+    /// </para>
     /// </summary>
     public async Task<OrganizationProfileDraftAppliedDto> ApplyDraftAsync(
         ApplyOrganizationProfileDraftRequestDto request, CancellationToken cancellationToken = default)
@@ -123,10 +151,6 @@ internal sealed class OrganizationProfileService(
 
         IReadOnlyList<OrganizationProfileFieldProposalDto> appliedProposals = [];
 
-        // The plan is computed inside the write transaction, against the row as it is at that moment.
-        // Planning it outside and saving the result afterwards would let a save that landed in
-        // between be silently discarded — and on this row that means a banned claim somebody entered
-        // while the reviewer was reading the preview.
         var profile = await WriteProfileAsync(
             current =>
             {
@@ -147,6 +171,15 @@ internal sealed class OrganizationProfileService(
     /// The single write path of this aggregate. Everything that changes the profile row — the form,
     /// one interview answer, a promoted draft — goes through here, so all three read the row inside
     /// the transaction that then writes it, and all three publish the same event afterwards.
+    ///
+    /// <para>
+    /// <b>Why the lookup has to be inside the transaction, not merely near it.</b> EF opens an implicit
+    /// transaction for <c>SaveChangesAsync</c>, but this lookup runs before it — so under a
+    /// <c>NOBYPASSRLS</c> role it would run with <c>app.organization_id</c> unset, return nothing, and
+    /// send the method down the "create new" branch every time. The <c>INSERT</c> then collides with the
+    /// row that was there all along, and an organization can never edit its profile twice. Sharing one
+    /// transaction also makes the upsert itself atomic.
+    /// </para>
     /// </summary>
     /// <param name="buildRequest">
     /// Given the profile as it is inside the transaction (or <see langword="null"/> when there is
@@ -159,12 +192,6 @@ internal sealed class OrganizationProfileService(
         var currentOrganizationId = RequireOrganizationId();
         var now = DateTime.UtcNow;
 
-        // Same reason as GetProfileAsync above, and the consequence here is worse than a blank read.
-        // EF opens an implicit transaction for SaveChangesAsync, but this lookup runs *before* it —
-        // so under a NOBYPASSRLS role it would run with app.organization_id unset, return nothing,
-        // and send the method down the "create new" branch every time. The INSERT then collides with
-        // the row that was there all along, and an organization can never edit its profile twice.
-        // Wrapping the read and the write in one transaction also makes the upsert actually atomic.
         await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
 
         var profile = await databaseContext.OrganizationProfiles
@@ -194,17 +221,23 @@ internal sealed class OrganizationProfileService(
         await databaseContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        // Published after the commit, not inside it: learning-service and ai-service keep read-only
-        // replicas of this row (Phase 40.19, docs/TENANCY/BACKGROUND_JOBS.md), and a replica that
-        // learned about a profile the transaction then rolled back would render a lesson with text
-        // no organization ever saved. The other direction — a commit whose event is lost — is the
-        // one the payload is designed for: the whole profile ships every time, so the next save
-        // repairs it, and until then the reader falls back to the neutral base wording.
         await PublishProfileUpdatedAsync(profile, cancellationToken);
 
         return ToDto(profile);
     }
 
+    /// <summary>
+    /// Announces a saved profile to the read-only replicas learning-service and ai-service keep of this
+    /// row (Phase 40.19, docs/TENANCY/BACKGROUND_JOBS.md).
+    ///
+    /// <para>
+    /// <b>Called after the commit, never inside it.</b> A replica that learned about a profile the
+    /// transaction then rolled back would render a lesson with text no organization ever saved. The
+    /// other direction — a commit whose event is lost — is the one the payload is designed for: the
+    /// whole profile ships every time, so the next save repairs it, and until then the reader falls
+    /// back to the neutral base wording.
+    /// </para>
+    /// </summary>
     private Task PublishProfileUpdatedAsync(OrganizationProfile profile, CancellationToken cancellationToken)
         => eventPublisher.PublishAsync(
             Topics.OrganizationProfileUpdated,

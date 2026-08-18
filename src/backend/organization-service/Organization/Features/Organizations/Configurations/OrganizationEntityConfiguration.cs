@@ -5,6 +5,14 @@ using OrganizationEntity = Sellevate.Organization.Features.Organizations.Models.
 
 namespace Sellevate.Organization.Features.Organizations.Configurations;
 
+/// <summary>
+/// The registry table's schema. <c>Id</c> is <c>ValueGeneratedNever</c> because the platform mints the
+/// organization identifier itself and other services replicate it as a foreign key, so the database
+/// must never invent one; <c>Slug</c> carries a unique index because it is a public URL segment and
+/// <c>OrganizationService</c>'s pre-check turns a violation into a 409 rather than a 500;
+/// <c>Status</c> is stored as its enum name so a value stays readable in the database after the enum
+/// is reordered in code.
+/// </summary>
 public sealed class OrganizationEntityConfiguration : IEntityTypeConfiguration<OrganizationEntity>
 {
     public void Configure(EntityTypeBuilder<OrganizationEntity> builder)
