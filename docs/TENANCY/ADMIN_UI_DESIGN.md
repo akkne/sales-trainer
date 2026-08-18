@@ -1314,15 +1314,17 @@ baseFeedbackSystemPrompt}`; `POST …/accept-base`; `POST …/keep-override`. И
 
 **Назначение.** Пригласить менеджеров, увидеть, кто в компании, отключить ушедшего.
 
-> **Внимание: этот экран частично не реализуем сегодня.** В identity-service **нет**
-> `GET /invites` и **нет** `GET /memberships` — проверено по
-> `src/backend/identity-service/Identity/Features/Invites/Endpoints/InvitesController.cs`
-> (только `POST` и `DELETE {inviteId}`) и
-> `…/Features/Membership/Endpoints/MembershipsController.cs` (только `DELETE {userId}`).
-> Список людей и список приглашений прочитать нечем. Требования к двум недостающим ручкам — §6.
+> **Обновлено 2026-08-18: обе недостающие ручки существуют.** `GET /memberships` и
+> `GET /invites` добавлены в identity-service, и слайс 8 читает их напрямую. Всё, что ниже названо
+> «паллиативом», **не построено**: списка «отправлено только что», живущего в памяти страницы, нет,
+> и состав команды не собирается из «кто хоть что-то решал». Абзацы про паллиативы оставлены как
+> история решения — читать их как описание экрана нельзя.
 
-**Эндпоинты, которые есть.** `POST /invites {email?, emails?, role}` → `CreateInvitesResponseDto`;
-`DELETE /invites/{inviteId}`; `DELETE /memberships/{userId}`. Все три — `RequireOrgSuperAdmin`.
+**Эндпоинты.** `GET /memberships?status=active|deactivated|all` → `MembershipDto[]` и
+`GET /invites?status=pending|all` → `InviteSummaryDto[]`, обе `RequireOrgAdmin`;
+`POST /invites {email?, emails?, role}` → `CreateInvitesResponseDto`, `DELETE /invites/{inviteId}`,
+`DELETE /memberships/{userId}` — эти три `RequireOrgSuperAdmin`. У `GET /invites` нет и не будет
+поля `token`. Контракт целиком — `docs/API_CONTRACTS.md` → «Invites & memberships».
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -1784,7 +1786,13 @@ O0 платформенному админу без организации, `/ad
 
 Три позиции. Первая блокирует один экран, две остальные — косметика, которую честнее назвать вслух.
 
-### 6.1 Списка людей и списка приглашений нет (блокирует O16)
+### 6.1 Списка людей и списка приглашений нет (блокирует O16) — ЗАКРЫТО 2026-08-18
+
+> Обе ручки добавлены ровно в описанном ниже виде и работают через гейтвей
+> (`identity-memberships`, `identity-memberships-root`, `identity-invites`, `identity-invites-root`).
+> O16 читает их напрямую, паллиативный режим не построен. Остальной текст раздела — исходное
+> требование, оставлено как история. Единственное расхождение с ним: ответ называется
+> `InviteSummaryDto`, а не `InviteDto`.
 
 Проверено по контроллерам, не по документации:
 `InvitesController` — только `POST /invites` и `DELETE /invites/{inviteId}`;
@@ -1806,8 +1814,9 @@ GET /invites?status=pending|all
 `token` в `GET /invites` **не возвращается никогда** — он отдаётся один раз при создании и хранится
 только хешем.
 
-До появления этих двух ручек O16 работает в паллиативном режиме, описанном в самом экране, и
-пикер людей в O3 предлагает только «вся команда» и тех, у кого есть попытки.
+До появления этих двух ручек O16 работал бы в паллиативном режиме, описанном в самом экране, а
+пикер людей в O3 предлагал бы только «вся команда» и тех, у кого есть попытки. Для O16 это больше
+не так.
 
 ### 6.2 Смена роли участника
 

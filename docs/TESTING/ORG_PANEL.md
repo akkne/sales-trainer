@@ -864,3 +864,228 @@ Preconditions: a `TenancyAdmin`, at least one lesson override and one dialog-mod
 | Russian field labels **inside** the twelve exercise editors | `features/admin/components/exercise-editors/*` is the platform panel's code and its field captions are English | the editors are reused whole (`{content, onChange}`); only the type names are Russian, in `features/org-content-overrides/utils/exercise-summary.ts`. Translating the captions means editing `features/admin/**`, which slice 7 does not own — still open |
 | Editing techniques and reference materials in this panel | §6.3: no organization-panel screens exist for them | «Править» links out to `/admin/techniques` / `/admin/reference` with the caption saying so |
 | Drag-and-drop reordering | there is no batch reorder route; `PUT /admin/exercises/{id}` moves one row | ↑/↓ buttons, one write per exercise that moved |
+
+---
+
+## Slice 8 — O16 «Люди» (`/org/people`)
+
+Invites and the roster. Design:
+[docs/TENANCY/ADMIN_UI_DESIGN.md → O16](../TENANCY/ADMIN_UI_DESIGN.md#o16--orgpeople--люди).
+Semantics: [docs/TENANCY/TENANCY.md §4](../TENANCY/TENANCY.md) (closed access, invites, offboarding).
+Contract: [docs/API_CONTRACTS.md → «Invites & memberships»](../API_CONTRACTS.md).
+
+Covers `app/(org)/org/people/page.tsx` and `features/org-people/**`.
+
+### Endpoints the screen calls
+
+| Method | Path | Gate | Used for |
+|---|---|---|---|
+| GET | `/memberships?status=active\|all` | `RequireOrgAdmin` | «Состав команды», both filter chips |
+| GET | `/invites?status=pending\|all` | `RequireOrgAdmin` | «Приглашения», both filter chips |
+| POST | `/invites` `{emails[], role}` | `RequireOrgSuperAdmin` | bulk invite |
+| DELETE | `/invites/{inviteId}` | `RequireOrgSuperAdmin` | «Отозвать» |
+| DELETE | `/memberships/{userId}` | `RequireOrgSuperAdmin` | «Отключить» — deactivation, not deletion |
+
+**The design's §6.1 palliative is not built.** `GET /memberships` and `GET /invites` were added on
+2026-08-18; the screen reads both directly. There is no in-memory «отправлено только что» list that
+disappears on reload, and the roster is not assembled out of «кто хоть что-то решал» — a manager
+hired last week with no attempts is on it, and so is the person who left.
+
+### Automated (vitest, from `src/frontend`)
+
+```
+npx tsc --noEmit
+npx vitest run
+npx eslint "app/(org)/org/people" features/org-people
+```
+
+| File | Covers |
+|---|---|
+| `__tests__/orgPeopleLogic.test.ts` | `parseInviteEmails`, `buildInviteOutcomeLines`, `summarizeInviteOutcome`/`describeInviteOutcome`, the four dictionaries (`describeInviteStatus`, `describeInviteRejection`, `describeOrganizationRole`, `describeMembershipStatus`), `formatShortRussianDate`/`formatLongRussianDate`, `describeMemberName`/`buildMemberInitials` |
+| `__tests__/OrgPeopleScreen.test.tsx` | `InviteOutcomeList`, `PendingInvitesTable`, `RosterTable`, `ReadOnlyNotice` rendered with `@testing-library/react` |
+
+The behaviours worth naming:
+
+- **A partial answer is one list, in the order the addresses were pasted.** `created[]` and
+  `rejected[]` are merged and re-sorted by submission order, matched on the trimmed lower-cased
+  address, because the server normalizes what it accepts and echoes back verbatim what it could not
+  parse. Two separate blocks would make «третья строка не прошла» unanswerable.
+- **A bulk invite where three of forty failed reads as neither success nor failure**:
+  «Отправлено приглашений: 37 · отклонено адресов: 3». Both numbers, always.
+- **The client never de-duplicates and never lower-cases the pasted list.** That is what produces
+  `duplicate-in-request` on the server, and swallowing it client-side would hide from the РОП that
+  their spreadsheet column had the address twice.
+- **All four invite states have distinct wording** — «Ждёт ответа» / «Принято» / «Отозвано» /
+  «Истекло» — and the dictionary covers exactly those four codes. The browser never recomputes
+  «истекло» against its own clock; the status is derived server-side, with recorded facts
+  outranking it.
+- **An unknown status, role or rejection reason renders verbatim**, never as «неизвестно» and never
+  as a guess. A value the dictionary has not heard of is a contract change and has to be visible.
+  `OrgAdmin`, retired on 2026-08-16, is deliberately absent and therefore shows as `OrgAdmin`.
+- **The raw token is never rendered.** `CreatedInvite` in `types/organization-people.ts` has no
+  `token` field at all, so nothing downstream can print it; the test feeds a response that *does*
+  carry one and asserts it appears nowhere in the DOM, and that the outcome list contains no `<a>`.
+  The screen says instead that the link went to the mailbox and why it is not shown.
+- **«Отключить» is offboarding.** The confirmation says the person loses access and that their
+  progress, conversations and assignment rows stay — «это история компании» — and the word «удалить»
+  appears nowhere in `features/org-people/**`.
+- **A deactivated person stays on the list** under «С отключёнными», dated, with no button left.
+- **The superadmin is not offered a button that deactivates themselves.** Their own row carries
+  «это вы» and no action. The backend would allow it; locking yourself out of your own organization
+  is not a thing a screen should make easy.
+- **There is no role control anywhere** — no select in a roster row, no «сменить роль». §6.2 is
+  real: the route does not exist. The screen says so in one line under the table instead of leaving
+  the reader hunting for it.
+- **A `TenancyAdmin` sees the same two lists with no write controls at all** and a sentence saying
+  who may invite and offboard — not a row of disabled buttons, which reads as breakage.
+- **The two reads fail independently.** A dead invite read shows its own `ErrorState` above a roster
+  that still renders, and says so.
+- **Loading shows `DataTable`'s skeleton, never an empty state**; an empty pending queue explains
+  what would appear there instead of reporting a zero.
+- **No XP, no streaks, no leagues** — asserted over the rendered output.
+
+### Manual — O16 `/org/people`
+
+Preconditions: a `TenancySuperAdmin`, a plain `TenancyAdmin` in the same organization, and one
+member who can be offboarded.
+
+| Scenario | Expect |
+|---|---|
+| Open as `TenancySuperAdmin` | invite form, invite queue, roster; «Отправить» disabled until the field has an address |
+| Paste four addresses, one per line | the button reads «Отправить 4» before you press it |
+| Paste `a@x.ru, b@x.ru; c@x.ru` on one line | still three addresses — comma, semicolon and newline all split |
+| Invite two good addresses and one that is already a member | one list of three: two ✓ with «действует до …», one ✗ «уже в компании»; the summary names both counts |
+| Invite the same address twice in one paste | one ✓ and one ✗ «повторяется в списке» — the client does not silently collapse them |
+| Invite an address with a pending invite | ✗ «приглашение уже отправлено» |
+| Type `не-адрес` | ✗ «непохоже на адрес»; the other addresses in the same paste still go out |
+| Look for the invite link anywhere on screen | there is none, and a line explains that it went to the mailbox |
+| «Отозвать» on a pending invite | it disappears from «Ждут ответа»; under «Все» it reappears as «Отозвано» with no button |
+| Switch the invite filter to «Все» | accepted, revoked and expired invites appear, each with its own word |
+| «Отключить» a member | the dialog names them and says the history stays; after confirming they leave «Работают» |
+| Switch the roster filter to «С отключёнными» | they are there, «Отключён», dated, with no button |
+| Find your own row | «это вы», and no «Отключить» on it |
+| Look for a way to change somebody's role | there is none; the line under the table says a new invite is the way |
+| Open as a plain `TenancyAdmin` | both lists in full, no invite form, no «Отозвать», no «Отключить», and the sentence saying why |
+| Stop identity-service | both sections show their own `ErrorState` with a working «Повторить» |
+| A brand-new organization | the roster is exactly one person — you; the invite queue explains itself instead of showing zero |
+
+### What the backend cannot serve, and what the screen does instead
+
+| Design asks for | Reality | Behaviour |
+|---|---|---|
+| «Иванов А. · менеджер · попыток 214» in the roster | `MembershipDto` carries no attempt count, and the heat map that has one is O1's read in another service | the roster shows role, joining date and status; attempts stay on `/org` where they are measured |
+| A control that changes a member's role | §6.2 — `PUT /memberships/{userId}/role` does not exist | no control; one line saying a new invite is the only way |
+| «Отправлено только что» as an in-memory palliative that vanishes on reload | superseded — `GET /invites` exists | the section renders the real answer to the last request, and the invite queue below it is read from the server |
+| The roster assembled from people with activity | superseded — `GET /memberships` exists | the real roster, including people who have practised nothing |
+| The invitee's name on a pending invite | there is no user row until the invite is accepted | the address, which is all that exists |
+| `invitedBy` shown as a name | `InviteSummaryDto` carries the inviter's id and no name, and no route resolves one | not rendered — an id in that column would say nothing |
+
+---
+
+## Slice 10 — O18 «Программа обучения» (`/org/program`)
+
+What it covers: `app/(org)/org/program/page.tsx` and `features/org-program/**`. Design:
+[docs/TENANCY/ADMIN_UI_DESIGN.md → O18](../TENANCY/ADMIN_UI_DESIGN.md#o18--orgprogram--программа-обучения).
+Semantics: [docs/TENANCY/CONTENT_MODEL.md §2.5](../TENANCY/CONTENT_MODEL.md) and the 40.17 entries in
+[docs/DONT_FORGET.md](../DONT_FORGET.md).
+
+**Endpoints.** Seven, all `AdminProgramController` (`RequireOrgAdmin`), plus one read borrowed from
+the shell:
+
+| Route | Used for |
+|---|---|
+| `GET /admin/program/versions` | the version list, the draft row, the counters «47 уроков · зачислено 9» |
+| `GET /admin/program/versions/{id}` | «Посмотреть» — the ordered items of one version |
+| `GET /admin/program/versions/{id}/diff/{baselineId}` | «Что изменилось» and «Что изменится у него» |
+| `POST /admin/program/versions/draft` | «Пересобрать черновик из дерева» |
+| `POST /admin/program/versions/publish` | «Опубликовать» |
+| `GET /admin/program/enrollments` | the enrollment table and the spread summary |
+| `POST /admin/program/enrollments {userId}` | «Зачислить ещё», one person per call |
+| `GET /admin/team/skill-map` (via `useTeamMemberNames`) | names for the enrollment rows and the enrollable list |
+
+**The route this screen must never gain.** There is no control anywhere on O18 that moves another
+person's pin, and no route that would let one exist. `POST /admin/program/enrollments` is idempotent
+and returns an existing enrollment unchanged; the move is `POST /program/switch`, which only the
+learner calls on themself. A «перевести всех на v4» button would convert the guarantee «программу
+под учащимся никто не переставит» from a property of the code into a question of what the panel drew
+(ADMIN_UI_DESIGN.md §7, DONT_FORGET.md → блок 40.17). The paragraph saying so is on the screen on
+purpose and is part of the guarantee, not decoration.
+
+### Automated (vitest, from `src/frontend`)
+
+```
+npx tsc --noEmit
+npx vitest run
+npx eslint "app/(org)/org/program" features/org-program
+```
+
+| File | Covers |
+|---|---|
+| `__tests__/orgProgramVersions.test.ts` | `selectCurrentPublishedVersion`, `selectDraftVersion`, `selectPreviousPublishedVersion`, `isEnrollmentBehind`, `summarizeEnrollmentSpread`, `selectEnrollableMembers`, `buildMemberNameLookup`, and the `format-program-text` helpers |
+| `__tests__/orgProgramComponents.test.tsx` | `EnrollmentSpreadSummary`, `EnrollmentTable`, `ProgramDiffView` rendered with `@testing-library/react` |
+
+The behaviours worth naming, because they are the ones that mislead quietly:
+
+- **«Отстаёт» is decided by version id, not by the version number.** `isEnrollmentBehind` compares
+  `enrollment.programVersionId` against the newest published version's id: the id is what the pin
+  stores, the number is a label two lists agree on by convention. A pin carrying number 3 that points
+  at `version-2` is behind, and the test says so.
+- **Nobody is behind when nothing is published.** With no published version the whole team is on the
+  live tree — a different statement from «all up to date», and the enrollment table shows neither
+  «Отстаёт» nor «Последняя» in that state.
+- **The draft is never «the current version».** `selectCurrentPublishedVersion` ignores it even
+  though its number is the highest; nobody can be pinned to a draft.
+- **People who hold no pin are counted and named.** `summarizeEnrollmentSpread` returns
+  `notEnrolledKnownCount`, and the summary says those people learn off the live skill tree. A screen
+  that reports «2 из 3 на последней версии» and stays silent about the other four people in the
+  organization has told the reader the programme is in force when it is not — that sentence is the
+  reason this slice exists.
+- **The mixed state is worded as normal.** Two versions in use renders «Команда учится по разным
+  версиям… Это нормальное состояние, а не рассинхронизация», not a warning to be resolved.
+- **The enrollment table offers exactly one button per behind row** — «Что изменится у него», which
+  reads the diff. The render test asserts the full list of buttons in the table and that the word
+  «Перевести» appears nowhere in it.
+- **The diff is four sections, never one list**, and an empty bucket prints no heading. A moved
+  lesson carries the footnote that its content did not change, which is the whole point of the fourth
+  bucket. Nothing is computed on the client (§7).
+- **`hasBreakingChanges` renders the red line** «в некоторых уроках изменился правильный ответ или
+  критерии оценки», independently of whether any individual `changedLesson.isBreaking` is set.
+- **A `null` `lessonTitle` renders «Урок недоступен»**, never the live lesson's title — substituting
+  the live title is exactly the failure programme pinning exists to prevent.
+- **Russian pluralization** agrees with the design mock: «1 урок» / «2 урока» / «47 уроков», the
+  11–14 exception, and «1 человек» / «2 человека» / «9 человек» where the one-form and many-form are
+  spelled the same.
+
+### Manual
+
+Preconditions: a `TenancyAdmin` account in an organization with a published skill tree. Nothing is
+pre-seeded — on a fresh install every organization has zero programme versions and zero enrollments
+(DONT_FORGET.md → блок 40.17), so the empty state is the first thing you will see.
+
+| Scenario | Expect |
+|---|---|
+| Open `/org/program` on a fresh organization | the «Программа ещё не опубликована» card explaining the live tree, one primary button «Пересобрать черновик из дерева» — no empty table |
+| Press it | a draft row appears with its lesson count; «Посмотреть», «Пересобрать черновик из дерева», «Опубликовать» |
+| «Посмотреть» on the draft | the ordered lessons, each with the snapshot it is pinned to; a lesson whose snapshot is invisible shows «Урок недоступен», not a live title |
+| «Опубликовать» | a confirmation saying the version freezes forever and that nobody already learning is moved; on confirm, «Опубликована v1. Никто из тех, кто уже учится, не сдвинулся.» |
+| «Опубликовать» twice with no edits in between | rebuild the draft, publish → «Изменений нет, новая версия не создана»; the version number does **not** advance |
+| «Опубликовать» with no draft at all | «Черновика нет. Соберите его из дерева навыков и попробуйте снова.» (the 409) |
+| «Зачислить ещё» | a dialog naming the version people will land on and the sentence «Зачислит новичков и не тронет тех, кто уже учится»; one button per person |
+| Enroll somebody, then edit the tree, rebuild the draft, publish v2 | that person stays on v1 and their row gains «Отстаёт»; the summary reports the split, and nothing on the screen offers to move them |
+| «Что изменилось» on v2 | four sections; a pure reorder puts everything in «Переставлены» and leaves the other three empty |
+| «Что изменилось» on the first published version | the button is absent — there is no baseline, and a disabled button explaining itself would be worse |
+| «Что изменится у него» on a behind row | the same diff, from that person's pinned version to today's |
+| Look for a control that moves somebody | there is none. The paragraph under the table says why, and that paragraph is a requirement, not copy |
+| Stop learning-service | `ErrorState` with a working «Повторить»; the diff dialog has its own error branch |
+| A learner switches themself (`POST /program/switch`) | their row reads «перешёл сам 14 авг» instead of «зачислен …» |
+
+### What the backend cannot serve, and what the screen does instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| «Иванов А. v3 зачислен 12 авг» | `ProgramEnrollmentDto` carries `userId` only — learning-service holds no replica of a person's name | names come from `GET /admin/team/skill-map` through `useTeamMemberNames`; anybody it cannot name renders «Без имени · {8 символов id}» |
+| «Зачислить ещё» over the organization's people | §6.1: identity-service has no roster route; the skill map only knows people who have already attempted something | the dialog offers the people the skill map knows and repeats the caveat; a brand-new hire with zero attempts cannot be enrolled from this screen |
+| A total of «сколько человек в организации не зачислено» | same missing roster — the panel knows a lower bound, not the truth | «Без зачисления — N человек (как минимум)» whenever `rosterKnown` is false, and the note explaining where the number comes from |
+| Enrolling a group in one action | there is no bulk route, deliberately (DONT_FORGET.md → блок 40.17) | one `POST` per person, driven by a per-row button; no multi-select that could later be pointed at existing pins |
+| The pinned programme actually driving what a learner sees | `/skill-tree`, `/lessons` and `/exercises/*` still read the live tree; only `GET /program` serves the pin, and no learner screen calls it yet | a footnote on O18 says exactly that, so that publishing is not read as «команда уже учится по этой версии» |
+| Un-enrolling somebody | no route exists | none offered |
