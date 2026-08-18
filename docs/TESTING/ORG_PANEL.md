@@ -750,3 +750,117 @@ The behaviours worth naming, because they are the ones that break quietly:
 | «Ссылка на публикацию затронутых уроков» | nothing publishes from this block, and there is no «publish these lessons» route | the lessons with accepted items are listed as links to O19, where publishing lives |
 | Per-status counts on the two tabs | `GET /admin/content/adaptations` does not paginate and has no counts endpoint | one unfiltered read; both tabs, their badges and the totals are computed from it |
 | Russian stage names | `stageKey` is a `Skill.Stage` value and the batch DTOs carry no label | `GET /skills/stages`, with `getStageMeta` falling back to the raw key |
+
+---
+
+## Slice 7 — Свои версии контента и редактор урока (O14, O15, O19)
+
+Screens: `/org/content/overrides` (O14), `/org/content/overrides/[kind]/[overrideId]` (O15),
+`/org/content/lessons/[lessonId]` (O19). Design: `docs/TENANCY/ADMIN_UI_DESIGN.md` O14/O15/O19,
+§6.3, §7. Semantics: `docs/TENANCY/CONTENT_MODEL.md` §1, §2.3–2.6.
+
+The one thing this slice must never grow is a merge. The API returns no diff on purpose, the client
+computes none, and there is no «слить автоматически» button anywhere — a three-way merge of prose
+and grading criteria produces plausible nonsense that then scores a live salesperson.
+
+### Endpoints each screen calls
+
+| Screen | Endpoints |
+|---|---|
+| O14 `/org/content/overrides` | `GET /admin/content/overrides` (learning) **and** `GET /admin/dialog/overrides/modes` (ai) — both unfiltered; the «только устаревшие / все» chips partition rows the server already flagged, so both counters come from one read per service |
+| O15, three learning kinds | `GET /admin/content/overrides/{kind}/{overrideId}`, `POST …/accept-base`, `POST …/keep-override`; for a lesson also `GET /admin/lessons/{baseId}/versions`, purely to turn the review's version **ids** into the «версия 3» / «версия 5» column headings |
+| O15, `kind=modes` | `GET /admin/dialog/overrides/modes/{overrideId}`, `PUT /admin/dialog/overrides/modes/{overrideId}` (inline prompt editor), `POST …/accept-base`, `POST …/keep-override` |
+| O19 `/org/content/lessons/[lessonId]` | `GET /admin/lessons` (title/topic — there is no by-id route), `GET /admin/content/overrides` (ownership), `GET /admin/lessons/{id}/versions`, `GET /admin/lessons/{id}/exercises`, `GET /admin/lessons/{id}/accuracy`, `PUT /admin/lessons/{id}`, `POST /admin/lessons/{id}/exercises`, `PUT /admin/exercises/{id}`, `DELETE /admin/exercises/{id}`, `POST /admin/lessons/{id}/versions/draft`, `POST /admin/lessons/{id}/versions/publish`, `POST /admin/content/overrides/lessons/{baseId}` (the «Сделать свою версию» button) |
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgContentOverrides.test.ts` | the override state vocabulary, the two-service row merge, comparison blocks, the accuracy series, the lesson's version state, exercise summaries and reordering |
+| `__tests__/OrgContentOverridesComponents.test.tsx` | `ThreeWayCompare`, `OverrideStateBadge`, `PublishDialog`, `UnpublishedDraftBanner`, `AccuracySeriesChart` |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **Four override states, not one boolean.** `isStale && forkedFrom !== null` → «оригинал
+  обновился»; `isStale && forkedFrom === null` → «основа неизвестна» (40.15 left this expressible
+  on purpose and it must not be rounded into the first); `!isStale && baseCurrent === null` → «у
+  оригинала нет версий», which is *not* «совпадает с базой»; otherwise «совпадает с базой».
+- **Nothing recomputes staleness on the client.** `resolveOverrideState` reads the server's three
+  fields and compares no content.
+- **One table, two services, unique row keys.** An override id is unique only inside its own
+  service, so rows are keyed `${kind}:${overrideId}`. Stale rows sort first.
+- **Highlighting is block-level and has no button.** `alignComparisonBlocks` answers only «этот
+  блок отличается», by whole-string equality; a block missing from one column counts as differing
+  rather than being dropped. The compare component renders zero buttons.
+- **`schemaVersion` is never shown as content.**
+- **Segments never join.** Each accuracy segment is its own polyline; a segment starting at a
+  breaking publish draws a visible break.
+- **`unversionedAttempts` is a footnote, never version 1**, with Russian plural agreement
+  (1 попытка / 3 попытки / 11 попыток / 21 попытка).
+- **A segment with `attemptCount: 0` draws a hollow point**, because «никто не отвечал» and «версии
+  нет» are different answers; `accuracy` arrives as 0..1 and is shown as whole percents.
+- **The publish dialog has no default.** Its confirm button stays disabled until one of the two
+  scopes is chosen, and it passes `isBreaking` verbatim.
+- **`createdNewVersion: false` shows «Изменений нет — публиковать нечего»** and the version number
+  does not move.
+- **No XP, streaks or leagues** anywhere in the slice's vocabulary — asserted directly.
+
+### Manual — O14 `/org/content/overrides`
+
+Preconditions: a `TenancyAdmin`, at least one lesson override and one dialog-mode override.
+
+| Scenario | Expect |
+|---|---|
+| An organization that has overridden nothing | «Своих версий нет — вы читаете общую библиотеку целиком…», framed as the healthy state, no error styling, no «создать копию» button |
+| Every copy up to date | the «Только устаревшие 0» chip is selected and the table says «Устаревших копий нет», not the empty-library text |
+| A stale lesson and a fresh mode | one table, four kind labels («урок», «техника», «справка», «режим диалога»), stale rows on top |
+| Stop ai-service, reload | the three learning kinds still render, above a «Режимы диалога сейчас недоступны» line; the page is not an error |
+| Stop learning-service, reload | the whole screen is `ErrorState` with a retry — the learning list *is* the screen |
+| Look for a «сделать копию» button | there is none, anywhere |
+| Click a row | O15 for that kind |
+
+### Manual — O15 `/org/content/overrides/[kind]/[overrideId]`
+
+| Scenario | Expect |
+|---|---|
+| Open a stale **lesson** override | three columns: «База на момент копирования (версия N)», «Ваша версия», «База сейчас (версия M)» |
+| Open a **technique** or **справка** override | two columns plus «Каким оригинал был в момент копирования, мы не знаем — у этого типа материалов нет истории версий.» |
+| Look for a merge control | none: three actions only, and the «Мы не сливаем эти тексты автоматически…» block under the columns |
+| «Оставить своё» | no confirmation — it is cheap and reversible; the state badge flips to «совпадает с базой» after the refetch |
+| «Взять базу» | a confirmation saying the copy goes to the archive and is not deleted; on success, back to O14 |
+| «Править» on a lesson | O19 for that override |
+| «Править» on a technique/справка | the platform panel (`/admin/techniques`, `/admin/reference`) with the «редактирование техник и справок пока делается через платформенную панель» caption — §6.3, still open |
+| Open a **dialog mode** override | two columns of prompts; «Править» expands the two monospace fields in place, with «Сохранить» |
+| Save the prompts | one `PUT`; there is no publish step and the fork mark clears itself |
+| A bad `kind` in the URL | «Неизвестный тип материала», not a crash and not a blank page |
+
+### Manual — O19 `/org/content/lessons/[lessonId]`
+
+| Scenario | Expect |
+|---|---|
+| Open a lesson override with a live draft | the sticky «Есть неопубликованные правки» bar naming the version the team is still answering; it stays visible while scrolling |
+| Edit an exercise | the draft is opened first (`POST …/versions/draft`), so the bar appears immediately rather than after the next reload |
+| Press «Опубликовать» | the modal with two radio options and no default; the button is dead until one is chosen |
+| Publish with nothing changed | «Изменений нет — публиковать нечего»; the version number does not move and the modal stays open |
+| Publish «по смыслу» | the accuracy chart gains a dashed break before the new segment |
+| Try to close the tab with a live draft | the browser's own leave prompt |
+| Press «← Контент» with a live draft | an in-app dialog: «Уйти без публикации» or «Опубликовать сейчас» |
+| Reorder with ↑/↓ | positions renumber 1..n; each move is one `PUT` per exercise that actually moved |
+| Open a **global** lesson | read-only, with «Сделать свою версию»; no title field, no per-row edit buttons |
+| Press «Сделать свою версию» on a global lesson | one `POST`, then a redirect to the copy's own id |
+| Open a lesson that is the organization's own but is **not** an override (generated by O11) | read-only at first; pressing «Сделать свою версию» answers 409 and the screen unlocks editing instead of showing an error |
+| Look at the accuracy chart with no published versions | «У урока ещё нет опубликованных версий, поэтому точность не по чему считать» |
+| Break `GET …/accuracy` alone | a compact error inside the chart card only — the exercises above stay editable |
+| Look for XP, streaks or leagues | none |
+
+### What the backend cannot serve, and what the screens do instead
+
+| Design asks for | Reality | Degraded behaviour |
+|---|---|---|
+| «Урок с `organizationId == null` открывается только на чтение» | **no endpoint returns a lesson's owner.** `GET /admin/lessons` is `(id, topicId, topicIconicName, topicTitle, title, orderInTopic)` and there is no `GET /admin/lessons/{id}` at all | ownership is inferred from `GET /admin/content/overrides`: a lesson listed there as a `lessons` override is the organization's copy. A lesson the organization owns without being an override (an O11-generated one) reads as global until «Сделать свою версию» answers 409 `SourceNotGlobal`, which the screen treats as «already yours» and unlocks editing. Every write is additionally guarded server-side by `ContentAuthoringGuard`, so the worst case is a 403 with a plain sentence, never a wrong write |
+| Column headings «(v3)» / «(v5)» on O15 | `ContentOverrideReviewDto` carries version **ids**, not numbers | one extra `GET /admin/lessons/{baseId}/versions` for lesson overrides, mapping id → number; the heading falls back to «точка форка» / «текущий оригинал» when the id is not in that list |
+| «`is_breaking` derived from the edit» | impossible in principle — a fixed comma and a moved correct answer are the same diff | the publish modal asks, with no default |
+| Per-version accuracy points | `LessonAccuracySegmentDto` aggregates a whole segment into one statistic | every version inside a segment is drawn at that segment's value, so the axis stays honest about how many versions the run covers without inventing per-version numbers |
+| Russian field labels **inside** the twelve exercise editors | `features/admin/components/exercise-editors/*` is the platform panel's code and its field captions are English | the editors are reused whole (`{content, onChange}`); only the type names are Russian, in `features/org-content-overrides/utils/exercise-summary.ts`. Translating the captions means editing `features/admin/**`, which slice 7 does not own — still open |
+| Editing techniques and reference materials in this panel | §6.3: no organization-panel screens exist for them | «Править» links out to `/admin/techniques` / `/admin/reference` with the caption saying so |
+| Drag-and-drop reordering | there is no batch reorder route; `PUT /admin/exercises/{id}` moves one row | ↑/↓ buttons, one write per exercise that moved |
