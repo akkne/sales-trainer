@@ -1,10 +1,10 @@
 # Assignments: the РОП → manager loop, and AI inside the admin panel
 
 **Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD), so is
-§1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation), and so is §1.3 (Phase 40.23 —
-issuing, the manager's screen and the three notices). Everything else on this page is still design:
-§2.1 repeats are 40.24, §2/§3 the AI pipeline is Stage F (40.27+), §4 the dashboard is 40.25, §5's
-non-completion push is 40.26.
+§1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation), so is §1.3 (Phase 40.23 —
+issuing, the manager's screen and the three notices), and so is **§2.1 (Phase 40.24 — automatic
+repeats)**. Everything else on this page is still design: §2/§3 the AI pipeline is Stage F (40.27+),
+§4 the dashboard is 40.25, §5's non-completion push is 40.26.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [CONTENT_MODEL.md](CONTENT_MODEL.md).
 Schema as built: [DB_SCHEMA.md](../DB_SCHEMA.md#assignments-assignmentprogressrecords).
@@ -193,6 +193,50 @@ don't stick, and a one-shot assignment reproduces the failure.
 — configured once, then automatic. This is the mechanism that turns one-off trainings into
 recurring practice; without it, the claim is a slogan.
 
+#### What 40.24 built, and the four things that change how the rest of this page reads
+
+The vocabulary is one kind — `{"kind":"fixed_offsets","offsetDays":[7,21]}`, with the list optional
+and defaulting to exactly those two numbers — and a background sweep (`AssignmentRepeatSweepService`,
+[BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) §4f) that acts on it. Eleven forks are recorded with their
+rejected alternatives in [DECISIONS.md](../DECISIONS.md) (2026-08-18); these four are the ones that
+change what the paragraphs above and below mean:
+
+- **A wave is a new `Assignment` row, not a second round inside the old one.** The squashed variant is
+  the one that keeps "one assignment, one funnel" literally true on §4's dashboard, and it is
+  unbuildable on this schema for a reason that is the whole point of §1.1: `assignment_progress`
+  carries exactly one `best_score` per person, deliberately, so a second wave's result would have to
+  overwrite the first's — destroying the only evidence anybody had that the training decayed, which is
+  the fact this section exists to surface. The link is `repeat_of_assignment_id` plus a 1-based
+  `repeat_wave_index`, so §4 can group the waves into one series and show the comparison. A repeat
+  never points at another repeat: the series is one level deep and the database refuses a repeat that
+  carries a schedule of its own.
+- **The offsets are measured from the origin's issue moment, and the cohort moves together.** Anchoring
+  per person — at the moment each of them cleared the threshold, which is what a spaced-repetition
+  textbook would say — needs one assignment per person, and forty people who passed on six different
+  days become six funnels the РОП cannot read. The unit they act on is a team meeting; «планёрка в
+  понедельник» in §4 is the same observation from the other side.
+- **The repeat goes to the people the origin was issued to**, intersected with the live roster —
+  not to a fresh resolution of the audience rule. `whole_team` re-resolved three weeks later hands a
+  *shortened* refresher to everybody hired since, i.e. the practice with the theory already stripped
+  out of it, and it changes the denominator between waves, which is exactly the comparison the series
+  exists to make. Outcome does not filter it either: the person who tried four times and stayed under
+  the bar is in §1.1's words the most valuable row on the screen, and a repeat that skipped them would
+  be the product silently giving up on the one person who needs it.
+- **"Shortened" means less repetition and less theory, never a lower bar.** The `reference_material`
+  items are dropped (kept only when they are all the assignment has) and `dialog_score.required_count`
+  is halved, rounded up; the score bars are copied untouched. Lowering a bar to make the repeat easy
+  would make the two waves' numbers incomparable, which costs the series its only purpose — and it
+  would put the four-minute completion §1.1 is written against back within reach.
+
+Two consequences worth stating plainly, because both look like bugs from the outside. **A closed
+assignment still repeats** — a five-day assignment is supposed to be closed by day 7, and a repeat
+that died when the РОП tidied up would be a feature that only works for people who never close
+anything. The way to cancel a series is therefore to clear or shorten `repeat_schedule` **while the
+assignment is still active**; once closed it is frozen with everything else, and the remaining waves
+will fire. And **a wave more than three days late is dropped rather than delivered**, because the value
+of spaced repetition is the spacing: a "+7 day" refresher arriving at +16 is not the feature arriving
+late. Both are in [DONT_FORGET.md](../DONT_FORGET.md).
+
 ---
 
 ## 3. AI inside the admin panel
@@ -306,6 +350,7 @@ their team. Design for that.
 | `analytics-service` | assignment funnel metrics |
 | exercise types ([NEW_EXERCISE_TYPES.md](../NEW_EXERCISE_TYPES.md)) | the 11 existing types are the assignment's content vocabulary — **confirmed in 40.23**: a `lesson_version` item links to `/session/:lessonId`, the ordinary lesson screen, and no renderer was added |
 | `learning-service` grading | threshold evaluation reuses existing scoring — **done in 40.22**: `UserExerciseAttempt` rows for accuracy, ai-service's own feedback grade for conversations |
+| the 40.23 fan-out | a repeat's issue is the same two writes a human-pressed issue performs — **done in 40.24**: one extracted `AssignmentFanOut`, so "asked" and "told" stay atomic on both paths and there is one idempotency story rather than two |
 
 Nothing here needs a new service. `Assignment` most naturally belongs to `learning-service`
 (it owns progress and grading), with the AI generation calls going to `ai-service` the same way
