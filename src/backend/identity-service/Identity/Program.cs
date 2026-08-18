@@ -5,8 +5,10 @@ using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Outbox;
-using Sellevate.Identity.Eventing;
 using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
+using Sellevate.Identity.Common.Security;
+using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
 using Sellevate.Identity.Features.Invites;
@@ -19,8 +21,6 @@ using Sellevate.Identity.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
-using Sellevate.Identity.Common.Constants;
-using Sellevate.Identity.Common.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 

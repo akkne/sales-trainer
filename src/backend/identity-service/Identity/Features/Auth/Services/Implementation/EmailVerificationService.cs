@@ -3,14 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Email.Abstract;
+using Sellevate.BuildingBlocks.Email.Models;
 using Sellevate.Identity.Features.Auth.Constants;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
-using Sellevate.BuildingBlocks.Email.Abstract;
-using Sellevate.BuildingBlocks.Email.Models;
 
 namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 

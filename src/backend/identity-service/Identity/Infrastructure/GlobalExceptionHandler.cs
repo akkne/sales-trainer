@@ -14,12 +14,12 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
         var (statusCode, title) = exception switch
         {
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
-            EmailNotVerifiedException   => (StatusCodes.Status403Forbidden,    "Email not verified"),
+            EmailNotVerifiedException => (StatusCodes.Status403Forbidden, "Email not verified"),
             OrganizationSuspendedException => (StatusCodes.Status403Forbidden, "Organization suspended"),
             EmailVerificationCooldownException => (StatusCodes.Status429TooManyRequests, "Too many requests"),
-            InvalidOperationException   => (StatusCodes.Status400BadRequest,   "Bad request"),
-            KeyNotFoundException        => (StatusCodes.Status404NotFound,     "Not found"),
-            _                          => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
+            InvalidOperationException => (StatusCodes.Status400BadRequest, "Bad request"),
+            KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
+            _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 
         if (statusCode == StatusCodes.Status500InternalServerError)
@@ -34,7 +34,7 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
         var problemDetails = new ProblemDetails
         {
             Status = statusCode,
-            Title  = title,
+            Title = title,
             Detail = statusCode < 500 ? exception.Message : null
         };
 
