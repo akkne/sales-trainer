@@ -4,6 +4,7 @@ using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 using Sellevate.Ai.Infrastructure.Data;
+using Sellevate.Ai.Infrastructure.Metrics;
 using Sellevate.BuildingBlocks.Tenancy;
 using StackExchange.Redis;
 
@@ -126,6 +127,8 @@ return newval";
             "LLM quota reached for organization {OrganizationId} on {Operation} ({Workload}): {Used} of {Ceiling} tokens",
             organizationId, operation, workloadClass, spentTokens, ceiling);
 
+        AiSpendMetrics.QuotaRefusals.WithLabels("llm_tokens", period).Inc();
+
         throw new AiQuotaExceededException("llm_tokens", period, spentTokens, ceiling);
     }
 
@@ -211,6 +214,8 @@ return newval";
                 "Organization voice day limit reached for {OrganizationId}: {Limit}s",
                 _tenantContext.OrganizationId, dayLimitSeconds);
 
+            AiSpendMetrics.QuotaRefusals.WithLabels("voice_minutes", "day").Inc();
+
             throw new AiQuotaExceededException("voice_minutes", "day", await ReadAsync(dayKey), dayLimitSeconds);
         }
 
@@ -223,6 +228,8 @@ return newval";
             _logger.LogInformation(
                 "Organization voice month limit reached for {OrganizationId}: {Limit}s",
                 _tenantContext.OrganizationId, monthLimitSeconds);
+
+            AiSpendMetrics.QuotaRefusals.WithLabels("voice_minutes", "month").Inc();
 
             throw new AiQuotaExceededException("voice_minutes", "month", await ReadAsync(monthKey), monthLimitSeconds);
         }
@@ -305,6 +312,19 @@ return newval";
         bool wasEstimated,
         CancellationToken cancellationToken)
     {
+        // Platform-wide, unlabelled by organization, and emitted before the per-organization write so
+        // that a Postgres hiccup cannot make the platform total silently understate itself.
+        if (kind == AiUsageKinds.Llm)
+        {
+            AiSpendMetrics.LlmTokens.WithLabels("prompt").Inc(promptTokens);
+            AiSpendMetrics.LlmTokens.WithLabels("completion").Inc(completionTokens);
+            AiSpendMetrics.LlmCalls.WithLabels(wasEstimated ? "estimated" : "reported").Inc();
+        }
+        else
+        {
+            AiSpendMetrics.SpeechCharacters.WithLabels(kind).Inc(speechCharacters);
+        }
+
         var organizationId = _tenantContext.OrganizationId;
         if (organizationId is null)
         {
