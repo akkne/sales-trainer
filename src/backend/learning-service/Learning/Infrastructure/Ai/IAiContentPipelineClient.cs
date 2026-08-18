@@ -26,4 +26,22 @@ public interface IAiContentPipelineClient
     Task<AiGeneratedLesson> GenerateAsync(
         AiGenerateExercisesRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.32. One exercise rewritten into the organization's product and voice. Called once per
+    /// exercise rather than once per batch — the unit of payment, the unit of failure and the unit a
+    /// person accepts have to be the same row (docs/CONTENT_PIPELINE.md §6).
+    /// </summary>
+    Task<AiRewrittenExercise> RewriteExerciseAsync(
+        AiAdaptExerciseRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.32. What is methodically wrong with one exercise a human wrote, as a list of codes.
+    /// Returns nothing to apply — the reviewer never repairs, because a model that both diagnoses and
+    /// silently fixes is a model nobody checks.
+    /// </summary>
+    Task<AiExerciseReview> ReviewExerciseAsync(
+        AiAdaptExerciseRequest request,
+        CancellationToken cancellationToken = default);
 }

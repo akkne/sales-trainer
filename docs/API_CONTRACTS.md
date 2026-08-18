@@ -2341,6 +2341,8 @@ and a generated lesson would otherwise be stranded.
 |---|---|---|---|
 | POST | /ai/content/structure | `{material, knownStructure?}` | `ExtractedContentStructureDto` |
 | POST | /ai/content/generate | `{structure, focus?, maximumExerciseCount}` | `{title, exercises: [{type, content}]}` |
+| POST | /ai/content/rewrite | **40.32** — `{exerciseType, content, profile?}` | `{content, summary}` — `content` is **null** when nothing needed changing |
+| POST | /ai/content/review | **40.32** — `{exerciseType, content, profile?}` | `{findings: [{code, detail}]}` — an empty list is the expected answer |
 
 Both are guarded by `InternalServiceAuthFilter` (`X-Internal-Service-Secret`) exactly like
 `POST /ai/evaluate`, and both are stateless — no organization, no database, no job. `503` on any
@@ -2350,3 +2352,98 @@ provider failure, `400` on a missing or oversized `material`.
 roadmap asks for, and it is what makes the human's edit at the checkpoint binding rather than
 advisory: a model that could still see the source would keep re-finding the objection the reviewer
 deleted.
+
+
+---
+
+## Batch content adaptation and AI content review (Phase 40.32, learning-service)
+
+«Перепиши все упражнения этапа "закрытие" под наш продукт и тон» → a background batch → a queue of
+proposals → **accept or reject one at a time**. The same routes serve the block's second half with
+`mode: "quality_review"`: a per-exercise report of what is methodically wrong with content the РОП
+wrote by hand.
+
+Every route is `RequireOrgAdmin` and carries `[TenantTransaction]`; the organization comes from the
+gateway-validated header and appears in no route, query string or body
+([TENANCY.md §1.3](TENANCY/TENANCY.md)). Gateway cluster `learning`, route
+`/admin/content/{**catch-all}` — **added in this block, and it is also what finally makes 40.18's
+`/admin/content/overrides` reachable through the gateway** (DECISIONS.md, 2026-08-18).
+
+Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) §6a.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content/adaptations?mode=&status= | — | `ContentAdaptationJobSummaryDto[]`, newest first |
+| GET | /admin/content/adaptations/{jobId} | — | `{summary, items[]}` or `404` |
+| GET | /admin/content/adaptations/{jobId}/items/{itemId} | — | `ContentAdaptationItemDto` or `404` |
+| POST | /admin/content/adaptations | `{mode?, stageKey}` | `201` + `{summary, items[]}`; `400` on an unknown mode, an empty stage or a stage above the per-batch ceiling; `409` when a live batch for that stage and mode already exists |
+| POST | /admin/content/adaptations/{jobId}/items/{itemId}/accept | — | `ContentAdaptationItemDto`; `409` if the item is not `proposed`, if the exercise changed since the proposal, or if the batch is a **quality review** |
+| POST | /admin/content/adaptations/{jobId}/items/{itemId}/reject | — | `ContentAdaptationItemDto`; `409` unless the item is `proposed` |
+| POST | /admin/content/adaptations/{jobId}/retry | — | `{summary, items[]}`; `409` when nothing failed |
+
+**There is no bulk verb, and that is the block.** Accept and reject each take an item id, so the
+smallest thing that can be applied is one exercise and applying it took a human click. «Применить
+всё» is auto-apply with a person's name attached; if sixty decisions is too many, the answer is a
+narrower stage, which is what the `MaximumItemsPerJob` ceiling (60) exists to force.
+
+```jsonc
+// ContentAdaptationJobSummaryDto
+{
+  "id": "…",
+  "mode": "tone_rewrite",          // or "quality_review"
+  "stageKey": "closing",           // a Skill.Stage value
+  "status": "awaiting_review",     // preparing | awaiting_review | completed | failed
+                                   // derived from the items, never counted
+  "itemCount": 23,                 // frozen at creation — the denominator of «сделано N из M»
+  "pendingCount": 0,               // still owed an AI call; the part that still costs money
+  "awaitingReviewCount": 9,        // still owed a HUMAN answer — the number the screen is about
+  "acceptedCount": 11, "rejectedCount": 2, "unchangedCount": 1, "failedCount": 0,
+  "failureReason": null,
+  "createdAt": "…", "updatedAt": "…", "completedAt": null
+}
+
+// ContentAdaptationItemDto — one item, with everything needed to answer yes or no
+{
+  "summary": {
+    "id": "…", "exerciseId": "…", "lessonId": "…", "lessonTitle": "Работа с ценой",
+    "exerciseType": "choose_option", "orderInLesson": 3,
+    "status": "proposed",          // pending | proposed | unchanged | accepted | rejected | failed
+    "changeSummary": "Заменил абстрактную выгоду на ваш срок внедрения и тон на «вы».",
+    "findingCount": 0,             // review mode
+    "hasBlockingFinding": false,   // review mode — a defect that makes the exercise harmful, not weak
+    "changedFieldCount": 4,
+    "failureReason": null, "resolvedAt": null
+  },
+  "currentContent":  { /* the exercise body as it stands right now */ },
+  "proposedContent": { /* the rewritten body; null in review mode */ },
+  "changes": [                     // the machine-readable half of the diff — an enumeration, not a merge
+    { "path": "situation",       "before": "Клиент говорит…", "after": "Клиент говорит…" },
+    { "path": "options[1].text", "before": "…",               "after": "…" }
+  ],
+  "findings": [                    // review mode; empty in rewrite mode
+    { "code": "unmeasurable_criteria", "severity": "blocking",
+      "message": "Критерии оценки свободного ответа нельзя проверить…",
+      "detail": "\"ответил вежливо\"" }
+  ],
+  "isStale": false                 // the exercise has been edited since the proposal was computed;
+                                   // computed on read, never stored. A stale item cannot be accepted
+}
+```
+
+**Nothing is merged, deliberately.** Both documents travel whole and the server enumerates which JSON
+leaves differ; it never produces a third document. 40.18 ruled out three-way merging of prose and
+grading criteria on the grounds that it produces plausible nonsense which then grades a living
+salesperson, and that ruling holds one level down.
+
+**Accepting a rewrite of a global-library exercise forks the lesson first** (40.18 copy-on-write) and
+writes the body into the organization's own copy — the response's `summary.exerciseId` is what was
+proposed against, and the applied row is recorded on the item. No `LessonVersion` is published:
+accepting edits the draft exactly as `PUT /admin/exercises/{id}` does, and publishing stays a
+separate human act on the existing 40.15 route.
+
+**The seven review codes** (`ambiguous_correct_answer`, `multiple_correct_answers`,
+`obvious_distractors`, `answer_given_away`, `unmeasurable_criteria`, `missing_explanation`,
+`banned_claim_rewarded`) are a closed vocabulary. ai-service returns codes and a quoted fragment;
+the Russian sentence and the `blocking`/`advisory` severity are resolved by learning-service, so two
+runs over the same exercise produce the same complaint and «сколько упражнений с этим дефектом» is a
+query. Codes learning-service does not know are dropped, never rendered blank.

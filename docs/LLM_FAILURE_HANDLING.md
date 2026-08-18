@@ -94,6 +94,39 @@ A missing or malformed `sufficiency` block in an otherwise valid completion is r
 degrading the other way would tell a customer their material is thin on the strength of our own
 model dropping a field. The deterministic structure check still runs, so nothing empty gets through.
 
+## A finding is not a failure either, and neither is an empty answer (Phase 40.32)
+
+Batch adaptation adds two more outcomes that must not be conflated with a provider failure, and one
+of them is the *absence* of an outcome.
+
+| | Provider failure | «Ничего не меняю» / «замечаний нет» | A finding |
+|---|---|---|---|
+| Cause | upstream | the exercise was already fine | our judgement about the customer's exercise |
+| Item state | `failed` after 2 attempts, `FailureReason` set | `unchanged`, resolved without a person | `proposed`, waiting for a person |
+| Log level | `Warning` | — | — |
+| Reaches the queue | no | **no** | yes |
+
+Four rules follow.
+
+- **The attempt budget is per item, not per batch.** One exercise the model chokes on must not fail
+  the fifty-nine good proposals beside it. `POST …/retry` re-queues exactly the failed items.
+- **Never degrade a provider failure into an empty rewrite.** `ExerciseRewriteService` throws on an
+  unparseable completion; returning `{"content": null}` would be recorded as «переписывать нечего»
+  and the customer would conclude their stage is already in their voice when nobody ever read it.
+- **Never degrade a malformed proposal into a stored one.** A rewritten body that fails
+  `ExerciseContentValidator` is a failed item, not a proposal. A person cannot tell a broken body from
+  a good one by reading a diff, and an exercise that blanks the screen mid-lesson is worse than one
+  that still sounds generic.
+- **An empty answer is a success and must stay cheap to give.** Both prompts say so twice. A rewriter
+  that always changes something and a reviewer that always finds something are the same failure: sixty
+  cosmetic items teach a person to click through the queue without reading it, which costs the
+  credibility of every true finding in it.
+
+A review code this service does not know is **dropped**, not rendered — the vocabulary is closed on
+purpose, and a code a model invented would otherwise reach a customer as an empty bullet. That is the
+same rule 40.28 applies to refusal codes, and it is applied twice: once on the way out of ai-service,
+once when the findings document is written.
+
 ## Graceful degradation, where it exists
 
 Some paths prefer a canned answer over an error:

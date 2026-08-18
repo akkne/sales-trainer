@@ -3,6 +3,7 @@ using Sellevate.BuildingBlocks.Outbox;
 using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Features.Assignments.Models;
 using Sellevate.Learning.Features.Content.Models;
+using Sellevate.Learning.Features.ContentAdaptation.Models;
 using Sellevate.Learning.Features.ContentGeneration.Models;
 using Sellevate.Learning.Features.DailyQuotes.Models;
 using Sellevate.Learning.Features.DialogReviews.Models;
@@ -52,6 +53,8 @@ public sealed class LearningDbContext : DbContext
     public DbSet<UserDialogScore> UserDialogScores => Set<UserDialogScore>();
     public DbSet<DialogReviewNote> DialogReviewNotes => Set<DialogReviewNote>();
     public DbSet<ContentGenerationJob> ContentGenerationJobs => Set<ContentGenerationJob>();
+    public DbSet<ContentAdaptationJob> ContentAdaptationJobs => Set<ContentAdaptationJob>();
+    public DbSet<ContentAdaptationItem> ContentAdaptationItems => Set<ContentAdaptationItem>();
     public DbSet<TeamSkillGapDismissal> TeamSkillGapDismissals => Set<TeamSkillGapDismissal>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
@@ -115,6 +118,15 @@ public sealed class LearningDbContext : DbContext
         // is filtered by the content rule below, but it is always owned rather than global.
         modelBuilder.Entity<ContentGenerationJob>()
             .HasQueryFilter(job => _tenantContext.IsPlatformWide || job.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.32. A batch names one customer's stage and holds proposals written out of their
+        // product, their tone and their banned claims. Plain equality — a null owner would mean one
+        // customer's proposed rewrites were readable, and acceptable, by every other. The item
+        // carries its own OrganizationId rather than inheriting the batch's, because EF query filters
+        // are not inherited through the Item -> Job navigation and the RLS policy is per table.
+        modelBuilder.Entity<ContentAdaptationJob>()
+            .HasQueryFilter(job => _tenantContext.IsPlatformWide || job.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<ContentAdaptationItem>()
+            .HasQueryFilter(item => _tenantContext.IsPlatformWide || item.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.31. «Не предлагай нам это» is a decision one РОП made about their own team's
         // panel. Plain equality — a null owner would silence one organization's suggestion for every
         // other, which is the loudest possible version of the bug the whole phase exists to prevent.

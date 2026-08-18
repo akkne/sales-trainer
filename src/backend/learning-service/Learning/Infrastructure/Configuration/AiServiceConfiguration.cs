@@ -14,6 +14,12 @@ public sealed class AiServiceConfiguration
     /// <summary>Phase 40.27. The second half, run only after a human has confirmed the structure.</summary>
     public string ContentGeneratePath { get; init; } = "/ai/content/generate";
 
+    /// <summary>Phase 40.32. One exercise rewritten into the organization's product and voice.</summary>
+    public string ContentRewritePath { get; init; } = "/ai/content/rewrite";
+
+    /// <summary>Phase 40.32. What is methodically wrong with one exercise a human wrote.</summary>
+    public string ContentReviewPath { get; init; } = "/ai/content/review";
+
     /// <summary>
     /// Phase 40.27. How long one pipeline call may take. The default <see cref="HttpClient"/> timeout
     /// is 100 seconds and generating a lesson routinely exceeds it — a timeout there would abandon a

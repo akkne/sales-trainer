@@ -163,6 +163,57 @@ public static class ContentSnapshotSerializer
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
+    /// <summary>
+    /// Phase 40.32. One exercise's authored body, canonicalized so that "has this exercise changed
+    /// since we asked the model about it?" has an answer.
+    ///
+    /// <para>
+    /// The batch adaptation queue holds a proposal computed against a specific body of text, and
+    /// between the proposal and the administrator's click somebody may have edited that exercise by
+    /// hand. Applying a rewrite computed against the old wording would silently discard their edit —
+    /// the failure 40.18 refused to build a merge for. So the fingerprint of what the model was shown
+    /// travels with the proposal and is recomputed on accept.
+    /// </para>
+    ///
+    /// <para>
+    /// The type is inside the hash because a body means nothing without it: the same JSON is a valid
+    /// <c>choose_option</c> and an invalid <c>free_text</c>. Identity, ownership, ordering and
+    /// timestamps are outside it, for the reason stated in the class remarks — an exercise that moved
+    /// from position two to position three has not changed its wording, and a stale-flag that fires
+    /// on reordering teaches people to click through the queue without reading it.
+    /// </para>
+    /// </summary>
+    public static string BuildCanonicalExerciseBody(
+        string type,
+        string? serializedContent,
+        string? customAiPrompt)
+    {
+        using var buffer = new MemoryStream();
+
+        using (var writer = new Utf8JsonWriter(buffer, CanonicalWriterOptions))
+        {
+            writer.WriteStartObject();
+
+            WriteJsonOrNull(writer, "content", serializedContent);
+
+            if (string.IsNullOrWhiteSpace(customAiPrompt))
+            {
+                writer.WriteNull("customAiPrompt");
+            }
+            else
+            {
+                writer.WriteString("customAiPrompt", customAiPrompt);
+            }
+
+            writer.WriteNumber("schemaVersion", CurrentSchemaVersion);
+            writer.WriteString("type", type);
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
     /// <summary>Lowercase hex SHA-256, the same convention <c>LessonVersion.ContentHash</c> uses.</summary>
     public static string ComputeContentHash(string canonicalContent)
         => LessonSnapshotSerializer.ComputeContentHash(canonicalContent);

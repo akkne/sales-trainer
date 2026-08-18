@@ -41,6 +41,26 @@ internal sealed class AiContentPipelineClient(
             _configuration.ContentGeneratePath, request, cancellationToken);
     }
 
+    public Task<AiRewrittenExercise> RewriteExerciseAsync(
+        AiAdaptExerciseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return PostAsync<AiAdaptExerciseRequest, AiRewrittenExercise>(
+            _configuration.ContentRewritePath, request, cancellationToken);
+    }
+
+    public Task<AiExerciseReview> ReviewExerciseAsync(
+        AiAdaptExerciseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return PostAsync<AiAdaptExerciseRequest, AiExerciseReview>(
+            _configuration.ContentReviewPath, request, cancellationToken);
+    }
+
     private async Task<TResult> PostAsync<TRequest, TResult>(
         string path,
         TRequest request,

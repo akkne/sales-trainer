@@ -61,6 +61,7 @@ superuser onto the `NOBYPASSRLS` role `sellevate_app`
 | learning | `AssignmentDeadlineSweepService` (40.23, digest 40.26) | Warns everybody who has not finished an assignment whose deadline is inside the lead window, tells the organization's administrators who has not **started** it, then stamps the assignment as announced | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:83](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs); `EnterSystemMode` at [:121](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentDeadlineSweepService.cs) | **Yes** — the enumeration only |
 | learning | `AssignmentRepeatSweepService` (40.24) | Re-issues a shortened version of an assignment at the offsets its `repeat_schedule` names (+7 and +21 days by default), as a new assignment linked to its origin | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:87](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs); `EnterSystemMode` at [:134](../../src/backend/learning-service/Learning/Features/Assignments/AssignmentRepeatSweepService.cs) | **Yes** — the enumeration only |
 | learning | `ContentGenerationSweepService` (40.27) | Advances the admin content pipeline one step per run: the structuring call, then — only after a human approved the structure — the generation call that writes a lesson | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:86](../../src/backend/learning-service/Learning/Features/ContentGeneration/ContentGenerationSweepService.cs); `EnterSystemMode` at [:125](../../src/backend/learning-service/Learning/Features/ContentGeneration/ContentGenerationSweepService.cs) | **Yes** — the enumeration only |
+| learning | `ContentAdaptationSweepService` (40.32) | Answers a few items of a batch tone rewrite or AI content review per tick — one LLM call per exercise — and writes a **proposal** onto the item. Applies nothing | **Per-organization iteration** over a **system** enumeration | `SetOrganization` at [:86](../../src/backend/learning-service/Learning/Features/ContentAdaptation/ContentAdaptationSweepService.cs); `EnterSystemMode` at [:122](../../src/backend/learning-service/Learning/Features/ContentAdaptation/ContentAdaptationSweepService.cs) | **Yes** — the enumeration only |
 | learning | `LessonVersionBackfill` (startup, once) | Mints a published "version 1" for lessons that have never been published, so 40.16's progress backfill has something to bind to | **System** | `EnterSystemMode` in the startup scope of [Program.cs](../../src/backend/learning-service/Learning/Program.cs), the same shape gamification's seeders use | No — it sees the **global** library only, and the content RLS policy admits `OrganizationId IS NULL` rows with no session variable set. An organization's own lessons (40.18) are deliberately out of its reach: their first version comes from their own admin or their own learners, inside that organization's context |
 
 ### 2.2 Kafka consumers — tenant from the envelope
@@ -473,6 +474,56 @@ finished and teaches nothing.
 polls; there is nothing to tell another service about, and nothing that decays while nothing runs
 except a lease, which is what the lease is for.
 
+## 4i. Phase 40.32 added the ninth worker, and it is the first one that spends money per row
+
+`ContentAdaptationSweepService` answers a batch's items — «перепиши все упражнения этапа "закрытие"»,
+or the same sweep asking what is methodically wrong with them instead
+([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a). It is §2.1's ninth row, in the shape the eight
+above it established: per-organization iteration over a system enumeration, `BYPASSRLS` required for
+the enumeration only, and the seventh `IgnoreQueryFilters()` call site in production code.
+
+Everything §4h says about the eighth worker applies here — the seconds-long tick because somebody is
+watching, the conditional-`UPDATE` claim committed before the call, the ten-minute lease deliberately
+longer than the HTTP timeout. **Three things are genuinely new, and all three follow from one fact:
+a run makes two calls, a batch makes up to sixty.**
+
+- **The lease is on the batch and the idempotency is on the item.** 40.27 could put both on the run,
+  because "has this run produced a lesson" is one column. Here the equivalent question is asked sixty
+  times, so the item is the row that answers it: an item carrying a proposal is never queued again,
+  whatever happens to the process holding the batch's lease. That is what makes an interrupted batch
+  cost exactly one call rather than forty.
+- **Each item is committed on its own, and the attempt budget is per item.** Sixty calls cannot be
+  held inside one transaction, and batching the writes would discard answers already billed for when
+  a tick dies at item four. The failure budget is per item for the mirror-image reason: one exercise
+  the model chokes on must not exhaust a budget that is protecting fifty-nine good proposals.
+  `POST …/retry` re-queues exactly the failed items.
+- **The worker cannot reach an `Exercise`, and that is the block.** It writes
+  `ContentAdaptationItems` and its batch's own status columns; the only code in the system that
+  writes an exercise body from a proposal is `ContentAdaptationJobService.AcceptItemAsync`, which
+  runs inside an organization administrator's request. The roadmap's «никогда не автоприменение» is
+  therefore a fact about which types this worker may write, not a rule somebody has to remember. A
+  future "apply the whole batch" verb would move that line, and moving it is the one change to this
+  feature that should never be made quietly.
+
+**The batch's `Status` is a projection, not a counter.** `ContentAdaptationStatusCalculator`
+recomputes it from the items inside every writing transaction, so a tick that dies after answering
+three items leaves nothing wrong — there is no counter to be behind. Section 5 of
+[40.32_content_adaptation_verify.sql](sql/40.32_content_adaptation_verify.sql) checks the projection
+against the items and expects zero disagreements.
+
+**Two synchronous calls entered the system**, both internal, both behind `InternalServiceAuthFilter`,
+neither exposed through the gateway: `POST /ai/content/rewrite` and `POST /ai/content/review`. They
+share the `/ai/content` prefix, the client and the timeout with 40.27's two, and they are fail-closed
+in the same sense — a failure spends the item's attempt and, after two, leaves that item failed with
+the reason on the row while the rest of the batch continues.
+
+**No consumer was added and no Kafka topic.** A batch's state lives in rows the screen polls; there
+is nothing to tell another service about. Nothing decays while nothing runs except a lease, which is
+what the lease is for.
+
+**The counts after 40.32: 30 `AddHostedService` registrations, nine workers in §2.1, seven
+`IgnoreQueryFilters()` call sites.**
+
 ---
 
 ## 5. How to keep this registry true
@@ -497,19 +548,20 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
    ```
 
 3. **`IgnoreQueryFilters()` in production code must be an organization enumeration and nothing
-   else.** As of 40.27 there are exactly **six** call sites outside tests — the enumeration steps of
-   `FollowUpReminderBackgroundService`, `StreakResetJob`, `WeeklyLeagueClosureJob`,
-   `AssignmentDeadlineSweepService` (40.23), `AssignmentRepeatSweepService` (40.24) and
-   `ContentGenerationSweepService` (40.27). All six sit inside an explicit system-mode scope and
-   `Select` the organization id column only; not one of them reads row content — which matters more
-   for the sixth than for the five before it, because a row on `ContentGenerationJobs` holds a
-   customer's uploaded product deck.
+   else.** As of 40.32 there are exactly **seven** call sites outside tests — the enumeration steps
+   of `FollowUpReminderBackgroundService`, `StreakResetJob`, `WeeklyLeagueClosureJob`,
+   `AssignmentDeadlineSweepService` (40.23), `AssignmentRepeatSweepService` (40.24),
+   `ContentGenerationSweepService` (40.27) and `ContentAdaptationSweepService` (40.32). All seven sit
+   inside an explicit system-mode scope and `Select` the organization id column only; not one of them
+   reads row content — which matters more for the last two than for the five before them, because a
+   row on `ContentGenerationJobs` holds a customer's uploaded product deck and a row on
+   `ContentAdaptationItems` holds their exercises rewritten in their own voice.
 
    ```bash
    grep -rn --include=*.cs "IgnoreQueryFilters" src/backend | grep -v /obj/ | grep -v Tests
    ```
 
-   A seventh call site is a finding until proven otherwise.
+   An eighth call site is a finding until proven otherwise.
 
 ### 40.31 added no job, no consumer and no seventh `IgnoreQueryFilters()`, and it had a real reason to
 
@@ -530,8 +582,9 @@ sweep either: its expiry is a `WHERE ExpiresAt > now()` on the read, and the rul
 early is a comparison against `AccuracyPercentAtDismissal` in the same query. An expired row costs one
 index entry and is overwritten the next time somebody dismisses that stage.
 
-The counts in §5 therefore stand: **29 `AddHostedService` registrations, eight workers in §2.1, six
-`IgnoreQueryFilters()` call sites.** A seventh is still a finding.
+The counts in §5 at the time stood at: **29 `AddHostedService` registrations, eight workers in §2.1,
+six `IgnoreQueryFilters()` call sites.** 40.32 moved all three by one — see §4i — and an eighth
+`IgnoreQueryFilters()` is still a finding.
 
 What 40.31 *does* touch in worker territory is one column on a table an existing worker owns:
 `ContentGenerationJobs.GapSourceRef`. `ContentGenerationSweepService` (§4h) neither reads nor writes

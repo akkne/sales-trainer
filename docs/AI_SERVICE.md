@@ -296,11 +296,57 @@ particular the interview's questions are **not** model-authored, for the reason 
 gives about refusal sentences, only sharper: an interview question is answered into a database column,
 and «пришлите ваш прайс в PDF» is a question with no field behind it.
 
+### Rewriting and reviewing one exercise (Phase 40.32)
+
+`ContentAdaptationController` — `POST /ai/content/rewrite` and `POST /ai/content/review`, sharing the
+route prefix, the guard and the un-gatewayed status of the two calls above. Full description:
+[CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md).
+
+**One exercise per call, not a stage per call.** A stage is up to sixty exercises; asked for in one
+completion, one truncation loses the lot, one bad exercise poisons the whole answer, and a batch
+interrupted at exercise forty starts again at one. Per-exercise calls cost more requests and buy the
+property the block needs: the unit of payment, the unit of failure and the unit a person accepts are
+the same row.
+
+Both take `{exerciseType, content, profile?}` — the profile being the same
+`ExtractedContentStructureDto` the pipeline already passes around, rather than a second shape meaning
+the same thing. Four properties of the prompts are decisions rather than details.
+
+- **The rewriter changes words, never the exercise.** It may replace an abstract benefit with the
+  customer's actual one, a generic objection with the wording their clients use, and a neutral
+  register with theirs. It may not move which option is correct, add or remove options, change the
+  type, or turn a theory card into a question — those are authoring decisions, and a batch quietly
+  making sixty of them would be the auto-apply the roadmap forbids wearing the costume of a tone
+  adjustment. learning-service validates the shape afterwards, but the prompt has to ask for it
+  first: a validator that rejects half the batch is a paid call producing nothing.
+- **«Ничего не меняю» is a permitted answer, and the prompt says so twice.** `{"content": null}`
+  resolves the item as `unchanged` without reaching anybody's queue. A model required to produce a
+  change produces one, and sixty cosmetic rewrites of exercises that were already fine is how a
+  reviewer learns to accept everything without reading it.
+- **`banned_claims` binds the rewriter harder than the generator.** Generation invents an exercise and
+  can avoid the topic; a rewrite is handed an existing correct answer, and if that answer already
+  promises something forbidden the honest output removes the promise rather than polishing it. The ban
+  block is appended last, after every block carrying the customer's own words —
+  `ContentAdaptationPromptBuilder`, shared by both routes so the reviewer cannot start flagging a
+  claim the rewriter has been happily writing.
+- **The reviewer diagnoses and never repairs.** It returns `{findings: [{code, detail}]}` from a
+  closed vocabulary of seven (`ambiguous_correct_answer`, `multiple_correct_answers`,
+  `obvious_distractors`, `answer_given_away`, `unmeasurable_criteria`, `missing_explanation`,
+  `banned_claim_rewarded`); `detail` is a **verbatim quote** from the exercise, because the
+  explanation is a fixed sentence learning-service already has and the one thing it cannot know is
+  which option is the problem. A service that both found the ambiguity and silently fixed it would be
+  a model editing a customer's curriculum with nobody in the loop. **Finding nothing is the expected
+  answer** and the prompt says so twice: a reviewer that always produces at least one complaint is one
+  nobody believes by the tenth exercise. The asymmetry is accepted knowingly — a missed defect costs
+  one weak exercise, a false alarm costs the credibility of every true one.
+
 ## Routes (through the gateway, paths preserved)
 
 Phases 40.27–40.28 added no gateway route: `/ai/content/*` is internal, like `/ai/evaluate`. 40.28
 changed the shape of the `structure` response but added no endpoint — the refusal it enables is a
-state of a learning-service run, not a status code from here.
+state of a learning-service run, not a status code from here. **Phase 40.32 added two more routes
+under the same internal prefix and no gateway entry either**, for the same reason: `rewrite` and
+`review` are called by learning-service's batch worker and by nothing else.
 
 Phase 40.25 added `/admin/dialog-sessions` and `/admin/dialog-sessions/{**catch-all}` to the `ai`
 cluster — a separate gateway route from `/admin/dialog/*`, which does not match a different path

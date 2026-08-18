@@ -1845,3 +1845,88 @@ window, no concurrent-index script** — the seventh block in a row, and for the
 index is built over zero rows, the partial index covers a column that is NULL on every existing row,
 and the `ADD COLUMN` is metadata-only in Postgres 11+ (nullable, no default), so nothing rewrites the
 table. Read-only verification: `docs/TENANCY/sql/40.31_skill_gaps_verify.sql`.
+
+---
+
+### Table: `ContentAdaptationJobs` (learning-db — Phase 40.32, strict tenant data, RLS enabled)
+
+One batch: «перепиши все упражнения этапа "закрытие" под наш продукт и тон», or the same sweep asking
+what is methodically wrong with them instead. **Strict tenant data, plain equality** — a batch names
+one customer's stage and its items hold their exercises rewritten in their own voice; a null owner
+would publish both to every other organization.
+
+Full description: [CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `OrganizationId` | uuid | **NOT NULL** — plain-equality RLS, never the content flavour |
+| `CreatedBy` | uuid | nullable — the РОП who pressed the button |
+| `Mode` | varchar(32) | NOT NULL, default `tone_rewrite`. `CK_ContentAdaptationJobs_Mode`: `tone_rewrite` \| `quality_review` |
+| `StageKey` | varchar(64) | NOT NULL, non-blank (`CK_ContentAdaptationJobs_StageKey`) — a `Skill.Stage` value. Same width as `TeamSkillGapDismissals.StageKey`, deliberately: a mismatch would let one table accept a key the other truncates |
+| `Status` | varchar(20) | NOT NULL, default `preparing`. `CK_ContentAdaptationJobs_Status`: `preparing` \| `awaiting_review` \| `completed` \| `failed`. **A projection of the items, recomputed inside every writing transaction — never a counter** |
+| `ItemCount` | integer | NOT NULL, ≥ 0 — frozen at creation. The denominator of «сделано N из M», and a denominator that moves while somebody reviews is worse than one slightly out of date |
+| `ClaimedAt` | timestamptz | nullable — the worker's lease, stamped and committed **before** any LLM call |
+| `FailureReason` | varchar(1000) | nullable — why the last tick failed. Per-item failures live on the item |
+| `CreatedAt` / `UpdatedAt` | timestamptz | NOT NULL |
+| `CompletedAt` | timestamptz | nullable. `CK_ContentAdaptationJobs_Completed`: non-null **exactly** when the status is `completed` or `failed` |
+
+Indexes: `(OrganizationId, Status, CreatedAt)` — the worker's query; `(OrganizationId, CreatedAt)` —
+the admin list; and `UX_ContentAdaptationJobs_Live` on `(OrganizationId, Mode, StageKey)`,
+**unique, partial** over `Status IN ('preparing','awaiting_review')`. Plus
+`UQ_ContentAdaptationJobs_Id_OrganizationId`, which exists only so the item table can point at it.
+
+> **The partial unique index is a cost control, not tidiness.** Two clicks a second apart both read
+> "no live batch" under READ COMMITTED and both start one, and the customer pays twice for the same
+> sixty LLM calls. Partial over the two live statuses so a finished batch never blocks the next one —
+> the whole point of the queue is that it eventually empties.
+
+### Table: `ContentAdaptationItems` (learning-db — Phase 40.32, strict tenant data, RLS enabled)
+
+One exercise inside a batch: what the model proposes for it, and what a person decided. **This is the
+row the roadmap calls «дифф», and it is the unit of accept and reject.**
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `OrganizationId` | uuid | **NOT NULL** — plain-equality RLS. Denormalized from the batch rather than inherited: EF query filters are not inherited through a navigation and an RLS policy is per table |
+| `JobId` | uuid | NOT NULL, FK → `ContentAdaptationJobs.Id` (`ON DELETE CASCADE`). A **second, composite** FK on `(JobId, OrganizationId)` says an item belongs to the organization its batch belongs to — RLS checks each row against the session tenant and never against its parent |
+| `ExerciseId` | uuid | NOT NULL — the exercise the proposal is about, **as resolved at collection time** (40.18): the organization's own copy when they have forked the lesson, the global library row when they have not. No FK: a global row and an owned row are the same table, and the item outlives a deleted exercise as a failure with a reason |
+| `LessonId` | uuid | NOT NULL — that exercise's lesson |
+| `LessonTitle` | varchar(300) | NOT NULL — human label, so a queue of sixty rows reads as content and not as identifiers |
+| `ExerciseType` | varchar(50) | NOT NULL — frozen here; a proposal that changes the type is rejected outright |
+| `OrderInLesson` | integer | NOT NULL — the learner's order, which is the order the queue is walked in |
+| `BaseContentHash` | varchar(64) | NOT NULL, exactly 64 chars (`CK_ContentAdaptationItems_Counters`) — SHA-256 of the canonical body the model was shown (`ContentSnapshotSerializer.BuildCanonicalExerciseBody`, type included). Recomputed on accept; a mismatch is a 409 |
+| `Status` | varchar(20) | NOT NULL, default `pending`. `CK_ContentAdaptationItems_Status`: `pending` \| `proposed` \| `unchanged` \| `accepted` \| `rejected` \| `failed` |
+| `ProposedContent` | jsonb | nullable — the rewritten body, validated by `ExerciseContentValidator` before it is ever stored. Null in review mode |
+| `ChangeSummary` | varchar(500) | nullable — the model's own sentence about what it changed. **The prose half of the diff**; the leaf-level half is computed on the server and can never supply the reason |
+| `ChangedFieldCount` | integer | NOT NULL, ≥ 0 — how many JSON leaves the proposal moves. Stored, not cached: it describes the proposal (frozen), not the exercise (not) |
+| `Findings` | jsonb | nullable — review mode, a list of `{code, detail}` from the closed vocabulary of seven. Only the code and the quoted fragment are stored; the sentence and the severity are resolved on read, so a stored document can never disagree with the code table |
+| `AppliedExerciseId` | uuid | nullable — **the row actually written**, which is not always `ExerciseId`: accepting a rewrite of a global exercise forks the lesson first and the body lands in the organization's copy |
+| `AppliedAt` | timestamptz | nullable |
+| `ResolvedBy` / `ResolvedAt` | uuid / timestamptz | nullable — who answered this item, and when. No worker ever fills them in |
+| `Attempts` | integer | NOT NULL, ≥ 0 — budgeted **per item**, so one bad exercise cannot exhaust the batch |
+| `FailureReason` | varchar(1000) | nullable |
+| `CreatedAt` / `UpdatedAt` | timestamptz | NOT NULL |
+
+Indexes: `(OrganizationId, JobId, Status)` — the worker's query; `(OrganizationId, JobId, LessonId,
+OrderInLesson)` — the queue in the learner's order; `(OrganizationId, ExerciseId, Status)` — «есть ли
+на это упражнение живое предложение»; plus EF's plain `JobId` index behind the cascade FK.
+
+> **`CK_ContentAdaptationItems_Proposal` is this block's checkpoint constraint**, the way
+> `CK_ContentGenerationJobs_Checkpoint` was 40.27's. It says three things at once: an accepted item
+> carries the proposal it applied *and* the row it was applied to; nothing outside the accepted state
+> may claim an application; and an item cannot sit in the review queue with nothing for a person to
+> look at. Together they make "auto-applied without a proposal" and "applied without being accepted"
+> unrepresentable rather than merely unwritten. `CK_ContentAdaptationItems_Resolution` pairs
+> `accepted`/`rejected` with `ResolvedAt` the same way.
+>
+> What SQL **cannot** say is «a human pressed it». That half is enforced by shape:
+> `ContentAdaptationStepRunner` has no branch that writes `accepted` or `rejected`, and the only code
+> in the system that writes an `Exercise` body out of a proposal is an admin request handler.
+
+Migration: `AddContentAdaptationBatches` (2026-08-18, Phase 40.32). Creates both tables empty.
+**No backfill, no maintenance window, no concurrent-index script** — the eighth block in a row, and
+for the plainest reason yet: nothing is added to an existing table at all, so every index including
+the partial unique one is built over zero rows. Read-only verification:
+`docs/TENANCY/sql/40.32_content_adaptation_verify.sql` (never executed).

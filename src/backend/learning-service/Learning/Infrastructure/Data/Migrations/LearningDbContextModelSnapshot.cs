@@ -283,6 +283,164 @@ namespace Sellevate.Learning.Infrastructure.Data.Migrations
                     b.ToTable("OrganizationProfileReplicas", (string)null);
                 });
 
+            modelBuilder.Entity("Sellevate.Learning.Features.ContentAdaptation.Models.ContentAdaptationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AppliedExerciseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BaseContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ChangeSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ChangedFieldCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExerciseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExerciseType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Findings")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LessonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LessonTitle")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("OrderInLesson")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProposedContent")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("pending");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("OrganizationId", "ExerciseId", "Status");
+
+                    b.HasIndex("OrganizationId", "JobId", "Status");
+
+                    b.HasIndex("OrganizationId", "JobId", "LessonId", "OrderInLesson");
+
+                    b.ToTable("ContentAdaptationItems", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Learning.Features.ContentAdaptation.Models.ContentAdaptationJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("tone_rewrite");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("preparing");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "CreatedAt");
+
+                    b.HasIndex("OrganizationId", "Mode", "StageKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ContentAdaptationJobs_Live")
+                        .HasFilter("\"Status\" IN ('preparing', 'awaiting_review')");
+
+                    b.HasIndex("OrganizationId", "Status", "CreatedAt");
+
+                    b.ToTable("ContentAdaptationJobs", (string)null);
+                });
+
             modelBuilder.Entity("Sellevate.Learning.Features.ContentGeneration.Models.ContentGenerationJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1327,6 +1485,17 @@ namespace Sellevate.Learning.Infrastructure.Data.Migrations
                     b.Navigation("Assignment");
                 });
 
+            modelBuilder.Entity("Sellevate.Learning.Features.ContentAdaptation.Models.ContentAdaptationItem", b =>
+                {
+                    b.HasOne("Sellevate.Learning.Features.ContentAdaptation.Models.ContentAdaptationJob", "Job")
+                        .WithMany("Items")
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Job");
+                });
+
             modelBuilder.Entity("Sellevate.Learning.Features.Lessons.Models.Exercise", b =>
                 {
                     b.HasOne("Sellevate.Learning.Features.Lessons.Models.Lesson", "Lesson")
@@ -1442,6 +1611,11 @@ namespace Sellevate.Learning.Infrastructure.Data.Migrations
             modelBuilder.Entity("Sellevate.Learning.Features.Assignments.Models.Assignment", b =>
                 {
                     b.Navigation("ProgressRecords");
+                });
+
+            modelBuilder.Entity("Sellevate.Learning.Features.ContentAdaptation.Models.ContentAdaptationJob", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Sellevate.Learning.Features.Programs.Models.ProgramVersion", b =>
