@@ -14,6 +14,10 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from lib_csharp_source import is_skipped, strip_strings_and_find_comment
+
 FORBIDDEN_ABBREVIATIONS = {
     "ctx", "req", "res", "msg", "cfg", "repo", "impl", "svc", "mgr", "cmd",
     "conn", "dest", "prop", "attr", "elem", "idx", "len", "btn", "pwd", "addr",
@@ -22,76 +26,6 @@ FORBIDDEN_ABBREVIATIONS = {
 }
 
 IDENTIFIER_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
-SKIP_NAME_MARKERS = (".g.cs", ".designer.cs", "globalusings", "assemblyinfo")
-
-
-def is_skipped(path: pathlib.Path) -> bool:
-    lowered = path.name.lower()
-    if any(marker in lowered for marker in SKIP_NAME_MARKERS):
-        return True
-    parts = {part.lower() for part in path.parts}
-    return bool(parts & {"obj", "bin", "migrations"})
-
-
-def strip_strings_and_find_comment(line: str):
-    """Returns (comment_column, code_without_strings_or_comments).
-
-    Walks the line tracking string/char literals so a // inside a string or a
-    URL is not mistaken for a comment. comment_column is the index of the first
-    real comment marker, or None.
-    """
-    index = 0
-    length = len(line)
-    code_characters = []
-    in_string = False
-    in_char = False
-    in_verbatim = False
-    while index < length:
-        character = line[index]
-        following = line[index + 1] if index + 1 < length else ""
-        if in_string:
-            if in_verbatim:
-                if character == '"' and following == '"':
-                    index += 2
-                    continue
-                if character == '"':
-                    in_string = False
-                    in_verbatim = False
-            else:
-                if character == "\\":
-                    index += 2
-                    continue
-                if character == '"':
-                    in_string = False
-            index += 1
-            continue
-        if in_char:
-            if character == "\\":
-                index += 2
-                continue
-            if character == "'":
-                in_char = False
-            index += 1
-            continue
-        if character == '"':
-            in_string = True
-            in_verbatim = line[index - 1] == "@" if index > 0 else False
-            index += 1
-            continue
-        if character == "'":
-            in_char = True
-            index += 1
-            continue
-        if character == "/" and following == "/":
-            if line[index:index + 3] == "///" and line[index:index + 4] != "////":
-                return None, "".join(code_characters)
-            return index, "".join(code_characters)
-        if character == "/" and following == "*":
-            return index, "".join(code_characters)
-        code_characters.append(character)
-        index += 1
-    return None, "".join(code_characters)
 
 
 def lint_file(path: pathlib.Path):
