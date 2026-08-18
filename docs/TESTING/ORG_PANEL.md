@@ -989,8 +989,8 @@ What it covers: `app/(org)/org/program/page.tsx` and `features/org-program/**`. 
 Semantics: [docs/TENANCY/CONTENT_MODEL.md §2.5](../TENANCY/CONTENT_MODEL.md) and the 40.17 entries in
 [docs/DONT_FORGET.md](../DONT_FORGET.md).
 
-**Endpoints.** Seven, all `AdminProgramController` (`RequireOrgAdmin`), plus one read borrowed from
-the shell:
+**Endpoints.** Seven, all `AdminProgramController` (`RequireOrgAdmin`), plus identity-service's
+roster:
 
 | Route | Used for |
 |---|---|
@@ -1001,7 +1001,7 @@ the shell:
 | `POST /admin/program/versions/publish` | «Опубликовать» |
 | `GET /admin/program/enrollments` | the enrollment table and the spread summary |
 | `POST /admin/program/enrollments {userId}` | «Зачислить ещё», one person per call |
-| `GET /admin/team/skill-map` (via `useTeamMemberNames`) | names for the enrollment rows and the enrollable list |
+| `GET /memberships?status=active` | names for the enrollment rows, and the list «Зачислить ещё» offers |
 
 **The route this screen must never gain.** There is no control anywhere on O18 that moves another
 person's pin, and no route that would let one exist. `POST /admin/program/enrollments` is idempotent
@@ -1036,10 +1036,13 @@ The behaviours worth naming, because they are the ones that mislead quietly:
 - **The draft is never «the current version».** `selectCurrentPublishedVersion` ignores it even
   though its number is the highest; nobody can be pinned to a draft.
 - **People who hold no pin are counted and named.** `summarizeEnrollmentSpread` returns
-  `notEnrolledKnownCount`, and the summary says those people learn off the live skill tree. A screen
-  that reports «2 из 3 на последней версии» and stays silent about the other four people in the
-  organization has told the reader the programme is in force when it is not — that sentence is the
-  reason this slice exists.
+  `notEnrolledCount` against `GET /memberships?status=active`, and the summary says those people
+  learn off the live skill tree. A screen that reports «2 из 3 на последней версии» and stays silent
+  about the other four people in the organization has told the reader the programme is in force when
+  it is not — that sentence is the reason this slice exists.
+- **A roster still loading is not «никого нет».** `rosterState` is `loading` / `ready` /
+  `unavailable`, because both of the non-ready states leave the unenrolled count at zero and the
+  cheerful sentence would then be false rather than absent.
 - **The mixed state is worded as normal.** Two versions in use renders «Команда учится по разным
   версиям… Это нормальное состояние, а не рассинхронизация», not a warning to be resolved.
 - **The enrollment table offers exactly one button per behind row** — «Что изменится у него», which
@@ -1071,6 +1074,8 @@ pre-seeded — on a fresh install every organization has zero programme versions
 | «Опубликовать» twice with no edits in between | rebuild the draft, publish → «Изменений нет, новая версия не создана»; the version number does **not** advance |
 | «Опубликовать» with no draft at all | «Черновика нет. Соберите его из дерева навыков и попробуйте снова.» (the 409) |
 | «Зачислить ещё» | a dialog naming the version people will land on and the sentence «Зачислит новичков и не тронет тех, кто уже учится»; one button per person |
+| A hire who has never opened a lesson | they are in the dialog: the list is `GET /memberships?status=active`, not «кто что-то решал» |
+| Stop identity-service, reload | the version list and the enrollment table still render; names fall back to «Без имени · {8 символов id}» and the summary says the roster did not load instead of «без зачисления никого нет» |
 | Enroll somebody, then edit the tree, rebuild the draft, publish v2 | that person stays on v1 and their row gains «Отстаёт»; the summary reports the split, and nothing on the screen offers to move them |
 | «Что изменилось» on v2 | four sections; a pure reorder puts everything in «Переставлены» and leaves the other three empty |
 | «Что изменилось» on the first published version | the button is absent — there is no baseline, and a disabled button explaining itself would be worse |
@@ -1083,9 +1088,8 @@ pre-seeded — on a fresh install every organization has zero programme versions
 
 | Design asks for | Reality | Degraded behaviour |
 |---|---|---|
-| «Иванов А. v3 зачислен 12 авг» | `ProgramEnrollmentDto` carries `userId` only — learning-service holds no replica of a person's name | names come from `GET /admin/team/skill-map` through `useTeamMemberNames`; anybody it cannot name renders «Без имени · {8 символов id}» |
-| «Зачислить ещё» over the organization's people | §6.1: identity-service has no roster route; the skill map only knows people who have already attempted something | the dialog offers the people the skill map knows and repeats the caveat; a brand-new hire with zero attempts cannot be enrolled from this screen |
-| A total of «сколько человек в организации не зачислено» | same missing roster — the panel knows a lower bound, not the truth | «Без зачисления — N человек (как минимум)» whenever `rosterKnown` is false, and the note explaining where the number comes from |
+| «Иванов А. v3 зачислен 12 авг» | `ProgramEnrollmentDto` carries `userId` only — learning-service holds no replica of a person's name | names come from identity-service's `GET /memberships?status=active`, which landed with slice 8; a pin whose person is not on the active roster (deactivated, or the request failed) renders «Без имени · {8 символов id}» |
+| A total of «сколько человек в организации не зачислено» | answerable now, but only against a roster that loaded | `rosterState` is three-valued: «Без зачисления — N человек» when the roster is ready, «Без зачисления никого нет» when it is ready and empty, and a note saying the roster did not load otherwise — a request still in flight must not render as «никого нет» |
 | Enrolling a group in one action | there is no bulk route, deliberately (DONT_FORGET.md → блок 40.17) | one `POST` per person, driven by a per-row button; no multi-select that could later be pointed at existing pins |
 | The pinned programme actually driving what a learner sees | `/skill-tree`, `/lessons` and `/exercises/*` still read the live tree; only `GET /program` serves the pin, and no learner screen calls it yet | a footnote on O18 says exactly that, so that publishing is not read as «команда уже учится по этой версии» |
 | Un-enrolling somebody | no route exists | none offered |
