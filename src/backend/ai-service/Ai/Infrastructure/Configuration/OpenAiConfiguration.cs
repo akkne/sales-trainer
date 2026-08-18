@@ -14,6 +14,16 @@ public enum OpenAiProvider
     F5Ai,
 }
 
+/// <summary>
+/// The OpenAI-compatible provider this service talks to: where it lives, which key opens it, and the
+/// model and token budget of each kind of call.
+///
+/// <para>
+/// <c>ApiKey</c> is injected from the root <c>.env</c>; <c>appsettings.json</c> carries only the
+/// <c>INJECTED_FROM_ENV</c> marker. Every model name and token cap is a per-call-type option rather
+/// than one shared pair, so re-pricing the feedback pass cannot silently re-price a dialog turn.
+/// </para>
+/// </summary>
 public sealed class OpenAiConfiguration
 {
     public const string SectionName = "OpenAI";

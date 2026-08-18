@@ -12,24 +12,52 @@ namespace Sellevate.Ai.Features.Dialog.Services.Implementation;
 /// <summary>
 /// Asks the model whether a user-authored scenario is about sales, and remembers the answer in
 /// Redis keyed by a hash of the normalized text so repeat runs of the same scenario are free.
+///
+/// <para>
+/// <b>Redis is an optimization here and never a dependency.</b> If it is down or the request carries no
+/// organization, the check still works — it just costs a model call — so every cache path swallows
+/// connection failures rather than failing the request. Session data fails loudly instead; a verdict
+/// about the caller's own text is not data another organization put there.
+/// </para>
+///
+/// <para>
+/// <b>An unavailable checker fails closed.</b> A verdict is either "about sales" or "not", and
+/// "we could not tell" is neither: it raises
+/// <see cref="ScenarioValidationUnavailableException"/> and is never cached and never read as approval.
+/// </para>
 /// </summary>
-public sealed class ScenarioValidationService : IScenarioValidationService
+internal sealed class ScenarioValidationService : IScenarioValidationService
 {
-    // Rejections are cached too: a user who keeps resubmitting the same off-topic text would
-    // otherwise burn a moderation call every attempt. Their TTL is shorter than approvals' because
-    // a rejection is the side we are more willing to re-examine after a prompt or model change.
+    /// <summary>
+    /// Approvals are held for a month. Rejections are cached too — a user resubmitting the same
+    /// off-topic text would otherwise burn a moderation call every attempt — but for a week only,
+    /// because a rejection is the side we are more willing to re-examine after a prompt or model change.
+    /// </summary>
     private static readonly TimeSpan ApprovedTimeToLive = TimeSpan.FromDays(30);
+
     private static readonly TimeSpan RejectedTimeToLive = TimeSpan.FromDays(7);
 
-    // Bumping the version invalidates every cached verdict at once — do it whenever the criteria
-    // below change, otherwise old verdicts outlive the rules that produced them.
-    //
-    // Phase 40.11: the key is namespaced by organization first. Without it, one customer's cached
-    // verdict answers another customer's request — and since the key is a hash of the scenario
-    // text, a shared key also tells organization B that somebody else already submitted exactly
-    // this text. The org: prefix makes both impossible, and incidentally makes every pre-40.11 key
-    // unreachable: no un-prefixed key is ever read again, they simply age out on their own TTL.
+    /// <summary>
+    /// Bumping the <c>v1</c> segment invalidates every cached verdict at once. Do it whenever the
+    /// criteria in <see cref="ValidationSystemPrompt"/> change, otherwise old verdicts outlive the rules
+    /// that produced them.
+    ///
+    /// <para>
+    /// Phase 40.11: the full key is namespaced by organization ahead of this prefix. Without that, one
+    /// customer's cached verdict answers another's request — and since the key is a hash of the scenario
+    /// text, a shared key would also tell organization B that somebody else had already submitted exactly
+    /// this text. The prefix incidentally makes every pre-40.11 key unreachable: no un-prefixed key is
+    /// ever read again, they simply age out on their own TTL.
+    /// </para>
+    /// </summary>
     private const string CacheKeyPrefix = "dialog:scenario-validation:v1:";
+
+    /// <summary>
+    /// Token cap on the verdict. Small on purpose: the answer is a one-field JSON object plus a sentence,
+    /// and this call runs on every attempt to start a custom scenario, so it is the highest-frequency
+    /// moderation call in the product.
+    /// </summary>
+    private const int MaximumVerdictTokenCount = 200;
     private const string ApprovedCacheValue = "ok";
     private const string RejectedCacheValuePrefix = "no:";
 
@@ -75,16 +103,9 @@ public sealed class ScenarioValidationService : IScenarioValidationService
         var lengthComplaint = DescribeLengthProblem(scenario);
         if (lengthComplaint != null)
         {
-            // A length problem is a property of the text itself, so it is a real verdict — but it
-            // costs nothing to recompute, so it never touches the cache.
             return ScenarioValidationResult.Invalid(lengthComplaint);
         }
 
-        // Null when there is no organization on this request. The cache is documented below as an
-        // optimization and never a dependency, so an unset tenant degrades exactly the way an
-        // unreachable Redis does — one extra model call — rather than reading or writing a key
-        // that no organization owns. Session data fails loudly instead; a verdict about the
-        // caller's own text is not data another organization put there.
         var cacheKey = BuildCacheKey(scenario);
 
         var cached = cacheKey is null ? null : await ReadFromCacheAsync(cacheKey);
@@ -103,6 +124,11 @@ public sealed class ScenarioValidationService : IScenarioValidationService
         return verdict;
     }
 
+    /// <summary>
+    /// A length problem is a property of the text itself, so it is a real verdict — but it costs nothing
+    /// to recompute, which is why it is decided before the cache is consulted and never stored in it.
+    /// Returns <see langword="null"/> when the length is acceptable.
+    /// </summary>
     private static string? DescribeLengthProblem(string scenario)
     {
         var trimmed = scenario?.Trim() ?? string.Empty;
@@ -161,8 +187,6 @@ public sealed class ScenarioValidationService : IScenarioValidationService
         return collapsed.ToString();
     }
 
-    // Redis is an optimization here, never a dependency: if it is down the check still works, it
-    // just costs a model call. So every cache path swallows connection failures.
     private async Task<ScenarioValidationResult?> ReadFromCacheAsync(string cacheKey)
     {
         try
@@ -216,7 +240,7 @@ public sealed class ScenarioValidationService : IScenarioValidationService
                 ValidationSystemPrompt,
                 BuildFencedUserPrompt(scenario),
                 cancellationToken,
-                maxTokens: 200);
+                maxTokens: MaximumVerdictTokenCount);
         }
         catch (Exception exception) when (exception is OpenAiRequestException
                                               or OpenAiRateLimitException
@@ -236,6 +260,12 @@ public sealed class ScenarioValidationService : IScenarioValidationService
         scenario.Trim() + "\n" +
         "=== КОНЕЦ СЦЕНАРИЯ ПОЛЬЗОВАТЕЛЯ ===";
 
+    /// <summary>
+    /// Reads the model's JSON verdict. The model is asked for a rejection reason but is not trusted to
+    /// always supply one — an empty reason would reach the user as a blank error — so a missing reason
+    /// falls back to the standard wording. A missing or non-boolean <c>relevant</c> field is not a
+    /// rejection but an unavailable checker, which is what keeps the fail-closed rule intact.
+    /// </summary>
     private static ScenarioValidationResult ParseVerdict(string answer)
     {
         var json = ExtractJsonObject(answer);
@@ -278,11 +308,9 @@ public sealed class ScenarioValidationService : IScenarioValidationService
             return ScenarioValidationResult.Valid();
         }
 
-        // The model is asked for a reason but is not trusted to always supply one, and an empty
-        // rejection message would reach the user as a blank error.
         return ScenarioValidationResult.Invalid(
             string.IsNullOrWhiteSpace(reason)
-                ? "Недопустимый сценарий: он не связан с продажами."
+                ? DialogMessages.ScenarioNotAboutSales
                 : reason.Trim());
     }
 

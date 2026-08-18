@@ -5,6 +5,17 @@ using Sellevate.Ai.Infrastructure.Data;
 
 namespace Sellevate.Ai.Features.Dialog.Seeders;
 
+/// <summary>
+/// Seeds the hidden bundle/mode pair behind "Звонок по компании" on the practice page.
+///
+/// <para>
+/// <b>Prompts live in the database and are editable in the admin panel, but the mode is seeded once</b> —
+/// so a tone change to the constants here would never reach an already-seeded environment. An existing
+/// row is therefore upgraded in place, but only when its prompts still match a previously seeded default
+/// byte for byte, i.e. nobody has customized them. An administrator's edit is always left alone, which is
+/// why every superseded default has to be kept below rather than deleted.
+/// </para>
+/// </summary>
 public static class CompanyCallModeSeeder
 {
     public static readonly Guid CompanyCallBundleId = new("a1000000-0000-0000-0000-000000000001");
@@ -65,10 +76,7 @@ public static class CompanyCallModeSeeder
         "Калибровка: 0-20 провал, 21-45 слабо, 46-70 нормально, 71-85 хорошо, 86-100 отлично. " +
         "Оценивай справедливо: за уверенный, старательный разговор не занижай баллы.";
 
-    // Prompts are stored in the DB and editable via the admin panel. The mode below is seeded once,
-    // so tone changes to the constants above would never reach an already-seeded environment. To fix
-    // that we upgrade an existing row IN PLACE, but only when its prompts still byte-for-byte match the
-    // previous seeded defaults — i.e. an admin has not customized them. Admin edits are left untouched.
+    /// <summary>The original seeded chat prompt, kept so a database still holding it rolls forward.</summary>
     private const string PreviousChatSystemPromptTemplate =
         "Ты — сотрудник или лицо, принимающее решения, в компании-потенциальном клиенте. " +
         "Твоя задача — вести себя реалистично: задавать встречные вопросы, выдвигать возражения, " +
@@ -80,8 +88,10 @@ public static class CompanyCallModeSeeder
         "Отвечай ТОЛЬКО в формате JSON: {\"reply\": \"<твоя реплика>\", \"endCall\": true|false}. " +
         "Поле reply всегда первым.";
 
-    // The first "warmer tone" revision, before the "live conversation / greet back" instructions were
-    // added. Kept so a DB already upgraded to it also rolls forward to the current prompt.
+    /// <summary>
+    /// The first "warmer tone" revision, before the "live conversation / greet back" instructions were
+    /// added. Kept so a database already upgraded to it also rolls forward to the current prompt.
+    /// </summary>
     private const string PreviousWarmChatSystemPromptTemplate =
         "Ты — сотрудник или лицо, принимающее решения, в компании-потенциальном клиенте. " +
         "Веди себя как живой человек, а не как робот-охранник: у тебя есть настроение, и оно " +
@@ -101,8 +111,10 @@ public static class CompanyCallModeSeeder
         "Отвечай ТОЛЬКО в формате JSON: {\"reply\": \"<твоя реплика>\", \"endCall\": true|false}. " +
         "Поле reply всегда первым.";
 
-    // Every chat prompt we have previously seeded. An existing row whose chat prompt still matches any of
-    // these is treated as un-customized and rolled forward; anything else is assumed to be an admin edit.
+    /// <summary>
+    /// Every chat prompt previously seeded. A row whose prompt still matches any of these is treated as
+    /// un-customized and rolled forward; anything else is assumed to be an administrator's edit.
+    /// </summary>
     private static readonly string[] PreviousChatSystemPromptTemplates =
     {
         PreviousChatSystemPromptTemplate,

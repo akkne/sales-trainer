@@ -7,6 +7,15 @@ namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 /// The first chunk additionally splits on clause delimiters (comma, semicolon, colon, dash)
 /// with a lower minimum length, so the first audio reaches the user as early as possible.
 /// Subsequent chunks split on sentence enders only, keeping natural TTS prosody.
+///
+/// <para>
+/// A clause delimiter counts only before the first chunk and only when whitespace follows it, so a
+/// decimal written the Russian way ("1,5") is never cut in half.
+/// </para>
+///
+/// <para>
+/// Stateful and single-threaded: one instance belongs to one turn.
+/// </para>
 /// </summary>
 internal sealed class SentenceChunker
 {
@@ -44,19 +53,18 @@ internal sealed class SentenceChunker
         }
 
         var splitIndex = -1;
-        for (var i = minimumLength; i < text.Length; i++)
+        for (var index = minimumLength; index < text.Length; index++)
         {
-            if (IsSentenceDelimiter(text[i]))
+            if (IsSentenceDelimiter(text[index]))
             {
-                splitIndex = i;
+                splitIndex = index;
                 break;
             }
 
-            // Clause delimiters count only before the first chunk and only when followed
-            // by whitespace, so numbers like "1,5" are never cut in half.
-            if (!_firstChunkEmitted && IsClauseDelimiter(text[i]) && i + 1 < text.Length && char.IsWhiteSpace(text[i + 1]))
+            if (!_firstChunkEmitted && IsClauseDelimiter(text[index])
+                && index + 1 < text.Length && char.IsWhiteSpace(text[index + 1]))
             {
-                splitIndex = i;
+                splitIndex = index;
                 break;
             }
         }
@@ -73,7 +81,7 @@ internal sealed class SentenceChunker
         return true;
     }
 
-    private static bool IsSentenceDelimiter(char ch) => ch is '.' or '!' or '?' or '\n';
+    private static bool IsSentenceDelimiter(char character) => character is '.' or '!' or '?' or '\n';
 
-    private static bool IsClauseDelimiter(char ch) => ch is ',' or ';' or ':' or '—' or '–';
+    private static bool IsClauseDelimiter(char character) => character is ',' or ';' or ':' or '—' or '–';
 }

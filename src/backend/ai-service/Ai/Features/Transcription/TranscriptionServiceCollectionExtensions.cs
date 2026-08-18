@@ -4,6 +4,10 @@ using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Transcription;
 
+/// <summary>
+/// Registers speech-to-text. Scoped rather than singleton because the spend meter it charges through
+/// closes over the request's tenant.
+/// </summary>
 public static class TranscriptionServiceCollectionExtensions
 {
     public static IServiceCollection AddTranscriptionFeatureServices(

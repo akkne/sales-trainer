@@ -24,6 +24,12 @@ public interface IDialogModeOverrideService
     /// <c>[Authorize]</c> on one of its actions would AND the two policies instead of ORing them:
     /// the code would read as if organization administrators were admitted and they would still be
     /// refused. Returns <see langword="null"/> when the row is not this organization's override.
+    ///
+    /// <para>
+    /// <c>Key</c> and <c>BundleId</c> are deliberately not editable. They are the override's link to the
+    /// row it shadows: change the key and the copy stops resolving over its base and starts appearing
+    /// beside it, which is the one outcome copy-on-write exists to prevent.
+    /// </para>
     /// </summary>
     Task<DialogMode?> UpdateOverrideAsync(
         Guid overrideId, UpdateModeRequestDto request, CancellationToken cancellationToken = default);
@@ -53,6 +59,22 @@ internal sealed class DialogModeOverrideService(
     AiDbContext databaseContext,
     ILogger<DialogModeOverrideService> logger) : IDialogModeOverrideService
 {
+    /// <summary>
+    /// Forks a global mode into this organization's own copy. Idempotent: an existing active copy is
+    /// returned untouched.
+    ///
+    /// <para>
+    /// <b>The seeded hidden bundles are refused.</b> Their prompts are half code — the service fills in
+    /// placeholders for the company being called and the scenario the learner typed — so a copy would
+    /// drift away from the code that feeds it until it silently stopped matching.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A retired override is revived rather than duplicated.</b> <c>UNIQUE (OrganizationId, BundleId,
+    /// Key)</c> makes a second copy impossible, and the organization had already discarded its text when
+    /// it accepted the base, so pressing "edit" again is a fresh fork of the current base.
+    /// </para>
+    /// </summary>
     public async Task<DialogModeOverrideResult> CreateOverrideAsync(
         Guid baseModeId,
         CancellationToken cancellationToken = default)
@@ -79,9 +101,6 @@ internal sealed class DialogModeOverrideService(
             return new DialogModeOverrideResult(DialogModeOverrideOutcome.SourceNotGlobal, null);
         }
 
-        // The seeded hidden bundles stay global. Their prompts are half code: the service fills in
-        // placeholders (the company being called, the scenario the learner typed), and a copy would
-        // drift away from the code that feeds it until it silently stopped matching.
         if (baseMode.Bundle is { IsHidden: true })
         {
             return new DialogModeOverrideResult(DialogModeOverrideOutcome.SourceIsSeededHiddenMode, null);
@@ -99,9 +118,6 @@ internal sealed class DialogModeOverrideService(
                 await DescribeAsync(existing, cancellationToken));
         }
 
-        // A retired override is revived rather than duplicated: UNIQUE (OrganizationId, BundleId,
-        // Key) makes a second copy impossible, and the organization had already discarded its text
-        // when it accepted the base, so pressing "edit" again is a fresh fork.
         var overrideMode = existing ?? new DialogMode { Id = Guid.NewGuid(), CreatedAt = DateTime.UtcNow };
 
         overrideMode.OrganizationId = organizationId;
@@ -218,6 +234,11 @@ internal sealed class DialogModeOverrideService(
         return true;
     }
 
+    /// <summary>
+    /// Review action two. Re-points the override's fork marker at the base as it is now, leaving the
+    /// prompt itself untouched: this records "we looked at what changed upstream and ours still stands",
+    /// which is a decision rather than a merge.
+    /// </summary>
     public async Task<bool> KeepOverrideAsync(Guid overrideId, CancellationToken cancellationToken = default)
     {
         if (databaseContext.TenantContext.OrganizationId is not { } organizationId)
@@ -239,8 +260,6 @@ internal sealed class DialogModeOverrideService(
             return false;
         }
 
-        // The prompt itself is untouched. This records "we looked at what changed upstream and ours
-        // still stands", which is a decision, not a merge.
         overrideMode.BaseContentHash = DialogModeSnapshot.ComputeContentHash(baseMode);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
@@ -273,9 +292,6 @@ internal sealed class DialogModeOverrideService(
             return null;
         }
 
-        // Key and BundleId are deliberately not editable here. They are the override's link to the
-        // row it shadows: change the key and the copy stops resolving over its base and starts
-        // appearing beside it, which is the one outcome copy-on-write exists to prevent.
         if (request.Title != null) overrideMode.Title = request.Title;
         if (request.Description != null) overrideMode.Description = request.Description;
         if (request.ChatSystemPrompt != null) overrideMode.ChatSystemPrompt = request.ChatSystemPrompt;
