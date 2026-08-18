@@ -19,12 +19,10 @@ namespace Sellevate.Notification.Features.Notifications.Emails.Delayed;
 ///
 /// <para>
 /// Phase 40.13. The read watermark is per-organization state and gets the <c>org:{orgId}:</c>
-/// prefix. The pending queue deliberately does <b>not</b>: it is one due-time-ordered work list for
-/// the whole service, the same shape as an outbox, and splitting it per organization would force
-/// the dispatcher to poll one sorted set per customer to find out what is due — cost growing with
-/// the customer list to protect data that is not in the key. Instead the organization travels
-/// inside each queued item, exactly as it travels in a Kafka envelope, and the dispatcher sets it
-/// on the tenant context before doing anything with the item.
+/// prefix; the pending queue deliberately does <b>not</b> — see
+/// <see cref="RedisKeys.ChatEmailPendingQueue"/>. The organization travels inside each queued item
+/// instead, exactly as it travels in a Kafka envelope, and the dispatcher sets it on the tenant
+/// context before doing anything with the item.
 /// </para>
 ///
 /// <para>
@@ -37,12 +35,10 @@ namespace Sellevate.Notification.Features.Notifications.Emails.Delayed;
 public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
 {
     /// <summary>
-    /// The one cross-organization key in this class; see the class remarks. Unchanged from before
-    /// 40.13, so nothing has to be migrated — only the member payload gained a field.
+    /// Ranges the due members and removes them atomically, returning the claimed payloads, so two
+    /// dispatcher instances can never email the same message twice.
+    /// KEYS[1] pending queue; ARGV[1] cut-off score in epoch ms; ARGV[2] maximum items.
     /// </summary>
-    private const string PendingKey = "notifications:chat-email:pending";
-
-    // Range due members and remove them atomically; returns the claimed member payloads.
     private const string ClaimDueScript = """
         local due = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, tonumber(ARGV[2]))
         if #due > 0 then
@@ -51,7 +47,11 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
         return due
         """;
 
-    // Set the watermark only when the new read time is later than the stored one.
+    /// <summary>
+    /// Raises the watermark only when the incoming read time is later than the stored one, so an
+    /// out-of-order read receipt can never lower it and re-arm an email for a message already read.
+    /// KEYS[1] watermark key; ARGV[1] read time in ticks; ARGV[2] TTL in seconds.
+    /// </summary>
     private const string SetWatermarkScript = """
         local current = tonumber(redis.call('GET', KEYS[1]))
         local incoming = tonumber(ARGV[1])
@@ -97,7 +97,7 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
 
         var payload = JsonSerializer.Serialize(member);
         var score = ToUnixMilliseconds(pending.DueAt);
-        return _connection.GetDatabase().SortedSetAddAsync(PendingKey, payload, score);
+        return _connection.GetDatabase().SortedSetAddAsync(RedisKeys.ChatEmailPendingQueue, payload, score);
     }
 
     public Task MarkConversationReadAsync(
@@ -116,12 +116,12 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
     }
 
     public async Task<IReadOnlyList<PendingChatEmail>> ClaimDueAsync(
-        DateTime asOf, int maxItems, CancellationToken cancellationToken = default)
+        DateTime asOf, int maximumItems, CancellationToken cancellationToken = default)
     {
         var result = await _connection.GetDatabase().ScriptEvaluateAsync(
             ClaimDueScript,
-            [(RedisKey)PendingKey],
-            [ToUnixMilliseconds(asOf), Math.Max(1, maxItems)]);
+            [(RedisKey)RedisKeys.ChatEmailPendingQueue],
+            [ToUnixMilliseconds(asOf), Math.Max(1, maximumItems)]);
 
         if (result.IsNull)
         {
@@ -140,8 +140,6 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
 
             if (stored.OrganizationId == Guid.Empty)
             {
-                // A pre-40.13 leftover. Dropped rather than sent under a guessed tenant — see the
-                // class remarks; the queue never holds more than one grace period of items.
                 _logger.LogWarning(
                     "Dropping a pending unread-chat email with no organization (queued before 40.13)");
                 continue;
@@ -174,6 +172,12 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
             && readTicks >= pending.MessageSentAt.Ticks;
     }
 
+    /// <summary>
+    /// Returns null rather than raising on an unreadable member: the payload shape has changed once
+    /// already, and one undeserializable item must not stop the whole batch behind it from being
+    /// emailed. The item has already been removed from the queue by the claim, so it is simply lost —
+    /// acceptable for a "you have an unread message" nudge, and never for the message itself.
+    /// </summary>
     private static StoredPendingChatEmail? Deserialize(RedisValue member)
     {
         if (!member.HasValue)
@@ -204,7 +208,7 @@ public sealed class RedisDelayedChatEmailScheduler : IDelayedChatEmailScheduler
     {
         if (organizationId == Guid.Empty)
         {
-            throw new InvalidOperationException("Organization context is not set.");
+            throw new InvalidOperationException(ErrorMessages.OrganizationContextNotSet);
         }
     }
 

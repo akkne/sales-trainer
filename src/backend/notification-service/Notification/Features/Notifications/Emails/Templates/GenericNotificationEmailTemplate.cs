@@ -10,7 +10,10 @@ namespace Sellevate.Notification.Features.Notifications.Emails.Templates;
 /// </summary>
 public sealed class GenericNotificationEmailTemplate : NotificationEmailTemplate
 {
-    // Default(NotificationType) (0) is not a defined member, so this never collides with a real type.
+    /// <summary>
+    /// <c>default</c> is 0, which is not a defined <see cref="NotificationType"/> member, so this
+    /// template can never collide with a real type in the renderer's index.
+    /// </summary>
     public override NotificationType NotificationType => default;
 
     protected override string? ActionLabel => "Open Sellevate";

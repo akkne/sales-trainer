@@ -91,10 +91,14 @@ public sealed class NotificationController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Every route addresses the caller's own inbox, so the recipient is taken from the token and
+    /// never from the request — there is no route or query parameter that could name someone else.
+    /// </summary>
     private bool TryGetCurrentUserId(out Guid recipientUserId)
     {
         var rawUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+            ?? User.FindFirstValue(ClaimTypeNames.Subject);
 
         return Guid.TryParse(rawUserId, out recipientUserId);
     }

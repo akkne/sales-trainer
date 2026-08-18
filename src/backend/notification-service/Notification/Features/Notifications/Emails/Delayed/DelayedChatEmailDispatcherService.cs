@@ -22,8 +22,6 @@ namespace Sellevate.Notification.Features.Notifications.Emails.Delayed;
 /// </summary>
 internal sealed class DelayedChatEmailDispatcherService : BackgroundService
 {
-    private const int MaxBatchSize = 100;
-
     private readonly IDelayedChatEmailScheduler _scheduler;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly NotificationEmailConfiguration _configuration;
@@ -68,19 +66,22 @@ internal sealed class DelayedChatEmailDispatcherService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Claims one batch and sends it, guarding <b>per item rather than per batch</b>.
+    /// <c>ClaimDueAsync</c> is destructive — it reads the due set and removes it in one step — so the
+    /// claimed list is the only remaining copy of up to a whole batch of emails. With the guard around
+    /// the loop instead, one SMTP timeout on the third recipient unwound past the ninety-seven behind
+    /// it and logged "will retry next tick" with nothing left to retry (review, 40.34).
+    /// </summary>
     private async Task FlushDueAsync(CancellationToken cancellationToken)
     {
-        var due = await _scheduler.ClaimDueAsync(DateTime.UtcNow, MaxBatchSize, cancellationToken);
+        var due = await _scheduler.ClaimDueAsync(
+            DateTime.UtcNow, _configuration.MaximumFlushBatchSize, cancellationToken);
         if (due.Count == 0)
         {
             return;
         }
 
-        // Per-item, not per-batch. ClaimDueAsync is destructive — it reads the due set and removes it
-        // in one step — so this list is the only remaining copy of up to a hundred emails. With the
-        // guard around the whole loop, one SMTP timeout on the third recipient unwound past the
-        // ninety-seven behind it and logged "will retry next tick" with nothing left to retry.
-        // Review, 40.34.
         foreach (var pending in due)
         {
             try
