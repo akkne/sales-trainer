@@ -676,7 +676,7 @@ organization in context at all (403): platform staff satisfy `RequireOrgAdmin` w
 membership, and a programme with no owner is not a thing that can be written. As everywhere, the
 organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
 
-### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23)
+### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23, automatic repeats 40.24)
 
 The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
 what counts as done, and who is where on it. Design:
@@ -712,8 +712,9 @@ gateway**):
 `{title, goal?, sourceType, sourceRef?, content?: AssignmentContentItemDto[], audience?, opensAt?, deadline?, completionRule, repeatSchedule?}`
 `AssignmentContentItemDto`: `{kind, reference, orderIndex, persona?}` — `persona` (40.23) is `{name?, position?, personality?, difficulty?}`, meaningful only on a `dialog_scenario` item and silently dropped from every other kind
 `AssignmentAudienceDto`: `{kind, userIds?, groupId?}`
-`AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
-`AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
+`AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, repeatOfAssignmentId, repeatWaveIndex, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
+`AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, repeatOfAssignmentId, repeatWaveIndex, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
+`repeatOfAssignmentId` / `repeatWaveIndex` (40.24) are set only on a generated repeat and say which wave of which origin it is; both null on anything a human created. There is **no route that creates a repeat** — the sweep does, on its own — and `createdBy` is null on every one of them
 `AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
 `AssignmentReminderResultDto`: `{notifiedCount}`
 `ActiveAssignmentDto`: `{id, title, goal, opensAt, deadline, completionRule, content: ActiveAssignmentItemDto[], status, bestScore, attemptCount, firstOpenedAt, completedAt}`
@@ -743,8 +744,42 @@ Issuing freezes both the rule and the content, so this is the last moment they c
 an assignment nobody can ever finish is indistinguishable on the dashboard from a team that has not
 started.
 
-`repeatSchedule` (optional) is still checked only for being an object naming a `kind`; its vocabulary
-is 40.24's.
+**`repeatSchedule` is optional and, since 40.24, checked against a closed vocabulary of exactly one
+kind.** It is what turns one training into recurring practice; without it the product's central claim
+is a slogan (`docs/TENANCY/ASSIGNMENTS.md` §2.1).
+
+| `kind` | Shape | Means |
+|---|---|---|
+| `fixed_offsets` | `{"kind":"fixed_offsets","offsetDays":[7,21]}` | A shortened re-issue this many days after **the origin was issued** (`activatedAt`), once per offset. `offsetDays` may be omitted and then means exactly `[7, 21]` |
+
+Anything else is a **400**: an unknown `kind`, a list that is empty, longer than 4, not ascending, or
+holding an offset outside 1–180 days. A cron expression is deliberately not expressible — what is
+being scheduled is the decay curve of one training session, which has no weekly rhythm to align to.
+
+What a wave actually is, because none of it is a route:
+
+- **A new assignment row**, created already `active` and linked to its origin by
+  `repeatOfAssignmentId` + `repeatWaveIndex`. Configured once, then automatic — a draft awaiting a
+  press would be a to-do item, which is what internal trainings die of. A repeat never carries a
+  schedule of its own (the database refuses it), so a series is one level deep.
+- **Issued to the origin's recipients**, intersected with the live roster — not to a fresh resolution
+  of the audience rule, which three weeks later would hand a shortened refresher to everybody hired
+  since and change the denominator between waves. Its own stored `audience` is therefore the resolved
+  `{"kind":"users","userIds":[…]}`. Outcome does not filter it: whoever was asked is asked again,
+  `failed_threshold` and `not_started` included.
+- **Shortened, never easier.** `reference_material` items are dropped (kept when they are all the
+  assignment has) and `dialog_score.requiredCount` is halved, rounded up, minimum one. The score bars
+  are copied untouched — lowering one would make the two waves incomparable, which is the only thing
+  the series is for. The deadline is the origin's *duration* re-based on issue time (floor of one
+  day); an origin with no deadline repeats with none.
+- **A closed origin still repeats.** The only way to cancel a series is to clear or shorten
+  `repeatSchedule` with a `PUT` **while the assignment is still active** — it is deliberately not in
+  the freeze set. Once closed, everything on the row is frozen and the remaining waves will fire.
+- **A wave more than three days late is dropped**, not delivered: the value of spaced repetition is
+  the spacing.
+
+No new notification family: a repeat stages `assignment.issued` per recipient, exactly as a
+human-pressed issue does.
 
 Work done **before** the assignment was issued never counts towards it: the measurement window opens
 at the later of `activatedAt` and `opensAt`.
@@ -778,7 +813,8 @@ Three consequences worth knowing before calling these routes:
   **nobody** is a `400`: a silently empty issue produces an active assignment whose funnel reads zero
   of zero, which on the screen is indistinguishable from a team that has not started.
 - **`{"kind":"group"}` is a `400`**, not a silent widening to the whole team. Nothing in the platform
-  defines a group yet; the kind is accepted structurally by the schema so 40.24+ needs no migration.
+  defines a group yet; the kind is accepted structurally by the schema so a later block needs no
+  migration.
 - **`PUT` on an *active* assignment re-resolves the audience and tops up**, adding rows and notices
   for anybody new and never removing anybody. That is how a person hired after the issue joins work
   already running — nothing back-dates them automatically. A recipient who has since left keeps their
