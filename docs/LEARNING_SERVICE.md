@@ -576,6 +576,41 @@ the one place the loop runs back the other way. Full argument in [DECISIONS.md](
   `GET /admin/dialog-sessions[/{id}]`, so `IDialogSessionRepository` stays the single holder of the
   session collection (TENANCY.md §1.6). The screen asks each service for what it owns.
 
+### Closing the loop from metric to content (Phase 40.31)
+
+The heat map above stops being a report. Four routes under `/admin/team/skill-gaps`
+(`TeamSkillGapService`, `Features/TeamInsights/`), one table, one column.
+
+- **`GET /admin/team/skill-gaps?days=`** — what to do next. It calls `ITeamSkillMapService` and
+  derives from the matrix, rather than re-aggregating: a red cell with no suggestion, or a suggestion
+  for a cell that is not red, would both be bugs the screen could not explain.
+- **A gap is three conditions**: at least 20 attempts on the stage inside the window, team accuracy
+  at or below 60%, and at least two managers with a reportable cell at or below it. The third is what
+  makes it «провал команды» rather than one person's bad week — for one person the matrix already
+  names them (`weakestStageKey`) and the answer is a conversation, not fifteen exercises. All three
+  are the agent's product decisions with their reasoning in [DECISIONS.md](DECISIONS.md).
+- **`POST /admin/team/skill-gaps/{stageKey}/content` is the one button.** It starts an ordinary 40.27
+  run: same checkpoint, same sufficiency threshold, same archived arrival. The only differences are
+  that the run's material is **composed** — from the measurement and the organization profile replica,
+  deterministically, no model involved — and that it carries `GapSourceRef`. An organization with an
+  empty profile gets a run in `insufficient` with 40.28's own codes, which is the correct answer and
+  not a defect: we do not know enough about that company to write exercises for them.
+- **Suggestions are computed; only refusals are stored.** `TeamSkillGapDismissals` is the block's only
+  table and holds one live row per stage. Everything else — which stages qualify, which are being
+  worked on, which were addressed recently — is derived on every read, so a gap that closes stops
+  being offered without any writer noticing. The shape 40.18 used for staleness and 40.25 for the
+  funnel.
+- **Anti-spam is the reason two of the four routes exist.** A dismissal lasts 90 days (the heat map's
+  own default window) and is broken early if the number falls ten points further; a live run for a
+  stage suppresses it outright and a second press returns *that run* rather than buying a second
+  lesson; a completed run keeps its stage quiet for 30 days. Every suppressed gap is still returned,
+  with its reason and expiry — a panel that shows nothing cannot be told apart from a broken one.
+- **`POST /admin/assignments` gained `contentGenerationJobId`**, and it **derives** `SourceType` and
+  `SourceRef` from the run instead of believing the body: `gap_detected` +
+  `skill-gap:<stage>@<date>` for a dashboard-started run, `training` + `lesson-version:<uuid>` for a
+  pasted one. That is the loop closed, and it also gave `training` its first writer — 40.21 defined
+  the value and nothing had ever set it.
+
 ### Non-completion as a working scenario (Phase 40.26)
 
 The block that makes the РОП act instead of read. No new table, no new column, no migration, no new
@@ -786,6 +821,12 @@ screen in 40.23 — could not reach this service through the gateway at all. Not
 the frontend checks (`tsc`, `vitest`) do not know the gateway exists and no test asserts that a
 controller route has a gateway route. Recorded in [DONT_FORGET.md](DONT_FORGET.md).
 
+**Phase 40.31 added no gateway entry, and that was checked rather than assumed.** Its four routes live
+under `/admin/team/skill-gaps`, which the `learning-admin-team` route
+(`/admin/team/{**catch-all}`, no method restriction) already covers — including the `DELETE`. The trap
+40.25 documented above is the reason this sentence exists at all: a new route under a path with no
+catch-all is a silent 404 that no test in this repository can see.
+
 After this flip the only public route still served by the monolith catch-all is
 `/admin/users/*` (admin user management: list/detail, moderation rename, avatar
 reset, role change). It was never part of any service's scope — Identity owns the
@@ -810,7 +851,7 @@ user aggregate but never took these admin routes. Phase 9 must move `/admin/user
   own explicit switch — but wiring the learner's existing screens onto the pinned programme belongs
   with the screens that render a programme, which is 40.20. Recorded in `docs/DONT_FORGET.md`.
 
-## The admin content pipeline (Phases 40.27–40.28)
+## The admin content pipeline (Phases 40.27–40.28, second door 40.31)
 
 The РОП pastes their material and gets a lesson, with a **stop in the middle**: the extracted
 structure — product, ICP, objections, script stages, tone, glossary, banned claims — is shown back for
@@ -863,6 +904,13 @@ What belongs to this service, and why it is split the way it is:
     A run is disposable and a profile is not (docs/DECISIONS.md, 2026-08-18), and a run that recorded
     what a different service did with its output would be claiming an authority over that row which
     it deliberately does not have.
+- **The pipeline has a second door since 40.31**, `POST /admin/team/skill-gaps/{stageKey}/content`.
+  It creates a run of the same six states with the same worker, differing only in that its material is
+  composed rather than pasted and that it carries `GapSourceRef`. **Nothing in the pipeline branches
+  on that column** — it is read by the suggestion panel and copied by `POST /admin/assignments`, and
+  the checkpoint, the sufficiency threshold, the attempts, the lease and the archived arrival are all
+  identical. A block that had needed a second pipeline for the dashboard's button would have been a
+  block that got the first one wrong.
 
 ## Local dev
 

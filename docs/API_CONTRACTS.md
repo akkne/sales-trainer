@@ -710,6 +710,16 @@ gateway**):
 
 `CreateAssignmentRequestDto` / `UpdateAssignmentRequestDto`:
 `{title, goal?, sourceType, sourceRef?, content?: AssignmentContentItemDto[], audience?, opensAt?, deadline?, completionRule, repeatSchedule?}`
+`CreateAssignmentRequestDto` also takes `contentGenerationJobId?` (40.31). **When it is present,
+`sourceType` and `sourceRef` in the body are ignored and derived from the run instead** — `gap_detected`
++ the run's `skill-gap:<stage>@<date>` for a run the dashboard started, `training` +
+`lesson-version:<uuid>` for one somebody started by pasting material. The caller therefore cannot label
+hand-written work as detected by the dashboard, and cannot lose the link by forgetting to label
+generated work. `content` left empty defaults to the run's own frozen lesson version, so the ordinary
+case is one field; sending a `content` list keeps it, which is how the exercises get paired with a
+`dialog_scenario` and a reading. A run that has not reached `completed` with a `producedLessonVersionId`
+is a 400 — an assignment pointing at a lesson that does not exist yet would be issued the moment
+somebody pressed activate, and 40.21 froze `content` at that moment on purpose
 `AssignmentContentItemDto`: `{kind, reference, orderIndex, persona?}` — `persona` (40.23) is `{name?, position?, personality?, difficulty?}`, meaningful only on a `dialog_scenario` item and silently dropped from every other kind
 `AssignmentAudienceDto`: `{kind, userIds?, groupId?}`
 `AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, repeatOfAssignmentId, repeatWaveIndex, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
@@ -975,6 +985,55 @@ cell, which is a different statement from "weak everywhere" and must not be draw
 `unattributedAttemptCount` buckets attempts whose exercise no longer exists — folded nowhere, the same
 call `unversionedAttempts` makes elsewhere in this document. The stage vocabulary is `Skill.Stage` /
 `SkillStages`, the platform's existing one, not a second one invented for this screen.
+
+#### From the heat map to content — the loop of Phase 40.31 (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/team/skill-gaps?days= | — | `TeamSkillGapsDto` |
+| POST | /admin/team/skill-gaps/:stageKey/content | — | `ContentGenerationJobDto`, 409 if the stage is not failing |
+| POST | /admin/team/skill-gaps/:stageKey/dismiss | `{note?}` | `TeamSkillGapsDto` (recomputed), 409 if the stage is not failing |
+| DELETE | /admin/team/skill-gaps/:stageKey/dismiss | — | 204, 404 if there was no refusal to take back |
+
+`RequireOrgAdmin`, `[TenantTransaction]`. `days` is the same window parameter `skill-map` takes, and
+the suggestion is derived from that very call — a red cell with no suggestion, or a suggestion for a
+cell that is not red, would both be bugs the screen could not explain.
+
+`TeamSkillGapsDto`: `{windowStart, minimumAttemptsForGap, maximumAccuracyPercentForGap, minimumStrugglingManagers, gaps: TeamSkillGapDto[], suppressed: SuppressedTeamSkillGapDto[], rosterKnown}`
+`TeamSkillGapDto`: `{stageKey, stageLabel, sourceRef, attemptCount, accuracyPercent, strugglingManagerCount, measuredManagerCount, weakestSkills: TeamSkillGapSkillDto[], proposedTitle, proposedGoal}`
+`TeamSkillGapSkillDto`: `{skillId, title, attemptCount, accuracyPercent}`
+`SuppressedTeamSkillGapDto`: `{stageKey, stageLabel, attemptCount, accuracyPercent, reason, suppressedUntil, contentGenerationJobId}`
+
+`reason` is one of `dismissed`, `run_in_progress`, `recently_addressed`.
+
+**A gap is three conditions, and all three thresholds are echoed back.** At least
+`minimumAttemptsForGap` attempts on the stage (20), accuracy at or below
+`maximumAccuracyPercentForGap` (60), and at least `minimumStrugglingManagers` managers below that bar
+(2). Echoed for the same reason `minimumAttemptsForAccuracy` is: a screen that must explain why the
+reddest cell produced no suggestion needs the numbers that decided it, and a client that hard-codes
+them a second time is how the two eventually disagree.
+
+**`suppressed` is returned rather than filtered away.** A panel that silently shows nothing cannot be
+told apart from a broken one, and «почему мне ничего не предлагают» is the question that gets a
+feature switched off. `run_in_progress` carries the run's id, so the answer is a link.
+
+**`sourceRef` is `skill-gap:<stage>@<yyyy-MM-dd>` and is assembled server-side.** It is what an
+assignment born from this gap will carry, so it is written by the code that measured the gap and
+never by the caller that asks for one. The observed numbers are not in it — they are in
+`proposedGoal`, which becomes the assignment's `goal`.
+
+**`POST …/content` is idempotent while a run for that stage is alive**: it returns that run instead
+of starting a second one. A dismissal or a recent run suppresses the *offer* but does not forbid the
+*act* — pressing the button on a dismissed gap clears the dismissal and proceeds, because suppression
+governs what the panel proposes and not what the administrator may do. A stage that is not failing at
+all is a 409 at any price. The run it starts is an ordinary 40.27 run: same checkpoint, same
+sufficiency threshold, and the lesson it eventually produces arrives archived.
+
+**The material is composed, not uploaded.** There is no textarea behind this button, so the run's
+`sourceMaterial` is written deterministically from the measurement and the organization profile — the
+same seven fields 40.19 renders and 40.29 interviews for. An organization with an empty profile gets a
+run in `insufficient` with 40.28's own codes, which is the honest answer rather than a bug: we do not
+know enough about that company to write exercises for them.
 
 #### The team's graded conversations (ai-service)
 
@@ -2193,6 +2252,8 @@ Full description of the pipeline and why the stop is the whole feature:
 // ContentGenerationJobDto
 {
   "id": "…", "title": "…", "status": "awaiting_review",
+  "gapSourceRef": null,                              // 40.31 — "skill-gap:<stage>@<yyyy-MM-dd>" when
+                                                     // the dashboard started this run, else null
   "sourceMaterial": "…",
   "structure": { /* ContentStructureDto */ },        // null until structuring returns
   "insufficiency": null,                             // 40.28 — non-null iff status is "insufficient"
@@ -2223,7 +2284,17 @@ cannot accept.
 
 `ContentGenerationJobSummaryDto` carries `insufficiency` too, unlike the material and the structure:
 it is the reason the run is sitting there, and a list that shows `insufficient` without saying what
-is missing sends the administrator into a detail screen for every refused run.
+is missing sends the administrator into a detail screen for every refused run. It also carries
+`gapSourceRef` (40.31), so a list of runs distinguishes the ones a person started from the ones the
+dashboard proposed.
+
+**There is a second door into this pipeline since 40.31**, and it is
+`POST /admin/team/skill-gaps/{stageKey}/content`. It creates an ordinary run — same six states, same
+worker, same checkpoint, same sufficiency threshold — with two differences: its `sourceMaterial` is
+composed from the measurement and the organization profile rather than pasted, and it carries
+`gapSourceRef`. Nothing in the pipeline branches on that column; it is read by the suggestion panel
+(to stop offering a stage somebody is already working on) and copied by `POST /admin/assignments`
+(to give the resulting assignment its provenance).
 
 Behaviour a caller can observe, and each of these is a decision:
 

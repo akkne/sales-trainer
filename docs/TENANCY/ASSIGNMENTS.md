@@ -36,6 +36,9 @@ assignment
   title, goal
   source_type          -- training | manual | gap_detected
   source_ref           -- which training upload, or which metric triggered it
+                       --   training     → lesson-version:<uuid>   (frozen, never lesson:)
+                       --   manual       → NULL, by CHECK constraint
+                       --   gap_detected → skill-gap:<stage>@<yyyy-MM-dd>   (40.31, §3.4)
   content jsonb        -- [exercise refs, dialog scenario refs, theory refs]
   audience             -- user_ids | group_id | whole_team
   opens_at, deadline
@@ -295,6 +298,55 @@ one button, `source_type = gap_detected`, `source_ref` = the metric.
 
 This is what turns the dashboard from a report into a tool. A report gets opened quarterly; a tool
 that proposes the next action gets opened weekly.
+
+#### What 40.31 built for §3.4, and the five things that change how the rest of this page reads
+
+Four routes, one table, one column. Six forks with their rejected alternatives are in
+[DECISIONS.md](../DECISIONS.md) (2026-08-18); these are the ones that change what the paragraphs
+above and below mean.
+
+- **«Провал команды» is three conditions, not one number.** A stage of the funnel qualifies when it
+  has at least **20 attempts** inside the window, team accuracy **at or below 60%**, and **at least
+  two managers** with a reportable cell at or below that bar. All three are the agent's product
+  decisions, calibrated against numbers the product already states: 40.25's five-attempt floor for a
+  single cell (20 is four of those), 40.22's own example of a passing bar (80%, so 60 is twenty
+  points below "needs practice" and reads as "the team cannot do this"), and the difference between
+  a coaching conversation and a content decision (one weak manager is already named by
+  `TeamSkillMapMemberDto.WeakestStageKey`).
+- **The suggestion is computed, never stored.** It is derived from the *same* call that draws the
+  heat map, so the panel and the matrix cannot disagree about the same window, and a gap that closes
+  stops being offered without anything having to extinguish a row. The only thing 40.31 stores is a
+  **refusal** — `TeamSkillGapDismissals`, one live row per stage — because "a person said no" is the
+  one fact the attempt rows do not imply. Same call 40.18 made for staleness and 40.25 for the funnel.
+- **`source_ref` for a metric is `skill-gap:<stage>@<yyyy-MM-dd>`.** The stage half is the identity
+  — a second observation of the same weak stage next week is the same gap — and the date half is the
+  evidence. The numbers themselves are **not** in the reference: they are written into
+  `Assignment.Goal` at creation, which is what keeps a year-old row readable when the window that
+  produced it has long since rolled past.
+- **The button starts a 40.27 run, not an assignment.** There is no unreviewed model output in the
+  team's live tree at any point: the run stops at the same checkpoint every run stops at, and the
+  lesson it produces arrives archived. The assignment appears at the end, from
+  `POST /admin/assignments` with `contentGenerationJobId` — and that route **derives** `source_type`
+  and `source_ref` from the run rather than believing the body. A client cannot label hand-written
+  work as detected by the dashboard, and a client that forgets to label generated work cannot lose
+  the link. It also gave `training` its first writer: a pasted-material run produces
+  `source_type = training`, `source_ref = lesson-version:<uuid>`, which is what §1 said that value
+  meant and what nothing had yet written.
+- **A suggestion that was refused comes back, and a suggestion being worked on does not repeat.**
+  A dismissal lasts **90 days** — the heat map's own default window, so a refusal lives exactly as
+  long as the measurement that provoked it could still be the same measurement — and is broken early
+  if the number falls **10 points** below what it was when the refusal was recorded. A live run
+  holding a stage's reference suppresses that stage outright, and pressing the button anyway
+  returns **that run** rather than buying a second lesson. Every suppressed gap is reported with its
+  reason and its expiry, because a panel that merely shows nothing is indistinguishable from a
+  broken one.
+
+**What 40.31 did not build:** the persona half of the roadmap's own sentence. «Диалог с персоной,
+которая давит на скидку» would be a generated `DialogMode`, and dialog modes live in ai-service with
+no generation path of any kind — building one is a second 40.27, not a corner of this block. The
+suggestion therefore proposes exercises; the dialogue is an ordinary `dialog_scenario` content item
+the РОП adds to the same assignment from the modes that already exist. Recorded in
+[DONT_FORGET.md](../DONT_FORGET.md).
 
 ### 3.5 Batch tone adaptation
 
