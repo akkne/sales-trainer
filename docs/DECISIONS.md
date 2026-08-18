@@ -5209,6 +5209,21 @@ per-block notes never had, and `docs/TESTING/TENANCY.md` gained the two-organiza
 checklist the roadmap asks for. The same reasoning covers the manual acceptance run itself: it needs a
 running system and two populated organizations, which is Rule №1.
 
+### One of the block's own fixes had to be corrected, and that is worth recording
+
+The quota work produced the only self-inflicted defect of the block. The security review was right
+that `AiQuotaService` relied on the query filter where it should have named the organization, and the
+first fix added a flat `record.OrganizationId == organizationId` predicate to the spend report. That
+closed the reported bug and broke the documented behaviour standing next to it: a platform
+administrator carrying **no** organization header is *meant* to read the installation-wide total, and
+a null `organizationId` makes that predicate match nothing, so the report came back empty.
+
+The right shape constrains only when there is something to constrain to. It is a small thing, but it
+is the same class of mistake as the finding it was fixing — reasoning about one caller and forgetting
+the other — and it happened while fixing a review finding, under exactly the conditions that make
+this branch's missing tests expensive. Nothing caught it but re-reading the contract in
+`API_CONTRACTS.md`.
+
 ### The counters, checked rather than assumed
 
 `AddHostedService` = 30. `IgnoreQueryFilters()` in production code = **7**, not the 6 that block
