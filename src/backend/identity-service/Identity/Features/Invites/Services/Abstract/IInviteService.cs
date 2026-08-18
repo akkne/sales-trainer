@@ -20,6 +20,13 @@ public interface IInviteService
     /// organization — including when it exists in another one.</summary>
     Task<bool> RevokeAsync(Guid inviteId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The caller's organization's invites, newest first, without the raw token — it exists only in
+    /// the creation response and in the invitee's mailbox.
+    /// </summary>
+    Task<IReadOnlyList<InviteSummaryDto>> ListAsync(
+        InviteStatusFilter statusFilter, CancellationToken cancellationToken = default);
+
     Task<IssuedTokenPair> AcceptAsync(
         string rawToken,
         AcceptInviteRequestDto request,

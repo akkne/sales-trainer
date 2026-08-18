@@ -20,7 +20,10 @@ namespace Sellevate.Identity.Features.Membership.Endpoints;
 /// </para>
 /// <para>
 /// Removing a user from an organization is the one privilege the 2026-08-16 role split reserves
-/// for a superadmin, so this route is <c>RequireOrgSuperAdmin</c> (docs/DECISIONS.md).
+/// for a superadmin, so <see cref="DeactivateMembership"/> carries <c>RequireOrgSuperAdmin</c> on
+/// top of the controller's <c>RequireOrgAdmin</c> (attributes are ANDed, and every superadmin
+/// satisfies the admin policy). Reading the roster is not that privilege: a <c>TenancyAdmin</c>
+/// hands out assignments to these people and cannot do it blind.
 /// </para>
 /// <para>
 /// <c>Membership</c> is keyed on <c>(UserId, OrganizationId)</c> and is not <c>ITenantScoped</c>
@@ -30,14 +33,62 @@ namespace Sellevate.Identity.Features.Membership.Endpoints;
 /// </summary>
 [ApiController]
 [Route("memberships")]
-[Authorize(Policy = AuthorizationPolicies.RequireOrganizationSuperAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
 [TenantScoped]
 public sealed class MembershipsController(
     IdentityDbContext databaseContext,
     ITenantContext tenantContext,
     ILogger<MembershipsController> logger) : ControllerBase
 {
+    /// <summary>
+    /// The organization's roster. Defaults to the people who still work here; ask for
+    /// <c>deactivated</c> or <c>all</c> to see the ones who no longer do.
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<MembershipDto>>> ListMemberships(
+        [FromQuery] MembershipStatusFilter status = MembershipStatusFilter.Active,
+        CancellationToken cancellationToken = default)
+    {
+        var currentOrganizationId = tenantContext.OrganizationId;
+        if (currentOrganizationId is null)
+        {
+            return Forbid();
+        }
+
+        var memberships = databaseContext.Memberships
+            .Where(candidate => candidate.OrganizationId == currentOrganizationId);
+
+        memberships = status switch
+        {
+            MembershipStatusFilter.Active =>
+                memberships.Where(candidate => candidate.Status == MembershipStatus.Active),
+            MembershipStatusFilter.Deactivated =>
+                memberships.Where(candidate => candidate.Status == MembershipStatus.Deactivated),
+            _ => memberships,
+        };
+
+        var roster = await memberships
+            .Join(
+                databaseContext.Users,
+                membership => membership.UserId,
+                user => user.Id,
+                (membership, user) => new { membership, user })
+            .OrderBy(row => row.user.DisplayName)
+            .Select(row => new MembershipDto(
+                row.membership.UserId,
+                row.user.Email,
+                row.user.DisplayName,
+                row.membership.Role.ToString(),
+                row.membership.Status.ToString(),
+                row.membership.JoinedAt,
+                row.membership.DeactivatedAt))
+            .ToListAsync(cancellationToken);
+
+        return Ok(roster);
+    }
+
     [HttpDelete("{userId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.RequireOrganizationSuperAdministrator)]
     public async Task<IActionResult> DeactivateMembership(Guid userId, CancellationToken cancellationToken)
     {
         var currentOrganizationId = tenantContext.OrganizationId;

@@ -177,19 +177,39 @@ consumed `organization.created` yet"; the message says so and the operation is s
 
 ---
 
-## Invites & memberships `[OrgSuperAdmin]` `[tenant-scoped]`
+## Invites & memberships `[tenant-scoped]`
 
-| Method | Path | Body | Response |
-|---|---|---|---|
-| POST | /invites | `{email?, emails?, role}` | `CreateInvitesResponseDto` |
-| DELETE | /invites/{inviteId} | — | 204 / 404 |
-| DELETE | /memberships/{userId} | — | 204 / 404 |
+| Method | Path | Body | Response | Gate |
+|---|---|---|---|---|
+| GET | /memberships?status=active\|deactivated\|all | — | `MembershipDto[]` | `RequireOrgAdmin` |
+| GET | /invites?status=pending\|all | — | `InviteSummaryDto[]` | `RequireOrgAdmin` |
+| POST | /invites | `{email?, emails?, role}` | `CreateInvitesResponseDto` | `RequireOrgSuperAdmin` |
+| DELETE | /invites/{inviteId} | — | 204 / 404 | `RequireOrgSuperAdmin` |
+| DELETE | /memberships/{userId} | — | 204 / 404 | `RequireOrgSuperAdmin` |
 
-All three add or remove a user, which after the 2026-08-16 role split is the one privilege reserved
-for a superadmin — so all three require `RequireOrgSuperAdmin` (`org_role = TenancySuperAdmin`, or a
-platform `role = SuperAdmin`) **and** the gateway-injected `X-Organization-Id` header. They are
-`[TenantScoped]`, so a request without that header gets `403` before the action runs. A
-`TenancyAdmin` gets `403` here and nowhere else.
+The three writes add or remove a user, which after the 2026-08-16 role split is the one privilege
+reserved for a superadmin (`org_role = TenancySuperAdmin`, or a platform `role = SuperAdmin`). The
+two reads are not that privilege and were added in Phase 40.20, because a `TenancyAdmin` hands out
+assignments to these people and cannot do it blind: both controllers are gated `RequireOrgAdmin` at
+the class level with `RequireOrgSuperAdmin` on each write action. Authorize attributes are ANDed and
+every superadmin satisfies the admin policy, so the looser class gate cannot widen a write.
+
+Everything here needs the gateway-injected `X-Organization-Id` header — all of it is
+`[TenantScoped]`, so a request without that header gets `403` before the action runs.
+
+`MembershipDto`: `{userId, email, displayName, role, status, joinedAt, deactivatedAt}` — `role` and
+`status` are **names**, not the enum's numbers (identity-service registers no
+`JsonStringEnumConverter`). Ordered by display name. The query starts from `Memberships` and joins
+outward to `Users`; a user with no membership row is invisible here, which is the point — `Users` is
+platform-global and has no organization column of its own.
+
+`InviteSummaryDto`: `{id, email, role, status, invitedBy, createdAt, expiresAt}`. Default
+`status=pending`, because an accepted invite is a membership now and belongs on the roster.
+`status` is derived — `pending` / `accepted` / `revoked` / `expired` — with recorded facts
+outranking the clock, so an accepted invite whose expiry has passed still reads `accepted`. There is
+**no `token` field and never will be**: the raw token exists once, in the creation response and the
+invitee's mailbox, and a listing that returned it would turn any admin read into account takeover of
+a pending invitee.
 
 `CreateInvitesResponseDto`: `{created: [{id, email, role, expiresAt, token}], rejected: [{email, reason}]}`
 

@@ -195,6 +195,55 @@ internal sealed class InviteService(
         return true;
     }
 
+    /// <summary>
+    /// Reads inside a transaction like every other method here, and for the reason the class comment
+    /// gives: <c>Invites</c> is one of the tables row-level security actually protects, and a bare
+    /// <c>SELECT</c> carries no <c>SET LOCAL app.organization_id</c>, so it would return an empty
+    /// list rather than an error the day RLS is switched on.
+    ///
+    /// <para>
+    /// The organization predicate is written out even though the entity has a global query filter.
+    /// The filter widens for platform staff (<c>IsPlatformWide</c>), which is right for a support
+    /// query and wrong for a roster screen — this endpoint answers "who did <b>we</b> invite".
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<InviteSummaryDto>> ListAsync(
+        InviteStatusFilter statusFilter, CancellationToken cancellationToken = default)
+    {
+        var currentOrganizationId = RequireOrganizationId();
+
+        await using var transaction = await databaseContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+
+        var invites = databaseContext.Invites
+            .Where(candidate => candidate.OrganizationId == currentOrganizationId);
+
+        if (statusFilter == InviteStatusFilter.Pending)
+        {
+            invites = invites.Where(candidate =>
+                candidate.AcceptedAt == null && candidate.RevokedAt == null && candidate.ExpiresAt > now);
+        }
+
+        var rows = await invites
+            .OrderByDescending(candidate => candidate.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return rows
+            .Select(invite => new InviteSummaryDto(
+                invite.Id,
+                invite.Email,
+                invite.Role.ToString(),
+                InviteStatusDescriptor.Describe(invite, now),
+                invite.InvitedBy,
+                invite.CreatedAt,
+                invite.ExpiresAt))
+            .ToList();
+    }
+
+
     public async Task<IssuedTokenPair> AcceptAsync(
         string rawToken,
         AcceptInviteRequestDto request,

@@ -48,20 +48,32 @@ public class PlatformAdminControllerContractTests
     }
 
     [Test]
-    public void InvitesController_remains_tenant_scoped_and_is_now_org_super_admin_gated()
+    public void InvitesController_reads_are_org_admin_and_writes_are_org_super_admin()
     {
         typeof(InvitesController).GetCustomAttribute<TenantScopedAttribute>().Should().NotBeNull();
         PolicyOf<InvitesController>().Should().Be(
-            AuthorizationPolicies.RequireOrganizationSuperAdministrator,
-            "inviting and revoking are add/remove-a-user, the one privilege the 2026-08-16 role "
-            + "split reserves for a superadmin");
+            AuthorizationPolicies.RequireOrganizationAdministrator,
+            "reading who has been invited is ordinary organization administration (Phase 40.20)");
+
+        foreach (var mutatingAction in new[] { "CreateInvites", "RevokeInvite" })
+        {
+            PolicyOfAction<InvitesController>(mutatingAction).Should().Be(
+                AuthorizationPolicies.RequireOrganizationSuperAdministrator,
+                "inviting and revoking are add/remove-a-user, the one privilege the 2026-08-16 role "
+                + "split reserves for a superadmin — and an action attribute is ANDed with the "
+                + "controller's, so the looser controller gate cannot widen it");
+        }
     }
 
     [Test]
-    public void MembershipsController_remains_tenant_scoped_and_is_now_org_super_admin_gated()
+    public void MembershipsController_reads_are_org_admin_and_offboarding_stays_org_super_admin()
     {
         typeof(MembershipsController).GetCustomAttribute<TenantScopedAttribute>().Should().NotBeNull();
         PolicyOf<MembershipsController>().Should().Be(
+            AuthorizationPolicies.RequireOrganizationAdministrator,
+            "a TenancyAdmin assigns work to these people and cannot do it blind (Phase 40.20)");
+
+        PolicyOfAction<MembershipsController>("DeactivateMembership").Should().Be(
             AuthorizationPolicies.RequireOrganizationSuperAdministrator,
             "offboarding removes a user from the organization");
     }
