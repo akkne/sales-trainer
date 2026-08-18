@@ -104,6 +104,11 @@ internal static class ContentFieldChangeSummarizer
         }
     }
 
+    /// <summary>
+    /// Walks both objects' property names in <b>ordinal</b> order, so the same pair of documents always
+    /// produces the same change list. A list whose order depended on how Postgres normalized the
+    /// <c>jsonb</c> would read to a reviewer as churn rather than as a diff.
+    /// </summary>
     private static void WalkObject(
         string path,
         JsonElement before,
@@ -111,8 +116,6 @@ internal static class ContentFieldChangeSummarizer
         List<ContentFieldChangeDto> changes,
         int depth)
     {
-        // Ordinal ordering, so the same pair of documents always produces the same list — a change
-        // list whose order depends on how Postgres normalized the jsonb would read as churn.
         var names = before.EnumerateObject().Select(property => property.Name)
             .Concat(after.EnumerateObject().Select(property => property.Name))
             .Distinct(StringComparer.Ordinal)

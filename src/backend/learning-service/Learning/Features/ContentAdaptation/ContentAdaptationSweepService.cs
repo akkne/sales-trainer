@@ -66,6 +66,28 @@ internal sealed class ContentAdaptationSweepService(
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>
+    /// Advances every organization's pending adaptation batches once, and returns how many items moved.
+    ///
+    /// <para>
+    /// <b>One scope per organization, never one reused.</b> <c>TenantContext</c> refuses to be
+    /// re-pointed at a second organization, which turns "the loop forgot to reset the tenant" from a
+    /// silent cross-tenant write into an exception.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The batch allowance is checked before the runner claims a lease</b> (Phase 40.33). The claim
+    /// is one conditional <c>UPDATE</c> that also spends an attempt, so discovering the ceiling
+    /// afterwards would burn attempts on an organization that cannot be served and eventually fail its
+    /// items for a reason that has nothing to do with them. Logged at Information, not Warning: an
+    /// organization at its ceiling is a commercial fact, not an incident.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>One organization's failure must not stall the rest of the tick</b> — the reason the
+    /// per-organization loop and its catch exist at all.
+    /// </para>
+    /// </summary>
     internal async Task<int> SweepAsync(CancellationToken cancellationToken)
     {
         var organizationIds = await EnumerateOrganizationsWithPendingBatchesAsync(cancellationToken);
@@ -78,20 +100,12 @@ internal sealed class ContentAdaptationSweepService(
 
         foreach (var organizationId in organizationIds)
         {
-            // One scope per organization, never one reused: TenantContext refuses to be re-pointed at
-            // a second organization, which turns "the loop forgot to reset the tenant" from a silent
-            // cross-tenant write into an exception.
             using var scope = scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(organizationId);
 
             var quotaClient = scope.ServiceProvider.GetRequiredService<IAiQuotaClient>();
             if (!await quotaClient.HasBatchAllowanceAsync(cancellationToken))
             {
-                // Phase 40.33. Asked **before** the runner claims a lease, because the claim is one
-                // conditional UPDATE that also spends an attempt: discovering the wall afterwards
-                // would burn attempts on an organization that cannot be served and eventually fail
-                // runs for a reason that has nothing to do with them. Information, not Warning — an
-                // organization at its ceiling is a commercial fact, not an incident.
                 logger.LogInformation(
                     "Skipping organization {OrganizationId} this tick — batch AI allowance is spent",
                     organizationId);
@@ -110,8 +124,6 @@ internal sealed class ContentAdaptationSweepService(
             }
             catch (Exception exception)
             {
-                // One organization's failure must not stall every other organization's batches for
-                // the rest of the tick — the reason the loop exists at all.
                 logger.LogError(
                     exception,
                     "Content adaptation sweep failed for organization {OrganizationId}; other organizations continue",
