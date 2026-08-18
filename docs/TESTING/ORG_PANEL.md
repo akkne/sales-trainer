@@ -248,3 +248,76 @@ Preconditions: a `TenancyAdmin` whose organization has at least one manager with
 | Stop identity-service, keep learning-service up | the map still renders; roster marks fall back to whatever `skill-map` knew — no error, no red banner |
 | Click a manager's name | `/org/dialogs?userId={userId}` |
 | Click a cell | nothing happens — there is no per-skill attempt filter in the API to click through to |
+
+---
+
+## Slice 4 — O8 «Профиль компании» (`/org/profile`)
+
+The interview, the draft preview and the full form. What this screen writes ends up in every lesson
+the organization sees (`{{organization.*}}` substitution, docs/CONTENT_PARAMETERIZATION.md) and in
+two prompts at once — the AI persona's and the grader's.
+
+### Automated (vitest)
+
+| File | Covers |
+|---|---|
+| `__tests__/orgProfileInterview.test.ts` | which questions a round shows, the «осталось ещё N» count, the editor-per-gap-code map, per-answer validation, and that one answer patches exactly one field |
+| `__tests__/orgProfileForm.test.ts` | the full form's load/save round trip, blank-row dropping, duplicate-term and orphaned-answer validation, `findRemovedBannedClaims`, stage reordering |
+| `__tests__/orgProfileDraft.test.ts` | grouping of the four merge decisions, accept-field toggling, the «nothing to apply» case, and the `sessionStorage` handoff from the 40.27 checkpoint |
+| `__tests__/orgProfileService.test.ts` | 404-as-«ещё нет», the `limit=3` default, which verb goes to which route, and the sentence a 403 turns into |
+| `__tests__/OrgProfileBannedClaims.test.tsx` | the two-confirmation gate on removing a banned claim, end to end through the real form |
+
+The behaviours worth naming, because they are the ones that break quietly:
+
+- **A 404 from `GET /organizations/profile` is the first-run case, not an error.** The service turns
+  it into `null`; anything else still throws. An organization that has never saved a profile must
+  see the interview, never «Что-то пошло не так».
+- **One answer is one `PATCH` naming one field.** The test asserts the patch body has exactly one
+  key. A read-modify-write `PUT` would silently discard whatever a colleague answered meanwhile, and
+  the multi-person case is the expected one here.
+- **`banned_claims` and `glossary` are hidden while any blocking gap is open**, and neither ever
+  holds readiness hostage. Their honest answer may be «таких нет», which the schema cannot record —
+  hence the «Таких нет» button, which hides the question for that sitting only.
+- **The readiness bar has two states, never a percentage.** It reads
+  `isReadyForParameterization`; «5 из 7» would call a finished profile unfinished and an unusable one
+  nearly done.
+- **A gap code with no editor is dropped, not rendered blank** — the same closed-vocabulary rule the
+  backend applies to unknown codes.
+- **Conflict checkboxes in the draft preview start unticked**, `unchanged` proposals are not rendered
+  at all, and `banned_claims` cannot be ticked: `toggleAcceptedField` refuses every field outside
+  `OrganizationProfileFields.Overwritable`, so the screen can never promise a replacement the server
+  would ignore — or a deletion it must never perform.
+- **Removing a banned claim takes two confirmations.** The row's delete button opens a dialog naming
+  the claim; removing it still writes nothing. Pressing «Сохранить» then opens a second dialog
+  listing every claim that would stop being forbidden. Only «Снять и сохранить» issues the `PUT`. A
+  save that removes nothing asks nothing.
+- **Russian agreement is computed, not concatenated.** «1 вопрос / 2 вопроса / 5 вопросов /
+  11 вопросов / 21 вопрос» are all pinned.
+
+### Manual — O8
+
+Preconditions: a `TenancyAdmin`. A plain `Manager` cannot reach `/org/*` at all; a member who can
+read the panel but is not an org administrator gets 403 on every save (see the last row).
+
+| Scenario | Expect |
+|---|---|
+| Open `/org/profile` in an organization that never saved a profile | grey bar «Готов к подстановке: нет», three questions, «Осталось ещё 4 вопроса». No error anywhere, though `GET /organizations/profile` returned 404 |
+| Slow connection | header + two card skeletons, never an empty form |
+| Stop organization-service | one `ErrorState` with «Повторить»; profile and gaps fail together |
+| Answer the first question | the button reads «Сохраняем…», then the question disappears and the next one arrives; only `PATCH` was sent, with one field in the body |
+| Have a colleague answer a different question in another tab, then answer yours | both answers survive — this is what the `PATCH` contract buys |
+| Break the network and press «Ответить» | the error appears under **that** question; the other two keep whatever was typed in them |
+| Answer «Возражения» with two entries | refused client-side — the server counts three as the threshold and would return the same gap |
+| Answer «Этапы скрипта» with two stages | same refusal, same reason |
+| Answer everything blocking | the bar turns green, «Уроки говорят про ваш продукт», remaining optional questions are listed as non-blocking |
+| Fill in all seven | «Профиль заполнен» + a read-only summary; the interview does not render |
+| «Таких нет» on the banned-claims question | the question goes away for this sitting; a reload brings it back, because nothing was written |
+| «Заполнить по материалам» | a dialog asking for a title and pasted text (≥200 characters), with the side effect stated: the same run also produces a hidden draft lesson. Confirming starts `POST /admin/content-generation` and navigates to `/org/content/generation/{jobId}` |
+| Return from the checkpoint with «Заполнить профиль компании из этой структуры» | the preview opens: «Заполнится», «Дополнится + N», «Расхождение — решать вам». Nothing is pre-ticked |
+| Apply the preview without ticking anything | blanks are filled, lists grow, every existing value survives, and the interview reappears **without a second request** |
+| Reload while the preview is open | the draft is gone (the slot is read once); the interview is shown |
+| «Показать все поля профиля» | the seven sections, the «сохраняется всё разом» warning above them, «Изменения доходят … за несколько секунд» below |
+| Empty a field on the full form and save | it is cleared — this is the only place in the product that can |
+| Delete a banned claim, then save | two dialogs, in that order; cancelling either one changes nothing on the server |
+| Save as a member who is not an org administrator | «Изменять профиль компании может только администратор организации» — a 403 is a role, not a fault to retry |
+| Look for XP, streaks or leagues | none, on any of the three modes |

@@ -153,6 +153,12 @@ export const apiClient = {
             body: JSON.stringify(requestBody),
         }),
 
+    patch: <TResponseBody>(path: string, requestBody: unknown) =>
+        fetchWithAuthToken<TResponseBody>(path, {
+            method: "PATCH",
+            body: JSON.stringify(requestBody),
+        }),
+
     delete: <TResponseBody>(path: string) =>
         fetchWithAuthToken<TResponseBody>(path, { method: "DELETE" }),
 };
