@@ -4836,3 +4836,269 @@ metadata-only `ADD COLUMN` to reason about either. The read-only check script is
   provider. Their calibration is a design and not an observation — in particular nobody knows how
   often the rewriter returns `{"content": null}`, and that number is the difference between a useful
   queue and sixty cosmetic diffs.
+
+---
+
+## 2026-08-18 — Phase 40.33: quotas and cost per organization
+
+### The single point was a claim, not a fact, and the block is mostly about making it true
+
+`AI_SERVICE.md` has said since the extraction that its bounded context is "everything that talks to an
+LLM or a speech API", and 40.27 put the content pipeline's calls there explicitly so that 40.33 would
+be "a feature rather than a rewrite". Both were true about intent and false about the code:
+learning-service still held a 362-line copy of `OpenAiChatService` **and** a copy of
+`YandexTtsService` + `TtsRouter`, serving the interactive `ai_dialogue` exercise against provider keys
+that service configured itself.
+
+The LLM copy was the one `DONT_FORGET.md` named. **The speech copy was the worse of the two**, and
+nobody had written it down: voice minutes had been metered per organization since 40.11, and every
+sentence an exercise spoke was synthesized outside that meter, against a `YandexTts:ApiKey` in
+learning-service's own configuration. A customer practising exercises all day spent speech budget no
+counter in the product could see.
+
+Both are deleted. learning-service now calls `POST /ai/chat`, `/ai/chat/stream` and `/ai/tts`, and
+holds **no provider key of any kind** — `OPENAI_*` and `YANDEX_TTS_API_KEY` are gone from its compose
+block and from `scripts/lib-local-env.sh`.
+
+The alternative was to duplicate the meter into learning-service, which is cheaper by a day and wrong
+for one reason: a meter duplicated is a meter that will disagree with itself, and the number it
+produces is the one somebody bills a customer against.
+
+**And the claim is now checked rather than remembered.** `scripts/ai-provider-lint.py` fails when any
+file outside a six-entry allow-list opens a provider-named `HttpClient` or names a provider host. It
+would have caught both deleted copies on the day they were left behind. The way this invariant broke
+last time was quiet — a monolith split, six blocks of nobody noticing, and a `DONT_FORGET` entry doing
+the job a lint should have been doing.
+
+### `AiEvaluationStrategyBase` was metered, not merged
+
+ai-service turned out to have a second provider path of its own: the five grading strategies POST to
+the completions endpoint directly rather than through `IOpenAiChatService`. Folding them together
+would have been the tidier diff and was rejected — that path has its own failure contract
+(`HttpRequestException`, an unparseable answer degrading into a failed-but-valid result rather than a
+503) which `LLM_FAILURE_HANDLING.md` pins and tests assert. Merging it would have been a behaviour
+change smuggled in under a metering change.
+
+What *is* shared is `OpenAiUsageReader`, so the two paths cannot count tokens differently. That is the
+part worth sharing; the HTTP plumbing is not.
+
+### The limits live in ai-db, and a Kafka replica was rejected on a concrete failure
+
+The natural shape, given 40.19, was columns on `OrganizationProfile` replicated into ai-db over
+`organization.profile.updated` — the pattern already exists, tested and understood.
+
+**Decision: `OrganizationQuotas` is an ai-db table, written by platform staff through
+`PUT /admin/ai-quota`.** The replica shape fails in exactly one scenario, and it is the scenario that
+matters: *the moment an operator most needs to change a limit is the moment a customer is standing at
+it.* A lagging consumer — or one dead-lettering on a malformed envelope — would leave the raise
+invisible to the enforcer, with nothing in the raise's own response saying so, and the support ticket
+that follows is "we raised it and it didn't work". The row the meter reads is the row the operator
+wrote.
+
+The cost of this choice is stated rather than hidden: quotas are now a second place per-organization
+settings live, and organization-service is no longer the whole answer to "what do we know about this
+customer". That is accepted because a quota is an operational setting of the meter rather than part
+of the tenant registry or the content profile, and because there is still no plan/tier/billing model
+anywhere — when one arrives it belongs in organization-service and this row stays where it is.
+
+### An absent quota row means the platform default, which dissolves fail-open vs fail-closed
+
+The roadmap poses the fork as fail-open (free overspend) versus fail-closed (a customer stops
+working), and asks for it to be decided on the price of the error. **The answer is that the fork is
+false if the default is not infinity.**
+
+Every column on `OrganizationQuotas` is nullable and null means `AiQuotas:Default…` — 600 voice
+minutes a day, 6000 a month, 20M tokens a month. That is *exactly* what ai-service did before this
+block, when `Voice:DailyLimitMinutes` applied to everybody and nothing capped LLM spend at all. So:
+
+- a fresh tenant with no row is **metered**, not free;
+- a failed write, a rolled-back migration or a database somebody forgot to seed leaves every
+  organization metered against sane numbers;
+- and no code path exists that turns "I could not find the limit" into "there is no limit".
+
+`0` means "this window is disabled" and is deliberately a different value from null. The only genuine
+fail-open left is the sweep preflight (below), and it is fail-open because the real gate is elsewhere.
+
+### The unit is tokens; money is derived and never enforces anything
+
+Three candidates, and the choice is load-bearing.
+
+- **Calls** are trivial to count and wildly inaccurate — a fifty-page structuring call and a
+  three-word dialog turn would count the same, which is the exact distinction the limit exists to make.
+- **Money** is the unit the customer's contract is written in, but our number for it is a price table
+  we maintain by hand. A limit denominated in money silently moves for every customer the day somebody
+  edits a constant, and nothing in the diff says so.
+- **Tokens** are what the provider bills and what we can count exactly.
+
+**Decision: the limit is counted in tokens; cost is derived on read, for display only.** Editing
+`AiQuotas:PricePerMillionTokens` re-renders history and moves no limit. `AiUsageRecords` is keyed by
+model because models differ in price by more than an order of magnitude and a blended token total
+cannot be turned into money without lying.
+
+A model absent from the price table is reported as **unpriced** (`hasUnpricedModels: true`), never as
+zero. Zero reads as "this model costs nothing", which is the one reading of a spend report that must
+never be accidental.
+
+### Measured where it is expensive, estimated where it cannot be, and the two are counted apart
+
+`usage` is read off every non-streaming completion — which is every expensive call in the product:
+structuring, generation, rewrite, review, feedback, personas, briefings, grading. An SSE stream carries
+no `usage`, and `stream_options: {include_usage: true}` is a request shape not every
+OpenAI-compatible gateway accepts. **Decision: streamed dialog turns are estimated from characters
+(÷4) and counted in their own column and their own metric label.**
+
+Breaking every voice call in the product to make its cheapest call exact is a bad trade; a streamed
+turn is capped at `MaximumDialogTokenCount` (500) anyway. What is *not* acceptable is recording such
+a call as zero, which would read as "this model is free" and quietly understate the month. The
+`Estimated vs Reported Accounting` panel exists so that if the estimate ever starts carrying the
+month, somebody finds out from a graph rather than from an invoice.
+
+### Hard limits, with a deliberate order of degradation
+
+The roadmap's «деградирует только свою организацию» is about isolation and does not by itself decide
+what happens at the wall. **Decision: two ceilings on one budget.** Interactive work runs to 100% of
+the monthly token limit; batch work stops at 100% − `BatchReservePercent` (default 90%).
+
+So an organization that has burned its month loses its **overnight content pipeline before it loses
+the conversation a rep is in the middle of**. Falling back to a cheaper model was considered and
+rejected: the product's answer quality is what the customer bought, and silently degrading it is a
+worse failure than a refusal somebody can see, argue with, and pay to lift. Queuing was rejected for
+the same reason 40.27 rejected wrapping an LLM call in a transaction — a queue whose drain condition
+is "next month" is an outage with extra steps.
+
+ai-service cannot infer the class, so the caller declares it in `X-Ai-Workload`. **Absent means
+interactive**, the class with the *larger* allowance: a caller that has never heard of the header gets
+the permissive answer rather than being quietly held at 90%.
+
+### The gate reads before and the charge writes after, and the overshoot is stated
+
+The price of a completion is not known until it exists, so a gate that reserves and a charge that
+settles cannot be one operation. Concurrent calls that all pass at 99% can each overshoot by one call.
+
+**Accepted, and bounded by concurrency.** The alternative — reserving a worst-case token budget per
+call and refunding the difference — would refuse work an organization could afford, every time, in
+exchange for a bound nobody needs. This is the same posture 40.11 took about voice counters restarting
+after the key-prefix change: name the bound, do not engineer around it.
+
+Atomicity where it *is* required is handled the way 40.27 required of its claim: state is derived from
+the write, never read-then-written. The voice reservation is a Lua check-and-increment (the script
+`VoiceUsageService` has used since the feature shipped); the LLM charge is a single
+`INSERT … ON CONFLICT DO UPDATE SET x = x + excluded.x`.
+
+### Postgres for LLM spend, Redis for voice — and the split is by access pattern, not by taste
+
+Voice reserves seconds before a stream and refunds the tail milliseconds later, many times a minute,
+and already has a durable record in Mongo `dialog_sessions`. It stays in Redis, with a new
+organization-wide counter (`org:{orgId}:voice:org:…`) under the per-user one.
+
+LLM spend is written once per completion, next to a call that takes seconds, and its whole purpose is
+to be readable next month **before the invoice arrives**. A counter a Redis eviction can silently zero
+is not that. So `AiUsageRecords` is a Postgres table, and the extra round trip per LLM call is
+negligible against the call itself.
+
+Both per-user *and* per-organization voice windows are kept. The per-user limit stops one person
+burning the organization's day, which the organization limit cannot; the organization limit stops the
+customer the roadmap names, which the per-user limit could not — a customer's total used to be
+however many seats they had times the per-user allowance, so **adding users added budget**.
+
+### The background pipelines ask before they claim, and that call is the one thing that fails open
+
+40.27 and 40.32's sweeps claim work with one conditional `UPDATE` that also spends an attempt.
+Discovering the quota wall afterwards burns attempts and holds leases for an organization that was
+never going to be served; three ticks and the run is `failed` for a reason that has nothing to do with
+it. So each sweep calls `GET /ai/quota/preflight?workload=batch` inside the per-organization scope it
+already opens, before resolving the step runner.
+
+**The preflight only reads**, so there is no double counting with the charge the meter makes later or
+with the pipelines' own 60-item ceiling.
+
+**And it fails open, deliberately and uniquely.** If it cannot be answered the sweep proceeds exactly
+as it did before this block existed. The preflight is an optimisation; the gate it optimises is in
+ai-service and cannot be skipped by a network blip. Failing closed here would let one flapping
+connection stop every customer's content pipeline while their budgets sat untouched — a worker failing
+closed on a question it only asked to save an attempt.
+
+### An unattributed metered call is refused, and both ends shipped in one commit
+
+The internal ai-service routes were genuinely stateless before this block — "no organization, no
+database, no job", as 40.27 put it — because nothing there was metered. Six clients (learning ×2 plus
+the new quota client, company ×4) now forward `X-Organization-Id`, and ai-service answers **400** to a
+metered call that carries none.
+
+Fail-closed here rather than "count it to nobody", because the honest answer to «чей это расход» is
+never «ничьих», and a silent unattributed bucket is how the meter becomes decorative. It is safe to be
+strict because every caller was updated in the same commit; a *new* caller that forgets gets a clear
+400 in development rather than a silent hole in production. Platform staff and system-mode work pass
+through ungated — they have no organization and no budget, and refusing them would break the admin
+screens.
+
+### 429, never 402, and never `Warning`
+
+A quota refusal is `429` with `{resource, period, used, limit}`. **402 is reserved for the provider
+telling us our own balance is empty**; rendering a customer's cap as a payment error reads as
+"Sellevate's card declined" and generates an incident on our side for an event that is the product
+working. Voice keeps the 429 shape it has always answered with.
+
+Refusals are logged at **`Information`** — the rule 40.28 states for a sufficiency refusal, applied
+again. A run of them against one organization is a signal, but a commercial one.
+`ai_quota_refusals_total` exists so that signal has somewhere to live that is not an alert.
+
+learning-service's `AiChatClient` maps a bare 429 onto `OpenAiRateLimitException`, which
+`ExerciseDialogService` already answers with its neutral reply. A learner mid-exercise sees a
+conversation that goes quiet, not a broken screen.
+
+### The spend report is an API answer; Prometheus stays organization-blind
+
+`docs/MONITORING.md` has refused an organization label four times. This block refuses it a fifth, and
+for the first time about money — where the temptation is sharpest, because "which customer is burning
+the budget" is exactly the operator's question and one label would answer it.
+
+**Decision: platform-wide totals in Prometheus (`ai_llm_tokens_total`, `ai_llm_calls_total`,
+`ai_speech_characters_total`, `ai_quota_refusals_total`, all with closed-vocabulary labels);
+per-organization numbers from `GET /admin/ai-usage`, computed from `AiUsageRecords`.** Exactly the
+split 40.25 used for the assignment funnel.
+
+The metrics live in **ai-service**, not analytics-service, which is the first metric owner outside
+analytics since the split. analytics is Redis-only and Kafka-fed by design (40.16, re-confirmed four
+times); routing spend through it would mean a new topic, a new consumer, and a counter lagging the
+call it counts, in a service whose point is owning no relational state. ai-service holds the number at
+the instant it happens. Recorded in `ANALYTICS_SERVICE.md` as well, so a reader of that file does not
+discover it from a Grafana panel.
+
+`GET /admin/ai-usage` is readable by an **organization administrator**, not platform staff only: the
+person who has to know their pipeline is about to stop is the РОП whose pipeline it is. `PUT
+/admin/ai-quota` is platform-only, because a quota is what the customer bought and raising your own is
+a purchase rather than an administrative action.
+
+### No worker, and three that were considered
+
+The meter runs entirely on the request path, so §2 of `BACKGROUND_JOBS.md` gains no row and the counts
+stay at 30 / nine / seven. A nightly rollup was unnecessary (`AiUsageRecords` *is* the rollup, written
+incrementally); a soft-threshold notifier was refused as a notification feature with an unanswered
+audience and deduplication question; an analytics projection was refused for the standing 40.16
+reason.
+
+### No long index, and therefore no `40.33_*_indexes_concurrently.sql`
+
+Both tables are created empty and the tenant column leads both primary keys, so every read is a prefix
+scan over one organization's dozen-or-so rows for the month. The ninth block in a row to reach this
+conclusion. The read-only companion is `docs/TENANCY/sql/40.33_ai_quotas_verify.sql`, whose section 2b
+checks the one mistake this database invites: copying `DialogModes`' content policy onto a table where
+a NULL owner would mean one customer's allowance binding everybody.
+
+### STT is recorded but not gated, on purpose
+
+Whisper bills per second of audio and `POST /transcription/transcribe` forwards a file it never
+decodes, so it never learns the duration. Transcribed characters are a proxy good enough to see a
+spike on the report and not good enough to refuse a call on. Recorded in `DONT_FORGET.md` rather than
+papered over with a made-up conversion.
+
+### Not done, on purpose
+
+- **No frontend.** `GET /admin/ai-usage` has no screen, the same call 40.27–40.32 made about their
+  routes. The numbers are reachable and the shape is settled; where they belong in the admin panel is
+  a design question this block did not open.
+- **No tests.** Rule №3 (`DONT_FORGET.md`, owner, 2026-08-16). What is uncovered — and what each
+  missing test would have caught — is listed there.
+- **Nothing executed.** No migration applied, no Redis touched, no LLM or speech provider called.
+  Rule №1.
