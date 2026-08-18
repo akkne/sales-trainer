@@ -213,6 +213,8 @@ Redis), company, gamification, social, identity, analytics, notification. Зав
 Все `*_backfill.sql`, `*_indexes_concurrently.sql`, оба `mongo/*.js` и все пять
 `scripts/tenancy-*-rollout.sh`. Проверен только `tenancy-default-organization-verify.sh` — он
 доказывает корректность бэкфилла 40.9 **на своей временной базе**, не приближаясь к настоящим данным.
+Ему нужен .NET SDK, поэтому на сервере он не запускается вовсе; состояние живых баз после бэкфилла
+читает `tenancy-default-organization-check.sh` (только `SELECT`).
 
 ### 3.3 Все промпты этапа F — ни один не отправлялся в LLM
 

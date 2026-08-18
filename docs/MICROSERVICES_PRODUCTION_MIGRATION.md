@@ -355,8 +355,14 @@ manual job, and the backup from §7.2 is the real safety net.
 
 The rollback restores the demoted platform roles exactly (the forward run recorded them) and never
 deletes a user. It was verified end-to-end against throwaway databases built from the services' own
-EF migrations — `./scripts/tenancy-default-organization-verify.sh`, which is safe to run on any
-machine with a local Postgres and creates and drops its own databases.
+EF migrations — `./scripts/tenancy-default-organization-verify.sh`, which creates and drops its own
+databases and needs the .NET SDK, so it belongs on a developer machine or in CI and **not** on the
+server.
+
+To check that the backfill landed on a real server, use the `SELECT`-only counterpart
+`./scripts/tenancy-default-organization-check.sh` — no SDK, no DDL, no temporary database. It reads
+the live `organization` and `identity` databases and is what `scripts/tenancy-rollout.sh` runs as
+its step 6.
 
 ### 7.6 After the migration
 

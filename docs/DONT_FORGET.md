@@ -500,8 +500,11 @@
       - `scripts/tenancy-default-organization-backfill.sh` — драйвер: по умолчанию `--dry-run`,
         `--apply` — прогон вперёд, `--rollback --i-have-a-backup` — откат (весь разрушающий SQL
         печатается до выполнения, как требуют SAFETY RULES в `CLAUDE.md`);
-      - `scripts/tenancy-default-organization-verify.sh` — проверка на одноразовых БД, безопасна
-        на любой машине с локальным Postgres, создаёт и удаляет свои БД сама (24/24 зелёных).
+      - `scripts/tenancy-default-organization-verify.sh` — тест самих SQL-файлов на одноразовых БД,
+        создаёт и удаляет свои БД сам (24/24 зелёных). Требует .NET SDK → **машина разработчика и
+        CI, не сервер**;
+      - `scripts/tenancy-default-organization-check.sh` — проверка живых `organization`/`identity`
+        после бэкфилла: только `SELECT`, без SDK и без DDL. Это шаг 6 в `tenancy-rollout.sh`.
 
       Порядок для человека расписан в `docs/MICROSERVICES_PRODUCTION_MIGRATION.md` §7
       («Раскатка тенантов»): свежий бэкап → прогон и **прогон отката** на восстановленной копии

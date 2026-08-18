@@ -214,7 +214,7 @@ is itself reported as a violation. Response DTOs avoid the exception entirely by
 ### The data migration and its rollback
 
 ```bash
-./scripts/tenancy-default-organization-verify.sh
+./scripts/tenancy-default-organization-verify.sh   # developer machine / CI only — needs the .NET SDK
 ```
 
 Creates two **throwaway** databases (`tenancy_verify_identity`, `tenancy_verify_organization`),
@@ -239,6 +239,25 @@ organization), then checks, in order:
 > The migration has been executed **only** against those throwaway databases. Running it on a copy
 > of production and then on production is a human step — see `docs/DONT_FORGET.md` and
 > [MICROSERVICES_PRODUCTION_MIGRATION.md §7](../MICROSERVICES_PRODUCTION_MIGRATION.md).
+
+### Checking a real server after the backfill
+
+`verify.sh` proves the SQL; it never looks at your data, and it cannot run on a host without the
+.NET SDK. The production-side counterpart is:
+
+```bash
+./scripts/tenancy-default-organization-check.sh
+```
+
+`SELECT` only — no SDK, no DDL, no temporary database. It asserts, against the live `organization`
+and `identity` databases: the default organization exists and is `Active`; both bookkeeping rows
+name the same organization id (the two databases have no foreign key between them); no user is left
+without a membership; nobody still holds the removed global `Admin` role; the auth-config and
+replica rows are present; no membership points at an organization identity has no replica of; and
+name and slug agree across the two databases. Every check runs even after one fails, so one run
+lists everything that is wrong. Exit code 0 = clean.
+
+This is what `scripts/tenancy-rollout.sh` runs as its step 6.
 
 ---
 
