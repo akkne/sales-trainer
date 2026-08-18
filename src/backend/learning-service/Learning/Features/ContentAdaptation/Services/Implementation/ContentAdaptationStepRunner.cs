@@ -7,6 +7,7 @@ using Sellevate.Learning.Features.Content.Services.Abstract;
 using Sellevate.Learning.Features.ContentAdaptation.Models;
 using Sellevate.Learning.Features.ContentAdaptation.Services.Abstract;
 using Sellevate.Learning.Features.ContentGeneration.Models;
+using Sellevate.Learning.Features.ContentGeneration.Services.Implementation;
 using Sellevate.Learning.Features.Exercises.Services;
 using Sellevate.Learning.Infrastructure.Ai;
 using Sellevate.Learning.Infrastructure.Data;
@@ -83,7 +84,7 @@ internal sealed class ContentAdaptationStepRunner(
             }
             finally
             {
-                await ReleaseClaimAsync(jobId, CancellationToken.None);
+                await ReleaseClaimAsync(claim, CancellationToken.None);
             }
         }
 
@@ -144,7 +145,7 @@ internal sealed class ContentAdaptationStepRunner(
 
         await tenantScope.CommitAsync(cancellationToken);
 
-        return claimedJob is null ? null : new ClaimedContentAdaptationJob(claimedJob.Id, claimedJob.Mode);
+        return claimedJob is null ? null : new ClaimedContentAdaptationJob(claimedJob.Id, claimedJob.Mode, now);
     }
 
     private async Task<int> RunItemsAsync(
@@ -161,8 +162,12 @@ internal sealed class ContentAdaptationStepRunner(
         // Read once per tick, not once per item: it is one row and it does not change between two
         // calls a few seconds apart. An empty profile is passed as nothing at all rather than as an
         // object of nulls — the same rule 40.27 follows.
-        var profile = ContentStructureDto.FromProfile(
-            await organizationProfileProvider.GetCurrentAsync(cancellationToken));
+        // Normalized for the same reason as the generation runner: the profile columns carry no
+        // length limit of their own, and this value is repeated into as many as five hundred rewrite
+        // prompts in one batch. Review, 40.34.
+        var profile = ContentStructureDocumentSerializer.Normalize(
+            ContentStructureDto.FromProfile(
+                await organizationProfileProvider.GetCurrentAsync(cancellationToken)));
 
         var answeredCount = 0;
 
@@ -532,7 +537,7 @@ internal sealed class ContentAdaptationStepRunner(
     /// rather than waiting out ten minutes. A tick that dies before reaching this leaves the lease
     /// standing, which is exactly what the lease is for.
     /// </summary>
-    private async Task ReleaseClaimAsync(Guid jobId, CancellationToken cancellationToken)
+    private async Task ReleaseClaimAsync(ClaimedContentAdaptationJob claim, CancellationToken cancellationToken)
     {
         try
         {
@@ -541,8 +546,13 @@ internal sealed class ContentAdaptationStepRunner(
             await using var tenantScope =
                 await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
+            // The ClaimedAt predicate makes the release conditional on still owning the lease. Every
+            // other claim operation in this file is conditional; this one was not, so a worker whose
+            // lease had already expired — a tick that ran long — cleared the lease of whichever
+            // worker had legitimately taken the job over, handing the same batch to two workers.
+            // Review, 40.34.
             await databaseContext.ContentAdaptationJobs
-                .Where(job => job.Id == jobId)
+                .Where(job => job.Id == claim.JobId && job.ClaimedAt == claim.ClaimedAt)
                 .ExecuteUpdateAsync(
                     setters => setters.SetProperty(job => job.ClaimedAt, (DateTime?)null),
                     cancellationToken);
@@ -551,7 +561,7 @@ internal sealed class ContentAdaptationStepRunner(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Could not release a content adaptation claim JobId={JobId}", jobId);
+            logger.LogError(exception, "Could not release a content adaptation claim JobId={JobId}", claim.JobId);
         }
     }
 
@@ -567,7 +577,7 @@ internal sealed class ContentAdaptationStepRunner(
     }
 
     /// <summary>A claimed batch, detached from the tracker so the long calls hold no entity.</summary>
-    private sealed record ClaimedContentAdaptationJob(Guid JobId, string Mode);
+    private sealed record ClaimedContentAdaptationJob(Guid JobId, string Mode, DateTime ClaimedAt);
 
     /// <summary>One item's work order: what to send, without the entity it came from.</summary>
     private sealed record ContentAdaptationItemWork(

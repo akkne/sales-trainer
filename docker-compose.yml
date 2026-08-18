@@ -39,6 +39,10 @@ services:
       - Kafka__BootstrapServers=kafka:29092
       - Logging__Loki__Url=http://loki:3100
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       # --- Identity tunables (override in .env; defaults are the in-code values) ---
       - Jwt__AccessTokenLifetimeMinutes=${JWT_ACCESS_TOKEN_LIFETIME_MINUTES:-15}
       - Jwt__RefreshTokenLifetimeDays=${JWT_REFRESH_TOKEN_LIFETIME_DAYS:-30}
@@ -199,6 +203,10 @@ services:
       - LearningService__BaseUrl=http://learning:8080
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
       - OpenAI__ApiKey=${OPENAI_API_KEY}
       - OpenAI__BaseUrl=${OPENAI_BASE_URL}
@@ -387,6 +395,10 @@ services:
       # door around that meter.
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
     depends_on:
       postgres:
@@ -412,6 +424,10 @@ services:
       - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=company;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
+      # Phase 40.34 — the shared secret in front of the /internal/* routes. Those routes carry
+      # no JWT and take their tenant from a header, so this is the only thing authenticating
+      # them. Absent outside Development they now refuse rather than allow.
+      - InternalAuth__ServiceSecret=${INTERNAL_SERVICE_SECRET}
       - Logging__Loki__Url=http://loki:3100
       - Kafka__BootstrapServers=kafka:29092
     depends_on:

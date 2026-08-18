@@ -76,28 +76,43 @@ internal sealed class DelayedChatEmailDispatcherService : BackgroundService
             return;
         }
 
+        // Per-item, not per-batch. ClaimDueAsync is destructive — it reads the due set and removes it
+        // in one step — so this list is the only remaining copy of up to a hundred emails. With the
+        // guard around the whole loop, one SMTP timeout on the third recipient unwound past the
+        // ninety-seven behind it and logged "will retry next tick" with nothing left to retry.
+        // Review, 40.34.
         foreach (var pending in due)
         {
-            if (await _scheduler.WasReadAsync(pending, cancellationToken))
+            try
             {
-                _logger.LogDebug(
-                    "Skipping unread-chat email for {RecipientUserId}: conversation already read",
-                    pending.RecipientUserId);
-                continue;
+                if (await _scheduler.WasReadAsync(pending, cancellationToken))
+                {
+                    _logger.LogDebug(
+                        "Skipping unread-chat email for {RecipientUserId}: conversation already read",
+                        pending.RecipientUserId);
+                    continue;
+                }
+
+                using var scope = _scopeFactory.CreateScope();
+                scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(pending.OrganizationId);
+
+                var dispatcher = scope.ServiceProvider.GetRequiredService<INotificationEmailDispatcher>();
+
+                await dispatcher.DispatchAsync(
+                    pending.RecipientUserId,
+                    NotificationType.ChatMessageReceived,
+                    NotificationTitles.ChatMessageReceived,
+                    pending.Body,
+                    pending.ActionUrl,
+                    cancellationToken);
             }
-
-            using var scope = _scopeFactory.CreateScope();
-            scope.ServiceProvider.GetRequiredService<TenantContext>().SetOrganization(pending.OrganizationId);
-
-            var dispatcher = scope.ServiceProvider.GetRequiredService<INotificationEmailDispatcher>();
-
-            await dispatcher.DispatchAsync(
-                pending.RecipientUserId,
-                NotificationType.ChatMessageReceived,
-                NotificationTitles.ChatMessageReceived,
-                pending.Body,
-                pending.ActionUrl,
-                cancellationToken);
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogError(
+                    exception,
+                    "Failed to send the unread-chat email for {RecipientUserId}; continuing with the rest of the batch",
+                    pending.RecipientUserId);
+            }
         }
     }
 }

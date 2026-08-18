@@ -37,10 +37,6 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
     [HttpGet("admin/topics/{topicIconicName}/lessons")]
     public async Task<ActionResult<IReadOnlyList<AdminLessonDto>>> GetByTopic(string topicIconicName, CancellationToken cancellationToken = default)
     {
-        // Creating a lesson creates a row in the library. An organization customizes what exists
-        // through the override route instead; originating content is 40.19/40.20.
-        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
-
         var topic = await database.Topics.FirstOrDefaultAsync(candidate => candidate.IconicName == topicIconicName, cancellationToken);
         if (topic is null) return NotFound(new { message = $"Topic '{topicIconicName}' not found." });
 
@@ -58,6 +54,10 @@ public sealed class AdminLessonsController(LearningDbContext database, ILogger<A
     public async Task<ActionResult<AdminLessonDto>> Create(
         string topicIconicName, [FromBody] CreateLessonRequestDto requestDto, CancellationToken cancellationToken = default)
     {
+        // Creating a lesson creates a row in the library. An organization customizes what exists
+        // through the override route instead; originating content is 40.19/40.20.
+        if (!ContentAuthoringGuard.IsPlatformAdministrator(User)) return Forbid();
+
         var topic = await database.Topics.FirstOrDefaultAsync(candidate => candidate.IconicName == topicIconicName, cancellationToken);
         if (topic is null) return NotFound(new { message = $"Topic '{topicIconicName}' not found." });
 

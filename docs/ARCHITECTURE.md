@@ -3,83 +3,103 @@
 ## Stack
 
 ```
-Next.js 15 (TypeScript, App Router)
+Next.js 16 (TypeScript, App Router)
   → HTTP REST (JSON) + JWT Bearer
     → ASP.NET Core 9 Web API (C#)
         ├── PostgreSQL 17   (main relational data)
         ├── MongoDB 8       (chat messages, future transcripts)
-        ├── Redis 7         (cache, sessions, team progress views)
-        └── OpenAI API      (free-text exercise evaluation)
+        ├── Redis 7         (cache, sessions, notifications, team progress views)
+        └── OpenAI API      (free-text exercise evaluation, via ai-service only)
 ```
 
 ## Frontend: `src/frontend`
 
-**Libraries:** Next.js 15, TypeScript, Tailwind CSS, Zustand, TanStack Query, Framer Motion
+**Libraries:** Next.js 16.2.1, React 19.2.4, TypeScript, Tailwind CSS, Zustand, TanStack Query, Framer Motion
 
-**Route layout (App Router):**
+**Layout.** The `lib/` + `components/` split this section used to describe is gone; neither
+directory exists any more. The frontend is organised by *feature* — each feature owns its own
+components, hooks and API calls — with a single `shared/` tree for what genuinely crosses features:
+
 ```
-app/
-  (auth)/
-    login/
-    register/
-    onboarding/
-  (main)/
-    tree/              ← skill tree, main screen
-    skill/[id]/        ← lesson list inside a skill
-    exercise/[id]/     ← exercise screen
-    reference/[id]/    ← reference material
-    league/            ← weekly team progress view
-    profile/           ← profile & stats
-lib/
-  api/apiClient.ts           ← single fetch wrapper (auto JWT + 401 refresh)
-  store/authStore.ts         ← Zustand auth state
-  store/selectedSkillStore.ts ← persisted selected skill for /tree home view
-  hooks/                     ← one hook per feature, no logic in components
-components/
-  ui/                  ← shared primitives
-  exercise/            ← exercise type renderers
-  layout/              ← shell, nav
+app/                        ← routes only; every page is thin and delegates to a feature
+  (auth)/     login, onboarding, verify-email, invite/[token]
+  (main)/     tree, skill/[id], reference, reference/[id], guidebook, profile, settings,
+              companies, companies/[id], dialog, dialog/[bundleId], dialog-reviews,
+              discuss, discuss/[threadId], friends, friends/[userId], friends/chat
+  (admin)/    admin/… — skills, skill-stages, topics, lessons, bulk-lessons, import,
+              reference, techniques, prompts, quotes, dialog, voice, leagues,
+              gamification, discuss, organizations, users
+  session/[lessonId]        ← the exercise runner (outside (main), full-screen)
+  dialog/[bundleId]/[modeId], companies/[id]/call   ← full-screen voice/dialog surfaces
+  api/logs                  ← the one Next route handler (browser log forwarding)
+features/
+  admin, assignments, auth, companies, devtools, dialog, dialog-reviews, discuss,
+  exercise, friends, layout, notifications, profile, skills, voice
+shared/
+  api/api-client.ts         ← single fetch wrapper (auto JWT + 401 refresh)
+  stores/                   ← Zustand: auth-store, selected-skill-store, theme-store,
+                               notification-preferences-store
+  analytics/, components/, constants/, hooks/, utils/
 ```
 
-## Backend: `src/api/backend`
+There is no `(main)/league/` route. The weekly league screen this document used to list is not part
+of the product any more, even though gamification-service still serves the league endpoints.
 
-**Vertical slice structure — one folder per feature:**
+## Backend: `src/backend/<service>/`
+
+There is no `src/api/backend` and no single `AppDbContext` — both belonged to the monolith and both
+are gone. Each service is its own ASP.NET Core project under `src/backend/<name>-service/<Name>/`,
+with its own database and its own context (`LearningDbContext`, `IdentityDbContext`, `AiDbContext`,
+`GamificationDbContext`, `SocialDbContext`, `CompanyDbContext`, `OrganizationDbContext`;
+notification- and analytics-service have no relational database at all). The vertical-slice shape
+survived the split — it just repeats per service instead of once:
+
 ```
-Features/
-  Auth/
-  Onboarding/
-  SkillTree/
-  Lessons/
-  Exercises/
-  Reference/
-  Gamification/
-  League/
-  Profile/
-Infrastructure/
-  Data/
-    AppDbContext.cs
-    Migrations/
-    *EntityConfiguration.cs   ← jsonb and array column configs
-  Mongo/
-  Redis/
+src/backend/learning-service/Learning/      ← the shape every service follows
+  Program.cs                    ← composition root: auth, tenancy, eventing, health
+  Features/                     ← one folder per slice, each Controller + Services/ + Dtos/
+    Admin/ Assignments/ Content/ ContentAdaptation/ ContentGeneration/ DailyQuotes/
+    DialogReviews/ Exercises/ Lessons/ Programs/ Reference/ SkillTree/ TeamInsights/ Techniques/
+  Eventing/                     ← Kafka producers/consumers for this service's topics
+  Infrastructure/
+    Data/
+      LearningDbContext.cs
+      Migrations/               ← this service's migrations only
+      *EntityConfiguration.cs   ← jsonb/array column configs, RLS + tenant filters
+    Ai/ Identity/               ← typed HTTP clients to other services
+  Common/, DependencyInjection/, Identity/
 ```
 
 **Rules from RAW.md enforced here:**
-- No repository wrappers — services use `AppDbContext` directly
+- No repository wrappers — services use their own `DbContext` directly
 - DTO ≠ Entity — controllers never return EF entities
-- All OpenAI calls go through `AiEvaluationService` (not yet implemented)
+- **No service calls an AI provider in-process.** ai-service owns every LLM / TTS / Whisper call;
+  everyone else reaches it over HTTP (`/ai/evaluate`, `/ai/chat`, `/ai/chat/stream`, `/ai/tts`,
+  `/ai/content/*`) behind `X-Internal-Service-Secret`. This is stated as an invariant because it
+  had already silently stopped being true once: the monolith split left learning-service holding
+  its own `OpenAiChatService` and `YandexTtsService`, and block 40.33 had to remove them. It is now
+  checked rather than remembered — `scripts/ai-provider-lint.py` fails CI if any service outside
+  ai-service opens a provider client, and allow-lists the metered callers inside ai-service.
 - Async/await everywhere, nullable reference types enabled
 
 ## Docker
 
-`docker-compose.yml` at root starts all 5 services:
-- `frontend` on :3000
-- `backend` on :5000 (internal :8080)
-- `postgres` on :5432 (healthcheck before backend starts)
-- `mongo` on :27017
-- `redis` on :6379
+`docker-compose.yml` at root defines 22 services — the nine backend services, the gateway, the
+frontend, and infra. There is no `backend` service; the thing on :5000 is the gateway:
 
-Backend auto-runs `db.Database.Migrate()` on startup.
+- `frontend` on `127.0.0.1:3000`
+- `gateway` on `127.0.0.1:5000` (internal :8080) — the only backend entry point
+- the nine services: `identity`, `learning`, `ai`, `gamification`, `social`, `analytics`,
+  `notification`, `company`, `organization`
+- data stores: `postgres` :5432 (healthcheck gates the services), `mongo` :27017, `redis` :6379,
+  `analytics-redis`, `minio`
+- eventing: `kafka` :9092, plus `kafka-ui` :8085 and `kafka-exporter`
+- observability: `loki`, `prometheus`, `grafana`
+
+Each service auto-runs `db.Database.Migrate()` on startup against its own database.
+
+This is the deploy shape, not the default local one — for local iteration see
+[LOCAL_DEV.md](LOCAL_DEV.md), which keeps only infra in Docker.
 
 ## Microservices migration — platform foundations (Phase 0)
 
@@ -87,13 +107,13 @@ The monolith above has been carved into independently deployable services per
 [MICROSERVICES.md](MICROSERVICES.md) (target) and
 [MICROSERVICES_ROADMAP.md](MICROSERVICES_ROADMAP.md) (route). **The migration is
 complete (Phase 9): the monolith is retired** — every route is owned by a service and
-the gateway no longer has a catch-all to the monolith. `src/backend/api` is kept in the
-repo and the solution as a reference only (not built or run as a container):
+the gateway no longer has a catch-all to the monolith. It is also *gone*: `src/backend/api` and
+`src/backend/tests` were deleted from `main` (commit `46c06a8`) and `Sellevate.sln` no longer
+contains the monolith project. The code is preserved on the `monolith-legacy` branch if it is ever
+needed for archaeology; nothing on `main` references it.
 
 ```
 src/backend/
-  api/                         ← RETIRED monolith (reference only; not deployed)
-  tests/                       ← monolith tests (reference only)
   {identity,learning,gamification,ai,social,analytics,notification,company,organization}-service/
                                ← the extracted services, each with its own DB + tests
   building-blocks/BuildingBlocks/   ← shared lib (event envelope, Kafka publisher +
@@ -147,8 +167,11 @@ src/backend/
   `exercise/lesson/skill.completed` producers were converted in the same way — the enqueue is
   staged before the business `SaveChangesAsync` so state + event commit atomically.) These three
   were the named scope of roadmap 10.3 (the producers whose events drive cross-service state).
-  Other producers (social, ai) still publish directly and can adopt the same shared building
-  blocks if/when their events need the same guarantee.
+  Other producers publish directly and can adopt the same shared building blocks if/when their
+  events need the same guarantee: social (`KafkaSocialEventPublisher`), ai
+  (`KafkaDialogEventPublisher`), company (`FollowUpReminderService`, see the producer-only note
+  below) and organization (`OrganizationService` / `OrganizationProfileService`) all inject
+  `IEventPublisher` and publish outside the business transaction.
 - **Organization service (Phase 40.5):** new microservice `organization-service` (not an
   extraction — the tenant registry did not exist before), port 5010, database `organization`.
   Owns the tenant registry (`Organizations`, not tenant-scoped, no RLS — see docs/DECISIONS.md)
@@ -207,10 +230,13 @@ src/backend/
   `BuildingBlocksServiceCollectionExtensions`) registers `TenantContext` scoped as both
   itself and `ITenantContext`, plus `TenantSaveChangesInterceptor` scoped; a consuming
   service still adds the interceptor to its own `DbContext` via `AddInterceptors` and is
-  responsible for populating `ITenantContext` per request/job. This building block is
-  registered by nothing yet — wiring it into a service's `DbContext` and populating it
-  from the gateway header is Phase 40.2+; this block only ships the primitives + tests
-  (`BuildingBlocks.Tests/Tenancy`). This is Layer 2 (EF, convenience) of the three-layer
+  responsible for populating `ITenantContext` per request/job. When 40.1 shipped this building
+  block was registered by nothing — it was primitives + tests (`BuildingBlocks.Tests/Tenancy`) and
+  the wiring was deferred. **Blocks 40.2–40.13 did that wiring, so that statement is now false:**
+  `AddSellevateTenancy()` is called by all seven Postgres-backed services (ai, organization,
+  company, gamification, learning, identity, social), and `UseSellevateTenantContext()` by all
+  nine — analytics and notification have no relational database but still establish the tenant
+  context for their Redis/Mongo keys. This is Layer 2 (EF, convenience) of the three-layer
   isolation model in TENANCY.md §1 — Postgres RLS (Phase 40.4) is the layer that actually
   survives raw SQL / `ExecuteUpdate`.
 - **Gateway + context propagation (Phase 40.2):** `IdentityHeaders.OrganizationId` (`X-Organization-Id`)
@@ -240,19 +266,39 @@ src/backend/
     `TransactionStartedAsync` — which fires for every transaction, including EF's own implicit
     per-`SaveChangesAsync` transaction — and issues `SET LOCAL app.organization_id = '<guid>'`,
     **never** a bare `SET`, so the value cannot outlive the transaction or leak onto the next
-    request that borrows the same pooled connection. It is a no-op (returns `null` from the
-    testable `BuildSetLocalCommandText()`) in system mode or with no organization set. Registered
+    request that borrows the same pooled connection. Since the platform-staff work it emits a
+    second statement, `SET LOCAL app.platform_mode = 'on'`, whenever the context is platform-wide
+    (`TenantConnectionInterceptor.cs:68,98-99,121`). The two are independent, not either/or — a
+    Sellevate administrator who also belongs to an organization gets both — so the interceptor is
+    a no-op (returns `null` from the testable `BuildSetLocalCommandText()`) only in system mode,
+    which relies on a `BYPASSRLS` role instead of the GUCs, or when there is *neither* an
+    organization nor platform-wide mode. Platform-wide with no organization is **not** a no-op.
+    Registered
     scoped by `AddSellevateTenancy()`, same as `TenantSaveChangesInterceptor`; a consuming service
     still adds it to its own `DbContext` via `AddInterceptors` when it actually gets tenant-scoped
     tables. `organization-service` (Phase 40.5) is the first to do so, on `OrganizationProfiles` —
     the Stage C rollout (40.10+) repeats the same pattern per service.
   - `TenantRlsMigrationBuilderExtensions.EnableTenantRls(table)` /
     `EnableTenantRlsForContent(table)` — migration-time helpers that emit `ENABLE` + `FORCE ROW
-    LEVEL SECURITY` and a policy with both `USING` and `WITH CHECK`, comparing
+    LEVEL SECURITY` and a policy with both `USING` and `WITH CHECK`. The base comparison is
     `"OrganizationId" = NULLIF(current_setting('app.organization_id', true), '')::uuid` (the
     content variant adds `"OrganizationId" IS NULL OR ...`). The `NULLIF` is load-bearing, not
     decorative — see docs/DECISIONS.md (2026-08-15) for how the real-Postgres integration test
     caught its absence.
+
+    **The two halves are no longer symmetric.** This document used to say the policy applies the
+    same comparison to `USING` and `WITH CHECK`; the `RefreshTenantPoliciesForPlatformStaff`
+    migration of 2026-08-16 (present in all seven Postgres services) changed that. `USING` now
+    additionally admits
+    `COALESCE(NULLIF(current_setting('app.platform_mode', true), ''), 'off') = 'on'`, while
+    `WITH CHECK` keeps the plain organization comparison
+    (`TenantRlsMigrationBuilderExtensions.cs:126-138`). The point is deliberate and worth stating
+    plainly: **visibility is widened for validated platform staff, authorship is not.** A Sellevate
+    administrator reads across every organization and still cannot write a row into one they did
+    not name explicitly. Because `ApplyPolicy` does `DROP POLICY IF EXISTS` first, re-running the
+    helper replaces the policy rather than failing, and passing `admitPlatformStaff: false`
+    regenerates the old symmetric policy through the same code path — which is exactly how that
+    migration's `Down` is written.
   - `TenantRowLevelSecurityIntegrationTests` (`BuildingBlocks.Tests/Tenancy`) exercises both
     against a real, throwaway local Postgres database and a non-superuser, non-owner,
     `NOBYPASSRLS` role — raw SQL, `ExecuteDelete`, and an `INSERT` carrying a foreign
@@ -262,11 +308,73 @@ src/backend/
     `sellevate_app` role; `scripts/tenancy-pool-lint.py` (CI: `tenancy-pool`) forbids
     `AddDbContextPool` anywhere in the backend, per the CODESTYLE.md rule it enforces.
 
+## `TenantTransactionScope` and `[TenantTransaction]` — why reads need a transaction
+
+This is the mechanism the whole RLS layer quietly depends on, and it was missing from this document
+for ten blocks while ten other docs described it.
+
+`TenantConnectionInterceptor` hooks `TransactionStarted`. `SET LOCAL` has no effect outside a
+transaction. Put those two facts together and the consequence is not obvious but it is severe:
+EF opens an implicit transaction for every `SaveChangesAsync`, so a **write** is covered for free,
+but a plain **read** outside a transaction runs with `app.organization_id` unset. Under a
+fail-closed policy (`current_setting(..., true)`, missing_ok) that read returns *zero* tenant rows —
+no error, no log line, just an empty list. The failure mode is an administrator opening a record
+they created a minute ago and finding it gone.
+
+Two pieces close that gap:
+
+- **`TenantTransactionScope`** (Phase 40.10) — the one transaction pattern in ai-, company-,
+  gamification-, learning- and social-service, each service owning a copy under its own
+  `Infrastructure/Data/`. The rule, stated once so it is not re-litigated per call site: every
+  service method touching a tenant-scoped table — or any content table, which may now hold
+  organization-owned rows — opens exactly one scope as its first statement. `BeginReadAsync` rolls
+  back on dispose (it exists to make rows visible, never to persist); `BeginWriteAsync` plus an
+  explicit `CommitAsync` for methods that also write. Both are re-entrant — a nested call finds a
+  transaction already open and becomes a no-op, so the outermost scope owns the transaction — which
+  means a write scope must never be nested inside a read scope, or its commit is swallowed.
+- **`[TenantTransaction]`** (Phase 40.18) — an action filter, defined in ai-service
+  (`Infrastructure/Data/TenantTransactionAttribute.cs`) and learning-service
+  (`Features/Content/TenantTransactionAttribute.cs`), that opens a write scope around the whole
+  action and commits it if the action did not throw. It exists for the admin controllers that talk
+  to the content tables directly and opened no scope of their own. That was survivable while
+  content was global, because the content policy admits `OrganizationId IS NULL` rows even with the
+  session variable unset; the moment 40.18 let an organization own content, those endpoints started
+  silently losing rows. It is a filter on the *controller* rather than a scope in each of twenty
+  actions precisely because the failure mode of the per-action version is somebody adding action
+  twenty-one. It is currently applied to 12 controllers: `AdminDialogController`,
+  `AdminDialogSessionsController`, `AdminDialogOverridesController`, `AdminAiQuotaController`,
+  `AiQuotaPreflightController` (ai) and `AdminContentAdaptationController`,
+  `AdminContentGenerationController`, `AdminExercisesController`, `AdminLessonsController`,
+  `AdminReferenceController`, `AdminTeamSkillGapsController`, `AdminTechniquesController`
+  (learning).
+
+## Service-to-service HTTP
+
+Kafka carries facts that already happened; anything a request needs *now* goes over HTTP. Every hop
+below is a typed client authenticated with `X-Internal-Service-Secret` and checked on the receiving
+side by that service's `InternalServiceAuthFilter` — these routes are not exposed through the
+gateway.
+
+| From → to | Client | Purpose |
+|---|---|---|
+| learning → ai | `AiEvaluationClient` | `/ai/evaluate` — free-text / rewrite / spot-mistake grading |
+| learning → ai | `AiQuotaClient` | per-organization spend preflight before an LLM call |
+| learning → ai | `AiContentPipelineClient` | `/ai/content/*` — generation and adaptation steps |
+| learning → ai | `AiChatClient`, `AiTtsClient` | exercise dialog and TTS, moved here by block 40.33 |
+| learning → identity | `IdentityOrganizationMemberDirectory` | `GET /internal/memberships/active` — who is in the org |
+| ai → learning | `AssignmentPracticeContextClient` | `GET /internal/assignments/practice-context` |
+| company → ai | `BriefingAiClient`, `ParseLogAiClient`, `PersonaAiClient`, `ReadinessAiClient` | the four company AI surfaces |
+
+The ai → learning hop is deliberately **fail-open**: `AssignmentPracticeContextClient` returns
+`null` on any non-success, timeout or exception rather than throwing, so a learning-service outage
+degrades the dialog's assignment context instead of taking dialog down with it. The learning → ai
+hops are not fail-open — an evaluation that cannot reach ai-service is an error, because silently
+grading nothing would be worse than failing loudly.
+
 ## EF Column Types
 
 | Property | Column type |
 |---|---|
-| `Skill.ApplicableSalesTypes` | `text[]` |
 | `Exercise.SerializedContent` | `jsonb` |
 | `UserExerciseAttempt.SerializedAnswer` | `jsonb` |
 | `UserExerciseAttempt.SerializedAiFeedback` | `jsonb` |

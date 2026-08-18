@@ -36,9 +36,16 @@ public static class DialogModeOverrideResolution
             return modes;
         }
 
+        // `candidate.IsActive` matters: AcceptBaseAsync retires an override by deactivating the row
+        // rather than deleting it. Without this clause the retired row still satisfied the anti-join,
+        // so the global mode stayed hidden while the override was excluded everywhere else and the
+        // organization was left with neither. The learning-service twin has always had the equivalent
+        // `!candidate.IsArchived` (ContentOverrideResolution). Found in review, 40.34.
         return modes.Where(mode =>
             mode.OrganizationId != null
             || !databaseContext.DialogModes.Any(candidate =>
-                candidate.ParentModeId == mode.Id && candidate.OrganizationId == organizationId));
+                candidate.ParentModeId == mode.Id
+                && candidate.OrganizationId == organizationId
+                && candidate.IsActive));
     }
 }

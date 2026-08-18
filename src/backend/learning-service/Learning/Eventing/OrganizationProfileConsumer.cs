@@ -50,6 +50,14 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
 
         var databaseContext = scopedServices.GetRequiredService<LearningDbContext>();
 
+        // The read and the write share one tenant transaction. `SET LOCAL app.organization_id` is
+        // issued by TenantConnectionInterceptor on TransactionStarted, so a bare FindAsync outside a
+        // transaction runs with no tenant set: once RLS is actually enforced it would return nothing,
+        // the handler would Add a row that already exists, and SaveChanges would fail the primary key
+        // — three retries, then the dead-letter queue. Every profile update after the first would be
+        // lost while the neutral fallback wording made it look normal. Review, 40.34.
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var existing = await databaseContext.OrganizationProfileReplicas
             .FindAsync([payload.OrganizationId], cancellationToken);
 
@@ -72,6 +80,7 @@ internal sealed class OrganizationProfileConsumer : KafkaConsumerBackgroundServi
         existing.UpdatedAt = payload.UpdatedAt;
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private static string Coalesce(string? value, string fallback)

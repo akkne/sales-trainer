@@ -26,13 +26,20 @@ namespace Sellevate.Organization.Features.Organizations.Endpoints;
 /// </para>
 ///
 /// <para>
-/// <b>The class-level gate stays open and the two writing routes are gated.</b> Reading the profile
+/// <b>The class-level gate stays open and every writing route is gated.</b> Reading the profile
 /// is something the organization's own members legitimately do — <c>OrganizationControllerAuthorizationTests</c>
-/// asserts that policy is null for exactly that reason — but promoting a draft and answering the
-/// interview are the РОП's job, and they are the two routes on this controller that can change what
-/// every lesson in the organization says. That leaves <c>PUT</c> reachable by any member, which is a
-/// pre-existing hole this block deliberately did not widen and did not silently close; it is recorded
-/// in docs/DONT_FORGET.md.
+/// asserts that policy is null for exactly that reason — but promoting a draft, answering the
+/// interview and replacing the profile wholesale are the РОП's job, and they are the routes on this
+/// controller that can change what every lesson in the organization says.
+/// </para>
+///
+/// <para>
+/// <b>40.34 closed the <c>PUT</c> hole.</b> Until the final acceptance block <c>PUT</c> carried only
+/// the class-level <c>[Authorize]</c>, so any member of the organization could replace all seven
+/// columns at once — including <c>banned_claims</c>, which binds both the AI persona and the grader.
+/// Emptying it made the organization's AI coach its reps into the exact promises compliance forbade,
+/// and a crafted entry landed attacker text in a <b>system</b> prompt. It is now gated like its two
+/// siblings below.
 /// </para>
 /// </summary>
 [ApiController]
@@ -49,6 +56,7 @@ public sealed class OrganizationProfileController(IOrganizationProfileService or
     }
 
     [HttpPut]
+    [Authorize(Policy = AuthorizationPolicies.RequireOrganizationAdministrator)]
     public async Task<ActionResult<OrganizationProfileDto>> UpdateProfile(
         [FromBody] UpdateOrganizationProfileRequestDto request,
         CancellationToken cancellationToken)

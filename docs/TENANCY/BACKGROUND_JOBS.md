@@ -420,8 +420,9 @@ organization's `org:{orgId}:` inbox.
 
 `ContentGenerationSweepService` advances the admin content pipeline
 ([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md)): the structuring call, then — only after a human has
-approved what structuring produced — the generation call that writes a lesson. It is §2.1's eighth
-row, in the shape the seven above it established: per-organization iteration over a system
+approved what structuring produced — the generation call that writes a lesson. It is §2.1's tenth
+row — the eighth to hold a tenant, see the correction in §4j — in the shape the ones above it
+established: per-organization iteration over a system
 enumeration, `BYPASSRLS` required for the enumeration only.
 
 Four things about it differ from every job already in this registry, and all four are consequences of
@@ -478,9 +479,10 @@ except a lease, which is what the lease is for.
 
 `ContentAdaptationSweepService` answers a batch's items — «перепиши все упражнения этапа "закрытие"»,
 or the same sweep asking what is methodically wrong with them instead
-([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a). It is §2.1's ninth row, in the shape the eight
-above it established: per-organization iteration over a system enumeration, `BYPASSRLS` required for
-the enumeration only, and the seventh `IgnoreQueryFilters()` call site in production code.
+([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a). It is §2.1's eleventh row — the ninth to hold a
+tenant, see the correction in §4j — in the shape the ones above it established: per-organization
+iteration over a system enumeration, `BYPASSRLS` required for the enumeration only, and the seventh
+`IgnoreQueryFilters()` call site in production code.
 
 Everything §4h says about the eighth worker applies here — the seconds-long tick because somebody is
 watching, the conditional-`UPDATE` claim committed before the call, the ten-minute lease deliberately
@@ -521,7 +523,7 @@ the reason on the row while the rest of the batch continues.
 is nothing to tell another service about. Nothing decays while nothing runs except a lease, which is
 what the lease is for.
 
-**The counts after 40.32: 30 `AddHostedService` registrations, nine workers in §2.1, seven
+**The counts after 40.32: 30 `AddHostedService` registrations, twelve rows in §2.1, seven
 `IgnoreQueryFilters()` call sites.**
 
 ---
@@ -533,8 +535,22 @@ the request path: the gate runs inside the call that is about to spend money and
 inside the call that just did. **No `BackgroundService`, no Hangfire job, no Kafka consumer and no
 new topic** — so §2 gains no row and every count above is unchanged:
 
-**The counts after 40.33 are still: 30 `AddHostedService` registrations, nine workers in §2.1, seven
+**The counts after 40.33 are still: 30 `AddHostedService` registrations, twelve rows in §2.1, seven
 `IgnoreQueryFilters()` call sites.** Verified by the three greps in §5.
+
+> **A correction from the 40.34 acceptance block.** Blocks 40.27–40.33 each carried the figure "nine
+> workers in §2.1" forward from the one before it, and none of them re-counted the table. §2.1 has
+> **twelve** rows, and it has had twelve since 40.32. The nine is the count of workers that hold a
+> *tenant* — everything except `OutboxRelayBackgroundService` (§3 treats it separately as the one
+> legitimate system reader), `LessonVersionBackfill` (startup, once, not a recurring worker) and the
+> two identity cleanups over platform-global tables. That distinction is real and worth keeping, but
+> it was never written down, so the number read as a row count and was wrong as one. The ordinals in
+> §4h and §4i inherited the same drift: `ContentGenerationSweepService` is §2.1's **tenth** row, not
+> its eighth, and `ContentAdaptationSweepService` its **eleventh**, not its ninth. Their position in
+> the *tenant-holding* sequence — eighth and ninth — is what those sections meant, and is correct.
+> The number that matters operationally is neither: it is the **seven** rows marked
+> `Needs BYPASSRLS = Yes`, because those are the ones that go silently quiet on the `sellevate_app`
+> cutover.
 
 Three shapes were considered and each would have added a worker; each was rejected for a reason worth
 recording, because the obvious next block will be tempted by all three.

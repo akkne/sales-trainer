@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Sellevate.Identity.Eventing;
-using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.BuildingBlocks.Email.Abstract;
 using Sellevate.BuildingBlocks.Identity;
+using Sellevate.Identity.Eventing;
+using Sellevate.Identity.Features.Auth.Models;
 
 namespace Sellevate.Identity.Tests.Helpers;
 

@@ -1,6 +1,6 @@
 # DB Schema
 
-Last updated: 2026-06-12
+Last updated: 2026-08-18
 
 ## Databases overview
 
@@ -10,38 +10,89 @@ Last updated: 2026-06-12
 | MongoDB    | Chat messages and unstructured dialogue data |
 | Redis      | Cache, sessions, team-progress rankings      |
 
-> **Microservices migration:** as each service is extracted it owns its own logical
-> Postgres database on the shared cluster, with its own EF migrations and
-> `DatabaseBootstrapper`. So far: `identity` (Phase 2), `ai` (Phase 6) and
-> **`gamification` (Phase 7)**. The `gamification` database owns `UserXpRecords`,
-> `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones`,
-> `Achievements`, `UserAchievements`, `Leagues`, `LeagueTiers`, `LeagueMemberships`,
-> `LeagueSettings` (schemas below, ported verbatim), plus a local `UserReplica`, a
-> `UserLearningProgress` projection (completed-lesson count + has-completed-any-skill,
-> fed by `lesson.completed`/`skill.completed`), and its own Hangfire schema. The
-> monolith's copies of these tables remain as reference until Phase 9. See
-> [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md).
+> **Microservices migration — finished.** This overview used to say "so far: identity,
+> ai and gamification" and "the monolith's copies remain as reference until Phase 9".
+> Both statements are stale: the extraction completed at Phase 9 and the monolith was
+> then **deleted** from `main` (it survives only on the `monolith-legacy` branch), so
+> there are no "monolith copies" of anything left to compare against. There are now
+> **seven** logical Postgres databases on the shared cluster, each with its own EF
+> migrations and `DatabaseBootstrapper`, plus two services with no relational database
+> at all.
 >
-> **`learning` (Phase 8)** — the last extraction. The `learning` database owns the
+> **`identity` (Phase 2)** — `Users`, `UserProfiles`, `RefreshTokens`, `DefaultAvatars`,
+> `OutboxMessages`, and the tenancy tables added across Phase 40: `Memberships` (40.6),
+> `Invites` (40.7), `OrganizationAuthConfigurations` (40.8), `OrganizationReplicas` and
+> `ImpersonationAuditEntries` (40.9).
+>
+> **`ai` (Phase 6)** — `DialogBundles`, `DialogModes`, `OpenQuestionGlobalContexts`,
+> `ExerciseTypePrompts` (ai's own copy), plus `OrganizationProfileReplicas` (40.19) and
+> the quota tables `OrganizationQuotas` / `AiUsageRecords` (40.33).
+>
+> **`gamification` (Phase 7)** — `UserXpRecords`, `UserStreaks`, `GamificationSettings`,
+> `ExerciseTypeRewards`, `StreakMilestones`, `Achievements`, `UserAchievements`,
+> `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`, plus a local
+> `UserReplicas`, a `UserLearningProgress` projection (completed-lesson count +
+> has-completed-any-skill, fed by `lesson.completed`/`skill.completed`),
+> `OutboxMessages`, and its own Hangfire schema — **the only Hangfire schema in the
+> platform**. See [GAMIFICATION_SERVICE.md](GAMIFICATION_SERVICE.md).
+>
+> **`learning` (Phase 8)** — the last extraction, and by far the largest database. The
 > content tree and progress: `Skills`, `SkillStages`, `Topics`,
-> `UserSkillProgressRecords`, `Lessons`, `LessonVersions` (40.15), `ProgramVersions`/`ProgramItems`/`ProgramEnrollments` (40.17), `Exercises`, `UserLessonProgressRecords`,
+> `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`,
 > `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`,
-> `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress` (schemas
-> ported verbatim from the monolith `AppDbContext`), plus a local `UserReplicas`
-> read-model fed by `user.*` events. Created by `DatabaseBootstrapper` + EF migration
-> `InitialLearningSchema`. The monolith's copies remain as reference until Phase 9. See
+> `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress`, plus a
+> local `UserReplicas` read-model fed by `user.*` events and `OutboxMessages`. Phase 40
+> then added, in block order: `LessonVersions` (40.15),
+> `ProgramVersions`/`ProgramItems`/`ProgramEnrollments` (40.17),
+> `OrganizationProfileReplicas` (40.19), `Assignments` and `AssignmentProgressRecords`
+> (40.21), `UserDialogScores` (40.22), `DialogReviewNotes` (40.25),
+> `ContentGenerationJobs` (40.27), `TeamSkillGapDismissals` (40.31), and
+> `ContentAdaptationJobs`/`ContentAdaptationItems` (40.32). See
 > [LEARNING_SERVICE.md](LEARNING_SERVICE.md).
+>
+> **`social` (Phase 8)** — `Friendships`, the `Discuss*` cluster, `UserReplicas`.
+> **`company` (Phase 39)** — `Companies`, `CompanyContacts`, `CompanyPersonas`,
+> `CallLogEntries`, `PracticeCalls`.
 >
 > **`organization` (Phase 40.5)** — the tenant registry, new (not extracted from the
 > monolith). Owns `Organizations` (the registry — deliberately not tenant-scoped, no RLS)
 > and `OrganizationProfiles` (tenant-scoped, RLS enabled via `EnableTenantRls`). See
 > [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md) and [TENANCY.md](TENANCY/TENANCY.md).
+>
+> **`notification` and `analytics` have no database.** Both keep their state in Redis
+> only, which is why the Redis key itself is their tenant boundary — see the Redis
+> section below.
 
 ---
 
 ## PostgreSQL
 
 All tables managed by EF Core migrations (`Infrastructure/Data/Migrations/`).
+
+### Tenancy: the two session settings every RLS policy reads
+
+Row-level security is described table by table below. Two Postgres session settings drive all of it,
+both issued as `SET LOCAL` by `TenantConnectionInterceptor` when a transaction starts — never a bare
+`SET`, so neither can outlive its transaction or leak onto the next request that borrows the same
+pooled connection:
+
+| Setting | Set when | Effect on a tenant policy |
+|---|---|---|
+| `app.organization_id` | the request or job has an organization | `USING` and `WITH CHECK`: `"OrganizationId" = NULLIF(current_setting('app.organization_id', true), '')::uuid` (the content flavour also admits `"OrganizationId" IS NULL`) |
+| `app.platform_mode` | the caller is validated Sellevate staff (platform-wide mode) | **`USING` only**: `COALESCE(NULLIF(current_setting('app.platform_mode', true), ''), 'off') = 'on'` |
+
+`app.platform_mode` arrived with the `RefreshTenantPoliciesForPlatformStaff` migration of
+2026-08-16, which re-applied every policy in all seven Postgres databases. It made the two halves of
+every policy **asymmetric on purpose: it widens visibility for platform staff, never authorship.** A
+Sellevate administrator reads across every organization and still cannot insert or update a row into
+one they did not name explicitly, because `WITH CHECK` ignores the setting entirely.
+
+Both settings use `current_setting(..., true)` (missing_ok), so an unset value is `NULL` rather than
+an error and the policy fails *closed* — an unscoped connection sees zero tenant rows. Note the
+practical consequence: `SET LOCAL` has no effect outside a transaction, so a read issued outside one
+sees nothing. That is why every tenant-touching service method opens a `TenantTransactionScope` —
+see [ARCHITECTURE.md](ARCHITECTURE.md). System-mode background jobs set neither and rely on a
+`BYPASSRLS` role instead.
 
 ---
 
@@ -136,6 +187,45 @@ A user with no `Memberships` row has no organization access — absent membershi
 implicit privilege. Migrating existing users into a default organization's `Memberships`
 is 40.9's job, not this table's; the schema is nullable/backfillable where needed (`InvitedBy`)
 to leave that migration room.
+
+---
+
+### `Invites` (Phase 40.7)
+
+A single-use invitation to join one organization with one organization role. The product has no
+public registration route ([TENANCY.md](TENANCY/TENANCY.md) §4.1), so this row is the only way a user
+account or a `Memberships` row ever comes into existence outside the platform superadmin panel — which
+makes it the whole of Phase 40.7 and the reason the `OrganizationAuthConfigurations` note below can
+say "unlike `Invites`".
+
+| Column           | Type                        | Nullable | Notes                              |
+|------------------|------------------------------|----------|------------------------------------|
+| `Id`             | `uuid`                       | NOT NULL | PK                                 |
+| `OrganizationId` | `uuid`                       | NOT NULL | The inviting organization. **No FK** — `organization-service` owns the registry in its own database, same as `Memberships` |
+| `Email`          | `varchar(320)`               | NOT NULL | Lower-cased invitee address, matched against the globally unique `Users.Email` |
+| `Role`           | `integer`                    | NOT NULL | The org-scoped role the invitee will get. Same vocabulary as `Memberships.Role`: 0=Manager, 1=TenancyAdmin, 2=TenancySuperAdmin |
+| `TokenHash`      | `varchar(64)`                | NOT NULL | **Only the hash is stored.** The raw token is returned once, at creation, in the response and the invite email — so a database dump never yields a usable invite. The same shape `RefreshToken.Token` and `EmailVerificationCode.CodeHash` already use |
+| `ExpiresAt`      | `timestamp with time zone`   | NOT NULL |                                    |
+| `AcceptedAt`     | `timestamp with time zone`   | NULL     | Set once; a second acceptance is rejected rather than ignored |
+| `RevokedAt`      | `timestamp with time zone`   | NULL     | Revocation is a timestamp, not a delete — an admin should still see that the invite existed |
+| `InvitedBy`      | `uuid`                       | NULL     | The issuing user. Nullable so a platform-side bootstrap invite — the first `TenancySuperAdmin` of a brand new organization (40.9) — has somewhere to land |
+| `CreatedAt`      | `timestamp with time zone`   | NOT NULL |                                    |
+
+Indexes: `IX_Invites_TokenHash` (UNIQUE) and `IX_Invites_OrganizationId_Email`. The unique one is
+deliberately **not** organization-first, breaking the tenant-scoped index rule in
+[TENANCY.md](TENANCY/TENANCY.md) §3, because acceptance finds the invite by hash alone — the caller
+has no organization yet. The listing index follows the rule normally.
+
+**RLS:** `EnableTenantRls("Invites")` (strict equality, not the content flavour — there is no such
+thing as a global invite), plus the EF query filter and the `TenantSaveChangesInterceptor` write
+guard. One organization can therefore never see or revoke another's invites.
+
+Acceptance is the single deliberate exception to "the organization never comes from the request", and
+it is worth being precise about why it is still safe: `InviteService.AcceptAsync` reads the
+organization from the **HMAC signature of the token itself** (`InviteTokenFactory`), before touching
+the database, and calls `TenantContext.SetOrganization` with it. The value is not attacker-chosen —
+forging it means forging the signature. If the request already carries an organization context and it
+disagrees with the token's, the invite is reported as not found rather than accepted.
 
 ---
 
@@ -306,9 +396,14 @@ Indexes: `IX_Topics_IconicName`, `IX_Topics_SkillId_OrderInSkill`
 | `OrderInTopic`| `integer` | NOT NULL |                      |
 | `Title`       | `text`    | NOT NULL |                      |
 
-Indexes: `IX_Lessons_TopicId_OrderInTopic`,
+Indexes: `IX_Lessons_OrganizationId_TopicId_OrderInTopic`, `IX_Lessons_TopicId`,
 `IX_Lessons_OrganizationId_Slug` (UNIQUE), `IX_Lessons_Slug_Global` (UNIQUE, `WHERE "OrganizationId" IS NULL`),
 `IX_Lessons_ParentLessonId`
+
+The pre-40.10 `IX_Lessons_TopicId_OrderInTopic` is gone: every read now filters on `OrganizationId`
+first, so 40.10 rebuilt the index organization-first and
+`docs/TENANCY/sql/40.10_learning_organization_indexes_concurrently.sql` drops the old one
+explicitly (a bare `IX_Lessons_TopicId` is kept for the lookups that have no ordering).
 
 > **Two slug indexes, not one.** In a composite unique index Postgres treats NULLs as **distinct**,
 > so `UNIQUE (OrganizationId, Slug)` does **not** stop two *global* lessons sharing a slug. The
@@ -927,26 +1022,31 @@ Indexes: `IX_Exercises_LessonId_OrderInLesson`
 
 ---
 
-### `Notifications`
+### Notifications — **there is no such table**
 
-| Column              | Type                       | Nullable | Notes                                                             |
-|---------------------|----------------------------|----------|-------------------------------------------------------------------|
-| `Id`                | `uuid`                     | NOT NULL | PK                                                                |
-| `RecipientUserId`   | `uuid`                     | NOT NULL | FK → `Users.Id`                                                   |
-| `NotificationType`  | `integer`                  | NOT NULL | 1=FriendRequestReceived, 2=FriendRequestAccepted, 3=ChatMessageReceived, 4=AchievementUnlocked, 5=StreakMilestone |
-| `Title`             | `varchar(200)`             | NOT NULL |                                                                   |
-| `Body`              | `varchar(1000)`            | NOT NULL |                                                                   |
-| `ActionUrl`         | `varchar(500)`             | NULL     | Relative frontend route for deep link                             |
-| `RelatedEntityId`   | `varchar(64)`              | NULL     | Source entity id (friendship id, conversation id, achievement key)|
-| `IsRead`            | `boolean`                  | NOT NULL | Default false                                                     |
-| `CreatedAt`         | `timestamp with time zone` | NOT NULL |                                                                   |
-| `ReadAt`            | `timestamp with time zone` | NULL     | Set when notification is marked as read                           |
+This document used to carry a full `Notifications` Postgres table here, with two indexes and a
+Hangfire recurring job `notification-cleanup`. None of it exists, and none of it survived the
+monolith split: **notification-service has no database.** No `DbContext`, no `Migrations/` folder,
+no Npgsql package reference. Hangfire exists in exactly one service, gamification, and its only two
+recurring jobs are `WeeklyLeagueClosure` and `DailyStreakReset` — there has never been a
+`notification-cleanup`.
 
-**Indexes:**
-- `(RecipientUserId, IsRead)` — unread lookup per user
-- `(RecipientUserId, CreatedAt)` — reverse-chronological listing per user
+Notifications live in Redis, and the key is the tenant boundary rather than an `OrganizationId`
+column:
 
-**Cleanup:** Hangfire recurring job `notification-cleanup` deletes rows where `IsRead = true AND CreatedAt < now() - 30 days` (runs daily at 00:30 UTC).
+| Key | Type | TTL | Holds |
+|---|---|---|---|
+| `org:{orgId}:notifications:inbox:{userId}` | List | `NotificationStorage:RetentionDays` (default 30) | the serialized notifications themselves, newest first, capped at `NotificationStorage:InboxCapacity` (default 100) |
+| `org:{orgId}:notifications:unread:{userId}` | String | same | the unread counter |
+
+`RedisKeys.OrganizationPrefix` throws `InvalidOperationException("Organization context is not
+set.")` on an empty organization id rather than falling back to a zero guid — without that, an
+unset tenant would silently build one shared `org:00000000-…:` bucket collecting every caller whose
+context was missing, which is worse than the un-prefixed key 40.13 replaced. Expiry is the TTL; no
+job sweeps anything.
+
+The Redis section below is the authoritative description of these keys, together with the
+chat-email watermark and the deliberately un-prefixed delayed-email queue.
 
 ---
 
@@ -983,8 +1083,8 @@ Techniques replace `ReferenceMaterials` as the handbook's primary entity. Dialog
 | `ParentTechniqueId` | `uuid` | NULL | Phase 40.18 — copy-on-write override pointer; FK → `Techniques.Id` `ON DELETE RESTRICT`. `CK_Techniques_OverrideHasOwner`: a row with a parent always has an owner. |
 | `BaseContentHash` | `varchar(64)` | NULL | Phase 40.18 — SHA-256 of the parent's canonical content (technique row + coach + additional-skill links) at fork time or at the last "keep override" review. Excludes `Id`, `OrganizationId` and `UpdatedAt`: a base re-saved unchanged has not changed, and a queue that cries wolf teaches its reader to click through. |
 | `IsArchived`     | `boolean` | NOT NULL | Phase 40.18, default `false`. "Take the new base" archives the override — `UserTechniqueProgress` points at this row without a foreign key, so deleting it to tidy a queue would orphan history. |
-| `Slug`           | `text`                     | NOT NULL | Unique **per organization**, not per installation. An override deliberately carries its base's slug, which is what keeps the handbook URL stable across a customization; read resolution is what makes the lookup by slug return exactly one row. |
-| `Name`           | `text`                     | NOT NULL |                                                                                  |
+| `Slug`           | `varchar(120)`             | NOT NULL | Unique **per organization**, not per installation. An override deliberately carries its base's slug, which is what keeps the handbook URL stable across a customization; read resolution is what makes the lookup by slug return exactly one row. |
+| `Name`           | `varchar(200)`             | NOT NULL |                                                                                  |
 | `Summary`        | `text`                     | NOT NULL | Short excerpt shown on card                                                      |
 | `Body`           | `text`                     | NOT NULL | Markdown body for expanded view                                                  |
 | `Tags`           | `text[]`                   | NOT NULL | Free tags for search/filter                                                      |
@@ -1037,7 +1137,7 @@ Per-user mastery tracking for techniques (drives the `MasteryRing` + `isNew` chi
 |------------------|----------------------------|----------|----------------------------------------------------|
 | `Id`             | `uuid`                     | NOT NULL | PK                                                 |
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserTechniqueProgressRecords_tenant_isolation`. |
-| `UserId`         | `uuid`                     | NOT NULL | FK → `Users.Id` ON DELETE CASCADE                  |
+| `UserId`         | `uuid`                     | NOT NULL | Owning user. **Not a foreign key** — `Users` lives in identity-db; learning-db keeps only a `UserReplicas` read model. There is no cascade either: nothing in this database deletes when a user does. |
 | `TechniqueId`    | `uuid`                     | NOT NULL | FK → `Techniques.Id` ON DELETE CASCADE             |
 | `Level`          | `integer`                  | NOT NULL | 0=Unseen, 1=Novice, 2=Practitioner, 3=Expert, 4=Master |
 | `MasteryPercent` | `integer`                  | NOT NULL | 0–100                                              |
@@ -1054,7 +1154,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 |-----------------------|-----------|----------|-----------------------------------------------------|
 | `Id`                  | `uuid`    | NOT NULL | PK                                                  |
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserSkillProgressRecords_tenant_isolation`. |
-| `UserId`              | `uuid`    | NOT NULL | FK → `Users.Id`                                     |
+| `UserId`              | `uuid`    | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; learning-db keeps only a `UserReplicas` read model. |
 | `SkillId`             | `uuid`    | NOT NULL | FK → `Skills.Id`                                    |
 | `Status`              | `text`    | NOT NULL | `locked` / `available` / `in_progress` / `completed`|
 | `CompletedLessonCount`| `integer` | NOT NULL |                                                     |
@@ -1068,7 +1168,7 @@ Indexes: `IX_UserTechniqueProgress_User_Technique` (unique on `UserId`,`Techniqu
 |---------------|----------------------------|----------|--------------------------------------------|
 | `Id`          | `uuid`                     | NOT NULL | PK                                         |
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserLessonProgressRecords_tenant_isolation`. |
-| `UserId`      | `uuid`                     | NOT NULL | FK → `Users.Id`                            |
+| `UserId`      | `uuid`                     | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; learning-db keeps only a `UserReplicas` read model. |
 | `LessonId`    | `uuid`                     | NOT NULL | FK → `Lessons.Id`                          |
 | `LessonVersionId` | `uuid`                 | NULL     | Phase 40.16 — the `LessonVersions` row this progress's `BestScore` and `CompletedAt` were achieved against. Refreshed only when the row actually advances (new best score, or the transition to completed), so "completed version 1" does not silently become "completed version 3". No FK — see `UserExerciseAttempts` below. |
 | `Status`      | `text`                     | NOT NULL | `not_started` / `in_progress` / `completed`|
@@ -1090,7 +1190,7 @@ migrations run from `Database.Migrate()` at startup.
 |-----------------------|----------------------------|----------|------------------------------------|
 | `Id`                  | `uuid`                     | NOT NULL | PK                                 |
 | `OrganizationId` | `uuid` | NOT NULL | Phase 40.10 — owning tenant. RLS policy `UserExerciseAttempts_tenant_isolation`. |
-| `UserId`              | `uuid`                     | NOT NULL | FK → `Users.Id`                    |
+| `UserId`              | `uuid`                     | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; learning-db keeps only a `UserReplicas` read model. |
 | `LessonVersionId`     | `uuid`                     | NULL     | Phase 40.16 — the immutable `LessonVersions` snapshot this answer was scored against. |
 | `ExerciseId`          | `uuid`                     | NOT NULL | Since 40.16 read as the exercise's identity **inside** `LessonVersionId`'s snapshot (the `exerciseId` key in its `Content`), not as a pointer into the mutable `Exercises` table. Same value, different meaning. |
 | `SerializedAnswer`    | `jsonb`                    | NOT NULL | User's answer payload              |
@@ -1130,7 +1230,7 @@ truncation at Postgres's 63-byte identifier limit, and the name has to stay exac
 |-------------------------|-----------|----------|------------------------|
 | `Id`                    | `uuid`    | NOT NULL | PK                     |
 | `OrganizationId`        | `uuid`    | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
-| `UserId`                | `uuid`    | NOT NULL | FK → `Users.Id`        |
+| `UserId`                | `uuid`    | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; gamification-db keeps only a `UserReplicas` read model. |
 | `CurrentStreakDayCount` | `integer` | NOT NULL |                        |
 | `LongestStreakDayCount` | `integer` | NOT NULL |                        |
 | `LastActivityDate`      | `date`    | NULL     |                        |
@@ -1148,7 +1248,7 @@ migration (at most one row per user, so a short lock), not the concurrent-rebuil
 |------------|----------------------------|----------|--------------------------------------------------|
 | `Id`       | `uuid`                     | NOT NULL | PK                                               |
 | `OrganizationId` | `uuid`                | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
-| `UserId`   | `uuid`                     | NOT NULL | FK → `Users.Id`                                  |
+| `UserId`   | `uuid`                     | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; gamification-db keeps only a `UserReplicas` read model. |
 | `Amount`   | `integer`                  | NOT NULL |                                                  |
 | `Source`   | `text`                     | NOT NULL | `exercise` / `streak_bonus` / `league_bonus` / `admin_correction` |
 | `EarnedAt` | `timestamp with time zone` | NOT NULL |                                                  |
@@ -1199,7 +1299,7 @@ The configurable tier ladder (replaces the previously hardcoded list). Seeded by
 |-------------------|-----------|----------|----------------------------------------------|
 | `Id`              | `uuid`    | NOT NULL | PK                                           |
 | `OrganizationId`  | `uuid`    | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
-| `UserId`          | `uuid`    | NOT NULL | FK → `Users.Id`                              |
+| `UserId`          | `uuid`    | NOT NULL | Owning user. Not a foreign key — `Users` lives in identity-db; gamification-db keeps only a `UserReplicas` read model. |
 | `LeagueId`        | `uuid`    | NOT NULL | FK → `Leagues.Id`                            |
 | `WeeklyXpAmount`  | `integer` | NOT NULL |                                              |
 | `Rank`            | `integer` | NOT NULL |                                              |
@@ -1312,7 +1412,7 @@ Quote of the day shown in the stats widget ("Совет дня"). One quote per 
 |-----------------|----------------------------|----------|---------------------------|
 | `Id`            | `uuid`                     | NOT NULL | PK                        |
 | `OrganizationId`| `uuid`                     | NOT NULL | Phase 40.13 — owning tenant. `ITenantScoped`, strict RLS. |
-| `UserId`        | `uuid`                     | NOT NULL | FK → `Users.Id` CASCADE   |
+| `UserId`        | `uuid`                     | NOT NULL | Owning user. **Not a foreign key and no cascade** — `Users` lives in identity-db; gamification-db keeps only a `UserReplicas` read model. |
 | `AchievementId` | `uuid`                     | NOT NULL | FK → `Achievements.Id` CASCADE |
 | `UnlockedAt`    | `timestamp with time zone` | NOT NULL |                           |
 
@@ -1432,55 +1532,102 @@ run against any database yet — see `docs/DONT_FORGET.md`.
 
 ## Migrations history
 
-| Migration name                        | Date       | Summary                                      |
-|---------------------------------------|------------|----------------------------------------------|
-| `InitialSchema`                       | 2026-03-31 | All base tables                              |
-| `AddRefreshTokenUserFk`               | 2026-04-01 | FK + index on `RefreshTokens.UserId`         |
-| `AddUserRole`                         | 2026-04-01 | `Role` integer column on `Users` (default 0) |
-| `AddAchievements`                     | 2026-04-05 | `Achievements` and `UserAchievements` tables |
-| `AddPersonaToUserProfile`             | 2026-04-05 | `Persona` nullable text column on `UserProfiles` |
-| `AddCategoryTagsToReference`          | 2026-04-05 | `Category` and `Tags` columns on `ReferenceMaterials` |
-| `AddDialogTables`                     | 2026-04-06 | `DialogBundles` and `DialogModes` tables     |
-| `AddVoiceFieldsToDialogMode`          | 2026-04-06 | Voice fields on `DialogModes`                |
-| `AddOpenQuestionGlobalContext`        | 2026-04-06 | `OpenQuestionGlobalContexts` table           |
-| `ResetSkillsAndAddNewOnes`            | 2026-04-13 | Reset skills data                            |
-| `AddExerciseTypePrompts`              | 2026-04-13 | `ExerciseTypePrompts` table                  |
-| `AddIconicNameToSkillsAndTopics`      | 2026-04-14 | Add IconicName (unique) to Skills and Topics |
-| `AddFriendships`                      | 2026-04-18 | `Friendships` table with unique composite index |
-| `AddNotifications`                    | 2026-04-18 | `Notifications` table with recipient+read and recipient+createdAt indexes |
-| `AlignExerciseTypePromptKeys`         | 2026-04-21 | Aligns `ExerciseTypePrompts` keys with `ExerciseTypes` constants |
-| `AddTechniques`                       | 2026-04-21 | 7 Technique-cluster tables + backfill from `ReferenceMaterials` + 4 seed techniques |
-| `AddUserAvatars`                      | 2026-06-12 | 3 avatar columns on `Users` + new `DefaultAvatars` table with unique index on `Index`; backfills `DefaultAvatarIndex` for existing users via `abs(hashtext(Id::text)) % 6` |
-| `AddDiscussPhotos`                    | 2026-06-12 | `DiscussPhotos` table (polymorphic owner) for Discuss thread/reply photo attachments |
-| `InitialSocialSchema` (social-service) | 2026-06-21 | Standalone `social` database: `Friendships`, all `Discuss*` tables, and `UserReplicas` (read-model). Owned by social-service, not the monolith `AppDbContext`. |
-| `InitialLearningSchema` (learning-service) | 2026-06-21 | Standalone `learning` database: `Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`, `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress`, and `UserReplicas` (read-model). Owned by learning-service, not the monolith `AppDbContext`. |
-| `AddLeagueTiersAndSchedule`           | 2026-06-16 | `LeagueTiers` table (seeded bronze/silver/gold/diamond) + period schedule columns on `LeagueSettings` |
-| `AddGamificationSettings`             | 2026-06-16 | `GamificationSettings` (singleton), `ExerciseTypeRewards`, `StreakMilestones` tables — DB-driven progress-points economy, all seeded with historic defaults |
-| `AddSkillStages`                      | 2026-06-16 | `SkillStages` table (seeded preparation/discovery/engagement/closing/retention) — DB-driven, admin-editable funnel stages for the skill tree |
-| `InitialCompanySchema` (company-service) | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
-| `AddCompanyContacts` (company-service)   | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
-| `AddCompanyStatus` (company-service)     | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
-| `AddCompanyFollowUp` (company-service)   | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
-| `AddCompanyBriefing` (company-service)   | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
-| `AddCompanyPersonas` (company-service)   | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
-| `AddCompanyReadiness` (company-service)  | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
-| `AddCompanyReadinessNoFeedbackCache` (company-service) | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
-| `AddOrganizationId` (learning-service) | 2026-08-15 | Phase 40.10, first Stage-C service. `OrganizationId uuid NOT NULL` on `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` (added with an all-zeros placeholder default, which is then dropped) and `OrganizationId uuid NULL` on `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` (`NULL` = global library). RLS on all ten: `EnableTenantRls` for the progress tables, `EnableTenantRlsForContent` for the content ones. Contains **no `CREATE INDEX` and no backfill** on purpose — both are operational steps (`docs/TENANCY/sql/40.10_learning_organization_backfill.sql`, `..._indexes_concurrently.sql`), because the migration runs from `Database.Migrate()` at startup where a long index build would stall readiness. |
-| `InitialOrganizationSchema` (organization-service) | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
-| `AddOrganizationId` (gamification-service) | 2026-08-15 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserLearningProgress`, `Leagues`, `LeagueMemberships`, `LeagueSettings` — strict `EnableTenantRls` on all seven (no global content flavour in this database). `Achievements`, `LeagueTiers`, `GamificationSettings`, `StreakMilestones`, `ExerciseTypeRewards`, `UserReplicas`, `OutboxMessages` get nothing. Unlike 40.10–40.12, **this migration does swap four unique constraints in place** (`Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`, `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key) because each was load-bearing for correctness in the deploy-to-script window and every affected table holds at most a row per user/week. Read indexes on `UserXpRecords`/`LeagueMemberships` stay out, rebuilt by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`. |
-| `AddOrganizationId` (social-service) | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
-| `AddLessonVersioning` (learning-service) | 2026-08-17 | Phase 40.15, Stage D. `ParentLessonId uuid NULL` (self-FK, `RESTRICT`), `Slug varchar(160) NOT NULL` and `IsArchived boolean NOT NULL` on `Lessons`; new table `LessonVersions` with `EnableTenantRlsForContent`, two check constraints and the `LessonVersions_reject_frozen_change` trigger. **Unlike 40.10–40.13 this migration creates its indexes itself**, and there is no companion `_indexes_concurrently.sql`: `LessonVersions` is created empty so its indexes are built over zero rows, and `Lessons` is a content table of a few hundred rows where the build is milliseconds — the same judgement 40.13 made for the four small gamification tables. Slug uniqueness is correctness, and leaving it unenforced until someone remembers a script is the worse trade. The slug backfill is also in-migration (derived from each row's own primary key), so unlike 40.9–40.13 there is **no maintenance window and no interval in which data is invisible**. Verification script: `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` (read-only). |
-| `AddProgressLessonVersionBinding` (learning-service) | 2026-08-17 | Phase 40.16, Stage D. `LessonVersionId uuid NULL` on `UserExerciseAttempts` and `UserLessonProgressRecords`, and nothing else. Both columns are nullable, so Postgres 11+ adds them as a catalogue-only change — no rewrite, no long lock — which is why this one is allowed to run inside `Database.Migrate()` on two tables that grow with usage. **Indexes are not created here** (they are declared in the entity configurations so the model snapshot carries them, and built by `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql`), and **the historical backfill is not here either**: it needs a "version 1" to point at, and that snapshot's `ContentHash` is defined over the exact bytes `LessonSnapshotSerializer` emits — SQL cannot reproduce them, because Postgres orders `jsonb` keys by length and then bytes. `LessonVersionBackfill` mints those versions at startup; `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing rows. No foreign key to `LessonVersions` on purpose (see the `UserExerciseAttempts` notes above). **No window in which any data is invisible**, unlike 40.10–40.13: nothing filters on these columns. |
-| `AddProgramVersioning` (learning-service) | 2026-08-17 | Phase 40.17, Stage D. Three new **strict tenant** tables — `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global programme), three check constraints and two freeze triggers (`ProgramVersions_reject_frozen_change`, `ProgramItems_reject_frozen_change`). **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15 made, for the same reason: all three tables are created empty by this very migration, so every index is built over zero rows, and two of them (one draft per organization, one pin per learner) are correctness constraints that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: the migration mints no programme version and enrolls nobody, nothing filters on the new tables, and an organization without a published programme behaves exactly as it did before — learners read the live tree, unpinned. Verification script: `docs/TENANCY/sql/40.17_program_versioning_verify.sql` (read-only, never executed). |
-| `AddContentOverrides` (learning-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentTechniqueId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and `IsArchived boolean NOT NULL DEFAULT false` on `Techniques`; the same three (as `ParentMaterialId`) on `ReferenceMaterials`; two indexes on the parent pointers; and three CHECK constraints — `CK_Techniques_OverrideHasOwner`, `CK_ReferenceMaterials_OverrideHasOwner` and `CK_Lessons_OverrideHasOwner` — saying that a row with a parent always has an owning organization. `Lessons` needed nothing else: 40.15 built its override columns already. **No companion `_indexes_concurrently.sql` and no backfill, both deliberate.** Nullable columns and a NOT NULL boolean with a constant default are catalog changes on Postgres 11+; the two indexes are built over tables holding tens to hundreds of rows; the CHECKs scan the same tens. Nothing fills a column on an existing row, so — as in 40.15 and 40.17 — **there is no maintenance window and no interval in which data is invisible**: every existing row keeps a null parent, which is the correct value for "this is the library, not somebody's copy". Verification script: `docs/TENANCY/sql/40.18_content_overrides_verify.sql` (read-only, never executed). |
-| `AddOrganizationProfileReplica` (learning-service) | 2026-08-17 | Phase 40.19, Stage D. One new table, `OrganizationProfileReplicas` — a read-only copy of organization-service's `OrganizationProfiles`, fed by the `organization.profile.updated` consumer. **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`**, and that is the interesting bit: every other table this folder added since 40.15 is content, where a NULL owner means "the shared library". Here a NULL owner would mean every organization's product name and banned claims at once, so the tenant column is the primary key and a row without an owner is unrepresentable. **No backfill, no maintenance window, no companion `_indexes_concurrently.sql`** — the table is created empty, is fed by events, holds at most one row per customer, and its only query is a lookup by that primary key, so there is no second access path to index. What *is* owed to a human is a one-time republish of profiles saved before this phase (`docs/DONT_FORGET.md`). Verification: `docs/TENANCY/sql/40.19_organization_profile_verify.sql` (read-only, never executed). |
-| `AddOrganizationProfileReplica` (ai-service) | 2026-08-17 | Phase 40.19, Stage D. The same table, in `ai`, for the same reason — persona and feedback prompts resolve `{{organization.*}}` and enforce `banned_claims` locally. **This is the first non-content table in ai-db**, which is exactly why the RLS flavour is worth stating: both neighbours (`DialogBundles`, `DialogModes`) legitimately use `IS NULL OR = current`, so copying the neighbouring policy is the natural mistake and would hand one customer's compliance list to everybody. Otherwise identical to the learning-service migration: catalog-only, empty table, no backfill, no window, no index script. |
-| `AddAssignments` (learning-service) | 2026-08-17 | Phase 40.21, **Stage E opens**. Two new **strict tenant** tables — `Assignments`, `AssignmentProgressRecords` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global assignment), fifteen check constraints, one `ON DELETE RESTRICT` foreign key and the `Assignments_reject_frozen_change` trigger. **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15/40.17/40.18 made: both tables are created empty by this very migration, so every index is built over zero rows, and one of them (one progress row per person per assignment) is a correctness constraint that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: nothing filters on the new tables and no existing row gains a meaning. The one constraint worth naming is `CK_Assignments_CompletionRule` — the column has no default and the API cannot omit it, so "completion means opening everything" has no resting place in the schema (docs/TENANCY/ASSIGNMENTS.md §1.1); its vocabulary stays 40.22's. `AssignmentProgressRecords` has **no writer at all** until 40.23 resolves an audience. Verification script: `docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed). |
-| `AddAssignmentThresholdEvaluation` (learning-service) | 2026-08-17 | Phase 40.22. One new **strict tenant** table, `UserDialogScores` — one row per graded practice conversation, unique on `(OrganizationId, UserId, SessionId)` — plus three check constraints. That uniqueness is the idempotency guarantee, not a performance choice: without it a redelivered `dialog.evaluated` writes a second row, `AttemptCount` climbs while nobody practised, and the line the РОП acts on ("tried 4 times and did not reach the bar") becomes a lie. No backfill is possible, let alone needed: `dialog.evaluated` carried no grade before this block, so conversations graded earlier are invisible to every assignment, permanently. Verification script: `docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (read-only, never executed). *(Recorded retroactively in 40.23 — the row was missing from this ledger.)* |
-| `AddAssignmentDeadlineNotice` (learning-service) | 2026-08-17 | Phase 40.23. **One nullable column**, `Assignments."DeadlineNoticeSentAt"` — when the "deadline is close" notice went out for the deadline the row currently has; cleared whenever the deadline changes. No index, no backfill, no `_indexes_concurrently.sql`, no maintenance window: `Assignments` is empty in every deployed database (nothing could create one before 40.21, and 40.21 shipped without a screen), so the column is added over zero rows and no existing row changes meaning. The index is omitted deliberately rather than forgotten — see the note in the `Assignments` section above. This is the migration behind the block that finally gives `AssignmentProgressRecords` a row **creator**: the audience fan-out. Verification script: `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (read-only, never executed). |
-| `AddAssignmentRepeats` (learning-service) | 2026-08-18 | Phase 40.24. **Two nullable columns** — `Assignments."RepeatOfAssignmentId"` (self-referencing FK, `ON DELETE RESTRICT`) and `"RepeatWaveIndex"` — one **unique partial index** over them, three check constraints, and a `CREATE OR REPLACE` of the 40.21 freeze trigger that adds both columns to its frozen set. The index is created here rather than deferred to a `_indexes_concurrently.sql` because it is a *correctness* constraint, not a performance one: a wave has been issued exactly when its row exists, so this index is the only thing standing between two sweep ticks racing inside one window and the same shortened assignment landing on the same team twice. A sent-ness column of the kind 40.23 added was **impossible** here — the origin may be `closed`, and the freeze trigger refuses any update to a closed row. `CK_Assignments_RepeatNoCascade` (a repeat carries no schedule of its own) is what stops the fan-out from becoming exponential. No backfill, no maintenance window: `Assignments` is empty in every deployed database. Verification script: `docs/TENANCY/sql/40.24_assignment_repeats_verify.sql` (read-only, never executed). |
-| `AddDialogModeOverrides` (ai-service) | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
-| `AddOrganizationQuotas` (ai-service) | 2026-08-18 | Phase 40.33, Stage G. Two new **strict tenant** tables in `ai` — `OrganizationQuotas` (one row per organization that has been given limits of its own) and `AiUsageRecords` (what each organization spent on each model in each UTC month) — both with `EnableTenantRls` (plain equality, never the content flavour: there is no global allowance and no global bill), both with the tenant column leading the primary key so a row without an owner is unrepresentable. **Indexes are created here and there is no companion `_indexes_concurrently.sql`**: both tables are created empty by this migration, and every read is a prefix scan on the leading key columns of a table holding one row per organization per model per month. **No backfill, and none is possible or needed** — no spend was ever recorded before this migration, and an absent `OrganizationQuotas` row deliberately means «the platform defaults in `AiQuotas:Default…`» rather than «unmetered», so every organization is metered from the first request after the deploy without a single row being written. Verification: `docs/TENANCY/sql/40.33_ai_quotas_verify.sql` (read-only, never executed). |
+One EF migration history per database — there is no shared one, and there has not been since the split. This table used to open with the monolith's migrations (`InitialSchema`, `AddUserRole`, `AddAchievements`, `AddNotifications`, `AddTechniques`, `AddDiscussPhotos`, `AddSkillStages` and the rest). **Those files no longer exist**: they were deleted from `main` with `src/backend/api` and survive only on the `monolith-legacy` branch. Every row below corresponds to a file actually present under `src/backend/<service>/Infrastructure/Data/Migrations/`, in per-service chronological order.
+
+### `identity` (identity-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialIdentitySchema` | 2026-06-20 | Standalone `identity` database (Phase 2): `Users`, `UserProfiles`, `RefreshTokens`, `EmailVerificationCodes`, `DefaultAvatars`. The first extraction, and the one every other service replicates from. |
+| `AddUniqueUserEmailIndex` | 2026-06-21 | Unique index on `Users.Email`. Email is globally unique across the whole platform, not per organization — which is what lets the invite flow match an invitee to an existing account. |
+| `AddUniqueRefreshTokenIndex` | 2026-06-21 | Unique index on `RefreshTokens.Token`, so a token can never resolve to two rows. |
+| `AddOutboxMessages` | 2026-06-21 | Phase 10.3. `OutboxMessages` table + relay for identity's `user.*` producers, converted from direct publishing to the outbox. |
+| `AddOutboxMessageOrganizationId` | 2026-08-14 | Phase 40.3. Nullable `OrganizationId` on `OutboxMessages`, same as gamification and learning. |
+| `AddMembership` | 2026-08-14 | Phase 40.6. `Memberships` — a user's role inside one organization, composite PK `(UserId, OrganizationId)` from day one, replacing the global `Users.Role` for org-scoped authorization. No FK on `OrganizationId`: the registry lives in `organization`-db. |
+| `AddInvite` | 2026-08-15 | Phase 40.7, and the whole of that block. `Invites` with `EnableTenantRls` (strict), a **globally** unique index on `TokenHash` and `IX_Invites_OrganizationId_Email`. The unique index is deliberately not organization-first — acceptance finds the invite by hash alone, because the caller has no organization yet. Only the hash is stored, so a database dump never yields a usable invite. |
+| `AddOrganizationAuthConfiguration` | 2026-08-15 | Phase 40.8. `OrganizationAuthConfigurations` — how one organization's people sign in. Lives in identity-db rather than `organization`-db because it is read on `POST /auth/login/start`, before any organization context exists. Deliberately **no RLS**, unlike `Invites`. |
+| `AddOrganizationReplicaAndImpersonationAudit` | 2026-08-15 | Phase 40.9. Two tables: `OrganizationReplicas` (a local read model of the registry, fed by `organization.*` events, so login can resolve an organization without a cross-service call) and `ImpersonationAuditEntries` (RLS-enabled — every time Sellevate staff enters a customer's account, permanently recorded). |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+
+### `learning` (learning-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialLearningSchema` | 2026-06-20 | Standalone `learning` database: `Skills`, `SkillStages`, `Topics`, `UserSkillProgressRecords`, `Lessons`, `Exercises`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `ExerciseTypePrompts`, `ReferenceMaterials`, `DailyQuotes`, `Techniques`, `TechniqueSkills`, `TechniqueCoaches`, `UserTechniqueProgress`, and `UserReplicas` (read-model). Owned by learning-service, not the monolith `AppDbContext`. |
+| `AddOutboxMessages` | 2026-06-21 | Phase 10.3. `OutboxMessages` table + relay; learning's `exercise/lesson/skill.completed` producers were converted to stage the enqueue inside the business `SaveChangesAsync`. |
+| `AddOutboxMessageOrganizationId` | 2026-08-14 | Phase 40.3. Nullable `OrganizationId` on `OutboxMessages`. |
+| `AddOrganizationId` | 2026-08-15 | Phase 40.10, first Stage-C service. `OrganizationId uuid NOT NULL` on `UserSkillProgressRecords`, `UserLessonProgressRecords`, `UserExerciseAttempts`, `UserTechniqueProgress` (added with an all-zeros placeholder default, which is then dropped) and `OrganizationId uuid NULL` on `Skills`, `Topics`, `Lessons`, `Exercises`, `Techniques`, `ReferenceMaterials` (`NULL` = global library). RLS on all ten: `EnableTenantRls` for the progress tables, `EnableTenantRlsForContent` for the content ones. Contains **no `CREATE INDEX` and no backfill** on purpose — both are operational steps (`docs/TENANCY/sql/40.10_learning_organization_backfill.sql`, `..._indexes_concurrently.sql`), because the migration runs from `Database.Migrate()` at startup where a long index build would stall readiness. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+| `AddLessonVersioning` | 2026-08-17 | Phase 40.15, Stage D. `ParentLessonId uuid NULL` (self-FK, `RESTRICT`), `Slug varchar(160) NOT NULL` and `IsArchived boolean NOT NULL` on `Lessons`; new table `LessonVersions` with `EnableTenantRlsForContent`, two check constraints and the `LessonVersions_reject_frozen_change` trigger. **Unlike 40.10–40.13 this migration creates its indexes itself**, and there is no companion `_indexes_concurrently.sql`: `LessonVersions` is created empty so its indexes are built over zero rows, and `Lessons` is a content table of a few hundred rows where the build is milliseconds — the same judgement 40.13 made for the four small gamification tables. Slug uniqueness is correctness, and leaving it unenforced until someone remembers a script is the worse trade. The slug backfill is also in-migration (derived from each row's own primary key), so unlike 40.9–40.13 there is **no maintenance window and no interval in which data is invisible**. Verification script: `docs/TENANCY/sql/40.15_lesson_versioning_verify.sql` (read-only). |
+| `AddProgressLessonVersionBinding` | 2026-08-17 | Phase 40.16, Stage D. `LessonVersionId uuid NULL` on `UserExerciseAttempts` and `UserLessonProgressRecords`, and nothing else. Both columns are nullable, so Postgres 11+ adds them as a catalogue-only change — no rewrite, no long lock — which is why this one is allowed to run inside `Database.Migrate()` on two tables that grow with usage. **Indexes are not created here** (they are declared in the entity configurations so the model snapshot carries them, and built by `docs/TENANCY/sql/40.16_progress_version_indexes_concurrently.sql`), and **the historical backfill is not here either**: it needs a "version 1" to point at, and that snapshot's `ContentHash` is defined over the exact bytes `LessonSnapshotSerializer` emits — SQL cannot reproduce them, because Postgres orders `jsonb` keys by length and then bytes. `LessonVersionBackfill` mints those versions at startup; `docs/TENANCY/sql/40.16_progress_version_backfill.sql` then binds the existing rows. No foreign key to `LessonVersions` on purpose (see the `UserExerciseAttempts` notes above). **No window in which any data is invisible**, unlike 40.10–40.13: nothing filters on these columns. |
+| `AddProgramVersioning` | 2026-08-17 | Phase 40.17, Stage D. Three new **strict tenant** tables — `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global programme), three check constraints and two freeze triggers (`ProgramVersions_reject_frozen_change`, `ProgramItems_reject_frozen_change`). **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15 made, for the same reason: all three tables are created empty by this very migration, so every index is built over zero rows, and two of them (one draft per organization, one pin per learner) are correctness constraints that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: the migration mints no programme version and enrolls nobody, nothing filters on the new tables, and an organization without a published programme behaves exactly as it did before — learners read the live tree, unpinned. Verification script: `docs/TENANCY/sql/40.17_program_versioning_verify.sql` (read-only, never executed). |
+| `AddContentOverrides` | 2026-08-17 | Phase 40.18, Stage D. `ParentTechniqueId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and `IsArchived boolean NOT NULL DEFAULT false` on `Techniques`; the same three (as `ParentMaterialId`) on `ReferenceMaterials`; two indexes on the parent pointers; and three CHECK constraints — `CK_Techniques_OverrideHasOwner`, `CK_ReferenceMaterials_OverrideHasOwner` and `CK_Lessons_OverrideHasOwner` — saying that a row with a parent always has an owning organization. `Lessons` needed nothing else: 40.15 built its override columns already. **No companion `_indexes_concurrently.sql` and no backfill, both deliberate.** Nullable columns and a NOT NULL boolean with a constant default are catalog changes on Postgres 11+; the two indexes are built over tables holding tens to hundreds of rows; the CHECKs scan the same tens. Nothing fills a column on an existing row, so — as in 40.15 and 40.17 — **there is no maintenance window and no interval in which data is invisible**: every existing row keeps a null parent, which is the correct value for "this is the library, not somebody's copy". Verification script: `docs/TENANCY/sql/40.18_content_overrides_verify.sql` (read-only, never executed). |
+| `AddOrganizationProfileReplica` | 2026-08-17 | Phase 40.19, Stage D. One new table, `OrganizationProfileReplicas` — a read-only copy of organization-service's `OrganizationProfiles`, fed by the `organization.profile.updated` consumer. **`EnableTenantRls` (plain equality), not `EnableTenantRlsForContent`**, and that is the interesting bit: every other table this folder added since 40.15 is content, where a NULL owner means "the shared library". Here a NULL owner would mean every organization's product name and banned claims at once, so the tenant column is the primary key and a row without an owner is unrepresentable. **No backfill, no maintenance window, no companion `_indexes_concurrently.sql`** — the table is created empty, is fed by events, holds at most one row per customer, and its only query is a lookup by that primary key, so there is no second access path to index. What *is* owed to a human is a one-time republish of profiles saved before this phase (`docs/DONT_FORGET.md`). Verification: `docs/TENANCY/sql/40.19_organization_profile_verify.sql` (read-only, never executed). |
+| `AddAssignments` | 2026-08-17 | Phase 40.21, **Stage E opens**. Two new **strict tenant** tables — `Assignments`, `AssignmentProgressRecords` — with `EnableTenantRls` (plain equality, not the content flavour: there is no global assignment), fifteen check constraints, one `ON DELETE RESTRICT` foreign key and the `Assignments_reject_frozen_change` trigger. **Indexes are created here and there is no companion `_indexes_concurrently.sql`** — the same call 40.15/40.17/40.18 made: both tables are created empty by this very migration, so every index is built over zero rows, and one of them (one progress row per person per assignment) is a correctness constraint that must not wait for a script somebody has to remember. **No backfill and no maintenance window**: nothing filters on the new tables and no existing row gains a meaning. The one constraint worth naming is `CK_Assignments_CompletionRule` — the column has no default and the API cannot omit it, so "completion means opening everything" has no resting place in the schema (docs/TENANCY/ASSIGNMENTS.md §1.1); its vocabulary stays 40.22's. `AssignmentProgressRecords` has **no writer at all** until 40.23 resolves an audience. Verification script: `docs/TENANCY/sql/40.21_assignments_verify.sql` (read-only, never executed). |
+| `AddAssignmentThresholdEvaluation` | 2026-08-17 | Phase 40.22. One new **strict tenant** table, `UserDialogScores` — one row per graded practice conversation, unique on `(OrganizationId, UserId, SessionId)` — plus three check constraints. That uniqueness is the idempotency guarantee, not a performance choice: without it a redelivered `dialog.evaluated` writes a second row, `AttemptCount` climbs while nobody practised, and the line the РОП acts on ("tried 4 times and did not reach the bar") becomes a lie. No backfill is possible, let alone needed: `dialog.evaluated` carried no grade before this block, so conversations graded earlier are invisible to every assignment, permanently. Verification script: `docs/TENANCY/sql/40.22_completion_threshold_verify.sql` (read-only, never executed). *(Recorded retroactively in 40.23 — the row was missing from this ledger.)* |
+| `AddAssignmentDeadlineNotice` | 2026-08-17 | Phase 40.23. **One nullable column**, `Assignments."DeadlineNoticeSentAt"` — when the "deadline is close" notice went out for the deadline the row currently has; cleared whenever the deadline changes. No index, no backfill, no `_indexes_concurrently.sql`, no maintenance window: `Assignments` is empty in every deployed database (nothing could create one before 40.21, and 40.21 shipped without a screen), so the column is added over zero rows and no existing row changes meaning. The index is omitted deliberately rather than forgotten — see the note in the `Assignments` section above. This is the migration behind the block that finally gives `AssignmentProgressRecords` a row **creator**: the audience fan-out. Verification script: `docs/TENANCY/sql/40.23_assignment_fanout_verify.sql` (read-only, never executed). |
+| `AddAssignmentRepeats` | 2026-08-18 | Phase 40.24. **Two nullable columns** — `Assignments."RepeatOfAssignmentId"` (self-referencing FK, `ON DELETE RESTRICT`) and `"RepeatWaveIndex"` — one **unique partial index** over them, three check constraints, and a `CREATE OR REPLACE` of the 40.21 freeze trigger that adds both columns to its frozen set. The index is created here rather than deferred to a `_indexes_concurrently.sql` because it is a *correctness* constraint, not a performance one: a wave has been issued exactly when its row exists, so this index is the only thing standing between two sweep ticks racing inside one window and the same shortened assignment landing on the same team twice. A sent-ness column of the kind 40.23 added was **impossible** here — the origin may be `closed`, and the freeze trigger refuses any update to a closed row. `CK_Assignments_RepeatNoCascade` (a repeat carries no schedule of its own) is what stops the fan-out from becoming exponential. No backfill, no maintenance window: `Assignments` is empty in every deployed database. Verification script: `docs/TENANCY/sql/40.24_assignment_repeats_verify.sql` (read-only, never executed). |
+| `AddDialogReviewNotes` | 2026-08-18 | Phase 40.25. One new **strict tenant** table, `DialogReviewNotes` — a manager's written note on one practice conversation — with `EnableTenantRls` and three indexes, all created here because the table is created empty by this very migration. No backfill: no review existed before this block. |
+| `AddContentGenerationJobs` | 2026-08-18 | Phase 40.27. `ContentGenerationJobs` (strict `EnableTenantRls`, three indexes) — the queue behind «сгенерировать урок из материалов», one row per requested generation with its step state. Created empty, so the indexes are built over zero rows and there is no companion `_indexes_concurrently.sql`. |
+| `AddContentGenerationSufficiency` | 2026-08-18 | Phase 40.28. Two columns on `ContentGenerationJobs` — `Insufficiency` and `StructuredMaterialLength` — so a job can end in «материала не хватает, вот чего именно» instead of quietly producing a thin lesson. Nullable additions, catalog-only, no index, no backfill. |
+| `AddTeamSkillGaps` | 2026-08-18 | Phase 40.31. `TeamSkillGapDismissals` (strict `EnableTenantRls`, two indexes) plus a `GapSourceRef` column — a dismissed gap stays dismissed instead of returning on the next recompute. Created empty; no backfill. |
+| `AddContentAdaptationBatches` | 2026-08-18 | Phase 40.32. Two new **strict tenant** tables, `ContentAdaptationJobs` and `ContentAdaptationItems`, with `EnableTenantRls` on both and seven indexes — a batch that rewrites existing content to one organization's profile, one row per batch and one per item so a partial failure is visible per item rather than sinking the batch. Both created empty by this migration; no backfill, no maintenance window. |
+
+### `ai` (ai-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialAiSchema` | 2026-06-20 | Standalone `ai` database (Phase 6): `DialogBundles`, `DialogModes` and a local `UserReplicas` read model. Owned by ai-service, not the monolith. |
+| `AddDialogBundleIsHidden` | 2026-07-09 | `DialogBundles.IsHidden` boolean NOT NULL DEFAULT false — a bundle can be retired from the learner-facing list without deleting it and the sessions that point at it. |
+| `AddOrganizationId` | 2026-08-15 | Phase 40.11. `OrganizationId uuid NULL` on `DialogBundles` and `DialogModes` with `EnableTenantRlsForContent` — the content flavour, because `NULL` is the shared scenario library every organization sees. Read indexes are rebuilt by `docs/TENANCY/sql/40.11_ai_organization_indexes_concurrently.sql`; this block also namespaced every ai-service Redis key `org:{orgId}:`. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+| `AddDialogModeOverrides` | 2026-08-17 | Phase 40.18, Stage D. `ParentModeId uuid NULL` (self-FK, `RESTRICT`), `BaseContentHash varchar(64) NULL` and an index on the parent pointer, plus `CK_DialogModes_OverrideHasOwner`, on `DialogModes`. `DialogBundles` gets nothing — a bundle carries no prompt, and copying one would fork its whole mode list (`docs/DECISIONS.md`, 2026-08-18). An override keeps its parent's `BundleId` and `Key`, which the 40.11 unique indexes already permit because the composite one is filtered to non-global rows. Same shape as the learning-service migration above: catalog-only column changes, one small index, no backfill, no window. |
+| `AddOrganizationProfileReplica` | 2026-08-17 | Phase 40.19, Stage D. The same table, in `ai`, for the same reason — persona and feedback prompts resolve `{{organization.*}}` and enforce `banned_claims` locally. **This is the first non-content table in ai-db**, which is exactly why the RLS flavour is worth stating: both neighbours (`DialogBundles`, `DialogModes`) legitimately use `IS NULL OR = current`, so copying the neighbouring policy is the natural mistake and would hand one customer's compliance list to everybody. Otherwise identical to the learning-service migration: catalog-only, empty table, no backfill, no window, no index script. |
+| `AddOrganizationQuotas` | 2026-08-18 | Phase 40.33, Stage G. Two new **strict tenant** tables in `ai` — `OrganizationQuotas` (one row per organization that has been given limits of its own) and `AiUsageRecords` (what each organization spent on each model in each UTC month) — both with `EnableTenantRls` (plain equality, never the content flavour: there is no global allowance and no global bill), both with the tenant column leading the primary key so a row without an owner is unrepresentable. **Indexes are created here and there is no companion `_indexes_concurrently.sql`**: both tables are created empty by this migration, and every read is a prefix scan on the leading key columns of a table holding one row per organization per model per month. **No backfill, and none is possible or needed** — no spend was ever recorded before this migration, and an absent `OrganizationQuotas` row deliberately means «the platform defaults in `AiQuotas:Default…`» rather than «unmetered», so every organization is metered from the first request after the deploy without a single row being written. Verification: `docs/TENANCY/sql/40.33_ai_quotas_verify.sql` (read-only, never executed). |
+
+### `gamification` (gamification-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialGamificationSchema` | 2026-06-20 | Standalone `gamification` database (Phase 7): `UserXpRecords`, `UserStreaks`, `GamificationSettings`, `ExerciseTypeRewards`, `StreakMilestones`, `Achievements`, `UserAchievements`, `Leagues`, `LeagueTiers`, `LeagueMemberships`, `LeagueSettings`, the `UserLearningProgress` projection and a local `UserReplicas`. |
+| `AddOutboxMessages` | 2026-06-21 | Phase 10.3, the reference implementation. `OutboxMessages` table so a state change and its event publish commit in one transaction; the relay forwards each stored envelope to Kafka verbatim. |
+| `AddXpRecordSourceEventIdIdempotency` | 2026-06-21 | `UserXpRecords.SourceEventId` plus a **partial** unique index `WHERE "SourceEventId" IS NOT NULL`, and a unique index on `UserStreaks.UserId`. Partial because rows granted by something other than an event legitimately have no source id, and a plain unique index would let only one of them exist. |
+| `AddLeagueUniqueConstraints` | 2026-06-21 | Makes `IX_Leagues_WeekStartDate_Tier` unique so two concurrent weekly-rollover calls cannot both create the same league. |
+| `AddOutboxMessageOrganizationId` | 2026-08-14 | Phase 40.3. Nullable `OrganizationId` on `OutboxMessages` so the tenant travels with the event envelope; nullable because platform-level events legitimately have no organization. |
+| `AddOrganizationId` | 2026-08-15 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `UserXpRecords`, `UserStreaks`, `UserAchievements`, `UserLearningProgress`, `Leagues`, `LeagueMemberships`, `LeagueSettings` — strict `EnableTenantRls` on all seven (no global content flavour in this database). `Achievements`, `LeagueTiers`, `GamificationSettings`, `StreakMilestones`, `ExerciseTypeRewards`, `UserReplicas`, `OutboxMessages` get nothing. Unlike 40.10–40.12, **this migration does swap four unique constraints in place** (`Leagues.(WeekStartDate,Tier)`, `UserStreaks.(UserId)`, `UserAchievements.(UserId,AchievementId)`, `UserLearningProgress`'s primary key) because each was load-bearing for correctness in the deploy-to-script window and every affected table holds at most a row per user/week. Read indexes on `UserXpRecords`/`LeagueMemberships` stay out, rebuilt by `docs/TENANCY/sql/40.13_gamification_organization_indexes_concurrently.sql`. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+
+### `social` (social-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialSocialSchema` | 2026-06-20 | Standalone `social` database: `Friendships`, all `Discuss*` tables, and `UserReplicas` (read-model). Owned by social-service, not the monolith `AppDbContext`. |
+| `FriendshipCanonicalPair` | 2026-06-21 | Two computed columns on `Friendships` — `CanonicalLowId` = `LEAST(RequesterId, AddresseeId)`, `CanonicalHighId` = `GREATEST(...)` — and a unique index over the pair, so A→B and B→A cannot both exist as separate friendships. |
+| `AddOrganizationId` | 2026-08-16 | Phase 40.13. `OrganizationId uuid NOT NULL` (placeholder default) on `Friendships`, `DiscussThreads`, `DiscussReplies`, `DiscussVotes`, `DiscussThreadTags`, `DiscussPhotos` — strict `EnableTenantRls` on all six. `OrganizationId uuid NULL` on `DiscussTags` (`NULL` = curated vocabulary shared by every organization), `EnableTenantRlsForContent`. `UserReplicas` gets nothing. Two unique swaps happen in-migration, not the concurrent-rebuild script: `DiscussTags.Slug` → `(OrganizationId, Slug)` + a partial unique index over the global rows, and `Friendships.(RequesterId,AddresseeId)` (+ the canonical-pair index) → organization-first. Every read index stays out, rebuilt by `docs/TENANCY/sql/40.13_social_organization_indexes_concurrently.sql`. Mongo `chat_conversations` gets `organizationId` via a separate script (`docs/TENANCY/mongo/40.13_chat_conversations_organization_backfill.js`), not this migration. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+
+### `company` (company-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialCompanySchema` | 2026-07-09 | Standalone `company` database: `Companies`, `CallLogEntries`, `PracticeCalls` tables. Owned by company-service (port 5009). |
+| `AddCompanyContacts` | 2026-07-09 | `CompanyContacts` table (mini-CRM, Phase 39.9); `CallLogEntries.ContactId` nullable FK → `CompanyContacts(Id)` ON DELETE SET NULL. |
+| `AddCompanyStatus` | 2026-07-10 | `Companies.Status` varchar(32) NOT NULL DEFAULT 'Lead' (status pipeline, Phase 39.10); plain `AddColumn` with a Postgres column default, so existing rows read as `Lead` without a separate `UPDATE`. |
+| `AddCompanyFollowUp` | 2026-07-10 | `Companies.NextActionAt` (timestamptz, nullable), `NextActionNote` (varchar(2000), nullable), `FollowUpNotifiedAt` (timestamptz, nullable) (follow-up reminders, Phase 39.11); sparse index `IX_Companies_NextActionAt` (filtered `WHERE "NextActionAt" IS NOT NULL`) keeps the reminder poll cheap. |
+| `AddCompanyBriefing` | 2026-07-10 | `Companies.BriefingContent` (text, nullable), `BriefingGeneratedAt` (timestamptz, nullable) (AI pre-call briefing cache, Phase 39.12); plain `AddColumn`, no index (read only via the single-row `GET/POST /companies/{id}/briefing`). |
+| `AddCompanyPersonas` | 2026-07-10 | `CompanyPersonas` table (AI persona generation, Phase 39.14); FK → `Companies(Id)` ON DELETE CASCADE. |
+| `AddCompanyReadiness` | 2026-07-10 | `Companies.ReadinessJson` (text, nullable), `ReadinessGeneratedAt` (timestamptz, nullable) (AI readiness-score cache, Phase 39.16); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+| `AddCompanyReadinessNoFeedbackCache` | 2026-07-11 | `Companies.ReadinessNoFeedbackUntil` (timestamptz, nullable) — negative-cache expiry for the "ai-service returned 204 / no usable feedback yet" readiness result (PR #26 review fast-follow, 39.17); plain `AddColumn`, no index (read/written only via the single-row `GET /companies/{id}/readiness`). |
+| `AddOrganizationId` | 2026-08-15 | Phase 40.12. `OrganizationId uuid NOT NULL` (placeholder default, then dropped) on `Companies`, `CallLogEntries`, `PracticeCalls`, `CompanyContacts`, `CompanyPersonas`, all with the **strict** `EnableTenantRls` — there is no global content in this database, so the content flavour would be wrong on every table. Read indexes are rebuilt by `docs/TENANCY/sql/40.12_company_organization_indexes_concurrently.sql`. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+
+### `organization` (organization-service)
+
+| Migration name | Date | Summary |
+|---|---|---|
+| `InitialOrganizationSchema` | 2026-08-14 | Standalone `organization` database: `Organizations` (tenant registry, unique `Slug`) and `OrganizationProfiles` (1:1 tenant-data row, RLS via `EnableTenantRls`). Owned by organization-service (port 5010), Phase 40.5. |
+| `RefreshTenantPoliciesForPlatformStaff` | 2026-08-16 | Re-applies every tenant policy in this database so its `USING` clause also admits validated platform staff (`app.platform_mode`), leaving `WITH CHECK` alone — visibility widens, authorship does not. The policy text is not written in the migration: it calls the same `EnableTenantRls`/`EnableTenantRlsForContent` helpers the original migration called, which now drop and re-create rather than fail on an existing policy, so there is never a second copy of the policy SQL to drift. `Down` passes `admitPlatformStaff: false` through the same helpers, making the rollback the exact pre-change policy rather than an approximation. **The model is untouched** — nothing is added, dropped or altered, so the snapshot is identical to the previous one, which is expected rather than an oversight. |
+
 
 ---
 
@@ -1671,7 +1818,11 @@ somebody edited the profile through the plain `PUT`. **There is therefore no
 migration to sequence against a deployment.
 
 **RLS:** `EnableTenantRls("OrganizationProfiles")` in `InitialOrganizationSchema` — `ENABLE`/`FORCE`
-row-level security with a `USING`/`WITH CHECK` policy on `OrganizationId = current_setting('app.organization_id', ...)`.
+row-level security with a `USING`/`WITH CHECK` policy on
+`OrganizationId = NULLIF(current_setting('app.organization_id', true), '')::uuid`. Since the
+`RefreshTenantPoliciesForPlatformStaff` migration (2026-08-16) the `USING` half **also** admits
+validated platform staff via `app.platform_mode` — see the tenancy-settings note above; `WITH CHECK`
+is unchanged, so Sellevate staff can read this profile without being able to write it.
 Also protected by the EF query filter and the Stage A `TenantSaveChangesInterceptor` write guard.
 `OrganizationProfileController` gates access with `[TenantScoped]`, so a request with no
 `X-Organization-Id` header never reaches the service layer at all.

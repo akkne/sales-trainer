@@ -18,7 +18,7 @@ namespace Sellevate.Identity.Tests.Unit;
 [TestFixture]
 public sealed class AuthorizationPolicyTests
 {
-    private IAuthorizationService authorizationService = null!;
+    private IAuthorizationService _authorizationService = null!;
 
     [SetUp]
     public void SetUp()
@@ -26,13 +26,13 @@ public sealed class AuthorizationPolicyTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAuthorization(AuthorizationPolicies.Register);
-        authorizationService = services.BuildServiceProvider()
+        _authorizationService = services.BuildServiceProvider()
             .GetRequiredService<IAuthorizationService>();
     }
 
     private async Task<bool> IsAllowedAsync(ClaimsPrincipal principal, string policyName)
     {
-        var authorizationResult = await authorizationService.AuthorizeAsync(
+        var authorizationResult = await _authorizationService.AuthorizeAsync(
             principal, resource: null, policyName);
         return authorizationResult.Succeeded;
     }

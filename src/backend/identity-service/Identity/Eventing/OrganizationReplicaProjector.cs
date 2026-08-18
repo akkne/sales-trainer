@@ -20,63 +20,63 @@ internal static class OrganizationReplicaProjector
         switch (envelope.Type)
         {
             case Topics.OrganizationCreated:
-            {
-                if (envelope.DataAs<OrganizationCreatedEvent>() is not { } payload)
                 {
-                    return;
-                }
+                    if (envelope.DataAs<OrganizationCreatedEvent>() is not { } payload)
+                    {
+                        return;
+                    }
 
-                await UpsertAsync(
-                    databaseContext,
-                    payload.OrganizationId,
-                    payload.Name,
-                    payload.Slug,
-                    OrganizationReplicaStatus.Active,
-                    cancellationToken);
-                break;
-            }
+                    await UpsertAsync(
+                        databaseContext,
+                        payload.OrganizationId,
+                        payload.Name,
+                        payload.Slug,
+                        OrganizationReplicaStatus.Active,
+                        cancellationToken);
+                    break;
+                }
 
             case Topics.OrganizationUpdated:
-            {
-                if (envelope.DataAs<OrganizationUpdatedEvent>() is not { } payload)
                 {
-                    return;
+                    if (envelope.DataAs<OrganizationUpdatedEvent>() is not { } payload)
+                    {
+                        return;
+                    }
+
+                    var status = Enum.TryParse<OrganizationReplicaStatus>(
+                        payload.Status, ignoreCase: true, out var parsedStatus)
+                        ? parsedStatus
+                        : OrganizationReplicaStatus.Active;
+
+                    await UpsertAsync(
+                        databaseContext,
+                        payload.OrganizationId,
+                        payload.Name,
+                        payload.Slug,
+                        status,
+                        cancellationToken);
+                    break;
                 }
-
-                var status = Enum.TryParse<OrganizationReplicaStatus>(
-                    payload.Status, ignoreCase: true, out var parsedStatus)
-                    ? parsedStatus
-                    : OrganizationReplicaStatus.Active;
-
-                await UpsertAsync(
-                    databaseContext,
-                    payload.OrganizationId,
-                    payload.Name,
-                    payload.Slug,
-                    status,
-                    cancellationToken);
-                break;
-            }
 
             case Topics.OrganizationSuspended:
-            {
-                if (envelope.DataAs<OrganizationSuspendedEvent>() is not { } payload)
                 {
-                    return;
+                    if (envelope.DataAs<OrganizationSuspendedEvent>() is not { } payload)
+                    {
+                        return;
+                    }
+
+                    var existingReplica = await databaseContext.OrganizationReplicas
+                        .FindAsync([payload.OrganizationId], cancellationToken);
+
+                    await UpsertAsync(
+                        databaseContext,
+                        payload.OrganizationId,
+                        payload.Name,
+                        existingReplica?.Slug ?? string.Empty,
+                        OrganizationReplicaStatus.Suspended,
+                        cancellationToken);
+                    break;
                 }
-
-                var existingReplica = await databaseContext.OrganizationReplicas
-                    .FindAsync([payload.OrganizationId], cancellationToken);
-
-                await UpsertAsync(
-                    databaseContext,
-                    payload.OrganizationId,
-                    payload.Name,
-                    existingReplica?.Slug ?? string.Empty,
-                    OrganizationReplicaStatus.Suspended,
-                    cancellationToken);
-                break;
-            }
 
             default:
                 return;

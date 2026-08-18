@@ -88,10 +88,23 @@ internal sealed class AssignmentRepeatIssueService(
         {
             // One transaction per wave rather than one per organization: a wave that cannot be built
             // must not roll back a wave that can, and the unique index that catches a racing tick
-            // should fail one insert rather than the tick.
-            if (await TryIssueWaveAsync(wave, roster, now, cancellationToken))
+            // should fail one insert rather than the tick. The transaction boundary alone did not
+            // deliver that — without the catch below, a collision unwound the whole method and
+            // abandoned every remaining due wave for the organization. Review, 40.34.
+            try
             {
-                issuedCount++;
+                if (await TryIssueWaveAsync(wave, roster, now, cancellationToken))
+                {
+                    issuedCount++;
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(
+                    exception,
+                    "Failed to issue repeat wave {WaveIndex} of AssignmentId={AssignmentId}; continuing with the remaining waves",
+                    wave.WaveIndex,
+                    wave.Origin.Id);
             }
         }
 

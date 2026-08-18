@@ -261,54 +261,62 @@ endCall: false ЗАПРЕЩЕНО.
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
 
-        while (!reader.EndOfStream)
+        // The charge sits in `finally`, not after the loop. This method is an async iterator: when the
+        // client hangs up mid-turn the consumer stops enumerating, the iterator is disposed at the
+        // `yield return`, and anything written after the loop never runs. The provider has still
+        // billed everything the model produced, so a straight-line charge meant every abandoned turn
+        // was billed and metered as nothing — on the highest-frequency LLM call in the product, where
+        // mid-turn abandonment is normal. The intent below was always this; the placement was not.
+        try
         {
-            if (cancellationToken.IsCancellationRequested) break;
-
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
-
-            var payload = line["data:".Length..].Trim();
-            if (payload == "[DONE]") break;
-
-            string? delta = null;
-            try
+            while (!reader.EndOfStream)
             {
-                using var doc = JsonDocument.Parse(payload);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                if (cancellationToken.IsCancellationRequested) break;
+
+                var line = await reader.ReadLineAsync(cancellationToken);
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+
+                var payload = line["data:".Length..].Trim();
+                if (payload == "[DONE]") break;
+
+                string? delta = null;
+                try
                 {
-                    var first = choices[0];
-                    if (first.TryGetProperty("delta", out var deltaElement) &&
-                        deltaElement.TryGetProperty("content", out var contentElement))
+                    using var doc = JsonDocument.Parse(payload);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
                     {
-                        delta = contentElement.GetString();
+                        var first = choices[0];
+                        if (first.TryGetProperty("delta", out var deltaElement) &&
+                            deltaElement.TryGetProperty("content", out var contentElement))
+                        {
+                            delta = contentElement.GetString();
+                        }
                     }
                 }
-            }
-            catch (JsonException)
-            {
-                _logger.LogDebug("Skipping non-JSON SSE payload: {Payload}", payload);
-                continue;
-            }
+                catch (JsonException)
+                {
+                    _logger.LogDebug("Skipping non-JSON SSE payload: {Payload}", payload);
+                    continue;
+                }
 
-            if (string.IsNullOrEmpty(delta)) continue;
+                if (string.IsNullOrEmpty(delta)) continue;
 
-            replyLength += delta.Length;
-            yield return delta;
+                replyLength += delta.Length;
+                yield return delta;
+            }
         }
-
-        // Charged after the stream ends, including when it ends early — a client that hangs up
-        // mid-turn has still been billed by the provider for everything the model produced up to
-        // that point, and pretending otherwise would let a flapping client run free.
-        await ChargeAsync(
-            chatModel,
-            reported: null,
-            new AiCompletionUsage(
-                _spendMeter.EstimateTokensFromLength(promptLength),
-                _spendMeter.EstimateTokensFromLength(replyLength)),
-            CancellationToken.None);
+        finally
+        {
+            await ChargeAsync(
+                chatModel,
+                reported: null,
+                new AiCompletionUsage(
+                    _spendMeter.EstimateTokensFromLength(promptLength),
+                    _spendMeter.EstimateTokensFromLength(replyLength)),
+                CancellationToken.None);
+        }
     }
 
     public async Task<FeedbackResult> GenerateFeedbackAsync(

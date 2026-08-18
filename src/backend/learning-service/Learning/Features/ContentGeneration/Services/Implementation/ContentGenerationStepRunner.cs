@@ -190,10 +190,16 @@ internal sealed class ContentGenerationStepRunner(
         // human. An empty profile is sent as nothing at all rather than as an object of nulls. On a
         // resumed run the seed is the run's own structure instead — it already contains the profile's
         // contribution and, more importantly, the reviewer's.
+        // Normalize on the profile branch too. Deserialize already applies it, but FromProfile did
+        // not, and the profile columns are unbounded `text`/`jsonb` — so a multi-megabyte `product`
+        // or a five-thousand-entry glossary went straight into the prompt of every generation call
+        // this organization made, burning its whole monthly token allowance in a handful of runs.
+        // The caps belong to the structure, not to the route the structure arrived by. Review, 40.34.
         var knownStructure = claim.Structure is not null
             ? ContentStructureDocumentSerializer.Deserialize(claim.Structure)
-            : ContentStructureDto.FromProfile(
-                await organizationProfileProvider.GetCurrentAsync(cancellationToken));
+            : ContentStructureDocumentSerializer.Normalize(
+                ContentStructureDto.FromProfile(
+                    await organizationProfileProvider.GetCurrentAsync(cancellationToken)));
 
         var structured = await aiContentPipelineClient.StructureAsync(
             new AiStructureMaterialRequest(materialToRead, knownStructure.IsEmpty ? null : knownStructure),

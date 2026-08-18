@@ -21,6 +21,11 @@ internal sealed class UpstreamConnectionWarmupService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Every failure is swallowed on purpose. This service re-opens idle sockets; it is a latency
+        // optimisation and nothing depends on it. Only OperationCanceledException was caught before,
+        // so an OptionsValidationException out of ResolveTargets — a typo in provider configuration —
+        // escaped to ExecuteAsync and, with .NET's default StopHost behaviour, crash-looped the whole
+        // ai-service over a purely optional warmup. Review, 40.34.
         try
         {
             var warmedCount = await _warmup.WarmupOnceAsync(stoppingToken);
@@ -29,12 +34,23 @@ internal sealed class UpstreamConnectionWarmupService : BackgroundService
             using var timer = new PeriodicTimer(WarmupInterval);
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                await _warmup.WarmupOnceAsync(stoppingToken);
+                try
+                {
+                    await _warmup.WarmupOnceAsync(stoppingToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger.LogWarning(exception, "Upstream connection warmup tick failed; continuing");
+                }
             }
         }
         catch (OperationCanceledException)
         {
             // Normal shutdown.
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Upstream connection warmup stopped; upstream calls will open sockets on demand");
         }
     }
 }

@@ -89,8 +89,7 @@ return newval";
 
     public async Task EnsureLlmAllowanceAsync(string operation, CancellationToken cancellationToken = default)
     {
-        var organizationId = _tenantContext.OrganizationId;
-        if (organizationId is null)
+        if (_tenantContext.OrganizationId is not { } organizationId)
         {
             // Platform staff reading their own installation still pass through here; they have no
             // organization and no budget of their own, and refusing them would break the admin
@@ -109,7 +108,7 @@ return newval";
             return;
         }
 
-        var spentTokens = await SumMonthlyTokensAsync(cancellationToken);
+        var spentTokens = await SumMonthlyTokensAsync(organizationId, cancellationToken);
         var workloadClass = WorkloadClass;
         var ceiling = CeilingFor(quota, workloadClass);
 
@@ -136,7 +135,7 @@ return newval";
         AiWorkloadClass workloadClass,
         CancellationToken cancellationToken = default)
     {
-        if (_tenantContext.OrganizationId is null)
+        if (_tenantContext.OrganizationId is not { } organizationId)
         {
             return true;
         }
@@ -147,7 +146,7 @@ return newval";
             return true;
         }
 
-        var spentTokens = await SumMonthlyTokensAsync(cancellationToken);
+        var spentTokens = await SumMonthlyTokensAsync(organizationId, cancellationToken);
         return spentTokens < CeilingFor(quota, workloadClass);
     }
 
@@ -283,18 +282,21 @@ return newval";
         return quota.LlmMonthlyTokenLimit - (quota.LlmMonthlyTokenLimit * reservePercent / 100);
     }
 
-    private async Task<long> SumMonthlyTokensAsync(CancellationToken cancellationToken)
+    private async Task<long> SumMonthlyTokensAsync(Guid organizationId, CancellationToken cancellationToken)
     {
         var periodKey = AiUsagePeriod.Current();
 
         await using var tenantScope = await AiTenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
 
-        var totals = await _databaseContext.AiUsageRecords
-            .Where(record => record.PeriodKey == periodKey && record.Kind == AiUsageKinds.Llm)
-            .Select(record => record.PromptTokens + record.CompletionTokens)
-            .ToListAsync(cancellationToken);
-
-        return totals.Sum();
+        // The organization predicate is explicit rather than left to the query filter, which reads
+        // `IsPlatformWide || …` and so admits every row for Sellevate staff holding a membership —
+        // metering the whole installation's tokens against one customer's ceiling. Review, 40.34.
+        // SumAsync rather than ToListAsync + Sum: this runs on every LLM call.
+        return await _databaseContext.AiUsageRecords
+            .Where(record => record.OrganizationId == organizationId
+                && record.PeriodKey == periodKey
+                && record.Kind == AiUsageKinds.Llm)
+            .SumAsync(record => (long)record.PromptTokens + record.CompletionTokens, cancellationToken);
     }
 
     /// <summary>

@@ -7,9 +7,13 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 > **Microservices migration:** `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*` and
 > `/avatars/*` are now served by the extracted **Identity service** (gateway base URL
 > `http://localhost:5000`), not the monolith. Paths and request/response shapes are
-> unchanged. One transitional caveat: `GET /profile` returns the activity-consistency / progress-points / completed-
-> skill / average-score aggregates as **0** because those are owned by Gamification/Learning
-> (not extracted yet, roadmap phases 7 & 8); the identity fields (displayName, email,
+> unchanged. One caveat, still true: `GET /profile` returns the activity-consistency /
+> progress-points / completed-skill / average-score aggregates as **0** — `ProfileService.cs:32`
+> hard-codes `CompletedSkillCount: 0` and its neighbours. The reason this document used to give for
+> it ("Gamification/Learning not extracted yet, roadmap phases 7 & 8") is no longer the reason: both
+> services were extracted long ago. The zeros survive because identity-service was never wired to
+> compose them — it would have to call gamification and learning on the profile read path, and
+> nobody has decided whether that is worth the fan-out. The identity fields (displayName, email,
 > persona, avatarUrl) are real. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
 
 ---
@@ -256,6 +260,7 @@ account; it never creates a second user.
 | GET | /skill-tree | — | `SkillTreeResponseDto` |
 | GET | /skills | — | `SkillTreeNodeDto[]` (all skills, `locked` if not enrolled) |
 | GET | /skills/stages | — | `SkillStageDto[]` (admin-configured funnel stages, ordered) |
+| GET | /skills/:skillId/topics | — | `TopicDto[]` — `{topicId, skillId, title, orderInSkill}`, the topics of one skill by **id** (not slug), ordered |
 | PUT | /skills/enrolled | `{skillSlugs: string[]}` | 204 |
 
 `PUT /skills/enrolled` — replaces the user's enrolled skill set.  
@@ -309,8 +314,8 @@ nothing here to switch to" and none should resolve into a move nobody asked for.
 |---|---|---|---|
 | GET | /skills/:slug/lessons | — | `LessonSummaryDto[]` |
 | GET | /lessons | — | `LessonSummaryDto[]` (all skills) |
+| GET | /topics/:topicId/lessons | — | `LessonSummaryDto[]` (one topic, with the caller's per-lesson status) |
 | GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` |
-| GET | /lessons/:lessonId/next | — | `NextLessonDto` or 204 if no next lesson |
 | POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
 | POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |
@@ -357,15 +362,15 @@ The **user speaks first** — an empty `message` returns an empty turn (no AI gr
 **rate_call**: `{ratings: {criterionId: number}, overallComment?: string}`
 **written_answer**: `{text: string}`
 
-`NextLessonDto`: `{lessonId, title, xpReward}` — next lesson in same skill with status `available` or `in_progress`. Returns 204 when no next lesson exists.
-
 ---
 
 ## Reference
 
 | Method | Path | Response |
 |---|---|---|
-| GET | /skills/:slug/reference | `ReferenceMaterialDto[]` |
+| GET | /skills/:skillId/reference | `ReferenceMaterialDto[]` — the materials of one skill. The segment is the skill's **id**, constrained `{skillId:guid}` in the route; a slug there is a 404 from routing, not a lookup miss |
+| GET | /reference?category=&search= | `ReferenceMaterialDto[]` — the whole library, both filters optional and independent |
+| GET | /reference/categories | `string[]` — the distinct non-empty categories, for the filter control |
 
 `ReferenceMaterialDto`: `{materialId, title, markdownContent, sortOrder}`
 
@@ -486,19 +491,38 @@ was removed in Phase 40.6 — see below) plus the nullable `orgId`/`orgRole` pai
 
 ---
 
-## Admin (requires `RequirePlatformAdmin` policy — revised 2026-08-16)
+## Admin (the gate is **per controller** — read this before assuming)
 
 All routes prefixed `/admin`. Unauthorized → 403.
 
-> **2026-08-16 — platform content administration is `RequirePlatformAdmin`.** Every `/admin/*`
-> content endpoint below is open to Sellevate staff at either rank (`role` ∈ {`Admin`,
-> `SuperAdmin`}). The only routes that stay `RequireSuperAdmin` are the ones that add or remove a
-> user — the `/admin/users` mutations and all of `/admin/platform/*`. The organization roles
-> (`TenancyAdmin`, `TenancySuperAdmin`) live on `membership`, not on `user`, and their own admin
-> screen is roadmap block 40.20, waiting on the owner's design; `RequireOrgAdmin` is declared in
-> every service for it but has zero call sites today. See
-> [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md), [ADMIN_PANEL.md](ADMIN_PANEL.md) and
-> `docs/DECISIONS.md` (2026-08-16) for the full route audit.
+> **There is no single policy for `/admin/*` any more.** This section used to be headed "requires
+> `RequirePlatformAdmin`" and to claim that "every `/admin/*` content endpoint below is open to
+> Sellevate staff at either rank", with `RequireOrgAdmin` declared in every service but holding
+> **zero call sites**. Blocks 40.15 onward falsified all of that: `RequireOrgAdmin` now has **20
+> call sites across 18 controllers**, and the two gates split the section roughly in half.
+>
+> **Platform-only (`RequirePlatformAdmin`, `role` ∈ {`Admin`, `SuperAdmin`}).** The shared library
+> and the platform's own knobs — nobody's customer edits these: skills, skill stages, topics,
+> exercise-type prompts, daily quotes, the seeder, dialog bundles/modes, voice usage, leagues,
+> gamification settings, and discuss moderation.
+>
+> **Organization-scoped (`RequireOrgAdmin`).** Everything a customer administers inside their own
+> tenant: lessons, lesson versions, lesson metrics/accuracy, programme, assignments, exercises,
+> reference, techniques, content overrides, content generation, content adaptation, team skill
+> gaps, team insights, dialog reviews, admin dialog sessions, dialog overrides, AI quota usage, and
+> the organization profile. The policy **also admits platform staff** carrying no organization role
+> at all, so a Sellevate administrator can still reach these screens — with the RLS `USING` clause
+> widening their reads and `WITH CHECK` refusing their writes into a tenant they did not name.
+>
+> Individual subsections below state their own gate; where one does, it is authoritative. A handful
+> of controllers mix the two — `AdminLessonsController` is org-scoped except for `Create`, which is
+> platform-only because creating a base lesson adds to the shared library.
+>
+> `RequireSuperAdmin` is unchanged and still guards only the routes that add or remove a user: the
+> `/admin/users` mutations and all of `/admin/platform/*`. The organization roles (`TenancyAdmin`,
+> `TenancySuperAdmin`) live on `membership`, not on `user`; their own admin screen is roadmap block
+> 40.20. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md), [ADMIN_PANEL.md](ADMIN_PANEL.md) and
+> `docs/DECISIONS.md` (2026-08-16) for the route audit that started this split.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -526,11 +550,17 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | GET | /admin/topics | — | `AdminTopicWithSkillDto[]` |
 | GET | /admin/skills/:skillIconicName/topics | — | `AdminTopicDto[]` |
 | POST | /admin/skills/:skillIconicName/topics | `{iconicName, title, orderInSkill}` | `AdminTopicDto` |
+| PUT | /admin/skills/:skillIconicName/topics/:topicIconicName | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
 | PUT | /admin/topics/:id | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
 | DELETE | /admin/topics/:id | — | 204 |
 
 `AdminTopicDto`: `{id, skillId, iconicName, title, orderInSkill}`
 `AdminTopicWithSkillDto`: `{id, skillId, skillIconicName, skillTitle, iconicName, title, orderInSkill}`
+
+The two `PUT`s are the same update reached two ways: by iconic name (the pair the admin UI has in
+hand when it is browsing a skill) or by primary key. Both take the same partial body — every field
+optional, only the supplied ones are written. The iconic-name form ignores `skillIconicName` when
+locating the row; the topic's own iconic name is already unique.
 
 ### Lessons
 | Method | Path | Body | Response |
@@ -1253,7 +1283,7 @@ All progress-point economy knobs are DB-driven and admin-editable (no hardcoded 
 | PUT | /admin/reference/:id | `{title, markdownContent, sortOrder, category?, tags?}` | `AdminReferenceMaterialDto` |
 | DELETE | /admin/reference/:id | — | 204 |
 
-`AdminReferenceMaterialDto`: `{id, skillId, skillTitle, skillSlug, title, markdownContent, sortOrder, category, tags: string[]}`
+`AdminReferenceMaterialDto`: `{id, skillId, skillTitle, title, markdownContent, sortOrder, category, tags: string[]}` — there is no `skillSlug`; the record carries the skill's title, not its slug.
 
 ### Techniques
 | Method | Path | Body | Response |
@@ -1332,6 +1362,28 @@ Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "a
 `AdminUserDetailDto`: `AdminUserDto` + `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`
 
 Reading the roster and a user's detail is open to both platform staff roles. Renaming, avatar moderation and role changes all mutate a user and are `RequireSuperAdmin`-only, so a platform `Admin` sees the modal read-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
+
+### Daily Quotes
+
+Platform-only (`RequirePlatformAdmin`) — the quote of the day is one shared editorial calendar, not
+per-organization content. The learner-facing read is `GET /daily-quote` (any authenticated role,
+documented above).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/daily-quotes?from=&to= | — | `AdminDailyQuoteDto[]`, ordered by date; both bounds optional and inclusive |
+| POST | /admin/daily-quotes | `{date, text, author?}` | `AdminDailyQuoteDto` |
+| PUT | /admin/daily-quotes/:id | `{date, text, author?}` | `AdminDailyQuoteDto` (404 if missing) |
+| DELETE | /admin/daily-quotes/:id | — | 204 (404 if missing) |
+
+`AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. `date` is a plain calendar
+date (`DateOnly`), not a timestamp. `author` is optional on write and stored as `""` when omitted,
+never null.
+
+Both writes validate the same two things: blank `text` → `400`, and a **second quote for a date that
+already has one → `409 Conflict`**. One date carries at most one quote, which is what lets the
+learner-facing read fall back to "the most recent quote at or before today" without having to choose
+between candidates.
 
 ### Seeder
 | Method | Path | Body | Response |
@@ -1470,6 +1522,7 @@ involvement.
 | GET | /dialog/sessions/:sessionId | — | `DialogSessionDto` |
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
 | POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
+| DELETE | /dialog/sessions/:sessionId | — | `204`; `404` when the session does not exist or does not belong to the caller |
 
 **Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500), personaName?: string (≤200), personaPosition?: string (≤200), personaPersonality?: string (≤4000), personaDifficulty?: string (≤16, "Easy"|"Medium"|"Hard")}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
 
@@ -2134,8 +2187,10 @@ Publishes `organization.created` on create, `organization.updated` on rename/rea
 | GET | /organizations/profile | — | `OrganizationProfileDto` or `404` if not set up yet |
 | PUT | /organizations/profile | `UpdateOrganizationProfileRequestDto` | `OrganizationProfileDto` |
 
-Both routes are `[TenantScoped]`: `TenantContextMiddleware` rejects the request with `403` if the
-gateway-validated `X-Organization-Id` header is absent — there is no organization id anywhere in
+**All six routes on this controller** are `[TenantScoped]` — the two above plus the four Phase 40.29
+interview routes documented further down (`GET /organizations/profile/gaps`, `PATCH`,
+`POST …/draft`, `POST …/draft/apply`). `TenantContextMiddleware` rejects the request with `403` if
+the gateway-validated `X-Organization-Id` header is absent — there is no organization id anywhere in
 the route or body (docs/TENANCY/TENANCY.md §1.3). The target organization is resolved solely from
 the header.
 
@@ -2477,7 +2532,7 @@ it is, and telling them a month later through a support ticket is the situation 
   "voiceDailyLimitMinutes": 600,
   "voiceUsedMinutesThisMonth": 612,
   "voiceMonthlyLimitMinutes": 6000,
-  "estimatedCost": 1443.12,          // derived from the price table, never stored. null if nothing priced
+  "estimatedCost": null,             // derived, never stored. null whenever ANY line is unpriced
   "hasUnpricedModels": true,         // at least one model used this month has no price configured
   "models": [
     { "model": "gpt-4o", "kind": "llm", "promptTokens": 612340, "completionTokens": 180905,
@@ -2494,6 +2549,13 @@ it is, and telling them a month later through a support ticket is the situation 
   pipeline went quiet in a month they can still hold calls in.
 - **`estimatedCost` is derived, never stored**, and `null` for a model with no configured price —
   reported as unpriced rather than as free, because zero reads as "this model costs nothing".
+  **The top-level total follows the same rule, and follows it strictly: it is `null` as soon as
+  *any* line is unpriced, not only when every line is** (corrected in 40.34 — it used to sum the
+  priced lines and skip the rest). That matters more than it sounds, because the shipped price table
+  configures speech and no LLM model at all: the old behaviour reported the speech bill alone as a
+  confident number while the entire LLM cost — the dominant one — contributed nothing to it. A
+  partial sum presented as a total is worse than no total, and `hasUnpricedModels` sitting beside it
+  was not enough of a warning. Fill in `AiQuotas:PricePerMillionTokens` and the figure appears.
 - **`llmEstimatedCallCount` is high by design**: only streamed dialog turns are estimated, and they
   are the most numerous and the cheapest calls in the product. Everything expensive carries the
   provider's own token count.
