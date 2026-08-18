@@ -367,7 +367,7 @@ from a row that cannot change mid-request. Platform-wide callers get the empty p
 mode the query filter admits every organization at once, so picking a row would show Sellevate staff
 a lesson with some customer's product name in it.
 
-### Assignments (Phase 40.21, thresholds 40.22, issuing 40.23)
+### Assignments (Phase 40.21, thresholds 40.22, issuing 40.23, repeats 40.24)
 
 `Assignments` / `AssignmentProgressRecords` ([ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1). Stage E
 opens here: the РОП turns an internal training session into short, dated, targeted practice for named
@@ -497,6 +497,41 @@ belongs to the person being graded against it.
 `POST /admin/assignments/:id/remind` publishes `assignment.reminder` to everybody not `completed`,
 `failed_threshold` included: that is the row the РОП most needs to reach.
 
+### Repeating an assignment automatically (Phase 40.24)
+
+The roadmap's whole reason for the feature: an internal training's effect decays in two to three
+weeks, so a one-shot assignment reproduces exactly the failure it is meant to fix.
+`AssignmentRepeatSweepService` re-issues a **shortened version** at the offsets `repeat_schedule`
+names — `{"kind":"fixed_offsets","offsetDays":[7,21]}`, the list optional and defaulting to those two.
+
+- **A wave is a new `Assignments` row**, created already `active`, linked to its origin by
+  `RepeatOfAssignmentId` and a 1-based `RepeatWaveIndex`. A second round inside the same row was
+  rejected because `AssignmentProgressRecords` carries one `BestScore` per person: the second wave's
+  result would overwrite the first's, destroying the only evidence that the training decayed
+  ([DECISIONS.md](DECISIONS.md), 2026-08-18). A repeat never carries a schedule of its own — the
+  database refuses it — so a series is one level deep and cannot cascade.
+- **Idempotency is the row's existence**, guarded by a unique partial index on
+  `(RepeatOfAssignmentId, RepeatWaveIndex)`. Nothing is incremented and nothing is stamped, which is
+  40.22's rule again — and here it is also the only option available: a sent-ness column on the origin
+  would be unwritable the moment the origin is `closed`, because the 40.21 freeze trigger refuses any
+  update to a closed row.
+- **It reuses the 40.23 fan-out verbatim.** `AssignmentFanOut` was extracted from `AssignmentService`
+  so a human pressing "issue" and the sweep write the same pair of facts — one progress row and one
+  `assignment.issued` outbox event per recipient, in one transaction — rather than two copies with two
+  idempotency stories. No new event family: notification-service dedupes on the assignment id, and a
+  repeat *is* a new assignment id.
+- **The cohort is the origin's recipients ∩ the live roster**, whatever became of them. Re-resolving
+  the audience rule would hand a shortened refresher to everybody hired since and change the
+  denominator between waves; filtering by outcome would mean the product silently stops asking the
+  `failed_threshold` person 40.22 calls the most valuable row on the screen.
+- **Shortened means less, not easier**: theory (`reference_material`) is dropped unless it is all the
+  assignment has, and `dialog_score.requiredCount` is halved rounded up. Score bars are copied
+  untouched.
+- **A closed origin still repeats**, and a wave more than `RepeatCatchUpDays` (default 3) late is
+  dropped rather than delivered. Both are deliberate and both are in
+  [DONT_FORGET.md](DONT_FORGET.md); the cancel path is editing `repeat_schedule` while the assignment
+  is still active.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -507,8 +542,10 @@ belongs to the person being graded against it.
 | `LessonVersionBackfill` (startup, once) | system | Mints "version 1" for never-published lessons; sees the global library only. |
 | `AssignmentDeadlineSweepService` (40.23) | **per-organization iteration** over a **system** enumeration | Warns everybody who has not finished an assignment whose deadline is inside the lead window (24h by default), then stamps `Assignments.DeadlineNoticeSentAt`. The enumeration reads one column — organization ids of rows already known to be due — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before warning anybody, so a progress row belonging to somebody who has left does not mail them their old employer's deadline. **Needs `BYPASSRLS` for the enumeration only** — see [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4e and DONT_FORGET. |
 
-Until 40.23 there was no per-organization iteration job in learning-service; the deadline sweep is
-the first. An **unset tenant is an exception, never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
+| `AssignmentRepeatSweepService` (40.24) | **per-organization iteration** over a **system** enumeration | Issues the repeat waves whose day has come, as new assignments linked to their origin. The enumeration reads one column — organization ids of assignments that carry a repeat schedule and were issued recently enough for a wave to still be pending — and everything after it runs in a fresh scope with a concrete organization set. It consults the live roster before issuing anything, and a failure to read it skips that organization for the tick with nothing recorded, so the next tick retries. **Needs `BYPASSRLS` for the enumeration only** — and this is the job where that matters most, because its output is invisible by nature: nobody notices a repeat that was never created. See [BACKGROUND_JOBS.md](TENANCY/BACKGROUND_JOBS.md) §4f and DONT_FORGET. |
+
+Until 40.23 there was no per-organization iteration job in learning-service; the deadline sweep was
+the first and 40.24's repeat sweep is the second. An **unset tenant is an exception, never a licence**: `KafkaConsumerBackgroundService` throws when a consumer that requires an
 organization gets an envelope without one, the query filters resolve to "no rows" rather than "all
 rows", and `TenantSaveChangesInterceptor` throws on any tenant-scoped write with no context.
 

@@ -128,6 +128,14 @@ schedule. Capacity capping (`LTRIM`) additionally bounds memory per user.
     `/tree?assignment={id}` for all three: 40.23's assignment surface *is* the card at the top of the
     learning path, and sending the notification anywhere else would contradict the feature it
     announces.
+
+    **Phase 40.24 added no fourth type, and that is a decision.** An automatic repeat — the shortened
+    re-issue at +7 and +21 days — is a *new assignment* with a new id, so it stages the ordinary
+    `assignment.issued` event per recipient and lands in the inbox as new work, which is exactly how
+    the recipient reads it. The type was justified in 40.23 by how differently a recipient reads a
+    notice, and "you have new practice" is not read differently for being generated. The dedupe key
+    is the assignment id, and a repeat is a new one, so redelivery still collapses and a genuine
+    second wave still arrives. No mapper, template or `NotificationType` changed in that block.
   - `UserReplicaConsumer` — `user.registered`/`user.updated`/`user.deleted`, projecting a
     minimal `{ email, displayName }` replica into Redis so recipients can be addressed by email.
 
