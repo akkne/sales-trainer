@@ -5154,7 +5154,7 @@ loop that could crash-loop ai-service over a configuration typo.
 
 **The `dotnet format` gate was fixed; the `codestyle-lint.py` gate was not.** Both run on any PR
 touching identity-service, and the final PR does. `dotnet format` was mechanical and is now green.
-`codestyle-lint.py` reports 1218 violations against 88 on `main`, almost all `/// <summary>` blocks
+`codestyle-lint.py` reports 1216 violations against 88 on `main`, almost all `/// <summary>` blocks
 that §9 of CODESTYLE.md forbids alongside `//` explanations. Fixing it automatically would mean
 deleting roughly 1 130 comments that carry the design rationale of the entire phase — the opposite of
 a mechanical change, and not something an acceptance block should do unasked. Block 40.9 already
