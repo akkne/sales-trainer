@@ -368,7 +368,7 @@ The **user speaks first** — an empty `message` returns an empty turn (no AI gr
 
 | Method | Path | Response |
 |---|---|---|
-| GET | /skills/:slug/reference | `ReferenceMaterialDto[]` |
+| GET | /skills/:skillId/reference | `ReferenceMaterialDto[]` — the materials of one skill. The segment is the skill's **id**, constrained `{skillId:guid}` in the route; a slug there is a 404 from routing, not a lookup miss |
 | GET | /reference?category=&search= | `ReferenceMaterialDto[]` — the whole library, both filters optional and independent |
 | GET | /reference/categories | `string[]` — the distinct non-empty categories, for the filter control |
 
