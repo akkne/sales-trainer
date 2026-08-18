@@ -11,6 +11,7 @@ using Sellevate.Learning.Features.Lessons.Models;
 using Sellevate.Learning.Features.Programs.Models;
 using Sellevate.Learning.Features.Reference.Models;
 using Sellevate.Learning.Features.SkillTree.Models;
+using Sellevate.Learning.Features.TeamInsights.Models;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Identity;
 
@@ -51,6 +52,7 @@ public sealed class LearningDbContext : DbContext
     public DbSet<UserDialogScore> UserDialogScores => Set<UserDialogScore>();
     public DbSet<DialogReviewNote> DialogReviewNotes => Set<DialogReviewNote>();
     public DbSet<ContentGenerationJob> ContentGenerationJobs => Set<ContentGenerationJob>();
+    public DbSet<TeamSkillGapDismissal> TeamSkillGapDismissals => Set<TeamSkillGapDismissal>();
     public DbSet<ExerciseTypePrompt> ExerciseTypePrompts => Set<ExerciseTypePrompt>();
     public DbSet<ReferenceMaterial> ReferenceMaterials => Set<ReferenceMaterial>();
     public DbSet<DailyQuote> DailyQuotes => Set<DailyQuote>();
@@ -113,6 +115,11 @@ public sealed class LearningDbContext : DbContext
         // is filtered by the content rule below, but it is always owned rather than global.
         modelBuilder.Entity<ContentGenerationJob>()
             .HasQueryFilter(job => _tenantContext.IsPlatformWide || job.OrganizationId == _tenantContext.OrganizationId);
+        // Phase 40.31. «Не предлагай нам это» is a decision one РОП made about their own team's
+        // panel. Plain equality — a null owner would silence one organization's suggestion for every
+        // other, which is the loudest possible version of the bug the whole phase exists to prevent.
+        modelBuilder.Entity<TeamSkillGapDismissal>()
+            .HasQueryFilter(dismissal => _tenantContext.IsPlatformWide || dismissal.OrganizationId == _tenantContext.OrganizationId);
         // Phase 40.19. The substitution profile is tenant data even though it feeds content: there
         // is no global profile, and a null owner would read as "every organization's product name".
         modelBuilder.Entity<OrganizationProfileReplica>()

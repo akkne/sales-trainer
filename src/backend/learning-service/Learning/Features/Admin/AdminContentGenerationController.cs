@@ -87,7 +87,8 @@ public sealed class AdminContentGenerationController(
 
         try
         {
-            var job = await contentGenerationJobService.StartAsync(requestDto, actorId, cancellationToken);
+            var job = await contentGenerationJobService.StartAsync(
+                requestDto, actorId, cancellationToken: cancellationToken);
 
             return CreatedAtAction(nameof(GetJob), new { jobId = job.Id }, job);
         }

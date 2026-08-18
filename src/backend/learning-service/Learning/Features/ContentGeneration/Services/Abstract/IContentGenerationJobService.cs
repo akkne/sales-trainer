@@ -19,9 +19,16 @@ public interface IContentGenerationJobService
 
     Task<ContentGenerationJobDto?> GetJobAsync(Guid jobId, CancellationToken cancellationToken = default);
 
+    /// <param name="gapSourceRef">
+    /// Phase 40.31. The measured failure the run answers (<c>skill-gap:&lt;stage&gt;@&lt;date&gt;</c>),
+    /// for a run the dashboard started rather than a person. Null on every ordinary run, and it is a
+    /// parameter rather than a field of the request body because no HTTP caller may claim it: the
+    /// only writer is the service that measured the gap.
+    /// </param>
     Task<ContentGenerationJobDto> StartAsync(
         StartContentGenerationRequestDto request,
         Guid? actorId,
+        string? gapSourceRef = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

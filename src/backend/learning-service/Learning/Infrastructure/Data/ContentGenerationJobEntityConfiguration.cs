@@ -38,6 +38,10 @@ public sealed class ContentGenerationJobEntityConfiguration : IEntityTypeConfigu
 
         builder.Property(job => job.FailureReason).HasMaxLength(1000);
 
+        // Phase 40.31. The same width Assignments.SourceRef has, because the value is copied straight
+        // into it when a gap-detected assignment is created from this run.
+        builder.Property(job => job.GapSourceRef).HasMaxLength(200);
+
         // The worker's own query: which runs of this organization are waiting for a call. Status
         // first because every worker query names one.
         builder.HasIndex(job => new { job.OrganizationId, job.Status, job.CreatedAt });
@@ -48,5 +52,11 @@ public sealed class ContentGenerationJobEntityConfiguration : IEntityTypeConfigu
         // The produced lesson, from the other side: "where did this lesson come from" is the question
         // asked of a generated lesson somebody is unsure about, and 40.31 will ask it by lesson id.
         builder.HasIndex(job => new { job.OrganizationId, job.ProducedLessonId });
+
+        // Phase 40.31. "Is a run already working on this gap" — asked once per red cell every time
+        // the suggestion panel is drawn. Partial, because the overwhelming majority of runs were
+        // started by a person pasting material and have nothing to say about a gap.
+        builder.HasIndex(job => new { job.OrganizationId, job.GapSourceRef })
+            .HasFilter("\"GapSourceRef\" IS NOT NULL");
     }
 }

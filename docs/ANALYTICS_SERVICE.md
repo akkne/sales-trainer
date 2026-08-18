@@ -187,6 +187,33 @@ applies more strongly to a copy in another service than it does to a column in t
    "this customer's assignment funnel", it comes from learning-service. Same sentence as
    `app_exercises_completed_total` in the section above, for the same reason.
 
+## Phase 40.31 added no counter, and that was a decision rather than an omission
+
+Roadmap 40.31 closes the loop from metric to content: the dashboard proposes generating exercises for
+the funnel stage the team is failing at, and the block's own thesis is that this is what turns a
+report opened quarterly into a tool opened weekly. That thesis is a claim about usage, and the
+obvious way to make it falsifiable is a counter here — «сколько раз кнопку нажали, сколько раз
+отклонили».
+
+**It was considered and not built**, on two counts, and both are rules this document already states.
+
+- **A useful version of that counter needs a customer dimension.** «Инструмент открывают раз в
+  неделю» is a statement about one customer's habit, and the aggregate across every organization
+  answers a different question — one loud customer would carry the number. Adding an organization
+  label is refused for the fourth time in this codebase, for the reason recorded above: it puts
+  customer identities and unbounded cardinality into the monitoring store.
+- **The unlabelled version is already derivable, exactly and for free.** Every press leaves a
+  `ContentGenerationJobs` row with a non-null `GapSourceRef`, and every refusal leaves a
+  `TeamSkillGapDismissals` row. Both are durable, both are per-organization, and both are already
+  queryable (`docs/TENANCY/sql/40.31_skill_gaps_verify.sql`, sections 5 and 6). A Prometheus counter
+  would be a second, weaker answer to a question a `SELECT count(*)` answers better — and 40.25
+  already refused a projection into Redis on the same grounds.
+
+So the pattern from 40.25 holds unchanged: **analytics answers "is anybody using this feature at
+all", and it can already do so** — a run started from a gap is an ordinary content-pipeline run, and
+whatever this service eventually counts about the pipeline will count these too. Anything with a
+customer's name on it is learning-service's, from rows.
+
 ## Metrics owned
 
 Defined in `Infrastructure/Metrics/AppMetrics.cs` (process-global statics, self-registered

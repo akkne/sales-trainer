@@ -132,9 +132,19 @@ internal sealed class AssignmentService(
     {
         var title = RequireTitle(requestDto.Title);
         var goal = NormalizeGoal(requestDto.Goal);
-        var sourceType = RequireSourceType(requestDto.SourceType);
-        var sourceRef = NormalizeSourceRef(sourceType, requestDto.SourceRef);
+
+        // Phase 40.31. Read before the write scope opens, like the roster read in UpdateAsync: it is
+        // one extra query on a rare route, and it decides three of the fields below.
+        var generatedSource = await ResolveGeneratedSourceAsync(
+            requestDto.ContentGenerationJobId, cancellationToken);
+
+        var sourceType = generatedSource?.SourceType ?? RequireSourceType(requestDto.SourceType);
+        var sourceRef = generatedSource?.SourceRef ?? NormalizeSourceRef(sourceType, requestDto.SourceRef);
         RequireConsistentSchedule(requestDto.OpensAt, requestDto.Deadline);
+
+        var content = requestDto.Content is { Count: > 0 }
+            ? requestDto.Content
+            : generatedSource?.Content;
 
         var now = DateTime.UtcNow;
 
@@ -146,7 +156,7 @@ internal sealed class AssignmentService(
             Goal = goal,
             SourceType = sourceType,
             SourceRef = sourceRef,
-            Content = AssignmentDocumentSerializer.SerializeContent(requestDto.Content),
+            Content = AssignmentDocumentSerializer.SerializeContent(content),
             Audience = AssignmentDocumentSerializer.SerializeAudience(requestDto.Audience),
             OpensAt = requestDto.OpensAt,
             Deadline = requestDto.Deadline,
@@ -745,6 +755,84 @@ internal sealed class AssignmentService(
 
         return normalizedSourceRef;
     }
+
+    /// <summary>
+    /// Phase 40.31. Where a <c>gap_detected</c> assignment gets its provenance (roadmap 40.31).
+    ///
+    /// <para>
+    /// <b>Nothing here comes from the request body except the run's id.</b> The source type and the
+    /// source reference are read off the run, which is the row that was there when the gap was
+    /// measured and the lesson was paid for — the same property 40.25 gave <c>DialogReviewNotes</c>
+    /// by reading the disputed score from the row rather than from the caller. A client cannot label
+    /// hand-written work as detected by the dashboard, and a client that forgets to label genuinely
+    /// generated work cannot lose the link.
+    /// </para>
+    ///
+    /// <para>
+    /// A run that has not finished is refused rather than accepted with an empty content list: an
+    /// assignment pointing at a lesson that does not exist yet would be issued to the team the moment
+    /// somebody pressed activate, and 40.21 froze <c>Content</c> at that moment on purpose.
+    /// </para>
+    /// </summary>
+    private async Task<GeneratedAssignmentSource?> ResolveGeneratedSourceAsync(
+        Guid? contentGenerationJobId,
+        CancellationToken cancellationToken)
+    {
+        if (contentGenerationJobId is not { } jobId)
+        {
+            return null;
+        }
+
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var job = await databaseContext.ContentGenerationJobs
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == jobId)
+            .Select(candidate => new
+            {
+                candidate.Status,
+                candidate.GapSourceRef,
+                candidate.ProducedLessonVersionId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (job is null)
+        {
+            throw new AssignmentValidationException(
+                $"Content generation run '{jobId}' does not exist in this organization.");
+        }
+
+        if (job.Status != ContentGenerationJobStatuses.Completed || job.ProducedLessonVersionId is null)
+        {
+            throw new AssignmentValidationException(
+                $"Content generation run '{jobId}' has not produced a lesson version yet.");
+        }
+
+        var sourceType = job.GapSourceRef is null
+            ? AssignmentSourceTypes.Training
+            : AssignmentSourceTypes.GapDetected;
+
+        // 40.21's rule, applied at the one call site that can honour it automatically: content is
+        // named by the frozen version and never by the lesson, because a lesson id silently
+        // re-points at whatever the lesson has since become.
+        var sourceRef = job.GapSourceRef ?? $"lesson-version:{job.ProducedLessonVersionId}";
+
+        return new GeneratedAssignmentSource(
+            sourceType,
+            sourceRef,
+            [
+                new AssignmentContentItemDto(
+                    AssignmentContentItemKinds.LessonVersion,
+                    job.ProducedLessonVersionId.Value.ToString(),
+                    0,
+                    null)
+            ]);
+    }
+
+    private sealed record GeneratedAssignmentSource(
+        string SourceType,
+        string SourceRef,
+        IReadOnlyList<AssignmentContentItemDto> Content);
 
     private static void RequireConsistentSchedule(DateTime? opensAt, DateTime? deadline)
     {

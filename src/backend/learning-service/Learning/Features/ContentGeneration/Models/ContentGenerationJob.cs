@@ -47,6 +47,22 @@ public sealed class ContentGenerationJob : ITenantScoped
     /// </summary>
     public string SourceMaterial { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Phase 40.31. The measured failure this run was started to answer, as
+    /// <c>skill-gap:&lt;stage&gt;@&lt;yyyy-MM-dd&gt;</c>, or null for a run somebody started by pasting
+    /// material.
+    ///
+    /// <para>
+    /// <b>It is the provenance, and it is also the deduplication key.</b> An assignment created from
+    /// this run copies it into <c>Assignment.SourceRef</c> and takes <c>gap_detected</c> as its
+    /// source type — so the caller never gets to claim a provenance, it is carried by the row that
+    /// earned it. And the presence of a live run holding a stage's reference is what stops the panel
+    /// offering the same stage a second time next Monday: the check is a read of this column, not a
+    /// flag anybody has to remember to set.
+    /// </para>
+    /// </summary>
+    public string? GapSourceRef { get; set; }
+
     /// <summary>One of <see cref="ContentGenerationJobStatuses"/>.</summary>
     public string Status { get; set; } = ContentGenerationJobStatuses.Structuring;
 

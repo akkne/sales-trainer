@@ -522,7 +522,7 @@ equality rather than the content flavour `IS NULL OR = current`. A `NULL` owner 
 | `Title` | `varchar(200)` | NOT NULL | |
 | `Goal` | `varchar(2000)` | NULL | Shown to the team, never parsed |
 | `SourceType` | `varchar(16)` | NOT NULL | `training` \| `manual` \| `gap_detected`; `CK_Assignments_SourceType` |
-| `SourceRef` | `varchar(200)` | NULL | Read according to `SourceType`. `CK_Assignments_ManualHasNoSourceRef`: null whenever the type is `manual` |
+| `SourceRef` | `varchar(200)` | NULL | Read according to `SourceType`, always `<kind>:<id>`. `training` → `lesson-version:<uuid>` (frozen, never `lesson:`); `gap_detected` → `skill-gap:<stage>@<yyyy-MM-dd>` (**40.31** — the funnel stage the team failed and the day it was measured; the numbers themselves go into `Goal`); `manual` → null, by `CK_Assignments_ManualHasNoSourceRef` |
 | `Content` | `jsonb` | NOT NULL | `{"items":[{"kind","reference","orderIndex"}]}` — **references only**; `CK_Assignments_Content` (must be an object) |
 | `Audience` | `jsonb` | NOT NULL | `{"kind":"whole_team"}` \| `{"kind":"users","userIds":[…]}` \| `{"kind":"group","groupId":…}`; `CK_Assignments_Audience` (object carrying `kind`) |
 | `OpensAt` | `timestamptz` | NULL | Null means "as soon as it is active" |
@@ -1737,6 +1737,7 @@ Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
 | `Title` | varchar(200) | NOT NULL, non-blank; becomes the generated topic's title |
 | `SourceMaterial` | text | NOT NULL, non-blank; the pasted deck/script, verbatim. Bounded at 60 000 characters by the service, not by the column |
 | `Status` | varchar(20) | NOT NULL, DEFAULT `'structuring'`; one of `structuring` / `awaiting_review` / `generating` / `completed` / `failed` / `insufficient` (40.28) |
+| `GapSourceRef` | varchar(200) | **40.31** — nullable; `skill-gap:<stage>@<yyyy-MM-dd>` on a run the dashboard proposed, null on one somebody started by pasting material. `CK_ContentGenerationJobs_GapSourceRef` keeps it inside that namespace. Same width as `Assignments.SourceRef`, because it is copied there verbatim |
 | `Structure` | jsonb | nullable — the extracted structure, in the organization profile's shape |
 | `Insufficiency` | jsonb | **40.28** — nullable; the recorded refusal: `{stage, gaps: [{code, message}], note}`. Non-null **exactly** when `Status = 'insufficient'` |
 | `StructuredAt` | timestamptz | nullable |
@@ -1754,7 +1755,10 @@ Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
 
 Indexes: `(OrganizationId, Status, CreatedAt)` (the worker's query), `(OrganizationId, CreatedAt)`
 (the administrator's list), `(OrganizationId, ProducedLessonId)` («where did this lesson come from»,
-which 40.31 will ask).
+which 40.31 will ask), and `(OrganizationId, GapSourceRef)` — **partial** on `GapSourceRef IS NOT
+NULL`, 40.31, for «is a run already working on this gap», asked once per red cell every time the
+suggestion panel is drawn. Partial because the overwhelming majority of runs were started by a
+person pasting material and have nothing to say about a gap.
 
 Constraints, and two of them are the block rather than hygiene:
 
@@ -1795,3 +1799,49 @@ nobody reads. Both `ADD COLUMN`s are metadata-only (a nullable column, and a non
 so the table is not rewritten. The `Down` migration moves any `insufficient` row back to
 `awaiting_review` or `structuring` before narrowing the status vocabulary, because a down migration
 that leaves a table unable to accept its own constraint is one nobody can run.
+
+---
+
+### Table: `TeamSkillGapDismissals` (learning-db — Phase 40.31, strict tenant data, RLS enabled)
+
+One suggestion the РОП said no to. **The only table 40.31 adds, and that is the block's central
+decision:** the suggestions themselves are computed on every read from the same heat map the screen
+draws, so a gap that closes stops being offered without anything having to extinguish a row. A table
+of proposed gaps would have needed a writer, an expiry sweep and a rule for what happens to a row
+whose number has since recovered — all to hold a fact the matrix already answers. What genuinely
+cannot be derived is that a person said no.
+
+Full description: [ASSIGNMENTS.md §3.4](TENANCY/ASSIGNMENTS.md).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid | PK |
+| `OrganizationId` | uuid | **NOT NULL** — plain-equality RLS. A null owner would silence one customer's panel for every other |
+| `StageKey` | varchar(64) | NOT NULL — the `Skill.Stage` key that was dismissed, without the observation date. `CK_TeamSkillGapDismissals_StageKey`: non-blank and containing neither `:` nor `@`, the two separators of `skill-gap:<stage>@<date>` |
+| `DismissedBy` | uuid | nullable — the РОП, or null when the token carried no user id |
+| `DismissedAt` | timestamptz | NOT NULL |
+| `ExpiresAt` | timestamptz | NOT NULL — `CK_TeamSkillGapDismissals_Window`: strictly after `DismissedAt`. The service sets it to +90 days |
+| `AccuracyPercentAtDismissal` | integer | NOT NULL, 0–100 (`CK_TeamSkillGapDismissals_Measurement`) — the team's accuracy on that stage at the moment of the refusal |
+| `AttemptCountAtDismissal` | integer | NOT NULL, ≥ 0 — how much practice that number was built on |
+| `Note` | varchar(500) | nullable — why, in the РОП's words. Never shown to the team |
+
+Index: `IX_TeamSkillGapDismissals_OrganizationId_StageKey` — **unique**. One live refusal per stage
+per organization; a second «не сейчас» on the same red cell replaces the first rather than stacking,
+and two tabs racing collide here rather than leaving two rows that expire on different days. The same
+use of a unique index 40.24 made for repeat waves.
+
+> **Why a refusal expires, and why it can be broken early.** A permanent dismissal is a worse product
+> than no button at all: the team that was weak at closing in August is still being measured in
+> November, and a refusal that outlived its own evidence would quietly turn the panel off for the one
+> stage most in need of it. The life is **90 days** — the heat map's own default window — so a refusal
+> lasts exactly as long as the measurement that provoked it could still be the same measurement.
+> `AccuracyPercentAtDismissal` is what lets the world overrule the calendar: «мы это знаем» was said
+> about 58% and is not an answer to 41%, so the suggestion returns as soon as the number falls ten
+> points below what was recorded. Neither rule needs a sweep — both are read-time comparisons.
+
+Migration: `AddTeamSkillGaps` (2026-08-18, Phase 40.31). Creates this table empty and adds
+`ContentGenerationJobs.GapSourceRef` with its partial index and CHECK. **No backfill, no maintenance
+window, no concurrent-index script** — the seventh block in a row, and for the same reason: the unique
+index is built over zero rows, the partial index covers a column that is NULL on every existing row,
+and the `ADD COLUMN` is metadata-only in Postgres 11+ (nullable, no default), so nothing rewrites the
+table. Read-only verification: `docs/TENANCY/sql/40.31_skill_gaps_verify.sql`.

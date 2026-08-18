@@ -8,6 +8,7 @@ public static class TeamInsightsServiceCollectionExtensions
     public static IServiceCollection AddTeamInsightsFeatureServices(this IServiceCollection services)
     {
         services.AddScoped<ITeamSkillMapService, TeamSkillMapService>();
+        services.AddScoped<ITeamSkillGapService, TeamSkillGapService>();
 
         return services;
     }
