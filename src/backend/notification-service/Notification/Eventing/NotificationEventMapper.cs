@@ -60,6 +60,8 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.AssignmentIssued => MapAssignmentIssued(envelope),
             Topics.AssignmentDeadlineApproaching => MapAssignmentDeadlineApproaching(envelope),
             Topics.AssignmentReminder => MapAssignmentReminder(envelope),
+            Topics.AssignmentDeadlineDigest => MapAssignmentDeadlineDigest(envelope),
+            Topics.DialogReviewDisputed => MapDialogReviewDisputed(envelope),
             Topics.DialogReviewCommented => MapDialogReviewCommented(envelope),
             Topics.DialogReviewResolved => MapDialogReviewResolved(envelope),
             _ => null
@@ -295,10 +297,114 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             NotificationTitles.AssignmentReminder,
             body,
             NotificationActionRoutes.Assignment(payload.AssignmentId),
-            // Keyed on the moment the РОП pressed the button, so a second press tomorrow is a
-            // second reminder while a redelivery of today's is not. A reminder that could only ever
-            // be sent once would defeat the point of the button.
-            $"{payload.AssignmentId}:{payload.RequestedAt:O}",
+            // Keyed on the hour the РОП pressed the button, so a second press tomorrow is a second
+            // reminder while a redelivery of today's is not. A reminder that could only ever be sent
+            // once would defeat the point of the button.
+            //
+            // Phase 40.26 coarsened this from the exact instant to the hour, because that block put
+            // the button inside a notification sent to *every* administrator of the organization:
+            // five РОПs opening the same digest used to mean five separate reminders landing on the
+            // same manager within a minute. The whole feature depends on that inbox still being read.
+            $"{payload.AssignmentId}:{payload.RequestedAt:yyyy-MM-ddTHH}",
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.26. The one notice in this service addressed to a РОП about somebody else's work
+    /// (docs/TENANCY/ASSIGNMENTS.md §5).
+    ///
+    /// <para>
+    /// The body opens with names and the action url carries the reminder, because the roadmap's
+    /// requirement is «не отчёт, который РОП может открыть, а адресный пуш с действием» — and a
+    /// digest that reads "3 сотрудника не начали" sends its reader to look somewhere else, which is
+    /// the report it was supposed to replace.
+    /// </para>
+    /// </summary>
+    private static CreateNotificationRequest? MapAssignmentDeadlineDigest(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentDeadlineDigestEvent>();
+        if (payload is null
+            || payload.AdministratorUserId == Guid.Empty
+            || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        // Nobody has failed to start. The producer does not publish this case at all; the guard is
+        // here because "all good" is the one message this notice must never be, and a defence that
+        // lives in one service only is a defence one refactor away from gone.
+        if (payload.NotStartedCount <= 0)
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var names = payload.NotStartedNames?
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .ToList() ?? [];
+
+        string notStarted;
+        if (names.Count == 0)
+        {
+            notStarted = payload.NotStartedCount.ToString();
+        }
+        else if (names.Count < payload.NotStartedCount)
+        {
+            notStarted = $"{string.Join(", ", names)} и ещё {payload.NotStartedCount - names.Count}";
+        }
+        else
+        {
+            notStarted = string.Join(", ", names);
+        }
+
+        var body = $"«{title}» — срок до {payload.Deadline.ToString(DeadlineFormat)}. "
+                   + $"Ещё не начали: {notStarted}. Откройте, чтобы напомнить в один клик.";
+
+        return new CreateNotificationRequest(
+            payload.AdministratorUserId,
+            NotificationType.AssignmentDeadlineDigest,
+            NotificationTitles.AssignmentDeadlineDigest,
+            body,
+            NotificationActionRoutes.AssignmentReminderPrompt(payload.AssignmentId),
+            // Assignment plus the exact due instant, exactly as the manager's notice above: moving a
+            // deadline clears the producer's sent-ness stamp, and the fresh digest for the new date
+            // must not be swallowed by the one for the date that no longer applies.
+            $"{payload.AssignmentId}:{payload.Deadline:O}",
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.26. A manager disputed a score. This is the notice 40.25 wrote the queue for and
+    /// could not send — there was no way to enumerate an organization's administrators.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewDisputed(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewDisputedEvent>();
+        if (payload is null
+            || payload.AdministratorUserId == Guid.Empty
+            || string.IsNullOrWhiteSpace(payload.Comment))
+        {
+            return null;
+        }
+
+        var who = string.IsNullOrWhiteSpace(payload.SubjectDisplayName)
+            ? "Менеджер"
+            : payload.SubjectDisplayName.Trim();
+
+        var body = payload.DisputedScore is { } disputedScore
+            ? $"{who} не согласен с оценкой {disputedScore}: {Shorten(payload.Comment.Trim())}"
+            : $"{who} не согласен с оценкой: {Shorten(payload.Comment.Trim())}";
+
+        return new CreateNotificationRequest(
+            payload.AdministratorUserId,
+            NotificationType.DialogReviewDisputed,
+            NotificationTitles.DialogReviewDisputed,
+            body,
+            NotificationActionRoutes.AdminDialogReview(payload.NoteId),
+            // The note. One open dispute per conversation is a database constraint (40.25), and a
+            // note is never edited, so a second event with this key is a Kafka redelivery.
+            payload.NoteId.ToString(),
             SendEmail: true);
     }
 

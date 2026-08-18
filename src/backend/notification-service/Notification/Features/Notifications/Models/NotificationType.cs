@@ -27,5 +27,13 @@ public enum NotificationType
     // was ruled on" are read completely differently, and the second only exists because somebody
     // asked a question they are waiting on an answer to.
     DialogReviewCommented = 13,
-    DialogReviewResolved = 14
+    DialogReviewResolved = 14,
+
+    // Phase 40.26 — the two notices that go to the РОП rather than to a manager
+    // (docs/TENANCY/ASSIGNMENTS.md §5). They are separate values from the manager-facing family
+    // above for the same reason that family has three: the recipient is different, the action is
+    // different, and an inbox in which "your deadline is close" and "your team is not starting" look
+    // alike is an inbox where the second one is skipped.
+    AssignmentDeadlineDigest = 15,
+    DialogReviewDisputed = 16
 }

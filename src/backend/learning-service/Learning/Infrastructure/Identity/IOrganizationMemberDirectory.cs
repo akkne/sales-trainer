@@ -13,7 +13,7 @@ namespace Sellevate.Learning.Infrastructure.Identity;
 public interface IOrganizationMemberDirectory
 {
     /// <summary>
-    /// The user ids of every active membership in the current organization.
+    /// The current organization's active members, and (Phase 40.26) which of them administer it.
     ///
     /// <para>
     /// Throws when identity-service cannot answer. That is the contract, not an accident: an empty
@@ -21,5 +21,5 @@ public interface IOrganizationMemberDirectory
     /// different facts here — one issues an assignment to nobody and reports success.
     /// </para>
     /// </summary>
-    Task<IReadOnlyList<Guid>> GetActiveMemberIdsAsync(CancellationToken cancellationToken = default);
+    Task<OrganizationRoster> GetRosterAsync(CancellationToken cancellationToken = default);
 }

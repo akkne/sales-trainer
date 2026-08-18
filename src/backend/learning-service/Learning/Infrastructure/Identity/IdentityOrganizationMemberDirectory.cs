@@ -49,7 +49,7 @@ internal sealed class IdentityOrganizationMemberDirectory : IOrganizationMemberD
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<Guid>> GetActiveMemberIdsAsync(CancellationToken cancellationToken = default)
+    public async Task<OrganizationRoster> GetRosterAsync(CancellationToken cancellationToken = default)
     {
         var organizationId = _tenantContext.OrganizationId
             ?? throw new InvalidOperationException("Organization context is not set.");
@@ -80,10 +80,22 @@ internal sealed class IdentityOrganizationMemberDirectory : IOrganizationMemberD
                 "Identity service returned an unreadable member roster.");
         }
 
-        return payload.UserIds
+        var memberIds = payload.UserIds
             .Where(userId => userId != Guid.Empty)
             .Distinct()
             .ToList();
+
+        // Phase 40.26. An absent list means "this identity-service does not report administrators"
+        // and stays null all the way to the caller; an empty one means "this organization has none".
+        // See OrganizationRoster for why the two must not collapse into each other.
+        var administratorIds = payload.AdministratorUserIds is null
+            ? null
+            : payload.AdministratorUserIds
+                .Where(userId => userId != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+        return new OrganizationRoster(memberIds, administratorIds);
     }
 
     /// <summary>
@@ -91,5 +103,7 @@ internal sealed class IdentityOrganizationMemberDirectory : IOrganizationMemberD
     /// cross-service contract in this system is expressed: the two services agree on a wire shape,
     /// not on a shared type.
     /// </summary>
-    private sealed record OrganizationMemberIdsResponse(IReadOnlyList<Guid>? UserIds);
+    private sealed record OrganizationMemberIdsResponse(
+        IReadOnlyList<Guid>? UserIds,
+        IReadOnlyList<Guid>? AdministratorUserIds);
 }

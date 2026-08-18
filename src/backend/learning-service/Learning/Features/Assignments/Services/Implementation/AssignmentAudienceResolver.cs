@@ -52,7 +52,7 @@ internal sealed class AssignmentAudienceResolver(
         IReadOnlyList<Guid> activeMemberIds;
         try
         {
-            activeMemberIds = await memberDirectory.GetActiveMemberIdsAsync(cancellationToken);
+            activeMemberIds = (await memberDirectory.GetRosterAsync(cancellationToken)).MemberIds;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

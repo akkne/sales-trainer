@@ -52,6 +52,35 @@ internal sealed class KafkaLearningEventPublisher(IOutboxWriter outboxWriter) : 
         return Task.CompletedTask;
     }
 
+    public Task PublishAssignmentDeadlineDigestAsync(
+        AssignmentDeadlineDigestEvent payload,
+        CancellationToken cancellationToken = default)
+    {
+        // Keyed by the administrator, not by the assignment: the partition key is the recipient
+        // everywhere in this system, and per-recipient ordering only exists if the recipient is the
+        // key.
+        outboxWriter.Enqueue(
+            Topics.AssignmentDeadlineDigest,
+            payload.AdministratorUserId.ToString(),
+            Topics.AssignmentDeadlineDigest,
+            payload);
+
+        return Task.CompletedTask;
+    }
+
+    public Task PublishDialogReviewDisputedAsync(
+        DialogReviewDisputedEvent payload,
+        CancellationToken cancellationToken = default)
+    {
+        outboxWriter.Enqueue(
+            Topics.DialogReviewDisputed,
+            payload.AdministratorUserId.ToString(),
+            Topics.DialogReviewDisputed,
+            payload);
+
+        return Task.CompletedTask;
+    }
+
     public Task PublishAssignmentProgressChangedAsync(
         AssignmentProgressChangedEvent payload,
         CancellationToken cancellationToken = default)

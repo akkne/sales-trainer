@@ -87,6 +87,32 @@ public sealed record AssignmentReminderEvent(
     DateTime? Deadline,
     DateTime RequestedAt);
 
+/// <summary>Published by learning-service's deadline sweep, a day before the deadline, to each
+/// administrator of the organization (Phase 40.26). <see cref="NotStartedNames"/> is the readable
+/// prefix of <see cref="NotStartedCount"/>, not the whole of it: the body has to open with names to
+/// be a thing to act on rather than a report, and it has to stay one sentence to be read at all.
+/// <see cref="Deadline"/> is part of the dedupe key for the same reason it is on
+/// <see cref="AssignmentDeadlineApproachingEvent"/>.</summary>
+public sealed record AssignmentDeadlineDigestEvent(
+    Guid AssignmentId,
+    Guid AdministratorUserId,
+    string Title,
+    DateTime Deadline,
+    int NotStartedCount,
+    IReadOnlyList<string>? NotStartedNames);
+
+/// <summary>Published by learning-service when a manager disputes an AI score (Phase 40.26),
+/// addressed to each administrator of the organization. The counterpart of
+/// <see cref="DialogReviewResolvedEvent"/>, which travels the other way.</summary>
+public sealed record DialogReviewDisputedEvent(
+    Guid NoteId,
+    Guid AdministratorUserId,
+    Guid SubjectUserId,
+    string? SubjectDisplayName,
+    string SessionId,
+    int? DisputedScore,
+    string Comment);
+
 /// <summary>Published by learning-service when the РОП comments on a fragment of somebody's
 /// practice conversation (Phase 40.25). The quoted lines travel with the event rather than being
 /// fetched, because this service has no database beyond its inbox and because a notice reading
