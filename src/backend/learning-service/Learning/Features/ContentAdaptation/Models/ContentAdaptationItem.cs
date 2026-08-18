@@ -84,6 +84,19 @@ public sealed class ContentAdaptationItem : ITenantScoped
     public string? ChangeSummary { get; set; }
 
     /// <summary>
+    /// How many leaves of the body the proposal moves, as computed when the proposal was made.
+    ///
+    /// <para>
+    /// Stored rather than recomputed on read, and that is not a cached count: it describes the
+    /// proposal, which is frozen, and not the exercise, which is not. Recomputing it in the list
+    /// would mean re-reading sixty exercise bodies to render a column, and re-reading them against a
+    /// body that has since moved would make the number disagree with the change list the item screen
+    /// shows.
+    /// </para>
+    /// </summary>
+    public int ChangedFieldCount { get; set; }
+
+    /// <summary>
     /// Review mode: the findings as canonical JSON — a list of <c>{code, detail}</c> drawn from
     /// <see cref="ContentReviewFindingCodes"/>. Null in rewrite mode. Non-null exactly when a review
     /// item is proposed, and the database says so (<c>CK_ContentAdaptationItems_Proposal</c>).
