@@ -1,5 +1,10 @@
 namespace Sellevate.Company.Features.Companies.FollowUpReminders;
 
+/// <summary>
+/// The per-organization half of the follow-up reminder poll. Separate from the hosted service that
+/// drives it so the claim-and-publish logic can be exercised against an in-memory context, and so
+/// that the tenant scope is a property of one call rather than of a long-lived loop.
+/// </summary>
 public interface IFollowUpReminderService
 {
     /// <summary>

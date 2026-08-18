@@ -1,10 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sellevate.Company.Common.Constants;
 using Sellevate.Company.Features.Companies.Models;
 
 namespace Sellevate.Company.Features.Companies.Configurations;
 
-public sealed class CompanyPersonaEntityConfiguration : IEntityTypeConfiguration<CompanyPersona>
+/// <summary>
+/// Maps the <c>CompanyPersonas</c> table — saved buyer personas a salesperson practises against.
+/// The difficulty is stored as its enum name rather than an ordinal, so reordering the enum cannot
+/// silently reinterpret stored rows.
+/// </summary>
+internal sealed class CompanyPersonaEntityConfiguration : IEntityTypeConfiguration<CompanyPersona>
 {
     public void Configure(EntityTypeBuilder<CompanyPersona> builder)
     {
@@ -17,20 +23,20 @@ public sealed class CompanyPersonaEntityConfiguration : IEntityTypeConfiguration
 
         builder.Property(persona => persona.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(CompanyFieldLengths.Name);
 
         builder.Property(persona => persona.Position)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(CompanyFieldLengths.Position);
 
         builder.Property(persona => persona.Personality)
             .IsRequired()
-            .HasMaxLength(4000);
+            .HasMaxLength(CompanyFieldLengths.PersonaPersonality);
 
         builder.Property(persona => persona.Difficulty)
             .IsRequired()
             .HasConversion<string>()
-            .HasMaxLength(16)
+            .HasMaxLength(CompanyFieldLengths.PersonaDifficultyColumn)
             .HasDefaultValue(PersonaDifficulty.Medium);
 
         builder.Property(persona => persona.CreatedAt)

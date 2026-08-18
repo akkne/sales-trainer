@@ -166,6 +166,11 @@ public sealed class FollowUpReminderServiceTests
         callCount.Should().Be(2);
     }
 
+    /// <summary>
+    /// Gives up after <c>PublishMaxAttempts</c> tries (so two retries at the default), and the
+    /// company stays claimed rather than being retried next tick — the at-most-once contract:
+    /// dropping one reminder is preferred to risking a duplicate notification.
+    /// </summary>
     [Test]
     public async Task ProcessDueFollowUpsAsync_gives_up_after_exhausting_retries_on_a_persistent_publish_failure()
     {
@@ -185,8 +190,6 @@ public sealed class FollowUpReminderServiceTests
 
         var publishedCount = await _reminderService.ProcessDueFollowUpsAsync();
 
-        // Gives up after 3 attempts (2 retries), but the company stays claimed — at-most-once,
-        // not retried again this tick — matching the pre-existing "already claimed" contract.
         publishedCount.Should().Be(0);
         callCount.Should().Be(3);
 

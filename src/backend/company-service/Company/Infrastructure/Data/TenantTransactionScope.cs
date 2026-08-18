@@ -37,6 +37,11 @@ namespace Sellevate.Company.Infrastructure.Data;
 /// alternative (close the transaction, call the model, reopen) would need the reopened scope to
 /// re-read and re-validate the row anyway.
 /// </para>
+///
+/// <para>
+/// A non-relational provider — only the in-memory one the unit tests use — has neither transactions
+/// nor row-level security, so there is nothing to scope and every scope becomes a no-op.
+/// </para>
 /// </summary>
 internal sealed class TenantTransactionScope : IAsyncDisposable
 {
@@ -59,8 +64,6 @@ internal sealed class TenantTransactionScope : IAsyncDisposable
         CompanyDbContext databaseContext,
         CancellationToken cancellationToken)
     {
-        // IsRelational() is false only for the in-memory provider the unit tests use, which has no
-        // transactions and no row-level security — there is nothing to scope there.
         if (!databaseContext.Database.IsRelational() || databaseContext.Database.CurrentTransaction is not null)
         {
             return new TenantTransactionScope(null);

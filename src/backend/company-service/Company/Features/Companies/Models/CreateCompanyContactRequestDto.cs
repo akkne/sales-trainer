@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using Sellevate.Company.Common.Constants;
 
 namespace Sellevate.Company.Features.Companies.Models;
 
 public sealed record CreateCompanyContactRequestDto(
-    [Required][MaxLength(200)] string Name,
-    [MaxLength(200)] string? Position = null,
-    [MaxLength(2000)] string? Notes = null);
+    [Required][MaxLength(CompanyFieldLengths.Name)] string Name,
+    [MaxLength(CompanyFieldLengths.Position)] string? Position = null,
+    [MaxLength(CompanyFieldLengths.ContactNotes)] string? Notes = null);

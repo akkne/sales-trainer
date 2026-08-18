@@ -1,28 +1,10 @@
-using Sellevate.Company.Infrastructure.Configuration;
-
 namespace Sellevate.Company.Infrastructure.Ai;
 
+/// <summary>Registers <see cref="IBriefingAiClient"/> as a typed client against ai-service.</summary>
 public static class BriefingAiServiceCollectionExtensions
 {
-    private const string InternalServiceSecretHeaderName = "X-Internal-Service-Secret";
-
     public static IServiceCollection AddBriefingAiClient(
         this IServiceCollection services,
         IConfiguration configuration)
-    {
-        services.Configure<AiServiceConfiguration>(
-            configuration.GetSection(AiServiceConfiguration.SectionName));
-
-        services.AddHttpClient<IBriefingAiClient, BriefingAiClient>(httpClient =>
-        {
-            // Service-to-service auth: mirrors ai-service's InternalServiceAuthFilter, which
-            // rejects requests without this header once InternalAuth:ServiceSecret is configured
-            // (left open in dev/single-service mode when the secret is unset).
-            var internalServiceSecret = configuration["InternalAuth:ServiceSecret"];
-            if (!string.IsNullOrWhiteSpace(internalServiceSecret))
-                httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);
-        });
-
-        return services;
-    }
+        => services.AddInternalAiClient<IBriefingAiClient, BriefingAiClient>(configuration);
 }

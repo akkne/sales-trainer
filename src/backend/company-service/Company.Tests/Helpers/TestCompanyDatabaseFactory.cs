@@ -7,6 +7,16 @@ using CompanyEntity = Sellevate.Company.Features.Companies.Models.Company;
 
 namespace Sellevate.Company.Tests.Helpers;
 
+/// <summary>
+/// Builds <see cref="CompanyDbContext"/> instances for the unit tests and seeds rows into them.
+///
+/// <para>
+/// Every context gets the real <see cref="TenantSaveChangesInterceptor"/>, not a stand-in: it is what
+/// stamps <c>OrganizationId</c> on an entity <c>CompanyService</c> creates without naming one, and
+/// what raises <c>CrossTenantWriteException</c> on a foreign one. Leaving it out would make every
+/// tenancy test pass with <c>Guid.Empty</c>.
+/// </para>
+/// </summary>
 internal static class TestCompanyDatabaseFactory
 {
     /// <summary>
@@ -28,9 +38,6 @@ internal static class TestCompanyDatabaseFactory
         var options = new DbContextOptionsBuilder<CompanyDbContext>()
             .UseInMemoryDatabase(databaseName ?? $"company-tests-{Guid.NewGuid()}")
             .EnableSensitiveDataLogging()
-            // The real write guard, not a stand-in: it is what stamps OrganizationId on an entity
-            // CompanyService creates without naming one, and what raises CrossTenantWriteException
-            // on a foreign one. Leaving it out would make every unit test pass with Guid.Empty.
             .AddInterceptors(new TenantSaveChangesInterceptor(tenantContext))
             .Options;
 

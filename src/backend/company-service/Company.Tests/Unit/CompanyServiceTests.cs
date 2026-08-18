@@ -1,9 +1,11 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using NSubstitute;
 using NUnit.Framework;
+using Sellevate.Company.Features.Companies;
 using Sellevate.Company.Features.Companies.Exceptions;
 using Sellevate.Company.Features.Companies.Models;
 using Sellevate.Company.Features.Companies.Services.Implementation;
@@ -21,6 +23,7 @@ public sealed class CompanyServiceTests
     private IParseLogAiClient _parseLogAiClient = null!;
     private IPersonaAiClient _personaAiClient = null!;
     private IReadinessAiClient _readinessAiClient = null!;
+    private IOptions<CompanyServiceOptions> _serviceOptions = null!;
     private CompanyService _companyService = null!;
 
     private static readonly Guid FirstUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -35,7 +38,8 @@ public sealed class CompanyServiceTests
         _parseLogAiClient = Substitute.For<IParseLogAiClient>();
         _personaAiClient = Substitute.For<IPersonaAiClient>();
         _readinessAiClient = Substitute.For<IReadinessAiClient>();
-        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        _serviceOptions = Options.Create(new CompanyServiceOptions());
+        _companyService = new CompanyService(_databaseContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient, _serviceOptions);
     }
 
     [TearDown]
@@ -531,7 +535,7 @@ public sealed class CompanyServiceTests
         result.Should().NotBeNull();
         result!.Should().HaveCount(5);
         result.Should().OnlyHaveUniqueItems();
-        result[0].Should().Be("Newest Goal");
+        result![0].Should().Be("Newest Goal");
         result.Should().NotContain("Excluded Goal");
     }
 
@@ -656,12 +660,13 @@ public sealed class CompanyServiceTests
         result.Should().BeNull();
     }
 
+    /// <summary>
+    /// Create and update treat Position/Notes identically: both DTOs make them optional, and the
+    /// service normalizes an omitted value to the empty string rather than leaving it null.
+    /// </summary>
     [Test]
     public async Task UpdateContactAsync_defaults_position_and_notes_to_empty_when_omitted()
     {
-        // DTO nullability alignment: CreateCompanyContactRequestDto and UpdateCompanyContactRequestDto
-        // both treat Position/Notes as optional (nullable, default null), and the service normalizes
-        // an omitted value to "" the same way for both create and update.
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var contact = await _companyService.CreateContactAsync(
             FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван Петров", "Руководитель закупок", "Любит цифры"));
@@ -776,20 +781,21 @@ public sealed class CompanyServiceTests
         await act.Should().ThrowAsync<ContactNotFoundInCompanyException>();
     }
 
+    /// <summary>
+    /// The check-then-act race: the ownership check passes, then a concurrent request deletes the
+    /// contact before <c>SaveChangesAsync</c> commits, so Postgres rejects the insert on the
+    /// ContactId foreign key. The InMemory provider does not enforce foreign keys, so a
+    /// <c>SaveChangesInterceptor</c> reproduces that violation deterministically.
+    /// </summary>
     [Test]
     public async Task CreateCallLogEntryAsync_translates_DbUpdateException_on_ContactId_fk_race_into_ContactNotFoundInCompanyException()
     {
-        // Simulates the check-then-act race: EnsureContactBelongsToCompanyAsync's existence check
-        // passes, but the contact is deleted by a concurrent request before SaveChangesAsync
-        // commits, so Postgres would reject the insert with a ContactId FK violation. The
-        // InMemory provider doesn't enforce FKs, so a SaveChangesInterceptor simulates that
-        // violation deterministically for the entry being inserted here.
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
 
         using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(
             _databaseName, new ThrowOnCallLogContactIdInterceptor(contact!.Id));
-        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient, _serviceOptions);
         var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
 
         Func<Task> act = () => racingService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
@@ -809,7 +815,7 @@ public sealed class CompanyServiceTests
 
         using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(_databaseName,
             new ThrowOnCallLogContactIdInterceptor(contact!.Id));
-        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient, _serviceOptions);
         var updateRequest = new UpdateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
 
         Func<Task> act = () => racingService.UpdateCallLogEntryAsync(FirstUserId, company.Id, entry!.Id, updateRequest);
@@ -819,19 +825,21 @@ public sealed class CompanyServiceTests
         exception.Which.InnerException.Should().BeOfType<DbUpdateException>();
     }
 
+    /// <summary>
+    /// An unrelated <c>DbUpdateException</c> — a different constraint, not the ContactId foreign key
+    /// — must keep propagating as itself (a 500) rather than being mis-mapped to "contact not found"
+    /// (a 400). Mis-mapping it would hide real database failures from monitoring and blame the user.
+    /// </summary>
     [Test]
     public async Task CreateCallLogEntryAsync_does_not_translate_an_unrelated_DbUpdateException()
     {
-        // An unrelated DbUpdateException (different constraint, not the ContactId FK) must NOT be
-        // mis-mapped to "contact not found" -> 400 — it has to keep propagating as-is (-> 500),
-        // otherwise real database failures would be silently hidden from monitoring.
         var company = await TestCompanyDatabaseFactory.SeedCompanyAsync(_databaseContext, FirstUserId, "Test Company");
         var contact = await _companyService.CreateContactAsync(FirstUserId, company.Id, new CreateCompanyContactRequestDto("Иван"));
 
         using var racingContext = TestCompanyDatabaseFactory.CreateInMemoryWithInterceptor(
             _databaseName,
             new ThrowOnCallLogContactIdInterceptor(contact!.Id, SimulatedDbUpdateFailure.UnrelatedConstraintViolation));
-        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient);
+        var racingService = new CompanyService(racingContext, _briefingAiClient, _parseLogAiClient, _personaAiClient, _readinessAiClient, _serviceOptions);
         var request = new CreateCallLogEntryRequestDto("Иван", "pitch", "ok", DateTime.UtcNow, contact.Id);
 
         Func<Task> act = () => racingService.CreateCallLogEntryAsync(FirstUserId, company.Id, request);
@@ -929,6 +937,10 @@ public sealed class CompanyServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// The service lets the AI failure out rather than caching a placeholder; the controller turns
+    /// this exception into a 503 (<c>CompanyController.GenerateBriefing</c>).
+    /// </summary>
     [Test]
     public async Task GenerateBriefingAsync_propagates_ai_failure_and_leaves_cache_unchanged()
     {
@@ -939,7 +951,6 @@ public sealed class CompanyServiceTests
 
         var act = () => _companyService.GenerateBriefingAsync(FirstUserId, company.Id);
 
-        // The controller maps this exception to a 503 response (see CompanyController.GenerateBriefing).
         await act.Should().ThrowAsync<InvalidOperationException>();
 
         var cached = await _companyService.GetBriefingAsync(FirstUserId, company.Id);
@@ -1092,7 +1103,7 @@ public sealed class CompanyServiceTests
 
         results.Should().NotBeNull();
         results!.Should().HaveCount(2);
-        results[0].Id.Should().Be(newest!.Id);
+        results![0].Id.Should().Be(newest!.Id);
     }
 
     [Test]
@@ -1305,6 +1316,11 @@ public sealed class CompanyServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// A transport or AI failure must not be confused with a "no feedback yet" result: neither the
+    /// positive cache nor the negative one may be written, and the exception reaches the controller,
+    /// which turns it into a 503 (<c>CompanyController.GetReadiness</c>).
+    /// </summary>
     [Test]
     public async Task GetReadinessAsync_propagates_ai_failure_and_leaves_cache_unchanged()
     {
@@ -1317,11 +1333,8 @@ public sealed class CompanyServiceTests
 
         var act = () => _companyService.GetReadinessAsync(FirstUserId, company.Id);
 
-        // The controller maps this exception to a 503 response (see CompanyController.GetReadiness).
         await act.Should().ThrowAsync<InvalidOperationException>();
 
-        // Neither the positive cache nor the negative ("no feedback") cache should have been
-        // written — a transport/AI failure must not be confused with a "no feedback yet" result.
         var persisted = await _databaseContext.Companies.FindAsync(company.Id);
         persisted!.ReadinessJson.Should().BeNull();
         persisted.ReadinessGeneratedAt.Should().BeNull();
@@ -1346,8 +1359,6 @@ public sealed class CompanyServiceTests
         secondResult.Should().NotBeNull();
         secondResult!.Score.Should().BeNull();
 
-        // The second call must be served from the negative cache — it must NOT re-fan-out to
-        // ai-service (which would itself re-run the sequential Mongo reads across sessions).
         await _readinessAiClient.Received(1).GenerateReadinessAsync(
             Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
 
@@ -1356,6 +1367,10 @@ public sealed class CompanyServiceTests
         persisted.ReadinessNoFeedbackUntil.Should().BeAfter(DateTime.UtcNow);
     }
 
+    /// <summary>
+    /// A new practice call is this codebase's practice-completion signal, so creating one must
+    /// invalidate the cached readiness score and let the next read regenerate it.
+    /// </summary>
     [Test]
     public async Task CreatePracticeCallAsync_invalidates_cached_readiness_so_next_get_regenerates_it()
     {
@@ -1367,7 +1382,6 @@ public sealed class CompanyServiceTests
             .Returns(new ReadinessAiResult(40, [], [], "Первая рекомендация."));
         await _companyService.GetReadinessAsync(FirstUserId, company.Id);
 
-        // A new practice call is the completion signal that should invalidate the cache.
         await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
             new CreatePracticeCallRequestDto("session-2", "goal 2"));
         _readinessAiClient
@@ -1383,6 +1397,11 @@ public sealed class CompanyServiceTests
             Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// The first read negative-caches "no feedback yet". A new practice call is the signal that
+    /// feedback might now exist, so it has to clear that negative cache too — not only the positive
+    /// <c>ReadinessJson</c> one — or the score would stay blank until the TTL expired.
+    /// </summary>
     [Test]
     public async Task CreatePracticeCallAsync_clears_negative_readiness_cache_so_next_get_refanouts()
     {
@@ -1392,11 +1411,8 @@ public sealed class CompanyServiceTests
         _readinessAiClient
             .GenerateReadinessAsync(Arg.Any<ReadinessAiRequest>(), Arg.Any<CancellationToken>())
             .Returns((ReadinessAiResult?)null);
-        // Negative-cache the "no feedback yet" result.
         await _companyService.GetReadinessAsync(FirstUserId, company.Id);
 
-        // A new practice call completing is the signal that feedback might now exist — it must
-        // clear the negative cache too, not just the positive ReadinessJson cache.
         await _companyService.CreatePracticeCallAsync(FirstUserId, company.Id,
             new CreatePracticeCallRequestDto("session-2", "goal 2"));
         _readinessAiClient
@@ -1423,7 +1439,8 @@ internal enum SimulatedDbUpdateFailure
     ContactIdForeignKeyViolation,
 
     /// <summary>
-    /// An unrelated failure (e.g. a different constraint, a transient error) that happens to also
+    /// An unrelated failure (SqlState 23505, a unique violation on some other constraint, or a
+    /// transient error) that happens to also
     /// be a <see cref="DbUpdateException"/> with a <see cref="PostgresException"/> inner exception,
     /// but must NOT be translated into <see cref="ContactNotFoundInCompanyException"/> — it should
     /// keep propagating so it surfaces as a real 500 instead of a mis-mapped 400.
@@ -1463,8 +1480,6 @@ internal sealed class ThrowOnCallLogContactIdInterceptor(
                 SimulatedDbUpdateFailure.ContactIdForeignKeyViolation =>
                     (PostgresErrorCodes.ForeignKeyViolation, ContactIdForeignKeyConstraintName),
                 SimulatedDbUpdateFailure.UnrelatedConstraintViolation =>
-                    // 23505 = unique_violation on some unrelated constraint — same DbUpdateException/
-                    // PostgresException shape, but not the ContactId FK, so it must not be translated.
                     (PostgresErrorCodes.UniqueViolation, "IX_CompanyContacts_SomeUnrelatedIndex"),
                 _ => throw new ArgumentOutOfRangeException(nameof(failureMode))
             };
