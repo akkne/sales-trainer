@@ -15,7 +15,11 @@ namespace Sellevate.Learning.Infrastructure.Ai;
 /// </summary>
 public interface IAiContentPipelineClient
 {
-    Task<ContentStructureDto> StructureAsync(
+    /// <summary>
+    /// Phase 40.28: returns the sufficiency verdict alongside the structure. One call, two answers —
+    /// the model reads the material once and both questions are about that reading.
+    /// </summary>
+    Task<AiStructuredMaterial> StructureAsync(
         AiStructureMaterialRequest request,
         CancellationToken cancellationToken = default);
 

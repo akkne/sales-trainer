@@ -21,13 +21,13 @@ internal sealed class AiContentPipelineClient(
 
     private readonly AiServiceConfiguration _configuration = configurationOptions.Value;
 
-    public Task<ContentStructureDto> StructureAsync(
+    public Task<AiStructuredMaterial> StructureAsync(
         AiStructureMaterialRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return PostAsync<AiStructureMaterialRequest, ContentStructureDto>(
+        return PostAsync<AiStructureMaterialRequest, AiStructuredMaterial>(
             _configuration.ContentStructurePath, request, cancellationToken);
     }
 

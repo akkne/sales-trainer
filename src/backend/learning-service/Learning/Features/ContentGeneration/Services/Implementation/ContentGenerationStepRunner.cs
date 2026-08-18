@@ -166,6 +166,7 @@ internal sealed class ContentGenerationStepRunner(
                 claimedJob.Status,
                 claimedJob.Title,
                 claimedJob.SourceMaterial,
+                claimedJob.StructuredMaterialLength,
                 claimedJob.Structure,
                 claimedJob.ApprovedBy,
                 claimedJob.ProducedLessonId);
@@ -175,15 +176,37 @@ internal sealed class ContentGenerationStepRunner(
         ClaimedContentGenerationJob claim,
         CancellationToken cancellationToken)
     {
+        // Phase 40.28. A run that was refused and has since been given more material is resumed, not
+        // restarted: only the part of the material nobody has read yet is sent, and what is already
+        // known travels as the known structure the prompt is told to keep rather than rewrite. A РОП
+        // arguing with «нет ни одного возражения» pays for reading their objections list, not for
+        // reading the fifty-page deck a second time.
+        var alreadyStructuredLength = Math.Clamp(
+            claim.StructuredMaterialLength, 0, claim.SourceMaterial.Length);
+        var materialToRead = claim.SourceMaterial[alreadyStructuredLength..];
+
         // Seeded from the profile so a customer who already filled the form in is not asked the same
         // seven questions again, and so the model is told to fill gaps rather than to contradict a
-        // human. An empty profile is sent as nothing at all rather than as an object of nulls.
-        var profileSeed = ContentStructureDto.FromProfile(
-            await organizationProfileProvider.GetCurrentAsync(cancellationToken));
+        // human. An empty profile is sent as nothing at all rather than as an object of nulls. On a
+        // resumed run the seed is the run's own structure instead — it already contains the profile's
+        // contribution and, more importantly, the reviewer's.
+        var knownStructure = claim.Structure is not null
+            ? ContentStructureDocumentSerializer.Deserialize(claim.Structure)
+            : ContentStructureDto.FromProfile(
+                await organizationProfileProvider.GetCurrentAsync(cancellationToken));
 
-        var structure = await aiContentPipelineClient.StructureAsync(
-            new AiStructureMaterialRequest(claim.SourceMaterial, profileSeed.IsEmpty ? null : profileSeed),
+        var structured = await aiContentPipelineClient.StructureAsync(
+            new AiStructureMaterialRequest(materialToRead, knownStructure.IsEmpty ? null : knownStructure),
             cancellationToken);
+
+        var structure = structured.Structure ?? ContentStructureDto.Empty;
+
+        // Phase 40.28, stage two: the structure is the honest signal. Length said the material was
+        // worth reading; what could actually be read out of it says whether four good exercises can
+        // be built. The model's opinion arrived in the same completion and can add a refusal here —
+        // it is the only judge able to recognise a recipe that happens to mention a price — but it
+        // cannot lift one, or a confident completion would be all it took to bypass the threshold.
+        var insufficiency = ContentSufficiencyInspector.InspectStructure(structure, structured.Sufficiency);
 
         await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
 
@@ -201,7 +224,19 @@ internal sealed class ContentGenerationStepRunner(
         var now = DateTime.UtcNow;
         job.Structure = ContentStructureDocumentSerializer.Serialize(structure);
         job.StructuredAt = now;
-        job.Status = ContentGenerationJobStatuses.AwaitingReview;
+
+        // Recorded whichever way the verdict went: the material has been read and paid for, and if
+        // the run is refused and later resumed, this is what stops it being read again.
+        job.StructuredMaterialLength = job.SourceMaterial.Length;
+
+        job.Status = insufficiency is null
+            ? ContentGenerationJobStatuses.AwaitingReview
+            : ContentGenerationJobStatuses.Insufficient;
+
+        job.Insufficiency = insufficiency is null
+            ? null
+            : ContentInsufficiencyDocumentSerializer.Serialize(insufficiency);
+
         job.ClaimedAt = null;
         job.FailureReason = null;
         job.UpdatedAt = now;
@@ -209,9 +244,23 @@ internal sealed class ContentGenerationStepRunner(
         await databaseContext.SaveChangesAsync(cancellationToken);
         await tenantScope.CommitAsync(cancellationToken);
 
-        logger.LogInformation(
-            "Content generation run reached the review checkpoint JobId={JobId} Objections={ObjectionCount} ScriptStages={ScriptStageCount}",
-            claim.JobId, structure.Objections.Count, structure.ScriptStages.Count);
+        if (insufficiency is null)
+        {
+            logger.LogInformation(
+                "Content generation run reached the review checkpoint JobId={JobId} Objections={ObjectionCount} ScriptStages={ScriptStageCount}",
+                claim.JobId, structure.Objections.Count, structure.ScriptStages.Count);
+        }
+        else
+        {
+            // Logged at Information, not Warning: refusing thin material is the feature working, not
+            // a fault. A run of these lines against one organization is, however, the signal that
+            // their onboarding never told them what to upload.
+            logger.LogInformation(
+                "Content generation run refused for thin material JobId={JobId} Gaps={Gaps} ModelNote={ModelNote}",
+                claim.JobId,
+                string.Join(",", insufficiency.Gaps.Select(gap => gap.Code)),
+                insufficiency.Note);
+        }
     }
 
     private async Task RunGenerationAsync(
@@ -469,6 +518,7 @@ internal sealed class ContentGenerationStepRunner(
         string Status,
         string Title,
         string SourceMaterial,
+        int StructuredMaterialLength,
         string? Structure,
         Guid? ApprovedBy,
         Guid? ProducedLessonId);
