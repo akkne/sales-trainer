@@ -20,5 +20,12 @@ public enum NotificationType
     // that exists precisely because the first two were ignored.
     AssignmentIssued = 10,
     AssignmentDeadlineApproaching = 11,
-    AssignmentReminder = 12
+    AssignmentReminder = 12,
+
+    // Phase 40.25 — the feedback loop (docs/TENANCY/ASSIGNMENTS.md §4.1). Two values for the same
+    // reason the assignment family has three: "your РОП commented on your call" and "your dispute
+    // was ruled on" are read completely differently, and the second only exists because somebody
+    // asked a question they are waiting on an answer to.
+    DialogReviewCommented = 13,
+    DialogReviewResolved = 14
 }

@@ -12,6 +12,7 @@ public static class AssignmentServiceCollectionExtensions
         services.Configure<AssignmentOptions>(configuration.GetSection(AssignmentOptions.SectionName));
 
         services.AddScoped<IAssignmentService, AssignmentService>();
+        services.AddScoped<IAssignmentDashboardService, AssignmentDashboardService>();
         services.AddScoped<IAssignmentThresholdEvaluator, AssignmentThresholdEvaluator>();
         services.AddScoped<IAssignmentAudienceResolver, AssignmentAudienceResolver>();
         services.AddScoped<IMyAssignmentService, MyAssignmentService>();

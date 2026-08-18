@@ -60,6 +60,8 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.AssignmentIssued => MapAssignmentIssued(envelope),
             Topics.AssignmentDeadlineApproaching => MapAssignmentDeadlineApproaching(envelope),
             Topics.AssignmentReminder => MapAssignmentReminder(envelope),
+            Topics.DialogReviewCommented => MapDialogReviewCommented(envelope),
+            Topics.DialogReviewResolved => MapDialogReviewResolved(envelope),
             _ => null
         };
     }
@@ -299,6 +301,77 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             $"{payload.AssignmentId}:{payload.RequestedAt:O}",
             SendEmail: true);
     }
+
+    /// <summary>
+    /// Phase 40.25. The body opens with the quoted lines, because those lines are the whole reason
+    /// the note exists — a notification announcing that feedback exists elsewhere is feedback
+    /// nobody reads.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewCommented(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewCommentedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Comment))
+        {
+            return null;
+        }
+
+        var quote = payload.QuotedText?.Trim();
+        var body = string.IsNullOrEmpty(quote)
+            ? payload.Comment.Trim()
+            : $"«{Shorten(quote)}» — {payload.Comment.Trim()}";
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.DialogReviewCommented,
+            NotificationTitles.DialogReviewCommented,
+            body,
+            NotificationActionRoutes.DialogReview(payload.NoteId),
+            // The note itself. A note is written once and never edited, so a second event with this
+            // key is a Kafka redelivery and collapsing it is correct.
+            payload.NoteId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.25. Names the outcome in the first sentence. «Рассмотрено» on its own would be the
+    /// same silence the dispute mechanism exists to replace.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewResolved(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewResolvedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Outcome))
+        {
+            return null;
+        }
+
+        var upheld = string.Equals(payload.Outcome, "upheld", StringComparison.OrdinalIgnoreCase);
+        var body = upheld
+            ? payload.AdjustedScore is { } adjusted
+                ? $"РОП согласился: оценка должна была быть {adjusted} вместо {payload.DisputedScore}."
+                : "РОП согласился с вами: оценка была выставлена неверно."
+            : "РОП посмотрел запись — оценка остаётся прежней.";
+
+        var resolution = payload.Resolution?.Trim();
+        if (!string.IsNullOrEmpty(resolution))
+        {
+            body += $" {resolution}";
+        }
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.DialogReviewResolved,
+            NotificationTitles.DialogReviewResolved,
+            body,
+            NotificationActionRoutes.DialogReview(payload.NoteId),
+            // A dispute is ruled on once — the service refuses to re-resolve a closed row — so the
+            // note id alone is the whole key.
+            payload.NoteId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>Keeps a quoted fragment to one readable line in an inbox and an email subject-adjacent body.</summary>
+    private static string Shorten(string text)
+        => text.Length <= 160 ? text : text[..157].TrimEnd() + "…";
 
     private static CreateNotificationRequest? MapCompanyFollowUpDue(EventEnvelope envelope)
     {

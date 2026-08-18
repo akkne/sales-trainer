@@ -17,4 +17,10 @@ public static class NotificationTitles
     public const string AssignmentIssued = "Вам назначено задание";
     public const string AssignmentDeadlineApproaching = "Дедлайн задания приближается";
     public const string AssignmentReminder = "Напоминание о задании";
+
+    /// <summary>Phase 40.25. The РОП commented on a fragment of the recipient's practice call.</summary>
+    public const string DialogReviewCommented = "РОП прокомментировал ваш разговор";
+
+    /// <summary>Phase 40.25. The РОП ruled on a disputed AI score.</summary>
+    public const string DialogReviewResolved = "Ваше оспаривание оценки рассмотрено";
 }

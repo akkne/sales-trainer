@@ -2,9 +2,15 @@
 
 **Status:** §1 is **built** (Phase 40.21 — the entity, its progress table and the РОП's CRUD), so is
 §1.1 (Phase 40.22 — the completion-rule vocabulary and its evaluation), so is §1.3 (Phase 40.23 —
-issuing, the manager's screen and the three notices), and so is **§2.1 (Phase 40.24 — automatic
-repeats)**. Everything else on this page is still design: §2/§3 the AI pipeline is Stage F (40.27+),
-§4 the dashboard is 40.25, §5's non-completion push is 40.26.
+issuing, the manager's screen and the three notices), so is §2.1 (Phase 40.24 — automatic repeats),
+and so is **§4 and §4.1 (Phase 40.25 — the funnel, the heat map, the quotes and the two-way loop)**,
+as API and as data. Everything else on this page is still design: §2/§3 the AI pipeline is Stage F
+(40.27+), and §5's non-completion push is 40.26.
+
+**One thing to read §4 with:** 40.25 shipped the whole of it as endpoints and one new table, and the
+РОП has no screen to see any of it on. The admin panel split is 40.20 and it is waiting on the
+owner's design — the same reason 40.15–40.24 shipped without a frontend. What did ship on the
+manager's side is the half that is theirs: the dispute button and the review inbox.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [CONTENT_MODEL.md](CONTENT_MODEL.md).
 Schema as built: [DB_SCHEMA.md](../DB_SCHEMA.md#assignments-assignmentprogressrecords).
@@ -314,6 +320,56 @@ The last one is underrated. «68 баллов» is not actionable to a РОП. T
 gave away the price *is* — it is ready-made material for Monday's team meeting. That is the feature
 that makes them open the product every week rather than every quarter.
 
+#### What 40.25 built for §4, and the six things that change how the rest of this page reads
+
+Three endpoints and one table. Nine forks are recorded with their rejected alternatives in
+[DECISIONS.md](../DECISIONS.md) (2026-08-18); these are the ones that change what the paragraphs
+above and below mean.
+
+- **The funnel has five stages, not four, and the fifth is the whole point.** `GET
+  /admin/assignments/{id}/dashboard` reports assigned, not started, started, completed *and*
+  `failedThresholdCount` separately. §1.1 argues that «начал, пробовал 4 раза, не дотянул» is the
+  most valuable row on the screen; a four-stage funnel ending at "completed" puts those people back
+  among the people who never started, which is the exact collapse 40.22 separated the two states to
+  prevent — reintroduced by the screen that exists to show it. The rows come back named and ordered
+  worst-standing first, so the screen opens on the people something needs doing about.
+- **A leaver is marked rather than deleted or counted, which closes the cost §1.3 recorded.** The
+  dashboard asks identity-service who still holds an active membership and annotates each row, then
+  reports `leftOrganizationCount` and `assignedActiveCount` next to the raw counts. The row itself
+  still stays — it is the record that somebody was asked — but the arithmetic no longer punishes a
+  team for somebody's departure. Filtering leavers out entirely was rejected: a five-person team
+  where two people left is a different situation from a three-person team, and the РОП is the one
+  who knows which they are looking at. **This roster read is fail-open**, unlike the one at issue
+  time: `null` means "we could not check", which is not zero, and the funnel is still true without
+  it.
+- **The wave series is on the same response.** A repeat is its own row with its own funnel (§2.1),
+  and the dashboard returns every wave of the series with its own five counts. That comparison is
+  the entire reason 40.24 built waves as separate rows; making it a second request would make it a
+  comparison nobody performs.
+- **«Этап воронки продаж» is `Skill.Stage`, the vocabulary the skill tree already has.** `GET
+  /admin/team/skill-map` returns one matrix read along both axes the roadmap asks for: per team,
+  accuracy per skill; per manager, the stage they sag on. company-service's `CompanyStatus` pipeline
+  (39.10) was rejected for it — that is a *deal* pipeline, where a company sits in a rep's CRM, and
+  the question here is about a *conversation*. A cell below five attempts reports no percentage at
+  all, because two right answers out of two is 100% and is a fact about nobody.
+- **The quotes come from ai-service and learning-service never reads Mongo.** `GET
+  /admin/dialog-sessions` lists the team's *graded* conversations filtered by manager, scenario and
+  an upper bound on the grade — «покажи разговоры на 4 и ниже» is a list somebody takes to a
+  meeting — and `GET /admin/dialog-sessions/{id}` returns the transcript with per-message indexes a
+  quote can point at. `IDialogSessionRepository` stays the single holder of the collection (§1.6 of
+  [TENANCY.md](TENANCY.md)); the screen asks each service for what it owns.
+- **`GET /admin/assignments/{id}/progress` is unchanged and stays.** It is the raw, name-free list,
+  and the only one of the two that cannot be affected by identity-service being unavailable.
+
+**«Метрики воронки заданий — в `analytics-service`»** resolved to two platform-wide Prometheus
+counters — `app_assignments_issued_total` and `app_assignment_progress_total{state}` — fed by
+`assignment.issued` and a new `assignment.progress.changed`. It is a counter and not a projection
+because [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md) settled the governing rule in 40.16:
+analytics is Redis-only, stores no attempts and carries no organization label, since a customer id
+as a Prometheus label puts identities and unbounded cardinality into the monitoring store. Analytics
+therefore answers *is anybody doing assignments at all*, and the funnel with names stays in
+learning-service where the rows are.
+
 ### 4.1 Two-way feedback
 
 - The РОП can select a fragment of a dialogue, comment on it, and send it to the manager.
@@ -322,6 +378,53 @@ that makes them open the product every week rather than every quarter.
 Without the second mechanism, AI grading is a black box, and the first genuinely disputed score
 destroys the team's trust in every number the product shows. A dispute path also generates exactly
 the labelled data needed to tune the grading prompts.
+
+#### What 40.25 built for §4.1, and the four choices that carry it
+
+**One table, `DialogReviewNotes`, with a `Kind`** — `coaching_note` (РОП → manager, closed by being
+read) and `score_dispute` (manager → РОП, closed by a verdict). They are the same object seen from
+either end: an annotation on a fragment of one conversation, written by one party and closed by the
+other, sharing a session, a quoted fragment, a comment, an author, a subject and a resolution. Two
+tables would have duplicated all six and given the tenant column, the policy, the frozen-quote copy
+and the freeze rules two places each to be got right. What genuinely differs is which words close a
+row, and that is a check constraint rather than a second schema.
+
+**It lives in learning-service, and nothing in it reads ai-service.** The conversation is a Mongo
+document one service away, so the obvious home looks like ai-service; the disputed *number* is a
+`UserDialogScores` row, which is here and is the value that actually drives an assignment's
+threshold. Every write starts from that row: the session id, the manager, the scenario and the grade
+are read out of learning-db rather than taken from the request. That is what makes "the РОП cannot
+address a note at somebody else's employee" a property of the query — a session belonging to another
+organization does not exist to the code that would write the row — and it is why an *ungraded*
+conversation cannot be annotated at all, which is the right refusal rather than a limitation.
+
+**The quoted fragment is copied into the row, not referenced.** The whole use for it is three lines
+on Monday morning; a note that renders empty because ai-service is slow, or because retention
+eventually trims old sessions, is a note that failed at the only moment it mattered. The message
+indexes are stored alongside so the fragment can still be found in context while the session exists.
+
+**An upheld dispute records a corrected score and does not apply it.** 40.22 made every progress
+number derived from attempt rows and recomputed on every event, so a hand-edited score would be
+overwritten by the next redelivery — and, worse, a threshold that can be argued down by the person
+being measured is the four-minute completion §1.1 exists to make unreachable, reached by another
+route. Whether an upheld dispute should eventually move a grade is a product decision with money and
+trust on both sides, and it is in [DONT_FORGET.md](../DONT_FORGET.md) rather than guessed at. The
+labelled data the roadmap wants is extracted by
+[`docs/TENANCY/sql/40.25_dialog_reviews_verify.sql`](sql/40.25_dialog_reviews_verify.sql) §6.
+
+Two smaller rules with the same shape. **Rejecting a dispute requires a reason and upholding one does
+not** — "the grade stands, because" is the sentence that keeps the mechanism from being a rubber
+stamp, and agreement needs no defence; both outcomes notify the manager, because a dispute closed in
+silence recreates the black box. And **one open dispute per conversation**, by partial unique index:
+a queue that can be flooded with duplicates of one complaint is a queue the РОП stops opening. It is
+partial, so the same call may be disputed again after a verdict.
+
+Two things this does **not** have, both stated plainly because both look like bugs from the outside.
+**The РОП gets no push when a dispute arrives** — notifications are addressed to a user id and
+nothing in the platform can enumerate an organization's administrators; the dispute lands in the
+queue the dashboard reads, and the push belongs with 40.26. And **the РОП has no screen** for any of
+§4 or §4.1; the manager's half — the dispute button in the feedback modal and the `/dialog-reviews`
+inbox — did ship. Both are in [DONT_FORGET.md](../DONT_FORGET.md).
 
 ---
 

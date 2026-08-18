@@ -761,6 +761,83 @@ Indexes: `IX_UserDialogScores_OrganizationId_UserId_SessionId` (**UNIQUE**),
 
 ---
 
+### `DialogReviewNotes`
+
+Phase 40.25. One annotation on one graded conversation: either the РОП coaching a manager on a
+quoted fragment of it (`coaching_note`), or the manager saying the AI graded them wrongly
+(`score_dispute`) — docs/TENANCY/ASSIGNMENTS.md §4.1. One table for both directions rather than two,
+because they share a session, a quoted fragment, a comment, an author, a subject and a resolution;
+what differs is who may close the row and with which word, which is a check constraint below rather
+than a second schema. Alternatives are in [DECISIONS.md](DECISIONS.md) (2026-08-18).
+
+**Strict tenant data, plain-equality RLS.** A conversation and everything said about it happen inside
+one organization, so `OrganizationId` is `NOT NULL` and the policy is plain equality — never the
+content tables' `IS NULL OR = current`. A global row here would mean one customer's manager arguing
+about a grade in front of every other customer.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `Id` | `uuid` | NOT NULL | PK |
+| `OrganizationId` | `uuid` | NOT NULL | RLS, plain equality |
+| `Kind` | `varchar(20)` | NOT NULL | `coaching_note` \| `score_dispute`; default `coaching_note`; `CK_DialogReviewNotes_Kind`. Immutable once written |
+| `SessionId` | `varchar(64)` | NOT NULL | ai-service's session id, copied from the `UserDialogScores` row for it. Same width as `UserDialogScores.SessionId`. **Not a foreign key** (see below). `CK_DialogReviewNotes_SessionId` (non-blank) |
+| `DialogModeKey` | `varchar(100)` | NOT NULL | Copied from the score row, denormalized so "which prompts do managers argue with" is one query over this table rather than a join into ai-service |
+| `SubjectUserId` | `uuid` | NOT NULL | Whose conversation it is — the manager. Resolved from the score row, never from the request |
+| `AuthorUserId` | `uuid` | NOT NULL | Who wrote the row: the РОП for a coaching note, the manager for a dispute. `CK_DialogReviewNotes_Author`: equal to `SubjectUserId` whenever `Kind = 'score_dispute'` |
+| `QuotedFromMessageIndex` | `integer` | NULL | First message of the quoted fragment; null when the note is about the conversation as a whole |
+| `QuotedToMessageIndex` | `integer` | NULL | Last message of the quoted fragment, inclusive |
+| `QuotedText` | `varchar(8000)` | NULL | A frozen copy of the quoted lines, kept even though the transcript is one service away — retention/latency must not turn Monday's coaching note into three empty lines |
+| `Comment` | `varchar(4000)` | NOT NULL | The РОП's coaching, or the manager's reason for disputing. `CK_DialogReviewNotes_Comment` (non-blank) |
+| `DisputedScore` | `integer` | NULL | The 0–100 grade being argued about, frozen at write time |
+| `Status` | `varchar(20)` | NOT NULL | Default `open`; `CK_DialogReviewNotes_Status` (below) |
+| `Resolution` | `varchar(4000)` | NULL | The РОП's verdict in their own words; required by the service when a dispute is rejected |
+| `AdjustedScore` | `integer` | NULL | What the grade should have been, 0–100, set only when a dispute is upheld. Never written back to `UserDialogScores` |
+| `ResolvedBy` | `uuid` | NULL | Who closed it: the manager for a note, the РОП for a dispute |
+| `ResolvedAt` | `timestamptz` | NULL | |
+| `CreatedAt` | `timestamptz` | NOT NULL | |
+| `UpdatedAt` | `timestamptz` | NOT NULL | |
+
+Indexes: `IX_DialogReviewNotes_OrganizationId_SubjectUserId_Status` (the manager's inbox),
+`IX_DialogReviewNotes_OrganizationId_Kind_Status_CreatedAt` (the РОП's queue — kind before status,
+because the queue is always asked for one kind at a time), `IX_DialogReviewNotes_OrganizationId_SessionId`
+(everything ever said about one conversation).
+
+> **`UX_DialogReviewNotes_OpenDisputePerSession`** — a **unique partial index** on
+> `("OrganizationId", "SessionId") WHERE "Kind" = 'score_dispute' AND "Status" = 'open'`. At most one
+> unreviewed dispute per conversation: a queue that fills with duplicates of one complaint is a queue
+> the РОП stops opening, and the whole mechanism only works while they keep opening it. Partial, so the
+> same conversation may be disputed again after a verdict — someone told "the grade stands" who then
+> finds new evidence is not spamming.
+
+Check constraints: `CK_DialogReviewNotes_Kind` (`Kind IN ('coaching_note','score_dispute')`);
+`CK_DialogReviewNotes_Status` (a coaching note may only be `open`/`acknowledged`, a dispute only
+`open`/`upheld`/`rejected` — a coaching note cannot be "upheld" and a dispute cannot be closed by being
+read, because those two words are what separate a review from an acknowledgement);
+`CK_DialogReviewNotes_Author` (`Kind <> 'score_dispute' OR AuthorUserId = SubjectUserId` — asserted in
+one direction only, so a РОП who also practises may still write a note on their own conversation);
+`CK_DialogReviewNotes_Comment` / `CK_DialogReviewNotes_SessionId` (non-blank, trimmed);
+`CK_DialogReviewNotes_Quote` (both indexes non-negative, `to >= from` when both are present);
+`CK_DialogReviewNotes_Scores` (`DisputedScore`/`AdjustedScore` each 0–100, and `AdjustedScore` only
+when `Status = 'upheld'`); `CK_DialogReviewNotes_CoachingNoteQuote` (a coaching note requires a
+non-blank `QuotedText` — its entire product value is the three lines the РОП is taking to Monday's
+meeting).
+
+> **`SessionId` is not a foreign key, and never can be: the conversation is a Mongo document in
+> ai-service.** What makes the value trustworthy is that nothing writes it from a request — every
+> insert copies it from the `UserDialogScores` row for that session, which is itself under row-level
+> security, so a session belonging to another organization does not exist to the code that would write
+> it here.
+
+**No backfill, no maintenance window, no concurrent-index script** — the table is created empty by
+this migration, so all three ordinary indexes and the partial unique index are built over zero rows
+and the `ACCESS EXCLUSIVE` lock costs nothing. Nothing could be backfilled either: no coaching note or
+dispute has ever existed anywhere to copy from.
+
+Verification script: [docs/TENANCY/sql/40.25_dialog_reviews_verify.sql](TENANCY/sql/40.25_dialog_reviews_verify.sql)
+(read-only, never executed).
+
+---
+
 ### `Exercises`
 
 | Column              | Type                       | Nullable | Notes                                                                         |

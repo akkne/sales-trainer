@@ -87,6 +87,30 @@ public sealed record AssignmentReminderEvent(
     DateTime? Deadline,
     DateTime RequestedAt);
 
+/// <summary>Published by learning-service when the РОП comments on a fragment of somebody's
+/// practice conversation (Phase 40.25). The quoted lines travel with the event rather than being
+/// fetched, because this service has no database beyond its inbox and because a notice reading
+/// "you have a comment" is one more thing to ignore.</summary>
+public sealed record DialogReviewCommentedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string? QuotedText,
+    string Comment);
+
+/// <summary>Published by learning-service when the РОП rules on a disputed AI score (Phase 40.25).
+/// <see cref="Outcome"/> travels because "upheld" and "rejected" read completely differently to the
+/// person who filed it, and a notice that says only "reviewed" recreates the black box the dispute
+/// mechanism exists to open.</summary>
+public sealed record DialogReviewResolvedEvent(
+    Guid NoteId,
+    Guid UserId,
+    string SessionId,
+    string Outcome,
+    int? DisputedScore,
+    int? AdjustedScore,
+    string? Resolution);
+
 // User-profile replica events — consumed to resolve a recipient's email/display name locally
 // (the notification service has no database, so the replica is held in Redis).
 public sealed record UserRegisteredEvent(Guid UserId, string Email, string DisplayName, string? AvatarKey);

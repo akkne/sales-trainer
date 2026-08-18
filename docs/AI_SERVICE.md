@@ -154,6 +154,41 @@ the `CK_DialogModes_OverrideHasOwner` constraint, and `AdminDialogOverridesContr
 - **Not in this block:** the review screen (no frontend was touched — 40.20), and prompt
   parameterization from an organization profile (40.19).
 
+### The РОП reads the team's transcripts (Phase 40.25)
+
+The roadmap's «цитаты из диалогов, а не только цифры»: `AdminDialogSessionsController`, under
+`RequireOrgAdmin` and `[TenantTransaction]`, serves an organization administrator two routes.
+
+- `GET /admin/dialog-sessions?userId=&modeId=&maxScore=&limit=` — the team's **graded** conversations,
+  newest first. `maxScore` is the parameter that makes the list usable: «покажи разговоры на 4 и
+  ниже» is a list somebody takes to a meeting, «покажи все разговоры» is not. Abandoned sessions are
+  excluded — no feedback, no score, nothing to quote against.
+- `GET /admin/dialog-sessions/{sessionId}` — one transcript, with an explicit **index** on every
+  message. A quoted fragment has to be citable after the fact, and a quote that names only its text
+  cannot survive the same sentence being said twice.
+
+Two things about where this sits.
+
+**`IDialogSessionRepository` grew two methods rather than a second reader appearing.** The screen
+these serve is the РОП's assignment dashboard, which lives in learning-service, so the tempting shape
+is a learning-service query straight into `dialog_sessions`. That would be a second holder of the
+Mongo tenant filter, which is the one thing the repository exists to prevent (§ Multi-tenancy above);
+`AiTenancyModelTests` greps the source tree for a second `GetCollection<DialogSession>` and would
+fail the build. The screen asks each service for what it owns instead. A learning-service proxy that
+re-serves transcripts was also rejected — it keeps the single holder and adds a second copy of every
+transcript in flight and a second place for the tenant header to be dropped, for no gain over the
+browser making two calls.
+
+**It is a separate controller from `AdminDialogController`**, for the reason that file already
+records: that one authors the shared prompt library and is platform-staff-only, and stacking a second
+`[Authorize]` on an action there would AND the two policies rather than OR them — an organization
+administrator would be refused by code that reads as if they were allowed.
+
+The annotations the РОП then writes — a coaching note on a fragment, or a manager's dispute of the AI
+score — live in **learning-service**, not here. The disputed number is a `UserDialogScores` row,
+which is a learning-db row and the value that drives an assignment's threshold; see
+[ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §4.1 and [DECISIONS.md](DECISIONS.md) (2026-08-18).
+
 ## Coupling broken during extraction
 
 | Monolith coupling | Resolution in ai-service |
@@ -197,6 +232,10 @@ the `CK_DialogModes_OverrideHasOwner` constraint, and `AdminDialogOverridesContr
   ([BACKGROUND_JOBS.md §4b](TENANCY/BACKGROUND_JOBS.md)).
 
 ## Routes (through the gateway, paths preserved)
+
+Phase 40.25 added `/admin/dialog-sessions` and `/admin/dialog-sessions/{**catch-all}` to the `ai`
+cluster — a separate gateway route from `/admin/dialog/*`, which does not match a different path
+segment.
 
 Flipped to the `ai` cluster: `/dialog/*` (incl. `/dialog/voice/*` and
 `/dialog/sessions/{id}/voice/stream`), `/transcription/*`, `/admin/dialog/*`,

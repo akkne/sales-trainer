@@ -261,6 +261,41 @@ UI notes:
 - Suspending an organization stops its users signing in and stops their refresh tokens working.
   Already-issued access tokens keep working for up to 15 minutes.
 
+### The РОП's dashboard (Phase 40.25 — API only, no screen yet)
+
+`RequireOrgAdmin` throughout, so these are the first admin routes an *organization* administrator can
+reach that are not part of the platform library. Full contracts in
+[API_CONTRACTS.md](API_CONTRACTS.md); the design is
+[TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §4.
+
+| Method | Path | Owning service | Purpose |
+|---|---|---|---|
+| GET | /admin/assignments/:id/dashboard | learning-service | funnel, named rows, and every wave of the repeat series |
+| GET | /admin/team/skill-map?days= | learning-service | skill heat map + each manager's weakest sales-funnel stage |
+| GET | /admin/dialog-reviews?kind=&status=&sessionId= | learning-service | the review queue (open disputes, notes sent) |
+| POST | /admin/dialog-reviews | learning-service | send a quoted fragment with a comment to the manager |
+| POST | /admin/dialog-reviews/:noteId/resolve | learning-service | rule on a disputed AI score |
+| GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | ai-service | the team's graded conversations |
+| GET | /admin/dialog-sessions/:sessionId | ai-service | one transcript, with per-message indexes |
+
+**There is no screen for any of this yet, and that is 40.20.** The admin-panel split — a platform
+superadmin panel and an organization panel — is waiting on the owner's design, and every block from
+40.15 onward has shipped its backend without a frontend for the same reason. What did ship on the
+manager's side of 40.25 is `/dialog-reviews` (their inbox) and the dispute link in the dialog
+feedback modal; those are ordinary app screens, not admin ones.
+
+Three notes for whoever builds the screen:
+
+- **The funnel has five stages, not four.** `failedThresholdCount` is not a subset of
+  `completedCount` — it is the people who finished the work and stayed under the bar, and the roadmap
+  calls that the most valuable row on the screen. Drawing a four-stage funnel puts them back among
+  the people who never started.
+- **`isActiveMember` and the two roster counts can be `null`**, which means identity-service could not
+  be asked. Say "could not check"; do not draw a zero. `rosterKnown` on the response is the flag.
+- **`accuracyPercent` is `null` below `minimumAttemptsForAccuracy` attempts** and must render as a
+  blank cell with an explanation, never as 0%. Two right answers out of two is 100% and is a fact
+  about nobody.
+
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |
 |---|---|---|---|

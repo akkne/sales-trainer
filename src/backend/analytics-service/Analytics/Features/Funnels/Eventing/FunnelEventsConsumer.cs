@@ -27,6 +27,12 @@ internal sealed class FunnelEventsConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.UserRegistered,
         BuildingBlocks.Eventing.Topics.ExerciseCompleted,
         BuildingBlocks.Eventing.Topics.XpGranted,
+        // Phase 40.25. «Метрики воронки заданий — в analytics-service». Two topics rather than a
+        // projection: this service still stores nothing, and the counters they feed are the
+        // platform-wide operational funnel. The per-organization funnel the РОП reads is computed in
+        // learning-service, where the progress rows live (docs/ANALYTICS_SERVICE.md).
+        BuildingBlocks.Eventing.Topics.AssignmentIssued,
+        BuildingBlocks.Eventing.Topics.AssignmentProgressChanged,
     ];
 
     /// <summary>

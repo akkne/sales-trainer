@@ -532,6 +532,50 @@ names — `{"kind":"fixed_offsets","offsetDays":[7,21]}`, the list optional and 
   [DONT_FORGET.md](DONT_FORGET.md); the cancel path is editing `repeat_schedule` while the assignment
   is still active.
 
+### The РОП's dashboard and the two-way feedback loop (Phase 40.25)
+
+40.21–40.24 built the machinery and nobody could look at any of it. This block is the read side, plus
+the one place the loop runs back the other way. Full argument in [DECISIONS.md](DECISIONS.md)
+(2026-08-18); ASSIGNMENTS.md §4 is the design.
+
+- **`GET /admin/assignments/{id}/dashboard`** (`AssignmentDashboardService`) — the funnel, the named
+  people behind it and every wave of the repeat series with its own funnel, in one response.
+  Read-only, nothing is stored: a denormalized funnel column would be a second writer of a fact that
+  already has one, and 40.22's derive-never-increment rule is what makes the numbers survive a Kafka
+  redelivery. `failed_threshold` is a **fifth** funnel stage rather than a subset of "completed", for
+  the reason §1.1 gives.
+- **The leaver problem 40.23 recorded is closed here.** The dashboard asks
+  `IOrganizationMemberDirectory` who still holds an active membership and marks each row, then reports
+  `leftOrganizationCount` and `assignedActiveCount` alongside the raw counts. The progress row still
+  stays — it is the record that somebody was asked. **This roster read is fail-open**, unlike the one
+  at issue time: `null` says "we could not check", which is a different statement from zero, and a
+  read that refuses to draw the screen to withhold one annotation is the worse trade.
+- **`GET /admin/team/skill-map?days=`** (`TeamSkillMapService`, `Features/TeamInsights/`) — one matrix
+  read along both axes the roadmap asks for: per team, accuracy per skill; per manager, the
+  sales-funnel stage they sag on. The stage vocabulary is the platform's existing `Skill.Stage` /
+  `SkillStages` pair, not a second one. Skill attribution goes `UserExerciseAttempts → Exercises →
+  Lessons → Topics → Skills`; attempts whose exercise no longer exists are reported as
+  `unattributedAttemptCount` rather than folded in, the same call
+  [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md) makes for `unversionedAttempts`. A cell below five
+  attempts reports **no** percentage: two right answers out of two is 100% and is a fact about
+  nobody.
+- **`DialogReviewNotes`** (`Features/DialogReviews/`) — one table for both directions of §4.1, under a
+  `Kind` column: `coaching_note` (РОП → manager, closed by being read) and `score_dispute` (manager →
+  РОП, closed by a verdict). Routes: `/admin/dialog-reviews` (queue, create a note, resolve a
+  dispute) and `/dialog-reviews` (the manager's inbox, file a dispute, acknowledge a note).
+- **Every write into that table starts from a `UserDialogScores` row and never from the request
+  body.** The session id, the manager, the scenario and the frozen grade are read out of learning-db,
+  so "the РОП cannot address a note at somebody else's employee" is a property of an RLS-protected
+  query rather than a validation somebody has to remember. It also means an ungraded conversation
+  cannot be annotated at all — the right refusal, since it has no grade to dispute.
+- **An upheld dispute records `AdjustedScore` and does not apply it.** A hand-edited score would be
+  overwritten by the next redelivery (40.22 recomputes everything), and a threshold negotiable by the
+  person being measured is the four-minute completion 40.22 exists to prevent, reached another way.
+  Retro-scoring is a product decision in [DONT_FORGET.md](DONT_FORGET.md).
+- **Nothing here reads Mongo.** The quotes come from ai-service's own
+  `GET /admin/dialog-sessions[/{id}]`, so `IDialogSessionRepository` stays the single holder of the
+  session collection (TENANCY.md §1.6). The screen asks each service for what it owns.
+
 ### Background jobs
 
 | Job | Mode | Why it is safe |
@@ -630,10 +674,26 @@ open once the current one is finished. Regression covered by
 | `assignment.issued` (40.23) | one per recipient, when an assignment is issued or its running audience widens | `{ assignmentId, userId, title, goal, deadline }` |
 | `assignment.deadline.approaching` (40.23) | the deadline sweep, once per assignment per unfinished recipient | `{ assignmentId, userId, title, deadline }` |
 | `assignment.reminder` (40.23) | a РОП presses "remind" | `{ assignmentId, userId, title, deadline, requestedAt }` |
+| `assignment.progress.changed` (40.25) | a progress row moves between the four funnel states | `{ assignmentId, userId, previousStatus, status, bestScore, attemptCount }` |
+| `dialog.review.commented` (40.25) | the РОП comments on a fragment of somebody's graded call | `{ noteId, userId, sessionId, quotedText, comment }` |
+| `dialog.review.resolved` (40.25) | the РОП rules on a disputed AI score | `{ noteId, userId, sessionId, outcome, disputedScore, adjustedScore, resolution }` |
 
 The first three match the gamification-service consumer contract verbatim
 (`ExerciseCompletedEvent`, `LessonCompletedEvent`, `SkillCompletedEvent`). Consumed by
 Gamification (XP/streaks/achievements/league) and Analytics (`exercise.completed`).
+
+`assignment.progress.changed` (40.25) is consumed by **analytics-service only**, and only for its
+`status` field, which becomes a bounded Prometheus label. It is published from
+`AssignmentThresholdEvaluator` inside the transaction that writes the row, and only on an actual
+state change — an attempt count ticking from three to four is not a funnel movement. The
+per-organization funnel is **not** built from this topic and must not be; it is counted from the rows
+by `AssignmentDashboardService`. See [ANALYTICS_SERVICE.md](ANALYTICS_SERVICE.md).
+
+The two `dialog.review.*` topics (40.25) are consumed by notification-service only. Both are
+addressed to the manager, including a rejected dispute: a complaint closed in silence recreates the
+black box the mechanism exists to open. The quoted fragment travels with the event rather than being
+fetched, because notification-service has no database beyond its inbox and a notice reading "you have
+a comment" is one more thing to ignore.
 
 The three `assignment.*` topics are consumed by notification-service only. Every one of them is
 **per recipient rather than per assignment**: the partition key is the user id everywhere in this
@@ -685,6 +745,14 @@ being down must not stop a practice screen from opening.
 `/admin/exercise-type-prompts`, `/admin/reference`, `/admin/techniques`,
 `/admin/daily-quotes`, `/admin/seeder`, `/admin/program` and `/admin/program/*` — 40.17).
 `/profile/*` is intentionally NOT captured (owned by identity/gamification).
+
+**Phase 40.25 added `/assignments/*`, `/admin/assignments`, `/admin/assignments/*`, `/admin/team/*`,
+`/dialog-reviews`, `/dialog-reviews/*`, `/admin/dialog-reviews` and `/admin/dialog-reviews/*`.** The
+first three of those are a fix rather than a new feature: 40.21–40.23 built the assignment routes and
+never added them to the gateway, so the manager's assignment strip — shipped and mounted on the home
+screen in 40.23 — could not reach this service through the gateway at all. Nothing caught it, because
+the frontend checks (`tsc`, `vitest`) do not know the gateway exists and no test asserts that a
+controller route has a gateway route. Recorded in [DONT_FORGET.md](DONT_FORGET.md).
 
 After this flip the only public route still served by the monolith catch-all is
 `/admin/users/*` (admin user management: list/detail, moderation rename, avatar

@@ -886,6 +886,162 @@ a progress row updates a moment after the work rather than in the same response 
 `attemptCount` and `bestScore` are **recomputed** from the recorded attempts on every evaluation, never
 incremented, so reprocessing an event cannot inflate them.
 
+### The manager dashboard (Phase 40.25)
+
+The screen a РОП actually opens: one assignment's funnel with named people behind it, the team's
+skill heat map, the team's graded conversations, and the two-way review loop over a disputed grade.
+Design: [TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §4 and §4.1.
+
+**Gateway routing.** Before this block, `/assignments/*` and `/admin/assignments/*` had no gateway
+route at all — the manager strip shipped in 40.23 could not reach learning-service through the
+gateway. 40.25 adds `learning-assignments` (`/assignments/{**catch-all}`),
+`learning-admin-assignments` / `learning-admin-assignments-root` (`/admin/assignments/{**catch-all}`
+and the bare `/admin/assignments`), `learning-admin-team` (`/admin/team/{**catch-all}`),
+`learning-admin-dialog-reviews` / `-root` (`/admin/dialog-reviews/{**catch-all}` and the bare path),
+`learning-dialog-reviews` / `-root` (`/dialog-reviews/{**catch-all}` and the bare path), and
+`ai-admin-dialog-sessions` / `-root` (`/admin/dialog-sessions/{**catch-all}` and the bare path).
+
+#### Assignment dashboard (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/assignments/:assignmentId/dashboard | — | `AssignmentDashboardDto`, 404 if the assignment does not exist |
+
+`RequireOrgAdmin`, same gate as every other assignment route. It supersedes nothing —
+`GET /admin/assignments/:assignmentId/progress` stays, because it is the raw, name-free list and the
+only one of the two that cannot be affected by identity-service being down.
+
+`AssignmentDashboardDto`: `{assignment: AssignmentSummaryDto, funnel: AssignmentFunnelDto, rows: AssignmentDashboardRowDto[], series: AssignmentWaveDto[], rosterKnown}`
+`AssignmentFunnelDto`: `{assignedCount, notStartedCount, startedCount, completedCount, failedThresholdCount, leftOrganizationCount, assignedActiveCount}`
+`AssignmentDashboardRowDto`: `{userId, displayName, status, bestScore, attemptCount, firstOpenedAt, completedAt, isActiveMember}`
+`AssignmentWaveDto`: `{assignmentId, waveIndex, status, activatedAt, deadline, funnel: AssignmentFunnelDto}`
+
+**The funnel is five counts, not four.** `failedThresholdCount` is not a subset of `completedCount` —
+it is people who finished the measured work and stayed under the bar, the row the roadmap calls the
+most valuable on the screen. `startedCount` is `in_progress` + `completed` + `failed_threshold`
+together: a person who tried and failed has started.
+
+**The roster counts are nullable, not zero, when identity-service could not be asked who still works
+here.** `rosterKnown: false` means every `isActiveMember` and both `leftOrganizationCount` /
+`assignedActiveCount` are `null`; the screen should say "could not check" rather than draw a zero. A
+person who left keeps their progress row (40.23) and would otherwise read as `not_started` forever —
+`isActiveMember` is how the screen stops counting them against a team that has not failed at
+anything.
+
+**`series` always has at least one entry — the assignment itself.** A single-shot assignment yields
+exactly one wave (itself) rather than an empty list, so the screen has one shape instead of two.
+`waveIndex` is `0` for the origin and the 1-based `repeatWaveIndex` for each repeat, so "wave 2" on the
+screen matches the offset ordinal the РОП configured.
+
+`displayName` on a row comes from `UserReplicas` and is nullable — learning-service does not own
+identities, and someone who has never triggered a `user.updated` has no replica row yet. A missing
+name is returned as `null`, never as an invented placeholder.
+
+#### Team skill heat map (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/team/skill-map?days= | — | `TeamSkillMapDto` |
+
+`RequireOrgAdmin`. `days` (query, default the service's own window) bounds how far back attempts are
+counted; team readiness is a statement about now, not about somebody's whole history.
+
+`TeamSkillMapDto`: `{windowStart, stages: TeamSkillMapStageDto[], skills: TeamSkillMapSkillDto[], members: TeamSkillMapMemberDto[], unattributedAttemptCount, minimumAttemptsForAccuracy, rosterKnown}`
+`TeamSkillMapStageDto`: `{key, label, accent, order, attemptCount, accuracyPercent}`
+`TeamSkillMapSkillDto`: `{skillId, title, stageKey, orderInTree, attemptCount, accuracyPercent}`
+`TeamSkillMapMemberDto`: `{userId, displayName, isActiveMember, attemptCount, accuracyPercent, weakestStageKey, weakestSkillId, dialogCount, dialogAverageScore, stages: TeamSkillMapCellDto[], skills: TeamSkillMapCellDto[]}`
+`TeamSkillMapCellDto`: `{key, attemptCount, accuracyPercent}`
+
+**One endpoint, not two, because "per manager: where they sag, by funnel stage" and "per team: a
+skill heat map" are the same matrix read along its two axes.** Splitting them would run the
+aggregation twice and let the two screens disagree about the same window.
+
+**`accuracyPercent` is `null`, never `0`, below `minimumAttemptsForAccuracy`.** Two right answers out
+of two is 100% and means nothing about anybody — the same call 40.22 made for withholding an accuracy
+until every exercise in a set has been attempted. `weakestStageKey`/`weakestSkillId` are the
+lowest-scoring cell that has enough attempts to report a number at all, computed server-side so every
+consumer answers "where do they sag" the same way; both are `null` for somebody with no qualifying
+cell, which is a different statement from "weak everywhere" and must not be drawn as one.
+`unattributedAttemptCount` buckets attempts whose exercise no longer exists — folded nowhere, the same
+call `unversionedAttempts` makes elsewhere in this document. The stage vocabulary is `Skill.Stage` /
+`SkillStages`, the platform's existing one, not a second one invented for this screen.
+
+#### The team's graded conversations (ai-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | — | `AdminDialogSessionSummaryDto[]`, newest first |
+| GET | /admin/dialog-sessions/:sessionId | — | `AdminDialogTranscriptDto`, 404 if unknown |
+
+`RequireOrgAdmin`. `limit` defaults to 25. `maxScore` is the parameter that makes the list useful —
+"show me conversations scored 4 and below" is a list a РОП can act on, "show me every conversation" is
+not.
+
+`AdminDialogSessionSummaryDto`: `{id, userId, bundleId, modeId, modeKey, modeTitle, status, messageCount, score, feedbackSummary, assignmentId, createdAt, completedAt}`
+`AdminDialogTranscriptDto`: `{id, userId, bundleId, modeId, modeKey, modeTitle, status, score, feedback, assignmentId, createdAt, completedAt, messages: AdminDialogTranscriptMessageDto[]}`
+`AdminDialogTranscriptMessageDto`: `{index, role, content, timestamp}`
+
+**This lives in ai-service, not on the dashboard response, because the conversations are Mongo
+documents `IDialogSessionRepository` alone holds** — Mongo has no row-level security, so a filter
+spread over two services is a filter that will be forgotten in one of them. The screen asks
+learning-service for the funnel and ai-service for the words; neither service reads the other's
+store. `message.Index` is part of the contract (not left implicit in array order) because a coaching
+note quotes a session id **and** a message index, and the same line said twice must still be citable.
+Names are absent from both DTOs — ai-service holds no user replica, and the screen already has the
+team's names from the heat map.
+
+#### The review loop (learning-service)
+
+The РОП selects a fragment of a graded conversation and comments on it; the manager reads it and may
+dispute the grade. One table, `DialogReviewNotes` — see [DB_SCHEMA.md](DB_SCHEMA.md) — for both
+directions, because a coaching note and a score dispute share every field except who may close the row
+and with which word.
+
+Admin side (`RequireOrgAdmin`):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog-reviews?kind=&status=&sessionId= | — | `DialogReviewNoteDto[]`, 400 on a malformed filter |
+| POST | /admin/dialog-reviews | `CreateCoachingNoteRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure |
+| POST | /admin/dialog-reviews/:noteId/resolve | `ResolveScoreDisputeRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure, 404 if unknown |
+
+Manager side (`[Authorize]`, no admin gate, takes no user id — the caller is the token):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /dialog-reviews | — | `DialogReviewNoteDto[]`, newest first — coaching notes addressed to the caller and disputes they filed, in one list |
+| POST | /dialog-reviews/disputes | `CreateScoreDisputeRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure |
+| POST | /dialog-reviews/:noteId/acknowledge | — | `DialogReviewNoteDto`, 404 if unknown or not the caller's |
+
+`DialogReviewNoteDto`: `{id, kind, status, sessionId, dialogModeKey, subjectUserId, subjectDisplayName, authorUserId, authorDisplayName, quotedFromMessageIndex, quotedToMessageIndex, quotedText, comment, disputedScore, resolution, adjustedScore, resolvedBy, resolvedAt, createdAt, updatedAt}`
+`CreateCoachingNoteRequestDto`: `{sessionId, quotedFromMessageIndex?, quotedToMessageIndex?, quotedText, comment}` — `sessionId`, `quotedText` and `comment` are required; a coaching note whose whole content is "messages 4 to 6" cannot be re-read next month
+`CreateScoreDisputeRequestDto`: `{sessionId, quotedFromMessageIndex?, quotedToMessageIndex?, quotedText?, comment}` — `sessionId` and `comment` are required, the quote is not: the manager is usually arguing about the conversation as a whole
+`ResolveScoreDisputeRequestDto`: `{outcome, resolution?, adjustedScore?}` — `outcome` is `upheld` or `rejected` and required; `resolution` is required when `outcome` is `rejected` (closing a complaint in silence turns the mechanism into a rubber stamp); `adjustedScore` (0–100) is accepted only when `outcome` is `upheld`
+
+**The organization, the manager, the scenario and the grade are never taken from the request body.**
+`CreateCoachingNoteRequestDto`/`CreateScoreDisputeRequestDto` name only a `sessionId`; the subject,
+`dialogModeKey` and `disputedScore` are read off that session's `UserDialogScores` row inside the
+caller's organization, so a hand-written body cannot address a note at somebody else's employee. A
+session with no recorded score cannot be annotated at all (400) — an ungraded conversation has no
+grade to dispute and is not on the screen the fragment was selected from.
+
+**`adjustedScore` is recorded, never applied.** It does not change `UserDialogScores` or any
+assignment verdict — 40.22 made every progress number derived from attempt rows and recomputed on
+every event, and a hand-edited score would both be overwritten by the next redelivery and make the
+completion threshold negotiable by the person being measured. Retro-scoring is a decision the owner
+has not made (docs/DONT_FORGET.md).
+
+**At most one open dispute per conversation.** A second `POST /dialog-reviews/disputes` on a session
+that already has an open dispute is refused (400) by the service before it ever inserts, backed by the
+`UX_DialogReviewNotes_OpenDisputePerSession` partial unique index at the database as the final
+guarantee. A session may be disputed again after a verdict, because a person told "the grade stands"
+who later finds new evidence is not spamming the queue.
+
+Both admin write routes 403 (`Forbid()`) when the caller satisfies `RequireOrgAdmin` without holding
+an organization in context (platform staff impersonating nobody) — same shape as
+`AdminAssignmentsController`: a review row belongs to one organization, and with none in context the
+save guard would otherwise throw and surface a 500 describing an internal invariant.
+
 ### Content overrides and the staleness queue (Phase 40.18)
 
 Copy-on-write: an organization customizes the shared library one row at a time instead of forking it.

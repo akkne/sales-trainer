@@ -74,10 +74,10 @@ and then dead-lettered. A message is never handled without a decided tenant.
 |---------|----------|--------|------------------------|-----|
 | gamification | `LearningEventsConsumer` | `exercise.completed`, `lesson.completed`, `skill.completed` | `true` (inherited) | Grants XP into tenant-scoped tables |
 | gamification | `DialogEvaluatedConsumer` | `dialog.evaluated` | `true` (inherited) | Same |
-| notification | `NotificationEventConsumer` | eight topics — achievements, friends, chat, follow-ups | `true` (inherited, [deliberately documented at :48](../../src/backend/notification-service/Notification/Eventing/NotificationEventConsumer.cs)) | Writes into `org:{orgId}:` Redis inboxes; a notification with no organization has no inbox to land in |
+| notification | `NotificationEventConsumer` | thirteen topics — achievements, friends, chat, follow-ups, the three `assignment.*` (40.23) and the two `dialog.review.*` (40.25) | `true` (inherited, [deliberately documented at :48](../../src/backend/notification-service/Notification/Eventing/NotificationEventConsumer.cs)) | Writes into `org:{orgId}:` Redis inboxes; a notification with no organization has no inbox to land in |
 | identity | `OrganizationReplicaConsumer` | `organization.created` / `updated` / `suspended` | **`false`**, [:41](../../src/backend/identity-service/Identity/Eventing/OrganizationReplicaConsumer.cs) | The tenant *registry* projection: these events are **about** organizations, they are not **inside** one |
 | ai, learning, gamification, notification, social | `UserReplicaConsumer` (five copies) | `user.registered` / `updated` / `deleted` / `avatar.changed` | **`false`** in all five | `UserReplicas` is deliberately platform-global — a user is a cross-organization identity ([TENANCY.md](TENANCY.md) §4.2) |
-| analytics | `FunnelEventsConsumer` | `user.registered`, `exercise.completed`, `xp.granted` | **`false`**, [:58](../../src/backend/analytics-service/Analytics/Features/Funnels/Eventing/FunnelEventsConsumer.cs) | `user.registered` fires before the user has an organization at all |
+| analytics | `FunnelEventsConsumer` | `user.registered`, `exercise.completed`, `xp.granted`, and since 40.25 `assignment.issued`, `assignment.progress.changed` | **`false`**, [:58](../../src/backend/analytics-service/Analytics/Features/Funnels/Eventing/FunnelEventsConsumer.cs) | `user.registered` fires before the user has an organization at all |
 | ai | `GamificationDialogWeightsConsumer` | `gamification.dialog-weights.updated` | **`false`** (made explicit in 40.14) | Mirrors `GamificationSettings`, a single platform-global row, into an in-memory singleton — see §4 |
 | learning | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited, [declared by omission](../../src/backend/learning-service/Learning/Eventing/OrganizationProfileConsumer.cs)) | Writes `OrganizationProfileReplicas`, strict tenant data. Unlike identity's `OrganizationReplicaConsumer` two rows up, this event is **inside** a tenant, not about one: the profile belongs to the organization the way its lessons do. An envelope with no organization is dead-lettered rather than guessed at |
 | ai | `OrganizationProfileConsumer` (40.19) | `organization.profile.updated` | **`true`** (inherited) | Same table, same reason, second copy — and here the stakes are higher: a guessed tenant would apply one customer's `banned_claims` to another customer's practice calls |
@@ -396,6 +396,29 @@ The registry rots the moment someone adds a hosted service. Three cheap checks:
    ```
 
    A sixth call site is a finding until proven otherwise.
+
+### 40.25 added no job and no consumer, and that is worth stating
+
+Phase 40.25 (the РОП's dashboard) is a read block. It adds **no** `IHostedService`, **no** new
+`KafkaConsumerBackgroundService`, and **no** sixth `IgnoreQueryFilters()` call site — the count above
+stays at five. What it does add is topics to two consumers that already exist, and one topic to
+learning-service's outbox:
+
+- `FunnelEventsConsumer` (analytics) gained `assignment.issued` and `assignment.progress.changed`.
+  Its `RequiresOrganization => false` is unchanged and stays correct for the same reason it was
+  correct before: every branch increments a process-local Prometheus counter and stores nothing, so
+  there is no per-tenant state that could be written under the wrong organization. Both new topics
+  do carry an organization in the envelope; the consumer simply does not need it.
+- `NotificationEventConsumer` gained `dialog.review.commented` and `dialog.review.resolved`. Its
+  inherited `RequiresOrganization => true` is unchanged and stays correct: both produce a
+  notification in one organization's `org:{orgId}:` Redis inbox, so an envelope with no tenant has
+  no destination.
+- `assignment.progress.changed` is published by `AssignmentThresholdEvaluator` inside the ordinary
+  request/consumer transaction that writes the progress row, through the outbox. It is not a job.
+
+The dashboard's own roster read (`IOrganizationMemberDirectory`) happens inside an HTTP request with
+a concrete tenant in context. It is **not** a system-mode read and does not belong in the table
+above.
 
 There is no automated gate for any of this yet — `scripts/tenancy-boundary-lint.py` guards the HTTP
 boundary (no `organizationId` in DTOs, routes or query strings) and `scripts/tenancy-pool-lint.py`

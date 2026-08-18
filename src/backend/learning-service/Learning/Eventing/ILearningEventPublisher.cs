@@ -23,4 +23,26 @@ public interface ILearningEventPublisher
     Task PublishAssignmentReminderAsync(
         AssignmentReminderEvent payload,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.25. One progress row changed state. Staged in the same transaction as the change,
+    /// so the funnel counter analytics-service keeps cannot drift from the rows it describes.
+    /// </summary>
+    Task PublishAssignmentProgressChangedAsync(
+        AssignmentProgressChangedEvent payload,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Phase 40.25. The two notices of the feedback loop (docs/TENANCY/ASSIGNMENTS.md §4.1). Through
+    /// the outbox like everything above, so the row and the notice about it commit together — a
+    /// coaching note that existed without being delivered would be the РОП believing they had spoken
+    /// to somebody who never heard them.
+    /// </summary>
+    Task PublishDialogReviewCommentedAsync(
+        DialogReviewCommentedEvent payload,
+        CancellationToken cancellationToken = default);
+
+    Task PublishDialogReviewResolvedAsync(
+        DialogReviewResolvedEvent payload,
+        CancellationToken cancellationToken = default);
 }
