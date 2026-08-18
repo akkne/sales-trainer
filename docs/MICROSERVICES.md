@@ -270,6 +270,9 @@ a composition of those per-service admin APIs.
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
 | `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note (+ `organizationId` in the envelope since 40.12) |
+| `assignment.issued` | Learning | Notifications, Analytics (40.25) | assignmentId, userId, title, goal, deadline — one event per recipient (40.23) |
+| `assignment.deadline.approaching` | Learning | Notifications | assignmentId, userId, title, deadline (40.23) |
+| `assignment.reminder` | Learning | Notifications | assignmentId, userId, title, deadline, requestedAt (40.23) |
 | `assignment.progress.changed` | Learning | Analytics | assignmentId, userId, previousStatus, status, bestScore, attemptCount |
 | `dialog.review.commented` | Learning | Notifications | noteId, userId (the manager), sessionId, quotedText, comment |
 | `dialog.review.resolved` | Learning | Notifications | noteId, userId (the manager who disputed), sessionId, outcome, disputedScore, adjustedScore, resolution |
