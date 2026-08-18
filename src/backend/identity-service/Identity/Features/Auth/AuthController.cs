@@ -61,9 +61,43 @@ public sealed class AuthController(
             displayName,
             role,
             orgId = organizationId,
+            orgName = await ResolveOrganizationNameAsync(organizationId, cancellationToken),
             orgRole = organizationRole,
             isOnboardingCompleted
         });
+    }
+
+    /// <summary>
+    /// The display name of the caller's own organization, or <see langword="null"/> when they belong
+    /// to none.
+    ///
+    /// <para>
+    /// Added in Phase 40.20: the organization admin panel has to say whose panel it is, and until
+    /// now nothing told a member the name of their own organization — the claim carries only the id,
+    /// and <c>GET /organizations/{id}</c> is platform-staff only. Putting it in the token instead
+    /// would have meant a rename only taking effect after everyone signs in again.
+    /// </para>
+    ///
+    /// <para>
+    /// Reads the local registry projection rather than calling organization-service, so this stays
+    /// off the authentication hot path and survives that service being down. A name of
+    /// <see langword="null"/> for a real organization means the projection has not consumed
+    /// <c>organization.created</c> yet — the panel falls back to a neutral label rather than
+    /// blocking on it.
+    /// </para>
+    /// </summary>
+    private async Task<string?> ResolveOrganizationNameAsync(
+        string? organizationId, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(organizationId, out var parsedOrganizationId))
+        {
+            return null;
+        }
+
+        return await databaseContext.OrganizationReplicas
+            .Where(replica => replica.OrganizationId == parsedOrganizationId)
+            .Select(replica => replica.Name)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>

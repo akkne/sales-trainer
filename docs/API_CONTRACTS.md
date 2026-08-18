@@ -114,7 +114,17 @@ differ; see [DECISIONS.md](DECISIONS.md) (2026-08-15, 40.8).
 
 `orgId`/`orgRole` (Phase 40.6) are `null` unless the user has an active `membership` row —
 absent membership is never implicit organization access. `GET /auth/me` mirrors the same
-two fields (`orgId`, `orgRole`) alongside `id`/`email`/`displayName`/`role`/`isOnboardingCompleted`.
+two fields (`orgId`, `orgRole`) alongside `id`/`email`/`displayName`/`role`/`isOnboardingCompleted`,
+and adds **`orgName`** (Phase 40.20).
+
+`orgName` is the display name of the caller's own organization and is deliberately **not** a token
+claim: it is read from identity's local registry projection on every call, so a rename takes effect
+immediately instead of after everyone signs in again, and the read costs nothing on the
+authentication path because the projection is local. It is `null` for a caller with no organization,
+and also `null` when the projection has not yet consumed `organization.created` for a real one —
+the panel shows a neutral label rather than blocking. It exists because nothing else told a member
+the name of their own organization: the claim carries only the id, and `GET /organizations/{id}` is
+platform-staff only.
 
 **Email verification flow.** Since 40.7 the invite replaces this flow for anyone arriving by
 invite: possession of the token already proves control of the address, so an accepted invite
