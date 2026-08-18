@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { isOrganizationStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { useFriendRequests } from "@/features/friends/hooks/use-friends";
 import { NotificationBell } from "@/features/notifications/components/notification-bell";
 
@@ -44,6 +44,11 @@ export function NavRail() {
         friendRequests?.filter((r) => r.direction === "incoming").length ?? 0;
 
     const onProfile = pathname.startsWith("/profile");
+
+    /// The РОП's way into the organization panel (docs/TENANCY/ADMIN_UI_DESIGN.md §1.2). The
+    /// mobile bottom-nav deliberately stays as it is: managing a team on a phone is the
+    /// "check the funnel on the road" case, and that is served by the address alone.
+    const canOpenOrganizationPanel = isOrganizationStaff(authenticatedUser?.orgRole);
 
     return (
         <aside className="rail" aria-label="Навигация">
@@ -91,6 +96,18 @@ export function NavRail() {
             <span className="rail-bell" title="Уведомления">
                 <NotificationBell />
             </span>
+
+            {canOpenOrganizationPanel && (
+                <Link
+                    href="/org"
+                    className={`rail-item${pathname.startsWith("/org") ? " active" : ""}`}
+                    title="Управление"
+                    aria-label="Управление"
+                    aria-current={pathname.startsWith("/org") ? "page" : undefined}
+                >
+                    <Icon name="briefcase" size={19} />
+                </Link>
+            )}
 
             {/* Settings pinned at bottom */}
             <Link

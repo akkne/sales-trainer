@@ -2245,9 +2245,12 @@ so every lesson in the product reads as the neutral fallback. See
 
 **Authorization.** `GET …/gaps` and `POST …/draft` are `[Authorize]` only, like `GET`: neither writes
 anything. `PATCH` and `POST …/draft/apply` additionally require `RequireOrgAdmin` — they are the two
-routes on this controller that can change what every lesson in the organization says. The plain `PUT`
-is still reachable by any authenticated member; that predates 40.29 and is recorded in
-[DONT_FORGET.md](DONT_FORGET.md) rather than closed here.
+routes on this controller that can change what every lesson in the organization says. **The plain
+`PUT` carries `RequireOrgAdmin` too** — 40.34 closed the hole this paragraph used to describe as
+open, because a member who could replace all seven columns could empty `banned_claims` and make the
+organization's AI coach its reps into the exact promises compliance forbade. Verified in
+`OrganizationProfileController`: `GET` and `GET …/gaps` and `POST …/draft` are `[Authorize]` only;
+`PUT`, `PATCH` and `POST …/draft/apply` are `RequireOrgAdmin`.
 
 - `OrganizationProfileGapsDto`: `{questions: [{code, question, priority}], totalGapCount, blockingGapCount, isReadyForParameterization}`.
   Codes: `product`, `icp`, `objections`, `script_stages`, `tone`, `banned_claims`, `glossary` — a

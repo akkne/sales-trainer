@@ -37,3 +37,16 @@ export { StatTile } from "./stat-tile";
 export type { StatTileTone } from "./stat-tile";
 export { ThemeToggle } from "./theme-toggle";
 export { ErrorState } from "./error-state";
+
+export { Modal } from "./modal";
+export type { ModalSize } from "./modal";
+export { ConfirmDialog } from "./confirm-dialog";
+export type { ConfirmTone } from "./confirm-dialog";
+export { DataTable } from "./data-table";
+export type { Column, TableSort, SortDirection } from "./data-table";
+export { EmptyState } from "./empty-state";
+export { PageHeader } from "./page-header";
+export { Tabs } from "./tabs";
+export type { TabItem } from "./tabs";
+export { MetricBar } from "./metric-bar";
+export type { MetricBarTone } from "./metric-bar";

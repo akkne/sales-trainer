@@ -33,7 +33,11 @@ Role is stored as an integer column on the `User` table and emitted as a `role` 
 Emitted as the `org_role` JWT claim (alongside `org_id`) when the user has an active
 `membership` row; **absent** for a user with none — which is the normal state for Sellevate staff,
 and why the platform role satisfies the org-scoped policies on its own. The organization-scoped
-admin screen itself is roadmap block 40.20, waiting on the owner's design.
+panel these two roles open is `/org/*` — see [Two panels](#two-panels-4020) below.
+
+The frontend mirrors the pair in `shared/stores/auth-store.ts` as `isOrganizationStaff(orgRole)`
+and `canManageOrganizationPeople(orgRole)`, alongside the platform pair. They are display gates
+only; the backend policies are what enforce the rule.
 
 ---
 
@@ -43,8 +47,20 @@ admin screen itself is roadmap block 40.20, waiting on the owner's design.
 |---|---|---|
 | `RequirePlatformAdmin` | `role` ∈ {`Admin`, `SuperAdmin`} | All `/admin/*` **content** endpoints (learning, ai, gamification, social), the `/organizations` tenant registry, and the read side of `/admin/users` |
 | `RequireSuperAdmin` | `role` = `SuperAdmin` | Everything that adds or removes a user platform-wide: `PUT/DELETE /admin/users/*`, plus all of `/admin/platform/*` (impersonation, bootstrap-admin) |
-| `RequireOrgAdmin` | `org_role` ∈ {`TenancyAdmin`, `TenancySuperAdmin`} **or** `role` ∈ {`Admin`, `SuperAdmin`} | No call site today — reserved for the organization admin screen (40.20) |
+| `RequireOrgAdmin` | `org_role` ∈ {`TenancyAdmin`, `TenancySuperAdmin`} **or** `role` ∈ {`Admin`, `SuperAdmin`} | Everything the РОП does. Twenty controllers carry it as of 40.33 — see the list below the table |
 | `RequireOrgSuperAdmin` | `org_role` = `TenancySuperAdmin` **or** `role` = `SuperAdmin` | `/invites`, `/memberships` — adding and removing an organization's users |
+
+**`RequireOrgAdmin` was written in 40.6 with no call site and stayed empty until 40.20's design
+existed.** Blocks 40.21–40.33 then hung the whole РОП surface on it, so "reserved for a future
+screen" is no longer true — this is the busiest of the four policies. The controllers that declare
+it, verified by `grep RequireOrganizationAdministrator src/backend/**/Features`:
+
+| Service | Controllers |
+|---|---|
+| learning | `AdminAssignmentsController`, `AdminProgramController`, `AdminTeamInsightsController`, `AdminTeamSkillGapsController`, `AdminDialogReviewsController`, `AdminContentGenerationController`, `AdminContentAdaptationController`, `AdminContentOverridesController`, `AdminLessonsController`, `AdminLessonVersionsController`, `AdminLessonMetricsController`, `AdminExercisesController`, `AdminReferenceController`, `AdminTechniquesController` |
+| ai | `AdminDialogSessionsController`, `AdminDialogOverridesController`, `AdminAiQuotaController` |
+| organization | `OrganizationProfileController` — the three writing routes only (`PUT`, `PATCH`, `POST …/draft/apply`); the reads stay open to any member |
+| identity | `InvitesController`, `MembershipsController` — reads only; every mutation on them is `RequireOrgSuperAdmin` |
 
 Platform staff satisfy the two org-scoped policies **without holding any `org_role` claim**: they
 normally have no membership anywhere, and the whole point of the platform roles is that they are not
@@ -56,6 +72,77 @@ with `builder.Services.AddAuthorization(AuthorizationPolicies.Register)`. Contro
 `[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]` and friends — never a
 string literal. Each service's test project carries an `AuthorizationPolicyContractTests` that pins
 the wire-level names and the two asymmetries.
+
+---
+
+## Two panels (40.20)
+
+Since block 40.20 there are **two** admin surfaces, at two addresses, and this document describes
+both. The full screen-by-screen design is
+[TENANCY/ADMIN_UI_DESIGN.md](TENANCY/ADMIN_UI_DESIGN.md); what follows is the part a person needs
+before touching either tree.
+
+| | Platform panel | Organization panel |
+|---|---|---|
+| Address | `/admin/*` | `/org/*` |
+| Route group | `app/(admin)/` | `app/(org)/` |
+| Audience | Sellevate staff | the customer's РОП |
+| Gate | `isPlatformStaff(role)` | `isOrganizationStaff(orgRole) \|\| isPlatformStaff(role)` |
+| Language | English (internal tool) | Russian, «вы»-form (a product surface the customer pays for) |
+| Styling | raw Tailwind utilities | the `shared/components` library |
+| Screens | the sixteen that already existed, unchanged | nineteen new ones (O1–O19) |
+
+**Nothing moved.** The split is a second tree, not a migration of the first: no `/admin/*` screen
+was renamed, rewritten or deleted, which is also what let the eleven screen slices be built in
+parallel without colliding.
+
+**Why `/org` and not `/admin/org`.** Nesting would have given the two panels one layout, one
+language and one gate — exactly what the block separates.
+
+**Platform staff with no membership** land in state O0 (`features/org-shell/components/no-organization-state.tsx`),
+which explains that the panel shows one company's data and points at `/admin/organizations`, where
+impersonation (40.9) is the logged way in. The state is decided by `authenticatedUser.orgId == null`,
+not by a 403 — the 403 arrives per request and far too late to explain anything.
+`ImpersonationBanner` is mounted in `app/(org)/layout.tsx` as well as in `app/(main)/layout.tsx`, so
+somebody inside a customer's panel can always see whose it is and get back out.
+
+**No gamification anywhere in `/org/*`** — no XP, no streaks, no leagues, even where an endpoint
+returns those fields (`ActiveAssignmentDto.xpEarned`, `DialogSessionDto.xpEarned`). The РОП's only
+numeric currencies are accuracy in percent and a dialog score out of 100.
+
+### Legacy `/admin/*` links from notifications
+
+The Phase 40.26 notification jobs mint two `actionUrl`s that point at organization-panel screens
+under their old `/admin/*` addresses, and those rows are already in the notification store:
+
+- `AssignmentDeadlineDigest` → `/admin/assignments/{id}?action=remind&scope=not_started`
+- `DialogReviewDisputed` → `/admin/dialog-reviews?note={noteId}`
+
+They keep working through a redirect table — `features/org-shell/lib/legacy-admin-redirects.ts`,
+called from `app/(admin)/layout.tsx` **before** the role gate, with `router.replace` so Back leaves
+the panel instead of bouncing off the redirect. Ten prefixes are mapped; the longest matching one
+wins, so `/admin/dialog/overrides` beats `/admin/dialog`, which is a platform screen and redirects
+nowhere. The query string is carried over whole.
+
+| From | To |
+|---|---|
+| `/admin/assignments`, `/admin/assignments/{id}` | `/org/assignments`, `/org/assignments/{id}` |
+| `/admin/dialog-reviews` | `/org/reviews` |
+| `/admin/dialog-sessions` | `/org/dialogs` |
+| `/admin/team` | `/org` |
+| `/admin/content/overrides`, `/admin/dialog/overrides` | `/org/content/overrides` |
+| `/admin/content-generation` | `/org/content/generation` |
+| `/admin/content/adaptations` | `/org/content/adaptations` |
+| `/admin/ai-usage` | `/org/usage` |
+
+`app/(admin)/admin/[...legacyAdminPath]/page.tsx` exists only so the table can run at all: none of
+those paths has a page of its own, and Next.js answers an unmatched URL with the global not-found
+without rendering any route-group layout. The catch-all matches them so the layout above redirects;
+anything the table does not recognise still 404s.
+
+**The parameters are read, not obeyed.** `action=remind` opens the reminder confirmation and
+`scope=not_started` preselects its recipients. The link never sends a reminder on load: a URL that
+messages the team as it opens is a URL that fires the first time a mail scanner follows it.
 
 ---
 
@@ -283,11 +370,12 @@ reach that are not part of the platform library. Full contracts in
 | POST | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** «не сейчас» |
 | DELETE | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** take the refusal back |
 
-**There is no screen for any of this yet, and that is 40.20.** The admin-panel split — a platform
-superadmin panel and an organization panel — is waiting on the owner's design, and every block from
-40.15 onward has shipped its backend without a frontend for the same reason. What did ship on the
-manager's side of 40.25 is `/dialog-reviews` (their inbox) and the dispute link in the dialog
-feedback modal; those are ordinary app screens, not admin ones.
+**The screens are 40.20's O1–O7, and they are designed.**
+[TENANCY/ADMIN_UI_DESIGN.md](TENANCY/ADMIN_UI_DESIGN.md) draws every one of them against these
+exact routes; slice 0 shipped the `/org/*` shell they hang off, and the screens themselves land in
+slices 1–3. Until then these routes are reachable only by API. What did ship on the manager's side
+of 40.25 is `/dialog-reviews` (their inbox) and the dispute link in the dialog feedback modal;
+those are ordinary app screens, not admin ones.
 
 Three notes for whoever builds the screen:
 
@@ -355,8 +443,10 @@ All routes under `/admin` are protected — non-admins are redirected to `/tree`
 
 ```
 app/(admin)/
-  layout.tsx           ← sidebar nav + auth guard
+  layout.tsx           ← sidebar nav + auth guard + the §1.5 legacy redirect table
   admin/
+    [...legacyAdminPath]/
+      page.tsx         ← catch-all so the redirect table sees the notification links; else 404
     page.tsx           ← redirect to /admin/skills
     skill-stages/
       page.tsx         ← funnel-stage CRUD (label/accent/order)
@@ -396,15 +486,67 @@ app/(admin)/
       page.tsx         ← tenant registry: create, invite the first admin, suspend/resume, impersonate (Phase 40.9)
 ```
 
+### The organization panel (`/org/*`, block 40.20)
+
+Routes under `/org` admit `TenancyAdmin`/`TenancySuperAdmin` and platform staff; everyone else is
+redirected to `/tree`. Screen-by-screen specifications live in
+[TENANCY/ADMIN_UI_DESIGN.md §2](TENANCY/ADMIN_UI_DESIGN.md); the shell that carries them is
+`features/org-shell/`.
+
+```
+app/(org)/
+  layout.tsx           ← gate + sidebar + mobile drawer + ImpersonationBanner + state O0
+  org/
+    page.tsx           ← O1  Команда: skill heat map + gap panel
+    assignments/       ← O2 list, O3 new, O4 one assignment (funnel, waves, reminder)
+    dialogs/           ← O5 team conversations, O6 transcript and review
+    reviews/           ← O7 disputes and sent coaching notes
+    profile/           ← O8 company profile (interview / full form)
+    content/           ← O9 three queues; generation/ O10–O11, adaptations/ O12–O13,
+                          overrides/ O14–O15, lessons/[lessonId] O19
+    people/            ← O16 invitations and members
+    usage/             ← O17 AI spend
+    program/           ← O18 the learning programme
+
+features/org-shell/
+  components/org-sidebar.tsx           ← the nav, structurally identical to the platform one
+  components/no-organization-state.tsx ← state O0
+  constants/navigation.ts              ← all nine entries; owned by slice 0, read by the rest
+  hooks/use-org-nav-badges.ts          ← the three sidebar counters
+  hooks/use-team-directory.ts          ← useTeamSkillMap / useTeamMemberNames, shared by four slices
+  lib/legacy-admin-redirects.ts        ← the §1.5 table
+```
+
+The sidebar carries the panel's only three counters, each answering "is there work for me there":
+active assignments (`GET /admin/assignments?status=active`), open score disputes
+(`GET /admin/dialog-reviews?kind=score_dispute&status=open`), and a dot — no number — when any
+override has gone stale (`GET /admin/content/overrides?staleOnly=true` **or**
+`GET /admin/dialog/overrides/modes?staleOnly=true`). `staleTime` 60s, refetch on window focus. A
+failing request contributes nothing rather than a zero or a dot: a dot that means "we could not
+ask" sends somebody looking for work that is not there.
+
 ---
 
 ## UI principles
+
+### Platform panel (`/admin/*`)
 
 - Minimal, functional, monochrome color scheme
 - Standard HTML-like forms via Tailwind utility classes
 - Tables for list views
 - Inline delete confirmation (no separate modal — just a button state change to "Confirm?")
 - JSON import sections collapsible on each entity page (Skills, Lessons)
+
+### Organization panel (`/org/*`)
+
+- Everything visible is Russian, «вы»-form. Enum values, query keys, `data-*` and logs stay English
+- Built from `shared/components`, not from raw utilities — the customer opens this every week and it
+  has to look like the rest of the product. Block 40.20 added seven components for it: `Modal`,
+  `ConfirmDialog`, `DataTable`, `EmptyState`, `PageHeader`, `Tabs`, `MetricBar`
+- Lime is a fill only: `--primary-ink` for brand-coloured text, `--on-primary` on a lime fill
+- "Done" is `--success`, never lime — on a heat map they must read apart at badge size
+- Numbers are `--font-mono`, tabular
+- One `variant="primary"` button per screen
 
 ---
 
@@ -626,9 +768,10 @@ Each component includes the canonical TypeScript schema and client-side validati
 
 ## The РОП's content pipeline — API only (Phases 40.27–40.28)
 
-**There is no screen for this yet.** The РОП's admin panel is roadmap 40.20 and is waiting on the
-owner's design, the same reason 40.15–40.27 shipped API-only. What exists is the whole pipeline
-behind `/admin/content-generation/*` — see [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) and
+**The screens are 40.20's O9–O11 and land in slice 5.** They are drawn in
+[TENANCY/ADMIN_UI_DESIGN.md](TENANCY/ADMIN_UI_DESIGN.md) against these routes; the `/org/*` shell
+they hang off shipped in slice 0. What exists behind them already is the whole pipeline under
+`/admin/content-generation/*` — see [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) and
 [API_CONTRACTS.md](API_CONTRACTS.md).
 
 What the screen has to do, when it is designed, in the order that matters:
@@ -682,7 +825,7 @@ Three things the screen must not do, because the backend deliberately does not s
 
 ## The profile interview — API only (Phase 40.29)
 
-**No screen for this either**, same reason: 40.20 is waiting on the owner's design. The backend is four
+**This is 40.20's O8 and it lands in slice 4.** The backend is four
 routes on `/organizations/profile` ([API_CONTRACTS.md](API_CONTRACTS.md#organization-profile-as-an-interview-phase-4029),
 [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029)).
 
@@ -724,7 +867,7 @@ Two things this screen must not do:
 
 ## Batch adaptation and content review — API only (Phase 40.32)
 
-**No screen for this either**, same reason: 40.20 waits on the owner's design. The backend is seven
+**These are 40.20's O12–O13 and they land in slice 6.** The backend is seven
 routes under `/admin/content/adaptations`
 ([API_CONTRACTS.md](API_CONTRACTS.md), [CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md)).
 

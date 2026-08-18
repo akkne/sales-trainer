@@ -7,6 +7,7 @@ import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { clientLogger } from "@/shared/utils/client-logger";
 import { Icon } from "@/shared/components/icon";
 import type { IconName } from "@/shared/components/icon";
+import { resolveLegacyAdminRedirect } from "@/features/org-shell/lib/legacy-admin-redirects";
 
 const NAV_ICONS: Record<string, IconName> = {
     "/admin/import": "grid",
@@ -46,7 +47,21 @@ export default function AdminLayout({
         setSidebarOpen(false);
     }, [pathname]);
 
+    /// Runs ahead of the role gate below and for every visitor, platform staff included: the
+    /// screens these paths name were never built under /admin/*, and the notification actionUrls
+    /// baked into rows already in the store point straight at them
+    /// (docs/TENANCY/ADMIN_UI_DESIGN.md §1.5). `replace` so that Back leaves the panel instead of
+    /// bouncing off the redirect.
+    const legacyRedirectTarget = resolveLegacyAdminRedirect(pathname);
+
     useEffect(() => {
+        if (!legacyRedirectTarget) return;
+        const search = typeof window === "undefined" ? "" : window.location.search;
+        router.replace(`${legacyRedirectTarget}${search}`);
+    }, [legacyRedirectTarget, router]);
+
+    useEffect(() => {
+        if (legacyRedirectTarget) return;
         if (!accessToken) {
             clientLogger.warn("Admin panel access denied — not authenticated", { path: pathname });
             router.replace("/login");
@@ -60,7 +75,7 @@ export default function AdminLayout({
             });
             router.replace("/tree");
         }
-    }, [accessToken, authenticatedUser, router, pathname]);
+    }, [accessToken, authenticatedUser, router, pathname, legacyRedirectTarget]);
 
     useEffect(() => {
         if (accessToken && authenticatedUser && isPlatformStaff(authenticatedUser.role)) {
@@ -74,6 +89,8 @@ export default function AdminLayout({
     }, [pathname]);
 
     if (!mounted) return null;
+
+    if (legacyRedirectTarget) return null;
 
     if (accessToken && !authenticatedUser) {
         return (

@@ -24,6 +24,19 @@ export const isPlatformStaff = (role: UserRole | null | undefined): boolean =>
 export const canManagePlatformUsers = (role: UserRole | null | undefined): boolean =>
     role === "SuperAdmin";
 
+/// The administrator of one organization — the РОП. Mirrors `RequireOrgAdmin` on the backend,
+/// minus its platform-staff branch: this predicate answers "does this person belong to an
+/// organization panel", and platform staff reach `/org/*` through impersonation instead
+/// (docs/TENANCY/ADMIN_UI_DESIGN.md §1.2).
+export const isOrganizationStaff = (orgRole: OrgRole | null | undefined): boolean =>
+    orgRole === "TenancyAdmin" || orgRole === "TenancySuperAdmin";
+
+/// The single privilege that separates an organization admin from an organization superadmin:
+/// inviting and deactivating that organization's people. Mirrors `RequireOrgSuperAdmin`, which
+/// is the gate that actually enforces it — this only decides whether the affordance is shown.
+export const canManageOrganizationPeople = (orgRole: OrgRole | null | undefined): boolean =>
+    orgRole === "TenancySuperAdmin";
+
 interface AuthenticatedUser {
     id: string;
     email: string;
