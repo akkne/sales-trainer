@@ -4,6 +4,202 @@ Non-trivial engineering decisions with their alternatives and rationale. Newest 
 
 ---
 
+## 2026-08-18 — Phase 40.29: the organization profile as an interview
+
+Roadmap block 40.29, the third of stage F. The profile of 40.5 exists, 40.19 renders it into every
+lesson and every persona prompt, and it is empty, because it is a thirty-field form. Full description:
+[ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029).
+
+The premise the whole block rests on is the roadmap's own second bullet, and it is worth restating as
+a claim about the *previous* block rather than this one: **an empty profile does not degrade 40.19, it
+cancels it.** Every placeholder resolves to the neutral fallback, so the customer reads the library
+exactly as it read before parameterization existed, and the metric that decides whether the tenancy
+architecture worked (`CONTENT_MODEL.md` §3 — the share of adaptation closed by substitution rather
+than by hand-editing) cannot come out any way but badly. 40.19 built the mechanism; this block is
+whether anybody ever loads it.
+
+### Where the interview lives, and how the draft crosses the service boundary
+
+This was the block's hard fork. The profile is organization-service's aggregate, the extracted
+structure is a learning-service row, and the LLM that produced it is in ai-service.
+
+**Decided: organization-service owns the merge, and the draft arrives in the request body, carried by
+the client.** `POST /organizations/profile/draft` previews, `POST /organizations/profile/draft/apply`
+commits. There is no `jobId` anywhere in the contract and organization-service has never heard of a
+content-generation run.
+
+- **The profile keeps exactly one writer and one publisher of `organization.profile.updated`.** That
+  was 40.27's fourth objection to writing the profile from the pipeline, and it is not weakened by
+  moving the write here — it is the reason it moved here.
+- **learning-service's replica stays read-only in both directions**, which was a stated constraint.
+- **It adds no authority.** This is the decisive argument for letting a client carry the document. The
+  same administrator can already `PUT /admin/content-generation/{id}/structure` with any content they
+  like and `PUT /organizations/profile` with any content they like. Passing a document between two
+  routes they may already write is not a new trust boundary; it is the same person typing the same
+  thing with fewer steps.
+- **The promotion is inherently interactive, and that is what the alternatives are bad at.** The merge
+  asks a human a question — «есть ваше значение и предложение ИИ, что оставить» — and an answer has to
+  come back before the write. That is a request, not an event.
+
+Three alternatives, and why each was rejected.
+
+- **learning-service calls organization-service.** A background worker writing another service's
+  aggregate, and doing it *while* holding the answers to questions only a human can settle. It would
+  also put a synchronous cross-service hop inside a step whose entire design (40.27) is about not
+  holding anything open across an LLM call.
+- **An event, `content.structure.approved`, consumed by organization-service.** organization-service
+  is produce-only and has no consumer wiring at all — the block would start by adding Redis-backed
+  idempotency to a service that does not need it. Worse, the promotion would become invisible: no
+  preview, no conflict list, no place to answer. An eventual merge cannot ask a question, so it would
+  have to pick an answer, and the answer it would pick is the overwrite.
+- **A profile-draft table in organization-service.** A second copy of the document 40.27 already
+  stores, with its own staleness problem and its own lifecycle, to hold a value for the ninety seconds
+  between «покажи что получится» and «применить».
+
+### What happens to fields somebody already filled in: fill blanks, grow lists, never silently replace
+
+The second fork, and the one 40.27 explicitly deferred to this block. The scenario is concrete:
+compliance types `banned_claims` in March, a РОП pastes a new product deck in June, the model reads
+the deck's marketing copy as the company's position. An overwrite there is not a lost edit — it is a
+persona voicing a promise a lawyer forbade, discovered by the customer.
+
+The seven fields split in two, and the split is by *shape*, not by importance.
+
+- **Single-valued** — `product`, `icp`, `tone`, `script_stages`. Empty → filled, no consent asked,
+  because filling a blank destroys nothing and an interview that asked permission to fill blanks would
+  be the form again. Non-empty and different → reported as a `conflict` and **kept**, unless the caller
+  names the field in `acceptedFields`.
+- **Additive** — `objections`, `glossary`, `banned_claims`. Union, existing entry always wins. There is
+  nothing to consent to because nothing is lost, and the existing entry winning is what preserves the
+  `frequency` an extraction cannot know and the answer a manager wrote from experience.
+
+Two consequences of that split are decisions in their own right.
+
+- **`script_stages` is single-valued although it is a list.** It is an ordered sequence describing one
+  conversation, not a set. Unioning a five-stage script with a seven-stage one yields twelve stages in
+  an order that describes no call anybody makes — a merge that is technically lossless and practically
+  garbage. Replaced whole or kept whole, which is also how the reviewer was looking at it.
+- **`banned_claims` has no consent value at all.** It is absent from
+  `OrganizationProfileFields.Overwritable`, so there exists no `acceptedFields` string that deletes a
+  banned claim — not a client bug, not a stale second tab, not a caller that sends `["*"]`. The union
+  direction is the safe one: a compliance list that grows forbids more, and the failure mode of a
+  too-strict list is a persona declining to say something it could have. Deleting an entry stays a
+  deliberate act on the whole-profile form, by somebody looking at the whole list.
+
+The rejected alternative was "last write wins, show a diff afterwards". It is simpler and it is the
+one shape that makes the customer discover the problem in production, in the one field where
+discovering it in production is the thing we sold them protection from.
+
+### The interview's questions are fixed on the server, and they are not 40.28's codes
+
+Two decisions that look like one.
+
+**Fixed on the server**, exactly as 40.28 ruled for refusal sentences («коды на проводе, предложения
+на сервере»), and the argument is stronger here than it was there. A model-authored question is a
+different sentence every run, so a screen cannot count, sort, skip or translate it. And an interview
+question is answered *into a database column*: «пришлите ваш прайс в PDF» is a question with no field
+behind it, and the customer who answers it has been wasted rather than helped.
+
+**A separate vocabulary from `ContentSufficiencyCodes`**, which was the tempting reuse — 40.28's
+`gaps` are already a machine-readable list of what is missing. The two disagree in both directions.
+`banned_claims` and the glossary block nothing in generation and matter a great deal in a profile;
+`too_short` and `off_topic` are facts about an uploaded document and say nothing about a row that has
+no document. A shared list would have to satisfy both audiences and would end up describing neither —
+which is, concretely, how «добавьте больше информации» gets written.
+
+### Three questions at a time, and the priority tiers are about 40.19 rather than about completeness
+
+The roadmap's success criterion is a number — «5 минут вместо часа» — and its failure mode is also
+a number: «30 пустых полей никто не заполнит». Both are about how much a person is shown, so the cap
+is the feature and the ordering is the rest of it.
+
+- **Three per round** (`limit`, default 3, clamped to 1…7). Three is what somebody answers in the tab
+  they are already in; seven is a form, and a form is what the block replaces.
+- **`totalGapCount` is uncapped and travels alongside.** A capped list with no total is a progress bar
+  that lies — the third answer would look like the end.
+- **The tiers are defined by what breaks, not by what is empty.** `blocking` is `product`, `icp` and
+  fewer than three objections: those are what 40.19 renders everywhere, and while one is open the
+  parameterization is not merely thin, it is absent. `important` is `script_stages`, `tone`,
+  `banned_claims`. `optional` is `glossary`. `isReadyForParameterization` is exactly «no blocking gap
+  is open», deliberately a narrower claim than «профиль заполнен».
+- **Three objections, not 40.28's two.** That threshold asks whether one lesson can be built; this one
+  asks whether every persona in the product has a plausible repertoire, and a persona that raises the
+  same two objections forever is recognisable as a script by the second session.
+- **Two questions can never be answered and that is accepted.** «Есть ли запрещённые обещания» and
+  «есть ли свои термины» may honestly be «таких нет», and the profile has no marker for that. Adding
+  two boolean «answered: none» columns for two cosmetic fields was rejected as schema for a UI
+  problem. The consequence is bounded by construction: readiness ignores those tiers, and the cap
+  means they are never shown while a real gap is open.
+
+### `PATCH` exists because an interview cannot be answered with a whole-row `PUT`
+
+Answering one question through `PUT /organizations/profile` means read-modify-write of all seven
+fields, which silently discards whatever a colleague saved in between — most likely in exactly the
+multi-person moment this flow invites, since the whole point is that different people know different
+fields. So `PATCH` was added: an omitted field keeps its stored value.
+
+**It cannot clear a field**, because `null` already means «не отвечал» and one JSON value cannot mean
+two things. The alternative — a `JsonElement`-backed patch that distinguishes an absent key from an
+explicit null — is real machinery for the rarest operation in the feature. Clearing stays on the
+whole-row `PUT`, which is a form somebody is looking at whole, which is the right place to empty
+something on purpose.
+
+All three write paths (`PUT`, `PATCH`, `…/draft/apply`) go through one private method that reads the
+row inside the transaction that then writes it and publishes `organization.profile.updated` after the
+commit. That is not tidiness: the merge plan for a promotion is computed *inside* that transaction,
+because planning it against a row read earlier would let a save that landed in between be discarded —
+and on this row that means a banned claim somebody entered while the reviewer was reading the preview.
+
+### Authorization: the two writing routes are gated, and the pre-existing hole is recorded rather than closed
+
+`PATCH` and `POST …/draft/apply` require `RequireOrgAdmin`. `GET …/gaps` and `POST …/draft` do not,
+because neither writes anything and the class-level gate is already «any member of this organization»
+— which `OrganizationControllerAuthorizationTests` asserts on purpose, since members legitimately read
+the profile.
+
+That leaves `PUT /organizations/profile` reachable by any authenticated member, which means an
+ordinary salesperson can rewrite `banned_claims`. **It is a real hole and it predates this block.** It
+was not closed here for one reason: closing it is a one-line change whose blast radius is a member-
+facing screen nobody has built yet, and doing it silently inside a block about something else is how a
+403 shows up in production with no note attached. It is written up in `DONT_FORGET.md` with the exact
+line to change.
+
+### No schema change, no migration, no `40.29_*.sql`, no background job
+
+Stated explicitly because the block reads like it should have all four.
+
+The interview keeps **no state**: not which question was asked, not which was skipped, not whether a
+draft was ever promoted. All of it is derivable from which of the seven columns are empty, and a table
+recording it would be a second source of truth about the same fields — drifting the first time
+somebody edited the profile through the plain `PUT`. Likewise there is no «promoted» flag on the
+content-generation run: a run is disposable, a profile is not, and a run recording what another
+service did with its output would claim an authority over that row it deliberately does not have.
+
+Consequently: no index to build concurrently, nothing to backfill, no deployment ordering, and
+`BACKGROUND_JOBS.md` still has eight entries — the ninth is still a finding, not this block.
+
+### The gateway needed nothing, and it was checked rather than assumed
+
+40.25's trap (three consecutive blocks shipped a screen that 404ed because no test compares controller
+routes to gateway routes) applies to every new route. `/organizations/{**catch-all}` already covers
+`/organizations/profile/gaps`, `/organizations/profile/draft` and `/organizations/profile/draft/apply`,
+the route carries no `Methods` constraint so YARP forwards `PATCH`, and every service's CORS policy is
+`AllowAnyMethod()`. `PATCH` is nonetheless the **first** in this backend, which is the one thing here
+a human should confirm against the real reverse proxy — recorded in `DONT_FORGET.md`.
+
+### Not done, on purpose
+
+- **No screen.** 40.20, still waiting on the owner's design, same as 40.15–40.28. What the screen has
+  to do is written out in [ADMIN_PANEL.md](ADMIN_PANEL.md).
+- **No file upload.** The material is still pasted text; 40.30 owns recordings and the consent
+  question that comes with them.
+- **No tests.** Rule №3 in [DONT_FORGET.md](DONT_FORGET.md), with the missing cases written out under
+  «Тесты, которых нет». The merge policy is the largest untested surface this block adds and it is the
+  one that overwrites a compliance list if it is wrong.
+- **No prompt was executed, because none was written.** 40.29 adds no LLM call at all.
+
+---
+
 ## Phase 40.26 — non-completion as a working scenario (2026-08-18)
 
 Eight forks, decided during an unattended run under the rules in `docs/DONT_FORGET.md` (no
