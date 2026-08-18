@@ -189,6 +189,12 @@ scripts/dev-organization.sh # Organization microservice on host, port 5010 (own 
 > `identity` (auto-created on first start) on the shared local Postgres. With the gateway
 > running, `/auth`, `/demo`, `/profile`, `/onboarding`, `/avatars` are proxied to it; the
 > monolith serves the rest. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+>
+> It also needs the **shared Redis** on `localhost:6379`: `AddSellevateEventing` registers
+> a `RedisIdempotencyStore` whose multiplexer connects eagerly at startup, so
+> `export_identity_env` must override `ConnectionStrings__Redis`. Without that override the
+> committed `redis:6379` (a Docker hostname) does not resolve on the host and the service
+> dies with a `RedisConnectionException` before it ever binds port 5002.
 
 > **Notification service (microservices Phase 4).** `scripts/dev-notifications.sh` runs the
 > extracted Notification service on `http://localhost:5004`, backed only by the shared local

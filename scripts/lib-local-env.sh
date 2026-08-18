@@ -139,6 +139,11 @@ export_identity_env() {
   export ASPNETCORE_URLS="http://localhost:${LOCAL_IDENTITY_PORT}"
 
   export ConnectionStrings__Postgres="Host=localhost;Port=${LOCAL_POSTGRES_PORT};Database=identity;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+  # AddSellevateEventing's RedisIdempotencyStore needs a live multiplexer at startup
+  # (Program.cs registers it eagerly), so this override is not optional: without it the
+  # committed appsettings value `redis:6379` — a Docker hostname — fails to resolve on the
+  # host and the service dies with a RedisConnectionException before binding its port.
+  export ConnectionStrings__Redis="localhost:${LOCAL_REDIS_PORT}"
   export Kafka__BootstrapServers="localhost:${LOCAL_KAFKA_PORT}"
   export Logging__Loki__Url="http://localhost:${LOCAL_LOKI_PORT}"
 
