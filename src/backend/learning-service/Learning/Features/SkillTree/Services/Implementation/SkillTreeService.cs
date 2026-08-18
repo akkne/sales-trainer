@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Common.Constants;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.SkillTree.Models;
 using Sellevate.Learning.Features.SkillTree.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -17,6 +18,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
     public async Task<IReadOnlyList<SkillStageDto>> GetStagesAsync(
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         return await databaseContext.SkillStages
             .OrderBy(stage => stage.Order)
             .Select(stage => new SkillStageDto(stage.Key, stage.Label, stage.Accent, stage.Order))
@@ -26,6 +29,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
     public async Task<IReadOnlyList<SkillTreeNodeDto>> GetAllSkillsAsync(
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await databaseContext.Skills
             .OrderBy(skill => skill.OrderInTree)
             .ThenBy(skill => skill.Id)
@@ -50,6 +55,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await databaseContext.Skills
             .OrderBy(skill => skill.OrderInTree)
             .ThenBy(skill => skill.Id)
@@ -66,9 +73,12 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         var enrolledSkillIdSet = enrolledSkillIds.ToHashSet();
         var hasAnyEnrollment = enrolledSkillIdSet.Count > 0;
 
-        // Single query: lesson count per skill via topic join.
+        // Single query: lesson count per skill via topic join. Phase 40.18: resolved, because an
+        // organization that overrode a lesson would otherwise see it counted twice — once as the
+        // base and once as its own copy — and every "3 of 7 lessons" on the tree would be wrong for
+        // exactly the customers who customized the most.
         var lessonCountBySkill = await databaseContext.Topics
-            .Join(databaseContext.Lessons,
+            .Join(databaseContext.Lessons.ResolveOverrides(databaseContext),
                 topic => topic.Id,
                 lesson => lesson.TopicId,
                 (topic, lesson) => new { topic.SkillId, lesson.Id })
@@ -146,6 +156,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         IReadOnlyList<string> skillSlugs,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         // Always keep the core skill enrolled, regardless of what the caller sent.
         var desiredSlugs = skillSlugs
             .Append(AlwaysEnrolledSlug)
@@ -186,12 +198,15 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         await databaseContext.UserSkillProgressRecords.AddRangeAsync(toAdd, cancellationToken);
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<TopicDto>> GetTopicsForSkillAsync(
         Guid skillId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var topics = await databaseContext.Topics
             .Where(topic => topic.SkillId == skillId)
             .OrderBy(topic => topic.OrderInSkill)
@@ -209,6 +224,8 @@ internal sealed class SkillTreeService(LearningDbContext databaseContext) : ISki
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var allSkills = await GetAllSkillsWithProgressAsync(userId, cancellationToken);
 
         return new SkillTreeResponseDto(

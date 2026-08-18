@@ -14,12 +14,14 @@ using Sellevate.Social.Features.Discuss;
 using Sellevate.Social.Features.Friends;
 using Sellevate.Social.Infrastructure.Configuration;
 using Sellevate.Social.Infrastructure.Data;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Infrastructure.Mongo;
 using Sellevate.Social.Infrastructure.Storage;
 using Sellevate.Social.Infrastructure.Storage.Abstract;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
+using Sellevate.Social.Common.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,8 +47,19 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 
 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
-builder.Services.AddDbContext<SocialDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.13. Registers the request-scoped ITenantContext plus the two interceptors: the
+// cross-tenant write guard and the one that issues SET LOCAL app.organization_id for the
+// row-level-security policies. Never switch this to EF Core's pooled-context helper
+// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py) — a pooled context would cache the first
+// tenant's query filter and hand it to every later caller.
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<SocialDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.Configure<MongoConfiguration>(builder.Configuration.GetSection(MongoConfiguration.SectionName));
 builder.Services.AddSingleton<IMongoClient>(_ =>
@@ -100,14 +113,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy("RequireAdmin", policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.IsInRole("Admin") || authorizationContext.User.IsInRole("SuperAdmin")));
-    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
-        policy.RequireRole("SuperAdmin"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -137,6 +143,12 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+
+// Phase 40.13. Populates the request-scoped ITenantContext from the X-Organization-Id header the
+// gateway sets from the validated token (and strips from inbound requests). After UseAuthorization
+// so the endpoint — and therefore its [TenantScoped] metadata — is already resolved: a controller
+// marked [TenantScoped] gets 403 rather than running with no tenant.
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

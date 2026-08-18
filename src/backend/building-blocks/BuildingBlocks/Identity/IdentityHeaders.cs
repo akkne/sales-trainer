@@ -17,6 +17,7 @@ public static class IdentityHeaders
 {
     public const string UserId = "X-User-Id";
     public const string UserRole = "X-User-Role";
+    public const string OrganizationId = "X-Organization-Id";
 
     /// <summary>
     /// Extracts the user id from a validated principal. Falls back across the common
@@ -30,4 +31,7 @@ public static class IdentityHeaders
     public static string? ResolveRole(ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Role)?.Value
            ?? principal.FindFirst("role")?.Value;
+
+    public static string? ResolveOrganizationId(ClaimsPrincipal principal)
+        => principal.FindFirst("org_id")?.Value;
 }

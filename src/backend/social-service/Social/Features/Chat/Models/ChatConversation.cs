@@ -9,6 +9,22 @@ public sealed class ChatConversation
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = null!;
 
+    /// <summary>
+    /// Phase 40.13. The organization this conversation belongs to. There is no RLS in Mongo, so
+    /// this field is enforced entirely by <c>ChatConversationRepository</c> — every filter in that
+    /// class starts from it, and it is also fixed as the mandatory leading component of any future
+    /// shard key, the same decision ai-service made for dialog sessions in 40.11.
+    ///
+    /// <para>
+    /// Stored as a string, not a Guid: it matches how <c>userId</c> and <c>senderId</c> are already
+    /// stored in this collection, so a mongosh query written by a human uses one convention rather
+    /// than two.
+    /// </para>
+    /// </summary>
+    [BsonElement("organizationId")]
+    [BsonRepresentation(BsonType.String)]
+    public Guid OrganizationId { get; set; }
+
     [BsonElement("participantIds")]
     public List<Guid> ParticipantIds { get; set; } = [];
 

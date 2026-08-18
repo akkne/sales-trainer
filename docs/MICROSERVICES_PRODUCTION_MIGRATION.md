@@ -263,7 +263,114 @@ script with `--force` — it truncates the target tables and reloads.
 
 ---
 
-## 7. Known caveats on a single box
+## 7. Раскатка тенантов — turning a single-tenant install into tenant #1 (Phase 40.9)
+
+> This section is a **separate, later** maintenance window from the monolith→microservices
+> cutover above. Do not combine them: one is a schema-and-topology change with a clean rollback
+> (the monolith DB is never modified), the other rewrites live rows in two databases.
+
+### 7.1 What the migration does
+
+Everything already in production belongs to nobody in particular — there is no `organization`
+anywhere. The migration puts it all into one organization so that the tenancy work from 40.4–40.8
+has something to be true about:
+
+| Database | Change |
+|---|---|
+| `organization` | one row in `Organizations` — the default organization |
+| `identity` | one `Memberships` row per existing user; one `OrganizationAuthConfigurations` row (`method = password`); one `OrganizationReplicas` row; the removed global `Admin` role (value 1) cleared |
+
+Nothing else. `Invites` has had `OrganizationId NOT NULL` since 40.7 so there is nothing to fill
+in — the script asserts this rather than assuming it. `OutboxMessages.OrganizationId` stays null
+where it is null: a platform-global event legitimately has no tenant. **Every other service
+database (`learning`, `ai`, `company`, `gamification`, `social`, `notification`) has no
+`organization_id` column at all yet** — that is Stage C, roadmap 40.10+, and each service gets its
+own window with its own backfill file.
+
+### 7.2 Prerequisites
+
+- Both services have already started once on the new code, so their EF migrations have run.
+  `40.9_default_organization_backfill_identity_db.sql` writes into `OrganizationReplicas`, which
+  the `AddOrganizationReplicaAndImpersonationAudit` migration creates. The driver refuses up front
+  if a required table is missing.
+- A **restored copy of production** to rehearse on. This is not optional and is the one step the
+  agent cannot do for you.
+- A fresh backup of `identity` and `organization`, taken the same way as §3.
+
+### 7.3 The run
+
+```bash
+# 1. Rehearse on the restored copy. Point the script at it, never at production yet.
+IDENTITY_DB=identity_restored ORGANIZATION_DB=organization_restored \
+  ./scripts/tenancy-default-organization-backfill.sh --dry-run
+
+IDENTITY_DB=identity_restored ORGANIZATION_DB=organization_restored \
+  ./scripts/tenancy-default-organization-backfill.sh --apply
+
+# 2. Rehearse the rollback on the same copy, so you have seen it work before you need it.
+IDENTITY_DB=identity_restored ORGANIZATION_DB=organization_restored \
+  ./scripts/tenancy-default-organization-backfill.sh --rollback --i-have-a-backup
+
+# 3. Only now, production. Stop the app containers first — the migration writes rows the
+#    running services also write.
+docker compose stop identity organization gateway
+./scripts/tenancy-default-organization-backfill.sh --dry-run
+./scripts/tenancy-default-organization-backfill.sh --apply
+docker compose start identity organization gateway
+```
+
+The SQL itself lives in [`docs/TENANCY/sql/40.9_*.sql`](TENANCY/sql/) — read those four files, they
+*are* the migration. The script only chooses the connection, passes one organization id to both
+databases and prints what is about to happen.
+
+`ORGANIZATION_ID` defaults to `00000000-0000-4000-8000-000000000001`. It is a fixed, recognisable
+constant rather than a fresh uuid because the same value has to land in two databases that have no
+foreign key between them, and nothing will complain if the two runs disagree.
+
+### 7.4 Verifying afterwards
+
+```bash
+# Every user has exactly one membership, all in the default organization.
+docker exec -i postgres psql -U "$POSTGRES_USER" -d identity -c \
+  'SELECT "OrganizationId", count(*) FROM "Memberships" GROUP BY 1;'
+
+# Everyone can still sign in: the login flow now needs the auth-config row and the replica row.
+curl -sS -X POST https://api.DOMAIN/auth/login/start -H 'content-type: application/json' \
+  -d '{"email":"someone@customer.com"}'
+```
+
+Then sign in as a real user in a browser. A `403` with "This organization is suspended" means the
+`OrganizationReplicas` row is missing or has `Status = 1`; a `401` means the membership did not
+land.
+
+### 7.5 Rollback
+
+`./scripts/tenancy-default-organization-backfill.sh --rollback --i-have-a-backup`.
+
+It prints the full destructive SQL first (project safety rule) and refuses without the flag. The
+SQL itself refuses to run if anyone has joined the default organization since the backfill —
+accepting an invite, being bootstrapped as the first `OrgAdmin` — because deleting a real
+post-migration membership is worse than a failed rollback. In that situation the rollback is a
+manual job, and the backup from §7.2 is the real safety net.
+
+The rollback restores the demoted platform roles exactly (the forward run recorded them) and never
+deletes a user. It was verified end-to-end against throwaway databases built from the services' own
+EF migrations — `./scripts/tenancy-default-organization-verify.sh`, which is safe to run on any
+machine with a local Postgres and creates and drops its own databases.
+
+### 7.6 After the migration
+
+- The platform superadmin screen at `/admin/organizations` is how every *subsequent* organization
+  is created. The migration is a one-off for the installation that predates tenancy.
+- The default organization's `AllowedEmailDomains` is deliberately empty. Filling it in would route
+  every address at that domain to this organization, which is wrong the moment a second customer
+  shares a mail provider.
+- Stage C (40.10+) adds `organization_id` service by service. Each one is another window, another
+  backfill file next to these, and the same rehearse-then-apply discipline.
+
+---
+
+## 8. Known caveats on a single box
 
 - **No isolation:** one service OOM/looping can starve the others. Add per-service
   `mem_limit` / `cpus` in compose if one misbehaves.

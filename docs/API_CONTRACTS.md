@@ -7,10 +7,51 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 > **Microservices migration:** `/auth/*`, `/demo/*`, `/profile/*`, `/onboarding/*` and
 > `/avatars/*` are now served by the extracted **Identity service** (gateway base URL
 > `http://localhost:5000`), not the monolith. Paths and request/response shapes are
-> unchanged. One transitional caveat: `GET /profile` returns the activity-consistency / progress-points / completed-
-> skill / average-score aggregates as **0** because those are owned by Gamification/Learning
-> (not extracted yet, roadmap phases 7 & 8); the identity fields (displayName, email,
+> unchanged. One caveat, still true: `GET /profile` returns the activity-consistency /
+> progress-points / completed-skill / average-score aggregates as **0** — `ProfileService.cs:32`
+> hard-codes `CompletedSkillCount: 0` and its neighbours. The reason this document used to give for
+> it ("Gamification/Learning not extracted yet, roadmap phases 7 & 8") is no longer the reason: both
+> services were extracted long ago. The zeros survive because identity-service was never wired to
+> compose them — it would have to call gamification and learning on the profile read path, and
+> nobody has decided whether that is worth the fan-out. The identity fields (displayName, email,
 > persona, avatarUrl) are real. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+
+---
+
+## Gateway-injected headers
+
+The gateway validates the JWT once and injects trusted identity headers into every downstream
+request; client-supplied copies of these headers are always stripped first, so a caller cannot
+spoof them. See `src/backend/gateway/Gateway/IdentityForwarding.cs` and
+`src/backend/building-blocks/BuildingBlocks/Identity/IdentityHeaders.cs`.
+
+| Header | Set from | Notes |
+|---|---|---|
+| `X-User-Id` | JWT `sub` (falls back to the `NameIdentifier` claim) | present on any authenticated request |
+| `X-User-Role` | JWT `role` claim | present when the token carries a role |
+| `X-Organization-Id` | JWT `org_id` claim | present once `identity-service` issues `org_id` (Phase 40.6); absent on tokens without it |
+
+`org_role` (Phase 40.6) is **not** forwarded as a gateway header — unlike `X-User-Id`/
+`X-User-Role`/`X-Organization-Id`, every service already validates the JWT itself
+(`AddJwtBearer`, shared signing key), so all four policies (`RequirePlatformAdmin`,
+`RequireSuperAdmin`, `RequireOrgAdmin`, `RequireOrgSuperAdmin`) read the `org_role`/`role` claims
+straight off the validated token; no header round-trip needed.
+
+`X-Organization-Id` populates `Sellevate.BuildingBlocks.Tenancy.ITenantContext` via
+`TenantContextMiddleware`. A route marked `[TenantScoped]` (or built with
+`.RequireTenantScope()`) returns `403 Forbidden` when the header is missing or malformed — the
+caller is a validated identity that lacks organization context, not an unauthenticated one, so a
+403 (not a 401) is returned. The organization is **never** read from the request body, query
+string, or route — enforced by `scripts/tenancy-boundary-lint.py` (CI: `tenancy-boundary`
+workflow). See [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 1.3.
+
+**Exception since 2026-08-16 (the owner's role split):** a caller whose validated `role` claim is
+`Admin` or `SuperAdmin` — Sellevate's own staff — passes a `[TenantScoped]` route **without** the
+header, and their reads span every organization. They normally hold no membership, so requiring the
+header would lock the platform admin panel out of its own screens. The privilege comes from the
+claim on the token this service authenticated, never from a header a client could send; the
+organization header, when present, still only names an organization and still grants nothing. Their
+writes are unchanged and still require an explicit organization. See TENANCY.md §1.6a.
 
 ---
 
@@ -18,21 +59,68 @@ All endpoints except those marked `[public]` require `Authorization: Bearer <acc
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /auth/register | `{email, password, displayName}` | `RegistrationResultDto` (no tokens) |
+| POST | /auth/invites/{token}/accept `[public]` | `{displayName?, password?}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/verify-email | `{email, code}` | `AuthTokenResponseDto` + cookie `refreshToken` |
 | POST | /auth/resend-code | `{email}` | 204 |
+| POST | /auth/login/start | `{email}` | `{method}` |
 | POST | /auth/login | `{email, password}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/google | `{idToken}` | `AuthTokenResponseDto` + cookie |
 | POST | /auth/refresh `[public]` | — (reads cookie) | `AuthTokenResponseDto` + new cookie |
 | POST | /auth/logout | — | 204 |
 | POST | /demo/token `[public]` | — | `{accessToken, expiresInSeconds}` |
 
-`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role}`
-`RegistrationResultDto`: `{email, requiresEmailVerification}`
+`AuthTokenResponseDto`: `{accessToken, userId, displayName, isOnboardingCompleted, role, orgId, orgRole}`
 
-**Email verification flow.** `/auth/register` creates an unverified user and emails a
-short-lived numeric code (MailerSend); it returns `RegistrationResultDto` instead of tokens.
-The client then calls `/auth/verify-email` with the code to receive tokens. `/auth/resend-code`
+> **There is no `POST /auth/register` (Phase 40.7).** The route is deleted, not guarded — see
+> [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.1. The only way an account is created is
+> `POST /auth/invites/{token}/accept`. `POST /auth/google` is a login method only: it rejects an
+> unknown Google identity, and one whose account has no **active** membership, with `401` and a
+> single identical message for both cases (it must not reveal which addresses belong to a
+> customer).
+
+> **Suspended organizations (Phase 40.9).** `/auth/login`, `/auth/google`, `/auth/refresh` and
+> `/auth/invites/{token}/accept` all answer `403` (`"Organization suspended"`) when the caller's
+> active membership belongs to a suspended organization. The check lives at the single point every
+> one of those routes converges on — token issuance — so a route added later cannot miss it, and a
+> refresh token cannot outlive the suspension by its 30-day lifetime. Already-issued access tokens
+> still work until they expire (≤15 min): a JWT is not revocable without a session store. An
+> organization identity-service has not heard of yet reads as **active**, never as suspended — the
+> registry projection is eventually consistent and a lagging consumer must not lock a customer out.
+
+**Three-step login (Phase 40.8).** The login method is a per-organization setting
+(`organization_auth_config`, owned by identity-service), so the client asks first and sends a
+credential second:
+
+1. `POST /auth/login/start` `{email}` → `200 {"method": "password" | "oidc" | "saml"}`
+2. the client renders the form for that method
+3. `POST /auth/login` `{email, password}` — the server re-resolves the organization and
+   dispatches to the `IAuthProvider` registered for its method
+
+`/auth/login/start` is **pre-authentication and not tenant-scoped**: the caller has no token and
+no `X-Organization-Id` yet — resolving that is what the step is for.
+
+It answers `200` for **every syntactically valid address, known or not** (`400` only for a
+malformed one), and never returns the organization id or name. This is the same anti-enumeration
+choice `POST /auth/google` makes with its single identical `401`: the first step of a login screen
+is the most reachable endpoint in the product, so its answer must not vary with whether the
+address belongs to a customer. The organization is resolved from an **active membership** first
+(the invite path) and from `allowed_email_domains` second; anything unmatched resolves to
+`password`, exactly like a known address in a password organization.
+
+`"oidc"`/`"saml"` are declared but **not implemented**. An organization configured for one has
+password login refused — `POST /auth/login` returns `401` even for the correct password — rather
+than silently downgraded. Only a customer who configures SSO makes their own domain's answer
+differ; see [DECISIONS.md](DECISIONS.md) (2026-08-15, 40.8).
+
+`orgId`/`orgRole` (Phase 40.6) are `null` unless the user has an active `membership` row —
+absent membership is never implicit organization access. `GET /auth/me` mirrors the same
+two fields (`orgId`, `orgRole`) alongside `id`/`email`/`displayName`/`role`/`isOnboardingCompleted`.
+
+**Email verification flow.** Since 40.7 the invite replaces this flow for anyone arriving by
+invite: possession of the token already proves control of the address, so an accepted invite
+creates the user with `IsEmailVerified = true` and no code is ever sent. The code endpoints stay
+for accounts that predate invites. `/auth/verify-email` takes a code and returns tokens.
+`/auth/resend-code`
 re-issues a code (silent 204 for unknown/already-verified emails to avoid account enumeration;
 `429` with `Retry-After` + `{retryAfterSeconds}` while a resend cooldown is active).
 `/auth/verify-email` returns `401` on an invalid/expired/exhausted code.
@@ -40,6 +128,106 @@ re-issues a code (silent 204 for unknown/already-verified emails to avoid accoun
 is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md](EMAIL_VERIFICATION.md).
 
 ---
+
+## Platform superadmin `[SuperAdmin]` `[NOT tenant-scoped]` (Phase 40.9 — unchanged by the 2026-08-16 role split: impersonation and bootstrapping an organization's first admin are both superadmin-exclusive)
+
+> Served by **identity-service** under `/admin/platform/*` (gateway route `identity-admin-platform`).
+> Organization CRUD lives in organization-service; what lands here is everything that needs
+> identity-db — minting a token and creating an invite. See [DECISIONS.md](DECISIONS.md) (2026-08-15).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /admin/platform/impersonation | `{organizationId, reason}` | `ImpersonationTokenDto`, `404` unknown org, `403` suspended / already impersonating |
+| GET | /admin/platform/impersonation | — | `ImpersonationAuditEntryDto[]`, newest first, max 100 |
+| POST | /admin/platform/organizations/bootstrap-admin | `{organizationId, email}` | `BootstrapOrganizationAdminResponseDto`, `404`, `409` already has an admin, `403` suspended |
+
+`ImpersonationTokenDto`: `{accessToken, expiresAt, impersonationId, organization: {id, name}}`
+`ImpersonationAuditEntryDto`: `{id, actorUserId, actorEmail, organization: {id, name}, reason, issuedAt, expiresAt}`
+`BootstrapOrganizationAdminResponseDto`: `{inviteId, organization: {id, name}, email, expiresAt, token}`
+
+These are the **only** routes in the backend where an organization identifier arrives in a request
+body. TENANCY.md §1.3 states the rule and this exception in the same breath: a superadmin crossing
+a tenant boundary does so through an explicit endpoint that mints a new token, never through a
+parameter on an ordinary route. `scripts/tenancy-boundary-lint.py` allow-lists the two request DTOs
+by exact path and nothing else.
+
+**The impersonation token is deliberately weaker than the one that requested it:**
+
+| Property | Value | Why |
+|---|---|---|
+| `role` | `User` — **never** `SuperAdmin` | it cannot reach any `RequireSuperAdmin` route, which is what stops a second impersonation |
+| `sub` | the superadmin's own user id | the impersonator borrows an organization, never an identity |
+| `org_id` / `org_role` | target organization / `TenancyAdmin` | what it is for — deliberately one rank below `TenancySuperAdmin`, so an impersonator cannot add or remove the borrowed organization's users |
+| `imp`, `imp_id`, `imp_actor` | marker claims | it is recognisable as an impersonation token wherever it turns up |
+| lifetime | `Impersonation:TokenLifetimeMinutes`, default **15** | short |
+| refresh token | **none** | the session cannot be silently renewed; extending it means asking again and writing another audit row |
+
+The audit row is written and committed *before* the token is returned, so a token that exists
+always has a record behind it. `reason` is required (3–500 chars).
+
+`bootstrap-admin` reuses the Phase 40.7 invite machinery verbatim — same `IInviteService`, same
+email, same one-time token — in a scope pinned to the target organization. The role is always
+`TenancySuperAdmin` and is not taken from the request: only a superadmin can invite, so a first
+admin one rank lower would leave the organization unable to add anybody. It answers `409` if the
+organization already has an active `TenancySuperAdmin` membership or a pending `TenancySuperAdmin`
+invite, so it cannot be used as a back door into a running customer's organization.
+
+`404` also covers "organization-service created it seconds ago and identity-service has not
+consumed `organization.created` yet"; the message says so and the operation is safe to retry.
+
+---
+
+## Invites & memberships `[OrgSuperAdmin]` `[tenant-scoped]`
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /invites | `{email?, emails?, role}` | `CreateInvitesResponseDto` |
+| DELETE | /invites/{inviteId} | — | 204 / 404 |
+| DELETE | /memberships/{userId} | — | 204 / 404 |
+
+All three add or remove a user, which after the 2026-08-16 role split is the one privilege reserved
+for a superadmin — so all three require `RequireOrgSuperAdmin` (`org_role = TenancySuperAdmin`, or a
+platform `role = SuperAdmin`) **and** the gateway-injected `X-Organization-Id` header. They are
+`[TenantScoped]`, so a request without that header gets `403` before the action runs. A
+`TenancyAdmin` gets `403` here and nowhere else.
+
+`CreateInvitesResponseDto`: `{created: [{id, email, role, expiresAt, token}], rejected: [{email, reason}]}`
+
+- `email` and `emails` are both accepted and merged — one address or a pasted bulk list, so a
+  РОП onboarding forty managers does not click forty times. A bulk request is **partially
+  successful**: bad addresses land in `rejected` with a reason
+  (`invalid-email`, `duplicate-in-request`, `already-a-member`, `invite-already-pending`)
+  while the rest are created.
+- `role` is an `OrgRole` (`Manager` / `TenancyAdmin` / `TenancySuperAdmin`); an unknown value is
+  `400`. The retired name `OrgAdmin` is **rejected**, not mapped — the `400` message names both
+  replacements so a stale client can fix itself (`docs/DECISIONS.md`, 2026-08-16). Bare numbers
+  outside the enum are rejected too.
+- `token` is the raw single-use token and is returned **only here, once** — the database keeps
+  only its SHA-256 hash. It is also mailed to the invitee (MailerSend).
+- The route deliberately carries **no organization segment**. The roadmap sketched
+  `/organizations/{id}/invites`, but the organization must come from the header, never the
+  route (section 1.3 of TENANCY.md), and `/organizations/*` already belongs to
+  organization-service at the gateway. See [DECISIONS.md](DECISIONS.md) (2026-08-15).
+- `DELETE /invites/{inviteId}` revokes a pending invite; an already-accepted invite and an
+  invite belonging to another organization are both `404`.
+- `DELETE /memberships/{userId}` is **offboarding, not deletion**: it sets
+  `status = deactivated` + `deactivatedAt` and keeps the row. There is no endpoint that deletes
+  a membership — the manager's history belongs to the organization.
+
+`POST /auth/invites/{token}/accept` is the public counterpart and is *not* tenant-scoped: the
+caller has no organization yet, so the organization is recovered from the token's own HMAC
+signature. Responses:
+
+| Status | Meaning |
+|---|---|
+| 200 | accepted — `AuthTokenResponseDto` + `refreshToken` cookie, `orgId`/`orgRole` already set |
+| 400 | the address has no account yet and no `password` was supplied |
+| 404 | unknown, malformed, tampered-with, or another organization's token (deliberately indistinguishable) |
+| 409 | the invite was already used |
+| 410 | the invite expired or was revoked |
+
+Accepting an invite for an address that **already has an account** adds a membership to that
+account; it never creates a second user.
 
 ## Onboarding
 
@@ -72,6 +260,7 @@ is not yet verified. Google sign-in is auto-verified. See [EMAIL_VERIFICATION.md
 | GET | /skill-tree | — | `SkillTreeResponseDto` |
 | GET | /skills | — | `SkillTreeNodeDto[]` (all skills, `locked` if not enrolled) |
 | GET | /skills/stages | — | `SkillStageDto[]` (admin-configured funnel stages, ordered) |
+| GET | /skills/:skillId/topics | — | `TopicDto[]` — `{topicId, skillId, title, orderInSkill}`, the topics of one skill by **id** (not slug), ordered |
 | PUT | /skills/enrolled | `{skillSlugs: string[]}` | 204 |
 
 `PUT /skills/enrolled` — replaces the user's enrolled skill set.  
@@ -86,14 +275,47 @@ Skills currently enrolled but absent from the list are set to `locked` (progress
 
 ---
 
+## Programme (Phase 40.17)
+
+The learner's own view of the frozen curriculum they are pinned to, and the only route in the system
+that moves a pin. Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.5.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /program | — | `MyProgramDto` |
+| POST | /program/switch | `{targetProgramVersionId}` | `MyProgramDto` (409 if the target cannot be switched to) |
+
+`MyProgramDto`: `{isEnrolled, programVersionId, programVersionNumber, enrolledAt, switchedAt, items[], latestPublishedProgramVersionId, latestPublishedProgramVersionNumber, switchAvailable, pendingDiff}`
+`ProgramItemDto`: `{id, skillId, lessonId, lessonVersionId, lessonVersionNumber, lessonTitle, orderIndex}`
+
+`lessonTitle` is read out of the **pinned snapshot**, not off the live `Lessons` row. Showing the
+current title next to an old pin is exactly the retroactive substitution the phase exists to stop;
+`null` means the snapshot is no longer visible, which is a truer answer than the new title.
+
+`isEnrolled: false` is a normal answer, not an error. An organization that has published no
+programme version has no pins, and its people go on reading the live skill tree as they always have
+— enrollment narrows and freezes, it does not gate (see [DECISIONS.md](DECISIONS.md), 2026-08-17).
+
+`pendingDiff` is present only when `switchAvailable` is true, and is the same `ProgramDiffDto` the
+admin diff route returns. **Nothing about it is applied until the learner calls `/program/switch`.**
+
+`POST /program/switch` acts on the caller's own pin and takes no user id; there is deliberately no
+route by which anyone moves anybody else's. The target version is **named** rather than implied, so
+that a version published between showing the diff and accepting it cannot become the one the learner
+lands on. 409 covers all three refusals — not enrolled, target is not a published version of this
+organization, target is the version they are already on — because each of them means "there is
+nothing here to switch to" and none should resolve into a move nobody asked for.
+
+---
+
 ## Lessons & Exercises
 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /skills/:slug/lessons | — | `LessonSummaryDto[]` |
 | GET | /lessons | — | `LessonSummaryDto[]` (all skills) |
+| GET | /topics/:topicId/lessons | — | `LessonSummaryDto[]` (one topic, with the caller's per-lesson status) |
 | GET | /lessons/:lessonId/exercises | — | `ExerciseDto[]` |
-| GET | /lessons/:lessonId/next | — | `NextLessonDto` or 204 if no next lesson |
 | POST | /exercises/:exerciseId/submit | `{answer: <jsonb>}` | `ExerciseSubmissionResultDto` |
 | POST | /exercises/:exerciseId/chat | `{message: string}` | `ExerciseChatResponseDto` |
 | POST | /exercises/:exerciseId/voice/stream | `{message: string}` | `application/octet-stream` — length-prefixed frames |
@@ -140,15 +362,15 @@ The **user speaks first** — an empty `message` returns an empty turn (no AI gr
 **rate_call**: `{ratings: {criterionId: number}, overallComment?: string}`
 **written_answer**: `{text: string}`
 
-`NextLessonDto`: `{lessonId, title, xpReward}` — next lesson in same skill with status `available` or `in_progress`. Returns 204 when no next lesson exists.
-
 ---
 
 ## Reference
 
 | Method | Path | Response |
 |---|---|---|
-| GET | /skills/:slug/reference | `ReferenceMaterialDto[]` |
+| GET | /skills/:skillId/reference | `ReferenceMaterialDto[]` — the materials of one skill. The segment is the skill's **id**, constrained `{skillId:guid}` in the route; a slug there is a 404 from routing, not a lookup miss |
+| GET | /reference?category=&search= | `ReferenceMaterialDto[]` — the whole library, both filters optional and independent |
+| GET | /reference/categories | `string[]` — the distinct non-empty categories, for the filter control |
 
 `ReferenceMaterialDto`: `{materialId, title, markdownContent, sortOrder}`
 
@@ -264,13 +486,43 @@ Tiers: configurable via the `LeagueTiers` table (admin CRUD below). Default ladd
 
 ## Auth — updated response
 
-`AuthTokenResponseDto` now includes `role: "User" | "Admin" | "SuperAdmin"`.
+`AuthTokenResponseDto` now includes `role: "User" | "Admin" | "SuperAdmin"` (the global `Admin` role
+was removed in Phase 40.6 — see below) plus the nullable `orgId`/`orgRole` pair.
 
 ---
 
-## Admin (requires `RequireAdmin` policy — role Admin or SuperAdmin)
+## Admin (the gate is **per controller** — read this before assuming)
 
 All routes prefixed `/admin`. Unauthorized → 403.
+
+> **There is no single policy for `/admin/*` any more.** This section used to be headed "requires
+> `RequirePlatformAdmin`" and to claim that "every `/admin/*` content endpoint below is open to
+> Sellevate staff at either rank", with `RequireOrgAdmin` declared in every service but holding
+> **zero call sites**. Blocks 40.15 onward falsified all of that: `RequireOrgAdmin` now has **20
+> call sites across 18 controllers**, and the two gates split the section roughly in half.
+>
+> **Platform-only (`RequirePlatformAdmin`, `role` ∈ {`Admin`, `SuperAdmin`}).** The shared library
+> and the platform's own knobs — nobody's customer edits these: skills, skill stages, topics,
+> exercise-type prompts, daily quotes, the seeder, dialog bundles/modes, voice usage, leagues,
+> gamification settings, and discuss moderation.
+>
+> **Organization-scoped (`RequireOrgAdmin`).** Everything a customer administers inside their own
+> tenant: lessons, lesson versions, lesson metrics/accuracy, programme, assignments, exercises,
+> reference, techniques, content overrides, content generation, content adaptation, team skill
+> gaps, team insights, dialog reviews, admin dialog sessions, dialog overrides, AI quota usage, and
+> the organization profile. The policy **also admits platform staff** carrying no organization role
+> at all, so a Sellevate administrator can still reach these screens — with the RLS `USING` clause
+> widening their reads and `WITH CHECK` refusing their writes into a tenant they did not name.
+>
+> Individual subsections below state their own gate; where one does, it is authoritative. A handful
+> of controllers mix the two — `AdminLessonsController` is org-scoped except for `Create`, which is
+> platform-only because creating a base lesson adds to the shared library.
+>
+> `RequireSuperAdmin` is unchanged and still guards only the routes that add or remove a user: the
+> `/admin/users` mutations and all of `/admin/platform/*`. The organization roles (`TenancyAdmin`,
+> `TenancySuperAdmin`) live on `membership`, not on `user`; their own admin screen is roadmap block
+> 40.20. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md), [ADMIN_PANEL.md](ADMIN_PANEL.md) and
+> `docs/DECISIONS.md` (2026-08-16) for the route audit that started this split.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -298,23 +550,675 @@ All routes prefixed `/admin`. Unauthorized → 403.
 | GET | /admin/topics | — | `AdminTopicWithSkillDto[]` |
 | GET | /admin/skills/:skillIconicName/topics | — | `AdminTopicDto[]` |
 | POST | /admin/skills/:skillIconicName/topics | `{iconicName, title, orderInSkill}` | `AdminTopicDto` |
+| PUT | /admin/skills/:skillIconicName/topics/:topicIconicName | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
 | PUT | /admin/topics/:id | `{iconicName?, title?, orderInSkill?}` | `AdminTopicDto` |
 | DELETE | /admin/topics/:id | — | 204 |
 
 `AdminTopicDto`: `{id, skillId, iconicName, title, orderInSkill}`
 `AdminTopicWithSkillDto`: `{id, skillId, skillIconicName, skillTitle, iconicName, title, orderInSkill}`
 
+The two `PUT`s are the same update reached two ways: by iconic name (the pair the admin UI has in
+hand when it is browsing a skill) or by primary key. Both take the same partial body — every field
+optional, only the supplied ones are written. The iconic-name form ignores `skillIconicName` when
+locating the row; the topic's own iconic name is already unique.
+
 ### Lessons
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/lessons | — | `AdminLessonWithTopicDto[]` |
 | GET | /admin/topics/:topicIconicName/lessons | — | `AdminLessonDto[]` |
-| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic}` | `AdminLessonDto` |
-| PUT | /admin/lessons/:id | `{title, orderInTopic}` | `AdminLessonDto` |
+| POST | /admin/topics/:topicIconicName/lessons | `{title, orderInTopic, slug?}` | `AdminLessonDto` (400 if `slug` is malformed) |
+| PUT | /admin/lessons/:id | `{title, orderInTopic, slug?}` | `AdminLessonDto` (400 if `slug` is malformed) |
 | DELETE | /admin/lessons/:id | — | 204 |
 
-`AdminLessonDto`: `{id, topicId, title, orderInTopic}`
+`AdminLessonDto`: `{id, topicId, title, orderInTopic, slug, isArchived}`
 `AdminLessonWithTopicDto`: `{id, topicId, topicIconicName, topicTitle, title, orderInTopic}`
+
+`slug` (Phase 40.15) is optional in both directions. Omitted on create, the lesson gets a
+collision-free machine slug derived from its own id; omitted on update, the existing slug is left
+alone rather than regenerated — regenerating would change the lesson's stable identifier on every
+title edit, which is the one thing a slug must not do. Supplied, it is validated (lowercase latin
+letters, digits, single hyphens) and rejected with 400 rather than silently rewritten.
+
+### Lesson versions (Phase 40.15)
+
+Immutable snapshots of a lesson together with its full ordered exercise set. Design:
+[TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/lessons/:lessonId/versions | — | `LessonVersionSummaryDto[]`, newest first (404 if no such lesson) |
+| GET | /admin/lessons/:lessonId/versions/:versionId | — | `LessonVersionDto` |
+| POST | /admin/lessons/:lessonId/versions/draft | — | `LessonVersionDto` (the lesson's single draft, created if absent) |
+| POST | /admin/lessons/:lessonId/versions/publish | `{isBreaking?}` (default `false`) | `PublishLessonVersionResultDto` |
+
+`LessonVersionSummaryDto`: `{id, lessonId, versionNumber, status, contentHash, baseVersionId, isBreaking, createdBy, createdAt, publishedAt}`
+`LessonVersionDto`: the same plus `content` — the snapshot, as a JSON object rather than a string
+`PublishLessonVersionResultDto`: `{version, createdNewVersion}`
+
+`createdNewVersion: false` means the content hash matched the last published version: nothing
+changed, so nothing was frozen and the existing version comes back unchanged. The caller should say
+"no changes to publish" rather than show a version number that did not move.
+
+`isBreaking` is the one thing publishing cannot infer. A typo fix and a changed correct answer look
+identical to a diff, and the accuracy series joins across the first and splits across the second
+(Phase 40.16, below) — so the publisher declares which it was.
+
+**Authorization is two-part.** The controller carries `RequireOrgAdmin`, which admits an
+organization's own administrator as well as any platform administrator. That alone is not enough:
+a lesson with `OrganizationId IS NULL` is the global library every customer reads, so both write
+routes additionally require platform administrator rights when the lesson is global, answering 403
+otherwise. The reverse direction needs no check — another organization's lessons were already
+invisible before the request arrived, through the query filter and the RLS policy. As everywhere,
+the organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`,
+never from the body, the query string or the route.
+
+### Lesson accuracy by version (Phase 40.16)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/lessons/:lessonId/accuracy | — | `LessonAccuracySeriesDto` (404 if no such lesson) |
+
+`LessonAccuracySeriesDto`: `{lessonId, segments[], unversionedAttempts}`
+`LessonAccuracySegmentDto`: `{startVersionNumber, endVersionNumber, versionNumbers[], versionIds[], startsAtBreakingChange, statistics}`
+`LessonAttemptStatisticsDto`: `{attemptCount, correctAttemptCount, accuracy, averageScore, firstAttemptAt, lastAttemptAt}`
+
+`accuracy` is a fraction in `0..1`, not a percentage, and is `0` when `attemptCount` is `0` — a
+segment with no attempts is returned rather than omitted, because "nobody has answered this version
+yet" and "this version does not exist" are different answers.
+
+**A segment is a run of versions the chart may draw as one line.** It starts at the lesson's first
+published version and at every version published with `isBreaking: true`; cosmetic versions extend
+the segment they follow. Draft versions are excluded (no learner ever saw one); archived versions are
+kept (they were live once, and dropping them would erase the history of everyone who studied then).
+
+`unversionedAttempts` counts attempts with no `lessonVersionId` at all — everything recorded before
+40.16, until `docs/TENANCY/sql/40.16_progress_version_backfill.sql` is run. They are a separate
+bucket rather than part of version 1 on purpose: nobody can prove which content those answers were
+scored against, and folding them in would be the same retroactive claim the phase exists to stop.
+
+`RequireOrgAdmin`, and — unlike the publish routes above — with no second platform-level gate. This
+endpoint writes nothing and counts only the caller's own organization's attempts: the RLS policy on
+`UserExerciseAttempts` is plain equality, so an organization administrator asking about a global
+lesson gets their own team's numbers and nobody else's, which is exactly what a РОП is entitled to
+ask.
+
+### Programme versions and enrollment (Phase 40.17)
+
+The РОП's curriculum: an ordered list of references, frozen on publish, and who is standing on which
+frozen copy. Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.5.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/program/versions | — | `ProgramVersionSummaryDto[]`, newest first |
+| GET | /admin/program/versions/:programVersionId | — | `ProgramVersionDto` |
+| GET | /admin/program/versions/:programVersionId/diff/:baselineProgramVersionId | — | `ProgramDiffDto` (from baseline → version) |
+| POST | /admin/program/versions/draft | — | `ProgramVersionDto` (the organization's single draft, created if absent) |
+| POST | /admin/program/versions/publish | — | `PublishProgramVersionResultDto` (409 if there is no draft) |
+| GET | /admin/program/enrollments | — | `ProgramEnrollmentDto[]` |
+| POST | /admin/program/enrollments | `{userId}` | `ProgramEnrollmentDto` (409 if nothing is published yet) |
+
+`ProgramVersionSummaryDto`: `{id, versionNumber, status, itemCount, enrollmentCount, createdBy, createdAt, publishedAt}`
+`ProgramVersionDto`: `{id, versionNumber, status, createdBy, createdAt, publishedAt, items[]}`
+`PublishProgramVersionResultDto`: `{version, createdNewVersion}`
+`ProgramEnrollmentDto`: `{userId, programVersionId, programVersionNumber, previousProgramVersionId, enrolledAt, switchedAt}`
+
+`POST .../draft` re-derives the draft's items from the live skill tree every time it is called:
+skills by their position in the tree, topics by theirs, lessons by theirs, archived lessons left out.
+Each item is pinned to the lesson's newest published version, minting a version 1 for a lesson that
+has never been published — through the same resolver an exercise attempt goes through, so a
+programme and the progress recorded against it can never disagree about which snapshot a lesson
+currently is.
+
+`createdNewVersion: false` means the draft's items were identical to the last published version's:
+nothing was frozen, the draft was discarded, and the existing version comes back. This matters more
+than the lesson equivalent — a version that changed nothing would still tell every enrolled learner
+that a new programme is waiting and then show them an empty diff, which is how a switch notice stops
+being read.
+
+`ProgramDiffDto`: `{fromProgramVersionId, fromVersionNumber, toProgramVersionId, toVersionNumber, addedLessons[], removedLessons[], changedLessons[], movedLessons[], hasBreakingChanges}`
+`ProgramDiffLessonDto` (added/removed): `{lessonId, skillId, lessonVersionId, lessonVersionNumber, lessonTitle, orderIndex}`
+`ProgramDiffVersionChangeDto` (changed): `{lessonId, skillId, lessonTitle, fromLessonVersionId, fromLessonVersionNumber, toLessonVersionId, toLessonVersionNumber, isBreaking}`
+`ProgramDiffMoveDto` (moved): `{lessonId, lessonTitle, fromSkillId, toSkillId, fromOrderIndex, toOrderIndex}`
+
+Four buckets rather than one list, because they mean four different things to whoever decides.
+`movedLessons` is the whole content of a "reorder the skills" edit and is the proof that such an edit
+touched no lesson — same lesson, same pinned snapshot, different place.
+
+`isBreaking` on a changed lesson is **not** read off the target version's own flag. A programme can
+skip several lesson versions at once, so the answer is "did any published version of this lesson
+between the two pins declare itself breaking" — every version strictly after the lower of the two
+version numbers and up to and including the higher, so that a move back to an older programme is
+reported just as loudly. A pin whose snapshot is missing or invisible counts as breaking: "the
+content changed and nobody can say how" is a breaking change.
+
+**Enrollment is asymmetric, and that asymmetry is the block.** `POST /admin/program/enrollments`
+puts a learner with no pin on the newest published version and is idempotent — a learner who already
+has a pin comes back **unchanged**, not moved. An administrator re-running it after publishing
+therefore enrolls the newcomers and leaves everybody mid-course exactly where they were. Moving an
+existing pin is the learner's own act (`POST /program/switch`), and no admin route does it.
+
+**Authorization is one-part, unlike the lesson-version routes above.** `RequireOrgAdmin` and nothing
+else: there is no such thing as a global programme — `ProgramVersions.OrganizationId` is `NOT NULL`
+and the RLS policy is plain equality — so the "is this the global library?" question that forced a
+second gate onto lesson publishing has no analogue here. The write routes do refuse a caller with no
+organization in context at all (403): platform staff satisfy `RequireOrgAdmin` without holding a
+membership, and a programme with no owner is not a thing that can be written. As everywhere, the
+organization comes from the gateway-validated `X-Organization-Id` header via `ITenantContext`.
+
+### Assignments (Phase 40.21, thresholds 40.22, issuing and the manager's screen 40.23, automatic repeats 40.24, the РОП's push 40.26)
+
+The РОП's targeted practice: what the team is asked to do after an internal training, who it is for,
+what counts as done, and who is where on it. Design:
+[TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §1.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/assignments?status=draft\|active\|closed | — | `AssignmentSummaryDto[]`, newest first (400 on an unknown status) |
+| GET | /admin/assignments/:assignmentId | — | `AssignmentDto` |
+| GET | /admin/assignments/:assignmentId/progress | — | `AssignmentProgressDto[]` |
+| POST | /admin/assignments | `CreateAssignmentRequestDto` | `AssignmentDto` (a draft) |
+| PUT | /admin/assignments/:assignmentId | `UpdateAssignmentRequestDto` | `AssignmentDto` (409 when the status forbids the edit) |
+| POST | /admin/assignments/:assignmentId/activate | — | `AssignmentDto` (409 if it is not a draft, or has no content) |
+| POST | /admin/assignments/:assignmentId/close | — | `AssignmentDto` (409 if it is not active) |
+| DELETE | /admin/assignments/:assignmentId | — | 204 (409 for anything that has been issued) |
+| POST | /admin/assignments/:assignmentId/remind?scope=unfinished\|not_started | — | `AssignmentReminderResultDto` (409 if it is not active or the scope is unknown; **503** when the roster cannot be read) |
+
+Learner-facing (`[Authorize]`, no admin gate, takes no user id — the caller is the token):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /assignments/active | — | `ActiveAssignmentDto[]`, soonest deadline first, `[]` when there are none |
+
+Service-to-service (no JWT; `X-Internal-Service-Secret` + `[TenantScoped]`, **not routed through the
+gateway**):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /internal/memberships/active *(identity-service)* | — | `{userIds: uuid[], administratorUserIds: uuid[]}` — active memberships of the organization in the header, and (40.26) the subset who administer it |
+| GET | /internal/assignments/practice-context?userId=&modeKey= *(learning-service)* | — | `AssignmentPracticeContextDto`, or 204 when this person owes no conversation on that mode |
+
+`CreateAssignmentRequestDto` / `UpdateAssignmentRequestDto`:
+`{title, goal?, sourceType, sourceRef?, content?: AssignmentContentItemDto[], audience?, opensAt?, deadline?, completionRule, repeatSchedule?}`
+`CreateAssignmentRequestDto` also takes `contentGenerationJobId?` (40.31). **When it is present,
+`sourceType` and `sourceRef` in the body are ignored and derived from the run instead** — `gap_detected`
++ the run's `skill-gap:<stage>@<date>` for a run the dashboard started, `training` +
+`lesson-version:<uuid>` for one somebody started by pasting material. The caller therefore cannot label
+hand-written work as detected by the dashboard, and cannot lose the link by forgetting to label
+generated work. `content` left empty defaults to the run's own frozen lesson version, so the ordinary
+case is one field; sending a `content` list keeps it, which is how the exercises get paired with a
+`dialog_scenario` and a reading. A run that has not reached `completed` with a `producedLessonVersionId`
+is a 400 — an assignment pointing at a lesson that does not exist yet would be issued the moment
+somebody pressed activate, and 40.21 froze `content` at that moment on purpose
+`AssignmentContentItemDto`: `{kind, reference, orderIndex, persona?}` — `persona` (40.23) is `{name?, position?, personality?, difficulty?}`, meaningful only on a `dialog_scenario` item and silently dropped from every other kind
+`AssignmentAudienceDto`: `{kind, userIds?, groupId?}`
+`AssignmentDto`: `{id, title, goal, sourceType, sourceRef, content[], audience, opensAt, deadline, completionRule, repeatSchedule, repeatOfAssignmentId, repeatWaveIndex, status, createdBy, createdAt, updatedAt, activatedAt, closedAt}`
+`AssignmentSummaryDto`: `{id, title, sourceType, status, audienceKind, opensAt, deadline, hasRepeatSchedule, repeatOfAssignmentId, repeatWaveIndex, contentItemCount, assignedCount, startedCount, completedCount, failedThresholdCount, createdBy, createdAt, updatedAt}`
+`repeatOfAssignmentId` / `repeatWaveIndex` (40.24) are set only on a generated repeat and say which wave of which origin it is; both null on anything a human created. There is **no route that creates a repeat** — the sweep does, on its own — and `createdBy` is null on every one of them
+`AssignmentProgressDto`: `{userId, status, bestScore, attemptCount, firstOpenedAt, completedAt}`
+`AssignmentReminderResultDto`: `{notifiedCount, scope}`
+
+**`scope` on `POST /remind` (40.26), and the two failure modes it inherited.** `unfinished` is the
+default and 40.23's behaviour — everybody who has not completed it, including the people under the
+threshold. `not_started` is the set the day-before digest names, and it exists because that digest
+carries the remind button: a notice listing five names whose button then messages twelve people is
+the product doing something other than what it just said. The route now also **consults the live
+roster before nudging anybody**, so it can answer 503 the way `POST /activate` does — a progress row
+outlives employment on purpose, and reminding without checking means mailing an ex-employee their
+former employer's homework. `notifiedCount` therefore counts people who both owe the work and still
+work there.
+`ActiveAssignmentDto`: `{id, title, goal, opensAt, deadline, completionRule, content: ActiveAssignmentItemDto[], status, bestScore, attemptCount, firstOpenedAt, completedAt}`
+`ActiveAssignmentItemDto`: `{kind, reference, orderIndex, title, lessonId}` — `title` is null when the referenced content was archived after the assignment was issued, `lessonId` is set only for `lesson_version`. **No persona is ever in this DTO** — see below.
+`AssignmentPracticeContextDto`: `{assignmentId, title, goal, personaName, personaPosition, personaPersonality, personaDifficulty}`
+
+**`completionRule` is required, has no default, and since 40.22 is checked against a closed
+vocabulary.** If completion could mean "opened everything", managers would click through in four
+minutes, the dashboard would read 100%, and the number would be a lie the РОП eventually catches — so
+the API has no way to express it. Two kinds, both from the roadmap:
+
+| `kind` | Shape | One attempt is | Met when | `bestScore` on the progress row |
+|---|---|---|---|---|
+| `dialog_score` | `{"kind":"dialog_score","minimumScore":70,"requiredCount":3}` | one graded practice conversation on one of the assignment's `dialog_scenario` items | `requiredCount` conversations have each scored at least `minimumScore` | the best single conversation score so far |
+| `exercise_accuracy` | `{"kind":"exercise_accuracy","minimumAccuracyPercent":80}` | one exercise submission against the assignment's pinned `lesson_version` | every exercise in the pinned set has been attempted **and** correct submissions ÷ all submissions ≥ `minimumAccuracyPercent` | `null` until the whole set has been attempted, then the accuracy percent |
+
+Anything else is a **400**: an unknown `kind`, a missing number, a bar outside 1–100, a
+`requiredCount` outside 1–20. A bar of **zero is refused explicitly** — "score at least 0" is a
+threshold every click clears, which is the failure mode wearing a discriminator. Counting
+conversations rather than averaging them is deliberate (an average lets one strong call carry two
+weak ones), and so is counting exercise *submissions* rather than exercises-eventually-correct
+(brute-forcing a set lowers accuracy instead of raising it).
+
+`POST /activate` additionally **409s when the rule measures content the assignment does not carry** —
+`dialog_score` with no `dialog_scenario` item, `exercise_accuracy` with no `lesson_version` item.
+Issuing freezes both the rule and the content, so this is the last moment they can be reconciled, and
+an assignment nobody can ever finish is indistinguishable on the dashboard from a team that has not
+started.
+
+**`repeatSchedule` is optional and, since 40.24, checked against a closed vocabulary of exactly one
+kind.** It is what turns one training into recurring practice; without it the product's central claim
+is a slogan (`docs/TENANCY/ASSIGNMENTS.md` §2.1).
+
+| `kind` | Shape | Means |
+|---|---|---|
+| `fixed_offsets` | `{"kind":"fixed_offsets","offsetDays":[7,21]}` | A shortened re-issue this many days after **the origin was issued** (`activatedAt`), once per offset. `offsetDays` may be omitted and then means exactly `[7, 21]` |
+
+Anything else is a **400**: an unknown `kind`, a list that is empty, longer than 4, not ascending, or
+holding an offset outside 1–180 days. A cron expression is deliberately not expressible — what is
+being scheduled is the decay curve of one training session, which has no weekly rhythm to align to.
+
+What a wave actually is, because none of it is a route:
+
+- **A new assignment row**, created already `active` and linked to its origin by
+  `repeatOfAssignmentId` + `repeatWaveIndex`. Configured once, then automatic — a draft awaiting a
+  press would be a to-do item, which is what internal trainings die of. A repeat never carries a
+  schedule of its own (the database refuses it), so a series is one level deep.
+- **Issued to the origin's recipients**, intersected with the live roster — not to a fresh resolution
+  of the audience rule, which three weeks later would hand a shortened refresher to everybody hired
+  since and change the denominator between waves. Its own stored `audience` is therefore the resolved
+  `{"kind":"users","userIds":[…]}`. Outcome does not filter it: whoever was asked is asked again,
+  `failed_threshold` and `not_started` included.
+- **Shortened, never easier.** `reference_material` items are dropped (kept when they are all the
+  assignment has) and `dialog_score.requiredCount` is halved, rounded up, minimum one. The score bars
+  are copied untouched — lowering one would make the two waves incomparable, which is the only thing
+  the series is for. The deadline is the origin's *duration* re-based on issue time (floor of one
+  day); an origin with no deadline repeats with none.
+- **A closed origin still repeats.** The only way to cancel a series is to clear or shorten
+  `repeatSchedule` with a `PUT` **while the assignment is still active** — it is deliberately not in
+  the freeze set. Once closed, everything on the row is frozen and the remaining waves will fire.
+- **A wave more than three days late is dropped**, not delivered: the value of spaced repetition is
+  the spacing.
+
+No new notification family: a repeat stages `assignment.issued` per recipient, exactly as a
+human-pressed issue does.
+
+Work done **before** the assignment was issued never counts towards it: the measurement window opens
+at the later of `activatedAt` and `opensAt`.
+
+`content` is a list of **references**, never exercise bodies. Three kinds:
+
+| `kind` | `reference` | Why |
+|---|---|---|
+| `lesson_version` | a `LessonVersions.Id` | The assignment's exercise set. A frozen snapshot, so a recorded score always describes content somebody can still read; pointing at a mutable `Exercise` id would repeat the defect 40.16 removed from progress. The eleven existing exercise types render it with **no new code** |
+| `dialog_scenario` | an ai-service dialog mode **key** | The practice conversation. A key, not a uuid — that is how ai-service addresses modes. 40.23 turns it into an ordinary `DialogSession` with an injected persona |
+| `reference_material` | a `ReferenceMaterials.Id` | Ungraded theory, resolved through the same override and substitution path as any other read |
+
+Duplicate `(kind, reference)` pairs are a 400, `orderIndex` is re-derived densely from the order the
+items arrive in, and a `lesson_version` or `reference_material` reference that is not a uuid is a 400.
+
+`audience` is the **rule**, not the resolved people: `{"kind":"whole_team"}`,
+`{"kind":"users","userIds":[…]}` or `{"kind":"group","groupId":…}`, defaulting to `whole_team`. The
+employee list lives in identity-service, so the column stores the rule and never a copy of it.
+
+**Issuing resolves the rule (40.23).** `POST /activate` asks identity-service for the organization's
+active member ids, turns the rule into named people, writes one `not_started` progress row per
+recipient and stages one `assignment.issued` notice per recipient — in one transaction, so "was
+asked" and "was told" cannot diverge. From this block on, `GET /admin/assignments/:id/progress`
+returns real rows and the summary's funnel counts are real numbers.
+
+Three consequences worth knowing before calling these routes:
+
+- **A named `userIds` list is intersected with the live roster.** Somebody who has left is dropped
+  (with a log line, not a refusal — one leaver must not break every assignment that mentioned them),
+  and a user id belonging to another organization is dropped outright. An audience that resolves to
+  **nobody** is a `400`: a silently empty issue produces an active assignment whose funnel reads zero
+  of zero, which on the screen is indistinguishable from a team that has not started.
+- **`{"kind":"group"}` is a `400`**, not a silent widening to the whole team. Nothing in the platform
+  defines a group yet; the kind is accepted structurally by the schema so a later block needs no
+  migration.
+- **`PUT` on an *active* assignment re-resolves the audience and tops up**, adding rows and notices
+  for anybody new and never removing anybody. That is how a person hired after the issue joins work
+  already running — nothing back-dates them automatically. A recipient who has since left keeps their
+  row (it is the record that they were asked) but is not contacted again.
+
+Both routes answer **`503`** when identity-service cannot be reached, with nothing written. That is
+deliberately not a `500`: nothing is wrong with the request or the assignment, and the honest
+instruction is "press it again".
+
+`sourceType` is `training`, `manual` or `gap_detected`, and `sourceRef` is read according to it: a
+`manual` assignment with a source reference is a 400. When the reference names library content it must
+name a **frozen version** (`lesson-version:<uuid>`), never a lesson.
+
+**Status transitions are one-way: `draft → active → closed`.** A draft is fully editable and
+deletable. An issued assignment refuses edits to `sourceType`, `sourceRef`, `content` and
+`completionRule` with a 409 naming the fields — refused rather than silently ignored, because an
+administrator who believes they moved a threshold and did not is worse off than one who is told they
+cannot. Title, goal, audience, opening time, deadline and repeat schedule stay editable, because adding
+three people to a running assignment and extending a deadline are ordinary acts. A closed assignment is
+frozen whole and cannot be reopened; the answer to "we want that practice again" is a new assignment,
+which is also what 40.24's repeats will create. The database enforces all of this with a trigger, not
+only the service.
+
+**Authorization is one-part, like the programme routes above.** `RequireOrgAdmin` and nothing else:
+there is no global assignment — `Assignments.OrganizationId` is `NOT NULL` and the RLS policy is plain
+equality — so the "is this the global library?" question that forces a second gate onto lesson
+publishing has no analogue. The write routes refuse a caller with no organization in context at all
+(403): platform staff satisfy `RequireOrgAdmin` without holding a membership, and an assignment with no
+owner is not a thing that can be written. As everywhere, the organization comes from the
+gateway-validated `X-Organization-Id` header via `ITenantContext`.
+
+**The learner's own screen (40.23).** `GET /assignments/active` returns the caller's unfinished
+assignments — the query is over *their progress rows*, so an assignment nobody issued to them cannot
+appear however active it is, and no second authorization gate is needed to make that true. Completed
+ones drop off ("пока не выполнено"); `failed_threshold` stays, because the work is finished and the
+bar was not met and hiding it would leave the person who most needs another attempt with no way back.
+An assignment whose `opensAt` has not arrived is absent. `completionRule` comes back verbatim so the
+screen can name the bar instead of a status word. **An empty array is the normal answer** and the
+client must render nothing for it — the assignment strip is an addition to the home screen, never a
+replacement for the skill tree.
+
+**Nothing on the learner path writes.** There is no "mark as opened" route, deliberately: it would
+make the read path a second writer of columns `AssignmentThresholdConsumer` owns, with a different
+idea of what "started" means (a screen opened rather than graded work done).
+
+**The practice conversation and its persona (40.23).** A `dialog_scenario` content item names an
+ai-service dialog mode key, and the assignment's practice dialogue is an ordinary `POST
+/dialog/sessions` on that mode. ai-service then calls
+`GET /internal/assignments/practice-context` itself and injects the assignment's framing and persona
+into the prompt through `AssignmentPracticePromptBuilder`. **The persona is never in a response the
+browser sees and never accepted in a request body**: the client starting the session belongs to the
+person being graded against that persona, and a persona they can send is one they can rewrite. The
+lookup degrades to "no assignment" on any failure, so a practice screen never fails to open because
+learning-service is down.
+
+**Progress moves on events, not on requests (40.22).** `AssignmentProgressDto.status` is written by
+`AssignmentThresholdConsumer`, which listens to `dialog.evaluated` and `exercise.completed` and
+re-judges that person's open assignments. Nothing about it is synchronous with a learner's submit, so
+a progress row updates a moment after the work rather than in the same response —
+`POST /exercises/:id/submit` returns exactly what it always did. The four statuses:
+
+| `status` | Means |
+|---|---|
+| `not_started` | issued to this person, no work recorded since it was issued |
+| `in_progress` | started, and the work the rule measures is not finished yet |
+| `failed_threshold` | the work **is** finished and the result is under the bar — "started, tried 4 times, did not reach it" |
+| `completed` | the bar was met. Terminal: a later weaker attempt is practice, not a demotion, so `bestScore` and `completedAt` stand |
+
+`attemptCount` and `bestScore` are **recomputed** from the recorded attempts on every evaluation, never
+incremented, so reprocessing an event cannot inflate them.
+
+### The manager dashboard (Phase 40.25)
+
+The screen a РОП actually opens: one assignment's funnel with named people behind it, the team's
+skill heat map, the team's graded conversations, and the two-way review loop over a disputed grade.
+Design: [TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §4 and §4.1.
+
+**Gateway routing.** Before this block, `/assignments/*` and `/admin/assignments/*` had no gateway
+route at all — the manager strip shipped in 40.23 could not reach learning-service through the
+gateway. 40.25 adds `learning-assignments` (`/assignments/{**catch-all}`),
+`learning-admin-assignments` / `learning-admin-assignments-root` (`/admin/assignments/{**catch-all}`
+and the bare `/admin/assignments`), `learning-admin-team` (`/admin/team/{**catch-all}`),
+`learning-admin-dialog-reviews` / `-root` (`/admin/dialog-reviews/{**catch-all}` and the bare path),
+`learning-dialog-reviews` / `-root` (`/dialog-reviews/{**catch-all}` and the bare path), and
+`ai-admin-dialog-sessions` / `-root` (`/admin/dialog-sessions/{**catch-all}` and the bare path).
+
+#### Assignment dashboard (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/assignments/:assignmentId/dashboard | — | `AssignmentDashboardDto`, 404 if the assignment does not exist |
+
+`RequireOrgAdmin`, same gate as every other assignment route. It supersedes nothing —
+`GET /admin/assignments/:assignmentId/progress` stays, because it is the raw, name-free list and the
+only one of the two that cannot be affected by identity-service being down.
+
+`AssignmentDashboardDto`: `{assignment: AssignmentSummaryDto, funnel: AssignmentFunnelDto, rows: AssignmentDashboardRowDto[], series: AssignmentWaveDto[], rosterKnown}`
+`AssignmentFunnelDto`: `{assignedCount, notStartedCount, startedCount, completedCount, failedThresholdCount, leftOrganizationCount, assignedActiveCount}`
+`AssignmentDashboardRowDto`: `{userId, displayName, status, bestScore, attemptCount, firstOpenedAt, completedAt, isActiveMember}`
+`AssignmentWaveDto`: `{assignmentId, waveIndex, status, activatedAt, deadline, funnel: AssignmentFunnelDto}`
+
+**The funnel is five counts, not four.** `failedThresholdCount` is not a subset of `completedCount` —
+it is people who finished the measured work and stayed under the bar, the row the roadmap calls the
+most valuable on the screen. `startedCount` is `in_progress` + `completed` + `failed_threshold`
+together: a person who tried and failed has started.
+
+**The roster counts are nullable, not zero, when identity-service could not be asked who still works
+here.** `rosterKnown: false` means every `isActiveMember` and both `leftOrganizationCount` /
+`assignedActiveCount` are `null`; the screen should say "could not check" rather than draw a zero. A
+person who left keeps their progress row (40.23) and would otherwise read as `not_started` forever —
+`isActiveMember` is how the screen stops counting them against a team that has not failed at
+anything.
+
+**`series` always has at least one entry — the assignment itself.** A single-shot assignment yields
+exactly one wave (itself) rather than an empty list, so the screen has one shape instead of two.
+`waveIndex` is `0` for the origin and the 1-based `repeatWaveIndex` for each repeat, so "wave 2" on the
+screen matches the offset ordinal the РОП configured.
+
+`displayName` on a row comes from `UserReplicas` and is nullable — learning-service does not own
+identities, and someone who has never triggered a `user.updated` has no replica row yet. A missing
+name is returned as `null`, never as an invented placeholder.
+
+#### Team skill heat map (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/team/skill-map?days= | — | `TeamSkillMapDto` |
+
+`RequireOrgAdmin`. `days` (query, default the service's own window) bounds how far back attempts are
+counted; team readiness is a statement about now, not about somebody's whole history.
+
+`TeamSkillMapDto`: `{windowStart, stages: TeamSkillMapStageDto[], skills: TeamSkillMapSkillDto[], members: TeamSkillMapMemberDto[], unattributedAttemptCount, minimumAttemptsForAccuracy, rosterKnown}`
+`TeamSkillMapStageDto`: `{key, label, accent, order, attemptCount, accuracyPercent}`
+`TeamSkillMapSkillDto`: `{skillId, title, stageKey, orderInTree, attemptCount, accuracyPercent}`
+`TeamSkillMapMemberDto`: `{userId, displayName, isActiveMember, attemptCount, accuracyPercent, weakestStageKey, weakestSkillId, dialogCount, dialogAverageScore, stages: TeamSkillMapCellDto[], skills: TeamSkillMapCellDto[]}`
+`TeamSkillMapCellDto`: `{key, attemptCount, accuracyPercent}`
+
+**One endpoint, not two, because "per manager: where they sag, by funnel stage" and "per team: a
+skill heat map" are the same matrix read along its two axes.** Splitting them would run the
+aggregation twice and let the two screens disagree about the same window.
+
+**`accuracyPercent` is `null`, never `0`, below `minimumAttemptsForAccuracy`.** Two right answers out
+of two is 100% and means nothing about anybody — the same call 40.22 made for withholding an accuracy
+until every exercise in a set has been attempted. `weakestStageKey`/`weakestSkillId` are the
+lowest-scoring cell that has enough attempts to report a number at all, computed server-side so every
+consumer answers "where do they sag" the same way; both are `null` for somebody with no qualifying
+cell, which is a different statement from "weak everywhere" and must not be drawn as one.
+`unattributedAttemptCount` buckets attempts whose exercise no longer exists — folded nowhere, the same
+call `unversionedAttempts` makes elsewhere in this document. The stage vocabulary is `Skill.Stage` /
+`SkillStages`, the platform's existing one, not a second one invented for this screen.
+
+#### From the heat map to content — the loop of Phase 40.31 (learning-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/team/skill-gaps?days= | — | `TeamSkillGapsDto` |
+| POST | /admin/team/skill-gaps/:stageKey/content | — | `ContentGenerationJobDto`, 409 if the stage is not failing |
+| POST | /admin/team/skill-gaps/:stageKey/dismiss | `{note?}` | `TeamSkillGapsDto` (recomputed), 409 if the stage is not failing |
+| DELETE | /admin/team/skill-gaps/:stageKey/dismiss | — | 204, 404 if there was no refusal to take back |
+
+`RequireOrgAdmin`, `[TenantTransaction]`. `days` is the same window parameter `skill-map` takes, and
+the suggestion is derived from that very call — a red cell with no suggestion, or a suggestion for a
+cell that is not red, would both be bugs the screen could not explain.
+
+`TeamSkillGapsDto`: `{windowStart, minimumAttemptsForGap, maximumAccuracyPercentForGap, minimumStrugglingManagers, gaps: TeamSkillGapDto[], suppressed: SuppressedTeamSkillGapDto[], rosterKnown}`
+`TeamSkillGapDto`: `{stageKey, stageLabel, sourceRef, attemptCount, accuracyPercent, strugglingManagerCount, measuredManagerCount, weakestSkills: TeamSkillGapSkillDto[], proposedTitle, proposedGoal}`
+`TeamSkillGapSkillDto`: `{skillId, title, attemptCount, accuracyPercent}`
+`SuppressedTeamSkillGapDto`: `{stageKey, stageLabel, attemptCount, accuracyPercent, reason, suppressedUntil, contentGenerationJobId}`
+
+`reason` is one of `dismissed`, `run_in_progress`, `recently_addressed`.
+
+**A gap is three conditions, and all three thresholds are echoed back.** At least
+`minimumAttemptsForGap` attempts on the stage (20), accuracy at or below
+`maximumAccuracyPercentForGap` (60), and at least `minimumStrugglingManagers` managers below that bar
+(2). Echoed for the same reason `minimumAttemptsForAccuracy` is: a screen that must explain why the
+reddest cell produced no suggestion needs the numbers that decided it, and a client that hard-codes
+them a second time is how the two eventually disagree.
+
+**`suppressed` is returned rather than filtered away.** A panel that silently shows nothing cannot be
+told apart from a broken one, and «почему мне ничего не предлагают» is the question that gets a
+feature switched off. `run_in_progress` carries the run's id, so the answer is a link.
+
+**`sourceRef` is `skill-gap:<stage>@<yyyy-MM-dd>` and is assembled server-side.** It is what an
+assignment born from this gap will carry, so it is written by the code that measured the gap and
+never by the caller that asks for one. The observed numbers are not in it — they are in
+`proposedGoal`, which becomes the assignment's `goal`.
+
+**`POST …/content` is idempotent while a run for that stage is alive**: it returns that run instead
+of starting a second one. A dismissal or a recent run suppresses the *offer* but does not forbid the
+*act* — pressing the button on a dismissed gap clears the dismissal and proceeds, because suppression
+governs what the panel proposes and not what the administrator may do. A stage that is not failing at
+all is a 409 at any price. The run it starts is an ordinary 40.27 run: same checkpoint, same
+sufficiency threshold, and the lesson it eventually produces arrives archived.
+
+**The material is composed, not uploaded.** There is no textarea behind this button, so the run's
+`sourceMaterial` is written deterministically from the measurement and the organization profile — the
+same seven fields 40.19 renders and 40.29 interviews for. An organization with an empty profile gets a
+run in `insufficient` with 40.28's own codes, which is the honest answer rather than a bug: we do not
+know enough about that company to write exercises for them.
+
+#### The team's graded conversations (ai-service)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | — | `AdminDialogSessionSummaryDto[]`, newest first |
+| GET | /admin/dialog-sessions/:sessionId | — | `AdminDialogTranscriptDto`, 404 if unknown |
+
+`RequireOrgAdmin`. `limit` defaults to 25. `maxScore` is the parameter that makes the list useful —
+"show me conversations scored 4 and below" is a list a РОП can act on, "show me every conversation" is
+not.
+
+`AdminDialogSessionSummaryDto`: `{id, userId, bundleId, modeId, modeKey, modeTitle, status, messageCount, score, feedbackSummary, assignmentId, createdAt, completedAt}`
+`AdminDialogTranscriptDto`: `{id, userId, bundleId, modeId, modeKey, modeTitle, status, score, feedback, assignmentId, createdAt, completedAt, messages: AdminDialogTranscriptMessageDto[]}`
+`AdminDialogTranscriptMessageDto`: `{index, role, content, timestamp}`
+
+**This lives in ai-service, not on the dashboard response, because the conversations are Mongo
+documents `IDialogSessionRepository` alone holds** — Mongo has no row-level security, so a filter
+spread over two services is a filter that will be forgotten in one of them. The screen asks
+learning-service for the funnel and ai-service for the words; neither service reads the other's
+store. `message.Index` is part of the contract (not left implicit in array order) because a coaching
+note quotes a session id **and** a message index, and the same line said twice must still be citable.
+Names are absent from both DTOs — ai-service holds no user replica, and the screen already has the
+team's names from the heat map.
+
+#### The review loop (learning-service)
+
+The РОП selects a fragment of a graded conversation and comments on it; the manager reads it and may
+dispute the grade. One table, `DialogReviewNotes` — see [DB_SCHEMA.md](DB_SCHEMA.md) — for both
+directions, because a coaching note and a score dispute share every field except who may close the row
+and with which word.
+
+Admin side (`RequireOrgAdmin`):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog-reviews?kind=&status=&sessionId= | — | `DialogReviewNoteDto[]`, 400 on a malformed filter |
+| POST | /admin/dialog-reviews | `CreateCoachingNoteRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure |
+| POST | /admin/dialog-reviews/:noteId/resolve | `ResolveScoreDisputeRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure, 404 if unknown |
+
+Manager side (`[Authorize]`, no admin gate, takes no user id — the caller is the token):
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /dialog-reviews | — | `DialogReviewNoteDto[]`, newest first — coaching notes addressed to the caller and disputes they filed, in one list |
+| POST | /dialog-reviews/disputes | `CreateScoreDisputeRequestDto` | `DialogReviewNoteDto`, 400 on a validation failure |
+| POST | /dialog-reviews/:noteId/acknowledge | — | `DialogReviewNoteDto`, 404 if unknown or not the caller's |
+
+`DialogReviewNoteDto`: `{id, kind, status, sessionId, dialogModeKey, subjectUserId, subjectDisplayName, authorUserId, authorDisplayName, quotedFromMessageIndex, quotedToMessageIndex, quotedText, comment, disputedScore, resolution, adjustedScore, resolvedBy, resolvedAt, createdAt, updatedAt}`
+`CreateCoachingNoteRequestDto`: `{sessionId, quotedFromMessageIndex?, quotedToMessageIndex?, quotedText, comment}` — `sessionId`, `quotedText` and `comment` are required; a coaching note whose whole content is "messages 4 to 6" cannot be re-read next month
+`CreateScoreDisputeRequestDto`: `{sessionId, quotedFromMessageIndex?, quotedToMessageIndex?, quotedText?, comment}` — `sessionId` and `comment` are required, the quote is not: the manager is usually arguing about the conversation as a whole
+`ResolveScoreDisputeRequestDto`: `{outcome, resolution?, adjustedScore?}` — `outcome` is `upheld` or `rejected` and required; `resolution` is required when `outcome` is `rejected` (closing a complaint in silence turns the mechanism into a rubber stamp); `adjustedScore` (0–100) is accepted only when `outcome` is `upheld`
+
+**The organization, the manager, the scenario and the grade are never taken from the request body.**
+`CreateCoachingNoteRequestDto`/`CreateScoreDisputeRequestDto` name only a `sessionId`; the subject,
+`dialogModeKey` and `disputedScore` are read off that session's `UserDialogScores` row inside the
+caller's organization, so a hand-written body cannot address a note at somebody else's employee. A
+session with no recorded score cannot be annotated at all (400) — an ungraded conversation has no
+grade to dispute and is not on the screen the fragment was selected from.
+
+**`adjustedScore` is recorded, never applied.** It does not change `UserDialogScores` or any
+assignment verdict — 40.22 made every progress number derived from attempt rows and recomputed on
+every event, and a hand-edited score would both be overwritten by the next redelivery and make the
+completion threshold negotiable by the person being measured. Retro-scoring is a decision the owner
+has not made (docs/DONT_FORGET.md).
+
+**At most one open dispute per conversation.** A second `POST /dialog-reviews/disputes` on a session
+that already has an open dispute is refused (400) by the service before it ever inserts, backed by the
+`UX_DialogReviewNotes_OpenDisputePerSession` partial unique index at the database as the final
+guarantee. A session may be disputed again after a verdict, because a person told "the grade stands"
+who later finds new evidence is not spamming the queue.
+
+Both admin write routes 403 (`Forbid()`) when the caller satisfies `RequireOrgAdmin` without holding
+an organization in context (platform staff impersonating nobody) — same shape as
+`AdminAssignmentsController`: a review row belongs to one organization, and with none in context the
+save guard would otherwise throw and surface a 500 describing an internal invariant.
+
+### Content overrides and the staleness queue (Phase 40.18)
+
+Copy-on-write: an organization customizes the shared library one row at a time instead of forking it.
+Design: [TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §1 and §2.6.
+
+`{kind}` is one of `lessons`, `techniques`, `reference-materials` — in the path, never in a body, so
+an action cannot be aimed at a row of a different family by editing a payload.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content/overrides?staleOnly=false | — | `ContentOverrideDto[]` |
+| GET | /admin/content/overrides/:kind/:overrideId | — | `ContentOverrideReviewDto` |
+| POST | /admin/content/overrides/:kind/:baseId | — | `ContentOverrideDto` (409 if the row is already somebody's copy; 400 if the caller has no organization) |
+| POST | /admin/content/overrides/:kind/:overrideId/accept-base | — | 204 |
+| POST | /admin/content/overrides/:kind/:overrideId/keep-override | — | 204 |
+
+`ContentOverrideDto`: `{kind, overrideId, baseId, title, isStale, forkedFrom, baseCurrent}`
+`ContentOverrideReviewDto`: `{summary, override, baseAtFork, baseCurrent}` — three whole documents.
+
+**`POST /admin/content/overrides/:kind/:baseId` is the only route in the platform that creates a
+copy of anything**, and it is reachable only from a person pressing "edit". Nothing runs at
+onboarding: an organization handed a private fork of the library on day one stops receiving every
+later improvement to it, permanently, and nobody notices until the content roadmap has stopped
+existing. It is idempotent — pressing it twice returns the existing copy untouched — and it refuses a
+row that is already an organization's own copy (409). For a lesson it clones the lesson row and every
+exercise in it and opens the draft version, so the administrator lands in something editable.
+
+**`isStale` is computed on every read, not stored.** For a lesson, `forkedFrom` and `baseCurrent` are
+`LessonVersion` ids and staleness is "they differ, and the base has something published". For a
+technique or a reference material they are content hashes, because neither family has a version
+table. A null `forkedFrom` counts as stale — "unknown base, needs review" is a state 40.15 left
+expressible on purpose.
+
+**The review payload contains no diff, by design.** `baseAtFork` is populated only for lessons (40.15
+froze the snapshot it points at); for the other two kinds the base's previous text was overwritten in
+place and nothing stored it, so the field is null and the screen compares the override against the
+base's current text. Nothing is merged anywhere: a lesson is prose and grading criteria, and a
+three-way merge of those produces text that reads as if a person wrote it and then scores a real
+salesperson against a rule nobody chose.
+
+**Three actions, and the third one is elsewhere.** `accept-base` archives the override so read
+resolution stops shadowing the global row — archived, not deleted, because progress rows point at it
+without a foreign key. `keep-override` re-points the fork marker at the base as it stands now and
+touches no content: it records "we looked, ours still stands". **Edit** is the ordinary authoring
+routes (`PUT /admin/lessons/:id`, the `/admin/exercises` routes, `PUT /admin/techniques/:id`,
+`PUT /admin/reference/:id`, and `POST /admin/lessons/:id/versions/publish`), which 40.18 opened to
+organization administrators for exactly this purpose; publishing a new override version re-points the
+fork marker as a side effect, so editing clears the queue entry on its own.
+
+**Authorization: `RequireOrgAdmin`, and the organization comes from `ITenantContext`.** A caller with
+no organization at all (platform staff, or a request that reached the service without the gateway
+header) gets 400 on create and an empty queue on read — there is nobody for a copy to belong to.
+
+### Authoring the library vs authoring an override (Phase 40.18)
+
+`AdminLessonsController`, `AdminExercisesController`, `AdminTechniquesController` and
+`AdminReferenceController` were `RequirePlatformAdmin` until 40.18 and are now `RequireOrgAdmin`
+**plus a per-row ownership check**:
+
+- a row with an `OrganizationId` belongs to that organization, and RLS has already proved the caller
+  is inside it → an organization administrator may write it;
+- a row with a null `OrganizationId` is the global library → platform administrator rights required
+  (403 otherwise);
+- **creating** content from nothing (`POST /admin/topics/:iconicName/lessons`,
+  `POST /admin/techniques`, `POST /admin/techniques/import`, `POST /admin/skills/:skillId/reference`)
+  stays platform-only. An organization customizes what exists; originating an original curriculum is
+  40.19/40.20's question.
+
+The check is in application code and not in row-level security, and that is worth stating plainly
+because it looks like a gap: the content RLS policy is `OrganizationId IS NULL OR = current` in the
+`WITH CHECK` clause as well as the `USING` clause, since a customer must be able to read the shared
+library. Read as a write rule, that says any organization may write a row with a null owner — that
+is, edit every other customer's curriculum. The database cannot tell those two cases apart, because
+"global" is a null and not a tenant.
+
+One consequence for existing callers: creating an exercise under a lesson now stamps the exercise
+with the lesson's organization. Before 40.18 it left it null, which was correct while every lesson
+was global and would have put an override's exercises into the shared library the moment one existed.
 
 ### Exercises
 | Method | Path | Body | Response |
@@ -379,7 +1283,7 @@ All progress-point economy knobs are DB-driven and admin-editable (no hardcoded 
 | PUT | /admin/reference/:id | `{title, markdownContent, sortOrder, category?, tags?}` | `AdminReferenceMaterialDto` |
 | DELETE | /admin/reference/:id | — | 204 |
 
-`AdminReferenceMaterialDto`: `{id, skillId, skillTitle, skillSlug, title, markdownContent, sortOrder, category, tags: string[]}`
+`AdminReferenceMaterialDto`: `{id, skillId, skillTitle, title, markdownContent, sortOrder, category, tags: string[]}` — there is no `skillSlug`; the record carries the skill's title, not its slug.
 
 ### Techniques
 | Method | Path | Body | Response |
@@ -434,13 +1338,17 @@ On update and on re-import the child rows (`TechniqueSkills`, `TechniqueCoaches`
 
 Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "admin_correction"` and `EarnedAt` stamped at the team progress period's week start — a direct `WeeklyXpAmount` write would be erased by the next progress-point sync, while a correction record survives every re-sync and stays auditable.
 
-### Users (`RequireAdmin`; role change requires `RequireSuperAdmin`)
+### Users (read: `RequirePlatformAdmin`; every mutation: `RequireSuperAdmin`)
 
 > Owned by the extracted **[identity-service](IDENTITY_SERVICE.md)** (it owns
 > Users/Roles). The gateway flips `/admin/users/*` to the identity cluster; paths and
 > shapes are unchanged. The `AdminUserDetailDto` activity stats (activity-consistency/progress-points/skills/score)
 > are owned by gamification/learning, so identity returns them as `0` for now — same
-> caveat as `GET /profile`.
+> caveat as `GET /profile`. Lists/manages users platform-wide (not scoped to one
+> organization), so the controller is Sellevate-staff-only throughout: reading is
+> `RequirePlatformAdmin`, every mutation is `RequireSuperAdmin`. Role changes move between the
+> three platform roles (`User`/`Admin`/`SuperAdmin`) — organization roles are a different axis and
+> are never assignable here.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -453,21 +1361,62 @@ Progress-point adjustment is recorded as a `UserXpRecords` row with `Source = "a
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider ("Google"|"Password"), hasCustomAvatar, avatarUrl}`
 `AdminUserDetailDto`: `AdminUserDto` + `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`
 
-Rename and avatar moderation are available to any admin (inappropriate nicknames/photos); role changes stay SuperAdmin-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
+Reading the roster and a user's detail is open to both platform staff roles. Renaming, avatar moderation and role changes all mutate a user and are `RequireSuperAdmin`-only, so a platform `Admin` sees the modal read-only. `DELETE /admin/users/:id/avatar` reuses the avatar reset flow (deletes the uploaded S3 object and falls back to the default avatar).
+
+### Daily Quotes
+
+Platform-only (`RequirePlatformAdmin`) — the quote of the day is one shared editorial calendar, not
+per-organization content. The learner-facing read is `GET /daily-quote` (any authenticated role,
+documented above).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/daily-quotes?from=&to= | — | `AdminDailyQuoteDto[]`, ordered by date; both bounds optional and inclusive |
+| POST | /admin/daily-quotes | `{date, text, author?}` | `AdminDailyQuoteDto` |
+| PUT | /admin/daily-quotes/:id | `{date, text, author?}` | `AdminDailyQuoteDto` (404 if missing) |
+| DELETE | /admin/daily-quotes/:id | — | 204 (404 if missing) |
+
+`AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. `date` is a plain calendar
+date (`DateOnly`), not a timestamp. `author` is optional on write and stored as `""` when omitted,
+never null.
+
+Both writes validate the same two things: blank `text` → `400`, and a **second quote for a date that
+already has one → `409 Conflict`**. One date carries at most one quote, which is what lets the
+learner-facing read fall back to "the most recent quote at or before today" without having to choose
+between candidates.
 
 ### Seeder
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>` | `SkillsImportResultDto` |
-| POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>` | `TopicsImportResultDto` |
-| POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>` | `LessonsImportResultDto` |
-| POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>` (≤20 MB) | `BundleImportResultDto` |
+| POST | /admin/seeder/skills | `multipart/form-data; file=<JSON>, target=global` | `SkillsImportResultDto` |
+| POST | /admin/seeder/topics | `multipart/form-data; file=<JSON>, target=global` | `TopicsImportResultDto` |
+| POST | /admin/seeder/lessons | `multipart/form-data; file=<JSON>, target=global` | `LessonsImportResultDto` |
+| POST | /admin/seeder/bundle | `multipart/form-data; file=<JSON>, target=global` (≤20 MB) | `BundleImportResultDto` |
 | GET | /admin/seeder/skills/export | — | `SkillExportDto[]` — re-importable via POST /admin/seeder/skills |
 | GET | /admin/seeder/topics/export | — | `TopicExportDto[]` — re-importable via POST /admin/seeder/topics |
 | GET | /admin/seeder/lessons/export | — | `LessonExportDto[]` (with nested exercises) — re-importable via POST /admin/seeder/lessons |
 | GET | /admin/seeder/bundle/export | — | `BundleExportDto` (`{ skills: [...] }`) — re-importable via POST /admin/seeder/bundle |
 
-Each `GET …/export` returns the full content set shaped exactly like the matching import body, so an export file feeds straight back into its import (exercise `content` is emitted as a JSON object, not a string). Ordered by the relevant order field; skill/topic icon names are resolved from ids. UI: "Export JSON" buttons on `/admin/skills`, `/admin/topics`, `/admin/lessons`; "Export tree" on `/admin/import`.
+**`target` is required on all four imports and must be the literal `global`** (Phase 40.19). Anything
+else — a missing field, a different word, an organization id — is `400`. It states which library is
+being written, and it is **not** an organization id and must never become one: the tenant is read from
+`ITenantContext`, never from a body (docs/TENANCY/TENANCY.md §1.3, enforced by
+`scripts/tenancy-boundary-lint.py`). Since 40.19 every read inside these endpoints is also narrowed to
+`OrganizationId IS NULL`, which fixed a silent bug — the tenancy query filter admits "global or mine",
+and lessons upsert on `(topicId, title)`, so a re-run could overwrite a customer's override with the
+base text. See [SEEDER.md](SEEDER.md) §0.
+
+Each `GET …/export` returns the full **global** content set shaped exactly like the matching import
+body, so an export file feeds straight back into its import (exercise `content` is emitted as a JSON
+object, not a string). They take no `target`: there is only one thing to export, and since 40.19 they
+are narrowed to `OrganizationId IS NULL` for the mirror of the reason above — an export carrying one
+customer's overrides would re-import as if those were everybody's content. Ordered by the relevant
+order field; skill/topic icon names are resolved from ids. UI: "Export JSON" buttons on
+`/admin/skills`, `/admin/topics`, `/admin/lessons`; "Export tree" on `/admin/import`.
+
+Seeded lesson titles and exercise content may carry `{{organization.*}}` placeholders. They are stored
+verbatim and resolved per organization at render time, which is why the same seeded bundle produces the
+same `ContentHash` for every customer — see [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
 
 **Skills JSON:** `[{ iconicName, title, description?, orderInTree, stage? }]`
 **Topics JSON:** `[{ skillIconicName, iconicName, title, orderInSkill }]`
@@ -573,6 +1522,7 @@ involvement.
 | GET | /dialog/sessions/:sessionId | — | `DialogSessionDto` |
 | POST | /dialog/sessions/:sessionId/messages | `{content: string}` | `DialogMessageDto` |
 | POST | /dialog/sessions/:sessionId/complete | — | `{summary, content, generatedAt, xpEarned}`; `204 No Content` when the session has no user messages (marked `abandoned`, no feedback generated) |
+| DELETE | /dialog/sessions/:sessionId | — | `204`; `404` when the session does not exist or does not belong to the caller |
 
 **Company context:** `companyContext` is optional on `POST /dialog/sessions`. Shape: `{companyName: string (required, ≤200), companyDescription: string (required, ≤8000), callGoal?: string (≤500), personaName?: string (≤200), personaPosition?: string (≤200), personaPersonality?: string (≤4000), personaDifficulty?: string (≤16, "Easy"|"Medium"|"Hard")}`. When present, the service appends a structured block to the mode's `ChatSystemPrompt` and `FeedbackSystemPrompt` at runtime (not stored in PostgreSQL — only persisted in the MongoDB `DialogSession` document as `companyCallContext`). The `GET /dialog/company-call-mode` endpoint returns the fixed `{bundleId, modeId}` that callers must pass when starting a company-practice session. **Constraint:** `companyContext` may only be used with the seeded company-call mode (key `company-call`); passing it with any other mode returns `400 Bad Request`.
 
@@ -600,7 +1550,7 @@ involvement.
 - If `OpenAI:ApiKey` is not configured, `GET /dialog/bundles` returns `[]`
 - Session endpoints return `503 Service Unavailable` if OpenAI not configured
 
-### Admin endpoints (RequireAdmin)
+### Admin endpoints (`RequirePlatformAdmin` — revised 2026-08-16)
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -616,6 +1566,51 @@ involvement.
 | DELETE | /admin/dialog/modes/:modeId | — | 204 |
 | POST | /admin/dialog/import | `multipart/form-data; file=<JSON>` (≤20 MB) | `DialogImportResultDto` |
 | GET | /admin/dialog/export | — | `DialogExportDto` — all bundles with nested modes, re-importable verbatim |
+
+#### Prompt overrides (Phase 40.18)
+
+Per-organization prompt customization, the ai-service half of copy-on-write. Design:
+[TENANCY/CONTENT_MODEL.md](TENANCY/CONTENT_MODEL.md) §2.6 and §4.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/dialog/overrides/modes?staleOnly=false | — | `DialogModeOverrideDto[]` |
+| GET | /admin/dialog/overrides/modes/:overrideId | — | `DialogModeOverrideReviewDto` |
+| POST | /admin/dialog/overrides/modes/:baseModeId | — | `DialogModeOverrideDto` (409 if already a copy, or if the mode is in a seeded hidden bundle) |
+| PUT | /admin/dialog/overrides/modes/:overrideId | `UpdateModeRequestDto` | `AdminDialogModeDto` (404 if not this organization's override) |
+| POST | /admin/dialog/overrides/modes/:overrideId/accept-base | — | 204 |
+| POST | /admin/dialog/overrides/modes/:overrideId/keep-override | — | 204 |
+
+`DialogModeOverrideDto`: `{overrideId, baseModeId, bundleId, key, title, isStale, forkedFromHash, baseCurrentHash}`
+`DialogModeOverrideReviewDto`: `{summary, overrideChatSystemPrompt, overrideFeedbackSystemPrompt, baseChatSystemPrompt, baseFeedbackSystemPrompt}`
+
+`RequireOrgAdmin`; the organization comes from `ITenantContext`, never from the route or the body.
+
+The override keeps its parent's `bundleId` and `key`, so the customized prompt appears in the same
+bundle in the same position — the 40.11 unique indexes already allow it, because the composite one is
+filtered to non-global rows. `GET /dialog/bundles/:id/modes` resolves: an organization with an
+override sees its own prompt and not the base, and an organization without one sees the base.
+
+**`DialogBundle` is not override-able**, and this is the one place the implementation is narrower
+than the roadmap sentence. A bundle carries no prompt at all — title, description, emoji, sort order
+— while a copied bundle would be an empty folder needing a second resolution layer for "which modes
+are in it". An organization that wants its own bundle creates one, which 40.11 already allows.
+
+**The seeded hidden modes (`company-call`, `custom-scenario`) cannot be overridden — 409, not a
+silent no-op.** Their prompts are half code: the service completes them at run time from placeholders
+it supplies, and a per-organization copy would drift away from the code that feeds it until it
+quietly stopped matching.
+
+`PUT /admin/dialog/overrides/modes/:overrideId` is the "edit" action, and it lives on this controller
+rather than as a widened route on `AdminDialogController` for a concrete reason: stacking a second
+`[Authorize]` on one action of a platform-only controller **ANDs** the two policies rather than ORing
+them, so the code would read as though organization administrators were admitted and they would still
+be refused. A separate controller makes the weaker gate impossible to misread.
+`AdminDialogController` stays platform-only in full.
+
+`key` and `bundleId` are not editable on an override: they are its link to the row it shadows, and
+changing the key would make the copy stop resolving over its base and start appearing beside it —
+the one outcome copy-on-write exists to prevent.
 
 **Dialog export JSON:** `GET /admin/dialog/export` returns `{ bundles: [{ skillId, title, description, iconEmoji, sortOrder, isActive, modes: [{ key, title, description, chatSystemPrompt, feedbackSystemPrompt, sortOrder, isActive, voiceEnabled, voiceId }] }] }` — exactly the shape `POST /admin/dialog/import` accepts, so an export file re-imports verbatim. UI: "Export JSON" button on `/admin/dialog`.
 
@@ -658,7 +1653,7 @@ without it the client received a 200 with zero frames and the persona simply sta
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (RequireAdmin) |
+| GET | /admin/voice/usage | — | `AdminVoiceUsageDto` (`RequirePlatformAdmin` — revised 2026-08-16). **Phase 40.11: scoped to the caller's organization**, not the whole installation — a platform superadmin sees another organization's numbers by impersonating into it (40.9). **Phase 40.33 added four fields** — `organizationDailyLimitSeconds`, `organizationMonthlyLimitSeconds`, `organizationUsedSecondsToday`, `organizationUsedSecondsThisMonth` — because the per-user rows answered «кто много говорит» and never answered «сколько осталось у компании». Existing fields unchanged. |
 
 ```jsonc
 // AdminVoiceUsageDto
@@ -874,7 +1869,7 @@ All endpoints require auth. Threads, replies and votes are PostgreSQL; votes are
 Tags are hybrid: a thread's `tags` array mixes existing curated/free slugs and brand-new labels;
 unknown labels are created on the fly as non-curated tags (slug = lowercased, whitespace→`-`).
 
-### Admin endpoints (`RequireAdmin`)
+### Admin endpoints (`RequirePlatformAdmin` — revised 2026-08-16)
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -980,7 +1975,10 @@ background service (`FollowUpReminderBackgroundService`) that polls every
 `FollowUpReminder:PollIntervalMinutes` (default 5) for companies where `NextActionAt <= now AND
 FollowUpNotifiedAt IS NULL`, claims them (sets `FollowUpNotifiedAt`, commits), and publishes one
 `company.followup.due` Kafka event per claimed company — see `docs/MICROSERVICES.md §4.1` for the
-topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Consumed by
+topic/payload and `docs/ARCHITECTURE.md` for the claim-before-publish trade-off. Since Phase 40.12
+the poll runs **once per organization** with a scoped tenant context (an unset tenant raises rather
+than meaning "every organization"), and the event carries `organizationId` in the **envelope** —
+not in the payload, whose fields are unchanged. Consumed by
 notification-service → `NotificationType.CompanyFollowUpDue`, an in-app-only notification (no
 email) titled *«Пора связаться с {companyName}»*, `actionUrl` `/companies/{id}`.
 
@@ -1145,3 +2143,488 @@ practice call; the selected persona's `name`/`position`/`personality`/`difficult
 - `event` and `page` are validated against a **server-side whitelist** (`analytics-service/Analytics/Features/Tracking/Constants/TrackedEvents.cs`) to cap label cardinality — unknown values are rejected with `400`, never silently accepted.
 - `/tracking/presence/ping` marks the caller present (Redis sorted set) and bumps `app_authenticated_requests_total`. Identity is taken from the gateway-injected `X-User-Id` header, falling back to the validated JWT subject.
 - All product metrics are scraped from the `/metrics` endpoint (jobs `sallevate-backend` + `sellevate-analytics`); there is no read API for them — query them in Prometheus/Grafana. See [MONITORING.md](MONITORING.md).
+
+---
+
+## Organization service (Phase 40.5)
+
+> **New microservice `organization-service`** (host port **5010**). Routes `/organizations/*` via
+> YARP gateway cluster `organization`. All endpoints require Bearer auth. See
+> [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md) and
+> [docs/TENANCY/TENANCY.md](TENANCY/TENANCY.md).
+
+### Organizations (tenant registry — not tenant-scoped)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /organizations | `{name, slug?}` | `201 OrganizationDetailDto`, `400` blank name, `409` slug taken |
+| GET | /organizations | — | `OrganizationSummaryDto[]` newest-created first |
+| GET | /organizations/{id} | — | `OrganizationDetailDto` or `404` |
+| PUT | /organizations/{id} | `{name, slug?}` | `OrganizationDetailDto`, `404`, `400`, or `409` slug taken |
+| POST | /organizations/{id}/suspend | — | `OrganizationDetailDto` or `404` |
+| POST | /organizations/{id}/reactivate | — | `OrganizationDetailDto` or `404` |
+
+`OrganizationSummaryDto`: `{id, name, slug, status, createdAt}`
+`OrganizationDetailDto`: `{id, name, slug, status, createdAt, updatedAt}`
+
+`slug` is normalized (lowercased, non-alphanumerics collapsed to single hyphens) and globally
+unique; omitted → derived from `name`. `status` is `Active | Suspended`. These routes are not
+`[TenantScoped]` — they administer the registry itself, not one organization's own data (see
+docs/TENANCY/TENANCY.md §1.2).
+
+**Phase 40.9, revised 2026-08-16:** the whole controller requires `RequirePlatformAdmin` — running the tenant registry is ordinary platform administration, and only adding/removing users is superadmin-exclusive. Any other caller gets `403`.
+That gate is what makes addressing an organization by a route id legitimate here and nowhere else
+(docs/TENANCY/TENANCY.md §1.3).
+
+Publishes `organization.created` on create, `organization.updated` on rename/reactivate,
+`organization.suspended` on suspend. **Consumed since 40.9** by identity-service, which keeps an
+`OrganizationReplicas` projection so a suspended organization stops producing tokens.
+
+### Organization profile (tenant-scoped)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /organizations/profile | — | `OrganizationProfileDto` or `404` if not set up yet |
+| PUT | /organizations/profile | `UpdateOrganizationProfileRequestDto` | `OrganizationProfileDto` |
+
+**All six routes on this controller** are `[TenantScoped]` — the two above plus the four Phase 40.29
+interview routes documented further down (`GET /organizations/profile/gaps`, `PATCH`,
+`POST …/draft`, `POST …/draft/apply`). `TenantContextMiddleware` rejects the request with `403` if
+the gateway-validated `X-Organization-Id` header is absent — there is no organization id anywhere in
+the route or body (docs/TENANCY/TENANCY.md §1.3). The target organization is resolved solely from
+the header.
+
+`OrganizationProfileDto` / `UpdateOrganizationProfileRequestDto`: `{product?, icp?, objections[] ({text, frequency?, bestResponse?}), scriptStages: string[], tone?, glossary: {[key]: string}, bannedClaims: string[], createdAt, updatedAt}` — shape per [CONTENT_MODEL.md §3](TENANCY/CONTENT_MODEL.md#3-the-organization-profile--the-part-that-removes-most-forks). `PUT` upserts: the first call for an organization creates the row.
+
+**Since Phase 40.19 this `PUT` is the substitution surface of the whole product.** A successful save
+publishes `organization.profile.updated` (whole profile, after the commit), which learning-service and
+ai-service project into local replicas; from then on `{{organization.product}}` and its siblings
+resolve out of it in lesson text, exercise content, grading prompts and persona prompts, and
+`bannedClaims` binds both the AI persona and the scoring. Two consequences a caller can observe:
+
+- **It is eventually consistent.** A save takes a moment to reach a lesson or a live call. The response
+  is authoritative for organization-db; the rendered lesson is not, for a second or so.
+- **An empty profile is not an error state.** Unfilled fields render as the neutral base wording
+  («ваш продукт», «ваш клиент»), never as blanks and never as visible `{{…}}`.
+
+Syntax, fallbacks and the render-on-read rule: [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md).
+
+### Organization profile as an interview (Phase 40.29, tenant-scoped)
+
+Four routes on the same row, and they exist because nobody fills in a thirty-field form. An empty
+profile is not a cosmetic problem — it is the state in which 40.19's substitution does nothing at all,
+so every lesson in the product reads as the neutral fallback. See
+[ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /organizations/profile/gaps?limit=3 | — | `OrganizationProfileGapsDto` |
+| PATCH | /organizations/profile | `PatchOrganizationProfileRequestDto` | `OrganizationProfileDto` |
+| POST | /organizations/profile/draft | `ExtractedProfileDraftDto` | `OrganizationProfileDraftPreviewDto` |
+| POST | /organizations/profile/draft/apply | `ApplyOrganizationProfileDraftRequestDto` | `OrganizationProfileDraftAppliedDto` |
+
+**Authorization.** `GET …/gaps` and `POST …/draft` are `[Authorize]` only, like `GET`: neither writes
+anything. `PATCH` and `POST …/draft/apply` additionally require `RequireOrgAdmin` — they are the two
+routes on this controller that can change what every lesson in the organization says. The plain `PUT`
+is still reachable by any authenticated member; that predates 40.29 and is recorded in
+[DONT_FORGET.md](DONT_FORGET.md) rather than closed here.
+
+- `OrganizationProfileGapsDto`: `{questions: [{code, question, priority}], totalGapCount, blockingGapCount, isReadyForParameterization}`.
+  Codes: `product`, `icp`, `objections`, `script_stages`, `tone`, `banned_claims`, `glossary` — a
+  closed list, in asking order. `priority` is `blocking` / `important` / `optional`; **`blocking` means
+  `{{organization.*}}` renders the fallback until it is answered**, and `isReadyForParameterization`
+  is exactly `blockingGapCount == 0`. `questions` is capped (default 3, maximum 7) and
+  `totalGapCount` is not, so a screen can show three and still say «осталось ещё 4». A gap is
+  reported for fewer than 3 objections and fewer than 3 script stages, not merely for zero.
+  **Never 404**: an organization that has never saved a profile gets all seven questions.
+- `PatchOrganizationProfileRequestDto`: the `PUT` body with every field optional. **An omitted field
+  keeps its stored value.** There is no way to *clear* a field here — `null` already means «не
+  отвечал» — so clearing stays on the whole-row `PUT`.
+- `ExtractedProfileDraftDto`: `{product?, icp?, tone?, objections?: [{text, bestResponse?}], scriptStages?: string[], glossary?: {[term]: string}, bannedClaims?: string[]}` —
+  learning-service's `ContentStructureDto`, field for field, redeclared rather than shared (same rule
+  as `MaterialGapCodes`). **There is no `jobId`:** the caller reads the structure off
+  `GET /admin/content-generation/{jobId}` and posts it here, so organization-service stays the only
+  writer of the profile. That adds no authority — the same administrator can already `PUT` an
+  arbitrary structure onto the run and an arbitrary profile onto this row.
+- `OrganizationProfileDraftPreviewDto`: `{fields: [{field, decision, currentValue?, suggestedValue?, addedItemCount}], conflictCount, gapsAfterApply}`.
+  Writes nothing. `decision` is `unchanged` / `fill` / `conflict` / `extend`. The preview is planned
+  with **every** overwritable field accepted, because its job is to show the most the draft could do.
+- `ApplyOrganizationProfileDraftRequestDto`: `{draft, acceptedFields?: string[]}`. `acceptedFields`
+  accepts only `product`, `icp`, `tone`, `script_stages`; anything else is dropped silently. Omitting
+  it is the safe default and the expected case. `400` if `draft` is missing.
+- `OrganizationProfileDraftAppliedDto`: `{profile, appliedFields, gaps}` — the write and the next
+  round of the interview in one response, so the screen does not need a second round trip between
+  «ИИ заполнил профиль» and «остался один вопрос».
+
+**The merge policy, which is the contract that matters:**
+
+| Field | What apply does | Consent needed |
+|---|---|---|
+| `product`, `icp`, `tone`, `scriptStages` | fills if empty; **keeps the existing value** if not | yes — name it in `acceptedFields` |
+| `objections` | union by text (case-insensitive); an existing entry wins, keeping its `frequency` | no — nothing is lost |
+| `glossary` | adds unknown terms; an existing term keeps its definition | no |
+| `bannedClaims` | union, add-only | **impossible** — no `acceptedFields` value can delete one |
+
+`POST …/draft/apply` publishes `organization.profile.updated` like every other save, so the 40.19
+replicas learn about a promoted draft the same way they learn about a form submission.
+
+---
+
+## Admin content pipeline (Phases 40.27–40.28, learning-service)
+
+The РОП's «структурировать → **остановиться** → сгенерировать» run. Every route is
+`RequireOrgAdmin` and carries `[TenantTransaction]`; the organization comes from the
+gateway-validated header and appears in no route, query string or body
+([TENANCY.md §1.3](TENANCY/TENANCY.md)). Gateway cluster `learning`, routes
+`/admin/content-generation` and `/admin/content-generation/{**catch-all}`.
+
+Full description of the pipeline and why the stop is the whole feature:
+[CONTENT_PIPELINE.md](CONTENT_PIPELINE.md).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content-generation?status= | — | `ContentGenerationJobSummaryDto[]`, newest first |
+| GET | /admin/content-generation/{jobId} | — | `ContentGenerationJobDto` or `404` |
+| POST | /admin/content-generation | `{title, material}` | `201` + `ContentGenerationJobDto` (status `structuring`, or **`insufficient`** — 40.28) |
+| PUT | /admin/content-generation/{jobId}/structure | `ContentStructureDto` | `ContentGenerationJobDto`, `409` outside `awaiting_review` / `insufficient` |
+| POST | /admin/content-generation/{jobId}/material | `{material}` | **40.28** — `ContentGenerationJobDto`, `409` unless the run is `insufficient` |
+| POST | /admin/content-generation/{jobId}/approve | — | `ContentGenerationJobDto` (status `generating`), `409` + `insufficiency` if the structure is too thin |
+| POST | /admin/content-generation/{jobId}/retry | — | `ContentGenerationJobDto`, `409` unless the run failed |
+
+```jsonc
+// ContentStructureDto — the artifact at the checkpoint. Field for field the organization
+// profile of CONTENT_MODEL.md §3, and deliberately a separate draft (DECISIONS.md, 2026-08-18).
+{
+  "product": "…",                                    // or null
+  "icp": "…",                                        // or null
+  "tone": "…",                                       // or null
+  "objections":   [{ "text": "Дорого", "bestResponse": "…" }],   // ≤ 10
+  "scriptStages": ["Приветствие", "Выявление потребности"],      // ≤ 12
+  "glossary":     { "СДЭК": "…" },                               // ≤ 30 terms
+  "bannedClaims": ["гарантированная доходность"]                 // ≤ 20
+}
+
+// ContentGenerationJobDto
+{
+  "id": "…", "title": "…", "status": "awaiting_review",
+  "gapSourceRef": null,                              // 40.31 — "skill-gap:<stage>@<yyyy-MM-dd>" when
+                                                     // the dashboard started this run, else null
+  "sourceMaterial": "…",
+  "structure": { /* ContentStructureDto */ },        // null until structuring returns
+  "insufficiency": null,                             // 40.28 — non-null iff status is "insufficient"
+  "structuredAt": "…", "approvedAt": null,
+  "producedLessonId": null, "producedLessonVersionId": null,
+  "producedExerciseCount": 0, "generatedAt": null,
+  "failureReason": null,
+  "createdAt": "…", "updatedAt": "…"
+}
+
+// ContentInsufficiencyDto (Phase 40.28) — the refusal, as a list the screen can render as
+// bullets. `code` is what the UI keys off; `message` is what the РОП reads.
+{
+  "stage": "structure",                              // or "material" — see below
+  "gaps": [
+    { "code": "no_objections",
+      "message": "В материале нет ни одного возражения клиента. Добавьте примеры возражений, которые менеджеры слышат чаще всего, или запись звонка, где они звучат." }
+  ],
+  "note": "…"                                        // the model's own reasoning, diagnostic only
+}
+```
+
+`code` is one of a closed vocabulary — `off_topic`, `too_short`, `no_product`, `no_icp`,
+`no_objections`, `no_script`, `no_examples` — and a code outside it is dropped rather than shown. The
+sentence per code is fixed and written on the server, never by the model: a model-authored refusal
+is a different sentence every run, is untranslatable, and occasionally demands something the product
+cannot accept.
+
+`ContentGenerationJobSummaryDto` carries `insufficiency` too, unlike the material and the structure:
+it is the reason the run is sitting there, and a list that shows `insufficient` without saying what
+is missing sends the administrator into a detail screen for every refused run. It also carries
+`gapSourceRef` (40.31), so a list of runs distinguishes the ones a person started from the ones the
+dashboard proposed.
+
+**There is a second door into this pipeline since 40.31**, and it is
+`POST /admin/team/skill-gaps/{stageKey}/content`. It creates an ordinary run — same six states, same
+worker, same checkpoint, same sufficiency threshold — with two differences: its `sourceMaterial` is
+composed from the measurement and the organization profile rather than pasted, and it carries
+`gapSourceRef`. Nothing in the pipeline branches on that column; it is read by the suggestion panel
+(to stop offering a stage somebody is already working on) and copied by `POST /admin/assignments`
+(to give the resulting assignment its provenance).
+
+Behaviour a caller can observe, and each of these is a decision:
+
+- **The two long halves are asynchronous.** `POST` returns immediately with status `structuring`;
+  a background sweep makes the LLM call and moves the run to `awaiting_review`. The screen polls
+  `GET /admin/content-generation/{jobId}`. Same for `approve` → `generating` → `completed`.
+- **`approve` is idempotent by state.** Approving a run that is already `generating` or `completed`
+  returns it unchanged rather than re-queueing it — a double-clicked button must not buy two lessons.
+  Approving a `structuring` or `failed` run is `409`.
+- **`400` on start** only when `material` is empty or over 60 000 characters, or `title` is blank.
+  **Thin material is not a `400` (40.28)** — it is a run in the `insufficient` state carrying
+  `insufficiency`. A `400` would make the РОП start over and re-pay for structuring the deck they
+  already uploaded, and «добавьте примеры возражений или запись звонка» is worth more to them than
+  the error was.
+- **The threshold has two stages** (40.28). `stage: "material"` means it was decided from the text
+  itself, before anything was sent to a model — under ~400 characters or 60 words, or not a single
+  word in the whole document that belongs to selling. `stage: "structure"` means the material was
+  read properly and what came back was too thin to build four good exercises from: no objections
+  *and* no script stages, or no product *and* no ICP. The model's own verdict rides the same
+  structuring call and can **add** a refusal (it is the only judge that recognises a recipe
+  mentioning a price) but never lift one.
+- **A refusal is arguable, and arguing with it is cheap.** `POST …/material` appends text and puts
+  the run back to `structuring`; the next call reads only what was added, alongside the structure
+  already extracted. `PUT …/structure` is also open on a refused run, so somebody who knows the four
+  objections may simply type them — the edited structure is re-inspected, and an edit that leaves it
+  just as empty leaves the run refused.
+- **`409` on approve** when the structure is too thin, with `{message, insufficiency}`. The run is
+  moved to `insufficient` *before* the error is returned, so a screen that polls sees the same list
+  without having caught anything.
+- **Every value in a structure is bounded** at 2000 characters and every list is capped, on write and
+  on read, matching the 40.19 render path's caps.
+- **The produced lesson arrives archived.** `producedLessonId` names a real `Lesson` with real
+  `Exercise` rows and a published `LessonVersion`, owned by the caller's organization, invisible to
+  learners until `PUT /admin/lessons/{id}` sends `isArchived: false`. Per-item accept/reject of
+  generated exercises is roadmap 40.32.
+
+**`PUT /admin/lessons/{id}` gained an optional `isArchived` in this block.** Omitted, it leaves the
+flag alone, so existing callers are unaffected. It exists because archiving previously had no reverse
+and a generated lesson would otherwise be stranded.
+
+### Internal (ai-service, not exposed through the gateway)
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | /ai/content/structure | `{material, knownStructure?}` | `ExtractedContentStructureDto` |
+| POST | /ai/content/generate | `{structure, focus?, maximumExerciseCount}` | `{title, exercises: [{type, content}]}` |
+| POST | /ai/content/rewrite | **40.32** — `{exerciseType, content, profile?}` | `{content, summary}` — `content` is **null** when nothing needed changing |
+| POST | /ai/content/review | **40.32** — `{exerciseType, content, profile?}` | `{findings: [{code, detail}]}` — an empty list is the expected answer |
+
+Both are guarded by `InternalServiceAuthFilter` (`X-Internal-Service-Secret`) exactly like
+`POST /ai/evaluate`, and both are stateless — no organization, no database, no job. `503` on any
+provider failure, `400` on a missing or oversized `material`.
+
+**The material is deliberately absent from `/ai/content/generate`.** That is the token saving the
+roadmap asks for, and it is what makes the human's edit at the checkpoint binding rather than
+advisory: a model that could still see the source would keep re-finding the objection the reviewer
+deleted.
+
+
+---
+
+## Batch content adaptation and AI content review (Phase 40.32, learning-service)
+
+«Перепиши все упражнения этапа "закрытие" под наш продукт и тон» → a background batch → a queue of
+proposals → **accept or reject one at a time**. The same routes serve the block's second half with
+`mode: "quality_review"`: a per-exercise report of what is methodically wrong with content the РОП
+wrote by hand.
+
+Every route is `RequireOrgAdmin` and carries `[TenantTransaction]`; the organization comes from the
+gateway-validated header and appears in no route, query string or body
+([TENANCY.md §1.3](TENANCY/TENANCY.md)). Gateway cluster `learning`, route
+`/admin/content/{**catch-all}` — **added in this block, and it is also what finally makes 40.18's
+`/admin/content/overrides` reachable through the gateway** (DECISIONS.md, 2026-08-18).
+
+Full description: [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) §6a.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /admin/content/adaptations?mode=&status= | — | `ContentAdaptationJobSummaryDto[]`, newest first |
+| GET | /admin/content/adaptations/{jobId} | — | `{summary, items[]}` or `404` |
+| GET | /admin/content/adaptations/{jobId}/items/{itemId} | — | `ContentAdaptationItemDto` or `404` |
+| POST | /admin/content/adaptations | `{mode?, stageKey}` | `201` + `{summary, items[]}`; `400` on an unknown mode, an empty stage or a stage above the per-batch ceiling; `409` when a live batch for that stage and mode already exists |
+| POST | /admin/content/adaptations/{jobId}/items/{itemId}/accept | — | `ContentAdaptationItemDto`; `409` if the item is not `proposed`, if the exercise changed since the proposal, or if the batch is a **quality review** |
+| POST | /admin/content/adaptations/{jobId}/items/{itemId}/reject | — | `ContentAdaptationItemDto`; `409` unless the item is `proposed` |
+| POST | /admin/content/adaptations/{jobId}/retry | — | `{summary, items[]}`; `409` when nothing failed |
+
+**There is no bulk verb, and that is the block.** Accept and reject each take an item id, so the
+smallest thing that can be applied is one exercise and applying it took a human click. «Применить
+всё» is auto-apply with a person's name attached; if sixty decisions is too many, the answer is a
+narrower stage, which is what the `MaximumItemsPerJob` ceiling (60) exists to force.
+
+```jsonc
+// ContentAdaptationJobSummaryDto
+{
+  "id": "…",
+  "mode": "tone_rewrite",          // or "quality_review"
+  "stageKey": "closing",           // a Skill.Stage value
+  "status": "awaiting_review",     // preparing | awaiting_review | completed | failed
+                                   // derived from the items, never counted
+  "itemCount": 23,                 // frozen at creation — the denominator of «сделано N из M»
+  "pendingCount": 0,               // still owed an AI call; the part that still costs money
+  "awaitingReviewCount": 9,        // still owed a HUMAN answer — the number the screen is about
+  "acceptedCount": 11, "rejectedCount": 2, "unchangedCount": 1, "failedCount": 0,
+  "failureReason": null,
+  "createdAt": "…", "updatedAt": "…", "completedAt": null
+}
+
+// ContentAdaptationItemDto — one item, with everything needed to answer yes or no
+{
+  "summary": {
+    "id": "…", "exerciseId": "…", "lessonId": "…", "lessonTitle": "Работа с ценой",
+    "exerciseType": "choose_option", "orderInLesson": 3,
+    "status": "proposed",          // pending | proposed | unchanged | accepted | rejected | failed
+    "changeSummary": "Заменил абстрактную выгоду на ваш срок внедрения и тон на «вы».",
+    "findingCount": 0,             // review mode
+    "hasBlockingFinding": false,   // review mode — a defect that makes the exercise harmful, not weak
+    "changedFieldCount": 4,
+    "failureReason": null, "resolvedAt": null
+  },
+  "currentContent":  { /* the exercise body as it stands right now */ },
+  "proposedContent": { /* the rewritten body; null in review mode */ },
+  "changes": [                     // the machine-readable half of the diff — an enumeration, not a merge
+    { "path": "situation",       "before": "Клиент говорит…", "after": "Клиент говорит…" },
+    { "path": "options[1].text", "before": "…",               "after": "…" }
+  ],
+  "findings": [                    // review mode; empty in rewrite mode
+    { "code": "unmeasurable_criteria", "severity": "blocking",
+      "message": "Критерии оценки свободного ответа нельзя проверить…",
+      "detail": "\"ответил вежливо\"" }
+  ],
+  "isStale": false                 // the exercise has been edited since the proposal was computed;
+                                   // computed on read, never stored. A stale item cannot be accepted
+}
+```
+
+**Nothing is merged, deliberately.** Both documents travel whole and the server enumerates which JSON
+leaves differ; it never produces a third document. 40.18 ruled out three-way merging of prose and
+grading criteria on the grounds that it produces plausible nonsense which then grades a living
+salesperson, and that ruling holds one level down.
+
+**Accepting a rewrite of a global-library exercise forks the lesson first** (40.18 copy-on-write) and
+writes the body into the organization's own copy — the response's `summary.exerciseId` is what was
+proposed against, and the applied row is recorded on the item. No `LessonVersion` is published:
+accepting edits the draft exactly as `PUT /admin/exercises/{id}` does, and publishing stays a
+separate human act on the existing 40.15 route.
+
+**The seven review codes** (`ambiguous_correct_answer`, `multiple_correct_answers`,
+`obvious_distractors`, `answer_given_away`, `unmeasurable_criteria`, `missing_explanation`,
+`banned_claim_rewarded`) are a closed vocabulary. ai-service returns codes and a quoted fragment;
+the Russian sentence and the `blocking`/`advisory` severity are resolved by learning-service, so two
+runs over the same exercise produce the same complaint and «сколько упражнений с этим дефектом» is a
+query. Codes learning-service does not know are dropped, never rendered blank.
+
+---
+
+## AI quotas and spend (Phase 40.33)
+
+Full description: [AI_QUOTAS.md](AI_QUOTAS.md). Two gatewayed admin routes and four internal ones.
+
+### `GET /admin/ai-usage` — `RequireOrgAdmin`
+
+This month's spend for the caller's organization. **Organization administrators, not platform staff
+only**: the person who has to know their content pipeline is about to stop is the РОП whose pipeline
+it is, and telling them a month later through a support ticket is the situation the roadmap bullet
+«расход виден в дашборде раньше, чем в счёте от провайдера» exists to prevent.
+
+```jsonc
+{
+  "periodKey": "2026-08",            // the UTC month
+  "currency": "RUB",
+  "quotaState": "ok",                // ok | warning | batch_paused | exhausted
+  "llmPromptTokens": 812340,
+  "llmCompletionTokens": 214905,
+  "llmTotalTokens": 1027245,
+  "llmMonthlyTokenLimit": 20000000,
+  "llmCallCount": 1841,
+  "llmEstimatedCallCount": 1602,     // counted from characters, not from a reported usage block
+  "speechCharacters": 418220,
+  "voiceUsedMinutesToday": 37,
+  "voiceDailyLimitMinutes": 600,
+  "voiceUsedMinutesThisMonth": 612,
+  "voiceMonthlyLimitMinutes": 6000,
+  "estimatedCost": null,             // derived, never stored. null whenever ANY line is unpriced
+  "hasUnpricedModels": true,         // at least one model used this month has no price configured
+  "models": [
+    { "model": "gpt-4o", "kind": "llm", "promptTokens": 612340, "completionTokens": 180905,
+      "callCount": 1610, "speechCharacters": 0, "estimatedCost": null },
+    { "model": "yandex-tts", "kind": "tts", "promptTokens": 0, "completionTokens": 0,
+      "callCount": 231, "speechCharacters": 418220, "estimatedCost": 543.68 }
+  ]
+}
+```
+
+- **`quotaState` has four values and the third is the interesting one.** `batch_paused` means the
+  organization is past its batch ceiling: background pipelines have stopped, conversations have not.
+  A report that only said `ok`/`exhausted` would leave an administrator wondering why their content
+  pipeline went quiet in a month they can still hold calls in.
+- **`estimatedCost` is derived, never stored**, and `null` for a model with no configured price —
+  reported as unpriced rather than as free, because zero reads as "this model costs nothing".
+  **The top-level total follows the same rule, and follows it strictly: it is `null` as soon as
+  *any* line is unpriced, not only when every line is** (corrected in 40.34 — it used to sum the
+  priced lines and skip the rest). That matters more than it sounds, because the shipped price table
+  configures speech and no LLM model at all: the old behaviour reported the speech bill alone as a
+  confident number while the entire LLM cost — the dominant one — contributed nothing to it. A
+  partial sum presented as a total is worse than no total, and `hasUnpricedModels` sitting beside it
+  was not enough of a warning. Fill in `AiQuotas:PricePerMillionTokens` and the figure appears.
+- **`llmEstimatedCallCount` is high by design**: only streamed dialog turns are estimated, and they
+  are the most numerous and the cheapest calls in the product. Everything expensive carries the
+  provider's own token count.
+- A **platform administrator with no organization header** reads the installation-wide total
+  (`IsPlatformWide` widening, 40.16). Safe in a way `/admin/voice/usage` was not before 40.11: it
+  returns per-model token counts and no identities at all.
+
+### `GET` / `PUT /admin/ai-quota` — `RequirePlatformAdmin`, `[TenantScoped]`
+
+```jsonc
+// PUT body — every field optional; omitting one CLEARS it back to the platform default
+{ "voiceDailyLimitMinutes": 1200, "voiceMonthlyLimitMinutes": null,
+  "llmMonthlyTokenLimit": 50000000, "batchReservePercent": 20,
+  "note": "Contract 2026-Q3, raised after the onboarding batch" }
+
+// Response (both verbs)
+{ "voiceDailyLimitMinutes": 1200, "voiceMonthlyLimitMinutes": null,
+  "llmMonthlyTokenLimit": 50000000, "batchReservePercent": 20,
+  "note": "…",
+  "isOrganizationSpecific": true,          // false when no row exists and everything below is a default
+  "effectiveVoiceDailyLimitMinutes": 1200,
+  "effectiveVoiceMonthlyLimitMinutes": 6000,   // ← the platform default showing through the null above
+  "effectiveLlmMonthlyTokenLimit": 50000000,
+  "effectiveBatchReservePercent": 20,
+  "updatedAt": "2026-08-18T04:11:00Z" }
+```
+
+**Platform staff only, and that is a commercial boundary rather than a technical one.** A quota is
+what the customer bought; an organization administrator raising their own is not an administrative
+action, it is a purchase. The organization edited is the caller's `X-Organization-Id` — for platform
+staff, the one they impersonated into (40.9) — so there is no organization id in the route and none
+in the body (`scripts/tenancy-boundary-lint.py`).
+
+`batchReservePercent` is clamped to 0–90; a negative limit is read as null.
+
+### A quota refusal, on any metered route
+
+```jsonc
+// 429
+{ "error": "Organization AI quota reached",
+  "resource": "llm_tokens",          // llm_tokens | voice_minutes
+  "period": "month_batch_reserve",   // day | month | month_batch_reserve
+  "used": 18000412, "limit": 18000000 }
+```
+
+**429, not 402.** 402 is reserved for the *provider* telling us **our** balance is empty
+(`OpenAiPaymentRequiredException`); conflating them would make a customer's cap look like our outage.
+Voice keeps its existing 429 shape (`{error, period, usedSeconds, limitSeconds}`) with `period`
+reading `organization day` / `organization month`.
+
+An **unattributed** metered call — one arriving with no `X-Organization-Id` — is `400`
+`{ "error": "An organization is required for metered AI calls." }`. A caller mistake with a fixed
+remedy, reported as such rather than as a server fault.
+
+### Internal, un-gatewayed (`X-Internal-Service-Secret`, like `/ai/evaluate`)
+
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /ai/chat | `{systemPrompt, messages:[{role, content}]}` → `{content, isStopSignal}` |
+| POST | /ai/chat/stream | same body → `application/x-ndjson`, one `{"d":"…"}` per content delta |
+| POST | /ai/tts | `{text, voiceId?}` → `audio/wav` |
+| GET | /ai/quota/preflight?workload=batch\|interactive | — → `{allowed: bool}`. **Reads only** |
+
+The first three are what learning-service's deleted in-process provider clients used to do. On a
+provider failure they answer with a **named** code so the caller rebuilds the same exception it used
+to throw itself — `payment_required` (402), `rate_limited` (429), `provider_auth` (503),
+`provider_rejected` / `provider_failed` / `provider_unreachable` (503), with the upstream status
+alongside. The provider's own body never travels: it is redacted and dropped inside ai-service, per
+[LLM_FAILURE_HANDLING.md](LLM_FAILURE_HANDLING.md).
+
+All four require `X-Organization-Id`, and all callers now send it. `X-Ai-Workload` (`batch` /
+`interactive`, default `interactive`) declares whether a person is waiting.

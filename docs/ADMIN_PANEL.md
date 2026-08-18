@@ -2,24 +2,60 @@
 
 ## Roles
 
+> **2026-08-16 update (owner's request):** roles live on two independent axes. `Admin` and
+> `SuperAdmin` are **Sellevate's own platform roles** and are deliberately not bounded by tenancy.
+> Every organization additionally has its own `TenancyAdmin` and `TenancySuperAdmin`. At either
+> level the **only** difference between the admin and the superadmin is that only the superadmin may
+> **add or remove users**. See `docs/DECISIONS.md` (2026-08-16) for the rationale and the full
+> route audit.
+
+### Platform role (`User.Role`)
+
 | Role | Value | Capabilities |
 |---|---|---|
 | `User` | 0 | Regular learner — existing experience unchanged |
-| `Admin` | 1 | Manage content (skills, lessons, exercises, reference), view learner list |
-| `SuperAdmin` | 2 | All admin functions + manage admin roles (promote/demote users) |
+| `Admin` | 1 | Sellevate staff. Every `/admin/*` content endpoint below and the `/organizations` tenant registry. **May not** add, invite, deactivate or re-role a user |
+| `SuperAdmin` | 2 | Everything `Admin` can do, **plus** adding/removing users and impersonation |
+
+Value 1 was `Admin` before Phase 40.6 removed it and is `Admin` again — the same meaning, so no
+stored row changes interpretation.
 
 Role is stored as an integer column on the `User` table and emitted as a `role` claim in the JWT access token.
+
+### Organization role (`membership.role`)
+
+| Role | Value | Meaning |
+|---|---|---|
+| `Manager` | 0 | The salesperson practicing in one organization |
+| `TenancyAdmin` | 1 | The РОП — admin of that one organization (formerly `OrgAdmin`, same value) |
+| `TenancySuperAdmin` | 2 | Everything `TenancyAdmin` can do, **plus** inviting and offboarding that organization's users |
+
+Emitted as the `org_role` JWT claim (alongside `org_id`) when the user has an active
+`membership` row; **absent** for a user with none — which is the normal state for Sellevate staff,
+and why the platform role satisfies the org-scoped policies on its own. The organization-scoped
+admin screen itself is roadmap block 40.20, waiting on the owner's design.
 
 ---
 
 ## Authorization policies (backend)
 
-| Policy | Required role | Applied to |
+| Policy | Satisfied by | Applied to |
 |---|---|---|
-| `RequireAdmin` | Admin OR SuperAdmin | All `/admin/*` endpoints except user management |
-| `RequireSuperAdmin` | SuperAdmin only | `PUT /admin/users/:id/role` |
+| `RequirePlatformAdmin` | `role` ∈ {`Admin`, `SuperAdmin`} | All `/admin/*` **content** endpoints (learning, ai, gamification, social), the `/organizations` tenant registry, and the read side of `/admin/users` |
+| `RequireSuperAdmin` | `role` = `SuperAdmin` | Everything that adds or removes a user platform-wide: `PUT/DELETE /admin/users/*`, plus all of `/admin/platform/*` (impersonation, bootstrap-admin) |
+| `RequireOrgAdmin` | `org_role` ∈ {`TenancyAdmin`, `TenancySuperAdmin`} **or** `role` ∈ {`Admin`, `SuperAdmin`} | No call site today — reserved for the organization admin screen (40.20) |
+| `RequireOrgSuperAdmin` | `org_role` = `TenancySuperAdmin` **or** `role` = `SuperAdmin` | `/invites`, `/memberships` — adding and removing an organization's users |
 
-Policies are registered in each service's `Program.cs`. Controllers use `[Authorize(Policy = "RequireAdmin")]`.
+Platform staff satisfy the two org-scoped policies **without holding any `org_role` claim**: they
+normally have no membership anywhere, and the whole point of the platform roles is that they are not
+bounded by tenancy. (Making the *data* they then see span every organization is a separate concern
+in the tenancy layer, not in these policies.)
+
+All four are declared once per service in `Common/Constants/AuthorizationPolicies.cs` and registered
+with `builder.Services.AddAuthorization(AuthorizationPolicies.Register)`. Controllers use
+`[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]` and friends — never a
+string literal. Each service's test project carries an `AuthorizationPolicyContractTests` that pins
+the wire-level names and the two asymmetries.
 
 ---
 
@@ -27,9 +63,11 @@ Policies are registered in each service's `Program.cs`. Controllers use `[Author
 
 Every `/admin/*` endpoint now lives in the **service that owns the data**, not in a
 central admin app. The frontend is unaffected: it calls the same paths through the
-API gateway, which routes each `/admin/*` prefix to its owning service and injects the
-trusted `X-User-Id`/`X-User-Role` headers. Each service registers its own
-`RequireAdmin`/`RequireSuperAdmin` policies and enforces them locally.
+API gateway, which routes each `/admin/*` prefix to its owning service. `org_role`/`role`
+are read straight off the JWT the service already validates (no header round-trip); the
+gateway still injects `X-User-Id`/`X-User-Role`/`X-Organization-Id` for the cases that do
+use headers. Each service registers the same four policies from its own
+`AuthorizationPolicies.Register` and enforces them locally.
 
 | Admin prefix | Owning service |
 |---|---|
@@ -57,7 +95,7 @@ Change these in production via environment variables.
 
 ## API endpoints (admin namespace)
 
-All routes prefixed `/admin`. Require `RequireAdmin` unless noted.
+All routes prefixed `/admin`. Require `RequirePlatformAdmin` unless noted.
 
 ### Skills
 | Method | Path | Body | Response |
@@ -180,7 +218,7 @@ See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the poi
 
 `AdminDailyQuoteDto`: `{id, date, text, author, createdAt, updatedAt}`. The admin UI is a month calendar (`/admin/quotes`) — click a day to create/edit/delete its quote.
 
-### Users (`RequireAdmin`; role change is SuperAdmin only)
+### Users (read: `RequirePlatformAdmin`; every mutation: `RequireSuperAdmin`)
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | /admin/users | — | `AdminUserDto[]` |
@@ -191,9 +229,114 @@ See [API_CONTRACTS](API_CONTRACTS.md#gamification-xp) for DTO shapes and the poi
 
 `AdminUserDto`: `{id, email, displayName, role, createdAt, isEmailVerified, authProvider, hasCustomAvatar, avatarUrl}`.
 `AdminUserDetailDto` adds activity stats: `{currentStreakDayCount, longestStreakDayCount, totalXpAmount, completedSkillCount, totalSkillCount, averageExerciseScore, persona}`.
-UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row opens a detail modal for moderation (rename, remove photo) and stats. Any admin can moderate; only SuperAdmins see the role selector.
+UI: `/admin/users` lists all users (avatar, email + verification, provider, role); clicking a row
+opens a detail modal. A platform `Admin` sees the roster and the modal **read-only** — renaming,
+removing a photo and changing a role are all add/remove/re-role-a-user operations and are shown only
+to a `SuperAdmin`, so an `Admin` is never offered a button that would answer 403.
 
 **Owned by identity-service** (`AdminUsersController` in `identity-service/Identity/Features/Admin`). The activity stats (streak/XP/skills/score) are owned by gamification/learning, so identity returns them as `0` until cross-service composition lands — the same caveat as `GET /profile`. The monolith's copy stays as reference only.
+
+### Organizations & impersonation (registry: `RequirePlatformAdmin`; `/admin/platform/*`: `RequireSuperAdmin`)
+
+The `/admin/organizations` screen talks to two services, and the split follows which database the
+operation needs. Full contracts in [API_CONTRACTS.md](API_CONTRACTS.md).
+
+| Method | Path | Owning service | Purpose |
+|---|---|---|---|
+| GET / POST | /organizations | organization-service | list / create a tenant |
+| POST | /organizations/:id/suspend, /organizations/:id/reactivate | organization-service | suspend / resume |
+| POST | /admin/platform/organizations/bootstrap-admin | identity-service | invite the organization's first `TenancySuperAdmin` |
+| POST | /admin/platform/impersonation | identity-service | mint a short-lived token for another organization |
+| GET | /admin/platform/impersonation | identity-service | the impersonation audit trail |
+
+UI notes:
+
+- **Impersonation always asks for a reason.** It is written into the audit record, and a crossing
+  nobody can justify afterwards is the one nobody can review.
+- Starting an impersonation swaps the active access token for the short-lived one and parks the
+  platform token in `sessionStorage`. `ImpersonationBanner`, rendered in the main app shell on
+  every screen, is the way back — without it, entering a customer organization would be a one-way
+  door until the token expired.
+- The "Impersonate" action is disabled for a suspended organization; the backend refuses it too.
+- Suspending an organization stops its users signing in and stops their refresh tokens working.
+  Already-issued access tokens keep working for up to 15 minutes.
+
+### The РОП's dashboard (Phase 40.25 — API only, no screen yet)
+
+`RequireOrgAdmin` throughout, so these are the first admin routes an *organization* administrator can
+reach that are not part of the platform library. Full contracts in
+[API_CONTRACTS.md](API_CONTRACTS.md); the design is
+[TENANCY/ASSIGNMENTS.md](TENANCY/ASSIGNMENTS.md) §4.
+
+| Method | Path | Owning service | Purpose |
+|---|---|---|---|
+| GET | /admin/assignments/:id/dashboard | learning-service | funnel, named rows, and every wave of the repeat series |
+| GET | /admin/team/skill-map?days= | learning-service | skill heat map + each manager's weakest sales-funnel stage |
+| GET | /admin/dialog-reviews?kind=&status=&sessionId= | learning-service | the review queue (open disputes, notes sent) |
+| POST | /admin/dialog-reviews | learning-service | send a quoted fragment with a comment to the manager |
+| POST | /admin/dialog-reviews/:noteId/resolve | learning-service | rule on a disputed AI score |
+| POST | /admin/assignments/:id/remind?scope=unfinished\|not_started | learning-service | **(40.26)** the one-click nudge the deadline digest links to |
+| GET | /admin/dialog-sessions?userId=&modeId=&maxScore=&limit= | ai-service | the team's graded conversations |
+| GET | /admin/dialog-sessions/:sessionId | ai-service | one transcript, with per-message indexes |
+| GET | /admin/team/skill-gaps?days= | learning-service | **(40.31)** what to do next: the failing funnel stages, and the ones deliberately not offered |
+| POST | /admin/team/skill-gaps/:stageKey/content | learning-service | **(40.31)** the button — start a content run aimed at that stage |
+| POST | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** «не сейчас» |
+| DELETE | /admin/team/skill-gaps/:stageKey/dismiss | learning-service | **(40.31)** take the refusal back |
+
+**There is no screen for any of this yet, and that is 40.20.** The admin-panel split — a platform
+superadmin panel and an organization panel — is waiting on the owner's design, and every block from
+40.15 onward has shipped its backend without a frontend for the same reason. What did ship on the
+manager's side of 40.25 is `/dialog-reviews` (their inbox) and the dispute link in the dialog
+feedback modal; those are ordinary app screens, not admin ones.
+
+Three notes for whoever builds the screen:
+
+- **The funnel has five stages, not four.** `failedThresholdCount` is not a subset of
+  `completedCount` — it is the people who finished the work and stayed under the bar, and the roadmap
+  calls that the most valuable row on the screen. Drawing a four-stage funnel puts them back among
+  the people who never started.
+- **`isActiveMember` and the two roster counts can be `null`**, which means identity-service could not
+  be asked. Say "could not check"; do not draw a zero. `rosterKnown` on the response is the flag.
+- **`accuracyPercent` is `null` below `minimumAttemptsForAccuracy` attempts** and must render as a
+  blank cell with an explanation, never as 0%. Two right answers out of two is 100% and is a fact
+  about nobody.
+
+**Phase 40.26 added a fourth note, and it is a hard requirement rather than advice.** The РОП now
+receives two notifications, and both link into this unbuilt panel:
+
+- `AssignmentDeadlineDigest` → `/admin/assignments/{id}?action=remind&scope=not_started`
+- `DialogReviewDisputed` → `/admin/dialog-reviews?note={noteId}`
+
+**Read the action out of the link; do not invent one.** `action=remind` means "open this assignment
+with the reminder confirmation already up", and `scope=not_started` means "the recipients are exactly
+the people the notification just listed by name" — the notice says «ещё не начали: Иванов, Петров»,
+and a button that then messages everybody who has not *finished* is the screen contradicting the
+notice that opened it. The endpoint in the table above already answers with that scope, so the screen
+is the only missing piece. The link deliberately does **not** perform the reminder on load: a URL that
+messages a team the moment it is fetched is a URL a mail scanner fires. Until the screen exists both
+links 404 — recorded in [DONT_FORGET.md](DONT_FORGET.md).
+
+**Phase 40.31 turned the dashboard into a tool, and left the whole thing invisible for the same
+reason.** Four more routes, no screen. Four notes for whoever builds it, and the first is the block's
+entire product claim:
+
+- **The suggestion panel belongs beside the heat map, not on a page of its own.** «Отчёт открывают
+  раз в квартал, инструмент — раз в неделю» is a claim about one screen: the red cell and the button
+  that does something about it have to be in the same field of view. A separate «предложения» tab is
+  a report about a report.
+- **Render `suppressed`, do not drop it.** Every entry says why a real failure is not being offered
+  (`dismissed` / `run_in_progress` / `recently_addressed`), until when, and — for the run cases — the
+  run's id. A panel that shows nothing is indistinguishable from a broken one, and «почему мне ничего
+  не предлагают» is the question that gets a feature switched off. `run_in_progress` should render as
+  a link into the checkpoint screen below, not as a greyed-out button.
+- **The button is one press and it is not instant.** `POST …/content` returns a
+  `ContentGenerationJobDto` in `structuring`, `insufficient` or — if a run for that stage is already
+  alive — the existing run, unchanged. All three are the same screen: the checkpoint screen of the
+  section below. Do not build a second progress UI for this path.
+- **Do not let the client assemble `sourceRef` or `sourceType`.** Both are returned by the server and
+  both are derived again server-side when the assignment is created (`POST /admin/assignments` with
+  `contentGenerationJobId`). A screen that posts `sourceType: "gap_detected"` by hand is a screen that
+  can label anything as measured.
 
 ### JSON Import (Seeder)
 | Method | Path | Body | Response |
@@ -249,6 +392,8 @@ app/(admin)/
         page.tsx       ← period members: move tier, adjust progress points, remove, force re-sync
     users/
       page.tsx         ← user list + role management (superadmin only)
+    organizations/
+      page.tsx         ← tenant registry: create, invite the first admin, suspend/resume, impersonate (Phase 40.9)
 ```
 
 ---
@@ -476,3 +621,150 @@ Each component includes the canonical TypeScript schema and client-side validati
 - **Exercises** have `sortOrder` by their position within a lesson
 - Backend queries always `OrderBy(x => x.SortOrder)` to ensure consistent ordering
 - Visual editor allows reordering via up/down arrows
+
+---
+
+## The РОП's content pipeline — API only (Phases 40.27–40.28)
+
+**There is no screen for this yet.** The РОП's admin panel is roadmap 40.20 and is waiting on the
+owner's design, the same reason 40.15–40.27 shipped API-only. What exists is the whole pipeline
+behind `/admin/content-generation/*` — see [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) and
+[API_CONTRACTS.md](API_CONTRACTS.md).
+
+What the screen has to do, when it is designed, in the order that matters:
+
+1. **A textarea and a title.** The material is pasted text — a product deck's contents, a call script,
+   notes from a training session. File upload and call recordings are 40.30.
+2. **A spinner with a poll.** `POST` returns immediately with status `structuring`; the structuring
+   call takes tens of seconds to minutes. `GET /admin/content-generation/{jobId}` is the poll.
+2a. **The refusal, which is a screen of its own (40.28).** The run may come back `insufficient`
+   instead of `awaiting_review` — either immediately, if the pasted text was too thin or not about
+   selling at all, or after structuring, if too little could be read out of it. `insufficiency.gaps`
+   is a list of `{code, message}`; **render it as a list of bullets, never as a paragraph**, because
+   usually only one of them is something the РОП can act on today. Two things this screen must
+   offer, and they are the whole reason the refusal is a state rather than an error:
+   a textarea that `POST …/material` appends (the run resumes where it stopped and does not re-read
+   the deck), and — when a structure exists — the ordinary checkpoint editor, because somebody who
+   knows their four objections should be able to type them instead of hunting for a document. Do not
+   render a refusal as an error toast: it is the most useful answer the product gives on that path,
+   and «добавьте примеры возражений или запись звонка» is worth more to that customer than the
+   lesson they asked for would have been.
+3. **The checkpoint, which is the whole screen.** Product, who they sell to, tone, the objections,
+   the stages of their script, the glossary, the banned claims — every one editable, every one
+   deletable, and gaps shown as gaps rather than hidden. «Всё верно? что убрать, что добавить?»
+   `PUT …/structure` saves the edit; it is idempotent and can be pressed as often as the reviewer
+   likes.
+4. **One approve button**, and it should be obvious that it is the expensive one. Everything before it
+   costs seconds; after it, the same correction means re-generating a lesson.
+5. **The result.** `producedLessonId` names a real archived lesson with real exercises. The screen
+   should link into the existing lesson editor rather than growing a viewer of its own — it is an
+   ordinary lesson, which is the point.
+
+Three things the screen must not do, because the backend deliberately does not support them:
+
+- **Do not offer a "generate anyway" button on a refused run.** There is no route for it. The
+  threshold is answerable — add material, or fill the structure in by hand — but not waivable, and
+  every path back through it is re-inspected. A bypass would hand the customer the fifteen bland
+  exercises this block exists to not sell them.
+
+- ~~**Do not offer per-exercise accept/reject.** That is roadmap 40.32.~~ **40.32 shipped it, and it
+  is a separate screen rather than a step of this one** — see below. A generated lesson still arrives
+  archived and un-archiving it is still `PUT /admin/lessons/{id}` with `isArchived: false`; what
+  changed is that any stage of any content can now be sent through a proposal queue answered item by
+  item. Do not fold that queue into the pipeline's result step: the two have different lifetimes, and
+  a run that is `completed` has nothing left to review.
+- **Do not write the reviewed structure into the organization profile *yourself*.** It looks like the
+  same form — it is the same field list — and it is deliberately a separate draft. Since 40.29 there
+  is a route that does it properly, under a merge policy: `POST /organizations/profile/draft/apply`.
+  A client that instead assembled a `PUT /organizations/profile` out of the structure would overwrite
+  the customer's `bannedClaims` with whatever the deck happened to say, which is the exact failure the
+  separation exists to prevent. See below.
+
+## The profile interview — API only (Phase 40.29)
+
+**No screen for this either**, same reason: 40.20 is waiting on the owner's design. The backend is four
+routes on `/organizations/profile` ([API_CONTRACTS.md](API_CONTRACTS.md#organization-profile-as-an-interview-phase-4029),
+[ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029)).
+
+The thing the screen must get right is that **this is not a form with AI assistance; it is an
+interview**. What that means concretely:
+
+1. **Never render seven inputs.** `GET /organizations/profile/gaps` returns three questions at a time
+   and a `totalGapCount`. Show the three, show «осталось ещё N», and re-fetch after each answer. The
+   whole block exists because the seven-field version stays empty.
+2. **One answer, one `PATCH`.** Do not read the profile, splice a field in and `PUT` all seven back —
+   that loses whatever a colleague saved in between, in exactly the multi-person situation this flow
+   invites. `PATCH /organizations/profile` with a single field is the write.
+3. **The «заполнить по материалам» path is the 40.27 pipeline, not a new upload box.** The РОП starts
+   an ordinary content-generation run with their deck and their script, corrects the structure at the
+   checkpoint, and the screen then posts that `structure` to `POST /organizations/profile/draft` (to
+   look) and `…/draft/apply` (to commit). One reading of one document fills the profile *and* produces
+   a training.
+4. **Show the conflicts, and do not pre-tick them.** The preview's `fields[]` carries `decision` per
+   field. `fill` and `extend` happen anyway and need no consent — they destroy nothing. `conflict`
+   means «есть ваше значение и предложение ИИ», and the field is left alone unless its name is sent
+   back in `acceptedFields`. A screen that pre-selected every conflict would be the silent overwrite
+   with a checkbox drawn on it.
+5. **`isReadyForParameterization` is the progress indicator worth showing**, not «5 из 7 полей». It
+   goes true when `product`, `icp` and three objections exist — the point at which lessons stop
+   reading as «ваш продукт» and start reading as the customer's own.
+
+Two things this screen must not do:
+
+- **Do not offer a way to delete a banned claim from the draft flow.** There is no such route: apply
+  only ever adds to `bannedClaims`. Removing one is a deliberate act on the whole-profile form, by
+  somebody looking at the whole list.
+- **Do not treat the two «skippable» questions as unanswered work.** `banned_claims` and `glossary`
+  may honestly be «таких нет» and the profile has no marker for that, so they persist. They are
+  `important` and `optional`, they never appear while a `blocking` gap is open, and they must not hold
+  a completion badge hostage.
+
+
+---
+
+## Batch adaptation and content review — API only (Phase 40.32)
+
+**No screen for this either**, same reason: 40.20 waits on the owner's design. The backend is seven
+routes under `/admin/content/adaptations`
+([API_CONTRACTS.md](API_CONTRACTS.md), [CONTENT_PIPELINE.md §6a](CONTENT_PIPELINE.md)).
+
+Two screens, sharing everything but the middle column:
+
+- **`mode: "tone_rewrite"`** — «перепиши все упражнения этапа "закрытие" под наш продукт и тон».
+- **`mode: "quality_review"`** — «что не так с тем, что мы написали руками».
+
+What the screens have to do, in the order that matters:
+
+1. **Pick a stage, press once.** `POST /admin/content/adaptations {mode, stageKey}` returns
+   immediately with the batch and its items, all `pending`. Nothing has been spent yet — the scope is
+   a database query. A stage above the per-batch ceiling is a **400 carrying the count**, and the
+   right response on screen is «в этапе 412 упражнений, это дорого — сузьте выбор», not a retry.
+2. **A progress bar with a poll.** `preparing` means items still owe an AI call; `GET
+   …/adaptations/{jobId}` gives `pendingCount` against `itemCount`. Minutes, not seconds: it is one
+   call per exercise.
+3. **The queue, which is the whole screen.** `awaitingReviewCount` is the number the header should
+   show — a batch is not done when the model finishes, it is done when a person has answered every
+   proposal. Order by lesson and position, so a reviewer reads a lesson the way it plays.
+4. **One item at a time.** `GET …/items/{itemId}` returns the current body, the proposed body and
+   `changes` — the list of JSON leaves that differ. Render `changeSummary` (the model's sentence about
+   what it changed) **first**: it is what lets somebody answer in five seconds, and the leaf list is
+   what they check it against. In review mode the middle column is `findings`, and
+   `hasBlockingFinding` is what must sort or badge the list — a queue of sixty advisory notes must not
+   bury the one saying the correct answer teaches a forbidden promise.
+5. **Accept, reject, next.** Both take an item id. `isStale: true` means the exercise was edited after
+   the proposal was computed: disable accept and say so, because the server will 409 anyway and the
+   honest fix is a re-run, not a merge.
+
+Four things the screens must not do, because the backend deliberately does not support them:
+
+- **Do not build an «применить всё» button.** There is no route for it, and adding one would be
+  auto-apply with the reviewer's name attached — the one thing this block exists to prevent. If the
+  queue feels too long, the answer is a narrower stage.
+- **Do not offer accept in review mode.** A finding is a diagnosis, not a patch; the route returns
+  409. Link to the ordinary exercise editor instead, and to a tone rewrite of the same stage.
+- **Do not render a diff you computed yourself.** The server already enumerates which leaves differ,
+  and it deliberately never merges the two documents. A client-side three-way merge of prose and
+  grading criteria is the exact thing 40.18 refused to build.
+- **Do not expect the change to be live.** Accepting edits the draft exercise. Learners see it when
+  somebody publishes a new lesson version on the existing 40.15 route — the screen should say so, or
+  a РОП will accept forty rewrites and wonder why the team still reads the old wording.

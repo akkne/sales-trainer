@@ -52,9 +52,9 @@ public class AdminUsersTests
     }
 
     [Test]
-    public async Task List_AllowedForAdmin()
+    public async Task List_AllowedForSuperAdmin()
     {
-        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.Admin);
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.SuperAdmin);
         var response = await client.GetAsync("/admin/users");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -62,7 +62,7 @@ public class AdminUsersTests
     [Test]
     public async Task Detail_ForUnknownUser_ReturnsNotFound()
     {
-        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.Admin);
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.SuperAdmin);
         var response = await client.GetAsync($"/admin/users/{Guid.NewGuid()}");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -71,7 +71,7 @@ public class AdminUsersTests
     public async Task Rename_UpdatesDisplayName()
     {
         var target = await SeedUserAsync();
-        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.Admin);
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.SuperAdmin);
 
         var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}",
             new { displayName = "Renamed Person" });
@@ -85,26 +85,108 @@ public class AdminUsersTests
     public async Task Rename_RejectsTooShortDisplayName()
     {
         var target = await SeedUserAsync();
-        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.Admin);
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.SuperAdmin);
 
         var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}", new { displayName = "x" });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    // 2026-08-16 role split: reading the roster is ordinary platform administration, so a
+    // platform `Admin` gets in. Every mutation below is add/remove-a-user and stays
+    // SuperAdmin-only (see docs/DECISIONS.md).
     [Test]
-    public async Task ChangeRole_ForbiddenForAdmin()
+    public async Task List_AllowedForPlatformAdmin()
+    {
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "admin@test.com", "A", UserRole.Admin);
+        var response = await client.GetAsync("/admin/users");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task Detail_AllowedForPlatformAdmin()
     {
         var target = await SeedUserAsync();
-        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "a@test.com", "A", UserRole.Admin);
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "admin@test.com", "A", UserRole.Admin);
 
-        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "Admin" });
+        var response = await client.GetAsync($"/admin/users/{target.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Test]
+    public async Task Rename_ForbiddenForPlatformAdmin()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "admin@test.com", "A", UserRole.Admin);
+
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}",
+            new { displayName = "Renamed Person" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task ChangeRole_ForbiddenForPlatformAdmin()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "admin@test.com", "A", UserRole.Admin);
+
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "SuperAdmin" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task DeleteAvatar_ForbiddenForPlatformAdmin()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "admin@test.com", "A", UserRole.Admin);
+
+        var response = await client.DeleteAsync($"/admin/users/{target.Id}/avatar");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task ChangeRole_ForbiddenForRegularUser()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "u@test.com", "U", UserRole.User);
+
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "SuperAdmin" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Test]
     public async Task ChangeRole_AllowedForSuperAdmin()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "s@test.com", "S", UserRole.SuperAdmin);
+
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "SuperAdmin" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<AdminUserResponse>();
+        body!.Role.Should().Be("SuperAdmin");
+    }
+
+    [Test]
+    public async Task ChangeRole_RejectsUnknownRole()
+    {
+        var target = await SeedUserAsync();
+        var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "s@test.com", "S", UserRole.SuperAdmin);
+
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "Wizard" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // "Admin" was a valid platform role until Phase 40.6 removed it, and the owner reinstated it
+    // on 2026-08-16 at its original numeric value. This locks it back in as assignable.
+    [Test]
+    public async Task ChangeRole_AcceptsTheReinstatedAdminRole()
     {
         var target = await SeedUserAsync();
         var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "s@test.com", "S", UserRole.SuperAdmin);
@@ -116,13 +198,15 @@ public class AdminUsersTests
         body!.Role.Should().Be("Admin");
     }
 
+    // `Enum.TryParse` happily turns an out-of-range number into an undefined enum value, which
+    // would persist a role nothing in the system can interpret.
     [Test]
-    public async Task ChangeRole_RejectsUnknownRole()
+    public async Task ChangeRole_RejectsANumericRoleValue()
     {
         var target = await SeedUserAsync();
         var client = Factory.CreateAuthenticatedClient(Guid.NewGuid(), "s@test.com", "S", UserRole.SuperAdmin);
 
-        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "Wizard" });
+        var response = await client.PutAsJsonAsync($"/admin/users/{target.Id}/role", new { role = "99" });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

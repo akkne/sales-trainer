@@ -3,10 +3,19 @@
 import { useState, useEffect } from "react";
 import { DialogFeedback } from "@/features/dialog/hooks/use-dialog";
 import { Icon } from "@/shared/components/icon";
+import { useDisputeScore } from "@/features/dialog-reviews/hooks/use-dialog-reviews";
 
 interface FeedbackModalProps {
     feedback: DialogFeedback;
     onClose: () => void;
+    /**
+     * Phase 40.25. The conversation this grade belongs to. When present, the modal offers to
+     * dispute the score (docs/TENANCY/ASSIGNMENTS.md §4.1).
+     *
+     * Optional because not every caller of this modal has one to hand, and a missing session id
+     * has to degrade to "no dispute button" rather than to a button that fails when pressed.
+     */
+    sessionId?: string | null;
 }
 
 function scoreColor(score: number): { soft: string; ink: string; label: string } {
@@ -17,7 +26,7 @@ function scoreColor(score: number): { soft: string; ink: string; label: string }
     return { soft: "var(--success-soft)", ink: "var(--success)", label: "Отлично" };
 }
 
-export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
+export function FeedbackModal({ feedback, onClose, sessionId }: FeedbackModalProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     useEffect(() => {
@@ -107,12 +116,77 @@ export function FeedbackModal({ feedback, onClose }: FeedbackModalProps) {
                     )}
                 </div>
 
+                {sessionId && <DisputeSection sessionId={sessionId} />}
+
                 <div className="modal-foot">
                     <button className="btn btn-primary btn-block" onClick={onClose}>
                         <Icon name="plus" size="sm" />
                         Новый диалог
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Phase 40.25. «Менеджер оспаривает оценку ИИ» at the moment the grade is on the screen.
+ *
+ * Collapsed behind one link on purpose. The mechanism has to exist — without it the first genuinely
+ * disputed score costs the product the team's trust in every number it shows — but a form that is
+ * open by default invites a complaint about every grade, and a queue nobody can read is the same as
+ * no mechanism at all.
+ */
+function DisputeSection({ sessionId }: { sessionId: string }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [comment, setComment] = useState("");
+    const dispute = useDisputeScore();
+
+    if (dispute.isSuccess) {
+        return (
+            <div style={{ padding: "0 20px 4px", fontSize: 13, color: "var(--ink-3)" }}>
+                Оценка отправлена руководителю на рассмотрение. Ответ придёт в уведомлениях.
+            </div>
+        );
+    }
+
+    if (!isOpen) {
+        return (
+            <div style={{ padding: "0 20px 4px" }}>
+                <button
+                    className="more-btn"
+                    style={{ color: "var(--ink-3)" }}
+                    onClick={() => setIsOpen(true)}
+                >
+                    Не согласны с оценкой?
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="col" style={{ gap: 8, padding: "0 20px 4px" }}>
+            <textarea
+                className="field"
+                rows={3}
+                placeholder="Что именно оценено неверно и почему"
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+            />
+            {dispute.isError && (
+                <span style={{ fontSize: 13, color: "var(--bad)" }}>{dispute.error.message}</span>
+            )}
+            <div className="row gap-2" style={{ justifyContent: "flex-end" }}>
+                <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>
+                    Отмена
+                </button>
+                <button
+                    className="btn btn-primary"
+                    disabled={comment.trim().length === 0 || dispute.isPending}
+                    onClick={() => dispute.mutate({ sessionId, comment: comment.trim() })}
+                >
+                    Оспорить
+                </button>
             </div>
         </div>
     );

@@ -15,6 +15,7 @@ internal sealed class AchievementService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
         var allAchievements = await databaseContext.Achievements
             .OrderBy(achievement => achievement.SortOrder)
             .ToListAsync(cancellationToken);
@@ -41,6 +42,7 @@ internal sealed class AchievementService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
         var allAchievements = await databaseContext.Achievements.ToListAsync(cancellationToken);
 
         var alreadyUnlockedIds = await databaseContext.UserAchievements
@@ -117,6 +119,7 @@ internal sealed class AchievementService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
 
         return newlyUnlockedKeys;
     }

@@ -3,13 +3,23 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Evaluation.Models;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
 
 namespace Sellevate.Ai.Features.Evaluation.Services.Implementation;
 
+/// <summary>
+/// The grading strategies' shared provider call. Phase 40.33 wired the meter through it rather than
+/// folding it into <c>IOpenAiChatService</c>: this path has its own failure contract — it throws
+/// <c>HttpRequestException</c> and degrades an unparseable answer into a failed-but-valid result
+/// rather than a 503 — which <c>docs/LLM_FAILURE_HANDLING.md</c> pins and tests assert. Merging the
+/// two would have been a behaviour change smuggled in under a metering change.
+/// </summary>
 internal abstract class AiEvaluationStrategyBase(
     IHttpClientFactory httpClientFactory,
     IOptions<OpenAiConfiguration> openAiOptions,
+    IAiSpendMeter spendMeter,
     ILogger logger)
 {
     protected async Task<ExerciseEvaluationResult> EvaluateWithAiAsync(
@@ -84,6 +94,10 @@ internal abstract class AiEvaluationStrategyBase(
             httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", openAiApiKey);
 
+        // Phase 40.33. The gate, on ai-service's second provider path. Placed after the prompt is
+        // assembled and before the request leaves, so a refused organization pays nothing.
+        await spendMeter.EnsureLlmAllowanceAsync($"exercise grading ({model})", cancellationToken);
+
         using var response = await httpClient.PostAsync(apiUrl, requestContent, cancellationToken);
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -97,6 +111,14 @@ internal abstract class AiEvaluationStrategyBase(
                 logger.LogWarning("OpenAI evaluation API rejected the request: {StatusCode} - {Body}", response.StatusCode, RedactAndTruncate(responseBody));
             throw new HttpRequestException("AI provider error");
         }
+
+        var reportedUsage = OpenAiUsageReader.Read(responseBody);
+        await spendMeter.RecordLlmUsageAsync(
+            model,
+            reportedUsage?.PromptTokens ?? spendMeter.EstimateTokensFromLength(systemPromptWithFormat.Length + delimitedUserPrompt.Length),
+            reportedUsage?.CompletionTokens ?? spendMeter.EstimateTokensFromLength(responseBody.Length),
+            wasEstimated: reportedUsage is null,
+            cancellationToken);
 
         if (responseBody.Contains("\"error\""))
         {

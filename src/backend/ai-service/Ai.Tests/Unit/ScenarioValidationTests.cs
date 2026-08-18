@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Ai.Features.Dialog.Constants;
 using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
@@ -22,6 +23,8 @@ public class ScenarioValidationTests
     private FakeRedis _cache = null!;
     private ScenarioValidationService _service = null!;
 
+    private TenantContext _tenantContext = null!;
+
     [SetUp]
     public void SetUp()
     {
@@ -31,8 +34,11 @@ public class ScenarioValidationTests
         var redis = Substitute.For<IConnectionMultiplexer>();
         redis.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(_cache.Database);
 
+        _tenantContext = new TenantContext();
+        _tenantContext.SetOrganization(AiDbContextFactory.DefaultOrganizationId);
+
         _service = new ScenarioValidationService(
-            _openAiChatService, redis, NullLogger<ScenarioValidationService>.Instance);
+            _openAiChatService, redis, _tenantContext, NullLogger<ScenarioValidationService>.Instance);
     }
 
     private void AnswerWith(string answer) =>
@@ -238,6 +244,65 @@ public class ScenarioValidationTests
             .Should().Be("Базовый промт.");
     }
 
+    // ── Phase 40.11: the verdict cache is per organization ────────────────
+
+    /// <summary>
+    /// Without the organization in the key, one customer's cached verdict answers another
+    /// customer's request — and because the key is a hash of the scenario text, a hit also tells
+    /// organization B that somebody else already submitted exactly this text.
+    /// </summary>
+    [Test]
+    public async Task Cached_verdict_is_namespaced_by_organization()
+    {
+        AnswerWith("{\"relevant\": true, \"reason\": null}");
+
+        await _service.ValidateAsync(SalesScenario);
+
+        _cache.Keys.Should().OnlyContain(key =>
+            key.StartsWith($"org:{AiDbContextFactory.DefaultOrganizationId}:", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task Two_organizations_do_not_share_a_verdict_for_the_same_text()
+    {
+        AnswerWith("{\"relevant\": true, \"reason\": null}");
+        await _service.ValidateAsync(SalesScenario);
+
+        var otherOrganizationContext = new TenantContext();
+        otherOrganizationContext.SetOrganization(Guid.NewGuid());
+        var redis = Substitute.For<IConnectionMultiplexer>();
+        redis.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(_cache.Database);
+        var otherOrganizationService = new ScenarioValidationService(
+            _openAiChatService, redis, otherOrganizationContext, NullLogger<ScenarioValidationService>.Instance);
+
+        await otherOrganizationService.ValidateAsync(SalesScenario);
+
+        // Two entries for one text: the second organization paid for its own verdict rather than
+        // reading the first one's.
+        _cache.Keys.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// With no organization on the request the cache is skipped entirely — the same degradation an
+    /// unreachable Redis produces, and documented in the service as such. What must never happen is
+    /// a read or a write against a key no organization owns.
+    /// </summary>
+    [Test]
+    public async Task An_unset_tenant_does_not_touch_the_cache()
+    {
+        AnswerWith("{\"relevant\": true, \"reason\": null}");
+
+        var redis = Substitute.For<IConnectionMultiplexer>();
+        redis.GetDatabase(Arg.Any<int>(), Arg.Any<object>()).Returns(_cache.Database);
+        var unscopedService = new ScenarioValidationService(
+            _openAiChatService, redis, new TenantContext(), NullLogger<ScenarioValidationService>.Instance);
+
+        var verdict = await unscopedService.ValidateAsync(SalesScenario);
+
+        verdict.IsValid.Should().BeTrue();
+        _cache.Keys.Should().BeEmpty();
+    }
+
     /// <summary>
     /// An in-memory stand-in for the Redis string commands the validator uses, so the caching tests
     /// assert on real hit/miss behavior rather than on which methods were called.
@@ -247,6 +312,8 @@ public class ScenarioValidationTests
         private readonly Dictionary<string, string> _entries = new(StringComparer.Ordinal);
 
         public bool FailEverything { get; set; }
+
+        public IReadOnlyCollection<string> Keys => _entries.Keys;
 
         public IDatabase Database { get; }
 

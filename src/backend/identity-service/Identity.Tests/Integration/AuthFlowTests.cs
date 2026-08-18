@@ -22,47 +22,31 @@ public class AuthFlowTests
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // TEMP: email confirmation disabled — registration returns tokens immediately.
+    /// <summary>
+    /// Phase 40.7: the public registration route is deleted, not hidden behind a flag or a role —
+    /// there must be no handler left at that path at all (docs/TENANCY/TENANCY.md §4.1).
+    /// </summary>
     [Test]
-    public async Task Register_ReturnsTokens_AndEmitsUserRegistered()
+    public async Task Register_RouteIsGone()
     {
         var client = Factory.CreateClient();
-        var email = UniqueEmail();
 
         var response = await client.PostAsJsonAsync("/auth/register",
-            new { email, password = "Password123!", displayName = "Reg User" });
+            new { email = UniqueEmail(), password = "Password123!", displayName = "Reg User" });
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<AuthTokenResult>();
-        body!.AccessToken.Should().NotBeNullOrEmpty();
-
-        Factory.UserEventPublisher.Registered.Should().Contain(e => e.Email == email);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Test]
-    public async Task Register_Duplicate_ReturnsConflict()
+    public async Task Login_AfterSeeding_Succeeds()
     {
         var client = Factory.CreateClient();
         var email = UniqueEmail();
-        var payload = new { email, password = "Password123!", displayName = "Dup" };
+        await TestUserSeeder.SeedUserAsync(Factory, email, "Flow");
 
-        (await client.PostAsJsonAsync("/auth/register", payload)).EnsureSuccessStatusCode();
-        var second = await client.PostAsJsonAsync("/auth/register", payload);
+        var login = await client.PostAsJsonAsync("/auth/login",
+            new { email, password = TestUserSeeder.DefaultPassword });
 
-        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
-    }
-
-    // TEMP: email confirmation disabled — login succeeds immediately after registration.
-    [Test]
-    public async Task Login_AfterRegister_Succeeds_WithoutVerification()
-    {
-        var client = Factory.CreateClient();
-        var email = UniqueEmail();
-        const string password = "Password123!";
-
-        await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Flow" });
-
-        var login = await client.PostAsJsonAsync("/auth/login", new { email, password });
         login.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await login.Content.ReadFromJsonAsync<AuthTokenResult>();
         body!.AccessToken.Should().NotBeNullOrEmpty();
@@ -71,15 +55,19 @@ public class AuthFlowTests
     [Test]
     public async Task Refresh_RotatesToken_ViaCookie()
     {
+        // Outside Development the refresh cookie is issued with Secure=true, so the client has
+        // to talk https or the cookie container never sends it back and /auth/refresh sees none.
         var client = Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
-            HandleCookies = true
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
         });
         var email = UniqueEmail();
-        const string password = "Password123!";
+        await TestUserSeeder.SeedUserAsync(Factory, email, "Refresh");
 
-        // TEMP: registration sets the refresh cookie directly (no verify-email step).
-        await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Refresh" });
+        var login = await client.PostAsJsonAsync("/auth/login",
+            new { email, password = TestUserSeeder.DefaultPassword });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var refresh = await client.PostAsync("/auth/refresh", null);
         refresh.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -93,11 +81,11 @@ public class AuthFlowTests
             HandleCookies = false
         });
         var email = UniqueEmail();
-        const string password = "Password123!";
+        await TestUserSeeder.SeedUserAsync(Factory, email, "Reuse");
 
-        // TEMP: registration returns the refresh cookie directly (no verify-email step).
-        var register = await client.PostAsJsonAsync("/auth/register", new { email, password, displayName = "Reuse" });
-        var firstRefreshToken = ExtractRefreshTokenCookie(register);
+        var login = await client.PostAsJsonAsync("/auth/login",
+            new { email, password = TestUserSeeder.DefaultPassword });
+        var firstRefreshToken = ExtractRefreshTokenCookie(login);
 
         var firstRefresh = await PostRefreshWithCookie(client, firstRefreshToken);
         firstRefresh.StatusCode.Should().Be(HttpStatusCode.OK);

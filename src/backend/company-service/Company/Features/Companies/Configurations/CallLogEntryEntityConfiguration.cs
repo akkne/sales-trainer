@@ -12,6 +12,9 @@ public sealed class CallLogEntryEntityConfiguration : IEntityTypeConfiguration<C
 
         builder.HasKey(entry => entry.Id);
 
+        builder.Property(entry => entry.OrganizationId)
+            .IsRequired();
+
         builder.Property(entry => entry.ContactName)
             .IsRequired()
             .HasMaxLength(200);
@@ -33,8 +36,14 @@ public sealed class CallLogEntryEntityConfiguration : IEntityTypeConfiguration<C
         builder.Property(entry => entry.UpdatedAt)
             .IsRequired();
 
-        builder.HasIndex(entry => new { entry.CompanyId, entry.OccurredAt })
-            .HasDatabaseName("IX_CallLogEntries_CompanyId_OccurredAt")
-            .IsDescending(false, true);
+        // Phase 40.12: the timeline read is always scoped to one organization first, so the
+        // organization leads the index. Replaces IX_CallLogEntries_CompanyId_OccurredAt, which the
+        // concurrent-index script drops once this one is valid.
+        builder.HasIndex(entry => new { entry.OrganizationId, entry.CompanyId, entry.OccurredAt })
+            .HasDatabaseName("IX_CallLogEntries_OrganizationId_CompanyId_OccurredAt")
+            .IsDescending(false, false, true);
+
+        builder.HasIndex(entry => new { entry.OrganizationId, entry.UserId })
+            .HasDatabaseName("IX_CallLogEntries_OrganizationId_UserId");
     }
 }

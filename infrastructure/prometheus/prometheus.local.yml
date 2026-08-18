@@ -17,6 +17,12 @@ scrape_configs:
       - targets: ['host.docker.internal:5005']
     metrics_path: /metrics
 
+  - job_name: sellevate-ai
+    static_configs:
+      # ai-service runs on the host in the local dev profile (scripts/dev-ai.sh), port 5003.
+      - targets: ['host.docker.internal:5003']
+    metrics_path: /metrics
+
   - job_name: kafka-exporter
     static_configs:
       - targets: ['kafka-exporter:9308']

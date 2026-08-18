@@ -4,6 +4,72 @@ Administrators can bulk-import content via the admin panel using three seeder en
 
 ---
 
+## 0. The seeder writes the GLOBAL library, and only the global library (Phase 40.19)
+
+Read this before anything else on this page. It is the one thing about the seeder that changed when
+organizations became able to own content.
+
+Every import below writes rows with `organization_id IS NULL` — the base library every customer
+reads. **It cannot be pointed at a customer, and that is a hard rule rather than a convention.**
+
+- Every request must carry an explicit `target=global` form field. Anything else — a missing field, a
+  different value, an organization id — is rejected with `400`. The field exists so that seeding the
+  shared library is a stated intention rather than a default, and so that the day somebody wants a
+  per-organization import they have to answer the question this endpoint currently refuses to be
+  asked.
+- `target` is **not** an organization id and must never become one. The tenant is read from
+  `ITenantContext` (the gateway-validated header), never from a request body
+  ([TENANCY.md §1.3](TENANCY/TENANCY.md)). `scripts/tenancy-boundary-lint.py` enforces this.
+- Every read inside the seeder is narrowed to `organization_id IS NULL` too, which is the half that
+  fixed a real bug. Reads used to go through the tenancy query filter, which admits *"global or
+  mine"*. A platform administrator who is also a member of an organization would load that
+  organization's **override** lessons alongside the base ones — and lessons upsert on
+  `(topicId, title)`, so re-running a bundle import would silently overwrite a customer's edited
+  lesson and its exercises with the base text. Nothing in the response said so; the customer would
+  simply find their edits gone. The `*/export` endpoints had the mirror bug: an export taken by that
+  administrator carried the overrides out into a file that re-imported as if it were the shared
+  library.
+- The narrowing is done by query rather than by "run as platform staff", so it holds no matter what
+  tenant header the request happened to carry.
+
+**How an organization customizes content, then, since not through the seeder:**
+
+| Want | Mechanism | Cost |
+|---|---|---|
+| The lesson to name their product, ICP, objections, tone, terminology | Fill in the profile form (`PUT /organizations/profile`) — the base lesson's `{{organization.*}}` placeholders resolve from it. See [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md) | Cheap. One base lesson still serves everybody, and they keep receiving base improvements |
+| A genuinely different lesson body | `POST /admin/content/overrides/lesson/{baseId}` — copy-on-write (Phase 40.18, [CONTENT_MODEL.md §2.6](TENANCY/CONTENT_MODEL.md)) | Expensive. That lesson leaves the base library's improvement path and joins the staleness review queue |
+| A different curriculum *order* | Programme versioning (Phase 40.17) — reordering touches no lesson | Cheap |
+
+`.claude/local-seed/seed.py` sends `target=global` on every bundle import and deliberately grew no
+flag to point itself anywhere else. If per-organization seeding is ever needed, that is a change to
+the API contract and to this document, not a command-line switch.
+
+### The customer's own path is a different pipeline (Phase 40.27)
+
+A customer who wants content **out of their own material** does not get a seeder flag. They get the
+admin content pipeline — [CONTENT_PIPELINE.md](CONTENT_PIPELINE.md) — which is the product version of
+what `seed.py` does offline, with one difference that is the whole point: it **stops in the middle**
+and shows the extracted structure for confirmation before generating anything.
+
+The two paths are deliberately separate, and the table above gains a fourth row because of it:
+
+| Want | Mechanism | Cost |
+|---|---|---|
+| A lesson built from their own deck, script or training notes | `POST /admin/content-generation` → review the structure → approve (Phase 40.27) | One structuring call and one generation call. The lesson is theirs, `organization_id` set, archived until reviewed. It never joins the shared library and never reaches another customer |
+
+Three properties keep this from becoming a back door into the shared library:
+
+- **It writes `organization_id`, always.** There is no target field and no way to ask for a global
+  write. The seeder remains the one authoring path for `organization_id IS NULL`, and that has not
+  changed.
+- **It goes through the ordinary content tables**, so a generated lesson is versioned, overridable and
+  substitutable exactly like a seeded one — but it is *the organization's* lesson, outside the base
+  library's improvement path by construction rather than by an override marker.
+- **`seed.py` itself is untouched by 40.27.** It still seeds the global library, still sends
+  `target=global`, still has no per-organization flag.
+
+---
+
 ## 1. Skills Seeder — `/admin/seeder/skills`
 
 Imports skills only.
@@ -37,7 +103,8 @@ POST /admin/seeder/skills
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data
 
-file: <JSON file>
+file:   <JSON file>
+target: global          # required — see §0. Any other value returns 400
 ```
 
 ### Response `200 OK`
@@ -83,7 +150,8 @@ POST /admin/seeder/topics
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data
 
-file: <JSON file>
+file:   <JSON file>
+target: global          # required — see §0. Any other value returns 400
 ```
 
 ### Response `200 OK`
@@ -172,7 +240,8 @@ POST /admin/seeder/lessons
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data
 
-file: <JSON file>
+file:   <JSON file>
+target: global          # required — see §0. Any other value returns 400
 ```
 
 ### Response `200 OK`
@@ -191,7 +260,7 @@ file: <JSON file>
 
 | Status | When |
 |---|---|
-| 400 | No file, unparseable JSON, missing required fields at lesson level |
+| 400 | `target` missing or not `global` (§0), no file, unparseable JSON, missing required fields at lesson level |
 | 401 | Missing/expired token |
 | 403 | User is not Admin or SuperAdmin |
 | 404 | Skill or topic not found |
@@ -251,7 +320,8 @@ POST /admin/seeder/bundle
 Authorization: Bearer <adminToken>
 Content-Type: multipart/form-data   (max 20 MB)
 
-file: <JSON file>
+file:   <JSON file>
+target: global          # required — see §0. Any other value returns 400
 ```
 
 ### Behavior
@@ -280,7 +350,7 @@ file: <JSON file>
 
 | Status | When |
 |---|---|
-| 400 | No file, non-`.json` file, unparseable JSON, or root not an object/array |
+| 400 | `target` missing or not `global` (§0), no file, non-`.json` file, unparseable JSON, or root not an object/array |
 | 401 | Missing/expired token |
 | 403 | User is not Admin or SuperAdmin |
 
@@ -295,5 +365,28 @@ For the complete content schema and validation rules for each of the 10 exercise
 - `spot_mistake`, `rewrite`, `ai_dialogue`, `evaluate_call`, `free_text` — AI-evaluated types with `ai_prompt` field
 
 Each type is validated on import; exercises with invalid `content` are skipped and reported in the response `errors` array.
+
+## Export endpoints
+
+`GET /admin/seeder/{skills,topics,lessons,bundle}/export` return the global library in exactly the
+shape the matching import accepts, so an export round-trips. They take no `target`: there is only one
+thing to export, and as of 40.19 they are narrowed to `organization_id IS NULL` for the reason given
+in §0 — an export that carried one customer's overrides would re-import as if those were everybody's
+content.
+
+## Placeholders in seeded content
+
+Seeded lesson text and exercise content may contain `{{organization.product}}`,
+`{{organization.icp}}`, `{{organization.tone}}`, `{{organization.objections}}`,
+`{{organization.script}}` and `{{organization.glossary.<term>}}`. They are stored verbatim and
+resolved per organization at render time, never at import time — which is why the same seeded bundle
+produces the same `ContentHash` for every customer. Full syntax, fallback behaviour and authoring
+guidance: **[CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md)**.
+
+Two things not to do in a seed file, both from that document: do not put a placeholder in an answer
+key, and write each sentence so that it still reads correctly with the neutral fallback («ваш
+продукт», «ваш клиент») substituted in, because there is no Russian declension engine behind this.
+
+---
 
 > **Microservices (Phase 8):** the content described here is now owned and served by the extracted **[learning-service](LEARNING_SERVICE.md)** through the gateway (Postgres `learning` DB). Paths, schemas and behaviour are unchanged. AI-graded exercise types are scored by the learning-service calling the ai-service `POST /ai/evaluate` (the learning-service still owns the `ExerciseTypePrompt` text and passes it in).

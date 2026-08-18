@@ -1,0 +1,17 @@
+name: tenancy-boundary
+
+on:
+  pull_request:
+    paths:
+      - "src/backend/**"
+      - "scripts/tenancy-boundary-lint.*"
+      - ".github/workflows/tenancy-boundary.yml"
+
+jobs:
+  tenancy-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Organization id request-boundary rule (TENANCY.md 1.3)
+        run: python3 scripts/tenancy-boundary-lint.py src/backend

@@ -57,6 +57,13 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             Topics.ChatMessageSent => MapChatMessageSent(envelope),
             Topics.DiscussReplyCreated => MapDiscussReplyCreated(envelope),
             Topics.CompanyFollowUpDue => MapCompanyFollowUpDue(envelope),
+            Topics.AssignmentIssued => MapAssignmentIssued(envelope),
+            Topics.AssignmentDeadlineApproaching => MapAssignmentDeadlineApproaching(envelope),
+            Topics.AssignmentReminder => MapAssignmentReminder(envelope),
+            Topics.AssignmentDeadlineDigest => MapAssignmentDeadlineDigest(envelope),
+            Topics.DialogReviewDisputed => MapDialogReviewDisputed(envelope),
+            Topics.DialogReviewCommented => MapDialogReviewCommented(envelope),
+            Topics.DialogReviewResolved => MapDialogReviewResolved(envelope),
             _ => null
         };
     }
@@ -203,6 +210,274 @@ internal sealed class NotificationEventMapper : INotificationEventMapper
             payload.ReplyId.ToString(),
             SendEmail: true);
     }
+
+    /// <summary>
+    /// Phase 40.23. The three assignment families all address one person about one assignment, so
+    /// they share a body shape and differ only in what they are trying to make happen.
+    ///
+    /// <para>
+    /// The deadline is rendered <c>dd.MM.yyyy</c> rather than through a Russian long-date format on
+    /// purpose: the container's culture data is not something this service controls, and a date the
+    /// recipient cannot parse is worse than a plain one.
+    /// </para>
+    /// </summary>
+    private const string DeadlineFormat = "dd.MM.yyyy";
+
+    private static CreateNotificationRequest? MapAssignmentIssued(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentIssuedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var goal = payload.Goal?.Trim();
+        var body = payload.Deadline is { } deadline
+            ? $"«{title}» — до {deadline.ToString(DeadlineFormat)}."
+            : $"«{title}» — без срока.";
+
+        if (!string.IsNullOrEmpty(goal))
+        {
+            body += $" {goal}";
+        }
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentIssued,
+            NotificationTitles.AssignmentIssued,
+            body,
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // The assignment alone. A person is issued an assignment once — 40.23's fan-out only
+            // ever adds recipients, never re-adds one — so a second event with this key is a Kafka
+            // redelivery and collapsing it is correct.
+            payload.AssignmentId.ToString(),
+            SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapAssignmentDeadlineApproaching(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentDeadlineApproachingEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentDeadlineApproaching,
+            NotificationTitles.AssignmentDeadlineApproaching,
+            $"«{title}» нужно завершить до {payload.Deadline.ToString(DeadlineFormat)}.",
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // Assignment plus the exact due instant, for the same reason the follow-up reminder
+            // below keys on the due date: extending a deadline has to arm a fresh notice rather
+            // than be swallowed by the notice for the date that no longer applies.
+            $"{payload.AssignmentId}:{payload.Deadline:O}",
+            SendEmail: true);
+    }
+
+    private static CreateNotificationRequest? MapAssignmentReminder(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentReminderEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var body = payload.Deadline is { } deadline
+            ? $"Задание «{title}» ещё не завершено. Срок — {deadline.ToString(DeadlineFormat)}."
+            : $"Задание «{title}» ещё не завершено.";
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.AssignmentReminder,
+            NotificationTitles.AssignmentReminder,
+            body,
+            NotificationActionRoutes.Assignment(payload.AssignmentId),
+            // Keyed on the hour the РОП pressed the button, so a second press tomorrow is a second
+            // reminder while a redelivery of today's is not. A reminder that could only ever be sent
+            // once would defeat the point of the button.
+            //
+            // Phase 40.26 coarsened this from the exact instant to the hour, because that block put
+            // the button inside a notification sent to *every* administrator of the organization:
+            // five РОПs opening the same digest used to mean five separate reminders landing on the
+            // same manager within a minute. The whole feature depends on that inbox still being read.
+            $"{payload.AssignmentId}:{payload.RequestedAt:yyyy-MM-ddTHH}",
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.26. The one notice in this service addressed to a РОП about somebody else's work
+    /// (docs/TENANCY/ASSIGNMENTS.md §5).
+    ///
+    /// <para>
+    /// The body opens with names and the action url carries the reminder, because the roadmap's
+    /// requirement is «не отчёт, который РОП может открыть, а адресный пуш с действием» — and a
+    /// digest that reads "3 сотрудника не начали" sends its reader to look somewhere else, which is
+    /// the report it was supposed to replace.
+    /// </para>
+    /// </summary>
+    private static CreateNotificationRequest? MapAssignmentDeadlineDigest(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<AssignmentDeadlineDigestEvent>();
+        if (payload is null
+            || payload.AdministratorUserId == Guid.Empty
+            || string.IsNullOrWhiteSpace(payload.Title))
+        {
+            return null;
+        }
+
+        // Nobody has failed to start. The producer does not publish this case at all; the guard is
+        // here because "all good" is the one message this notice must never be, and a defence that
+        // lives in one service only is a defence one refactor away from gone.
+        if (payload.NotStartedCount <= 0)
+        {
+            return null;
+        }
+
+        var title = payload.Title.Trim();
+        var names = payload.NotStartedNames?
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .ToList() ?? [];
+
+        string notStarted;
+        if (names.Count == 0)
+        {
+            notStarted = payload.NotStartedCount.ToString();
+        }
+        else if (names.Count < payload.NotStartedCount)
+        {
+            notStarted = $"{string.Join(", ", names)} и ещё {payload.NotStartedCount - names.Count}";
+        }
+        else
+        {
+            notStarted = string.Join(", ", names);
+        }
+
+        var body = $"«{title}» — срок до {payload.Deadline.ToString(DeadlineFormat)}. "
+                   + $"Ещё не начали: {notStarted}. Откройте, чтобы напомнить в один клик.";
+
+        return new CreateNotificationRequest(
+            payload.AdministratorUserId,
+            NotificationType.AssignmentDeadlineDigest,
+            NotificationTitles.AssignmentDeadlineDigest,
+            body,
+            NotificationActionRoutes.AssignmentReminderPrompt(payload.AssignmentId),
+            // Assignment plus the exact due instant, exactly as the manager's notice above: moving a
+            // deadline clears the producer's sent-ness stamp, and the fresh digest for the new date
+            // must not be swallowed by the one for the date that no longer applies.
+            $"{payload.AssignmentId}:{payload.Deadline:O}",
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.26. A manager disputed a score. This is the notice 40.25 wrote the queue for and
+    /// could not send — there was no way to enumerate an organization's administrators.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewDisputed(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewDisputedEvent>();
+        if (payload is null
+            || payload.AdministratorUserId == Guid.Empty
+            || string.IsNullOrWhiteSpace(payload.Comment))
+        {
+            return null;
+        }
+
+        var who = string.IsNullOrWhiteSpace(payload.SubjectDisplayName)
+            ? "Менеджер"
+            : payload.SubjectDisplayName.Trim();
+
+        var body = payload.DisputedScore is { } disputedScore
+            ? $"{who} не согласен с оценкой {disputedScore}: {Shorten(payload.Comment.Trim())}"
+            : $"{who} не согласен с оценкой: {Shorten(payload.Comment.Trim())}";
+
+        return new CreateNotificationRequest(
+            payload.AdministratorUserId,
+            NotificationType.DialogReviewDisputed,
+            NotificationTitles.DialogReviewDisputed,
+            body,
+            NotificationActionRoutes.AdminDialogReview(payload.NoteId),
+            // The note. One open dispute per conversation is a database constraint (40.25), and a
+            // note is never edited, so a second event with this key is a Kafka redelivery.
+            payload.NoteId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.25. The body opens with the quoted lines, because those lines are the whole reason
+    /// the note exists — a notification announcing that feedback exists elsewhere is feedback
+    /// nobody reads.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewCommented(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewCommentedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Comment))
+        {
+            return null;
+        }
+
+        var quote = payload.QuotedText?.Trim();
+        var body = string.IsNullOrEmpty(quote)
+            ? payload.Comment.Trim()
+            : $"«{Shorten(quote)}» — {payload.Comment.Trim()}";
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.DialogReviewCommented,
+            NotificationTitles.DialogReviewCommented,
+            body,
+            NotificationActionRoutes.DialogReview(payload.NoteId),
+            // The note itself. A note is written once and never edited, so a second event with this
+            // key is a Kafka redelivery and collapsing it is correct.
+            payload.NoteId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>
+    /// Phase 40.25. Names the outcome in the first sentence. «Рассмотрено» on its own would be the
+    /// same silence the dispute mechanism exists to replace.
+    /// </summary>
+    private static CreateNotificationRequest? MapDialogReviewResolved(EventEnvelope envelope)
+    {
+        var payload = envelope.DataAs<DialogReviewResolvedEvent>();
+        if (payload is null || payload.UserId == Guid.Empty || string.IsNullOrWhiteSpace(payload.Outcome))
+        {
+            return null;
+        }
+
+        var upheld = string.Equals(payload.Outcome, "upheld", StringComparison.OrdinalIgnoreCase);
+        var body = upheld
+            ? payload.AdjustedScore is { } adjusted
+                ? $"РОП согласился: оценка должна была быть {adjusted} вместо {payload.DisputedScore}."
+                : "РОП согласился с вами: оценка была выставлена неверно."
+            : "РОП посмотрел запись — оценка остаётся прежней.";
+
+        var resolution = payload.Resolution?.Trim();
+        if (!string.IsNullOrEmpty(resolution))
+        {
+            body += $" {resolution}";
+        }
+
+        return new CreateNotificationRequest(
+            payload.UserId,
+            NotificationType.DialogReviewResolved,
+            NotificationTitles.DialogReviewResolved,
+            body,
+            NotificationActionRoutes.DialogReview(payload.NoteId),
+            // A dispute is ruled on once — the service refuses to re-resolve a closed row — so the
+            // note id alone is the whole key.
+            payload.NoteId.ToString(),
+            SendEmail: true);
+    }
+
+    /// <summary>Keeps a quoted fragment to one readable line in an inbox and an email subject-adjacent body.</summary>
+    private static string Shorten(string text)
+        => text.Length <= 160 ? text : text[..157].TrimEnd() + "…";
 
     private static CreateNotificationRequest? MapCompanyFollowUpDue(EventEnvelope envelope)
     {

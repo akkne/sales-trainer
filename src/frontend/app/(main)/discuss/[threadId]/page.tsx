@@ -7,7 +7,7 @@ import { Button } from "@/shared/components/button";
 import { Textarea } from "@/shared/components/input";
 import { Skeleton, ErrorState } from "@/shared/components";
 import { UserAvatar } from "@/shared/components/user-avatar";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 import { VoteButton } from "@/features/discuss/components/vote-button";
 import { PhotoPicker } from "@/features/discuss/components/photo-picker";
 import { PhotoGallery } from "@/features/discuss/components/photo-gallery";
@@ -38,12 +38,13 @@ export default function ThreadDetailPage({ params }: { params: Promise<{ threadI
     const [replyFiles, setReplyFiles] = useState<File[]>([]);
     const [replyError, setReplyError] = useState<string | null>(null);
 
+    // Moderating discuss content is platform content administration, not user management, so
+    // both Sellevate staff roles moderate (docs/DECISIONS.md, 2026-08-16). The author always
+    // moderates their own thread.
     const canModerate =
         !!thread &&
         !!authenticatedUser &&
-        (authenticatedUser.id === thread.authorId ||
-            authenticatedUser.role === "Admin" ||
-            authenticatedUser.role === "SuperAdmin");
+        (authenticatedUser.id === thread.authorId || isPlatformStaff(authenticatedUser.role));
 
     const isViewingOwnThread =
         !!thread && !!authenticatedUser && authenticatedUser.id === thread.authorId;

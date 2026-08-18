@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Notification.Features.Notifications.Emails;
 using Sellevate.Notification.Features.Notifications.Models;
 using Sellevate.Notification.Features.Notifications.Services.Implementation;
@@ -13,6 +14,9 @@ namespace Sellevate.Notification.Tests.Unit;
 public class NotificationServiceTests
 {
     private static readonly Guid RecipientUserId = Guid.NewGuid();
+
+    /// <summary>Phase 40.13 — the organization every notification in this fixture belongs to.</summary>
+    private static readonly Guid OrganizationId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     /// <summary>Captures dispatch calls so tests can assert whether an email was triggered.</summary>
     private sealed class RecordingEmailDispatcher : INotificationEmailDispatcher
@@ -36,7 +40,8 @@ public class NotificationServiceTests
         InMemoryNotificationStore store,
         int inboxCapacity = 100,
         int retentionDays = 30,
-        INotificationEmailDispatcher? emailDispatcher = null)
+        INotificationEmailDispatcher? emailDispatcher = null,
+        Guid? organizationId = null)
     {
         var configuration = Options.Create(new NotificationStorageConfiguration
         {
@@ -44,9 +49,15 @@ public class NotificationServiceTests
             RetentionDays = retentionDays
         });
 
+        // A real TenantContext rather than a stub, so these tests exercise the same guard that
+        // ships: an organization can be set once and never re-pointed.
+        var tenantContext = new TenantContext();
+        tenantContext.SetOrganization(organizationId ?? OrganizationId);
+
         return new NotificationService(
             store,
             emailDispatcher ?? new RecordingEmailDispatcher(),
+            tenantContext,
             configuration,
             NullLogger<NotificationService>.Instance);
     }
@@ -64,7 +75,7 @@ public class NotificationServiceTests
 
         await service.CreateAsync(BuildRequest());
 
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         stored.Should().ContainSingle();
         stored[0].Title.Should().Be("Title");
         stored[0].IsRead.Should().BeFalse();
@@ -107,7 +118,7 @@ public class NotificationServiceTests
             await service.CreateAsync(BuildRequest(relatedEntityId: $"related-{created}"));
         }
 
-        store.CapacityFor(RecipientUserId).Should().Be(3);
+        store.CapacityFor(OrganizationId, RecipientUserId).Should().Be(3);
     }
 
     [Test]
@@ -144,7 +155,7 @@ public class NotificationServiceTests
         var store = new InMemoryNotificationStore();
         var service = CreateService(store);
         await service.CreateAsync(BuildRequest());
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         await service.MarkAsReadAsync(RecipientUserId, stored[0].Id);
 
         var unreadOnly = await service.GetRecentAsync(RecipientUserId, limit: 20, includeRead: false);
@@ -158,11 +169,11 @@ public class NotificationServiceTests
         var store = new InMemoryNotificationStore();
         var service = CreateService(store);
         await service.CreateAsync(BuildRequest());
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
 
         await service.MarkAsReadAsync(RecipientUserId, stored[0].Id);
 
-        var refreshed = await store.GetAllAsync(RecipientUserId);
+        var refreshed = await store.GetAllAsync(OrganizationId, RecipientUserId);
         refreshed[0].IsRead.Should().BeTrue();
         refreshed[0].ReadAt.Should().NotBeNull();
         (await service.GetUnreadCountAsync(RecipientUserId)).Should().Be(0);
@@ -174,13 +185,13 @@ public class NotificationServiceTests
         var store = new InMemoryNotificationStore();
         var service = CreateService(store);
         await service.CreateAsync(BuildRequest());
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         await service.MarkAsReadAsync(RecipientUserId, stored[0].Id);
-        var firstReadAt = (await store.GetAllAsync(RecipientUserId))[0].ReadAt;
+        var firstReadAt = (await store.GetAllAsync(OrganizationId, RecipientUserId))[0].ReadAt;
 
         await service.MarkAsReadAsync(RecipientUserId, stored[0].Id);
 
-        (await store.GetAllAsync(RecipientUserId))[0].ReadAt.Should().Be(firstReadAt);
+        (await store.GetAllAsync(OrganizationId, RecipientUserId))[0].ReadAt.Should().Be(firstReadAt);
     }
 
     [Test]
@@ -206,7 +217,7 @@ public class NotificationServiceTests
         await service.MarkAllAsReadAsync(RecipientUserId);
 
         (await service.GetUnreadCountAsync(RecipientUserId)).Should().Be(0);
-        (await store.GetAllAsync(RecipientUserId)).Should().OnlyContain(notification => notification.IsRead);
+        (await store.GetAllAsync(OrganizationId, RecipientUserId)).Should().OnlyContain(notification => notification.IsRead);
     }
 
     // ── NO3: domain-level idempotency ─────────────────────────────────────────
@@ -223,7 +234,7 @@ public class NotificationServiceTests
         await service.CreateAsync(request);
         await service.CreateAsync(request); // replay — must be ignored
 
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         stored.Should().ContainSingle("second create with the same business key must be skipped");
     }
 
@@ -239,7 +250,7 @@ public class NotificationServiceTests
         await service.CreateAsync(first);
         await service.CreateAsync(second);
 
-        (await store.GetAllAsync(RecipientUserId)).Should().HaveCount(2);
+        (await store.GetAllAsync(OrganizationId, RecipientUserId)).Should().HaveCount(2);
     }
 
     [Test]
@@ -254,7 +265,7 @@ public class NotificationServiceTests
         await service.CreateAsync(first);
         await service.CreateAsync(second);
 
-        (await store.GetAllAsync(RecipientUserId)).Should().HaveCount(2);
+        (await store.GetAllAsync(OrganizationId, RecipientUserId)).Should().HaveCount(2);
     }
 
     // ── Email side channel ────────────────────────────────────────────────────
@@ -266,13 +277,13 @@ public class NotificationServiceTests
         var dispatcher = new RecordingEmailDispatcher();
         var service = CreateService(store, emailDispatcher: dispatcher);
         var request = new CreateNotificationRequest(
-            RecipientUserId, NotificationType.LeagueUpdated, "League", "You were promoted",
-            "/league", "league-1", SendEmail: true);
+            RecipientUserId, NotificationType.CompanyFollowUpDue, "Follow-up", "A follow-up is due",
+            "/companies", "company-1", SendEmail: true);
 
         await service.CreateAsync(request);
 
         dispatcher.Dispatched.Should().ContainSingle();
-        dispatcher.Dispatched[0].Type.Should().Be(NotificationType.LeagueUpdated);
+        dispatcher.Dispatched[0].Type.Should().Be(NotificationType.CompanyFollowUpDue);
         dispatcher.Dispatched[0].Recipient.Should().Be(RecipientUserId);
     }
 
@@ -321,7 +332,7 @@ public class NotificationServiceTests
 
         await service.CreateAsync(request);
 
-        var stored = await store.GetAllAsync(RecipientUserId);
+        var stored = await store.GetAllAsync(OrganizationId, RecipientUserId);
         stored.Should().ContainSingle();
         stored[0].Title.Should().NotContainAny(" ", "");
         stored[0].Body.Should().NotContainAny("\t", "\r", "\n");
@@ -337,7 +348,7 @@ public class NotificationServiceTests
 
         await service.CreateAsync(request);
 
-        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().Be("/profile");
+        (await store.GetAllAsync(OrganizationId, RecipientUserId))[0].ActionUrl.Should().Be("/profile");
     }
 
     [Test]
@@ -351,7 +362,7 @@ public class NotificationServiceTests
 
         await service.CreateAsync(request);
 
-        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().BeNull();
+        (await store.GetAllAsync(OrganizationId, RecipientUserId))[0].ActionUrl.Should().BeNull();
     }
 
     [Test]
@@ -365,6 +376,6 @@ public class NotificationServiceTests
 
         await service.CreateAsync(request);
 
-        (await store.GetAllAsync(RecipientUserId))[0].ActionUrl.Should().BeNull();
+        (await store.GetAllAsync(OrganizationId, RecipientUserId))[0].ActionUrl.Should().BeNull();
     }
 }

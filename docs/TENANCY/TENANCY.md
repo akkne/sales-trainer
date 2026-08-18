@@ -172,6 +172,57 @@ Two legitimate modes, and they must be distinguishable in code:
   the default when the context happens to be empty. **An unset tenant is an exception, never a
   license.**
 
+**Done in 40.14 — the audit and its registry: [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md).** Every
+hosted service, Hangfire job and Kafka consumer in `src/backend` is listed there with its mode and
+the line that declares it, including the ones that touch no tenant data at all (listed so the
+registry is provably complete rather than merely long). The audit closed the last two workers whose
+mode was implicit: `OutboxRelayBackgroundService`, which had cross-tenant reach as a side effect of
+an empty context and now says `EnterSystemMode()` out loud, and ai-service's
+`GamificationDialogWeightsConsumer`, which demanded a tenant for a platform-global setting and so
+dead-lettered every change saved by Sellevate staff.
+
+Table above kept as written for the design record; the registry is the current state.
+
+### 1.6a Три режима тенант-контекста (правка владельца, 2026-08-16)
+
+`ITenantContext` различает **три** режима, и они намеренно не сведены в один флаг:
+
+| Режим | Признак | Кто попадает | Что расширяется |
+|-------|---------|--------------|-----------------|
+| Тенант | `OrganizationId` задан | член одной организации | ничего, обычный случай |
+| Платформенный | `IsPlatformWide` | сотрудник Sellevate: клейм `role` = `Admin` / `SuperAdmin` | **только чтение** |
+| Системный | `IsSystem` | фоновая джоба, HTTP-запроса нет | подключение под ролью с `BYPASSRLS` |
+
+Платформенный и системный — **не одно и то же**. Системный существует потому, что работу некому
+атрибутировать; платформенный — потому, что человек имеет право смотреть. Слияние этих двух дало бы
+фоновой джобе привилегии человека (или наоборот), поэтому режимы взаимоисключающие и попытка войти
+во второй бросает исключение.
+
+**Единственный вход в платформенный режим — валидированный клейм.** `TenantContextMiddleware`
+читает `ClaimsPrincipal`, который сервис аутентифицировал сам, и никогда не заголовок, тело, query
+или маршрут. Подделанный `X-User-Role`, выдуманный `X-Platform-Mode` и неаутентифицированный
+принципал с нужным клеймом покрыты тестами и режим не открывают. Токен импersonation выпускается с
+`role: User` (40.9) — значит, «примерив» организацию, платформенных прав не получают.
+
+Расширяется чтение во всех трёх местах, где оно бывает:
+
+- **EF query filter** — `_tenantContext.IsPlatformWide || <прежнее условие>` у каждой сущности;
+- **RLS** — новый GUC `app.platform_mode`, попадающий **только** в `USING`, не в `WITH CHECK`;
+- **Mongo** — `DialogSessionRepository` и `ChatConversationRepository` убирают организацию из
+  фильтра (политик, чтобы выразить это в базе, там нет).
+
+**Запись не расширяется нигде.** `WITH CHECK` остаётся строгим, `TenantSaveChangesInterceptor`
+по-прежнему требует явную организацию на `Added`. Платформенный админ видит всех заказчиков и всё
+равно пишет только в ту организацию, которую назвал явно. Если из-за этого какой-то платформенный
+путь записи упадёт — это правильное поведение, а не повод ослабить политику.
+
+Платформенный режим **совместим** с заданной организацией: администратор, который вдобавок состоит
+в организации, читает по всем, а пишет в свою — поэтому интерцептор выдаёт оба `SET LOCAL`.
+
+Redis (инбоксы уведомлений, presence аналитики) намеренно **не** расширен: кросс-организационное
+чтение там означает скан всех префиксов, а платформенного экрана, которому это нужно, пока нет. См.
+`docs/DECISIONS.md` (2026-08-16).
+
 ### 1.7 Kafka and the outbox
 
 `OutboxMessage` and `EventEnvelope` both need `OrganizationId`, and the envelope is the right
@@ -194,11 +245,24 @@ and consumers, so it happens once, before any tenant-scoped consumer exists.
   `organizationId` to the document, to the compound indexes, and make it the shard key prefix if
   sharding ever happens. There is no RLS equivalent, so the filter is application-enforced; keep
   all session reads behind one repository so there is exactly one place to audit.
+  **Done in 40.11** — `DialogSessionRepository` in ai-service. What made it a boundary rather than
+  a convention: it takes `ITenantContext` in its constructor, it holds the only
+  `GetCollection<DialogSession>` in the service (`MongoDbContext` no longer exposes the
+  collection), no method accepts an organization or returns "all organizations", an unset tenant
+  raises instead of widening, there is no system-mode bypass, and a unit test asserts against the
+  source tree that no second file reaches the collection. Copy that shape for
+  `chat_conversations` in social-service (40.13).
 - **Redis** — analytics, presence, notification inboxes, the idempotency store and the LLM verdict
   cache are all Redis-only. **Namespace every key with the org id** (`org:{orgId}:...`). The
   current `RedisIdempotencyStore` and the custom-scenario verdict cache key off user-supplied
   content; without a prefix, one org's cached verdict answers another org's request, and presence
   counts leak headcount between customers.
+  **Done for ai-service in 40.11**: the verdict cache, the voice quota counters and
+  `RedisIdempotencyStore` all carry `org:{orgId}:`. The idempotency organization comes from the
+  event envelope, not from ambient context, and an event with no organization deliberately keeps
+  the un-prefixed key — there is no tenant to confuse, and the unchanged key is what preserves
+  dedupe across the deploy. Pre-prefix keys are never read again and expire on their own TTL;
+  nothing is flushed (`docs/DECISIONS.md`).
 
 ### 1.9 Indexes and unique constraints
 
@@ -211,7 +275,7 @@ The higher-severity item is uniqueness. Every existing global unique constraint 
 |------------------|---------------|
 | `UNIQUE(email)` on users | **stays global** — see §4.1, users are cross-org identities |
 | `UNIQUE(iconic_name)` on skills | `UNIQUE(organization_id, iconic_name)` — two orgs may both have `objections` |
-| dialog mode `key` (e.g. `company-call`, `custom-scenario`) | seeded modes stay global; org-authored modes need the org in the key |
+| dialog mode `key` (e.g. `company-call`, `custom-scenario`) | seeded modes stay global; org-authored modes need the org in the key — **done in 40.11**: `UNIQUE(OrganizationId, BundleId, Key) WHERE OrganizationId IS NOT NULL` plus a partial `UNIQUE(BundleId, Key) WHERE OrganizationId IS NULL`, because Postgres treats NULLs in a composite unique index as distinct |
 
 A missed one does not leak data — it makes onboarding the second customer fail with a constraint
 violation, which is a better failure than the alternative but still blocks the sale.
@@ -442,13 +506,23 @@ it later means rewriting the JWT, every authorization check and the invite flow 
 first person who needs two organizations (a consultant, or Sellevate's own support staff) shows up
 earlier than expected.
 
-`UserRole` today is a global enum `{User, Admin, SuperAdmin}` on the user row. It splits in two:
+`UserRole` was a single global enum on the user row. It is now two independent axes (revised
+2026-08-16 at the owner's request — `docs/DECISIONS.md`):
 
-- **Platform role** (on `user`): `SuperAdmin` — Sellevate staff only, creates organizations.
-- **Organization role** (on `membership`): `Manager` (the salesperson) / `OrgAdmin` (the РОП).
+- **Platform role** (on `user`): `User` / `Admin` / `SuperAdmin` — Sellevate staff, deliberately
+  **not bounded by tenancy**; they are meant to see across every organization.
+- **Organization role** (on `membership`): `Manager` (the salesperson) / `TenancyAdmin` (the РОП) /
+  `TenancySuperAdmin`.
 
-`Admin` as a global role disappears; a РОП is an admin **of one organization**, never of the
-platform. Both go into the JWT: `role` (platform) and `org_role` (within `org_id`).
+At either level the only difference between the admin and the superadmin is that only the superadmin
+may **add or remove users**. A РОП is an admin **of one organization**, never of the platform. Both
+axes go into the JWT: `role` (platform) and `org_role` (within `org_id`), and a user with no active
+membership carries neither `org_id` nor `org_role` — which is the normal state for Sellevate staff.
+
+The authorization policies (`RequirePlatformAdmin`, `RequireSuperAdmin`, `RequireOrgAdmin`,
+`RequireOrgSuperAdmin`) let the platform role satisfy the organization-scoped gates on its own.
+Making the *data* those callers then see span every organization is the tenant-context/query-filter/
+RLS concern described elsewhere in this document, not an authorization one.
 
 ### 4.3 Invites
 

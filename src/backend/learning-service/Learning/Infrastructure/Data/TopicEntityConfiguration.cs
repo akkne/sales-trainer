@@ -10,6 +10,7 @@ public sealed class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
     {
         builder.ToTable("Topics");
         builder.HasKey(topic => topic.Id);
+        builder.Property(topic => topic.OrganizationId);
         builder.Property(topic => topic.IconicName).IsRequired();
         builder.Property(topic => topic.Title).IsRequired();
 
@@ -18,7 +19,14 @@ public sealed class TopicEntityConfiguration : IEntityTypeConfiguration<Topic>
             .HasForeignKey(topic => topic.SkillId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(topic => topic.IconicName).IsUnique();
-        builder.HasIndex(topic => new { topic.SkillId, topic.OrderInSkill });
+        // Phase 40.10, same reasoning as SkillEntityConfiguration.
+        builder.HasIndex(topic => new { topic.OrganizationId, topic.IconicName })
+            .IsUnique();
+        builder.HasIndex(topic => topic.IconicName)
+            .IsUnique()
+            .HasFilter("\"OrganizationId\" IS NULL")
+            .HasDatabaseName("IX_Topics_IconicName_Global");
+
+        builder.HasIndex(topic => new { topic.OrganizationId, topic.SkillId, topic.OrderInSkill });
     }
 }

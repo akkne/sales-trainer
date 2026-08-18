@@ -34,6 +34,9 @@ namespace Sellevate.Identity.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PartitionKey")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -83,6 +86,44 @@ namespace Sellevate.Identity.Infrastructure.Data.Migrations
                     b.HasIndex("Email");
 
                     b.ToTable("EmailVerificationCodes", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Identity.Features.Auth.Models.OrganizationAuthConfiguration", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<string[]>("AllowedEmailDomains")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsJustInTimeProvisioningEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsMultiFactorAuthenticationRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ProviderSettings")
+                        .HasColumnType("jsonb");
+
+                    b.Property<TimeSpan?>("SessionLifetime")
+                        .HasColumnType("interval");
+
+                    b.HasKey("OrganizationId");
+
+                    b.HasIndex("AllowedEmailDomains");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("AllowedEmailDomains"), "gin");
+
+                    b.ToTable("OrganizationAuthConfigurations", (string)null);
                 });
 
             modelBuilder.Entity("Sellevate.Identity.Features.Auth.Models.RefreshToken", b =>
@@ -190,6 +231,85 @@ namespace Sellevate.Identity.Infrastructure.Data.Migrations
                     b.ToTable("DefaultAvatars", (string)null);
                 });
 
+            modelBuilder.Entity("Sellevate.Identity.Features.Invites.Models.Invite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "Email");
+
+                    b.ToTable("Invites", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Identity.Features.Membership.Models.Membership", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeactivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasKey("UserId", "OrganizationId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("Memberships", (string)null);
+                });
+
             modelBuilder.Entity("Sellevate.Identity.Features.Onboarding.Models.UserProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -225,6 +345,76 @@ namespace Sellevate.Identity.Infrastructure.Data.Migrations
                     b.ToTable("UserProfiles", (string)null);
                 });
 
+            modelBuilder.Entity("Sellevate.Identity.Features.Organizations.Models.OrganizationReplica", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrganizationId");
+
+                    b.ToTable("OrganizationReplicas", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Identity.Features.PlatformAdmin.Models.ImpersonationAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OrganizationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IssuedAt")
+                        .IsDescending();
+
+                    b.HasIndex("OrganizationId", "IssuedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("ImpersonationAuditEntries", (string)null);
+                });
+
             modelBuilder.Entity("Sellevate.Identity.Features.Auth.Models.RefreshToken", b =>
                 {
                     b.HasOne("Sellevate.Identity.Features.Auth.Models.User", "User")
@@ -234,6 +424,15 @@ namespace Sellevate.Identity.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Sellevate.Identity.Features.Membership.Models.Membership", b =>
+                {
+                    b.HasOne("Sellevate.Identity.Features.Auth.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Features.Friends.Models;
 using Sellevate.Social.Features.Friends.Services.Abstract;
 
@@ -8,6 +9,9 @@ namespace Sellevate.Social.Features.Friends;
 
 [ApiController]
 [Route("friends")]
+// Phase 40.13. Friendships are tenant data; without an organization there is no correct answer to
+// any route here, so the middleware refuses the request rather than serving an empty list.
+[TenantScoped]
 [Authorize]
 public sealed class FriendController(IFriendService friendService) : ControllerBase
 {

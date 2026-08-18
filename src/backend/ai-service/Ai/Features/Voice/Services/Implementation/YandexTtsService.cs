@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Voice.Models;
+using Sellevate.Ai.Features.Quotas.Models;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
 
@@ -9,6 +11,7 @@ internal sealed class YandexTtsService : IYandexTtsService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<YandexTtsConfiguration> _yandexTtsOptions;
+    private readonly IAiSpendMeter _spendMeter;
     private readonly ILogger<YandexTtsService> _logger;
 
     private const string PlaceholderApiKey = "REPLACE_WITH_YANDEX_API_KEY";
@@ -16,10 +19,12 @@ internal sealed class YandexTtsService : IYandexTtsService
     public YandexTtsService(
         IHttpClientFactory httpClientFactory,
         IOptions<YandexTtsConfiguration> yandexTtsOptions,
+        IAiSpendMeter spendMeter,
         ILogger<YandexTtsService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _yandexTtsOptions = yandexTtsOptions;
+        _spendMeter = spendMeter;
         _logger = logger;
     }
 
@@ -81,6 +86,13 @@ internal sealed class YandexTtsService : IYandexTtsService
         var wavBytes = WrapLpcmInWav(pcmStream.ToArray(), configuration.SampleRateHertz);
 
         _logger.LogInformation("Yandex TTS synthesized {TextLength} chars to {AudioBytes} bytes", text.Length, wavBytes.Length);
+
+        // Phase 40.33. Charged in characters, which is how Yandex SpeechKit bills. Charged *here*
+        // rather than in the router on purpose: CachingTtsRouter serves short repeated phrases from
+        // memory without a provider call, and a cache hit costs nothing, so it must be recorded as
+        // nothing.
+        await _spendMeter.RecordSpeechUsageAsync(AiUsageKinds.Tts, "yandex-tts", text.Length, cancellationToken);
+
         return new MemoryStream(wavBytes);
     }
 

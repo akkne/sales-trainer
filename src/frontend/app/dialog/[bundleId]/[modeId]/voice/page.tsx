@@ -583,7 +583,7 @@ export default function VoiceCallPage() {
                 )}
             </div>
 
-            {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} />}
+            {feedback && <FeedbackModal feedback={feedback} onClose={handleCloseFeedback} sessionId={sessionId} />}
         </div>
     );
 }

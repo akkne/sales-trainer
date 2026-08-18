@@ -19,10 +19,12 @@ public sealed class DiscussThreadConfiguration : IEntityTypeConfiguration<Discus
             .HasForeignKey(reply => reply.ThreadId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(thread => thread.AuthorId);
-        builder.HasIndex(thread => thread.IsPinned);
-        builder.HasIndex(thread => thread.LastActivityAt);
-        builder.HasIndex(thread => thread.UpvoteCount);
-        builder.HasIndex(thread => thread.CreatedAt);
+        // Phase 40.13: every list on the Discuss screen is "this organization, then sort", so the
+        // organization leads each index rather than being an afterthought filter.
+        builder.HasIndex(thread => new { thread.OrganizationId, thread.AuthorId });
+        builder.HasIndex(thread => new { thread.OrganizationId, thread.IsPinned });
+        builder.HasIndex(thread => new { thread.OrganizationId, thread.LastActivityAt });
+        builder.HasIndex(thread => new { thread.OrganizationId, thread.UpvoteCount });
+        builder.HasIndex(thread => new { thread.OrganizationId, thread.CreatedAt });
     }
 }

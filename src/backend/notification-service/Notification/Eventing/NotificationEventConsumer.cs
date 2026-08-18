@@ -42,8 +42,22 @@ internal sealed class NotificationEventConsumer : KafkaConsumerBackgroundService
         BuildingBlocks.Eventing.Topics.ChatMessageRead,
         BuildingBlocks.Eventing.Topics.DiscussReplyCreated,
         BuildingBlocks.Eventing.Topics.CompanyFollowUpDue,
+        BuildingBlocks.Eventing.Topics.AssignmentIssued,
+        BuildingBlocks.Eventing.Topics.AssignmentDeadlineApproaching,
+        BuildingBlocks.Eventing.Topics.AssignmentReminder,
+        BuildingBlocks.Eventing.Topics.AssignmentDeadlineDigest,
+        BuildingBlocks.Eventing.Topics.DialogReviewCommented,
+        BuildingBlocks.Eventing.Topics.DialogReviewResolved,
+        BuildingBlocks.Eventing.Topics.DialogReviewDisputed,
     ];
 
+    /// <summary>
+    /// Phase 40.13 leaves <c>RequiresOrganization</c> at its inherited <c>true</c>, and that is a
+    /// decision rather than an omission: every topic here produces a notification in one
+    /// organization's inbox, so an envelope with no tenant has no correct destination. The base
+    /// class turns that into a normal handler failure, which retries and then dead-letters —
+    /// visible, unlike a notification quietly filed under a blank organization.
+    /// </summary>
     protected override async Task HandleAsync(
         EventEnvelope envelope,
         IServiceProvider scopedServices,
@@ -84,8 +98,15 @@ internal sealed class NotificationEventConsumer : KafkaConsumerBackgroundService
             return;
         }
 
+        // The organization comes from the envelope, not from ambient state: a consumer's tenant is
+        // a property of the message in its hand. The base class has already rejected an envelope
+        // without one (RequiresOrganization is the inherited default here), so this cannot be empty.
         await _delayedChatEmailScheduler.MarkConversationReadAsync(
-            payload.ReaderUserId, payload.ConversationId, payload.ReadAt, cancellationToken);
+            envelope.OrganizationId!.Value,
+            payload.ReaderUserId,
+            payload.ConversationId,
+            payload.ReadAt,
+            cancellationToken);
     }
 
     private async Task ScheduleUnreadChatEmailAsync(
@@ -99,6 +120,7 @@ internal sealed class NotificationEventConsumer : KafkaConsumerBackgroundService
 
         await _delayedChatEmailScheduler.ScheduleAsync(
             new PendingChatEmail(
+                envelope.OrganizationId!.Value,
                 createRequest.RecipientUserId,
                 createRequest.Body,
                 createRequest.ActionUrl,

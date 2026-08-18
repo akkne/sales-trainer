@@ -8,6 +8,7 @@ using NUnit.Framework;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Infrastructure.Configuration;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -35,7 +36,11 @@ public class OpenAiProviderErrorTests
         httpClientFactory.CreateClient("OpenAI").Returns(_ => new HttpClient(new StubHandler(statusCode, body)));
 
         var options = Options.Create(new OpenAiConfiguration { ApiKey = "test-key" });
-        return new OpenAiChatService(httpClientFactory, options, NullLogger<OpenAiChatService>.Instance);
+        return new OpenAiChatService(
+            httpClientFactory,
+            options,
+            Substitute.For<IAiSpendMeter>(),
+            NullLogger<OpenAiChatService>.Instance);
     }
 
     private static Task<string> CallAsync(OpenAiChatService service) =>

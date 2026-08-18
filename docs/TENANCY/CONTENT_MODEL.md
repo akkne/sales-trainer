@@ -1,6 +1,36 @@
 # Per-organization content: customization, versioning, overrides
 
-**Status:** DESIGN ONLY. Not implemented.
+**Status:** §2.1, §2.2 and the `content_hash` rule are **implemented** (Phase 40.15, 2026-08-17);
+§2.3 (progress referencing the version) and §2.4 (`is_breaking`) are **implemented** (Phase 40.16,
+2026-08-17); §2.5 (programme versioning and enrollment) is **implemented** (Phase 40.17,
+2026-08-17) — see [DB_SCHEMA.md](../DB_SCHEMA.md) (`LessonVersions`, `UserExerciseAttempts`,
+`UserLessonProgressRecords`, `ProgramVersions`/`ProgramItems`/`ProgramEnrollments`),
+[SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md) (parts 3.5 and 3.7),
+[LEARNING_SERVICE.md](../LEARNING_SERVICE.md) and [ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md)
+(how metrics are counted per version); §1 and §2.6 (copy-on-write overrides, read resolution and the
+staleness queue) are **implemented** (Phase 40.18, 2026-08-18) for lessons, techniques, reference
+materials and dialog-mode prompts; §3 (the organization profile and placeholder substitution) is
+**implemented** (Phase 40.19, 2026-08-18) — see [CONTENT_PARAMETERIZATION.md](../CONTENT_PARAMETERIZATION.md)
+for the syntax and [SEEDER.md](../SEEDER.md) §0 for what changed in the seeder.
+
+Three places where the implementation is narrower than the text below, deliberately.
+
+- The three review actions exist as API; **the review screen does not.** The frontend was not touched
+  in 40.18 for the same reason it was not touched in 40.15–40.17 — the РОП's admin panel is 40.20 and
+  is waiting on the owner's design. See `docs/DONT_FORGET.md`.
+- The §2.4 dashboard is an API (`GET /admin/lessons/{lessonId}/accuracy`), not a screen. The screen
+  belongs with the РОП's admin panel, which is 40.20.
+- An edit that is **not** published binds new attempts to the previous snapshot. The attempt-time
+  resolver mints a version only when a lesson has none at all, never on unpublished drift, because
+  an unattributed content change would have to be treated as breaking and would then split the
+  series on every fixed comma — the §2.4 failure reached from the other side. Publishing is the act
+  that makes an edit historically visible, and 40.20's editing screen has to make it the natural end
+  of editing. See `docs/DECISIONS.md` (2026-08-17) and `docs/DONT_FORGET.md`.
+- The §2.5 pin is enforced end to end in the backend, but **the learner's existing screens do not
+  read it yet**. `GET /skill-tree`, `/lessons` and `/exercises/*` still serve the live library; the
+  pinned programme is `GET /program` and nothing in the frontend calls it. So the guarantee "nobody
+  moves a learner's programme but the learner" is real and complete, while "the learner sees the
+  pinned programme" waits on the screens that render one, which is 40.20.
 
 Parent doc: [TENANCY.md](TENANCY.md). Sibling: [ASSIGNMENTS.md](ASSIGNMENTS.md).
 Current content model: [SKILLS_AND_EXERCISES.md](../SKILLS_AND_EXERCISES.md),
@@ -125,6 +155,14 @@ they are right to.
 So attempts and lesson progress carry `lesson_version_id` (and the exercise's identity **within**
 that version), not a bare `exercise_id`.
 
+**As implemented (40.16):** one new nullable column, `LessonVersionId`, on both tables. The
+exercise's identity within the version needs no column of its own — `exerciseId` is already inside
+the snapshot and inside its hash (§2.2), so `ExerciseId` stays and changes meaning rather than shape:
+a key into a frozen document instead of a pointer at an editable row. Nullable because attempts
+recorded before the phase have nothing to point at until the backfill runs, and no foreign key
+because a content table under an `IS NULL OR = current` policy and strict tenant data under plain
+equality must not be joined by a constraint validated with the writer's privileges.
+
 ### 2.4 `is_breaking`
 
 A publish is flagged by the admin as cosmetic (typo, rewording) or semantic (the correct answer
@@ -133,6 +171,15 @@ changed, grading criteria changed).
 The dashboard joins metric series across cosmetic versions and splits them across semantic ones.
 Without this, the accuracy chart for a skill steps every time someone fixes a comma, and the РОП
 stops trusting it — the same failure as §2.3, arrived at from the other direction.
+
+**As implemented (40.16):** `GET /admin/lessons/{lessonId}/accuracy` in learning-service, which owns
+the attempts. A segment starts at the first published version and at every version flagged breaking;
+cosmetic versions extend the segment before them. Attempts with no version are a separate
+`unversionedAttempts` bucket, never folded into version 1 — nobody can prove what they were scored
+against. analytics-service computes none of this and is not going to: it is Redis-only, stores no
+attempts, and its `exercise.completed` counter is a platform-wide funnel number with no lesson, no
+version and no organization in it. The rule for anyone drawing the chart lives in
+[ANALYTICS_SERVICE.md](../ANALYTICS_SERVICE.md).
 
 ### 2.5 Programme versioning
 
@@ -149,6 +196,40 @@ A manager on lesson 8 of 21 must not find the programme rearranged underneath th
 go to the new version; existing learners are offered an explicit "switch to the current version"
 with a diff.
 
+**As implemented (40.17):** `ProgramVersions`, `ProgramItems`, `ProgramEnrollments` in learning-db,
+next to the lessons and lesson versions they reference. Six things worth stating, because each is a
+fork the roadmap left open (full reasoning in `docs/DECISIONS.md`, 2026-08-17).
+
+- **All three are strict tenant data**, not content. There is no global programme: a curriculum is a
+  decision one organization made about its own people, so `organization_id` is `NOT NULL` and the RLS
+  policy is plain equality rather than the `IS NULL OR = current` every table above uses. This is the
+  first place in Stage D where the content flavour would have been actively wrong.
+- **`program_item` carries `lesson_id` as well as `lesson_version_id`.** Not decoration: without it,
+  "the same lesson, now pinned to a newer snapshot" is inexpressible, and a curriculum could list one
+  lesson at versions 3 and 5 at once — the same material with two answer keys. It cannot drift,
+  because a published version's `lesson_id` is frozen by §2.1's trigger. The pin also survives §2.6
+  re-pointing `base_version_id`, since that column is provenance and the version's identity is not.
+- **The structure is frozen by a trigger on `program_item`, not only on `program_version`.** The
+  structure lives in the item rows, so that is where a retroactive reorder would actually be written,
+  and deleting an item from a frozen programme is the same edit seen from the other side. The reason
+  to put it in the database is sharper than it was for lessons: an edited lesson snapshot corrupts a
+  metric, an edited programme rearranges the curriculum under somebody mid-course.
+- **Enrollment is asymmetric.** The administrator's enroll call is idempotent and never moves an
+  existing pin, so re-running it after a publish enrolls the newcomers and leaves everybody
+  mid-course alone. The switch is the learner's own call, on themselves, naming the target version so
+  that a publish between showing the diff and accepting it cannot redirect them. No route moves
+  somebody else's pin — the claim in the paragraph above is about which code paths exist.
+- **The diff has four buckets** — added, removed, re-pinned, moved — and `is_breaking` on a re-pinned
+  lesson reads every published version between the two pins rather than the target's own flag. A
+  programme can skip several lesson versions at once, and reading only the target would hide a
+  changed correct answer behind a later typo fix: the §2.4 failure one level up.
+- **Enrollment does not gate access, and no "programme version 1" is minted.** An organization that
+  has published nothing has no pins and its people read the live library exactly as before. 40.16
+  could mint a lesson's version 1 because the lesson body existed and only its snapshot was missing;
+  a programme version is not a snapshot of something that exists but a curriculum decision nobody has
+  made yet, and pinning every existing learner to whatever the seeder loaded would freeze them onto
+  it silently.
+
 ### 2.6 Staleness, and no auto-merge
 
 An override carries `base_version_id`. When the global lesson publishes a new version, every
@@ -161,6 +242,46 @@ grades a salesperson.
 
 The review queue shows: what changed upstream, what the organization changed, and three actions —
 take the new base (discard the override), keep the override (re-point `base_version_id`), or edit.
+
+**As implemented (40.18):** eight things worth stating, because each is a fork the roadmap left open
+(full reasoning in `docs/DECISIONS.md`, 2026-08-18).
+
+- **A copy is made only when an administrator presses "edit".** `POST
+  /admin/content/overrides/{kind}/{baseId}` is the only code path in either service that creates one.
+  Nothing runs at onboarding, on a Kafka event or on a schedule — the verify script's last check
+  simply counts the copies, and on a fresh deployment the answer is zero.
+- **"Stale" is not stored anywhere.** The queue is a query that compares each override's fork marker
+  against the base as it stands right now. Marking synchronously at publish time is not merely
+  awkward, it is refused by the database: it would mean writing rows into organizations the publisher
+  is not in, and the RLS `WITH CHECK` clause is the one clause the 2026-08-16 role split deliberately
+  did not widen. A background sweep would work and was rejected for lagging: while it lags, the queue
+  says an override is current when its base has already moved, which is the one error a review queue
+  must not make.
+- **The fork marker is a version id for lessons and a content fingerprint for the other three.**
+  `Technique`, `ReferenceMaterial` and `DialogMode` have no immutable version table, and building
+  three more was out of scope. The fingerprint answers "has upstream moved?" exactly as well; what it
+  gives up is the before-image, so the review payload's `baseAtFork` is populated for lessons and null
+  for the rest.
+- **The API computes no diff at all**, only returns the documents. A textual diff of prose is the
+  first half of a merge, and the pressure to "apply the non-conflicting hunks" starts the moment one
+  exists.
+- **Read resolution is an explicit call, and only on learner-facing paths.** The query filter admits
+  "mine or global", so without it an organization sees every overridden lesson twice. The authoring
+  paths deliberately keep seeing both sides — the review screen exists to show them side by side —
+  and platform-wide callers do not resolve either, or one customer's edit would hide a global lesson
+  from Sellevate staff.
+- **Retiring an override archives it, never deletes it.** Progress rows and Mongo dialog sessions
+  point at these rows without a foreign key, so deleting one to tidy a queue orphans history.
+  `IsArchived` was added to `Techniques` and `ReferenceMaterials` to match `Lessons`; in ai-service
+  the existing `IsActive` does the job.
+- **The write boundary is in C#, not in RLS.** The content policy admits a null owner on write by
+  design (the seeder and every platform authoring path need it), which read as a write rule says any
+  organization may edit the shared library. `ContentAuthoringGuard` states the real rule once, and
+  three CHECK constraints say in the database that an override always has an owner.
+- **`DialogBundle` is not copy-on-write, and that is the one place the implementation narrows the
+  roadmap.** A bundle carries no prompt; a copied one is an empty folder needing a second resolution
+  layer for "which modes are in it", whose natural answer is §1's library fork one level down. Only
+  `DialogMode` — which carries `ChatSystemPrompt` and `FeedbackSystemPrompt` — is override-able.
 
 ---
 
@@ -190,6 +311,58 @@ render time. One base lesson serves every customer; the customer fills in a form
 customer will ask what stops the AI persona from coaching a rep into an illegal promise. Having an
 answer is a sales asset.
 
+**As implemented (40.19):** six things worth stating, because each is a fork the roadmap left open
+(full reasoning in `docs/DECISIONS.md`, 2026-08-18; syntax and authoring guidance in
+[CONTENT_PARAMETERIZATION.md](../CONTENT_PARAMETERIZATION.md)).
+
+- **The syntax is `{{organization.<field>}}`, and substitution happens on read, never on write.** The
+  row and the §2.1 snapshot both keep the template; only the HTTP response and the outgoing AI prompt
+  carry substituted text. Rendering before the write would freeze a different snapshot — and a
+  different `content_hash` — per organization for the same base lesson, which is §1's fork reached by
+  accident and stripped of §2.6's guard rails. The same argument protects `DialogMode`'s 40.18
+  fingerprint: a rendered prompt would make every override permanently stale.
+- **An unfilled field renders as neutral prose, not as a blank and not as the raw placeholder.**
+  «ваш продукт», «ваш клиент», «типичные возражения ваших клиентов» — the phrases the base library was
+  already written in, so a trial account on day one reads exactly as it did before this phase. A
+  visible `{{organization.icp}}` is a defect a salesperson sees; a blank produces «Расскажите, чем
+  помогает », which reads as a broken product rather than an empty form. An unknown key (a typo) is
+  removed and logged rather than displayed. What this buys is paid for in Russian grammar: there is no
+  declension engine and there is not going to be one, so base sentences have to be phrased to survive
+  the fallback.
+- **The grader renders too.** Not symmetry for its own sake: a question rendered for the learner and
+  unrendered for the grader marks correct answers wrong, because the deterministic strategies compare
+  option text and the AI strategy would be judging an answer to a question it was not shown.
+- **`banned_claims` binds both the persona and the scoring.** ai-service's chat prompt, ai-service's
+  feedback prompt, and learning-service's exercise grading prompt, all from one builder in
+  BuildingBlocks. Enforcing only the persona side is worse than nothing: a persona that stays silent
+  while the grader keeps rewarding the forbidden claim teaches the rep to say it anyway. The block is
+  appended **last**, after every block carrying human-written text, because a rule something later can
+  qualify is not a rule.
+- **The profile reaches the two rendering services as a replica, not a call.** `organization.profile.updated`
+  on Kafka → `OrganizationProfileReplicas` in learning-db and ai-db, the same shape as `UserReplicas`
+  (40.2) and `OrganizationReplicas` (40.9). Substitution sits on the read path of the entire product,
+  and a synchronous hop there would mean lessons go down when organization-service does, to deliver
+  something whose absence is merely cosmetic. The cost is eventual consistency; the payload is the
+  whole profile every time, so a lost message is repaired by the next save. Unlike every earlier
+  replica consumer, these two run in **tenant** mode — the profile is inside a tenant, not about one.
+- **Platform-wide callers get the empty profile.** In platform mode the query filter admits every
+  organization at once, so "the profile" is undefined and picking a row would render Sellevate staff a
+  lesson with some customer's product name in it. The same rule §2.6's read resolution follows.
+
+**As implemented (40.29): the profile is filled in by interview, not by that form.** The paragraph
+above says «the customer fills in a form», and the form is thirty-odd inputs. The observation the block
+starts from is that it therefore stays empty, and an empty profile is not a degraded version of this
+section — it is this section not happening at all. What was added is four routes on the same row and
+no schema change: a capped, ordered list of what is still missing
+(`GET /organizations/profile/gaps`, three questions at a time), a per-field answer
+(`PATCH /organizations/profile`), and the promotion of the structure the 40.27 pipeline extracted from
+the customer's own deck and script (`POST /organizations/profile/draft`, `…/draft/apply`). The merge
+policy is *fill blanks, grow lists, never silently replace a human's words* — and `banned_claims` is
+union-only with no way to delete an entry through that path, which is what makes the guarantee two
+paragraphs above survive somebody pasting a marketing deck in June. Full description in
+[ORGANIZATION_SERVICE.md](../ORGANIZATION_SERVICE.md#the-profile-as-an-interview-phase-4029), decisions
+in [DECISIONS.md](../DECISIONS.md) (2026-08-18).
+
 **This is the metric that decides whether the architecture worked** (repeated from
 [TENANCY.md §5](TENANCY.md#5-the-commercial-trap-this-architecture-has-to-defuse)): on the first
 pilot, measure the share of adaptation closed by profile substitution versus hand-editing lesson
@@ -202,9 +375,107 @@ expensive at ten customers.
 
 | Existing thing | What tenancy does to it |
 |----------------|--------------------------|
-| `seed.py` + `/admin/seeder/bundle` | Seeds the **global** library (`organization_id IS NULL`). Needs an explicit target, and must not be pointed at a customer. |
+| `seed.py` + `/admin/seeder/bundle` | **Done (40.19).** Seeds the **global** library (`organization_id IS NULL`), with a required `target=global` field and every read narrowed to `organization_id IS NULL` — see [SEEDER.md](../SEEDER.md) §0. The narrowing was a real fix, not paperwork: reads went through the "mine or global" query filter, and lessons upsert on `(topicId, title)`, so re-running a bundle import could silently overwrite a customer's override with the base text. |
 | `Skill.IconicName` uniqueness | Becomes unique per organization — see [TENANCY.md §1.9](TENANCY.md#19-indexes-and-unique-constraints) |
-| `DialogMode` / `DialogBundle` prompts | Already admin-editable; become override-able per organization. The seeded hidden modes (`company-call`, `custom-scenario`) stay global. |
+| `DialogMode` / `DialogBundle` prompts | **Done (40.18)** for `DialogMode`, which is where the prompts live: `ParentModeId` + `BaseContentHash`, the override keeping its parent's `BundleId` and `Key`. `DialogBundle` is not copy-on-write — see §2.6. The seeded hidden modes (`company-call`, `custom-scenario`) stay global and the service **refuses** to override them: their prompts are completed at run time from placeholders the code supplies. |
 | `ExerciseTypePrompt` | Stays platform-global — it defines how a *type* is graded, not what a customer teaches |
-| `Technique`, `ReferenceMaterial` | Same override + versioning treatment as lessons |
+| `Technique`, `ReferenceMaterial` | **Override done (40.18)**: `ParentTechniqueId` / `ParentMaterialId`, `BaseContentHash`, `IsArchived`, read resolution and the same review queue as lessons. **Versioning not done** — neither has an immutable version table, and the fork point is a fingerprint instead (§2.6). |
 | Admin panel ([ADMIN_PANEL.md](../ADMIN_PANEL.md)) | Splits into a platform superadmin panel (organizations, global library) and an organization admin panel (the РОП's) |
+| Where an organization's *own* lessons come from | **Done (40.27):** the admin content pipeline ([CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md)) — material in, a structure the РОП confirms, then a `Lesson` + `Exercise` rows + a published `LessonVersion`, `organization_id` set and archived until reviewed. It is §1's third row (the profile) reached from the other end: what a profile cannot express, a customer now generates rather than forks |
+
+---
+
+## 5. Generated content (Phases 40.27–40.28, second trigger 40.31)
+
+The one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md):
+**generated content is not a fourth kind of content.** A run produces the same three things every
+lesson in the product is made of — a `Lesson` row, `Exercise` rows, a published `LessonVersion`
+snapshot — so §2's versioning, §2.6's override machinery and §3's substitution all apply to it with no
+new code, and the eleven existing renderers play it.
+
+Four consequences follow from that, and each one was a fork.
+
+- **It is owned, never global.** `organization_id` is the caller's. The shared library has exactly one
+  authoring path and it is the seeder ([SEEDER.md §0](../SEEDER.md)); a pipeline that could write a
+  null owner would be that rule's back door.
+- **It is not an override.** `parent_lesson_id` is null: the lesson was written from the customer's
+  own material and forked nothing, so there is no base to go stale against and it never enters §2.6's
+  review queue. That is the difference between "we adapted your version of our lesson" and "we made
+  you a lesson".
+- **It arrives archived.** §1's argument is about not forking the curriculum; this is the adjacent
+  worry, which is not forking *quality*. The checkpoint 40.27 buys sits before generation, so whether
+  the generated exercises are any good is still unanswered when the lesson is written, and 40.32 owns
+  answering it item by item. Until then the lesson exists, is versioned and is addressable, and
+  learners do not see it. Un-archiving is `PUT /admin/lessons/{id}` with `isArchived: false`, which
+  40.27 added because archiving had no reverse before it.
+- **Sometimes it is not written at all (40.28).** A run whose material was too thin — or whose
+  extracted structure came back with no objections, no script stages and nothing about the product —
+  ends in `insufficient` with a list of what to add, and writes no content. That is the same argument
+  as the two above, applied one step earlier: the risk §1 guards against is a customer's tree filling
+  with forks of our curriculum; this guards against it filling with lessons generated from nothing.
+  A `Lesson` row is cheap to create and expensive to be wrong about — it is versioned, assignable and
+  reportable — so a run with nothing to say produces no row rather than an empty one.
+
+**Phase 40.31 added a second way to start such a run, and deliberately changed none of the four
+consequences above.** `POST /admin/team/skill-gaps/{stageKey}/content` starts a run because the
+dashboard measured the team failing a stage of the sales funnel, rather than because somebody pasted a
+deck. Two things about it belong in this document:
+
+- **The material is composed from the profile of §3, not uploaded.** There is no textarea behind that
+  button, so the run's `source_material` is written deterministically — the measurement, the stage's
+  weakest skills, and the organization's own product, ICP, tone, objections, script stages, glossary
+  and banned claims. That is the third distinct use §3 gets, after 40.19's substitution and 40.27's
+  seeding of the structuring call, and it is the strongest argument the profile has yet had for
+  existing: an organization that filled it in gets exercises about their objections, and one that did
+  not gets 40.28's refusal naming what to add.
+- **The generated lesson is indistinguishable from any other generated lesson.** Owned, not an
+  override, archived on arrival, and absent entirely when 40.28 refuses. The only difference lives on
+  the run (`ContentGenerationJobs.GapSourceRef`) and on the assignment eventually made from it
+  (`source_type = gap_detected`) — provenance, not content. A block that had needed a fifth kind of
+  content for the dashboard's button would have been a block that got §5 wrong.
+
+---
+
+## 6. Adapted content (Phase 40.32)
+
+§5 is about content the product wrote. This is about content the product **changes**, in bulk, on a
+customer's instruction — «перепиши все упражнения этапа "закрытие" под наш продукт и тон» — and the
+one thing worth stating here rather than only in [CONTENT_PIPELINE.md](../CONTENT_PIPELINE.md) §6a is
+that **adapted content is not a fifth kind of content either.** A batch produces no rows in any
+content table. It produces *proposals*, in tables of its own, and a person turns a proposal into an
+ordinary edit of an ordinary `Exercise`.
+
+Three consequences, and each one is a rule this document already had.
+
+- **Applying a rewrite to a global exercise forks the lesson, and that is §1's rule, not a new one.**
+  A batch collects its scope through §2.6's read resolution, so an organization that has already
+  forked a lesson sees their own exercises and one that has not sees the library's. When the second
+  kind is accepted, `IContentOverrideService.CreateOverrideAsync` runs — the same call pressing "edit"
+  makes — and the body lands in the copy. **This is load-bearing rather than tidy:** the content RLS
+  policy is `organization_id IS NULL OR = current` in its `WITH CHECK` clause too, so the database
+  cannot tell "the global library" from "somebody else's row", and a batch that wrote the base
+  directly would apply one customer's tone to every other customer's curriculum. The boundary is
+  `ContentAuthoringGuard` and the accept path, in code, exactly as §1 says it must be.
+- **Nothing is applied without a person, and nothing is merged.** §2.6 refuses to auto-merge an
+  override with a moved base because a three-way merge of prose and grading criteria produces
+  plausible nonsense that then grades a living salesperson. The same refusal, one level down: a
+  proposal and the current body travel to the screen as two documents plus a list of the leaves that
+  differ, and the only thing that combines them is an administrator clicking accept on one item. The
+  worker cannot write an `Exercise` at all.
+- **A proposal is answerable to a specific body of text.** The item stores the hash of what the model
+  was shown and accept recomputes it; if somebody edited that exercise in between, the answer is a
+  refusal, because applying would discard their words. Staleness is computed on read and stored
+  nowhere — the same shape §2.6 uses, for the same reason: there is no flag, so there is no flag to be
+  wrong.
+
+**No version is published by accepting.** The edit lands on the mutable `Exercise` row, so §2.3 still
+holds: a learner's recorded attempt points at a frozen `LessonVersion` and is unaffected until
+somebody publishes a new one. That is deliberate. A batch that published sixty versions would mean
+sixty snapshots nobody chose to freeze, and §2's whole argument is that a version is a decision.
+
+**The same tables carry the block's other half — AI review of hand-written content** — with
+`mode = 'quality_review'`. It writes a list of codes onto the item and nothing else: there is nothing
+to apply, accept is refused, and the fix is an ordinary edit in the editor. That asymmetry is the one
+place a model is allowed to have an opinion about a customer's curriculum without being able to act
+on it, and it is why the review exists at all: a РОП's weak exercise is, to their team,
+indistinguishable from ours.

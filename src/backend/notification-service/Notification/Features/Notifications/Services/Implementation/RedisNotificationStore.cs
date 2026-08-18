@@ -79,6 +79,7 @@ return count
     }
 
     public async Task PrependAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationRecord notification,
         int inboxCapacity,
@@ -88,7 +89,7 @@ return count
         ArgumentNullException.ThrowIfNull(notification);
 
         var database = _connectionMultiplexer.GetDatabase();
-        var inboxKey = RedisKeys.Inbox(recipientUserId);
+        var inboxKey = RedisKeys.Inbox(organizationId, recipientUserId);
 
         await database.ScriptEvaluateAsync(
             PrependLua,
@@ -102,11 +103,12 @@ return count
     }
 
     public async Task<IReadOnlyList<NotificationRecord>> GetAllAsync(
+        Guid organizationId,
         Guid recipientUserId,
         CancellationToken cancellationToken = default)
     {
         var database = _connectionMultiplexer.GetDatabase();
-        var entries = await database.ListRangeAsync(RedisKeys.Inbox(recipientUserId));
+        var entries = await database.ListRangeAsync(RedisKeys.Inbox(organizationId, recipientUserId));
 
         return entries
             .Select(entry => Deserialize(entry))
@@ -116,18 +118,20 @@ return count
     }
 
     public async Task<bool> ExistsAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationType notificationType,
         string? relatedEntityId,
         CancellationToken cancellationToken = default)
     {
-        var notifications = await GetAllAsync(recipientUserId, cancellationToken);
+        var notifications = await GetAllAsync(organizationId, recipientUserId, cancellationToken);
         return notifications.Any(n =>
             n.NotificationType == notificationType &&
             n.RelatedEntityId == relatedEntityId);
     }
 
     public async Task<bool> ReplaceAsync(
+        Guid organizationId,
         Guid recipientUserId,
         NotificationRecord updatedNotification,
         TimeSpan retention,
@@ -136,7 +140,7 @@ return count
         ArgumentNullException.ThrowIfNull(updatedNotification);
 
         var database = _connectionMultiplexer.GetDatabase();
-        var inboxKey = RedisKeys.Inbox(recipientUserId);
+        var inboxKey = RedisKeys.Inbox(organizationId, recipientUserId);
 
         var result = await database.ScriptEvaluateAsync(
             ReplaceOneLua,
@@ -152,6 +156,7 @@ return count
     }
 
     public async Task ReplaceAllAsync(
+        Guid organizationId,
         Guid recipientUserId,
         IReadOnlyList<NotificationRecord> notifications,
         TimeSpan retention,
@@ -163,7 +168,7 @@ return count
             return;
 
         var database = _connectionMultiplexer.GetDatabase();
-        var inboxKey = RedisKeys.Inbox(recipientUserId);
+        var inboxKey = RedisKeys.Inbox(organizationId, recipientUserId);
 
         // ARGV[1] = TTL, ARGV[2..N] = serialized replacement items
         var args = new RedisValue[1 + notifications.Count];

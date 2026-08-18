@@ -300,6 +300,18 @@ export const ErrorMessages = {
 - Structured logging with `ILogger<T>`. No `Console.WriteLine()`
 - Use `LoggerMessage.Define` or source-generated logging `[LoggerMessage]` for hot paths
 
+### Tenant-scoped `DbContext` registration
+- **Never register a tenant-scoped `DbContext` with `AddDbContextPool`.** EF Core's context pool
+  reuses the same pooled instance — and everything it closed over at construction time, including
+  the `ITenantContext`-backed global query filter — across unrelated requests for different
+  organizations. The first tenant to touch a pooled instance would silently leak its query filter
+  onto every later caller. Always use plain `AddDbContext`. See docs/TENANCY/TENANCY.md §1.4 and
+  `BuildingBlocks/Tenancy` (Phase 40.4).
+- Enforced by `scripts/tenancy-pool-lint.py` (CI: `tenancy-pool` workflow) — `AddDbContextPool` is
+  forbidden anywhere in `src/backend`, not only on tenant-scoped contexts: nothing in this codebase
+  uses it today, so the cheapest safe rule is a blanket ban rather than tracking which contexts are
+  "tenant-scoped yet."
+
 ---
 
 ## 7. Frontend Code Style (Next.js/TypeScript)

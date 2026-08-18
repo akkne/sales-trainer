@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Learning.Features.SkillTree.Models;
+using Sellevate.Learning.Features.Content;
 using Sellevate.Learning.Features.Techniques.Models;
 using Sellevate.Learning.Features.Techniques.Services.Abstract;
 using Sellevate.Learning.Infrastructure.Data;
@@ -18,7 +19,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         IReadOnlyCollection<string>? tags,
         CancellationToken cancellationToken = default)
     {
-        var techniquesQuery = databaseContext.Techniques.AsNoTracking().AsQueryable();
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var techniquesQuery = databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext);
 
         if (!string.IsNullOrWhiteSpace(skillIconicName))
         {
@@ -86,7 +89,12 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var technique = await databaseContext.Techniques.AsNoTracking()
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        // Phase 40.18: resolved, and here it is correctness rather than tidiness. An override
+        // carries the same slug as its base — that is what keeps the URL stable — so an unresolved
+        // lookup by slug would match two rows and return whichever the planner reached first.
+        var technique = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
             .Include(loadedTechnique => loadedTechnique.Coach)
             .Include(loadedTechnique => loadedTechnique.AdditionalSkills)
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
@@ -134,7 +142,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking()
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
+        var techniqueCountsBySkill = await databaseContext.Techniques.AsNoTracking().ResolveOverrides(databaseContext)
             .Where(technique => technique.PrimarySkillId != null)
             .GroupBy(technique => technique.PrimarySkillId!.Value)
             .Select(group => new { SkillId = group.Key, Count = group.Count() })
@@ -156,7 +166,7 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
                 countById.GetValueOrDefault(skill.Id)))
             .ToArray();
 
-        var totalCount = await databaseContext.Techniques.CountAsync(cancellationToken);
+        var totalCount = await databaseContext.Techniques.ResolveOverrides(databaseContext).CountAsync(cancellationToken);
 
         var userCounts = new TechniqueUserCountsDto(0, 0, totalCount);
 
@@ -182,7 +192,9 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         Guid currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var technique = await databaseContext.Techniques
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
+        var technique = await databaseContext.Techniques.ResolveOverrides(databaseContext)
             .FirstOrDefaultAsync(candidate => candidate.Slug == slug, cancellationToken);
 
         if (technique is null)
@@ -208,6 +220,7 @@ internal sealed class TechniqueService(LearningDbContext databaseContext) : ITec
         });
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyDictionary<Guid, Skill>> LoadSkillLookupAsync(

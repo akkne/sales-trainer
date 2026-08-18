@@ -1,33 +1,31 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using Sellevate.Ai.Features.Dialog.Helpers;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
 using Sellevate.Ai.Features.Dialog.Services.Implementation;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Data;
-using Sellevate.Ai.Infrastructure.Mongo;
 
 namespace Sellevate.Ai.Features.Voice.Services.Implementation;
 
 internal sealed class VoiceDialogService : IVoiceDialogService
 {
     private readonly AiDbContext _dbContext;
-    private readonly MongoDbContext _mongoContext;
+    private readonly IDialogSessionRepository _sessionRepository;
     private readonly IOpenAiChatService _openAiService;
     private readonly ITtsRouter _ttsRouter;
     private readonly ILogger<VoiceDialogService> _logger;
 
     public VoiceDialogService(
         AiDbContext dbContext,
-        MongoDbContext mongoContext,
+        IDialogSessionRepository sessionRepository,
         IOpenAiChatService openAiService,
         ITtsRouter ttsRouter,
         ILogger<VoiceDialogService> logger)
     {
         _dbContext = dbContext;
-        _mongoContext = mongoContext;
+        _sessionRepository = sessionRepository;
         _openAiService = openAiService;
         _ttsRouter = ttsRouter;
         _logger = logger;
@@ -39,11 +37,7 @@ internal sealed class VoiceDialogService : IVoiceDialogService
         string transcript,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var filter = Builders<DialogSession>.Filter.And(
-            Builders<DialogSession>.Filter.Eq(s => s.Id, sessionId),
-            Builders<DialogSession>.Filter.Eq(s => s.UserId, userId)
-        );
-        var session = await _mongoContext.DialogSessions.Find(filter).FirstOrDefaultAsync(ct);
+        var session = await _sessionRepository.FindForUserAsync(sessionId, userId, ct);
 
         if (session == null)
             throw new InvalidOperationException($"Session {sessionId} not found for user {userId}");
@@ -67,12 +61,13 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             IsStopSignal = false
         };
         session.Messages.Add(userMsg);
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            filter,
-            Builders<DialogSession>.Update.Push(s => s.Messages, userMsg),
-            cancellationToken: ct);
+        await _sessionRepository.AppendMessagesAsync(sessionId, userId, [userMsg], ct);
 
         var chatSystemPrompt = CompanyContextPromptBuilder.BuildChatSystemPrompt(mode.ChatSystemPrompt, session.CompanyCallContext);
+        // Phase 40.23. Voice practice on an assignment is graded by the same completion path and
+        // counts towards the same threshold, so it has to meet the same character. The context was
+        // resolved when the session started; this path only reads it.
+        chatSystemPrompt = AssignmentPracticePromptBuilder.BuildChatSystemPrompt(chatSystemPrompt, session.AssignmentPracticeContext);
 
         var replyParser = new StreamingChatReplyParser();
         var sentenceChunker = new SentenceChunker();
@@ -133,10 +128,7 @@ internal sealed class VoiceDialogService : IVoiceDialogService
             IsStopSignal = parseResult.EndCall
         };
         session.Messages.Add(assistantMsg);
-        await _mongoContext.DialogSessions.UpdateOneAsync(
-            filter,
-            Builders<DialogSession>.Update.Push(s => s.Messages, assistantMsg),
-            cancellationToken: ct);
+        await _sessionRepository.AppendMessagesAsync(sessionId, userId, [assistantMsg], ct);
 
         _logger.LogInformation(
             "Streamed voice message for session {SessionId}: user {UserLen} chars, AI {AiLen} chars, endCall={EndCall}, endCallReason={EndCallReason}",

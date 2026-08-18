@@ -9,9 +9,12 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Sellevate.Ai.Eventing;
 using Sellevate.Ai.Features.Companies;
+using Sellevate.Ai.Features.ContentAdaptation;
+using Sellevate.Ai.Features.ContentGeneration;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Evaluation;
+using Sellevate.Ai.Features.Quotas;
 using Sellevate.Ai.Features.Transcription;
 using Sellevate.Ai.Features.Voice;
 using Sellevate.Ai.Infrastructure.Data;
@@ -21,9 +24,12 @@ using Sellevate.Ai.Infrastructure.Mongo;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
+using Sellevate.BuildingBlocks.Tenancy;
+using Prometheus;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
+using Sellevate.Ai.Common.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,8 +55,18 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 
 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
-builder.Services.AddDbContext<AiDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.11: ai-db holds the dialog library, which becomes org-authorable, so the context carries
+// both tenancy interceptors — the write guard and the one that issues SET LOCAL app.organization_id
+// for the row-level-security policies. Never switch this to EF Core's pooled-context helper
+// (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py).
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<AiDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddSingleton<IMongoClient>(_ =>
     new MongoClient(builder.Configuration.GetConnectionString("Mongo")));
@@ -64,6 +80,7 @@ builder.Services.AddScoped<IDialogEventPublisher, KafkaDialogEventPublisher>();
 builder.Services.AddSingleton<IDialogScoringWeightsProvider, DialogScoringWeightsProvider>();
 builder.Services.AddHostedService<GamificationDialogWeightsConsumer>();
 builder.Services.AddHostedService<UserReplicaConsumer>();
+builder.Services.AddHostedService<OrganizationProfileConsumer>();
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -99,14 +116,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy("RequireAdmin", policy =>
-        policy.RequireAssertion(authorizationContext =>
-            authorizationContext.User.IsInRole("Admin") || authorizationContext.User.IsInRole("SuperAdmin")));
-    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
-        policy.RequireRole("SuperAdmin"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -122,7 +132,10 @@ builder.Services
     .AddTranscriptionFeatureServices(builder.Configuration)
     .AddVoiceFeatureServices(builder.Configuration)
     .AddEvaluationFeatureServices()
-    .AddCompanyAiFeatureServices();
+    .AddCompanyAiFeatureServices()
+    .AddContentGenerationFeatureServices()
+    .AddContentAdaptationFeatureServices()
+    .AddQuotaFeatureServices(builder.Configuration);
 
 // AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
 // HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.
@@ -171,6 +184,11 @@ var application = builder.Build();
 
 application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
+
+// Phase 40.33. ai-service is the third process to export /metrics (after the gateway and
+// analytics-service), because it is now the only place per-organization AI spend is known at the
+// instant it happens. The series it exports carry no organization label — see AiSpendMetrics.
+application.UseHttpMetrics();
 application.UseCors();
 
 if (application.Environment.IsDevelopment())
@@ -181,8 +199,10 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
+application.MapMetrics();
 
 application.MapControllers();
 

@@ -23,6 +23,11 @@ internal sealed class LeagueService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        // Phase 40.13. Reads are grouped into short transactions rather than one wrapping the
+        // whole method, because the create/join helpers below recover from a unique violation and
+        // carry on — inside one long transaction that violation would poison the transaction and
+        // the recovery could not run. Writes need no scope of their own: EF opens an implicit
+        // transaction per SaveChangesAsync, and that is what triggers SET LOCAL.
         var settings = await GetSettingsAsync(cancellationToken);
         var weekStart = settings.CurrentPeriodStartDate!.Value;
         var periodEndsAt = settings.CurrentPeriodEndsAt!.Value;
@@ -32,37 +37,47 @@ internal sealed class LeagueService(
         var tierKeys = tiers.Select(tier => tier.Key).ToList();
         var entryTier = tierKeys[0];
 
-        var previousMembershipData = await databaseContext.LeagueMemberships
-            .Where(membership => membership.UserId == userId)
-            .Join(
-                databaseContext.Leagues,
-                membership => membership.LeagueId,
-                league => league.Id,
-                (membership, league) => new { membership.PromotionOutcome, league.Tier, league.WeekStartDate })
-            .Where(membershipLeague => membershipLeague.WeekStartDate < weekStart)
-            .OrderByDescending(membershipLeague => membershipLeague.WeekStartDate)
-            .Select(membershipLeague => new { membershipLeague.PromotionOutcome, membershipLeague.Tier })
-            .FirstOrDefaultAsync(cancellationToken);
+        string? previousWeekOutcome;
+        string userTier;
+        Models.League? existingLeagueThisWeek;
 
-        var previousWeekOutcome = previousMembershipData?.PromotionOutcome;
+        // A read scope, deliberately closed before the create/join below: a write nested inside a
+        // read scope would be rolled back when the scope disposes.
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            var previousMembershipData = await databaseContext.LeagueMemberships
+                .Where(membership => membership.UserId == userId)
+                .Join(
+                    databaseContext.Leagues,
+                    membership => membership.LeagueId,
+                    league => league.Id,
+                    (membership, league) => new { membership.PromotionOutcome, league.Tier, league.WeekStartDate })
+                .Where(membershipLeague => membershipLeague.WeekStartDate < weekStart)
+                .OrderByDescending(membershipLeague => membershipLeague.WeekStartDate)
+                .Select(membershipLeague => new { membershipLeague.PromotionOutcome, membershipLeague.Tier })
+                .FirstOrDefaultAsync(cancellationToken);
 
-        var userTier = previousMembershipData is null
-            ? entryTier
-            : GetNextTierForOutcome(tierKeys, previousMembershipData.Tier, previousMembershipData.PromotionOutcome);
+            previousWeekOutcome = previousMembershipData?.PromotionOutcome;
 
-        var existingThisWeek = await databaseContext.LeagueMemberships
-            .Join(
-                databaseContext.Leagues,
-                membership => membership.LeagueId,
-                league => league.Id,
-                (membership, league) => new { Membership = membership, League = league })
-            .Where(membershipLeague => membershipLeague.Membership.UserId == userId && membershipLeague.League.WeekStartDate == weekStart)
-            .FirstOrDefaultAsync(cancellationToken);
+            userTier = previousMembershipData is null
+                ? entryTier
+                : GetNextTierForOutcome(tierKeys, previousMembershipData.Tier, previousMembershipData.PromotionOutcome);
+
+            existingLeagueThisWeek = await databaseContext.LeagueMemberships
+                .Join(
+                    databaseContext.Leagues,
+                    membership => membership.LeagueId,
+                    league => league.Id,
+                    (membership, league) => new { Membership = membership, League = league })
+                .Where(membershipLeague => membershipLeague.Membership.UserId == userId && membershipLeague.League.WeekStartDate == weekStart)
+                .Select(membershipLeague => membershipLeague.League)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         Models.League currentLeague;
-        if (existingThisWeek is not null)
+        if (existingLeagueThisWeek is not null)
         {
-            currentLeague = existingThisWeek.League;
+            currentLeague = existingLeagueThisWeek;
         }
         else
         {
@@ -73,6 +88,8 @@ internal sealed class LeagueService(
 
         await SyncWeeklyExperiencePointsForLeagueAsync(
             currentLeague.Id, currentLeague.WeekStartDate, currentLeague.WeekEndDate, cancellationToken);
+
+        await using var membershipReadScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
 
         var allMemberships = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == currentLeague.Id)
@@ -209,6 +226,8 @@ internal sealed class LeagueService(
 
     public async Task SyncLeagueWeeklyExperiencePointsAsync(Guid leagueId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var league = await databaseContext.Leagues
             .FirstOrDefaultAsync(leagueRecord => leagueRecord.Id == leagueId, cancellationToken);
         if (league is null)
@@ -218,14 +237,24 @@ internal sealed class LeagueService(
 
         await SyncWeeklyExperiencePointsForLeagueAsync(
             league.Id, league.WeekStartDate, league.WeekEndDate, cancellationToken);
+
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     /// <summary>
-    /// GA6(a): Read-only getter — does not write. Settings are seeded once at startup
-    /// via <see cref="LeagueSettingsSeeder"/>. Returns defaults if missing (in-memory/test scenarios).
+    /// GA6(a): Read-only getter — does not write.
+    ///
+    /// <para>
+    /// Phase 40.13 made LeagueSettings per-organization, so "missing" is now the normal state of a
+    /// customer that has never edited its league settings, not just a test scenario. The unsaved
+    /// default returned here is what keeps the read path from writing; the row is created the first
+    /// time an admin saves settings (<c>AdminLeaguesController.UpdateSettings</c> attaches it).
+    /// </para>
     /// </summary>
     public async Task<LeagueSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var settings = await databaseContext.LeagueSettings.FirstOrDefaultAsync(cancellationToken);
         if (settings is not null)
         {
@@ -247,6 +276,8 @@ internal sealed class LeagueService(
 
     private async Task<IReadOnlyList<LeagueTier>> LoadTiersAsync(CancellationToken cancellationToken)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken);
+
         var tiers = await databaseContext.LeagueTiers
             .AsNoTracking()
             .OrderBy(tier => tier.Order)
@@ -266,8 +297,13 @@ internal sealed class LeagueService(
         string tier,
         CancellationToken cancellationToken = default)
     {
-        var existing = await databaseContext.Leagues
-            .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        Models.League? existing;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            existing = await databaseContext.Leagues
+                .FirstOrDefaultAsync(league => league.WeekStartDate == weekStart && league.Tier == tier, cancellationToken);
+        }
+
         if (existing is not null)
         {
             return existing;
@@ -313,8 +349,13 @@ internal sealed class LeagueService(
         Guid leagueId,
         CancellationToken cancellationToken = default)
     {
-        var existing = await databaseContext.LeagueMemberships
-            .FirstOrDefaultAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+        LeagueMembership? existing;
+        await using (await TenantTransactionScope.BeginReadAsync(databaseContext, cancellationToken))
+        {
+            existing = await databaseContext.LeagueMemberships
+                .FirstOrDefaultAsync(m => m.UserId == userId && m.LeagueId == leagueId, cancellationToken);
+        }
+
         if (existing is not null)
         {
             return existing;
@@ -356,6 +397,8 @@ internal sealed class LeagueService(
         DateOnly weekEnd,
         CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var membershipUserIds = await databaseContext.LeagueMemberships
             .Where(membership => membership.LeagueId == leagueId)
             .Select(membership => membership.UserId)
@@ -383,6 +426,7 @@ internal sealed class LeagueService(
         }
 
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex)

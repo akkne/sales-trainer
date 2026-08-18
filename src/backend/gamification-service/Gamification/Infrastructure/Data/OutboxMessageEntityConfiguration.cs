@@ -10,6 +10,7 @@ public sealed class OutboxMessageEntityConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("OutboxMessages");
         builder.HasKey(outboxMessage => outboxMessage.Id);
+        builder.Property(outboxMessage => outboxMessage.OrganizationId);
         builder.Property(outboxMessage => outboxMessage.Topic)
             .IsRequired()
             .HasMaxLength(200);

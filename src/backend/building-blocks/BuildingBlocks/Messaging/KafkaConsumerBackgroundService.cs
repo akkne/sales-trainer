@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Sellevate.BuildingBlocks.Eventing;
 using Sellevate.BuildingBlocks.Idempotency;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.BuildingBlocks.Messaging;
 
@@ -36,6 +37,16 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
 
     /// <summary>The topics this consumer subscribes to.</summary>
     protected abstract IReadOnlyCollection<string> Topics { get; }
+
+    /// <summary>
+    /// Whether every event this consumer handles must carry an <see cref="EventEnvelope.OrganizationId"/>.
+    /// <c>true</c> by default: a tenant-scoped consumer must never silently process a message
+    /// with no tenant context (docs/TENANCY/TENANCY.md §1.6/§1.7). Override to <c>false</c> only
+    /// for a consumer that is genuinely platform-global by design (e.g. replicating Identity's
+    /// cross-org user directory) — this must be an explicit, auditable opt-in, never the default
+    /// reaction to an empty context.
+    /// </summary>
+    protected virtual bool RequiresOrganization => true;
 
     protected KafkaConsumerBackgroundService(
         IOptions<KafkaSettings> settings,
@@ -102,7 +113,25 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
                     continue;
                 }
 
-                await ProcessMessageAsync(consumer, result, stoppingToken);
+                try
+                {
+                    await ProcessMessageAsync(consumer, result, stoppingToken);
+                }
+                catch (Exception exception)
+                {
+                    // Handler exceptions are already caught by RunHandlerWithRetriesAsync. What this
+                    // catches is everything *around* the handler: the Redis idempotency store, the
+                    // offset commit, and the scope's service resolution. None of that was guarded,
+                    // and .NET's default BackgroundServiceExceptionBehavior is StopHost — so a
+                    // five-second Redis restart or a routine consumer-group rebalance took the whole
+                    // service down, HTTP API included, and `restart:` turned that into a crash loop.
+                    // This base class backs thirteen consumers across the platform. Review, 40.34.
+                    Logger.LogError(
+                        exception,
+                        "Unhandled error processing a Kafka message in group '{Group}'; continuing", _settings.ConsumerGroupId);
+
+                    await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -123,6 +152,7 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var deadLetterPublisher = scope.ServiceProvider.GetRequiredService<IDeadLetterPublisher>();
         var resilience = scope.ServiceProvider.GetRequiredService<IOptions<ConsumerResilienceSettings>>().Value;
+        var tenantContext = scope.ServiceProvider.GetRequiredService<TenantContext>();
 
         var processor = new EventMessageProcessor(
             _settings.ConsumerGroupId, _idempotencyStore, deadLetterPublisher, resilience, Logger);
@@ -131,12 +161,42 @@ public abstract class KafkaConsumerBackgroundService : BackgroundService
             result.Topic,
             result.Message.Key,
             result.Message.Value,
-            (envelope, cancellationToken) => HandleAsync(envelope, scope.ServiceProvider, cancellationToken),
+            (envelope, cancellationToken) =>
+            {
+                ApplyTenantContext(tenantContext, envelope, RequiresOrganization, GetType().Name);
+                return HandleAsync(envelope, scope.ServiceProvider, cancellationToken);
+            },
             stoppingToken);
 
         if (outcome != MessageProcessingOutcome.Redeliver)
         {
             consumer.Commit(result);
         }
+    }
+
+    /// <summary>
+    /// Sets <paramref name="tenantContext"/> from <paramref name="envelope"/> before the handler
+    /// runs. Throws if the envelope carries no organization and <paramref name="requiresOrganization"/>
+    /// is <c>true</c> — the exception surfaces through the handler's retry/dead-letter path exactly
+    /// like any other handler failure, so a message can never be processed silently without a
+    /// tenant. Safe to call again on a retry: re-setting the same organization, or re-entering
+    /// system mode, is a no-op on an already-set <see cref="TenantContext"/>.
+    /// </summary>
+    internal static void ApplyTenantContext(
+        TenantContext tenantContext, EventEnvelope envelope, bool requiresOrganization, string consumerName)
+    {
+        if (envelope.OrganizationId is { } organizationId)
+        {
+            tenantContext.SetOrganization(organizationId);
+            return;
+        }
+
+        if (requiresOrganization)
+        {
+            throw new InvalidOperationException(
+                $"Event {envelope.Type} ({envelope.EventId}) carries no organization, but consumer '{consumerName}' requires one.");
+        }
+
+        tenantContext.EnterSystemMode();
     }
 }

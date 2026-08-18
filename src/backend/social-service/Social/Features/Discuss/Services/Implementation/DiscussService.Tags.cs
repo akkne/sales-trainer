@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Social.Common.Constants;
 using Sellevate.Social.Features.Discuss.Models;
+using Sellevate.Social.Infrastructure.Data;
 
 namespace Sellevate.Social.Features.Discuss.Services.Implementation;
 
@@ -9,6 +10,8 @@ internal sealed partial class DiscussService
 {
     public async Task<List<DiscussTagDto>> GetTagsAsync(bool curatedOnly, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         IQueryable<DiscussTag> query = _databaseContext.DiscussTags;
         if (curatedOnly) query = query.Where(tag => tag.IsCurated);
 
@@ -20,6 +23,8 @@ internal sealed partial class DiscussService
 
     public async Task<List<PopularTagDto>> GetPopularTagsAsync(int limit, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         if (limit < 1) limit = 10;
 
         return await _databaseContext.DiscussTags
@@ -33,6 +38,8 @@ internal sealed partial class DiscussService
 
     public async Task<DiscussStatsDto> GetStatsAsync(CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         var totalThreads = await _databaseContext.DiscussThreads.CountAsync(cancellationToken);
         var totalReplies = await _databaseContext.DiscussReplies.CountAsync(cancellationToken);
 
@@ -75,6 +82,8 @@ internal sealed partial class DiscussService
 
     public async Task<bool> DeleteThreadAsync(Guid threadId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var thread = await _databaseContext.DiscussThreads
             .Include(candidate => candidate.Replies)
             .FirstOrDefaultAsync(candidate => candidate.Id == threadId, cancellationToken);
@@ -96,6 +105,7 @@ internal sealed partial class DiscussService
 
         _databaseContext.DiscussThreads.Remove(thread);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         foreach (var objectKey in photoObjectKeys)
             await DeleteObjectBestEffortAsync(objectKey, cancellationToken);
@@ -105,6 +115,8 @@ internal sealed partial class DiscussService
 
     public async Task<bool> DeleteReplyAsync(Guid replyId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var reply = await _databaseContext.DiscussReplies.FirstOrDefaultAsync(candidate => candidate.Id == replyId, cancellationToken);
         if (reply == null) return false;
 
@@ -129,6 +141,7 @@ internal sealed partial class DiscussService
 
         _databaseContext.DiscussReplies.Remove(reply);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         foreach (var objectKey in photoObjectKeys)
             await DeleteObjectBestEffortAsync(objectKey, cancellationToken);
@@ -139,6 +152,8 @@ internal sealed partial class DiscussService
     public async Task<DiscussThreadSummaryDto?> SetThreadFlagsAsync(
         Guid threadId, bool? isPinned, bool? isHot, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var thread = await _databaseContext.DiscussThreads
             .Include(candidate => candidate.ThreadTags).ThenInclude(threadTag => threadTag.Tag)
             .FirstOrDefaultAsync(candidate => candidate.Id == threadId, cancellationToken);
@@ -148,6 +163,7 @@ internal sealed partial class DiscussService
         if (isHot.HasValue) thread.IsHot = isHot.Value;
         thread.UpdatedAt = DateTime.UtcNow;
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         var authorNames = await ResolveAuthorNamesAsync([thread.AuthorId], cancellationToken);
         var photosByThreadId = await LoadThreadPhotosByThreadIdAsync([thread.Id], cancellationToken);
@@ -161,6 +177,8 @@ internal sealed partial class DiscussService
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> CreateCuratedTagAsync(
         string name, string? slug, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var finalSlug = Slugify(string.IsNullOrWhiteSpace(slug) ? name : slug!);
         if (finalSlug.Length == 0) return (DiscussOperationStatus.Conflict, null);
 
@@ -170,6 +188,11 @@ internal sealed partial class DiscussService
         var tag = new DiscussTag
         {
             Id = Guid.NewGuid(),
+            // Phase 40.13. A curated tag is the shared vocabulary, so it stays global (NULL). This
+            // endpoint is SuperAdmin-only — Sellevate staff curating the platform's tag list — which
+            // is what makes "global" the right default here and the wrong one in
+            // ResolveOrCreateTagsAsync, where the author is a customer's salesperson.
+            OrganizationId = null,
             Slug = finalSlug,
             Name = name.Trim(),
             IsCurated = true,
@@ -177,6 +200,7 @@ internal sealed partial class DiscussService
         };
         _databaseContext.DiscussTags.Add(tag);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         return (DiscussOperationStatus.Success, new DiscussTagDto(tag.Id, tag.Slug, tag.Name, tag.IsCurated));
     }
@@ -184,6 +208,8 @@ internal sealed partial class DiscussService
     public async Task<(DiscussOperationStatus Status, DiscussTagDto? Tag)> UpdateTagAsync(
         Guid tagId, string? name, string? slug, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var tag = await _databaseContext.DiscussTags.FirstOrDefaultAsync(candidate => candidate.Id == tagId, cancellationToken);
         if (tag == null) return (DiscussOperationStatus.NotFound, null);
 
@@ -199,16 +225,20 @@ internal sealed partial class DiscussService
         if (!string.IsNullOrWhiteSpace(name)) tag.Name = name!.Trim();
 
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
         return (DiscussOperationStatus.Success, new DiscussTagDto(tag.Id, tag.Slug, tag.Name, tag.IsCurated));
     }
 
     public async Task<bool> DeleteTagAsync(Guid tagId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var tag = await _databaseContext.DiscussTags.FirstOrDefaultAsync(candidate => candidate.Id == tagId, cancellationToken);
         if (tag == null) return false;
 
         _databaseContext.DiscussTags.Remove(tag);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
         return true;
     }
 

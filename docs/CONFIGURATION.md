@@ -69,3 +69,39 @@ same pattern as the other extracted services.
 Yandex SpeechKit API key of a service account with the `ai.speechkit-tts.user` role.
 Create at [console.yandex.cloud](https://console.yandex.cloud): service account → API keys → create.
 Sent as `Authorization: Api-Key <key>` header (see `YandexTtsService`).
+
+## AI quotas and the keys learning-service no longer needs (Phase 40.33)
+
+**New section, ai-service only — `AiQuotas`.** The platform-wide defaults every organization is
+metered against until it is given limits of its own, plus the price table the spend report is
+rendered with.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `AiQuotas:DefaultVoiceDailyLimitMinutes` | 600 | Organization-wide voice minutes per UTC day. `0` disables the window |
+| `AiQuotas:DefaultVoiceMonthlyLimitMinutes` | 6000 | Same, per UTC month |
+| `AiQuotas:DefaultLlmMonthlyTokenLimit` | 20 000 000 | Prompt + completion tokens per UTC month, all models. `0` disables the LLM limit |
+| `AiQuotas:DefaultBatchReservePercent` | 10 | Share of the LLM allowance background pipelines may not touch, so a batch stops before a conversation does |
+| `AiQuotas:SoftWarningPercent` | 80 | Where the spend report turns `warning`. Refuses nothing |
+| `AiQuotas:Currency` | `RUB` | Display only |
+| `AiQuotas:PricePerMillionTokens` | `{ "yandex-tts": 1300 }` | Per-model price, plus `tts`/`stt` providers priced per million characters. **Display only** — limits are counted in tokens, so editing a price re-renders history and moves no limit |
+| `AiQuotas:FallbackPricePerMillionTokens` | 0 | Price for a model absent from the table. At `0` such a model is reported as **unpriced**, never as free |
+| `AiQuotas:EstimatedCharactersPerToken` | 4 | Divisor for the one path with no reported usage — a streamed dialog turn |
+
+The four `Default*` keys are also exposed as `AI_QUOTA_*` environment variables in
+`docker-compose.yml` and `scripts/dev-ai.sh`. Per-organization overrides are rows in
+`OrganizationQuotas`, written through `PUT /admin/ai-quota`; **null in a column means "the platform
+default above", never "unlimited"**.
+
+`Voice:DailyLimitMinutes` / `MonthlyLimitMinutes` are unchanged and still mean the **per-user**
+allowance. Both windows apply. See [AI_QUOTAS.md](AI_QUOTAS.md).
+
+**Removed from learning-service:** the `OpenAI`, `YandexTts` and `Voice` sections, and with them the
+`OPENAI_*` and `YANDEX_TTS_API_KEY` environment variables in its compose block and in
+`scripts/lib-local-env.sh`. learning-service reaches the providers through ai-service now and holds
+no provider secret of any kind — a smaller secret surface as well as the thing that makes the meter
+complete. `AiService:ChatPath`, `ChatStreamPath`, `TextToSpeechPath`, `QuotaPreflightPath` and
+`ChatTimeoutSeconds` (90s) replace them, all non-secret and committed.
+
+Those variables stay in the root `.env` and are still consumed by **ai-service**. Nothing needs to be
+deleted from `.env`; what changed is which service reads it.

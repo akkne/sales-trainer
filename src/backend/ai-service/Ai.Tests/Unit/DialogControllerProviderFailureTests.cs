@@ -31,9 +31,7 @@ public class DialogControllerProviderFailureTests
         _dialogService = Substitute.For<IDialogService>();
         _dialogService.IsOpenAiConfigured.Returns(true);
 
-        _databaseContext = new AiDbContext(new DbContextOptionsBuilder<AiDbContext>()
-            .UseInMemoryDatabase("dialog-provider-failure-" + Guid.NewGuid())
-            .Options);
+        _databaseContext = AiDbContextFactory.CreateInMemory("dialog-provider-failure-" + Guid.NewGuid());
 
         _controller = new DialogController(
             _dialogService,

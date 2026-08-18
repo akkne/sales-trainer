@@ -9,18 +9,24 @@ internal sealed class LearningProgressService(GamificationDbContext databaseCont
 {
     public async Task RecordLessonCompletedAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var progress = await GetOrCreateAsync(userId, cancellationToken);
         progress.CompletedLessonCount += 1;
         progress.UpdatedAt = DateTime.UtcNow;
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     public async Task RecordSkillCompletedAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        await using var tenantScope = await TenantTransactionScope.BeginWriteAsync(databaseContext, cancellationToken);
+
         var progress = await GetOrCreateAsync(userId, cancellationToken);
         progress.HasCompletedAnySkill = true;
         progress.UpdatedAt = DateTime.UtcNow;
         await databaseContext.SaveChangesAsync(cancellationToken);
+        await tenantScope.CommitAsync(cancellationToken);
     }
 
     private async Task<UserLearningProgress> GetOrCreateAsync(Guid userId, CancellationToken cancellationToken)

@@ -5,10 +5,15 @@ using Microsoft.IdentityModel.Tokens;
 using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
+using Sellevate.Identity.Common.Constants;
+using Sellevate.Identity.Common.Security;
 using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth;
 using Sellevate.Identity.Features.Avatars;
+using Sellevate.Identity.Features.Invites;
 using Sellevate.Identity.Features.Onboarding;
+using Sellevate.Identity.Features.PlatformAdmin;
 using Sellevate.Identity.Features.Profile;
 using Sellevate.Identity.Infrastructure;
 using Sellevate.Identity.Infrastructure.Data;
@@ -39,8 +44,18 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
         .Enrich.WithProperty("Application", "Sellevate.Identity");
 });
 
-builder.Services.AddDbContext<IdentityDbContext>(databaseOptions =>
-    databaseOptions.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+// Phase 40.7: identity-db gained its first tenant-scoped table (Invites), so the context now
+// carries both tenancy interceptors — the write guard and the one that issues SET LOCAL
+// app.organization_id for the row-level-security policy. Never switch this registration to EF
+// Core's pooled-context helper (docs/CODESTYLE.md, scripts/tenancy-pool-lint.py).
+builder.Services.AddSellevateTenancy();
+
+builder.Services.AddDbContext<IdentityDbContext>((serviceProvider, databaseOptions) =>
+    databaseOptions
+        .UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<TenantSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TenantConnectionInterceptor>()));
 
 // Required by AddSellevateEventing's idempotency store (RedisIdempotencyStore).
 // Without this the DI container fails validation at builder.Build() and the
@@ -53,6 +68,11 @@ builder.Services.AddScoped<IUserEventPublisher, KafkaUserEventPublisher>();
 builder.Services.AddScoped<IOutboxWriter, IdentityOutboxWriter>();
 builder.Services.AddScoped<IOutboxStore, IdentityOutboxStore>();
 builder.Services.AddHostedService<OutboxRelayBackgroundService>();
+
+// Phase 40.9: identity-service becomes a consumer for the first time. It needs its own projection
+// of the tenant registry because it is the service that mints tokens, and a suspended organization
+// has to stop producing them (docs/TENANCY/TENANCY.md §1.1).
+builder.Services.AddHostedService<OrganizationReplicaConsumer>();
 
 builder.Services.AddSellevateHealthChecks()
     .AddRedis()
@@ -85,14 +105,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(authorizationOptions =>
-{
-    authorizationOptions.AddPolicy("RequireAdmin", policy =>
-        policy.RequireAssertion(context =>
-            context.User.IsInRole("Admin") || context.User.IsInRole("SuperAdmin")));
-    authorizationOptions.AddPolicy("RequireSuperAdmin", policy =>
-        policy.RequireRole("SuperAdmin"));
-});
+builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 var allowedOrigins = (builder.Configuration["Frontend:Url"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -109,8 +122,13 @@ builder.Services.AddHttpClient();
 
 builder.Services
     .AddAuthenticationFeatureServices(builder.Configuration)
+    .AddInviteFeatureServices(builder.Configuration)
     .AddOnboardingFeatureServices()
+    .AddPlatformAdminFeatureServices(builder.Configuration)
     .AddProfileFeatureServices();
+
+// Phase 40.23. Guards internal/* — the service-to-service routes that carry no JWT.
+builder.Services.AddScoped<InternalServiceAuthFilter>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -133,6 +151,7 @@ if (application.Environment.IsDevelopment())
 
 application.UseAuthentication();
 application.UseAuthorization();
+application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
 

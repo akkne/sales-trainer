@@ -7,6 +7,15 @@ namespace Sellevate.Analytics.Features.Funnels.Services.Implementation;
 
 internal sealed class FunnelEventRecorder : IFunnelEventRecorder
 {
+    /// <summary>
+    /// Phase 40.25. The four values of learning-service's <c>AssignmentProgressStatuses</c>, copied
+    /// rather than referenced: analytics-service does not depend on learning-service and must not
+    /// start to for a list of four strings. Copied lists drift, so an unrecognised value is dropped
+    /// loudly-in-the-logs rather than counted — see the guard at the call site.
+    /// </summary>
+    private static readonly HashSet<string> KnownProgressStates =
+        new(StringComparer.Ordinal) { "not_started", "in_progress", "completed", "failed_threshold" };
+
     public bool Record(EventEnvelope envelope)
     {
         ArgumentNullException.ThrowIfNull(envelope);
@@ -53,6 +62,40 @@ internal sealed class FunnelEventRecorder : IFunnelEventRecorder
                 }
 
                 AppMetrics.ExperiencePointsGranted.Inc(payload.Amount);
+                return true;
+            }
+
+            case Topics.AssignmentIssued:
+            {
+                var payload = envelope.DataAs<AssignmentIssuedEvent>();
+                if (payload is null)
+                {
+                    return false;
+                }
+
+                AppMetrics.AssignmentsIssued.Inc();
+                return true;
+            }
+
+            case Topics.AssignmentProgressChanged:
+            {
+                var payload = envelope.DataAs<AssignmentProgressChangedEvent>();
+                if (payload is null || string.IsNullOrWhiteSpace(payload.Status))
+                {
+                    return false;
+                }
+
+                // Guard: the label set has to stay bounded. A producer that grows a fifth status
+                // without this service knowing would otherwise add a Prometheus time series per
+                // unknown value — the cardinality failure this file avoids everywhere else by
+                // refusing an organization label. An unknown status is ignored, not counted under a
+                // catch-all, because a bucket named "other" is a number nobody can act on.
+                if (!KnownProgressStates.Contains(payload.Status))
+                {
+                    return false;
+                }
+
+                AppMetrics.AssignmentProgressTransitions.WithLabels(payload.Status).Inc();
                 return true;
             }
 

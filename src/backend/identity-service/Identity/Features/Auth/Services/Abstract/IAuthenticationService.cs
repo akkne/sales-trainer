@@ -4,19 +4,20 @@ namespace Sellevate.Identity.Features.Auth.Services.Abstract;
 
 public interface IAuthenticationService
 {
-    // TEMP: email confirmation disabled — registration issues tokens immediately.
-    Task<IssuedTokenPair> RegisterWithEmailAsync(
-        string email,
-        string password,
-        string displayName,
-        CancellationToken cancellationToken = default);
-
     Task<IssuedTokenPair> VerifyEmailAsync(
         string email,
         string code,
         CancellationToken cancellationToken = default);
 
     Task ResendVerificationCodeAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Steps 1–2 of the three-step login flow (Phase 40.8): the address is turned into the login
+    /// method its organization configured, without revealing whether the address is known.
+    /// </summary>
+    Task<ResolvedLoginMethod> ResolveLoginMethodAsync(
         string email,
         CancellationToken cancellationToken = default);
 
@@ -35,5 +36,15 @@ public interface IAuthenticationService
 
     Task RevokeRefreshTokenAsync(
         string rawRefreshToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Issues the access/refresh pair for an already-authenticated user. Exposed for the invite
+    /// acceptance flow (40.7), which authenticates by consuming a single-use signed token rather
+    /// than by password, but must produce exactly the same claims — including <c>org_id</c> and
+    /// <c>org_role</c> from the membership the acceptance just created.
+    /// </summary>
+    Task<IssuedTokenPair> IssueTokensForUserAsync(
+        User user,
         CancellationToken cancellationToken = default);
 }

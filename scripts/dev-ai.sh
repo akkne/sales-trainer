@@ -33,6 +33,11 @@ export OpenAI__MaximumDialogTokenCount="${OPENAI_MAX_TOKENS_DIALOG:-500}"
 export OpenAI__MaximumFeedbackTokenCount="${OPENAI_MAX_TOKENS_FEEDBACK:-1500}"
 export OpenAI__MaximumOpenQuestionTokenCount="${OPENAI_MAX_TOKENS_OPEN_QUESTION:-300}"
 export YandexTts__ApiKey="${YANDEX_TTS_API_KEY}"
+# Phase 40.33 — platform-wide quota defaults (an absent OrganizationQuotas row means these).
+export AiQuotas__DefaultVoiceDailyLimitMinutes="${AI_QUOTA_VOICE_DAILY_MINUTES:-600}"
+export AiQuotas__DefaultVoiceMonthlyLimitMinutes="${AI_QUOTA_VOICE_MONTHLY_MINUTES:-6000}"
+export AiQuotas__DefaultLlmMonthlyTokenLimit="${AI_QUOTA_LLM_MONTHLY_TOKENS:-20000000}"
+export AiQuotas__DefaultBatchReservePercent="${AI_QUOTA_BATCH_RESERVE_PERCENT:-10}"
 export GoogleTts__ApiKey="${GOOGLE_TTS_API_KEY:-}"
 
 echo "==> AI service -> http://localhost:${LOCAL_AI_PORT} (ASPNETCORE_ENVIRONMENT=$ASPNETCORE_ENVIRONMENT)"

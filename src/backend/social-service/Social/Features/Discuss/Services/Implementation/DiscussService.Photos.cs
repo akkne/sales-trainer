@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
+using Sellevate.Social.Infrastructure.Data;
 
 namespace Sellevate.Social.Features.Discuss.Services.Implementation;
 
@@ -13,6 +14,8 @@ internal sealed partial class DiscussService
         IReadOnlyList<DiscussPhotoUploadFile> files,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var ownerAuthorId = await ResolveOwnerAuthorIdAsync(ownerType, ownerId, cancellationToken);
         if (ownerAuthorId is null)
             return (DiscussPhotoUploadStatus.OwnerNotFound, Array.Empty<DiscussPhotoDto>());
@@ -36,7 +39,7 @@ internal sealed partial class DiscussService
             validatedFiles.Add((file, validation));
         }
 
-        var keyPrefix = ResolveObjectKeyPrefix(ownerType);
+        var keyPrefix = ResolveObjectKeyPrefix(RequireOrganizationId(), ownerType);
         var nextOrderIndex = existingCount;
         var createdAt = DateTime.UtcNow;
         var uploadedKeys = new List<string>(validatedFiles.Count);
@@ -67,6 +70,7 @@ internal sealed partial class DiscussService
         try
         {
             await _databaseContext.SaveChangesAsync(cancellationToken);
+            await scope.CommitAsync(cancellationToken);
         }
         catch (Exception)
         {
@@ -82,6 +86,8 @@ internal sealed partial class DiscussService
 
     public async Task<DiscussOperationStatus> DeletePhotoAsync(Guid photoId, Guid actingUserId, CancellationToken cancellationToken = default)
     {
+        await using var scope = await TenantTransactionScope.BeginWriteAsync(_databaseContext, cancellationToken);
+
         var photo = await _databaseContext.DiscussPhotos.FirstOrDefaultAsync(candidate => candidate.Id == photoId, cancellationToken);
         if (photo is null)
             return DiscussOperationStatus.NotFound;
@@ -96,6 +102,7 @@ internal sealed partial class DiscussService
         var objectKey = photo.ObjectKey;
         _databaseContext.DiscussPhotos.Remove(photo);
         await _databaseContext.SaveChangesAsync(cancellationToken);
+        await scope.CommitAsync(cancellationToken);
 
         try
         {
@@ -111,6 +118,11 @@ internal sealed partial class DiscussService
 
     public async Task<(Stream Content, string ContentType)?> GetPhotoContentAsync(Guid photoId, CancellationToken cancellationToken = default)
     {
+        // The object key is read from a row this organization can see, so the tenant boundary for
+        // MinIO is this query, not the key. The key is namespaced anyway — see
+        // ResolveObjectKeyPrefix — because an operator staring at a bucket listing has no query.
+        await using var scope = await TenantTransactionScope.BeginReadAsync(_databaseContext, cancellationToken);
+
         var photo = await _databaseContext.DiscussPhotos.AsNoTracking()
             .FirstOrDefaultAsync(candidate => candidate.Id == photoId, cancellationToken);
 
@@ -214,7 +226,31 @@ internal sealed partial class DiscussService
     private static DiscussPhotoDto MapPhotoToDto(DiscussPhoto photo) =>
         new(photo.Id, Services.DiscussPhotoUrlBuilder.Build(photo.Id), photo.OrderIndex);
 
-    private static string ResolveObjectKeyPrefix(DiscussPhotoOwner ownerType) => ownerType == DiscussPhotoOwner.Thread
-        ? DiscussPhotoConstants.ThreadObjectKeyPrefix
-        : DiscussPhotoConstants.ReplyObjectKeyPrefix;
+    /// <summary>
+    /// Phase 40.13. New object keys are namespaced by organization:
+    /// <c>org/{organizationId:N}/discuss/threads/{ownerId}/{photoId}.jpg</c>.
+    ///
+    /// <para>
+    /// This is not what enforces the boundary — every read loads the <c>DiscussPhotos</c> row first
+    /// and that row is behind the query filter and the RLS policy, so a key alone is never enough to
+    /// reach an object. It buys the two things a bucket cannot get from Postgres: an operator (or a
+    /// bucket lifecycle rule, or a per-customer deletion request) can tell whose file an object is
+    /// without a database, and a future per-organization bucket policy has a prefix to attach to.
+    /// It mirrors the <c>org:{orgId}:</c> Redis convention 40.11 established, in the shape S3 uses.
+    /// </para>
+    ///
+    /// <para>
+    /// Keys written before this block keep their old un-prefixed shape and are still served: the key
+    /// is read from the row, never recomputed. No object is moved, and no backfill exists — renaming
+    /// live objects would be an operation on live infrastructure for zero correctness gain.
+    /// </para>
+    /// </summary>
+    private static string ResolveObjectKeyPrefix(Guid organizationId, DiscussPhotoOwner ownerType)
+    {
+        var ownerPrefix = ownerType == DiscussPhotoOwner.Thread
+            ? DiscussPhotoConstants.ThreadObjectKeyPrefix
+            : DiscussPhotoConstants.ReplyObjectKeyPrefix;
+
+        return $"{DiscussPhotoConstants.OrganizationObjectKeyPrefix}/{organizationId:N}/{ownerPrefix}";
+    }
 }

@@ -213,7 +213,8 @@ call history, and practice-call sessions tied to a company.
 - **Frontend REST:** `/companies/*` (companies CRUD, status, follow-up scheduling, call log,
   practice-call records, contacts).
 - **Kafka producer only** (since Phase 39.11): a polling background service
-  (`FollowUpReminderBackgroundService`, default every 5 min) publishes `company.followup.due`
+  (`FollowUpReminderBackgroundService`, default every 5 min, one scoped pass per organization
+  since 40.12) publishes `company.followup.due`
   for companies whose `NextActionAt` is due and not yet notified — see §4.1. Registers only
   the Kafka publisher + topic provisioner directly (not the full `AddSellevateEventing`
   helper), since it never consumes and so has no need for the Redis-backed consumer
@@ -268,11 +269,44 @@ a composition of those per-service admin APIs.
 | `chat.message.sent` | Social | Notifications | recipientId, senderName, preview |
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
-| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note |
+| `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note (+ `organizationId` in the envelope since 40.12) |
+| `assignment.issued` | Learning | Notifications, Analytics (40.25) | assignmentId, userId, title, goal, deadline — one event per recipient (40.23) |
+| `assignment.deadline.approaching` | Learning | Notifications | assignmentId, userId, title, deadline (40.23) |
+| `assignment.reminder` | Learning | Notifications | assignmentId, userId, title, deadline, requestedAt (40.23) |
+| `assignment.progress.changed` | Learning | Analytics | assignmentId, userId, previousStatus, status, bestScore, attemptCount |
+| `dialog.review.commented` | Learning | Notifications | noteId, userId (the manager), sessionId, quotedText, comment |
+| `dialog.review.resolved` | Learning | Notifications | noteId, userId (the manager who disputed), sessionId, outcome, disputedScore, adjustedScore, resolution |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
-per user), envelope = `{ eventId, occurredAt, type, version, data }`, at-least-once
-delivery → **consumers are idempotent** (dedupe on `eventId`).
+per user), envelope = `{ eventId, occurredAt, type, version, organizationId, data }`,
+at-least-once delivery → **consumers are idempotent** (dedupe on `eventId`).
+
+**Tenancy in the envelope (Phase 40.3).** `organizationId` is part of the frozen
+cross-service contract, not a per-event payload field: a consumer must know the tenant
+*before* it deserializes `data`, and the outbox relay must be able to forward a stored
+event without understanding its payload. It is **nullable on the wire** — no producer
+populates it until organization membership exists end to end (blocks 40.6/40.9), and it
+stays `null` for genuinely platform-global events such as Identity's cross-org user
+lifecycle stream.
+
+Nullable on the wire does **not** mean permissive on the consuming side.
+`KafkaConsumerBackgroundService` sets the tenant context from the envelope before invoking
+the handler and exposes `protected virtual bool RequiresOrganization => true`: by default a
+consumer **throws** on an envelope with no organization, and the exception travels the normal
+retry/dead-letter path. A platform-global consumer opts out explicitly by overriding it to
+`false`, which switches the message to `ITenantContext.IsSystem`. This keeps the rule from
+[TENANCY.md](TENANCY/TENANCY.md) §1.6 intact — *an unset tenant is an exception, never a
+license* — while still allowing the handful of consumers that are legitimately cross-org.
+Each consumer runs in a fresh DI scope per message, so the set-once `TenantContext` never
+carries one message's tenant into the next.
+
+`OutboxMessage` carries a matching nullable `organizationId` column, mirrored from the
+envelope at enqueue time and **informational only** — the relay forwards `payload` verbatim
+and never filters on it. The relay stays the one legitimate system-wide reader of all rows,
+which is precisely why the tenant lives inside the serialized envelope rather than being
+derived at publish time. `PartitionKey` remains the **user id**: moving it to `org:user`
+would reshuffle every existing partition assignment and buy no ordering guarantee the
+current key does not already give.
 
 **Topic provisioning:** topics are **not** auto-created by the broker. Every service runs
 `KafkaTopicProvisioner` (a hosted service registered first by `AddSellevateEventing`) which

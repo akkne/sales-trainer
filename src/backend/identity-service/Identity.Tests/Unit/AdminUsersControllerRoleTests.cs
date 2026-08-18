@@ -57,7 +57,7 @@ public class AdminUsersControllerRoleTests
 
         var result = await controller.ChangeRole(
             superAdmin.Id,
-            new ChangeUserRoleRequestDto("Admin"),
+            new ChangeUserRoleRequestDto("User"),
             CancellationToken.None);
 
         result.Result.Should().BeOfType<ConflictObjectResult>(
@@ -90,7 +90,7 @@ public class AdminUsersControllerRoleTests
 
         var result = await controller.ChangeRole(
             superAdmin1.Id,
-            new ChangeUserRoleRequestDto("Admin"),
+            new ChangeUserRoleRequestDto("User"),
             CancellationToken.None);
 
         result.Result.Should().BeOfType<OkObjectResult>(

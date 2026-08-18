@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useAdminUsers } from "@/features/admin/hooks/use-admin";
 import { UserDetailModal } from "@/features/admin/components/user-detail-modal";
 import { UserAvatar } from "@/shared/components/user-avatar";
-import { useAuthStore } from "@/shared/stores/auth-store";
+import { canManagePlatformUsers, isPlatformStaff, useAuthStore } from "@/shared/stores/auth-store";
 
 const roleBadgeClass: Record<string, string> = {
     User: "bg-bg-2 text-ink-3",
-    Admin: "bg-accent-soft text-accent-ink",
+    Admin: "bg-indigo-soft text-indigo-ink",
     SuperAdmin: "bg-olive-soft text-olive",
 };
 
@@ -17,16 +17,18 @@ export default function AdminUsersPage() {
     const { data: users = [], isLoading } = useAdminUsers();
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    const role = authenticatedUser?.role;
-    const isAdmin = role === "Admin" || role === "SuperAdmin";
-    const canChangeRole = role === "SuperAdmin";
+    // Reading the roster is ordinary platform administration (RequirePlatformAdmin), so both
+    // `Admin` and `SuperAdmin` see this page. Changing a role is add/remove-a-user and stays
+    // superadmin-only (RequireSuperAdmin) — see docs/DECISIONS.md, 2026-08-16.
+    const canViewRoster = isPlatformStaff(authenticatedUser?.role);
+    const canManageUsers = canManagePlatformUsers(authenticatedUser?.role);
 
-    if (!isAdmin) {
+    if (!canViewRoster) {
         return (
             <div>
                 <h1 className="text-xl font-bold text-ink mb-4">Users</h1>
                 <p className="text-sm text-ink-3">
-                    Only admins can access this page.
+                    Only Sellevate staff can access this page.
                 </p>
             </div>
         );
@@ -119,7 +121,7 @@ export default function AdminUsersPage() {
                                             }}
                                             className="text-xs text-indigo-ink hover:underline"
                                         >
-                                            Manage
+                                            {canManageUsers ? "Manage" : "View"}
                                         </button>
                                     </td>
                                 </tr>
@@ -133,7 +135,7 @@ export default function AdminUsersPage() {
             {selectedId && (
                 <UserDetailModal
                     userId={selectedId}
-                    canChangeRole={canChangeRole}
+                    canManageUser={canManageUsers}
                     isSelf={selectedId === authenticatedUser?.id}
                     onClose={() => setSelectedId(null)}
                 />

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Gamification.Common.Constants;
 using Sellevate.Gamification.Eventing;
 using Sellevate.Gamification.Features.Admin.Models;
@@ -10,9 +11,16 @@ using Sellevate.Gamification.Infrastructure.Data;
 
 namespace Sellevate.Gamification.Features.Admin;
 
+/// <summary>
+/// Phase 40.13: <see cref="TenantScopedAttribute"/>. Every route here reads or writes rows that
+/// belong to one organization, so a request without the gateway-validated organization header is
+/// refused by the tenant middleware with a 403 instead of reaching a query filter that would match
+/// nothing and answer with a plausible-looking empty result.
+/// </summary>
 [ApiController]
 [Route(RouteConstants.AdminGamification)]
-[Authorize(Policy = AuthorizationPolicies.RequireAdministrator)]
+[Authorize(Policy = AuthorizationPolicies.RequirePlatformAdministrator)]
+[TenantScoped]
 public sealed class AdminGamificationController(
     GamificationDbContext databaseContext,
     IGamificationSettingsService gamificationSettingsService,

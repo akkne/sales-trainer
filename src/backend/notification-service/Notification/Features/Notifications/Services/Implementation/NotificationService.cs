@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Notification.Common;
 using Sellevate.Notification.Common.Constants;
 using Sellevate.Notification.Features.Notifications.Emails;
@@ -8,29 +9,46 @@ using Sellevate.Notification.Infrastructure.Configuration;
 
 namespace Sellevate.Notification.Features.Notifications.Services.Implementation;
 
+/// <summary>
+/// Phase 40.13. The single place notification-service turns an ambient tenant into an explicit one.
+/// Every store call below passes <see cref="CurrentOrganizationId"/>, so the organization reaches
+/// the Redis key through the type system rather than through a convention somebody has to remember.
+/// </summary>
 internal sealed class NotificationService : INotificationService
 {
     private readonly INotificationStore _notificationStore;
     private readonly INotificationEmailDispatcher _emailDispatcher;
+    private readonly ITenantContext _tenantContext;
     private readonly NotificationStorageConfiguration _storageConfiguration;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
         INotificationStore notificationStore,
         INotificationEmailDispatcher emailDispatcher,
+        ITenantContext tenantContext,
         IOptions<NotificationStorageConfiguration> storageConfiguration,
         ILogger<NotificationService> logger)
     {
         ArgumentNullException.ThrowIfNull(notificationStore);
         ArgumentNullException.ThrowIfNull(emailDispatcher);
+        ArgumentNullException.ThrowIfNull(tenantContext);
         ArgumentNullException.ThrowIfNull(storageConfiguration);
         ArgumentNullException.ThrowIfNull(logger);
 
         _notificationStore = notificationStore;
         _emailDispatcher = emailDispatcher;
+        _tenantContext = tenantContext;
         _storageConfiguration = storageConfiguration.Value;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Raises when the tenant is unset. An inbox has no platform-global reading: system mode here
+    /// would mean "every organization's notifications", which is the failure 40.14 is written to
+    /// catch, so this service has no system-mode path at all.
+    /// </summary>
+    private Guid CurrentOrganizationId =>
+        _tenantContext.OrganizationId ?? throw new InvalidOperationException("Organization context is not set.");
 
     public async Task CreateAsync(CreateNotificationRequest request, CancellationToken cancellationToken = default)
     {
@@ -47,7 +65,10 @@ internal sealed class NotificationService : INotificationService
         // streak day). Chat messages are deliberately excluded — they share the
         // conversationId as relatedEntityId, so every message is a distinct notification
         // and must never be deduped. Requests without a relatedEntityId are not deduped.
+        var organizationId = CurrentOrganizationId;
+
         if (IsDeduplicatable(request) && await _notificationStore.ExistsAsync(
+                organizationId,
                 request.RecipientUserId,
                 request.NotificationType,
                 request.RelatedEntityId,
@@ -81,6 +102,7 @@ internal sealed class NotificationService : INotificationService
         };
 
         await _notificationStore.PrependAsync(
+            organizationId,
             request.RecipientUserId,
             notification,
             _storageConfiguration.InboxCapacity,
@@ -118,7 +140,8 @@ internal sealed class NotificationService : INotificationService
         bool includeRead,
         CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationStore.GetAllAsync(recipientUserId, cancellationToken);
+        var notifications = await _notificationStore.GetAllAsync(
+            CurrentOrganizationId, recipientUserId, cancellationToken);
 
         return notifications
             .Where(notification => includeRead || !notification.IsRead)
@@ -130,7 +153,8 @@ internal sealed class NotificationService : INotificationService
 
     public async Task<int> GetUnreadCountAsync(Guid recipientUserId, CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationStore.GetAllAsync(recipientUserId, cancellationToken);
+        var notifications = await _notificationStore.GetAllAsync(
+            CurrentOrganizationId, recipientUserId, cancellationToken);
         return notifications.Count(notification => !notification.IsRead);
     }
 
@@ -139,7 +163,8 @@ internal sealed class NotificationService : INotificationService
         Guid notificationId,
         CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationStore.GetAllAsync(recipientUserId, cancellationToken);
+        var organizationId = CurrentOrganizationId;
+        var notifications = await _notificationStore.GetAllAsync(organizationId, recipientUserId, cancellationToken);
 
         var target = notifications.FirstOrDefault(notification => notification.Id == notificationId)
             ?? throw new KeyNotFoundException(ErrorMessages.NotificationNotFound);
@@ -150,12 +175,13 @@ internal sealed class NotificationService : INotificationService
         }
 
         var updated = target with { IsRead = true, ReadAt = DateTime.UtcNow };
-        await _notificationStore.ReplaceAsync(recipientUserId, updated, Retention, cancellationToken);
+        await _notificationStore.ReplaceAsync(organizationId, recipientUserId, updated, Retention, cancellationToken);
     }
 
     public async Task MarkAllAsReadAsync(Guid recipientUserId, CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationStore.GetAllAsync(recipientUserId, cancellationToken);
+        var organizationId = CurrentOrganizationId;
+        var notifications = await _notificationStore.GetAllAsync(organizationId, recipientUserId, cancellationToken);
 
         if (notifications.Count == 0 || notifications.All(notification => notification.IsRead))
         {
@@ -169,7 +195,7 @@ internal sealed class NotificationService : INotificationService
                 : notification with { IsRead = true, ReadAt = readTimestamp })
             .ToList();
 
-        await _notificationStore.ReplaceAllAsync(recipientUserId, updated, Retention, cancellationToken);
+        await _notificationStore.ReplaceAllAsync(organizationId, recipientUserId, updated, Retention, cancellationToken);
     }
 
     private TimeSpan Retention => TimeSpan.FromDays(Math.Max(1, _storageConfiguration.RetentionDays));

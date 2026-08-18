@@ -1,32 +1,48 @@
 # Email Verification by Code
 
-> ⚠️ **TEMPORARILY DISABLED** on branch `temp/disable-email-verification` (2026-07-24).
-> Email confirmation is bypassed: `POST /auth/register` creates the user already
-> verified (`IsEmailVerified = true`) and returns tokens immediately (auto-login),
-> `POST /auth/login` no longer blocks unverified accounts, and the frontend skips the
-> `/verify-email` page. The verification code endpoints/service remain in the codebase
-> but are unreachable in the normal flow. Revert this branch to restore the flow below.
+> ⚠️ **SUPERSEDED BY THE INVITE FLOW (Phase 40.7, 2026-08-15).**
+> There is no public registration any more — `POST /auth/register` is deleted — so nothing
+> reaches this flow on the normal path. **The invite replaces email verification:** possession
+> of the single-use invite token already proves control of the address, so
+> `POST /auth/invites/{token}/accept` creates the user with `IsEmailVerified = true` and sends
+> no code at all. See [TENANCY/TENANCY.md](TENANCY/TENANCY.md) section 4.3 and the
+> "Invites & memberships" section of [API_CONTRACTS.md](API_CONTRACTS.md).
+>
+> The code endpoints (`/auth/verify-email`, `/auth/resend-code`), the
+> `EmailVerificationCodes` table and `EmailVerificationService` all remain in the codebase and
+> still work — they cover accounts created before invites existed, and any future flow that
+> needs to re-prove an address (an email change, say). `POST /auth/login` does not block
+> unverified accounts.
+>
+> Everything below describes that retained mechanism.
 
-Implemented 2026-06-15. Email/password registration now requires the user to confirm
-ownership of their address with a short numeric code before they can log in.
+Implemented 2026-06-15. Confirming ownership of an address with a short numeric code.
 
 > **Microservices migration:** this flow now runs in the extracted **Identity service**
 > (`/auth/*` flipped at the gateway), unchanged. The `EmailVerificationCodes` table moved to
 > the Identity service's own `identity-db`. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
 
-## Flow
+## How an address is proven today (40.7)
 
-1. `POST /auth/register` creates the user with `IsEmailVerified = false`, generates a
-   numeric code, stores its hash, and emails the code via MailerSend. It returns
-   `RegistrationResultDto {email, requiresEmailVerification: true}` — **no tokens**.
-2. The frontend routes to `/verify-email`. The user enters the code.
-3. `POST /auth/verify-email {email, code}` validates the code, sets `IsEmailVerified = true`,
+1. An `OrgAdmin` creates an invite (`POST /invites`). Only the SHA-256 hash of the single-use
+   token is stored; the raw token goes out in the email through the same MailerSend transport
+   described below, and degrades to a log line in local dev the same way.
+2. The invitee opens `/invite/{token}` and posts to `POST /auth/invites/{token}/accept`.
+3. The account is created with `IsEmailVerified = true` and an active membership, and the
+   response is a normal `AuthTokenResponseDto` — **no code is ever generated or sent**. The
+   token arrived in the invitee's mailbox, which is exactly what a verification code exists to
+   demonstrate.
+4. Google sign-in (`/auth/google`) is auto-verified — Google has already proven ownership — but
+   since 40.7 it only works for an address that already has an account *and* an active
+   membership. It never creates one.
+
+## Retained code flow
+
+1. `POST /auth/verify-email {email, code}` validates the code, sets `IsEmailVerified = true`,
    and returns `AuthTokenResponseDto` + the `refreshToken` cookie (same as a login).
-4. `POST /auth/resend-code {email}` re-issues a code, subject to a cooldown.
-5. `POST /auth/login` returns `403 {requiresEmailVerification: true, email}` for an
-   unverified address; the frontend redirects to `/verify-email`.
-6. Google sign-in (`/auth/google`) is auto-verified — Google has already proven ownership —
-   and logging in via Google also marks a previously-unverified email account verified.
+2. `POST /auth/resend-code {email}` re-issues a code, subject to a cooldown.
+3. Nothing generates a code on the normal path any more, because the route that used to
+   (`/auth/register`) no longer exists.
 
 Existing users created before this feature were backfilled to `IsEmailVerified = true`
 by the migration, so nobody is locked out.
@@ -71,8 +87,9 @@ so local dev works without an account — the code appears in the backend logs. 
 - `/verify-email` page reads the pending email from `sessionStorage`, takes the code,
   and calls `useVerifyEmail`; `useResendVerificationCode` drives the resend button (with a
   visible cooldown countdown).
-- `useRegister` no longer logs the user in — it stores the email and routes to `/verify-email`.
 - `useLogin` inspects the typed `ApiError` payload and redirects on `requiresEmailVerification`.
+- There is no `useRegister` hook any more. `useAcceptInvite(token)` on `/invite/[token]` is what
+  creates an account, and it skips `/verify-email` entirely.
 
 ## Tests
 

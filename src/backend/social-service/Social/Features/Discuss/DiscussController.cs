@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Social.Features.Discuss.Constants;
 using Sellevate.Social.Features.Discuss.Models;
 using Sellevate.Social.Features.Discuss.Services.Abstract;
@@ -9,6 +10,8 @@ namespace Sellevate.Social.Features.Discuss;
 
 [ApiController]
 [Route("discuss")]
+// Phase 40.13. Threads, replies, votes and photos are tenant data — see FriendController.
+[TenantScoped]
 [Authorize]
 public sealed class DiscussController : ControllerBase
 {
@@ -222,7 +225,9 @@ public sealed class DiscussController : ControllerBase
             _ => NotFound(new { message = "Thread or reply not found" })
         };
 
-    private bool IsAdmin() => User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
+    // Phase 40.6 audit: "can moderate any thread/reply" — the global `Admin` role is gone,
+    // so this collapses to the one remaining platform role.
+    private bool IsAdmin() => User.IsInRole("SuperAdmin");
 
     private Guid? GetUserId()
     {

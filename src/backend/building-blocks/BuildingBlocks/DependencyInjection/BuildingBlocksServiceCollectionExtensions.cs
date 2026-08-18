@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sellevate.BuildingBlocks.Idempotency;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Outbox;
+using Sellevate.BuildingBlocks.Tenancy;
 
 namespace Sellevate.BuildingBlocks.DependencyInjection;
 
@@ -24,6 +25,14 @@ public static class BuildingBlocksServiceCollectionExtensions
     /// store). Kafka consumers are registered per service by adding the concrete
     /// <see cref="KafkaConsumerBackgroundService"/> subclasses as hosted services.
     /// </para>
+    ///
+    /// <para>
+    /// Also registers the tenancy primitives (<see cref="AddSellevateTenancy"/>):
+    /// <see cref="KafkaConsumerBackgroundService"/> resolves the scoped <see cref="TenantContext"/>
+    /// per message to enforce the tenant-context rule from the envelope, and outbox writers
+    /// resolve <see cref="ITenantContext"/> to stamp the current organization onto every
+    /// enqueued event.
+    /// </para>
     /// </summary>
     public static IServiceCollection AddSellevateEventing(this IServiceCollection services, IConfiguration configuration)
     {
@@ -40,6 +49,24 @@ public static class BuildingBlocksServiceCollectionExtensions
         services.AddSingleton<IDeadLetterPublisher>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IOutboxEventForwarder>(serviceProvider => serviceProvider.GetRequiredService<KafkaEventPublisher>());
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
+        services.AddSellevateTenancy();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="TenantContext"/> (scoped, as both itself and <see cref="ITenantContext"/>),
+    /// the write-guard <see cref="TenantSaveChangesInterceptor"/>, and the RLS
+    /// <see cref="TenantConnectionInterceptor"/>. A consuming service still has to add whichever
+    /// interceptors it needs to its own <see cref="Microsoft.EntityFrameworkCore.DbContext"/> via
+    /// <c>AddInterceptors</c> (never register that <c>DbContext</c> with EF Core's pooled context
+    /// helper — see docs/CODESTYLE.md) and populate <see cref="ITenantContext"/> per request/job.
+    /// </summary>
+    public static IServiceCollection AddSellevateTenancy(this IServiceCollection services)
+    {
+        services.AddScoped<TenantContext>();
+        services.AddScoped<ITenantContext>(serviceProvider => serviceProvider.GetRequiredService<TenantContext>());
+        services.AddScoped<TenantSaveChangesInterceptor>();
+        services.AddScoped<TenantConnectionInterceptor>();
         return services;
     }
 }

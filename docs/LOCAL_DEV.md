@@ -181,6 +181,7 @@ scripts/dev-identity.sh   # Identity microservice on host, port 5002 (own identi
 scripts/dev-notifications.sh # Notification microservice on host, port 5004 (Redis-only) (optional)
 scripts/dev-analytics.sh  # Analytics microservice on host, port 5005 (own analytics-redis on 6380) (optional)
 scripts/dev-company.sh    # Company microservice on host, port 5009 (own company database + Kafka producer, no Redis/Mongo) (optional)
+scripts/dev-organization.sh # Organization microservice on host, port 5010 (own organization database + Kafka producer, no Redis/Mongo) (optional)
 ```
 
 > **Identity service (microservices Phase 2).** `scripts/dev-identity.sh` runs the
@@ -188,6 +189,12 @@ scripts/dev-company.sh    # Company microservice on host, port 5009 (own company
 > `identity` (auto-created on first start) on the shared local Postgres. With the gateway
 > running, `/auth`, `/demo`, `/profile`, `/onboarding`, `/avatars` are proxied to it; the
 > monolith serves the rest. See [IDENTITY_SERVICE.md](IDENTITY_SERVICE.md).
+>
+> It also needs the **shared Redis** on `localhost:6379`: `AddSellevateEventing` registers
+> a `RedisIdempotencyStore` whose multiplexer connects eagerly at startup, so
+> `export_identity_env` must override `ConnectionStrings__Redis`. Without that override the
+> committed `redis:6379` (a Docker hostname) does not resolve on the host and the service
+> dies with a `RedisConnectionException` before it ever binds port 5002.
 
 > **Notification service (microservices Phase 4).** `scripts/dev-notifications.sh` runs the
 > extracted Notification service on `http://localhost:5004`, backed only by the shared local
@@ -209,6 +216,18 @@ scripts/dev-company.sh    # Company microservice on host, port 5009 (own company
 > (`scripts/dev-infra.sh`) for reminders to be delivered; a broker outage is logged and
 > tolerated, not fatal. With the gateway running, `/companies` and `/companies/*` are
 > proxied to it.
+
+> **Organization service (Phase 40.5, multi-tenancy).** `scripts/dev-organization.sh` runs the
+> Organization service on `http://localhost:5010` with its own Postgres database `organization`
+> (auto-created on first start) on the shared local Postgres. It has no Redis or Mongo
+> dependency. It produces `organization.created` / `organization.updated` / `organization.suspended`
+> on Kafka (no consumer yet) — the shared local Kafka broker must be running
+> (`scripts/dev-infra.sh`) for events to be delivered; a broker outage is logged and tolerated,
+> not fatal. With the gateway running, `/organizations` and `/organizations/*` are proxied to it.
+> `GET/PUT /organizations/profile` require a valid `X-Organization-Id` header — since
+> identity-service does not yet issue the `org_id` JWT claim (Phase 40.6), those two routes
+> return `403` through the gateway today; call them directly against `localhost:5010` with a
+> manually-set header for local testing. See [ORGANIZATION_SERVICE.md](ORGANIZATION_SERVICE.md).
 
 ## Files added by this profile
 
@@ -272,8 +291,8 @@ the gateway runs on the host like the other apps.
   monolith catch-all is gone, so the frontend reaches every service through it.
 - Start the services it proxies to before (or alongside) it: `dev-identity.sh`,
   `dev-ai.sh`, `dev-notifications.sh`, `dev-analytics.sh`, `dev-social.sh`,
-  `dev-gamification.sh`, `dev-learning.sh`, `dev-company.sh`. A route whose service is
-  down returns 502.
+  `dev-gamification.sh`, `dev-learning.sh`, `dev-company.sh`, `dev-organization.sh`. A route
+  whose service is down returns 502.
 - `export_gateway_env()` in `scripts/lib-local-env.sh` must override **every** cluster in
   the gateway's `appsettings.json`. The committed defaults are Docker hostnames
   (`http://ai:8080/`) that do not resolve on the host, so a cluster missing from that

@@ -1,18 +1,16 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Net;
 using System.Text;
-using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Sellevate.Identity.Eventing;
 using Sellevate.Identity.Features.Auth.Constants;
 using Sellevate.Identity.Features.Auth.Exceptions;
 using Sellevate.Identity.Features.Auth.Models;
 using Sellevate.Identity.Features.Auth.Services.Abstract;
-using Sellevate.Identity.Features.Avatars;
+using Sellevate.Identity.Features.Membership.Models;
+using Sellevate.Identity.Features.Organizations.Models;
 using Sellevate.Identity.Infrastructure.Configuration;
 using Sellevate.Identity.Infrastructure.Data;
 
@@ -21,62 +19,25 @@ namespace Sellevate.Identity.Features.Auth.Services.Implementation;
 internal sealed class AuthenticationService(
     IdentityDbContext databaseContext,
     IEmailVerificationService emailVerificationService,
-    IUserEventPublisher userEventPublisher,
+    IGoogleTokenValidator googleTokenValidator,
+    IOrganizationAuthConfigurationResolver organizationAuthConfigurationResolver,
+    IEnumerable<IAuthProvider> authProviders,
     IOptions<JwtConfiguration> jwtOptions,
-    IOptions<GoogleAuthConfiguration> googleOptions,
     ILogger<AuthenticationService> logger) : IAuthenticationService
 {
-    // TEMP: email confirmation disabled — the new user is created already verified
-    // and receives tokens immediately, so no verification email is sent.
-    public async Task<IssuedTokenPair> RegisterWithEmailAsync(
-        string email,
-        string password,
-        string displayName,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedEmail = email.ToLowerInvariant();
-        logger.LogInformation("Registration attempt {Email}", normalizedEmail);
+    /// <summary>
+    /// One message for "no such address", "wrong password" and "this organization does not sign in
+    /// with a password at all" — see <see cref="AuthResult"/>.
+    /// </summary>
+    private const string LoginRejectedMessage = "Invalid email or password.";
 
-        var existingUser = await databaseContext.Users
-            .FirstOrDefaultAsync(user => user.Email == normalizedEmail, cancellationToken);
-
-        if (existingUser is not null)
-        {
-            logger.LogWarning("Registration failed — email already registered {Email}", normalizedEmail);
-            throw new InvalidOperationException("Email already registered.");
-        }
-
-        var newUserId = Guid.NewGuid();
-        var newUser = new User
-        {
-            Id = newUserId,
-            Email = normalizedEmail,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            DisplayName = displayName,
-            CreatedAt = DateTime.UtcNow,
-            // TEMP: email confirmation disabled — mark verified on registration.
-            IsEmailVerified = true,
-            DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newUserId, DefaultAvatarSeeder.DefaultAvatarCount)
-        };
-
-        databaseContext.Users.Add(newUser);
-        await PublishUserRegisteredAsync(newUser, cancellationToken);
-        try
-        {
-            await databaseContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            logger.LogWarning("Registration failed — email already registered (unique violation) {Email}", normalizedEmail);
-            throw new InvalidOperationException("Email already registered.");
-        }
-
-        logger.LogInformation(
-            "User registered and auto-verified {Email} UserId={UserId}", normalizedEmail, newUser.Id);
-
-        // TEMP: log the user in immediately instead of requiring email verification.
-        return await IssueTokensForUserAsync(newUser, isOnboardingCompleted: false, cancellationToken);
-    }
+    /// <summary>
+    /// Deliberately identical for "no such account" and "account without an active membership":
+    /// a distinguishable answer would turn the Google endpoint into an oracle telling an outsider
+    /// which addresses belong to a Sellevate customer.
+    /// </summary>
+    private const string GoogleLoginRejectedMessage =
+        "This Google account has no access. Access to Sellevate is by invitation only.";
 
     public async Task<IssuedTokenPair> VerifyEmailAsync(
         string email,
@@ -132,6 +93,18 @@ internal sealed class AuthenticationService(
         await emailVerificationService.GenerateAndSendCodeAsync(normalizedEmail, user.DisplayName, cancellationToken);
     }
 
+    public Task<ResolvedLoginMethod> ResolveLoginMethodAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+        => organizationAuthConfigurationResolver.ResolveForEmailAsync(email, cancellationToken);
+
+    /// <summary>
+    /// Step 3 of the three-step login flow (docs/TENANCY/TENANCY.md §4.5): the organization the
+    /// address resolves to decides which <see cref="IAuthProvider"/> gets the credential. Today
+    /// that is always <c>PasswordAuthProvider</c>; an organization configured for a method with no
+    /// provider is refused rather than quietly falling back to a password, which is what makes the
+    /// seam worth having before SSO exists.
+    /// </summary>
     public async Task<IssuedTokenPair> LoginWithEmailAsync(
         string email,
         string password,
@@ -140,14 +113,27 @@ internal sealed class AuthenticationService(
         var normalizedEmail = email.ToLowerInvariant();
         logger.LogInformation("Login attempt {Email}", normalizedEmail);
 
-        var user = await databaseContext.Users
-            .FirstOrDefaultAsync(userRecord => userRecord.Email == normalizedEmail, cancellationToken);
+        var resolvedLoginMethod = await organizationAuthConfigurationResolver
+            .ResolveForEmailAsync(normalizedEmail, cancellationToken);
 
-        if (user is null || user.PasswordHash is null ||
-            !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        var authProvider = authProviders
+            .FirstOrDefault(candidate => candidate.Method == resolvedLoginMethod.Method);
+
+        if (authProvider is null)
+        {
+            logger.LogWarning(
+                "Login failed — no provider implements method {Method} configured for OrganizationId={OrganizationIdentifier}",
+                resolvedLoginMethod.Method, resolvedLoginMethod.OrganizationId);
+            throw new UnauthorizedAccessException(LoginRejectedMessage);
+        }
+
+        var authResult = await authProvider.AuthenticateAsync(
+            new AuthRequest(normalizedEmail, password), cancellationToken);
+
+        if (authResult.AuthenticatedUser is not { } user)
         {
             logger.LogWarning("Login failed — invalid credentials {Email}", normalizedEmail);
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new UnauthorizedAccessException(LoginRejectedMessage);
         }
 
         // TEMP: email confirmation disabled — do not block unverified accounts on login.
@@ -163,18 +149,9 @@ internal sealed class AuthenticationService(
         string googleIdToken,
         CancellationToken cancellationToken = default)
     {
-        var googleClientId = googleOptions.Value.ClientId
-            ?? throw new InvalidOperationException("Google:ClientId not configured.");
+        var googlePayload = await googleTokenValidator.ValidateAsync(googleIdToken, cancellationToken);
 
-        var validationSettings = new GoogleJsonWebSignature.ValidationSettings
-        {
-            Audience = [googleClientId]
-        };
-
-        var googlePayload = await GoogleJsonWebSignature.ValidateAsync(
-            googleIdToken, validationSettings);
-
-        if (!googlePayload.EmailVerified)
+        if (!googlePayload.IsEmailVerified)
         {
             logger.LogWarning("Google login rejected — email not verified by Google {Email}", googlePayload.Email);
             throw new UnauthorizedAccessException("Google account email is not verified.");
@@ -197,29 +174,42 @@ internal sealed class AuthenticationService(
             }
         }
 
-        var displayName = string.IsNullOrWhiteSpace(googlePayload.Name)
-            ? googlePayload.Email
-            : googlePayload.Name;
-
+        // Phase 40.7: Google sign-in is a login method, never a registration channel. With
+        // `POST /auth/register` deleted, an implicit "create the account on first Google login"
+        // branch would have been the last remaining self-service way into the product — the exact
+        // hole docs/TENANCY/TENANCY.md §4.1 closes. An account arrives only through an invite, so
+        // an unknown Google identity is rejected instead of provisioned.
         if (existingUser is null)
         {
-            var newGoogleUserId = Guid.NewGuid();
-            existingUser = new User
-            {
-                Id = newGoogleUserId,
-                Email = googlePayload.Email,
-                DisplayName = displayName,
-                GoogleId = googlePayload.Subject,
-                CreatedAt = DateTime.UtcNow,
-                IsEmailVerified = true,
-                DefaultAvatarIndex = DefaultAvatarIndexResolver.Resolve(newGoogleUserId, DefaultAvatarSeeder.DefaultAvatarCount)
-            };
-            databaseContext.Users.Add(existingUser);
-            await PublishUserRegisteredAsync(existingUser, cancellationToken);
-            await databaseContext.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("New user registered via Google {Email} UserId={UserId}", googlePayload.Email, existingUser.Id);
+            logger.LogWarning(
+                "Google login rejected — no account for {Email}; access is invite-only", googlePayload.Email);
+            throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
         }
-        else if (existingUser.GoogleId is null)
+
+        // Having an account is not enough: without an active membership an ordinary user belongs
+        // to no organization and there is nothing to sign in to.
+        //
+        // Platform staff are the exception, and deliberately so. `Admin` and `SuperAdmin` are
+        // Sellevate's own roles and are not bounded by tenancy (docs/DECISIONS.md, 2026-08-16);
+        // they normally hold no membership anywhere, and their whole job lives on the platform
+        // admin routes. Without this carve-out the password path would admit them and the Google
+        // path would lock them out of their own product. They still receive no `org_id`/`org_role`
+        // claim — absent membership stays absent, it is never implied.
+        var isPlatformStaff = existingUser.Role is UserRole.Admin or UserRole.SuperAdmin;
+        var hasActiveMembership = await databaseContext.Memberships
+            .AnyAsync(
+                candidate => candidate.UserId == existingUser.Id && candidate.Status == MembershipStatus.Active,
+                cancellationToken);
+
+        if (!hasActiveMembership && !isPlatformStaff)
+        {
+            logger.LogWarning(
+                "Google login rejected — no active membership for {Email} UserId={UserId}",
+                googlePayload.Email, existingUser.Id);
+            throw new UnauthorizedAccessException(GoogleLoginRejectedMessage);
+        }
+
+        if (existingUser.GoogleId is null)
         {
             existingUser.GoogleId = googlePayload.Subject;
             existingUser.IsEmailVerified = true;
@@ -301,17 +291,42 @@ internal sealed class AuthenticationService(
         logger.LogInformation("Refresh token revoked for UserId={UserId}", storedToken.UserId);
     }
 
-    private Task PublishUserRegisteredAsync(User user, CancellationToken cancellationToken) =>
-        userEventPublisher.PublishRegisteredAsync(
-            new UserRegisteredEvent(user.Id, user.Email, user.DisplayName, user.AvatarKey),
-            cancellationToken);
+    public async Task<IssuedTokenPair> IssueTokensForUserAsync(
+        User user,
+        CancellationToken cancellationToken = default)
+    {
+        var isOnboardingCompleted = await databaseContext.UserProfiles
+            .AnyAsync(profile => profile.UserId == user.Id && profile.IsOnboardingCompleted, cancellationToken);
+
+        return await IssueTokensForUserAsync(user, isOnboardingCompleted, cancellationToken);
+    }
 
     private async Task<IssuedTokenPair> IssueTokensForUserAsync(
         User user,
         bool isOnboardingCompleted,
         CancellationToken cancellationToken = default)
     {
-        var accessToken = BuildJwtAccessToken(user);
+        // Phase 40.6: at most one active membership is expected while the UI only allows
+        // a single organization per user; ordering by JoinedAt keeps the choice deterministic
+        // if that ever stops being true before multi-org support lands. A user with no
+        // membership gets no org_id/org_role claim — absent membership is never implicit
+        // organization access.
+        var membership = await databaseContext.Memberships
+            .AsNoTracking()
+            .Where(candidate => candidate.UserId == user.Id && candidate.Status == MembershipStatus.Active)
+            .OrderBy(candidate => candidate.JoinedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Phase 40.9: suspension is enforced here, at the one point every entry route converges on
+        // — password login, Google, invite acceptance and refresh all end up in this method. Doing
+        // it per-controller would leave whichever route is added next unguarded, and doing it only
+        // at login would leave already-issued refresh tokens working indefinitely.
+        if (membership is not null)
+        {
+            await RejectIfOrganizationIsSuspendedAsync(membership.OrganizationId, cancellationToken);
+        }
+
+        var accessToken = BuildJwtAccessToken(user, membership);
         var rawRefreshToken = GenerateSecureRandomToken();
 
         var newRefreshToken = new RefreshToken
@@ -332,24 +347,61 @@ internal sealed class AuthenticationService(
             UserId: user.Id.ToString(),
             DisplayName: user.DisplayName,
             IsOnboardingCompleted: isOnboardingCompleted,
-            Role: user.Role
+            Role: user.Role,
+            OrgId: membership?.OrganizationId.ToString(),
+            OrgRole: membership?.Role.ToString()
         );
     }
 
-    private string BuildJwtAccessToken(User user)
+    /// <summary>
+    /// An organization identity-service has never heard of is treated as active: the replica is
+    /// populated asynchronously over Kafka, and a consumer that is briefly behind must not lock a
+    /// paying customer out of their own product. Suspension is a deliberate, recorded platform act
+    /// — its absence is what "no row" means here, not "unknown, therefore refuse".
+    /// </summary>
+    private async Task RejectIfOrganizationIsSuspendedAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var isSuspended = await databaseContext.OrganizationReplicas
+            .AsNoTracking()
+            .AnyAsync(
+                replica => replica.OrganizationId == organizationId
+                    && replica.Status == OrganizationReplicaStatus.Suspended,
+                cancellationToken);
+
+        if (!isSuspended)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "Token issuance refused — OrganizationId={OrganizationIdentifier} is suspended", organizationId);
+        throw new OrganizationSuspendedException(organizationId);
+    }
+
+    private string BuildJwtAccessToken(User user, Features.Membership.Models.Membership? membership)
     {
         var signingKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtOptions.Value.Key));
 
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("displayName", user.DisplayName),
+            new(ClaimTypes.Role, user.Role.ToString())
+        };
+
+        if (membership is not null)
+        {
+            claims.Add(new Claim("org_id", membership.OrganizationId.ToString()));
+            claims.Add(new Claim("org_role", membership.Role.ToString()));
+        }
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(
-            [
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("displayName", user.DisplayName),
-                new Claim(ClaimTypes.Role, user.Role.ToString())
-            ]),
+            Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(jwtOptions.Value.AccessTokenLifetimeMinutes),
             Issuer = jwtOptions.Value.Issuer,
             Audience = jwtOptions.Value.Audience,
