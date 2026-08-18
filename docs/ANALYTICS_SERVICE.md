@@ -266,3 +266,26 @@ full Docker stack `docker compose up --build -d analytics gateway`. Health: `GET
 See [docs/TESTING/ANALYTICS_SERVICE.md](TESTING/ANALYTICS_SERVICE.md) for the test layout
 and the manual checklist, and [MONITORING.md](MONITORING.md) for the metric catalog and the
 Grafana dashboard.
+
+## Why AI spend metrics are not here (Phase 40.33)
+
+Phase 40.33 added four platform-wide Prometheus counters — `ai_llm_tokens_total`,
+`ai_llm_calls_total`, `ai_speech_characters_total`, `ai_quota_refusals_total` — and put them in
+**ai-service**, which became the third process in the system to expose `/metrics`. That is the first
+metric owner outside this service since the split, so the reasoning belongs on the record here as
+well as in [MONITORING.md](MONITORING.md).
+
+- **This service is Redis-only and Kafka-fed by design.** Routing spend through it would mean a new
+  topic, a new consumer, a new idempotency question, and a counter that lags the call it counts — in
+  a service whose whole design point is that it owns no relational state. ai-service already holds
+  the number at the instant the call happens, and the durable per-organization ledger it writes in
+  the same breath (`AiUsageRecords`) is a Postgres table this service would refuse on principle.
+- **The organization-label rule is unchanged and was re-confirmed rather than bent.** None of the
+  four new counters carries an organization label — the fifth time the codebase makes that call, and
+  the first time it makes it about money, where the temptation is sharpest. Per-organization spend is
+  `GET /admin/ai-usage`, computed in ai-service from its own rows. Same split this service has always
+  had with the assignment funnel (40.25): totals in Prometheus, customer numbers from the owning
+  service's tables.
+
+So nothing changed here. The entry exists because "the metrics live in analytics-service" stopped
+being true in 40.33, and a reader of this file should not have to discover that from a Grafana panel.

@@ -8,10 +8,10 @@ top of the existing Prometheus + Grafana + Loki stack.
 > Grafana dashboard for the infra side.
 
 ## Stack recap
-- Both the backend and the extracted **analytics-service** expose `/metrics` via
-  `prometheus-net.AspNetCore` (`UseHttpMetrics()` + `MapMetrics()`).
-- Prometheus scrapes both every 15s, under two jobs: `sallevate-backend` (the historical
-  misspelling, kept verbatim) and `sellevate-analytics`. Config:
+- The backend, the extracted **analytics-service** and — since Phase 40.33 — **ai-service**
+  expose `/metrics` via `prometheus-net.AspNetCore` (`UseHttpMetrics()` + `MapMetrics()`).
+- Prometheus scrapes them every 15s, under the jobs `sallevate-backend` (the historical
+  misspelling, kept verbatim), `sellevate-analytics` and `sellevate-ai`. Config:
   `infrastructure/prometheus/prometheus.yml` (prod), `prometheus.local.yml` (host dev).
 - **As of Phase 1** the product/usage metrics (`app_users_online`,
   `app_page_views_total`, `app_events_total`, `app_authenticated_requests_total`,
@@ -31,7 +31,8 @@ top of the existing Prometheus + Grafana + Loki stack.
 ## Metric catalog
 Product/usage metrics are defined in
 `src/backend/analytics-service/Analytics/Infrastructure/Metrics/AppMetrics.cs`
-(process-global statics, self-registered with the default registry). The monolith's
+(process-global statics, self-registered with the default registry). The AI-spend metrics added in
+Phase 40.33 live in `src/backend/ai-service/Ai/Infrastructure/Metrics/AiSpendMetrics.cs`, same shape. The monolith's
 original copy at `src/backend/api/Infrastructure/Metrics/AppMetrics.cs` is left as
 reference but is no longer the live source for the flipped metrics.
 
@@ -47,6 +48,10 @@ reference but is no longer the live source for the flipped metrics.
 | `app_experience_points_granted_total` | Counter | — | analytics | XP granted (from `xp.granted`). |
 | `app_assignments_issued_total` | Counter | — | analytics | Assignment issues across all organizations, one per resolved recipient (from `assignment.issued`, Phase 40.25). |
 | `app_assignment_progress_total` | Counter | `state` | analytics | Assignment progress state transitions across all organizations (from `assignment.progress.changed`, Phase 40.25). |
+| `ai_llm_tokens_total` | Counter | `direction` (`prompt`/`completion`) | ai | LLM tokens spent across all organizations and models (Phase 40.33). |
+| `ai_llm_calls_total` | Counter | `accounting` (`reported`/`estimated`) | ai | LLM completions across all organizations, split by whether the provider reported the token count or we estimated it (Phase 40.33). |
+| `ai_speech_characters_total` | Counter | `kind` (`tts`/`stt`) | ai | Characters synthesized or transcribed across all organizations (Phase 40.33). |
+| `ai_quota_refusals_total` | Counter | `resource`, `period` | ai | Calls refused because an organization reached its allowance (Phase 40.33). |
 
 **Neither of the two Phase 40.25 assignment counters carries an organization label, and that is
 deliberate — the fourth metric in this file to make that call.** A customer id in a label would put
@@ -59,6 +64,28 @@ organization" or "which team". The **per-organization assignment funnel** a РО
 computed in learning-service from `AssignmentProgressRecords` and served by
 `GET /admin/assignments/:assignmentId/dashboard` (see [API_CONTRACTS.md](API_CONTRACTS.md)) — never
 from Prometheus.
+
+**None of the four Phase 40.33 AI-spend counters carries an organization label either — the fifth
+time this file makes that call, and the first time it makes it about money.** The temptation is
+sharper here than anywhere before it: "which customer is burning the budget" is exactly the question
+an operator asks, and a `organization` label would answer it in one PromQL query. It is still refused,
+for the reasons the paragraph above gives — a customer id in a label puts identities and unbounded
+cardinality into the monitoring store — and because the answer already exists somewhere better.
+`direction`, `accounting`, `kind`, `resource` and `period` are all closed vocabularies compiled into
+the platform; none can grow from data.
+
+So these four answer «сколько платформа сожгла и растёт ли это», and deliberately cannot answer «чей
+это расход». The second question is `GET /admin/ai-usage`, computed in ai-service from its
+`AiUsageRecords` rows — per organization, per model, with a derived cost estimate. Same split as the
+per-organization assignment funnel (40.25): totals in Prometheus, customer numbers from the owning
+service's tables, never the other way round. See [AI_QUOTAS.md](AI_QUOTAS.md).
+
+**Why ai-service and not analytics-service.** analytics-service is Redis-only and Kafka-fed by design
+(40.16, re-confirmed four times since — 40.25, 40.31 among them). Routing spend through it would mean
+a new topic, a new consumer, and a counter that lags the call it counts, in a service whose whole
+point is that it owns no relational state. ai-service already holds the number at the instant the
+call happens. This is the first metric owner outside analytics since the split, and it is a
+deliberate exception rather than a drift.
 
 **"Visits per day/week" are not stored.** They are derived in Prometheus from the
 monotonic counters: `increase(app_authenticated_requests_total[1d])` /
@@ -95,6 +122,17 @@ monotonic counters: `increase(app_authenticated_requests_total[1d])` /
   rather than counted, so a fifth status added later cannot silently open a new Prometheus series.
 - **`app_logins_total`** — incremented server-side in the monolith's `AuthController`
   (login/google success), not from the client; moves with Auth in Phase 2.
+- **`ai_llm_tokens_total` / `ai_llm_calls_total` / `ai_speech_characters_total`** — incremented by
+  `AiSpendMeter.AddToLedgerAsync` in ai-service, on the same call that writes the per-organization
+  `AiUsageRecords` row and **before** it, so a Postgres hiccup cannot make the platform total
+  silently understate itself. Non-streaming completions carry the provider's own `usage` block
+  (`accounting="reported"`); streamed dialog turns have none and are estimated from characters
+  (`accounting="estimated"`) — see [AI_QUOTAS.md](AI_QUOTAS.md) §3.
+- **`ai_quota_refusals_total`** — incremented at each refusal point in `AiSpendMeter`. **Do not alert
+  on it.** An organization reaching a limit somebody sold it is the feature working; the meter logs
+  these at `Information` for the same reason. What deserves attention is the *shape*: a `period` of
+  `month_batch_reserve` means a customer's content pipeline stopped while their conversations kept
+  running, which is the intended degradation order and usually a sales conversation, not an incident.
 
 ## Frontend tracking
 - `src/frontend/shared/analytics/track.ts` — `trackEvent` / `trackPageView`,
@@ -129,6 +167,25 @@ panel renders whichever service currently emits the metric):
 | Page View Rate | `sum by (page) (rate(app_page_views_total{job=~"sallevate-backend\|sellevate-analytics"}[5m]))` |
 | Logins Rate | `sum by (method) (rate(app_logins_total{job=~"sallevate-backend\|sellevate-analytics"}[5m]))` |
 | Top Events (24h) | `topk(10, sum by (event) (increase(app_events_total{job=~"sallevate-backend\|sellevate-analytics"}[1d])))` |
+
+## Grafana dashboard — AI spend (Phase 40.33)
+`infrastructure/grafana/dashboards/ai-spend.json` (uid `sellevate-ai-spend`). This is the roadmap's
+«расход виден в дашборде раньше, чем в счёте от провайдера», platform side.
+
+| Panel | PromQL |
+|---|---|
+| LLM Tokens (24h) | `sum(increase(ai_llm_tokens_total{job="sellevate-ai"}[1d]))` |
+| LLM Calls (24h) | `sum(increase(ai_llm_calls_total{job="sellevate-ai"}[1d]))` |
+| Speech Characters (24h) | `sum(increase(ai_speech_characters_total{job="sellevate-ai"}[1d]))` |
+| Quota Refusals (24h) | `sum(increase(ai_quota_refusals_total{job="sellevate-ai"}[1d]))` |
+| Token Burn Rate by Direction | `sum by (direction) (rate(ai_llm_tokens_total{job="sellevate-ai"}[15m]))` |
+| Speech Characters by Kind | `sum by (kind) (rate(ai_speech_characters_total{job="sellevate-ai"}[15m]))` |
+| Refusals by Resource and Window | `sum by (resource, period) (increase(ai_quota_refusals_total{job="sellevate-ai"}[1h]))` |
+| Estimated vs Reported Accounting | `sum by (accounting) (increase(ai_llm_calls_total{job="sellevate-ai"}[1h]))` |
+
+The last panel is the honesty check: if `estimated` ever dominates `reported`, the spend report is
+mostly a guess and `stream_options: {include_usage: true}` becomes worth revisiting with whichever
+gateway is in front of the provider.
 
 ## Adding a new event/page
 1. Add the name to `TrackedEvents.Events` / `TrackedEvents.Pages` (analytics-service).

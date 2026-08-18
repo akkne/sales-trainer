@@ -14,6 +14,7 @@ using Sellevate.Ai.Features.ContentGeneration;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Dialog.Seeders;
 using Sellevate.Ai.Features.Evaluation;
+using Sellevate.Ai.Features.Quotas;
 using Sellevate.Ai.Features.Transcription;
 using Sellevate.Ai.Features.Voice;
 using Sellevate.Ai.Infrastructure.Data;
@@ -24,6 +25,7 @@ using Sellevate.BuildingBlocks.DependencyInjection;
 using Sellevate.BuildingBlocks.HealthChecks;
 using Sellevate.BuildingBlocks.Messaging;
 using Sellevate.BuildingBlocks.Tenancy;
+using Prometheus;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
@@ -132,7 +134,8 @@ builder.Services
     .AddEvaluationFeatureServices()
     .AddCompanyAiFeatureServices()
     .AddContentGenerationFeatureServices()
-    .AddContentAdaptationFeatureServices();
+    .AddContentAdaptationFeatureServices()
+    .AddQuotaFeatureServices(builder.Configuration);
 
 // AI6: add Polly resilience (retry on 5xx/429/timeout + circuit-breaker) to all upstream HTTP clients.
 // HttpClient.Timeout is set to 90s so Polly's own timeout (30s per attempt × 3) controls individual calls.
@@ -181,6 +184,11 @@ var application = builder.Build();
 
 application.UseExceptionHandler();
 application.UseSerilogRequestLogging();
+
+// Phase 40.33. ai-service is the third process to export /metrics (after the gateway and
+// analytics-service), because it is now the only place per-organization AI spend is known at the
+// instant it happens. The series it exports carry no organization label — see AiSpendMetrics.
+application.UseHttpMetrics();
 application.UseCors();
 
 if (application.Environment.IsDevelopment())
@@ -194,6 +202,7 @@ application.UseAuthorization();
 application.UseSellevateTenantContext();
 
 application.MapSellevateHealthChecks();
+application.MapMetrics();
 
 application.MapControllers();
 

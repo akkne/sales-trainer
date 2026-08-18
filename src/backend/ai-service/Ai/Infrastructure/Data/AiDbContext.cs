@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Sellevate.Ai.Features.Dialog;
 using Sellevate.Ai.Features.Organizations;
+using Sellevate.Ai.Features.Quotas.Models;
 using Sellevate.Ai.Features.Dialog.Models;
 using Sellevate.Ai.Identity;
 using Sellevate.BuildingBlocks.Tenancy;
@@ -29,12 +30,20 @@ public sealed class AiDbContext : DbContext
     public DbSet<UserReplica> UserReplicas => Set<UserReplica>();
     public DbSet<OrganizationProfileReplica> OrganizationProfileReplicas => Set<OrganizationProfileReplica>();
 
+    /// <summary>Phase 40.33. One row per organization that has been given limits of its own.</summary>
+    public DbSet<OrganizationQuota> OrganizationQuotas => Set<OrganizationQuota>();
+
+    /// <summary>Phase 40.33. What each organization spent on each model in each month.</summary>
+    public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new DialogBundleConfiguration());
         modelBuilder.ApplyConfiguration(new DialogModeConfiguration());
         modelBuilder.ApplyConfiguration(new UserReplicaEntityConfiguration());
         modelBuilder.ApplyConfiguration(new OrganizationProfileReplicaEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new OrganizationQuotaEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new AiUsageRecordEntityConfiguration());
 
         // Phase 40.11. Convenience, not security — the boundary is the RLS policy created by the
         // AddOrganizationId migration (docs/TENANCY/TENANCY.md 1.4). Both entities are listed
@@ -56,5 +65,13 @@ public sealed class AiDbContext : DbContext
         // to everybody. Plain equality.
         modelBuilder.Entity<OrganizationProfileReplica>()
             .HasQueryFilter(replica => _tenantContext.IsPlatformWide || replica.OrganizationId == _tenantContext.OrganizationId);
+
+        // Phase 40.33. Both quota tables are strict tenant data for the same reason the profile
+        // replica is: there is no global allowance and no global bill, and a NULL owner would mean
+        // one customer's limit — or one customer's spend — standing in for everybody's.
+        modelBuilder.Entity<OrganizationQuota>()
+            .HasQueryFilter(quota => _tenantContext.IsPlatformWide || quota.OrganizationId == _tenantContext.OrganizationId);
+        modelBuilder.Entity<AiUsageRecord>()
+            .HasQueryFilter(record => _tenantContext.IsPlatformWide || record.OrganizationId == _tenantContext.OrganizationId);
     }
 }

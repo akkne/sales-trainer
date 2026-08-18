@@ -847,10 +847,17 @@ user aggregate but never took these admin routes. Phase 9 must move `/admin/user
 
 ## Known limitations
 
-- `/exercises/{id}/chat` and `/exercises/{id}/voice/stream` (interactive `ai_dialogue`)
-  are served by Learning with the OpenAI chat + TTS pipeline ported from the monolith
-  so the frontend contract is preserved. Long term this LLM/TTS compute belongs in
-  ai-service behind a generic chat endpoint; that refactor is out of Phase 8 scope.
+- ~~`/exercises/{id}/chat` and `/exercises/{id}/voice/stream` (interactive `ai_dialogue`)
+  are served by Learning with the OpenAI chat + TTS pipeline ported from the monolith.~~
+  **Closed in Phase 40.33.** The two routes are unchanged and so is `ExerciseDialogService` — what
+  moved is where the completion and the synthesis are produced. `IOpenAiChatService` is now
+  `AiChatClient` (`POST /ai/chat`, `POST /ai/chat/stream`) and `ITtsRouter` is now `AiTtsClient`
+  (`POST /ai/tts`), both against ai-service; the in-process `OpenAiChatService`, `YandexTtsService`
+  and `TtsRouter` are deleted, and **learning-service holds no provider key at all** —
+  `OPENAI_API_KEY` and `YANDEX_TTS_API_KEY` were removed from its compose block and from
+  `scripts/lib-local-env.sh`. This was the last door around the per-organization meter; see
+  [AI_QUOTAS.md](AI_QUOTAS.md) §1 and `scripts/ai-provider-lint.py`, which now fails the build if a
+  second one appears.
 - `technique.mastery.changed` has a publisher and contract but no current trigger:
   the monolith's `MarkTechniqueSeen` only records first-seen and never changes mastery
   (matching prior behaviour). The producer is wired for when a mastery-progression
@@ -881,6 +888,13 @@ What belongs to this service, and why it is split the way it is:
   learning → ai seam, and the reason it goes there is roadmap 40.33: per-organization LLM spend is
   enforced at the one point every call passes through, and generating a lesson is about to be the
   most expensive call in the product.
+- **Since 40.33 both calls declare themselves batch** (`X-Ai-Workload: batch`) and carry
+  `X-Organization-Id`, and the sweep asks `GET /ai/quota/preflight?workload=batch` **before** it
+  claims a lease — the claim spends an attempt, so learning about the quota wall afterwards would
+  fail a run for a reason that has nothing to do with it. The preflight only reads; the charge stays
+  at the completion, so there is no double counting with the pipeline's own 60-item ceiling. If the
+  preflight cannot be reached the sweep proceeds and lets the real gate decide, because the real gate
+  is in ai-service and cannot be skipped by a network blip.
 - **`ContentGenerationSweepService`** is the eighth entry in
   [BACKGROUND_JOBS.md §2.1](TENANCY/BACKGROUND_JOBS.md), per-organization iteration over a system
   enumeration. Both halves are minutes long, so neither runs inside the request that asks for it.

@@ -223,6 +223,13 @@ services:
       - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
       - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
       - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
+      # Phase 40.33 — platform-wide defaults every organization is metered against until it is
+      # given limits of its own through PUT /admin/ai-quota. An absent quota row means these
+      # numbers, never "unmetered".
+      - AiQuotas__DefaultVoiceDailyLimitMinutes=${AI_QUOTA_VOICE_DAILY_MINUTES:-600}
+      - AiQuotas__DefaultVoiceMonthlyLimitMinutes=${AI_QUOTA_VOICE_MONTHLY_MINUTES:-6000}
+      - AiQuotas__DefaultLlmMonthlyTokenLimit=${AI_QUOTA_LLM_MONTHLY_TOKENS:-20000000}
+      - AiQuotas__DefaultBatchReservePercent=${AI_QUOTA_BATCH_RESERVE_PERCENT:-10}
     depends_on:
       postgres:
         condition: service_healthy
@@ -374,24 +381,10 @@ services:
       - AiService__BaseUrl=http://ai:8080
       # Phase 40.23: resolving an assignment's audience asks identity-service who works here.
       - IdentityService__BaseUrl=http://identity:8080
-      - OpenAI__ApiKey=${OPENAI_API_KEY}
-      - OpenAI__BaseUrl=${OPENAI_BASE_URL}
-      - OpenAI__ChatCompletionsPath=${OPENAI_CHAT_COMPLETIONS_PATH}
-      # Provider selects the auth header/schema: OpenAi=Bearer, F5Ai=X-Auth-Token. Must be F5Ai
-      # when routing through api.f5ai.ru, otherwise the gateway rejects the Bearer header with 401.
-      - OpenAI__Provider=${OPENAI_PROVIDER:-OpenAi}
-      # --- Learning tunables (shares the AI knobs; defaults are the in-code values) ---
-      - OpenAI__DialogModel=${OPENAI_DIALOG_MODEL:-gpt-4o}
-      - OpenAI__DialogTemperature=${OPENAI_DIALOG_TEMPERATURE:-0.7}
-      - OpenAI__MaximumDialogTokenCount=${OPENAI_MAX_TOKENS_DIALOG:-500}
-      - Voice__TtsProvider=${TTS_PROVIDER:-yandex}
-      - Voice__Enabled=${VOICE_ENABLED:-true}
-      - Voice__DailyLimitMinutes=${VOICE_DAILY_LIMIT_MINUTES:-30}
-      - Voice__MonthlyLimitMinutes=${VOICE_MONTHLY_LIMIT_MINUTES:-300}
-      - YandexTts__ApiKey=${YANDEX_TTS_API_KEY}
-      - YandexTts__Voice=${YANDEX_TTS_VOICE:-marina}
-      - YandexTts__Lang=${YANDEX_TTS_LANG:-ru-RU}
-      - YandexTts__Speed=${YANDEX_TTS_SPEED:-1.2}
+      # Phase 40.33: learning-service no longer holds a provider key of any kind. Its exercise
+      # dialogue and the speech for it go through ai-service, which is where per-organization spend
+      # is metered — the OpenAI__* and YandexTts__* variables that used to live here were the second
+      # door around that meter.
       - Frontend__Url=${FRONTEND_URL:-http://localhost:3000,https://sellevate.vercel.app}
       - Jwt__Key=${JWT_KEY}
       - Logging__Loki__Url=http://loki:3100

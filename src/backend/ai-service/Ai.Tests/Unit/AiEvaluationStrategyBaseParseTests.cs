@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using Sellevate.Ai.Features.Evaluation.Services.Implementation;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -14,7 +15,7 @@ public class AiEvaluationStrategyBaseParseTests
     // We use a thin test subclass to expose it.
     private sealed class Exposed : AiEvaluationStrategyBase
     {
-        public Exposed() : base(null!, null!, null!) { }
+        public Exposed() : base(null!, null!, null!, null!) { }
 
         public static global::Sellevate.Ai.Features.Evaluation.Models.ExerciseEvaluationResult Parse(string json)
             => ParseAiResponse(json);

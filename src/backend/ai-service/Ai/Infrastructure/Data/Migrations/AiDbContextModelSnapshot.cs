@@ -199,6 +199,76 @@ namespace Sellevate.Ai.Infrastructure.Data.Migrations
                     b.ToTable("OrganizationProfileReplicas", (string)null);
                 });
 
+            modelBuilder.Entity("Sellevate.Ai.Features.Quotas.Models.AiUsageRecord", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PeriodKey")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("CallCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CompletionTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("EstimatedCallCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("PromptTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SpeechCharacters")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OrganizationId", "PeriodKey", "Model");
+
+                    b.ToTable("AiUsageRecords", (string)null);
+                });
+
+            modelBuilder.Entity("Sellevate.Ai.Features.Quotas.Models.OrganizationQuota", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BatchReservePercent")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("LlmMonthlyTokenLimit")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("VoiceDailyLimitMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("VoiceMonthlyLimitMinutes")
+                        .HasColumnType("integer");
+
+                    b.HasKey("OrganizationId");
+
+                    b.ToTable("OrganizationQuotas", (string)null);
+                });
+
             modelBuilder.Entity("Sellevate.Ai.Identity.UserReplica", b =>
                 {
                     b.Property<Guid>("UserId")

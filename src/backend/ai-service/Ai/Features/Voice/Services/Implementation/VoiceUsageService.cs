@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Sellevate.Ai.Features.Dialog.Services.Abstract;
+using Sellevate.Ai.Features.Quotas.Models;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 using Sellevate.Ai.Features.Voice.Models;
 using Sellevate.Ai.Features.Voice.Services.Abstract;
 using Sellevate.Ai.Infrastructure.Configuration;
@@ -17,6 +19,8 @@ internal sealed class VoiceUsageService : IVoiceUsageService
     private readonly ITenantContext _tenantContext;
     private readonly IDatabase _redis;
     private readonly IOptions<VoiceFeatureConfiguration> _voiceFeatureOptions;
+    private readonly IAiSpendMeter _spendMeter;
+    private readonly IAiQuotaService _quotaService;
     private readonly ILogger<VoiceUsageService> _logger;
 
     // AI1: Lua script for atomic check-and-increment.
@@ -43,6 +47,8 @@ return newval";
         ITenantContext tenantContext,
         IConnectionMultiplexer connectionMultiplexer,
         IOptions<VoiceFeatureConfiguration> voiceFeatureOptions,
+        IAiSpendMeter spendMeter,
+        IAiQuotaService quotaService,
         ILogger<VoiceUsageService> logger)
     {
         _sessionRepository = sessionRepository;
@@ -50,6 +56,8 @@ return newval";
         _tenantContext = tenantContext;
         _redis = connectionMultiplexer.GetDatabase();
         _voiceFeatureOptions = voiceFeatureOptions;
+        _spendMeter = spendMeter;
+        _quotaService = quotaService;
         _logger = logger;
     }
 
@@ -122,6 +130,26 @@ return newval";
             throw new VoiceUsageLimitException("monthly", usedMonthly, monthlyLimit);
         }
 
+        // Phase 40.33. The organization-wide gate, layered under the per-user one above. Until this
+        // block a customer's total voice spend was however many users they had times the per-user
+        // allowance — which is precisely the roadmap's «один клиент, гоняющий голос сутками». The
+        // per-user limits stay: they stop one person burning the whole organization's day, which the
+        // organization limit alone cannot.
+        try
+        {
+            await _spendMeter.ReserveVoiceSecondsAsync(maxSeconds, cancellationToken);
+        }
+        catch (AiQuotaExceededException exception)
+        {
+            // Roll back both per-user reservations; the caller sees the same 429 shape it always has,
+            // with the period naming the organization window rather than the user's.
+            await _redis.StringDecrementAsync(dayKey, maxSeconds);
+            await _redis.StringDecrementAsync(monthKey, maxSeconds);
+
+            throw new VoiceUsageLimitException(
+                $"organization {exception.Period}", (int)exception.Used, (int)exception.Limit);
+        }
+
         _logger.LogDebug("Reserved {Seconds}s for user {UserId} — day={Day}, month={Month}",
             maxSeconds, userId, dayResult, monthResult);
 
@@ -150,6 +178,8 @@ return newval";
             await Task.WhenAll(
                 _redis.StringDecrementAsync(dayKey, refund),
                 _redis.StringDecrementAsync(monthKey, refund));
+
+            await _spendMeter.RefundVoiceSecondsAsync(refund, cancellationToken);
 
             _logger.LogDebug("Refunded {Refund}s for user {UserId} (reserved={Reserved}, actual={Actual})",
                 refund, userId, reservedSeconds, actualSeconds);
@@ -213,11 +243,17 @@ return newval";
         }
 
         var limits = _voiceFeatureOptions.Value;
+        var organizationQuota = await _quotaService.ResolveAsync(cancellationToken);
+        var (organizationDaySeconds, organizationMonthSeconds) = await _spendMeter.GetVoiceSecondsAsync(cancellationToken);
 
         return new AdminVoiceUsageDto
         {
             DailyLimitSeconds = limits.DailyLimitMinutes * 60,
             MonthlyLimitSeconds = limits.MonthlyLimitMinutes * 60,
+            OrganizationDailyLimitSeconds = organizationQuota.VoiceDailyLimitMinutes * 60,
+            OrganizationMonthlyLimitSeconds = organizationQuota.VoiceMonthlyLimitMinutes * 60,
+            OrganizationUsedSecondsToday = organizationDaySeconds,
+            OrganizationUsedSecondsThisMonth = organizationMonthSeconds,
             Users = usageEntries,
         };
     }

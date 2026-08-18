@@ -13,6 +13,7 @@ using Sellevate.Ai.Infrastructure.Configuration;
 using Sellevate.Ai.Infrastructure.Data;
 using Sellevate.BuildingBlocks.Tenancy;
 using StackExchange.Redis;
+using Sellevate.Ai.Features.Quotas.Services.Abstract;
 
 namespace Sellevate.Ai.Tests.Unit;
 
@@ -79,6 +80,8 @@ public class VoiceReservationGateTests
             tenantContext,
             mux,
             limits,
+            Substitute.For<IAiSpendMeter>(),
+            Substitute.For<IAiQuotaService>(),
             NullLogger<VoiceUsageService>.Instance);
 
         return (svc, redis);

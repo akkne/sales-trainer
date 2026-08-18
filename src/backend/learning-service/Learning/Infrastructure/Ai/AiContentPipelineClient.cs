@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sellevate.Learning.Features.ContentGeneration.Models;
+using Sellevate.BuildingBlocks.Tenancy;
 using Sellevate.Learning.Infrastructure.Configuration;
 
 namespace Sellevate.Learning.Infrastructure.Ai;
@@ -15,6 +16,7 @@ namespace Sellevate.Learning.Infrastructure.Ai;
 internal sealed class AiContentPipelineClient(
     HttpClient httpClient,
     IOptions<AiServiceConfiguration> configurationOptions,
+    ITenantContext tenantContext,
     ILogger<AiContentPipelineClient> logger) : IAiContentPipelineClient
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -68,8 +70,17 @@ internal sealed class AiContentPipelineClient(
     {
         var requestUri = _configuration.BaseUrl.TrimEnd('/') + path;
 
-        using var response = await httpClient.PostAsJsonAsync(
-            requestUri, request, SerializerOptions, cancellationToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri)
+        {
+            Content = JsonContent.Create(request, options: SerializerOptions),
+        };
+
+        // Phase 40.33. Every route this client reaches is driven by a sweep, never by somebody
+        // waiting — so all four declare themselves batch and are the first work an organization
+        // running low on allowance loses.
+        AiCallHeaders.Apply(httpRequest, tenantContext, AiCallHeaders.BatchWorkload);
+
+        using var response = await httpClient.SendAsync(httpRequest, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {

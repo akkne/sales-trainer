@@ -1,51 +1,52 @@
 using Sellevate.Learning.Features.Exercises.Services.Abstract;
 using Sellevate.Learning.Features.Exercises.Services.Implementation;
 using Sellevate.Learning.Infrastructure.Ai;
+using Sellevate.Learning.Infrastructure.Configuration;
 
 namespace Sellevate.Learning.Features.Exercises;
 
 public static class ExerciseDialogServiceCollectionExtensions
 {
+    private const string InternalServiceSecretHeaderName = "X-Internal-Service-Secret";
+
+    /// <summary>
+    /// Phase 40.33. The interactive <c>ai_dialogue</c> exercise now reaches the provider the same way
+    /// grading and the content pipeline already do — through ai-service.
+    ///
+    /// <para>
+    /// What disappeared from here: the named <c>OpenAI</c> and <c>YandexTts</c> HttpClients, their
+    /// Polly stacks, the <c>OpenAI</c>/<c>YandexTts</c>/<c>Voice</c> configuration sections, and the
+    /// two provider clients behind them. The resilience did not disappear — it lives on the other
+    /// side of the hop, in the one place that holds the keys — and learning-service no longer needs
+    /// <c>OPENAI_API_KEY</c> or <c>YANDEX_TTS_API_KEY</c> at all, which is a smaller secret surface
+    /// as well as a smaller code one.
+    /// </para>
+    /// </summary>
     public static IServiceCollection AddExerciseDialogServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.Configure<OpenAiConfiguration>(configuration.GetSection(OpenAiConfiguration.SectionName));
-        services.Configure<TtsRouterConfiguration>(configuration.GetSection(TtsRouterConfiguration.SectionName));
-        services.Configure<YandexTtsConfiguration>(configuration.GetSection(YandexTtsConfiguration.SectionName));
+        var aiServiceSection = configuration.GetSection(AiServiceConfiguration.SectionName);
+        var chatTimeout = TimeSpan.FromSeconds(Math.Clamp(
+            aiServiceSection.GetValue("ChatTimeoutSeconds", 90), 10, 300));
 
-        // Mirror ai-service: retry on 5xx/429/timeout plus a circuit breaker, so a stalled or
-        // flapping provider degrades into a fast 503 instead of pinning request threads for
-        // the default 100s and taking the whole exercise flow down with it.
-        foreach (var upstreamClientName in new[] { "OpenAI", "YandexTts" })
-        {
-            services.AddHttpClient(upstreamClientName)
-                .ConfigureHttpClient(client =>
-                    client.Timeout = TimeSpan.FromSeconds(90)) // outer timeout > Polly total; Polly controls per-attempt
-                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-                {
-                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(10),
-                    PooledConnectionLifetime = TimeSpan.FromMinutes(30),
-                })
-                .SetHandlerLifetime(TimeSpan.FromMinutes(30))
-                .AddStandardResilienceHandler(options =>
-                {
-                    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
-                    options.Retry.MaxRetryAttempts = 2;
-                    options.Retry.Delay = TimeSpan.FromSeconds(1);
-                    // Polly requires SamplingDuration >= 2 x AttemptTimeout, else startup validation fails.
-                    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
-                    options.CircuitBreaker.MinimumThroughput = 5;
-                    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(90);
-                });
-        }
-
-        services.AddScoped<IOpenAiChatService, OpenAiChatService>();
-        services.AddScoped<IYandexTtsService, YandexTtsService>();
-        services.AddScoped<ITtsRouter, TtsRouter>();
+        services.AddHttpClient<IOpenAiChatService, AiChatClient>(ConfigureAiServiceClient);
+        services.AddHttpClient<ITtsRouter, AiTtsClient>(ConfigureAiServiceClient);
 
         services.AddScoped<IExerciseDialogService, ExerciseDialogService>();
 
         return services;
+
+        void ConfigureAiServiceClient(HttpClient httpClient)
+        {
+            httpClient.Timeout = chatTimeout;
+
+            // Same service-to-service auth as the evaluation and content-pipeline clients: ai-service's
+            // InternalServiceAuthFilter rejects a request without it once the secret is configured, and
+            // leaves the route open in dev when it is not.
+            var internalServiceSecret = configuration["InternalAuth:ServiceSecret"];
+            if (!string.IsNullOrWhiteSpace(internalServiceSecret))
+                httpClient.DefaultRequestHeaders.Add(InternalServiceSecretHeaderName, internalServiceSecret);
+        }
     }
 }
