@@ -14,6 +14,16 @@ Everything that talks to an LLM or a speech API:
 - **Transcription** — Whisper speech-to-text.
 - **Evaluation** — the AI grading strategies pulled out of the monolith's `Exercises`
   slice, exposed as a synchronous `POST /ai/evaluate` endpoint for the Learning service.
+- **Quotas and spend (Phase 40.33)** — per-organization voice and LLM limits, enforced here because
+  this is the one point every paid call passes through, and the ledger the spend report is built
+  from. Full description: [AI_QUOTAS.md](AI_QUOTAS.md).
+
+Since 40.33 that first sentence is literally true and **checked**: `scripts/ai-provider-lint.py`
+fails when any file outside a six-entry allow-list opens a provider-named `HttpClient` or names a
+provider host. Until this block learning-service held its own copies of `OpenAiChatService` and
+`YandexTtsService` — a monolith leftover `docs/DONT_FORGET.md` had carried since 40.27 — and every
+interactive `ai_dialogue` exercise, text and speech alike, was spend no counter in the product could
+see.
 
 ## Layout
 
@@ -46,10 +56,12 @@ src/backend/ai-service/
 | Postgres `ai` | `OrganizationProfileReplicas` | Read-only copy of one organization's content-substitution profile, fed by `organization.profile.updated` (40.19). **The first non-content table in this database:** strict-equality RLS and the tenant column as the primary key, because a `NULL` owner would mean one customer's `banned_claims` binding everybody's calls. Read when a persona or feedback prompt is built. |
 | Postgres `ai` | `UserReplicas` | Local read-model (`UserId`, `Email`, `DisplayName`, `AvatarKey`) fed by `user.*` Kafka events. Used by the admin voice-usage report instead of joining Identity. **No `OrganizationId`**: it is a consumer-fed projection with no request and therefore no tenant, the same call learning-db made in 40.10. |
 | Mongo `sallevate` | `dialog_sessions` | Roleplay transcripts + per-session voice seconds. Tenancy: `organizationId` on every document, enforced by `DialogSessionRepository` alone — Mongo has no RLS (40.11). |
-| Redis | scenario-verdict cache + voice quota counters + Kafka idempotency store; TTS audio cache is in-process | Every ai-service key is namespaced `org:{organizationId}:` (40.11). |
+| Postgres `ai` | `OrganizationQuotas` | One organization's voice-minute and LLM-token allowance (40.33). Strict-equality RLS, tenant column as the primary key — there is no global allowance. **Every column is nullable and null means "the platform default"** from `AiQuotas:Default…`, which is why a missing row is still a metered organization rather than an unmetered one. Kept here rather than replicated from organization-service so that raising a limit takes effect on the next call instead of on the next Kafka delivery. |
+| Postgres `ai` | `AiUsageRecords` | What each organization spent on each model in each UTC month (40.33): prompt/completion tokens, call counts, speech characters. Written with one `INSERT … ON CONFLICT DO UPDATE SET x = x + excluded.x`, so two concurrent completions cannot lose each other's tokens. Money is **not** a column — cost is derived on read from a configurable price table, so correcting a price never moves a limit. |
+| Redis | scenario-verdict cache + voice quota counters (per user **and**, since 40.33, per organization) + Kafka idempotency store; TTS audio cache is in-process | Every ai-service key is namespaced `org:{organizationId}:` (40.11). |
 
 `DatabaseBootstrapper` creates the `ai` database on startup, then EF migrations run
-(`InitialAiSchema` … `AddOrganizationId`). Index rebuilds and the Mongo backfill are **not** part
+(`InitialAiSchema` … `AddOrganizationQuotas`). Index rebuilds and the Mongo backfill are **not** part
 of startup — they are operational steps, driven by
 `scripts/tenancy-ai-organization-rollout.sh`.
 
@@ -63,6 +75,10 @@ differently:
 | Postgres | RLS policy (`EnableTenantRlsForContent`) + EF query filter as convenience | The policy admits global rows only |
 | Mongo | `DialogSessionRepository`, and nothing else — there is no database-side net | Raises `InvalidOperationException`; never "all sessions" |
 | Redis | The key name (`org:{organizationId}:…`) | Verdict cache is skipped; quota keys raise |
+
+Phase 40.33 adds two tables to the Postgres row and one key family to the Redis row, and changes the
+failure mode of neither: `OrganizationQuotas` and `AiUsageRecords` are strict-equality RLS, and the
+new `org:{orgId}:voice:org:…` counters raise on an unset tenant exactly as the per-user ones do.
 
 The one behavioural change worth knowing: the SuperAdmin voice-usage report aggregates the
 caller's organization instead of the whole installation. A cross-tenant total is exactly the leak
@@ -358,6 +374,30 @@ Flipped to the `ai` cluster: `/dialog/*` (incl. `/dialog/voice/*` and
 
 `POST /ai/evaluate` is an **internal** service-to-service endpoint (Learning → AI on
 the docker network); it is intentionally **not** exposed through the gateway.
+
+### Phase 40.33 routes
+
+Four internal, un-gatewayed (`InternalServiceAuthFilter`, like `/ai/evaluate`):
+
+| Route | Caller | Why it exists |
+|---|---|---|
+| `POST /ai/chat` | learning-service | The generic completion the interactive `ai_dialogue` exercise used to make with its own provider client |
+| `POST /ai/chat/stream` | learning-service | The same, as newline-delimited `{"d":"…"}` deltas. NDJSON rather than re-emitted SSE: the caller is a service, and SSE's event names and reconnection ids buy nothing here while costing a second parser |
+| `POST /ai/tts` | learning-service | Speech synthesis for the same exercise. Goes through `CachingTtsRouter`, so a phrase an exercise and a roleplay both produce is now synthesized once for the installation |
+| `GET /ai/quota/preflight?workload=` | learning-service sweeps | «Есть ли ещё бюджет?», asked **before** a lease is claimed. Reads only — the charge stays at the completion |
+
+Two gatewayed (`ai-admin-ai-usage`, `ai-admin-ai-quota`, plus catch-all siblings):
+
+| Route | Policy | What |
+|---|---|---|
+| `GET /admin/ai-usage` | `RequireOrgAdmin` | The month's spend, per model, with `quotaState` and the voice windows |
+| `GET` / `PUT /admin/ai-quota` | `RequirePlatformAdmin` | The organization's allowance. Platform-only because a quota is what the customer bought, and raising your own is a purchase rather than an administrative action |
+
+The provider failure contract travels one hop on `/ai/chat*`: the body names the failure in a closed
+vocabulary (`payment_required`, `rate_limited`, `provider_auth`, `provider_rejected`,
+`provider_failed`, `provider_unreachable`) so learning-service rebuilds the same `OpenAiException`
+subtype it used to throw itself, and `docs/LLM_FAILURE_HANDLING.md` keeps holding. The provider's own
+body is redacted and dropped inside `OpenAiChatService` and never starts travelling again.
 
 ## Running locally
 

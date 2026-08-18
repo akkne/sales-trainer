@@ -22,6 +22,19 @@
   learning-service and ai-service can resolve `{{organization.*}}` placeholders locally instead of
   calling this service on their read paths — see [CONTENT_PARAMETERIZATION.md](CONTENT_PARAMETERIZATION.md) §5.
 
+**Explicitly not here either: quotas (Phase 40.33).** Per-organization voice-minute and LLM-token
+limits live in **ai-db** (`OrganizationQuotas`), not on `Organization` and not on
+`OrganizationProfile`. The obvious shape — a few columns here, replicated to ai-service over
+`organization.profile.updated` exactly as the profile already is — was considered and rejected on one
+concrete failure: the moment an operator most needs to change a limit is the moment a customer is
+standing at it, and a Kafka replica that is lagging (or whose consumer is dead-lettering) would leave
+the raise invisible to the enforcer with nothing in the raise's own response saying so. The row the
+meter reads is the row the operator wrote. Reasoning in full: [AI_QUOTAS.md](AI_QUOTAS.md) §2.
+
+There is still **no plan, tier, seat count or billing column anywhere in this database**, and 40.33
+did not add one. A quota is an operational setting of the meter, not the commercial contract; if the
+contract ever needs modelling, it belongs here and the quota row stays where it is.
+
 Explicitly **not** in scope for 40.5: memberships, users, invites, roles (40.6/40.7), the platform
 superadmin panel and impersonation (40.9), SSO (40.8, deliberately deferred). `organization-service`
 today only manages the registry row and the profile row; nothing yet reads or writes them except
