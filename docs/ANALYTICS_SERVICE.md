@@ -16,7 +16,8 @@ complete the key funnel steps:
 - **Presence** — a Redis sorted set of recently-active users, surfaced as the
   `app_users_online` gauge.
 - **Funnels** — Kafka consumers that count conversion-relevant integration events
-  (`user.registered`, `exercise.completed`, `xp.granted`) into Prometheus counters.
+  (`user.registered`, `exercise.completed`, `xp.granted`, and since 40.25 `assignment.issued` and
+  `assignment.progress.changed`) into Prometheus counters.
 
 The service is **loss-tolerant**: analytics is best-effort, so a Redis or Kafka hiccup
 never breaks a user request, and dropped events only mean a slightly lower count.
@@ -142,6 +143,50 @@ is right to (§2.4 of CONTENT_MODEL.md).
    version dimension by design. If a product report needs "completions of this lesson version", it
    comes from learning-service, not from Prometheus.
 
+## The assignment funnel, and what "metrics in analytics-service" means (Phase 40.25)
+
+Roadmap 40.25 says «метрики воронки заданий — в `analytics-service`». Read the previous section
+first, because it already decided how that has to be built.
+
+**What landed here is two counters, and nothing is stored.** `FunnelEventsConsumer` gained
+`assignment.issued` and `assignment.progress.changed`, and each increments a process-local Prometheus
+counter:
+
+- `app_assignments_issued_total` — one per recipient per issue.
+- `app_assignment_progress_total{state}` — one per state change, labelled by the state arrived at.
+
+**What did not land here is the funnel the РОП reads.** Assigned → started → completed → met
+threshold, with names, per organization, with a repeat series next to it, is computed by
+`AssignmentDashboardService` in learning-service and served by
+`GET /admin/assignments/{id}/dashboard`. That is the same split the accuracy series got in 40.16 and
+for the same three reasons: this service is Redis-only and holds no progress rows; a counter answers
+"is anybody using the feature" and cannot answer "who on this team has not started"; and an
+organization label in Prometheus puts customer identities and unbounded cardinality into the
+monitoring store to answer a question that belongs in a product report.
+
+A Redis projection of assignment progress was considered and rejected. Redis has no row-level
+security and no transaction with learning-db, so the projection can lag, double-count on a
+redelivery, or miss a wave — and the РОП would be reading a funnel that disagrees with the progress
+rows with no way to tell which is right. 40.22's rule (derive from rows, never increment a counter)
+applies more strongly to a copy in another service than it does to a column in the same table.
+[DECISIONS.md](DECISIONS.md) (2026-08-18) carries the full argument.
+
+### The rule for whoever reads these two counters
+
+1. **`state` is a bounded label and must stay one.** Its four values — `not_started`, `in_progress`,
+   `completed`, `failed_threshold` — are compiled into the platform. `FunnelEventRecorder` keeps its
+   own copy of the list (this service does not depend on learning-service for four strings) and
+   **drops an unrecognised status rather than counting it**, so a producer that grows a fifth state
+   cannot grow the metric's cardinality. It is deliberately not bucketed under "other": a count
+   nobody can attribute is a count nobody can act on.
+2. **`app_assignment_progress_total` counts transitions, not people.** One person who goes
+   `not_started → in_progress → failed_threshold → completed` contributes three. It answers "is the
+   feature moving" and cannot answer "how many people completed", which is a question about current
+   state and lives in learning-db.
+3. **Neither counter has an organization dimension, and neither will.** If a product report needs
+   "this customer's assignment funnel", it comes from learning-service. Same sentence as
+   `app_exercises_completed_total` in the section above, for the same reason.
+
 ## Metrics owned
 
 Defined in `Infrastructure/Metrics/AppMetrics.cs` (process-global statics, self-registered
@@ -156,6 +201,8 @@ with the default prometheus-net registry, served at `/metrics`).
 | `app_registrations_total` | Counter | — | `user.registered` Kafka event. |
 | `app_exercises_completed_total` | Counter | — | `exercise.completed` Kafka event. |
 | `app_experience_points_granted_total` | Counter | — | `xp.granted` Kafka event. |
+| `app_assignments_issued_total` | Counter | — | `assignment.issued` Kafka event (Phase 40.25), one per recipient. No organization label — see the section above. |
+| `app_assignment_progress_total` | Counter | `state` | `assignment.progress.changed` Kafka event (Phase 40.25). Four bounded values; an unrecognised status is dropped rather than counted. |
 
 `app_logins_total` stays in the monolith's `AuthController` for now (Auth is extracted in
 Phase 2), so the product-metrics dashboard queries both the `sallevate-backend` and
@@ -172,7 +219,8 @@ Phase 2), so the product-metrics dashboard queries both the `sallevate-backend` 
 ## Kafka
 
 - **Produces:** nothing.
-- **Consumes:** `user.registered`, `exercise.completed`, `xp.granted`. The
+- **Consumes:** `user.registered`, `exercise.completed`, `xp.granted`, and since 40.25
+  `assignment.issued` and `assignment.progress.changed`. The
   `FunnelEventsConsumer` is idempotent (dedupe on `eventId` via the shared Redis store) and
   loss-tolerant.
 

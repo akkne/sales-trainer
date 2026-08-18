@@ -45,6 +45,20 @@ reference but is no longer the live source for the flipped metrics.
 | `app_registrations_total` | Counter | — | analytics | Completed registrations (from `user.registered`). |
 | `app_exercises_completed_total` | Counter | — | analytics | Exercises completed (from `exercise.completed`). |
 | `app_experience_points_granted_total` | Counter | — | analytics | XP granted (from `xp.granted`). |
+| `app_assignments_issued_total` | Counter | — | analytics | Assignment issues across all organizations, one per resolved recipient (from `assignment.issued`, Phase 40.25). |
+| `app_assignment_progress_total` | Counter | `state` | analytics | Assignment progress state transitions across all organizations (from `assignment.progress.changed`, Phase 40.25). |
+
+**Neither of the two Phase 40.25 assignment counters carries an organization label, and that is
+deliberate — the fourth metric in this file to make that call.** A customer id in a label would put
+identities and unbounded cardinality into the monitoring store. `state` is safe precisely because it
+is bounded to the four values compiled into the platform (`not_started`, `in_progress`, `completed`,
+`failed_threshold`) — `FunnelEventRecorder` drops anything else rather than counting it under a
+catch-all. These two counters answer an operational question — "is anybody finishing assignments
+platform-wide, and how many are failing the threshold" — and deliberately cannot answer "which
+organization" or "which team". The **per-organization assignment funnel** a РОП actually reads is
+computed in learning-service from `AssignmentProgressRecords` and served by
+`GET /admin/assignments/:assignmentId/dashboard` (see [API_CONTRACTS.md](API_CONTRACTS.md)) — never
+from Prometheus.
 
 **"Visits per day/week" are not stored.** They are derived in Prometheus from the
 monotonic counters: `increase(app_authenticated_requests_total[1d])` /
@@ -74,6 +88,11 @@ monotonic counters: `increase(app_authenticated_requests_total[1d])` /
   `app_experience_points_granted_total`** — the analytics `FunnelEventsConsumer` counts the
   `user.registered` / `exercise.completed` / `xp.granted` Kafka events (idempotent,
   loss-tolerant).
+- **`app_assignments_issued_total` / `app_assignment_progress_total`** — the same
+  `FunnelEventsConsumer` (`FunnelEventRecorder`), counting `assignment.issued` and
+  `assignment.progress.changed`. The `state` label on the second is validated against a copy of
+  learning-service's four progress statuses before it is applied; an unrecognised status is dropped
+  rather than counted, so a fifth status added later cannot silently open a new Prometheus series.
 - **`app_logins_total`** — incremented server-side in the monolith's `AuthController`
   (login/google success), not from the client; moves with Auth in Phase 2.
 

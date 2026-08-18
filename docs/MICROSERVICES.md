@@ -270,6 +270,9 @@ a composition of those per-service admin APIs.
 | `chat.message.read` | Social | Notifications | readerUserId, conversationId, readAt |
 | `discuss.reply.created` | Social | Notifications | recipientId, replyAuthorName, threadId, threadTitle, replyId, preview |
 | `company.followup.due` | Company | Notifications | companyId, userId, companyName, nextActionAt, note (+ `organizationId` in the envelope since 40.12) |
+| `assignment.progress.changed` | Learning | Analytics | assignmentId, userId, previousStatus, status, bestScore, attemptCount |
+| `dialog.review.commented` | Learning | Notifications | noteId, userId (the manager), sessionId, quotedText, comment |
+| `dialog.review.resolved` | Learning | Notifications | noteId, userId (the manager who disputed), sessionId, outcome, disputedScore, adjustedScore, resolution |
 
 **Conventions:** topic = `<aggregate>.<event>`, partition key = `userId` (ordering
 per user), envelope = `{ eventId, occurredAt, type, version, organizationId, data }`,

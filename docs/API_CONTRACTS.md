@@ -1032,9 +1032,10 @@ completion threshold negotiable by the person being measured. Retro-scoring is a
 has not made (docs/DONT_FORGET.md).
 
 **At most one open dispute per conversation.** A second `POST /dialog-reviews/disputes` on a session
-that already has an open dispute is refused by the database's partial unique index (surfaced as 400);
-a session may be disputed again after a verdict, because a person told "the grade stands" who later
-finds new evidence is not spamming the queue.
+that already has an open dispute is refused (400) by the service before it ever inserts, backed by the
+`UX_DialogReviewNotes_OpenDisputePerSession` partial unique index at the database as the final
+guarantee. A session may be disputed again after a verdict, because a person told "the grade stands"
+who later finds new evidence is not spamming the queue.
 
 Both admin write routes 403 (`Forbid()`) when the caller satisfies `RequireOrgAdmin` without holding
 an organization in context (platform staff impersonating nobody) — same shape as
